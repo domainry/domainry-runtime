@@ -70,19 +70,12 @@ func (principal Principal) HasPermission(permission string) bool {
 	return systemCapabilityAllows(principal.SystemCapabilities, permission)
 }
 
-// HasExactPermission compares the canonical granted key literally. It does not
-// interpret "*" or an object wildcard as an alias for another Action.
+// HasExactPermission evaluates the same exact functional+data authorization as
+// HasPermission. The separate name is retained for call sites that want to
+// emphasize that wildcards and aliases are forbidden; it is not a
+// function-only bypass.
 func (principal Principal) HasExactPermission(permission string) bool {
-	permission = strings.TrimSpace(permission)
-	if permission == "" {
-		return false
-	}
-	for _, granted := range principal.PermissionKeys() {
-		if strings.TrimSpace(granted) == permission {
-			return true
-		}
-	}
-	return false
+	return principal.HasPermission(permission)
 }
 
 // HasAllPermissions requires every declared SDK function grant. An empty

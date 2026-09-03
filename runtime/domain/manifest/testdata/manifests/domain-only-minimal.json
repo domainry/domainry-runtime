@@ -7,17 +7,45 @@
       "key": "customer",
       "name": "Customer",
       "fields": [
-        {"key": "name", "name": "Name", "type": "text", "required": true},
-        {"key": "owner", "name": "Owner", "type": "user", "required": true}
+        {
+          "key": "name",
+          "name": "Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "owner",
+          "name": "Owner",
+          "type": "user",
+          "required": true
+        }
       ]
     },
     {
       "key": "opportunity",
       "name": "Opportunity",
       "fields": [
-        {"key": "customer", "name": "Customer", "type": "relation", "required": true, "validation": {"target": "customer"}},
-        {"key": "title", "name": "Title", "type": "text", "required": true},
-        {"key": "owner", "name": "Owner", "type": "user", "required": true}
+        {
+          "key": "customer",
+          "name": "Customer",
+          "type": "relation",
+          "required": true,
+          "validation": {
+            "target": "customer"
+          }
+        },
+        {
+          "key": "title",
+          "name": "Title",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "owner",
+          "name": "Owner",
+          "type": "user",
+          "required": true
+        }
       ]
     }
   ],
@@ -25,37 +53,111 @@
     {
       "key": "admin",
       "name": "Admin",
-      "permissions": ["business.access", "admin_console.access", "runtime.appschema.validate_application_definition", "customer.read", "customer.create", "customer.update", "customer.export", "opportunity.read", "opportunity.create", "opportunity.update"],
-      "record_scope": "all_records",
-      "data_permissions": [
-        {"object_key": "customer", "scope": "all_records", "read": true, "write": true},
-        {"object_key": "opportunity", "scope": "all_records", "read": true, "write": true}
+      "permissions": [
+        {
+          "permission_key": "business.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "admin_console.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.appschema.validate_application_definition",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.export",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "opportunity.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "opportunity.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "opportunity.update",
+          "data_scope": "all"
+        }
       ],
       "export_rules": [
-        {"object_key": "customer", "mode": "all_fields"}
+        {
+          "object_key": "customer",
+          "mode": "all_fields"
+        }
       ]
     },
     {
       "key": "business_admin",
       "name": "Business Admin",
-      "permissions": ["business.access", "customer.read", "customer.create", "customer.update", "customer.export", "opportunity.read", "opportunity.create", "opportunity.update"],
-      "record_scope": "all_records",
-      "data_permissions": [
-        {"object_key": "customer", "scope": "all_records", "read": true, "write": true},
-        {"object_key": "opportunity", "scope": "all_records", "read": true, "write": true}
+      "permissions": [
+        {
+          "permission_key": "business.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.export",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "opportunity.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "opportunity.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "opportunity.update",
+          "data_scope": "all"
+        }
       ],
       "export_rules": [
-        {"object_key": "customer", "mode": "all_fields"}
+        {
+          "object_key": "customer",
+          "mode": "all_fields"
+        }
       ]
     },
     {
       "key": "restricted",
       "name": "Restricted",
-      "permissions": ["business.access", "customer.read"],
-      "record_scope": "owned_records",
-      "data_permissions": [
-        {"object_key": "customer", "scope": "owned_records", "read": true, "write": false},
-        {"object_key": "opportunity", "scope": "none", "read": false, "write": false}
+      "permissions": [
+        {
+          "permission_key": "business.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.read",
+          "data_scope": "owner"
+        }
       ]
     }
   ],
@@ -67,7 +169,10 @@
       "icon": "briefcase-business",
       "parent_key": "business",
       "sort_order": 1000,
-      "roles": ["business_admin", "restricted"]
+      "roles": [
+        "business_admin",
+        "restricted"
+      ]
     },
     {
       "key": "object_opportunity",
@@ -76,11 +181,28 @@
       "icon": "briefcase-business",
       "parent_key": "business",
       "sort_order": 1010,
-      "roles": ["business_admin"]
+      "roles": [
+        "business_admin"
+      ]
     }
   ],
   "seed_records": [
-    {"object_key": "customer", "data": {"__seed_key": "customer_acme", "name": "Acme", "owner": "restricted_user"}},
-    {"object_key": "opportunity", "data": {"__seed_key": "opportunity_acme", "customer": "$record:customer_acme", "title": "Acme expansion", "owner": "admin_user"}}
+    {
+      "object_key": "customer",
+      "data": {
+        "__seed_key": "customer_acme",
+        "name": "Acme",
+        "owner": "restricted_user"
+      }
+    },
+    {
+      "object_key": "opportunity",
+      "data": {
+        "__seed_key": "opportunity_acme",
+        "customer": "$record:customer_acme",
+        "title": "Acme expansion",
+        "owner": "admin_user"
+      }
+    }
   ]
 }

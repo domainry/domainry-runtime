@@ -46,7 +46,7 @@ func AuthorizationActionDefinition(schema definitionmodel.ActionSchema, context 
 		CapabilityKey: strings.TrimSpace(context.CapabilityKey), CapabilityLabel: strings.TrimSpace(context.CapabilityLabel),
 		OperationKey: operationKey, OperationLabel: label, Label: label,
 		Exposures:     append([]actioncontract.Exposure(nil), context.Exposures...),
-		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission},
+		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated},
 		NonHTTP:       []actioncontract.NonHTTPBinding{{Kind: "runtime_action", InvocationKey: strings.TrimSpace(schema.Key)}},
 		Permission: &actioncontract.PermissionDefinition{
 			Key: permissionKey, Owner: owner, ResourceKey: resourceKey, OperationKey: operationKey,

@@ -27,7 +27,8 @@ func TestActionAuthorizationWorkspaceAndPermissionBoundaries(t *testing.T) {
 	if ActionAllowed(principalmodel.Principal{}, definitionmodel.ActionSchema{Key: "order.submit"}) {
 		t.Fatal("unknown principal was authorized")
 	}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"order.submit", "order.approve"}})
+	permissions := []string{"order.submit", "order.approve"}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)})
 	if !ActionAllowed(principal, definitionmodel.ActionSchema{ObjectKey: "order", Key: "order.submit"}) {
 		t.Fatal("action key fallback permission rejected")
 	}
@@ -40,26 +41,29 @@ func TestActionAuthorizationWorkspaceAndPermissionBoundaries(t *testing.T) {
 }
 
 func TestActionPersistencePrincipalDoesNotDuplicateOrAliasPermissions(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: []string{"order.read", "order.update"}})
-	persist := ActionPersistencePrincipal(principal, " order ")
-	permissions := persist.PermissionKeys()
-	if len(permissions) != 2 || !persist.HasPermission("order.update") {
-		t.Fatalf("persistence permissions=%v", permissions)
+	permissions := []string{"order.read", "order.update"}
+	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)})
+	persist := ActionPersistencePrincipal(principal, definitionmodel.ActionSchema{Key: "order.update", ObjectKey: " order "}, "update")
+	actualPermissions := persist.PermissionKeys()
+	if len(actualPermissions) != 2 || !persist.HasPermission("order.update") {
+		t.Fatalf("persistence permissions=%v", actualPermissions)
 	}
-	permissions[0] = "changed"
+	actualPermissions[0] = "changed"
 	if principal.PermissionKeys()[0] != "order.read" {
 		t.Fatalf("persistence permissions alias caller=%v", principal.PermissionKeys())
 	}
 }
 
 func TestActionPermissionHasNoCRUDFallback(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "editor", Permissions: []string{"order.read", "order.update"}})
+	permissions := []string{"order.read", "order.update"}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "editor", Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)})
 	action := definitionmodel.ActionSchema{Key: "order.submit", ObjectKey: "order"}
 	if ActionAllowed(principal, action) {
 		t.Fatal("CRUD permission must not authorize a different Action")
 	}
 	principal = accessfixture.WithMutation(principal, func(role *accessfixture.Bundle) {
 		role.Permissions = append(role.Permissions, "order.submit")
+		role.DataPolicies = append(role.DataPolicies, accessfixture.DataPoliciesForPermissions([]string{"order.submit"}, identitysdk.DataScopeAll)...)
 	})
 	if !ActionAllowed(principal, action) {
 		t.Fatal("same-key Action grant was not honored")

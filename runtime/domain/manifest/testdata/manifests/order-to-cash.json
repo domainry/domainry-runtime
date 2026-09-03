@@ -791,58 +791,13 @@
       "key": "admin",
       "name": "Admin",
       "permissions": [
-        "business.access",
-        "runtime.appschema.validate_application_definition"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "customer_account",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "inventory_stock",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "sales_order",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "shipment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "invoice",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "payment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "return_request",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "order_cash_ledger",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "runtime.appschema.validate_application_definition",
+          "data_scope": "all"
         }
       ]
     },
@@ -850,45 +805,57 @@
       "key": "sales",
       "name": "Sales",
       "permissions": [
-        "business.access",
-        "customer_account.read",
-        "inventory_stock.read",
-        "inventory_stock.update",
-        "order_cash_ledger.create",
-        "order_cash_ledger.read",
-        "runtime.workflows.get_ops_workflow_process",
-        "runtime.workflows.list_ops_workflow_executions",
-        "runtime.workflows.list_ops_workflow_processes",
-        "sales_order.create",
-        "sales_order.read",
-        "sales_order.update",
-        "workflow.sales_order.credit_discount_approval.run"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "customer_account",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "sales_order",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "customer_account.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "inventory_stock",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "inventory_stock.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "order_cash_ledger",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "inventory_stock.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "order_cash_ledger.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "order_cash_ledger.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.get_ops_workflow_process",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_executions",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_processes",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "sales_order.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "sales_order.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "sales_order.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "workflow.sales_order.credit_discount_approval.run",
+          "data_scope": "all"
         }
       ]
     },
@@ -896,45 +863,57 @@
       "key": "credit_manager",
       "name": "Credit Manager",
       "permissions": [
-        "business.access",
-        "customer_account.read",
-        "inventory_stock.read",
-        "inventory_stock.update",
-        "order_cash_ledger.create",
-        "runtime.workflows.approve_business_workflow_task",
-        "runtime.workflows.get_ops_workflow_process",
-        "runtime.workflows.list_ops_workflow_executions",
-        "runtime.workflows.list_ops_workflow_processes",
-        "runtime.workflows.reject_business_workflow_task",
-        "runtime.workflows.return_business_workflow_task",
-        "sales_order.read",
-        "sales_order.update"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "customer_account",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "sales_order",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "customer_account.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "inventory_stock",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "inventory_stock.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "order_cash_ledger",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "inventory_stock.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "order_cash_ledger.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.approve_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.get_ops_workflow_process",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_executions",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_processes",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.reject_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.return_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "sales_order.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "sales_order.update",
+          "data_scope": "all"
         }
       ]
     },
@@ -942,52 +921,61 @@
       "key": "warehouse",
       "name": "Warehouse",
       "permissions": [
-        "business.access",
-        "inventory_stock.read",
-        "inventory_stock.update",
-        "invoice.create",
-        "invoice.read",
-        "invoice.update",
-        "order_cash_ledger.create",
-        "order_cash_ledger.read",
-        "order_cash_ledger.update",
-        "sales_order.read",
-        "sales_order.update",
-        "shipment.create",
-        "shipment.read",
-        "shipment.update"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "sales_order",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "shipment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "inventory_stock.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "invoice",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "inventory_stock.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "inventory_stock",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "invoice.create",
+          "data_scope": "all"
         },
         {
-          "object_key": "order_cash_ledger",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "invoice.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "invoice.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "order_cash_ledger.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "order_cash_ledger.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "order_cash_ledger.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "sales_order.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "sales_order.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "shipment.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "shipment.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "shipment.update",
+          "data_scope": "all"
         }
       ]
     },
@@ -995,72 +983,93 @@
       "key": "finance",
       "name": "Finance",
       "permissions": [
-        "business.access",
-        "identity.audit.view",
-        "inventory_stock.read",
-        "inventory_stock.update",
-        "invoice.read",
-        "invoice.update",
-        "order_cash_ledger.create",
-        "order_cash_ledger.read",
-        "payment.create",
-        "payment.read",
-        "payment.update",
-        "return_request.read",
-        "return_request.update",
-        "runtime.workflows.approve_business_workflow_task",
-        "runtime.workflows.get_ops_workflow_process",
-        "runtime.workflows.list_ops_workflow_executions",
-        "runtime.workflows.list_ops_workflow_processes",
-        "runtime.workflows.reject_business_workflow_task",
-        "runtime.workflows.return_business_workflow_task",
-        "sales_order.read",
-        "sales_order.update",
-        "shipment.read"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "sales_order",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "shipment",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "identity.audit.view",
+          "data_scope": "all"
         },
         {
-          "object_key": "inventory_stock",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "inventory_stock.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "invoice",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "inventory_stock.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "payment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "invoice.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "return_request",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "invoice.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "order_cash_ledger",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "order_cash_ledger.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "order_cash_ledger.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "payment.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "payment.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "payment.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "return_request.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "return_request.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.approve_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.get_ops_workflow_process",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_executions",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_processes",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.reject_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.return_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "sales_order.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "sales_order.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "shipment.read",
+          "data_scope": "all"
         }
       ]
     },
@@ -1068,41 +1077,41 @@
       "key": "customer_service",
       "name": "Customer Service",
       "permissions": [
-        "business.access",
-        "inventory_stock.read",
-        "inventory_stock.update",
-        "order_cash_ledger.create",
-        "order_cash_ledger.read",
-        "return_request.create",
-        "return_request.read",
-        "return_request.update",
-        "sales_order.read"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "sales_order",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "inventory_stock",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "inventory_stock.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "return_request",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "inventory_stock.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "order_cash_ledger",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "order_cash_ledger.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "order_cash_ledger.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "return_request.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "return_request.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "return_request.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "sales_order.read",
+          "data_scope": "all"
         }
       ]
     }

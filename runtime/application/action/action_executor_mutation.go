@@ -3,7 +3,6 @@ package action
 import (
 	"context"
 	"fmt"
-	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"strings"
 	"time"
 
@@ -12,6 +11,8 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -133,8 +134,10 @@ func (e *businessActionExecution) ApplyRecordMutation(ctx context.Context, mutat
 	if err != nil {
 		return runtimeext.RecordMutationResult{}, err
 	}
+	actionResource, actionOperation := definitionmodel.ActionPermissionSubject(e.action)
 	ctx = recordmutation.WithMutationInvocation(ctx, recordmutation.MutationInvocation{
 		Source: transactionmodel.MutationSourceAction, ActionKey: e.action.Key, IdempotencyKey: e.invocation.IdempotencyKey,
+		ActionResource: actionResource, ActionOperation: actionOperation,
 		EffectAuthority: actionEffectAuthority(e.action.EffectSet), AssuranceEvidence: e.invocation.AssuranceEvidence,
 		WorkflowTriggers: []string{"action_executed:" + e.action.Key},
 	})

@@ -23,7 +23,7 @@ func (surface runtimeModuleSurface) Routes() []modulehttp.Route {
 	return []modulehttp.Route{{Action: actioncontract.ActionDefinition{
 		Key: "test." + surface.owner + ".get", Owner: "module:" + surface.owner, SourceKind: "module_surface", CapabilityKey: "test." + surface.owner, CapabilityLabel: "Test module",
 		OperationKey: "get", OperationLabel: "Get test module", Label: "Get test module", Exposures: []actioncontract.Exposure{actioncontract.ExposureTenantAdmin},
-		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticatedPrincipal}, HTTP: &actioncontract.HTTPBinding{Method: "GET", RouteTemplate: "/" + surface.owner},
+		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated}, HTTP: &actioncontract.HTTPBinding{Method: "GET", RouteTemplate: "/" + surface.owner},
 		EffectClass: actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "test_module_read", LifecycleStatus: actioncontract.LifecycleActive,
 	}}}
 }

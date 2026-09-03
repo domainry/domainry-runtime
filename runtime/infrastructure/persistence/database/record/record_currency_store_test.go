@@ -20,14 +20,14 @@ func TestSQLiteCurrencyPersistsSortsAndFiltersWithoutBinaryFloat(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	page, err := repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, Sort: []recordmodel.RecordSortRule{{Field: "amount", Direction: "asc"}}})
+	page, err := repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: "amount", Direction: "asc"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(page.Items) != 3 || page.Items[0].Data["amount"] != "-2.00" || page.Items[1].Data["amount"] != "2.00" || page.Items[2].Data["amount"] != "10.00" {
 		t.Fatalf("sorted amounts=%#v", page.Items)
 	}
-	page, err = repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"amount__gte": "2.00"}, Sort: []recordmodel.RecordSortRule{{Field: "amount", Direction: "asc"}}})
+	page, err = repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"amount__gte": "2.00"}, Sort: []recordmodel.RecordSortRule{{Field: "amount", Direction: "asc"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -64,7 +64,7 @@ func validateRuntimeAuthorizationReferences(snapshot appschemamodel.ApplicationS
 	references := []permissionReference{}
 	for roleIndex, role := range roles {
 		for permissionIndex, permission := range role.Permissions {
-			references = append(references, permissionReference{path: fmt.Sprintf("roles[%d].permissions[%d]", roleIndex, permissionIndex), key: permission, sourceKind: "role"})
+			references = append(references, permissionReference{path: fmt.Sprintf("roles[%d].permissions[%d].permission_key", roleIndex, permissionIndex), key: permission.PermissionKey, sourceKind: "role"})
 		}
 	}
 	for reportIndex, report := range snapshot.Reports {

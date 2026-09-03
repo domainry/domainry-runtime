@@ -68,7 +68,7 @@ func Definitions() []Definition {
 	for i := 0; i < typeOfConfig.NumField(); i++ {
 		field := typeOfConfig.Field(i)
 		name := configEnvName(field.Name)
-		secret := strings.Contains(name, "SECRET") || strings.Contains(name, "PASSWORD") || strings.Contains(name, "TOKEN") || strings.Contains(name, "DSN") || strings.Contains(name, "API_KEY") || strings.Contains(name, "ACCESS_TOKEN") || field.Name == "IntegrationDecryptOnlyKeys" || field.Name == "TelemetryHeaders" || field.Name == "RateLimitRedisURL"
+		secret := strings.Contains(name, "SECRET") || strings.Contains(name, "PASSWORD") || strings.Contains(name, "TOKEN") || strings.Contains(name, "DSN") || strings.Contains(name, "API_KEY") || strings.Contains(name, "ACCESS_TOKEN") || field.Name == "IntegrationDecryptOnlyKeys" || field.Name == "TelemetryHeaders" || field.Name == "RateLimitRedisURL" || field.Name == "PrincipalCacheRedisURL"
 		defaultValue := valueOfDefaults.Field(i).Interface()
 		if field.Name == "BusinessSeedSyncDisabled" {
 			defaultValue = !defaultValue.(bool)
@@ -237,6 +237,22 @@ func (c Config) Validate() error {
 		}
 	default:
 		return fmt.Errorf("unsupported RATE_LIMIT_BACKEND %q", c.RateLimitBackend)
+	}
+	principalCacheBackend := strings.ToLower(strings.TrimSpace(c.PrincipalCacheBackend))
+	if c.PrincipalCacheTTL < 0 {
+		return errors.New("PRINCIPAL_CACHE_TTL cannot be negative")
+	}
+	switch principalCacheBackend {
+	case "", "local":
+	case "redis":
+		if strings.TrimSpace(c.PrincipalCacheRedisURL) == "" {
+			return errors.New("PRINCIPAL_CACHE_REDIS_URL is required when PRINCIPAL_CACHE_BACKEND=redis")
+		}
+		if c.PrincipalCacheRedisConnectTimeout <= 0 {
+			return errors.New("PRINCIPAL_CACHE_REDIS_CONNECT_TIMEOUT must be positive")
+		}
+	default:
+		return fmt.Errorf("unsupported PRINCIPAL_CACHE_BACKEND %q", c.PrincipalCacheBackend)
 	}
 	if strings.TrimSpace(c.IdentityAudience) == "" {
 		return fmt.Errorf("IDENTITY_AUDIENCE is required")

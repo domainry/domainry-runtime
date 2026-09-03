@@ -76,6 +76,9 @@ func (recordsHTTPMutationExecutionStore) CompleteRecordMutationExecution(_ conte
 
 func (r *recordsHTTPRepository) ListRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
 	r.lastQuery = query
+	if _, candidateLookup := query.Filters["id__in"]; candidateLookup && r.found && len(r.page.Items) == 0 {
+		return recordmodel.RecordPageResult{Items: []recordmodel.Record{r.record}, Page: 1, PageSize: 1, Total: 1}, r.err
+	}
 	return r.page, r.err
 }
 func (r *recordsHTTPRepository) GetRecord(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error) {
@@ -222,7 +225,7 @@ func TestCreateRecordHTTPAcceptsLocalizedBusinessValues(t *testing.T) {
 	}
 }
 
-func TestRecordsQueryExportReferenceAndImportPreviewHandlers(t *testing.T) {
+func TestRecordsQueryReferenceAndImportPreviewHandlers(t *testing.T) {
 	repository := &recordsHTTPRepository{
 		page:   recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "one", Data: map[string]any{"name": "Ada"}}}, Page: 1, PageSize: 20, Total: 1},
 		record: recordmodel.Record{ID: "one", Data: map[string]any{"name": "Ada"}},
@@ -248,15 +251,6 @@ func TestRecordsQueryExportReferenceAndImportPreviewHandlers(t *testing.T) {
 	handler.recordReferences(w, recordsRequest("GET", "/references", "", map[string]string{"objectKey": " customer ", "recordID": " one "}))
 	if w.Code != http.StatusOK || *serviceErr != nil {
 		t.Fatalf("references status=%d err=%v", w.Code, *serviceErr)
-	}
-
-	w = httptest.NewRecorder()
-	handler.exportRecords(w, recordsRequest("GET", "/export?fields=+name+&reason=+review+&masking_policy=+default+&filter_summary=+all+&page=3&locale=zh-CN&fallback_locale=en-US", "", map[string]string{"objectKey": " customer "}))
-	if w.Code != http.StatusOK || !strings.Contains(w.Header().Get("Content-Type"), "text/csv") || !strings.Contains(w.Header().Get("Content-Disposition"), "attachment; filename=") || !strings.Contains(w.Body.String(), "Ada") {
-		t.Fatalf("export status=%d headers=%v body=%q err=%v", w.Code, w.Header(), w.Body.String(), *serviceErr)
-	}
-	if repository.lastQuery.Locale != "zh-CN" || repository.lastQuery.FallbackLocale != "en-US" {
-		t.Fatalf("export locale query=%#v", repository.lastQuery)
 	}
 
 	w = httptest.NewRecorder()
@@ -457,7 +451,7 @@ func TestRecordHandlersForwardRepositoryFailures(t *testing.T) {
 	repository := &recordsHTTPRepository{err: want}
 	handler, serviceErr := recordsHandlerForTest(recordsHTTPPrincipal())
 	handler.queries = recordsHTTPApplication(repository)
-	for _, call := range []func(http.ResponseWriter, *http.Request){handler.listRecords, handler.getRecord, handler.recordReferences, handler.exportRecords} {
+	for _, call := range []func(http.ResponseWriter, *http.Request){handler.listRecords, handler.getRecord, handler.recordReferences} {
 		*serviceErr = nil
 		w := httptest.NewRecorder()
 		r := recordsRequest("GET", "/record", "", map[string]string{"objectKey": "customer", "recordID": "one"})

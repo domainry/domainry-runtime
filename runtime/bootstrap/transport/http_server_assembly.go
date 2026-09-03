@@ -45,12 +45,14 @@ import (
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	publicationhandoffhttp "github.com/domainry/domainry-runtime/runtime/transport/http/publicationhandoff"
 	workspaceprovisionhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workspaceprovision"
+	"go.uber.org/zap"
 )
 
 type HTTPServerDependencies struct {
 	Config                   config.Config
 	Records                  *composition.RuntimeServices
 	IdentityBinding          identitysdk.Binding
+	PrincipalCache           identityprincipal.Cache
 	AuthorizationActions     func() *actioncontract.Registry
 	MonitoringBinding        monitoringsdk.Binding
 	SchedulerBinding         schedulersdk.Binding
@@ -100,7 +102,12 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		panic("transport.AssembleRuntimeHTTPServer requires an Identity SDK Binding")
 	}
 	publications := records.Applications().PublicationHandoff
-	resolver, err := identityprincipal.NewResolver(dependencies.IdentityBinding, identityprincipal.Options{Clock: dependencies.Clock, MaxCacheTTL: time.Minute})
+	resolver, err := identityprincipal.NewResolver(dependencies.IdentityBinding, identityprincipal.Options{
+		Clock: dependencies.Clock, MaxCacheTTL: dependencies.Config.EffectivePrincipalCacheTTL(), Cache: dependencies.PrincipalCache,
+		OnCacheError: func(err error) {
+			zap.L().Warn("Identity principal cache operation failed; resolving from authoritative binding", zap.String("error_kind", "identity_principal_cache_operation_failed"), zap.Error(err))
+		},
+	})
 	if err != nil {
 		panic("assemble Identity SDK principal resolver: " + err.Error())
 	}

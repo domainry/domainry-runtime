@@ -18,12 +18,14 @@ import (
 )
 
 func TestActionReadEffectAndPhaseRemainingConditions(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: []string{"existing.read"}})
-	if got := actionReadEffectAuthorizationPrincipal(principal, nil, "booking"); len(got.PermissionKeys()) != 1 {
+	permissions := []string{"existing.read"}
+	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)})
+	action := definitionmodel.ActionSchema{Key: "existing.read", ObjectKey: "existing"}
+	if got := actionReadEffectAuthorizationPrincipal(principal, nil, action, "booking"); len(got.PermissionKeys()) != 1 {
 		t.Fatalf("denied permissions=%v", got.PermissionKeys())
 	}
 	set := &definitionmodel.ActionEffectSet{Read: []definitionmodel.ActionObjectEffect{{ObjectKey: "booking"}}}
-	if got := actionReadEffectAuthorizationPrincipal(principal, set, " booking "); len(got.PermissionKeys()) != 2 || !got.HasPermission("booking.read") {
+	if got := actionReadEffectAuthorizationPrincipal(principal, set, action, " booking "); len(got.PermissionKeys()) != 2 || !got.HasPermission("booking.read") {
 		t.Fatalf("authorized permissions=%v", got.PermissionKeys())
 	}
 	var machine *actionExecutionPhaseMachine

@@ -33,7 +33,8 @@ func TestApplicationSchemaFacadeDoesNotDeriveGuardedWritesFromActionConfig(t *te
 }
 
 func TestMetadataVisibilityRemainingCompoundOperands(t *testing.T) {
-	role := accessfixture.Bundle{Permissions: []string{"customer.read", "customer.approve"}}
+	permissions := []string{"customer.read", "customer.approve"}
+	role := accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, role)
 	if !actionAllowed(principal, definitionmodel.ActionSchema{Key: "customer.approve", ObjectKey: "customer"}) {
 		t.Fatal("explicit action permission denied")

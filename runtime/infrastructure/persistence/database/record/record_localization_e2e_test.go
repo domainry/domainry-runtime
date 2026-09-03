@@ -53,7 +53,7 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 	create("workspace-a", "p2", "P-2", "Default tablet", recordmodel.RecordTranslations{"en-US": {"name": "Tablet"}, "zh-CN": {"name": "平板电脑"}})
 	create("workspace-b", "p1", "P-1", "Private phone", recordmodel.RecordTranslations{"zh-CN": {"name": "其他租户商品"}})
 
-	queryValue := recordmodel.RecordListQuery{Page: 1, PageSize: 10, Search: "苹果", SearchFields: []string{"name"}, Locale: "zh-CN", FallbackLocale: "en-US"}
+	queryValue := recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Search: "苹果", SearchFields: []string{"name"}, Locale: "zh-CN", FallbackLocale: "en-US"}
 	page, err := repository.ListRecords(t.Context(), "workspace-a", object, queryValue)
 	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != "p1" || page.Items[0].Data["name"] != "苹果手机" {
 		t.Fatalf("localized search page=%+v err=%v", page, err)
@@ -128,7 +128,7 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 
 func TestRecordLocalizedQuerySQLIsDialectAwareAndNonMultiplying(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "product", Fields: []definitionmodel.FieldSchema{{Key: "sku", Type: "text"}, {Key: "name", Type: "text", Config: map[string]any{"localized": true}}}}
-	queryValue := recordmodel.RecordListQuery{Search: "phone", SearchFields: []string{"sku", "name"}, Sort: []recordmodel.RecordSortRule{{Field: "name", Direction: "asc"}}, Locale: "zh-CN", FallbackLocale: "en-US"}
+	queryValue := recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Search: `phone%_~`, SearchFields: []string{"sku", "name"}, Sort: []recordmodel.RecordSortRule{{Field: "name", Direction: "asc"}}, Locale: "zh-CN", FallbackLocale: "en-US"}
 	for _, driver := range []string{"sqlite", "postgres", "mysql"} {
 		t.Run(driver, func(t *testing.T) {
 			store := openRuntimeStore(t)
@@ -143,11 +143,17 @@ func TestRecordLocalizedQuerySQLIsDialectAwareAndNonMultiplying(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(statement, "EXISTS (SELECT") || strings.Contains(statement, " JOIN ") || !strings.Contains(statement, "COALESCE((SELECT") {
+			if !strings.Contains(statement, "EXISTS (SELECT") || strings.Contains(statement, " JOIN ") || !strings.Contains(statement, "COALESCE((SELECT") || strings.Count(statement, "ESCAPE '~'") != 3 {
 				t.Fatalf("driver=%s statement=%s", driver, statement)
 			}
-			if len(args) == 0 {
-				t.Fatalf("driver=%s query lost bound arguments", driver)
+			patternCount := 0
+			for _, argument := range args {
+				if argument == `%phone~%~_~~%` {
+					patternCount++
+				}
+			}
+			if patternCount != 3 {
+				t.Fatalf("driver=%s literal contains arguments=%#v", driver, args)
 			}
 			if driver == "postgres" && (!strings.Contains(statement, "$1") || strings.Contains(statement, "?")) {
 				t.Fatalf("postgres placeholders statement=%s", statement)

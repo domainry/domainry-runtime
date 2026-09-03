@@ -16,8 +16,8 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 		{path: "/objects/{objectKey}/records/import/preview", method: "post", client: "previewRecordImport"},
 		{path: "/objects/{objectKey}/records/import/apply", method: "post", client: "applyRecordImport"},
 		{path: "/objects/{objectKey}/records/import/jobs", method: "post", client: "enqueueRecordImport"},
-		{path: "/objects/{objectKey}/records/export", method: "get", client: "exportRecords"},
-		{path: "/objects/{objectKey}/records/export/jobs", method: "post", client: "enqueueRecordExport"},
+		{path: "/objects/{objectKey}/records/export", method: "post", client: "exportRecords"},
+		{path: "/record-exports/{jobID}/download", method: "get", client: "downloadRecordExport"},
 		{path: "/objects/{objectKey}/actions/{actionKey}/bulk", method: "post", client: "runBulkAction"},
 		{path: "/files", method: "post", client: "uploadFile"},
 		{path: "/uploads/{filename}", method: "get", client: "downloadUpload"},
@@ -31,12 +31,18 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 	for _, path := range []string{
 		"/objects/{objectKey}/records/import/apply",
 		"/objects/{objectKey}/records/import/jobs",
-		"/objects/{objectKey}/records/export/jobs",
+		"/objects/{objectKey}/records/export",
 		"/objects/{objectKey}/actions/{actionKey}/bulk",
 	} {
 		if operation := openAPITestOperation(t, paths, path, "post"); !openAPITestRequiredHeader(operation, "Idempotency-Key") {
 			t.Errorf("POST %s is missing required Idempotency-Key", path)
 		}
+	}
+	if _, exists := paths["/objects/{objectKey}/records/export/jobs"]; exists {
+		t.Fatal("legacy record export job path is still published")
+	}
+	if _, exists := paths["/objects/{objectKey}/records/export"].(map[string]any)["get"]; exists {
+		t.Fatal("legacy GET record export method is still published")
 	}
 	for _, path := range []string{"/objects/{objectKey}/records/import/preview", "/objects/{objectKey}/records/import/apply", "/objects/{objectKey}/records/import/jobs"} {
 		content := openAPITestOperation(t, paths, path, "post")["requestBody"].(map[string]any)["content"].(map[string]any)

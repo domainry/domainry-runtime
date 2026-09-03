@@ -16,5 +16,5 @@ func (c schedulerFixedClock) Now() time.Time { return c.now }
 func schedulerTestPrincipal(permissions ...string) principalmodel.Principal {
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
 		Known: true, UserID: "operator-1", WorkspaceID: "workspace-a",
-	}}, accessfixture.Bundle{Permissions: permissions, RecordScope: "all_records"})
+	}}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, "all")})
 }

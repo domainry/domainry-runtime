@@ -1,5 +1,7 @@
 package contract
 
+import identitysdk "github.com/domainry/domainry-identity-sdk"
+
 type RecordFeaturePermissionSnapshot struct {
 	RoleKey   string                             `json:"role_key"`
 	UserID    string                             `json:"user_id,omitempty"`
@@ -7,7 +9,6 @@ type RecordFeaturePermissionSnapshot struct {
 	Actions   []RecordFeatureActionPermission    `json:"actions"`
 	Functions []RecordFeatureFunctionPermission  `json:"function_permissions,omitempty"`
 	Workflows []RecordFeaturePermissionDecision  `json:"workflows"`
-	Data      []RecordDataScopePermission        `json:"data_permissions,omitempty"`
 	Fields    []RecordFieldPermissionSnapshot    `json:"field_permissions,omitempty"`
 	Exports   []RecordExportPermissionSnapshot   `json:"export_permissions,omitempty"`
 	Approvals []RecordApprovalPermissionSnapshot `json:"approval_permissions,omitempty"`
@@ -19,15 +20,15 @@ type RecordFeatureObjectPermissions struct {
 }
 
 type RecordFeatureActionPermission struct {
-	Key               string   `json:"key"`
-	ObjectKey         string   `json:"object_key"`
-	Label             string   `json:"label,omitempty"`
-	Kind              string   `json:"kind"`
-	PermissionKey     string   `json:"permission_key"`
-	DataScope         string   `json:"data_scope"`
-	Allowed           bool     `json:"allowed"`
-	Reason            string   `json:"reason"`
-	AssuranceRequired []string `json:"assurance_required"`
+	Key               string                  `json:"key"`
+	ObjectKey         string                  `json:"object_key"`
+	Label             string                  `json:"label,omitempty"`
+	Kind              string                  `json:"kind"`
+	PermissionKey     string                  `json:"permission_key"`
+	DataScopes        []identitysdk.DataScope `json:"data_scopes,omitempty"`
+	Allowed           bool                    `json:"allowed"`
+	Reason            string                  `json:"reason"`
+	AssuranceRequired []string                `json:"assurance_required"`
 }
 
 type RecordFeatureFunctionPermission struct {
@@ -36,35 +37,13 @@ type RecordFeatureFunctionPermission struct {
 }
 
 type RecordFeaturePermissionDecision struct {
-	Key           string `json:"key"`
-	ObjectKey     string `json:"object_key,omitempty"`
-	Action        string `json:"action,omitempty"`
-	PermissionKey string `json:"permission_key,omitempty"`
-	DataScope     string `json:"data_scope,omitempty"`
-	Allowed       bool   `json:"allowed"`
-	Reason        string `json:"reason"`
-}
-
-type RecordDataScopePermission struct {
-	ObjectKey  string                  `json:"object_key"`
-	OwnerField string                  `json:"owner_field,omitempty"`
-	OrgIDField string                  `json:"org_id_field,omitempty"`
-	Context    RecordDataScopeContext  `json:"context,omitempty"`
-	Read       RecordDataScopeDecision `json:"read"`
-	Write      RecordDataScopeDecision `json:"write"`
-}
-
-type RecordDataScopeContext struct {
-	OrgID                 string   `json:"org_id,omitempty"`
-	OrgScopeIDs           []string `json:"org_scope_ids,omitempty"`
-	ReportingScopeUserIDs []string `json:"reporting_scope_user_ids,omitempty"`
-}
-
-type RecordDataScopeDecision struct {
-	Action  string `json:"action"`
-	Scope   string `json:"scope"`
-	Allowed bool   `json:"allowed"`
-	Reason  string `json:"reason"`
+	Key           string                  `json:"key"`
+	ObjectKey     string                  `json:"object_key,omitempty"`
+	Action        string                  `json:"action,omitempty"`
+	PermissionKey string                  `json:"permission_key,omitempty"`
+	DataScopes    []identitysdk.DataScope `json:"data_scopes,omitempty"`
+	Allowed       bool                    `json:"allowed"`
+	Reason        string                  `json:"reason"`
 }
 
 type RecordFieldPermissionSnapshot struct {
@@ -84,11 +63,11 @@ type RecordFieldAccessDecision struct {
 }
 
 type RecordExportPermissionSnapshot struct {
-	ObjectKey string                        `json:"object_key"`
-	Allowed   bool                          `json:"allowed"`
-	Reason    string                        `json:"reason"`
-	DataScope string                        `json:"data_scope"`
-	Fields    []RecordExportFieldPermission `json:"fields"`
+	ObjectKey  string                        `json:"object_key"`
+	Allowed    bool                          `json:"allowed"`
+	Reason     string                        `json:"reason"`
+	DataScopes []identitysdk.DataScope       `json:"data_scopes,omitempty"`
+	Fields     []RecordExportFieldPermission `json:"fields"`
 }
 
 type RecordExportFieldPermission struct {

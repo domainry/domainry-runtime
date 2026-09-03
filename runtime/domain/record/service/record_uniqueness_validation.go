@@ -73,7 +73,7 @@ func (s *RecordUniquenessValidator) ValidateUnique(ctx context.Context, workspac
 		if !complete {
 			continue
 		}
-		page, err := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: filters})
+		page, err := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: filters})
 		if err != nil {
 			return recordInternalError("check unique combination", err)
 		}
@@ -109,7 +109,7 @@ func (s *RecordUniquenessValidator) ValidateUnique(ctx context.Context, workspac
 				filters[key] = value
 			}
 			filters[policy.ConditionField] = conditionValue
-			page, listErr := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: filters})
+			page, listErr := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: filters})
 			if listErr != nil {
 				return recordInternalError("check conditional unique combination", listErr)
 			}

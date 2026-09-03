@@ -29,19 +29,21 @@ import (
 )
 
 type RecordRestoreDependencies struct {
-	Repository        recordrepository.RecordRepository
-	MutationKernel    *recordmutation.MutationKernelApplicationService
-	ObjectForAction   func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error)
-	CanAccess         func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
-	CanWrite          func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool
-	ValidateRelations func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
-	ValidatePolicies  func(context.Context, definitionmodel.ObjectSchema, map[string]any, map[string]any, string, string, principalmodel.Principal) error
-	ValidateUnique    func(context.Context, string, string, definitionmodel.ObjectSchema, string, map[string]any) error
-	ValidateDuplicate func(context.Context, string, definitionmodel.ObjectSchema, string, map[string]any) error
-	UpdatedTriggers   func(string, map[string]any, map[string]any) []string
-	PrepareWorkflow   func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error)
-	ExecuteWorkflow   func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
-	BuildAudit        func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) auditmodel.AuditEvent
+	Repository          recordrepository.RecordRepository
+	MutationKernel      *recordmutation.MutationKernelApplicationService
+	ObjectForAction     func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error)
+	CanAccess           func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
+	CanWrite            func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool
+	ScopeForAction      RecordMutationScopeResolver
+	LoadTargetForAction RecordMutationTargetLoader
+	ValidateRelations   func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
+	ValidatePolicies    func(context.Context, definitionmodel.ObjectSchema, map[string]any, map[string]any, string, string, principalmodel.Principal) error
+	ValidateUnique      func(context.Context, string, string, definitionmodel.ObjectSchema, string, map[string]any) error
+	ValidateDuplicate   func(context.Context, string, definitionmodel.ObjectSchema, string, map[string]any) error
+	UpdatedTriggers     func(string, map[string]any, map[string]any) []string
+	PrepareWorkflow     func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error)
+	ExecuteWorkflow     func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
+	BuildAudit          func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) auditmodel.AuditEvent
 }
 
 // RecordRestoreApplicationService coordinates the complete Record restore use case.
@@ -88,15 +90,26 @@ func (s *RecordRestoreApplicationService) PlanRestoreMutation(ctx context.Contex
 	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "restore"); err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
+	authorizationScope, err := resolveRecordMutationScope(s.dependencies.ScopeForAction, principal, object, "update")
+	if err != nil {
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
+	}
 	if !recordpolicy.RecordUsesSoftDelete(object) {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordRestoreError(apperror.KindBadRequest, "backend.record.restore_unsupported", nil)
 	}
-	record, found, err := s.dependencies.Repository.GetRecord(ctx, principal.WorkspaceID, object, recordID)
+	record, found, err := loadRecordMutationTarget(ctx, s.dependencies.LoadTargetForAction, s.dependencies.Repository, principal.WorkspaceID, object, recordID, authorizationScope)
 	if err != nil {
-		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordRestoreInternalError("get record", err)
+		operation := "get record"
+		if s.dependencies.LoadTargetForAction != nil {
+			operation = "get scoped mutation target"
+		}
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordRestoreInternalError(operation, err)
 	}
 	if !found {
-		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordRestoreError(apperror.KindNotFound, "backend.record.not_found", nil)
+		if s.dependencies.LoadTargetForAction == nil {
+			return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordRestoreError(apperror.KindNotFound, "backend.record.not_found", nil)
+		}
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordRestoreError(apperror.KindForbidden, "backend.record.outside_scope", nil)
 	}
 	if s.dependencies.CanAccess != nil && !s.dependencies.CanAccess(principal, object, record) {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordRestoreError(apperror.KindForbidden, "backend.record.outside_scope", nil)
@@ -105,7 +118,7 @@ func (s *RecordRestoreApplicationService) PlanRestoreMutation(ctx context.Contex
 	if expectedUpdatedAt != "" && expectedUpdatedAt != record.UpdatedAt {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordRestoreError(apperror.KindConflict, "backend.record.version_conflict", nil, "expected", expectedUpdatedAt, "actual", record.UpdatedAt)
 	}
-	planned, err := s.planRestore(ctx, objectKey, object, record, expectedUpdatedAt, principal)
+	planned, err := s.planRestore(ctx, objectKey, object, record, expectedUpdatedAt, principal, authorizationScope)
 	if err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
@@ -119,7 +132,7 @@ type recordRestorePlannedMutation struct {
 	before map[string]any
 }
 
-func (s *RecordRestoreApplicationService) planRestore(ctx context.Context, objectKey string, object definitionmodel.ObjectSchema, record recordmodel.Record, expectedUpdatedAt string, principal principalmodel.Principal) (recordRestorePlannedMutation, error) {
+func (s *RecordRestoreApplicationService) planRestore(ctx context.Context, objectKey string, object definitionmodel.ObjectSchema, record recordmodel.Record, expectedUpdatedAt string, principal principalmodel.Principal, authorizationScope *recordmodel.RecordScopeExpression) (recordRestorePlannedMutation, error) {
 	readRevision := record.UpdatedAt
 	beforeData := recordvalidation.RecordCloneData(record.Data)
 	if !strings.EqualFold(strings.TrimSpace(fmt.Sprint(beforeData["status"])), "deleted") {
@@ -180,7 +193,7 @@ func (s *RecordRestoreApplicationService) planRestore(ctx context.Context, objec
 	if expectedUpdatedAt == "" {
 		expectedUpdatedAt = readRevision
 	}
-	commit := transactionmodel.RecordMutationCommit{Operation: "restore", Object: object, Record: record, Optimistic: transactionmodel.OptimisticPrecondition{ExpectedUpdatedAt: expectedUpdatedAt}}
+	commit := transactionmodel.RecordMutationCommit{Operation: "restore", Object: object, Record: record, Optimistic: transactionmodel.OptimisticPrecondition{ExpectedUpdatedAt: expectedUpdatedAt}, AuthorizationScope: authorizationScope}
 	if s.dependencies.BuildAudit != nil {
 		audit := s.dependencies.BuildAudit(ctx, "record_restored", objectKey, record.ID, principal, "Restored "+objectKey+" record", beforeData, record.Data, map[string]any{"soft_delete": true})
 		commit.Audit = &audit

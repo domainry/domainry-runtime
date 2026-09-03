@@ -122,7 +122,7 @@ func NewRecordSystemOperationHandlers(dependencies RecordSystemOperationDependen
 			if dependencies.PlanCreateMutation == nil {
 				return ActionExecutionResult{}, missingExecutorPort("system_operation:plan_create")
 			}
-			plan, record, err := dependencies.PlanCreateMutation(ctx, action.ObjectKey, payload, "", ActionPersistencePrincipal(invocation.Principal, action.ObjectKey))
+			plan, record, err := dependencies.PlanCreateMutation(ctx, action.ObjectKey, payload, "", ActionPersistencePrincipal(invocation.Principal, action, "create"))
 			if err != nil {
 				return ActionExecutionResult{}, err
 			}
@@ -151,7 +151,7 @@ func NewRecordSystemOperationHandlers(dependencies RecordSystemOperationDependen
 			if dependencies.PlanDeleteMutation == nil {
 				return ActionExecutionResult{}, missingExecutorPort("system_operation:plan_delete")
 			}
-			plans, err := dependencies.PlanDeleteMutation(ctx, action.ObjectKey, invocation.RecordID, "", ActionPersistencePrincipal(invocation.Principal, action.ObjectKey))
+			plans, err := dependencies.PlanDeleteMutation(ctx, action.ObjectKey, invocation.RecordID, "", ActionPersistencePrincipal(invocation.Principal, action, "delete"))
 			if err != nil {
 				return ActionExecutionResult{}, err
 			}
@@ -162,7 +162,7 @@ func NewRecordSystemOperationHandlers(dependencies RecordSystemOperationDependen
 			if dependencies.PlanRestoreMutation == nil {
 				return ActionExecutionResult{}, missingExecutorPort("system_operation:plan_restore")
 			}
-			plan, record, err := dependencies.PlanRestoreMutation(ctx, action.ObjectKey, invocation.RecordID, "", ActionPersistencePrincipal(invocation.Principal, action.ObjectKey))
+			plan, record, err := dependencies.PlanRestoreMutation(ctx, action.ObjectKey, invocation.RecordID, "", ActionPersistencePrincipal(invocation.Principal, action, "update"))
 			if err != nil {
 				return ActionExecutionResult{}, err
 			}
@@ -184,7 +184,7 @@ func NewRecordSystemOperationHandlers(dependencies RecordSystemOperationDependen
 			if expected := strings.TrimSpace(fmt.Sprint(payload["expected_updated_at"])); expected != "" && expected != "<nil>" {
 				patch["expected_updated_at"] = expected
 			}
-			plan, record, err := dependencies.PlanConditionalUpdate(ctx, action.ObjectKey, invocation.RecordID, transactionmodel.ConditionalUpdateInput{Patch: patch}, ActionPersistencePrincipal(invocation.Principal, action.ObjectKey))
+			plan, record, err := dependencies.PlanConditionalUpdate(ctx, action.ObjectKey, invocation.RecordID, transactionmodel.ConditionalUpdateInput{Patch: patch}, ActionPersistencePrincipal(invocation.Principal, action, "update"))
 			if err != nil {
 				return ActionExecutionResult{}, err
 			}
@@ -199,7 +199,7 @@ func recordUpdateSystemOperation(dependencies RecordSystemOperationDependencies)
 		if dependencies.PlanUpdateMutation == nil {
 			return ActionExecutionResult{}, missingExecutorPort("system_operation:plan_update")
 		}
-		plan, record, err := dependencies.PlanUpdateMutation(ctx, action.ObjectKey, invocation.RecordID, payload, ActionPersistencePrincipal(invocation.Principal, action.ObjectKey))
+		plan, record, err := dependencies.PlanUpdateMutation(ctx, action.ObjectKey, invocation.RecordID, payload, ActionPersistencePrincipal(invocation.Principal, action, "update"))
 		if err != nil {
 			return ActionExecutionResult{}, err
 		}

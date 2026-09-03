@@ -168,10 +168,10 @@ func recordLocalizedSearchPredicate(s *database.RuntimeStore, workspaceID string
 	if err != nil {
 		return nil, err
 	}
-	searchValue := "%" + strings.ToLower(strings.TrimSpace(queryValue.Search)) + "%"
+	searchValue := "%" + recordEscapeLikePattern(strings.ToLower(strings.TrimSpace(queryValue.Search))) + "%"
 	searchPredicates := make([]query.Predicate, 0, len(queryValue.SearchFields)+1)
 	for _, field := range queryValue.SearchFields {
-		searchPredicates = append(searchPredicates, query.LikeValue(query.Lower(query.Column(field)), searchValue))
+		searchPredicates = append(searchPredicates, query.LikeValueEscaped(query.Lower(query.Column(field)), searchValue))
 	}
 	const alias = "record_i18n_search"
 	localizedValues := recordLocalizationAny(localized)
@@ -182,11 +182,17 @@ func recordLocalizedSearchPredicate(s *database.RuntimeStore, workspaceID string
 		query.EqualExpressions(query.QualifiedColumn(alias, "record_id"), query.TableColumn(object.Key, "id")),
 		query.InExpression(query.QualifiedColumn(alias, "field_key"), localizedValues...),
 		query.InExpression(query.QualifiedColumn(alias, "locale"), locales...),
-		query.LikeValue(query.Lower(query.QualifiedColumn(alias, "text_value")), searchValue),
+		query.LikeValueEscaped(query.Lower(query.QualifiedColumn(alias, "text_value")), searchValue),
 	}
 	subquery := query.NewSelectBuilder(s.SQLRenderer, recordLocalizedValueTable).Alias(alias).Projections(query.Project(query.Value(1))).Where(query.And(conditions...))
 	searchPredicates = append(searchPredicates, query.ExistsSubquery(subquery))
 	return query.And(basePredicate, query.Or(searchPredicates...)), nil
+}
+
+func recordEscapeLikePattern(value string) string {
+	value = strings.ReplaceAll(value, "~", "~~")
+	value = strings.ReplaceAll(value, "%", "~%")
+	return strings.ReplaceAll(value, "_", "~_")
 }
 
 func recordLocalizedOrders(workspaceID string, object definitionmodel.ObjectSchema, queryValue recordmodel.RecordListQuery) []query.Order {

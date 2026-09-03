@@ -29,8 +29,8 @@ func (s openAPIModuleSurface) OpenAPIOperations() map[string]map[string]any {
 
 func TestOpenAPIModuleOwnershipComesFromSurfaceRoutes(t *testing.T) {
 	surface := openAPIModuleSurface{owner: "example-module", routes: []modulehttp.Route{
-		{Action: openAPITestAction("example.metrics.read", "GET /operations/monitoring/metrics", []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationAuthenticatedPrincipal, actioncontract.EffectRead, "not_applicable", nil)},
-		{Action: openAPITestAction("example.jobs.get", "GET /data-exchange/jobs/{jobID}", []actioncontract.Exposure{actioncontract.ExposurePublic}, actioncontract.AuthorizationAuthenticatedPrincipal, actioncontract.EffectRead, "not_applicable", nil)},
+		{Action: openAPITestAction("example.metrics.read", "GET /operations/monitoring/metrics", []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationAuthenticated, false, actioncontract.EffectRead, "not_applicable", nil)},
+		{Action: openAPITestAction("example.jobs.get", "GET /data-exchange/jobs/{jobID}", []actioncontract.Exposure{actioncontract.ExposurePublic}, actioncontract.AuthorizationAuthenticated, false, actioncontract.EffectRead, "not_applicable", nil)},
 	}}
 	spec := BuildWithModuleHTTPSurfaces(appschemamodel.ApplicationSchemaSnapshot{}, "Domainry", []modulehttp.Surface{surface})
 	paths := spec["paths"].(map[string]any)
@@ -42,7 +42,7 @@ func TestOpenAPIModuleOwnershipComesFromSurfaceRoutes(t *testing.T) {
 		t.Fatalf("module operation id=%v", operation["operationId"])
 	}
 	route := operation["x-domainry-module-route"].(map[string]any)
-	if route["contract_version"] != modulehttp.ContractVersion || route["authorization"] != string(actioncontract.AuthorizationAuthenticatedPrincipal) {
+	if route["contract_version"] != modulehttp.ContractVersion || route["authorization"] != string(actioncontract.AuthorizationAuthenticated) {
 		t.Fatalf("module route=%#v", route)
 	}
 	jobOperation := paths["/data-exchange/jobs/{jobID}"].(map[string]any)["get"].(map[string]any)
@@ -61,7 +61,7 @@ func TestOpenAPIModuleUsesOwnerOperationAndGovernanceContract(t *testing.T) {
 	pattern := "POST /example/{exampleID}"
 	surface := openAPIModuleSurface{
 		owner:  "example-module",
-		routes: []modulehttp.Route{{Action: openAPITestAction("example.write", pattern, []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationExactRolePermission, actioncontract.EffectWrite, "caller_key_required", []actioncontract.ApprovalPolicy{actioncontract.ApprovalReason, actioncontract.ApprovalConfirmation})}},
+		routes: []modulehttp.Route{{Action: openAPITestAction("example.write", pattern, []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationAuthenticated, true, actioncontract.EffectWrite, "caller_key_required", []actioncontract.ApprovalPolicy{actioncontract.ApprovalReason, actioncontract.ApprovalConfirmation})}},
 		operations: map[string]map[string]any{pattern: {
 			"operationId": "applyExample", "summary": "Owner summary",
 			"parameters": []any{map[string]any{"in": "query", "name": "dry_run", "required": false, "schema": map[string]any{"type": "boolean"}}},
@@ -94,7 +94,7 @@ func TestOpenAPIModuleUsesOwnerOperationAndGovernanceContract(t *testing.T) {
 	}
 }
 
-func openAPITestAction(key, pattern string, exposures []actioncontract.Exposure, strategy actioncontract.AuthorizationStrategy, effect actioncontract.EffectClass, idempotency string, approvals []actioncontract.ApprovalPolicy) actioncontract.ActionDefinition {
+func openAPITestAction(key, pattern string, exposures []actioncontract.Exposure, strategy actioncontract.AuthorizationStrategy, requirePermission bool, effect actioncontract.EffectClass, idempotency string, approvals []actioncontract.ApprovalPolicy) actioncontract.ActionDefinition {
 	method, path, _ := strings.Cut(pattern, " ")
 	separator := strings.LastIndex(key, ".")
 	action := actioncontract.ActionDefinition{
@@ -103,9 +103,9 @@ func openAPITestAction(key, pattern string, exposures []actioncontract.Exposure,
 		HTTP: &actioncontract.HTTPBinding{Method: method, RouteTemplate: path}, EffectClass: effect, RiskLevel: actioncontract.RiskLow,
 		ApprovalPolicies: approvals, IdempotencyDecision: idempotency, AuditClass: "mutation_audit_required", LifecycleStatus: actioncontract.LifecycleActive,
 	}
-	if strategy == actioncontract.AuthorizationExactRolePermission {
+	if requirePermission {
 		action.Permission = &actioncontract.PermissionDefinition{Key: key, Owner: action.Owner, ResourceKey: key[:separator], OperationKey: key[separator+1:], Label: key, Category: "Example", LifecycleStatus: actioncontract.LifecycleActive}
-	} else if strategy != actioncontract.AuthorizationAuthenticatedPrincipal {
+	} else if strategy == actioncontract.AuthorizationSigned {
 		action.Authorization.PolicyKey = "example.policy"
 	}
 	return action

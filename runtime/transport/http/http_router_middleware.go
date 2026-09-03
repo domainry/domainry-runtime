@@ -252,7 +252,7 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		policy := routePolicyFor(routes, r)
 		resolved := s.resolveRequestAction(routes, r)
-		if r.Method == http.MethodOptions || resolved.found && (resolved.definition.Authorization.Strategy == actioncontract.AuthorizationAnonymousProtocol || resolved.definition.Authorization.Strategy == actioncontract.AuthorizationDelegatedCredential) || policy.fallback {
+		if r.Method == http.MethodOptions || resolved.found && (resolved.definition.Authorization.Strategy == actioncontract.AuthorizationAnonymous || resolved.definition.Authorization.Strategy == actioncontract.AuthorizationSigned) || policy.fallback {
 			next.ServeHTTP(w, r)
 			return
 		}

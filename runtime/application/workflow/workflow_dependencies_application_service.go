@@ -88,8 +88,8 @@ type WorkflowSchemaProvider interface {
 }
 
 type WorkflowRecordReader interface {
-	GetWorkflowRecord(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error)
-	ListWorkflowRecords(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error)
+	GetWorkflowRecord(context.Context, string, definitionmodel.ObjectSchema, string, principalmodel.Principal) (recordmodel.Record, bool, error)
+	ListWorkflowRecords(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error)
 }
 
 type WorkflowWaitTimerRequest struct {

@@ -38,7 +38,7 @@ func TestResolveScopeMembershipQueriesPermissionIDsBeforeRootFieldIN(t *testing.
 	if !reflect.DeepEqual(lookupArgs, []any{"workspace-a", "member-1", 101}) {
 		t.Fatalf("lookup args=%#v", lookupArgs)
 	}
-	where, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "ledger", ScopeExpression: &resolved})
+	where, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "ledger", ScopeExpression: &resolved})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,12 +67,12 @@ func TestBuildTenantWhereCompilesReverseExistenceAndDenyAllClaim(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	where, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "member", ScopeExpression: &resolved})
+	where, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "member", ScopeExpression: &resolved})
 	if err != nil || !strings.Contains(where, `"member"."id" IN ($2)`) || strings.Contains(where, "package") {
 		t.Fatalf("reverse root where=%s err=%v", where, err)
 	}
 	deny := &recordmodel.RecordScopeExpression{Operator: "in", FieldKey: "id"}
-	where, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "member", ScopeExpression: deny})
+	where, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "member", ScopeExpression: deny})
 	if err != nil || !strings.Contains(where, "1 = 0") || !reflect.DeepEqual(args, []any{"workspace-a"}) {
 		t.Fatalf("deny where=%s args=%#v err=%v", where, args, err)
 	}
@@ -80,7 +80,7 @@ func TestBuildTenantWhereCompilesReverseExistenceAndDenyAllClaim(t *testing.T) {
 
 func TestBuildTenantWhereRejectsUnresolvedRelationPath(t *testing.T) {
 	expression := &recordmodel.RecordScopeExpression{Operator: "eq", Path: []recordmodel.RecordScopePathSegment{{Direction: "forward", RelationFieldKey: "account_id", TargetObjectKey: "account"}}, FieldKey: "id", Values: []string{"account-1"}}
-	if _, _, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "ledger", ScopeExpression: expression}); err == nil || !strings.Contains(err.Error(), "resolved to permission IDs") {
+	if _, _, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "ledger", ScopeExpression: expression}); err == nil || !strings.Contains(err.Error(), "resolved to permission IDs") {
 		t.Fatalf("unresolved relation path err=%v", err)
 	}
 }
@@ -149,7 +149,7 @@ func TestResolveScopeMembershipFallsBackToSingleExistsAboveThreshold(t *testing.
 	if err != nil || !resolved.RelationExists || len(resolved.Path) != 3 {
 		t.Fatalf("overflow resolution=%#v err=%v", resolved, err)
 	}
-	where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "ledger", ScopeExpression: &resolved})
+	where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "ledger", ScopeExpression: &resolved})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestResolveScopeMembershipUsesINAtOneThousand(t *testing.T) {
 	if err != nil || resolved.RelationExists || len(resolved.Values) != 1000 {
 		t.Fatalf("threshold boundary resolution values=%d exists=%v err=%v", len(resolved.Values), resolved.RelationExists, err)
 	}
-	where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "member", ScopeExpression: &resolved})
+	where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "member", ScopeExpression: &resolved})
 	if err != nil || strings.Contains(where, "EXISTS") || strings.Count(where, `"member"."id" IN (`) != 1 || len(args) != 1001 {
 		t.Fatalf("threshold boundary where=%s args=%d err=%v", where, len(args), err)
 	}
@@ -190,7 +190,7 @@ func TestBuildTenantWhereChunksLargePermissionIDSets(t *testing.T) {
 		values[index] = "account"
 	}
 	expression := &recordmodel.RecordScopeExpression{Operator: "in", FieldKey: "account_id", Values: values}
-	where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "ledger", ScopeExpression: expression})
+	where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "ledger", ScopeExpression: expression})
 	if err != nil {
 		t.Fatal(err)
 	}

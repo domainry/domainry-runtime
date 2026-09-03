@@ -67,8 +67,8 @@ func newGymLifecycleP6Environment(t *testing.T) (*runtimecomposition.RuntimeServ
 	role := accessfixture.Bundle{Key: "gym_finance_fixture_operator", Permissions: []string{
 		"gym_financial_entry.read", "gym_financial_entry.create", "gym_financial_entry.update", "gym_financial_entry.delete",
 		"gym_commission_lock.read", "gym_commission_lock.create", "gym_commission_lock.update", "gym_commission_lock.delete",
-	}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{
-		{ObjectKey: "gym_financial_entry", Scope: "all_records", Read: true, Write: true}, {ObjectKey: "gym_commission_lock", Scope: "all_records", Read: true, Write: true},
+	}, DataPolicies: []accessfixture.DataPolicyFixture{
+		{ObjectKey: "gym_financial_entry", Scope: "all", Read: true, Write: true}, {ObjectKey: "gym_commission_lock", Scope: "all", Read: true, Write: true},
 	}}
 	service := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "gym-lifecycle-p6-fixture", TemplateVersion: "1", Name: "Gym Lifecycle P6 Fixture", Objects: objects, Integrations: connectormodel.IntegrationSchema{}, Store: store})
 	return service, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "finance-operator", WorkspaceID: "workspace-primary"}}, role)

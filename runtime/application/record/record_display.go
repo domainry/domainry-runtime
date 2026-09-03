@@ -108,6 +108,10 @@ func (s *RecordApplicationService) NormalizeListQuery(object definitionmodel.Obj
 	return s.normalizeListQuery(object, query, principal)
 }
 
+func (s *RecordApplicationService) NormalizeListQueryForAction(object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, principal principalmodel.Principal, action string) recordmodel.RecordListQuery {
+	return s.queryPolicy.NormalizeListQueryForAction(object, query, principal, action)
+}
+
 func recordExportInternalError(operation string, err error) error {
 	return recordExportError(apperror.KindInternal, "backend.internal", err, "operation", operation)
 }
@@ -220,15 +224,21 @@ func (s *RecordApplicationService) RecordScopeAllowsAction(ctx context.Context, 
 	if s.RecordDomainService == nil || s.RecordDomainService.Repository() == nil {
 		return false, apperror.New(apperror.KindInternal, "backend.permissions.record_store_unavailable", nil, nil)
 	}
-	record, found, err := s.RecordDomainService.Repository().GetRecord(ctx, principal.WorkspaceID, object, recordID)
+	if _, err := s.queryPolicy.ObjectForAction(principal, objectKey, action); err != nil {
+		return false, nil
+	}
+	query := s.queryPolicy.NormalizeListQueryForAction(object, recordmodel.RecordListQuery{
+		Page: 1, PageSize: 1, SkipTotal: true,
+		Filters: map[string]any{"id__in": []any{recordID}},
+	}, principal, action)
+	page, err := s.RecordDomainService.Repository().ListRecords(ctx, principal.WorkspaceID, object, query)
 	if err != nil {
 		return false, apperror.New(apperror.KindInternal, "backend.permissions.record_lookup_failed", err, nil)
 	}
-	if !found {
+	if len(page.Items) == 0 {
 		return false, nil
 	}
-	write := strings.TrimSpace(action) != "read" && strings.TrimSpace(action) != "export"
-	return s.queryPolicy.CanAccessPersistedRecordScope(ctx, principal, object, record, write)
+	return true, nil
 }
 
 func (s *RecordApplicationService) ListRecords(ctx context.Context, objectKey string, query recordmodel.RecordListQuery, principal principalmodel.Principal) (recordmodel.RecordPageResult, error) {

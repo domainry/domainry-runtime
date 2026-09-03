@@ -15,3 +15,13 @@ Builder owns source projects, route registries, design evidence and deployment r
 ## Runtime capability discovery contract
 
 Builder consumes Runtime's versioned capability description before compilation. Unsupported capability keys, incompatible versions and unverifiable hashes fail closed. The source-owned frontend may render routes and journeys, but cannot redefine Runtime execution semantics.
+
+Runtime provides a bounded three-step projection contract. Builder/CLI model-facing consumers must use it as follows:
+
+1. Module summary and `RuntimeModelAPIContractIndex` disclose only selection keys and routing facts. They must be the default model context.
+2. The caller requests one exact capability category or a selected set through `RuntimeModelAPIContractProjection`. Runtime authoring source projections contain only lifecycle, dependency, input schema and reference-binding facts needed to author candidate source values.
+3. Full OpenAPI operations, HTTP paths and methods, headers, status codes, idempotency mechanics, SSE cursors, background-job state and artifact download routes remain exact machine/client contracts. They are not model context.
+
+Runtime-owned automatic delivery policy stays below the model boundary. For example, a model selects `record_export` and sees a `file` result; Runtime chooses inline or background production from the effective export scope. Browser notification, progress, SSE resumption and the eventual artifact download are client/platform behavior and must not become separate model-authored branches.
+
+Owner validation remains authoritative after projection compaction. Removed authoring fields such as example payloads, validation error catalogs, output envelopes and execution policy continue to exist in their source-owner contracts and live validation path; their removal from the model projection does not remove enforcement.

@@ -1,8 +1,6 @@
 package validation
 
 import (
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	"encoding/json"
@@ -13,7 +11,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
-func RecordNormalizeListQuery(object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, principal principalmodel.Principal) recordmodel.RecordListQuery {
+func RecordNormalizeListQuery(object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) recordmodel.RecordListQuery {
 	if query.Page <= 0 {
 		query.Page = 1
 	}
@@ -36,12 +34,6 @@ func RecordNormalizeListQuery(object definitionmodel.ObjectSchema, query recordm
 		query.Sort = []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}
 	} else if !recordSortContainsField(query.Sort, "id") {
 		query.Sort = append(query.Sort, recordmodel.RecordSortRule{Field: "id", Direction: "asc"})
-	}
-	query.Scope = "none"
-	if principal.AccessBundle != nil {
-		query.Scope = "identity_policy"
-	} else if principal.SystemScope.Valid() && principal.Allows(object.Key, "read") {
-		query.Scope = "all_records"
 	}
 	query.RootObjectKey = object.Key
 	return query
@@ -152,7 +144,7 @@ func allowedFieldKeys(object definitionmodel.ObjectSchema, values []string) []st
 	out := []string{}
 	for _, value := range values {
 		value = strings.TrimSpace(value)
-		if RecordFieldExists(object, value) {
+		if RecordFieldExists(object, value) || metaFieldExists(value) {
 			out = append(out, value)
 		}
 	}

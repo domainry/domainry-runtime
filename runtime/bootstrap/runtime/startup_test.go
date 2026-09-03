@@ -439,7 +439,7 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 	dataPermissions := []accessfixture.DataPolicyFixture{}
 	for _, object := range canonical.Objects {
 		permissions = append(permissions, object.Key+".read")
-		dataPermissions = append(dataPermissions, accessfixture.DataPolicyFixture{ObjectKey: object.Key, Scope: "all_records", Read: true})
+		dataPermissions = append(dataPermissions, accessfixture.DataPolicyFixture{ObjectKey: object.Key, Scope: "all", Read: true})
 	}
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "admin", Permissions: permissions, DataPolicies: dataPermissions})
 	if _, err := runtime.records.Applications().BusinessSystem.RuntimeStateSnapshot(t.Context(), admin); err != nil {

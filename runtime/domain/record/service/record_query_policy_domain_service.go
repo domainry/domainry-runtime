@@ -72,24 +72,43 @@ func (s *RecordQueryPolicyDomainService) EnsureReportSnapshotAccess(object defin
 }
 
 func (s *RecordQueryPolicyDomainService) NormalizeListQuery(object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, principal principalmodel.Principal) recordmodel.RecordListQuery {
-	query = recordvalidation.RecordNormalizeListQuery(object, query, principal)
-	if expression, err, handled := RecordCompileSDKDataScopeExpression(object, s.objects(), principal, "read"); handled {
-		query.Scope = "custom"
+	return s.NormalizeListQueryForAction(object, query, principal, "read")
+}
+
+// NormalizeListQueryForAction compiles the exact permission's data predicate
+// into the repository query. An unrestricted (all) policy deliberately emits
+// no extra data-scope predicate; the persistence layer still owns workspace
+// isolation.
+func (s *RecordQueryPolicyDomainService) NormalizeListQueryForAction(object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, principal principalmodel.Principal, action string) recordmodel.RecordListQuery {
+	query = recordvalidation.RecordNormalizeListQuery(object, query)
+	action = normalizeSDKScopeAction(action)
+	if expression, err, handled := RecordCompileSDKDataScopeExpression(object, s.objects(), principal, action); handled {
+		if err != nil {
+			query.AuthorizationMode = recordmodel.RecordQueryAuthorizationPredicate
+			query.RootObjectKey = object.Key
+			query.ScopeExpression = expression
+			query.AuthorizationDiagnostic = &recordmodel.RecordAuthorizationDiagnostic{Code: "backend.policy.expression_invalid", ObjectKey: object.Key, Mode: query.AuthorizationMode, Detail: err.Error()}
+			return query
+		}
+		if expression == nil {
+			query.AuthorizationMode = recordmodel.RecordQueryAuthorizationUnrestricted
+			query.RootObjectKey = ""
+			query.ScopeExpression = nil
+			return query
+		}
+		query.AuthorizationMode = recordmodel.RecordQueryAuthorizationPredicate
 		query.RootObjectKey = object.Key
 		query.ScopeExpression = expression
-		if err != nil {
-			query.ScopeDiagnostic = &recordmodel.RecordScopeDiagnostic{Code: "backend.policy.expression_invalid", ObjectKey: object.Key, Scope: query.Scope, Detail: err.Error()}
-		}
 		return query
 	}
-	if principal.SystemScope.Valid() && principal.Allows(object.Key, "read") {
-		query.Scope = "all_records"
+	if principal.SystemScope.Valid() && principal.Allows(object.Key, action) {
+		query.AuthorizationMode = recordmodel.RecordQueryAuthorizationUnrestricted
 		query.ScopeExpression = nil
 		return query
 	}
-	query.Scope = "custom"
+	query.AuthorizationMode = recordmodel.RecordQueryAuthorizationDeny
 	query.RootObjectKey = object.Key
-	query.ScopeExpression = denyAllRecordScopeExpression()
+	query.ScopeExpression = nil
 	return query
 }
 
@@ -107,7 +126,7 @@ func (s *RecordQueryPolicyDomainService) CanWriteRecordScope(principal principal
 	return principal.SystemScope.Valid() && principal.Allows(object.Key, "update")
 }
 
-// CanWriteCandidateScope evaluates custom relation predicates against the
+// CanWriteCandidateScope evaluates compiled relation predicates against the
 // candidate plus persisted related records. Create authorization cannot query
 // the root record because it has not been inserted yet.
 func (s *RecordQueryPolicyDomainService) CanWriteCandidateScope(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, candidate recordmodel.Record) (bool, error) {
@@ -122,6 +141,24 @@ func (s *RecordQueryPolicyDomainService) CanAccessRecordAction(ctx context.Conte
 		return s.canAccessSDKRecordScope(ctx, principal, object, record, normalizeSDKScopeAction(action))
 	}
 	return principal.SystemScope.Valid() && principal.Allows(object.Key, normalizeSDKScopeAction(action)), nil
+}
+
+// MutationScopeExpression compiles the exact Action's Identity predicate for
+// both the authoritative target lookup and the final SQL mutation. Relation
+// paths stay as correlated EXISTS predicates so authorization is re-evaluated
+// by the same statement that changes the row.
+func (s *RecordQueryPolicyDomainService) MutationScopeExpression(principal principalmodel.Principal, object definitionmodel.ObjectSchema, action string) (*recordmodel.RecordScopeExpression, error) {
+	expression, err, handled := RecordCompileSDKMutationScopeExpression(object, s.objects(), principal, normalizeSDKScopeAction(action))
+	if handled {
+		if err != nil {
+			return nil, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.policy.expression_invalid", Err: err}
+		}
+		return expression, nil
+	}
+	if principal.SystemScope.Valid() && principal.Allows(object.Key, normalizeSDKScopeAction(action)) {
+		return nil, nil
+	}
+	return nil, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.permission.denied"}
 }
 
 // CanAccessPersistedRecordScope evaluates direct and relation-path data scope
@@ -151,7 +188,7 @@ func (s *RecordQueryPolicyDomainService) canAccessSDKRecordScope(ctx context.Con
 		return false, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.policy.expression_invalid", Err: err}
 	}
 	if expression == nil {
-		return false, nil
+		return true, nil
 	}
 	if !sdkScopeExpressionHasRelation(*expression) {
 		return directSDKScopeExpressionMatches(*expression, record), nil

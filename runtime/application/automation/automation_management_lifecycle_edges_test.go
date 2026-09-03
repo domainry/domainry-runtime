@@ -156,46 +156,66 @@ func TestAutomationManagementValidationAndSimulationFailureOutcomes(t *testing.T
 }
 
 type automationReplayRecordProbe struct {
-	page recordmodel.RecordPageResult
-	err  error
+	page    recordmodel.RecordPageResult
+	err     error
+	observe func(recordmodel.RecordListQuery)
 }
 
-func (p automationReplayRecordProbe) ListRecords(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
+func (p automationReplayRecordProbe) ListRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
+	if p.observe != nil {
+		p.observe(query)
+	}
 	return p.page, p.err
 }
 
 func TestAutomationBeforeCreateReplayCoversIncompleteMissingAmbiguousAndAccess(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "order"}
 	principal := automationFacadePrincipal()
+	resolveScope := func(principalmodel.Principal, definitionmodel.ObjectSchema, string) (*recordmodel.RecordScopeExpression, error) {
+		return nil, nil
+	}
 	rule := automationmodel.AutomationRuleSchema{Key: "rule", ObjectKey: "order", Enabled: true, Trigger: automationmodel.AutomationTriggerSchema{Phase: "before", Operation: "create"}, Execution: automationmodel.AutomationExecutionPolicy{IdempotencyKeys: []string{"external_id"}}}
-	if record, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{{Key: "no-keys", ObjectKey: "order", Enabled: true, Trigger: rule.Trigger}, rule}, automationReplayRecordProbe{}, object, map[string]any{}, principal, nil); err != nil || found || record.ID != "" {
+	if record, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{{Key: "no-keys", ObjectKey: "order", Enabled: true, Trigger: rule.Trigger}, rule}, automationReplayRecordProbe{}, object, map[string]any{}, principal, nil, nil); err != nil || found || record.ID != "" {
 		t.Fatalf("incomplete record=%#v found=%v err=%v", record, found, err)
 	}
 	input := map[string]any{"external_id": "A"}
-	if _, _, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{err: errAutomationFacadeProbe}, object, input, principal, nil); apperror.CodeOf(err) != "backend.internal" || !errors.Is(err, errAutomationFacadeProbe) {
+	if _, _, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{}, object, input, principal, nil, nil); apperror.CodeOf(err) != "backend.automation.record_scope_unavailable" {
+		t.Fatalf("missing scope resolver err=%v", err)
+	}
+	compiledScope := &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "owner_user_id", Values: []string{"user"}}
+	var scopedQuery recordmodel.RecordListQuery
+	if _, _, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{observe: func(query recordmodel.RecordListQuery) { scopedQuery = query }}, object, input, principal, func(principalmodel.Principal, definitionmodel.ObjectSchema, string) (*recordmodel.RecordScopeExpression, error) {
+		return compiledScope, nil
+	}, nil); err != nil {
+		t.Fatalf("scoped replay lookup: %v", err)
+	}
+	if scopedQuery.AuthorizationMode != recordmodel.RecordQueryAuthorizationPredicate || scopedQuery.RootObjectKey != object.Key || scopedQuery.ScopeExpression != compiledScope {
+		t.Fatalf("scoped replay query=%#v", scopedQuery)
+	}
+	if _, _, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{err: errAutomationFacadeProbe}, object, input, principal, resolveScope, nil); apperror.CodeOf(err) != "backend.internal" || !errors.Is(err, errAutomationFacadeProbe) {
 		t.Fatalf("list err=%v", err)
 	}
-	if _, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{}, object, input, principal, nil); err != nil || found {
+	if _, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{}, object, input, principal, resolveScope, nil); err != nil || found {
 		t.Fatalf("missing found=%v err=%v", found, err)
 	}
 	page := recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "a"}, {ID: "b"}}}
-	if _, _, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{page: page}, object, input, principal, nil); apperror.CodeOf(err) != "backend.automation.idempotency_ambiguous" {
+	if _, _, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{page: page}, object, input, principal, resolveScope, nil); apperror.CodeOf(err) != "backend.automation.idempotency_ambiguous" {
 		t.Fatalf("ambiguous err=%v", err)
 	}
 	page.Items = page.Items[:1]
-	if _, _, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{page: page}, object, input, principal, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return false }); apperror.CodeOf(err) != "backend.automation.idempotency_conflict" {
+	if _, _, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{page: page}, object, input, principal, resolveScope, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return false }); apperror.CodeOf(err) != "backend.automation.idempotency_conflict" {
 		t.Fatalf("access err=%v", err)
 	}
-	record, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{page: page}, object, input, principal, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true })
+	record, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{page: page}, object, input, principal, resolveScope, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true })
 	if err != nil || !found || record.ID != "a" {
 		t.Fatalf("record=%#v found=%v err=%v", record, found, err)
 	}
 	blankKeyRule := rule
 	blankKeyRule.Execution.IdempotencyKeys = []string{""}
-	if _, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{blankKeyRule}, automationReplayRecordProbe{}, object, input, principal, nil); err != nil || found {
+	if _, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{blankKeyRule}, automationReplayRecordProbe{}, object, input, principal, nil, nil); err != nil || found {
 		t.Fatalf("blank key found=%v err=%v", found, err)
 	}
-	if record, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{page: page}, object, input, principal, nil); err != nil || !found || record.ID != "a" {
+	if record, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{page: page}, object, input, principal, resolveScope, nil); err != nil || !found || record.ID != "a" {
 		t.Fatalf("nil access record=%+v found=%v err=%v", record, found, err)
 	}
 }

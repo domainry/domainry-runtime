@@ -119,15 +119,15 @@ func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
 	}
 
 	store := scriptedRecordStore(t, &recordSQLState{querySteps: []recordSQLQueryStep{{err: errRecordSQL}}})
-	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{Page: 0, PageSize: 10}); !errors.Is(err, errRecordSQL) {
+	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{Page: 0, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}); !errors.Is(err, errRecordSQL) {
 		t.Fatalf("count error=%v", err)
 	}
 	store = scriptedRecordStore(t, &recordSQLState{querySteps: []recordSQLQueryStep{{columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}}, {err: errRecordSQL}}})
-	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10}); !errors.Is(err, errRecordSQL) {
+	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}); !errors.Is(err, errRecordSQL) {
 		t.Fatalf("list error=%v", err)
 	}
 	store = scriptedRecordStore(t, &recordSQLState{querySteps: []recordSQLQueryStep{{columns: []string{"count"}, rows: [][]driver.Value{{int64(1)}}}, {columns: []string{"id"}, nextErr: errRecordSQL}}})
-	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10}); !errors.Is(err, errRecordSQL) {
+	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}); !errors.Is(err, errRecordSQL) {
 		t.Fatalf("list terminal error=%v", err)
 	}
 	store = scriptedRecordStore(t, &recordSQLState{querySteps: []recordSQLQueryStep{{err: errRecordSQL}}})

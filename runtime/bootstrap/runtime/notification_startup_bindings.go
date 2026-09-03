@@ -2,10 +2,12 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -52,6 +54,36 @@ func newProjectRecordNotificationActionAuthorizer(getRecord func(context.Context
 		_, err := getRecord(ctx, objectKey, recordID, principal)
 		return err
 	}
+}
+
+func newRecordExportNotificationActionAuthorizer(binding dataexchange.Binding) notificationfacade.InboxResolvedResourceAuthorizer {
+	return func(ctx context.Context, action notificationmodel.NotificationInboxResolvedAction, principal principalmodel.Principal) error {
+		jobID := strings.TrimSpace(action.RouteParams["resource_id"])
+		if binding == nil || jobID == "" {
+			return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.notification.inbox_action_unavailable"}
+		}
+		if !principal.Known || strings.TrimSpace(principal.WorkspaceID) == "" || strings.TrimSpace(principal.UserID) == "" {
+			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
+		}
+		job, err := binding.Job(ctx, dataexchange.JobRequest{Scope: recordDataExchangeNotificationScope(principal), JobID: jobID})
+		if err != nil {
+			if errors.Is(err, dataexchange.ErrJobNotFound) || apperror.KindOf(err) == apperror.KindNotFound {
+				return &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.notification.inbox_action_resource_not_found", Err: err}
+			}
+			return err
+		}
+		if job.Provider != "records" || job.Operation != "export" || job.WorkspaceID != principal.WorkspaceID || job.ActorID != principal.UserID {
+			return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.inbox_action_forbidden"}
+		}
+		if job.Status != "completed" || strings.TrimSpace(job.ArtifactID) == "" {
+			return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.notification.inbox_action_unavailable"}
+		}
+		return nil
+	}
+}
+
+func recordDataExchangeNotificationScope(principal principalmodel.Principal) dataexchange.Scope {
+	return dataexchange.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, RoleKey: principal.RoleKey, RequestID: principal.RequestID}
 }
 
 type workflowTaskLookup func(context.Context, string, string) (workflowmodel.WorkflowTask, bool, error)

@@ -11,21 +11,45 @@ import (
 func TestTenantWhereScopeAndFilterContract(t *testing.T) {
 	store := fuzzQueryStore{}
 	for _, invalid := range []string{"owned_records", "organization", "organization_and_children", "team", "department", "department_and_children", "subordinates", "store", "territory", "warehouse", "filtered_records"} {
-		if _, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: invalid}); err == nil {
+		if _, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationMode(invalid)}); err == nil {
 			t.Fatalf("legacy scope %q accepted", invalid)
 		}
 	}
 
 	query := recordmodel.RecordListQuery{
-		Search: " Needle ", SearchFields: []string{"name", "code"},
+		AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted,
+		Search:            " Needle ", SearchFields: []string{"name", "code"},
 		Filters: map[string]any{"workspace_id": "other", "empty": "", "plain": 2, "minimum__gte": int64(3), "maximum__lte": float32(4), "ids__in": []any{"a", "", 5}},
 	}
 	where, args, err := BuildTenantWhere(store, "workspace-a", query)
 	if err != nil || !strings.Contains(where, "LOWER") || !strings.Contains(where, `"minimum" >=`) || !strings.Contains(where, `"maximum" <=`) || !strings.Contains(where, `"ids" IN`) || len(args) != 8 {
 		t.Fatalf("search/filter where=%s args=%#v err=%v", where, args, err)
 	}
-	if _, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Search: "needle"}); err != nil || len(args) != 1 {
+	if _, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Search: "needle"}); err != nil || len(args) != 1 {
 		t.Fatalf("search without fields args=%#v err=%v", args, err)
+	}
+	where, args, err = BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Search: `50%_off~today`, SearchFields: []string{"name"}})
+	if err != nil || !strings.Contains(where, "ESCAPE '~'") || !reflect.DeepEqual(args, []any{"workspace-a", `%50~%~_off~~today%`}) {
+		t.Fatalf("literal contains search where=%s args=%#v err=%v", where, args, err)
+	}
+}
+
+func TestTenantWhereAllKeepsTenantAndBusinessFiltersWithoutScopePredicate(t *testing.T) {
+	where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{
+		AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted,
+		Filters:           map[string]any{"id__in": []any{"candidate"}, "status": "open"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(where, `"workspace_id" = $1`) || !strings.Contains(where, `"id" IN ($2)`) || !strings.Contains(where, `"status" = $3`) {
+		t.Fatalf("all lost tenant or business filters: where=%s args=%#v", where, args)
+	}
+	if strings.Contains(where, "owner_user_id") || strings.Contains(where, "owner_org_id") || strings.Contains(where, "EXISTS (") {
+		t.Fatalf("all unexpectedly added a data-scope predicate: where=%s", where)
+	}
+	if !reflect.DeepEqual(args, []any{"workspace-a", "candidate", "open"}) {
+		t.Fatalf("all args=%#v", args)
 	}
 }
 
@@ -35,7 +59,7 @@ func TestTenantWhereCompilesStableOwnershipIDUnion(t *testing.T) {
 		{Operator: "in", FieldKey: "owner_org_id", Values: []string{"sales", "store-1"}},
 	}}
 	where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{
-		Scope: "custom", RootObjectKey: "case", ScopeExpression: &expression,
+		AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "case", ScopeExpression: &expression,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -113,14 +137,17 @@ func TestQueryBuilderHelperContracts(t *testing.T) {
 
 func TestQueryBuilderRemainingScopeAndExpressionConditions(t *testing.T) {
 	store := fuzzQueryStore{}
-	if where, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: "none"}); err != nil || !strings.Contains(where, "1 = 0") {
+	if _, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{}); err == nil {
+		t.Fatal("missing authorization mode accepted")
+	}
+	if where, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationDeny}); err != nil || !strings.Contains(where, "1 = 0") {
 		t.Fatalf("deny-all where=%s err=%v", where, err)
 	}
-	if _, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "object"}); err == nil {
+	if _, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "object"}); err == nil {
 		t.Fatal("custom scope without expression accepted")
 	}
 	expression := &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "id", Values: []string{"one"}}
-	if _, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{Scope: "custom", ScopeExpression: expression}); err == nil {
+	if _, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, ScopeExpression: expression}); err == nil {
 		t.Fatal("custom scope without root object accepted")
 	}
 
@@ -172,12 +199,12 @@ func TestTenantWhereCompilesCanonicalFilterAST(t *testing.T) {
 		{Operator: "or", Children: []recordmodel.RecordFilterExpression{{Operator: "gte", Field: "priority", Value: 10}, {Operator: "not", Children: []recordmodel.RecordFilterExpression{{Operator: "in", Field: "owner_id", Values: []any{"a", "b"}}}}}},
 		{Operator: "is_not_null", Field: "started_at"},
 	}}
-	where, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{FilterExpression: filter})
+	where, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, FilterExpression: filter})
 	if err != nil || !strings.Contains(where, `("status" = $2 AND ("priority" >= $3 OR NOT ("owner_id" IN ($4, $5))) AND "started_at" IS NOT NULL)`) || !reflect.DeepEqual(args, []any{"workspace-a", "ready", float64(10), "a", "b"}) {
 		t.Fatalf("where=%s args=%#v err=%v", where, args, err)
 	}
 	invalid := &recordmodel.RecordFilterExpression{Operator: "and"}
-	if _, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{FilterExpression: invalid}); err == nil {
+	if _, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, FilterExpression: invalid}); err == nil {
 		t.Fatal("invalid canonical filter accepted")
 	}
 }

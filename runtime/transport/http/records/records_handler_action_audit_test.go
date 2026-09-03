@@ -108,13 +108,13 @@ func (p recordsSchemaProvider) SchemaForPrincipal(context.Context, principalmode
 }
 
 func recordsHTTPPrincipal() principalmodel.Principal {
+	permissions := []string{
+		"customer.create", "customer.read", "customer.update", "customer.delete", "customer.import", "customer.export",
+		"order.create", "order.read", "order.update", "order.delete", "order.import", "order.export",
+		"customer.approve", "customer.approve_object",
+	}
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "user"}, RequestID: "request"}, accessfixture.Bundle{
-		Permissions: []string{
-			"customer.create", "customer.read", "customer.update", "customer.delete", "customer.import", "customer.export",
-			"order.create", "order.read", "order.update", "order.delete", "order.import", "order.export",
-			"customer.approve", "customer.approve_object",
-		},
-		RecordScope: "all_records",
+		Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, "all"),
 	})
 }
 
@@ -281,9 +281,8 @@ func TestEffectivePermissionsAppliesRecordRLSOnceForEveryRecordAction(t *testing
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "coach-a"}}, accessfixture.Bundle{
 		Key:         "operator",
 		Permissions: []string{"customer.read", "customer.complete", "customer.cancel", "customer.create"},
-		RecordScope: "owned_records",
 		DataPolicies: []accessfixture.DataPolicyFixture{{
-			ObjectKey: "customer", Scope: "owned_records", Read: true, Write: true,
+			ObjectKey: "customer", Scope: "owner", Read: true, Write: true,
 		}},
 	},
 	)
@@ -298,8 +297,8 @@ func TestEffectivePermissionsAppliesRecordRLSOnceForEveryRecordAction(t *testing
 		wantRecord bool
 		wantReason string
 	}{
-		{name: "owned", owner: "coach-a", wantRecord: true, wantReason: "identity_policy_allowed"},
-		{name: "other owner", owner: "coach-b", wantRecord: false, wantReason: "record_scope_denied"},
+		{name: "owner", owner: "coach-a", wantRecord: true, wantReason: "identity_policy_allowed"},
+		{name: "other owner", owner: "coach-b", wantRecord: false, wantReason: "data_scope_denied"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			repository := &recordsHTTPRepository{record: recordmodel.Record{ID: "customer-1", OwnerUserID: test.owner}, found: true}
@@ -368,7 +367,7 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 	t.Run("record decision is unnecessary", func(t *testing.T) {
 		principal := principalWithPermissions("customer.create")
 		accessfixture.Mutate(&principal, func(role *accessfixture.Bundle) {
-			role.DataPolicies = []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}}
+			role.DataPolicies = []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}}
 		})
 		handler, serviceErr := recordsHandlerForTest(principal)
 		handler.permissions = permissionService(principal, []definitionmodel.ActionSchema{
@@ -386,7 +385,7 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 	t.Run("record service is required", func(t *testing.T) {
 		principal := principalWithPermissions("customer.approve")
 		accessfixture.Mutate(&principal, func(role *accessfixture.Bundle) {
-			role.DataPolicies = []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}}
+			role.DataPolicies = []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}}
 		})
 		handler, serviceErr := recordsHandlerForTest(principal)
 		handler.permissions = permissionService(principal, []definitionmodel.ActionSchema{recordAction})
@@ -400,7 +399,7 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 	t.Run("record lookup error is forwarded", func(t *testing.T) {
 		principal := principalWithPermissions("customer.approve", "order.approve")
 		accessfixture.Mutate(&principal, func(role *accessfixture.Bundle) {
-			role.DataPolicies = []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}}
+			role.DataPolicies = []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}}
 		})
 		handler, serviceErr := recordsHandlerForTest(principal)
 		handler.permissions = permissionService(principal, []definitionmodel.ActionSchema{
@@ -419,10 +418,9 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 	t.Run("denial only mutates matching allowed record actions", func(t *testing.T) {
 		principal := principalWithPermissions("customer.approve", "order.approve", "customer.create")
 		accessfixture.Mutate(&principal, func(role *accessfixture.Bundle) {
-			role.RecordScope = "owned_records"
 			role.DataPolicies = []accessfixture.DataPolicyFixture{
-				{ObjectKey: "customer", Scope: "owned_records", Read: true, Write: true},
-				{ObjectKey: "order", Scope: "all_records", Read: true, Write: true},
+				{ObjectKey: "customer", Scope: "owner", Read: true, Write: true},
+				{ObjectKey: "order", Scope: "all", Read: true, Write: true},
 			}
 		})
 		handler, serviceErr := recordsHandlerForTest(principal)
@@ -449,7 +447,7 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 		for _, action := range snapshot.Actions {
 			decisions[action.Key] = action
 		}
-		if decisions["customer.approve"].Allowed || decisions["customer.approve"].Reason != "record_scope_denied" {
+		if decisions["customer.approve"].Allowed || decisions["customer.approve"].Reason != "data_scope_denied" {
 			t.Fatalf("matching action=%+v", decisions["customer.approve"])
 		}
 		if decisions["customer.denied"].Allowed {

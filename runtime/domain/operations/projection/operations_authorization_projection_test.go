@@ -15,7 +15,7 @@ func TestOperationsAuthorizationProjectsOneExactActionPerOperation(t *testing.T)
 	actionByKey := make(map[string]actioncontract.ActionDefinition, len(actions))
 	bindingsByInvocation := map[string]string{}
 	for _, action := range actions {
-		if action.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission || action.Permission == nil || action.Permission.Key != action.Key {
+		if action.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || action.Permission == nil || action.Permission.Key != action.Key {
 			t.Fatalf("operation Action must use its same-key exact permission: %#v", action)
 		}
 		if len(action.NonHTTP) != 1 || action.NonHTTP[0].Kind != operationsActionBindingKind {

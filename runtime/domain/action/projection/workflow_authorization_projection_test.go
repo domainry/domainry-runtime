@@ -18,7 +18,7 @@ func TestAuthorizationActionForWorkflowProducesConcreteSameKeyPermission(t *test
 	if definition.Key != wantKey || definition.Permission == nil || definition.Permission.Key != wantKey || definition.Permission.Owner != definition.Owner {
 		t.Fatalf("definition=%#v", definition)
 	}
-	if definition.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission || definition.HTTP != nil || len(definition.NonHTTP) != 1 {
+	if definition.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || definition.HTTP != nil || len(definition.NonHTTP) != 1 {
 		t.Fatalf("authorization=%#v bindings=%#v", definition.Authorization, definition.NonHTTP)
 	}
 	registry := actioncontract.NewRegistry()

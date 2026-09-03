@@ -33,6 +33,8 @@ type RecordUpdateDependencies struct {
 	CanAccess             func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	CanWrite              func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool
 	CanAccessScope        func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record, bool) (bool, error)
+	ScopeForAction        RecordMutationScopeResolver
+	LoadTargetForAction   RecordMutationTargetLoader
 	Denied                RecordUpdateDeniedObserver
 	ValidatePipeline      func(context.Context, definitionmodel.ObjectSchema, string, map[string]any, principalmodel.Principal) error
 	ApplyPipelineDefaults func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal, bool) error
@@ -120,12 +122,26 @@ func (s *RecordUpdateApplicationService) update(ctx context.Context, objectKey, 
 		}
 		claim = acquired
 	}
-	record, found, err := s.dependencies.Repository.GetRecord(ctx, principal.WorkspaceID, object, recordID)
+	authorizationScope, err := resolveRecordMutationScope(s.dependencies.ScopeForAction, authorizationPrincipal, object, "update")
 	if err != nil {
-		return recordmodel.Record{}, recordUpdateError(apperror.KindInternal, "backend.internal", err, "operation", "get record")
+		s.denied(ctx, objectKey, recordID, principal, err, "data_scope", patch)
+		return recordmodel.Record{}, err
+	}
+	record, found, err := loadRecordMutationTarget(ctx, s.dependencies.LoadTargetForAction, s.dependencies.Repository, principal.WorkspaceID, object, recordID, authorizationScope)
+	if err != nil {
+		operation := "get record"
+		if s.dependencies.LoadTargetForAction != nil {
+			operation = "get scoped mutation target"
+		}
+		return recordmodel.Record{}, recordUpdateError(apperror.KindInternal, "backend.internal", err, "operation", operation)
 	}
 	if !found {
-		return recordmodel.Record{}, recordUpdateError(apperror.KindNotFound, "backend.record.not_found", nil)
+		if s.dependencies.LoadTargetForAction == nil {
+			return recordmodel.Record{}, recordUpdateError(apperror.KindNotFound, "backend.record.not_found", nil)
+		}
+		err := recordUpdateError(apperror.KindForbidden, "backend.record.outside_scope", nil)
+		s.denied(ctx, objectKey, recordID, principal, err, "data_scope", patch)
+		return recordmodel.Record{}, err
 	}
 	allowed, err := s.canAccessScope(ctx, authorizationPrincipal, object, record, false)
 	if err != nil {
@@ -140,7 +156,7 @@ func (s *RecordUpdateApplicationService) update(ctx context.Context, objectKey, 
 	if strings.TrimSpace(claim.Execution.ID) != "" {
 		auditMetadata = idempotency.AuditMetadata(claimAuditFacts(claim, "record.update", "succeeded"))
 	}
-	planned, err := s.planUpdate(ctx, objectKey, object, record, patch, localizedValues, auditMetadata, principal, authorizationPrincipal)
+	planned, err := s.planUpdate(ctx, objectKey, object, record, patch, localizedValues, auditMetadata, principal, authorizationPrincipal, authorizationScope)
 	if err != nil {
 		return recordmodel.Record{}, err
 	}
@@ -188,7 +204,7 @@ type recordUpdatePlannedMutation struct {
 	before map[string]any
 }
 
-func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectKey string, object definitionmodel.ObjectSchema, record recordmodel.Record, patch map[string]any, localizedValues []recordmodel.RecordLocalizedValueMutation, auditMetadata map[string]any, principal, authorizationPrincipal principalmodel.Principal) (recordUpdatePlannedMutation, error) {
+func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectKey string, object definitionmodel.ObjectSchema, record recordmodel.Record, patch map[string]any, localizedValues []recordmodel.RecordLocalizedValueMutation, auditMetadata map[string]any, principal, authorizationPrincipal principalmodel.Principal, authorizationScope *recordmodel.RecordScopeExpression) (recordUpdatePlannedMutation, error) {
 	optimistic := transactionmodel.OptimisticPrecondition{ExpectedUpdatedAt: record.UpdatedAt}
 	if expectedRaw, hasExpected := patch["expected_updated_at"]; hasExpected {
 		delete(patch, "expected_updated_at")
@@ -294,7 +310,7 @@ func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectK
 	record.Data = nextData
 	record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 	record.UpdateBy = principal.UserID
-	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: record, Optimistic: optimistic, LocalizedValues: localizedValues}
+	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: record, Optimistic: optimistic, AuthorizationScope: authorizationScope, LocalizedValues: localizedValues}
 	commit.Predicates = recordmutation.MutationPredicatesFromContext(ctx)
 	if s.dependencies.AfterOutbox != nil {
 		commit.Outbox = s.dependencies.AfterOutbox(objectKey, "update", beforeData, record, principal)

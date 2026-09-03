@@ -65,12 +65,23 @@ func (s *RecordUpdateApplicationService) PlanConditionalUpdateMutation(ctx conte
 	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "update"); err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
-	record, found, err := s.dependencies.Repository.GetRecord(ctx, principal.WorkspaceID, object, recordID)
+	authorizationScope, err := resolveRecordMutationScope(s.dependencies.ScopeForAction, authorizationPrincipal, object, "update")
 	if err != nil {
-		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindInternal, "backend.internal", err, "operation", "get conditional record")
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
+	}
+	record, found, err := loadRecordMutationTarget(ctx, s.dependencies.LoadTargetForAction, s.dependencies.Repository, principal.WorkspaceID, object, recordID, authorizationScope)
+	if err != nil {
+		operation := "get conditional record"
+		if s.dependencies.LoadTargetForAction != nil {
+			operation = "get scoped conditional mutation target"
+		}
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindInternal, "backend.internal", err, "operation", operation)
 	}
 	if !found {
-		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindNotFound, "backend.record.not_found", nil)
+		if s.dependencies.LoadTargetForAction == nil {
+			return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindNotFound, "backend.record.not_found", nil)
+		}
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindForbidden, "backend.record.outside_scope", nil)
 	}
 	allowed, err := s.canAccessScope(ctx, authorizationPrincipal, object, record, false)
 	if err != nil {
@@ -97,7 +108,7 @@ func (s *RecordUpdateApplicationService) PlanConditionalUpdateMutation(ctx conte
 		predicates = append(predicates, transactionmodel.MutationPredicate{Field: field.Key, Operator: "eq", Value: record.Data[field.Key], ErrorCode: "backend.mutation.concurrent_change"})
 	}
 	ctx = recordmutation.WithMutationPredicates(ctx, predicates)
-	planned, err := s.planUpdate(ctx, objectKey, object, record, patch, nil, nil, principal, authorizationPrincipal)
+	planned, err := s.planUpdate(ctx, objectKey, object, record, patch, nil, nil, principal, authorizationPrincipal, authorizationScope)
 	if err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}

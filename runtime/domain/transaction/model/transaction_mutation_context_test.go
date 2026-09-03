@@ -12,7 +12,7 @@ func TestMutationContextCapturesImmutableIdentitySourceAuthorityAndAssurance(t *
 	assurance := map[string]string{"method": " otp ", "nonce": "nonce-1"}
 	context, err := NewMutationContext(MutationContextInput{
 		WorkspaceID: " workspace-a ", ActorID: "user-a", RoleKey: "operator", Permissions: permissions,
-		DataScope: "owned", IdentityVersion: "identity-v7", Source: MutationSourceAction, ActionKey: " order.submit ",
+		IdentityVersion: "identity-v7", Source: MutationSourceAction, ActionKey: " order.submit ",
 		RequestID: "request-1", IdempotencyKey: "idem-1", CorrelationID: "correlation-1", CausationID: "cause-1",
 		ApplicationSchemaRevision: "revision-9", EffectAuthority: authority, AssuranceEvidence: assurance,
 	})
@@ -82,7 +82,7 @@ func TestTransactionModelRemainingValueAndCloneEdges(t *testing.T) {
 	}
 	context, err := NewMutationContext(MutationContextInput{
 		WorkspaceID: "workspace", ActorID: "actor", RoleKey: "role", Permissions: []string{"", "read", "read"},
-		DataScope: "all", IdentityVersion: "v1", Source: MutationSourceWorkflow, WorkflowKey: "workflow",
+		IdentityVersion: "v1", Source: MutationSourceWorkflow, WorkflowKey: "workflow",
 		RequestID: "request", IdempotencyKey: "idem", CorrelationID: "correlation", CausationID: "cause", ApplicationSchemaRevision: "revision",
 		EffectAuthority:   map[string][]string{"": {"ignored"}, "order": {"status"}},
 		AssuranceEvidence: map[string]string{"": "ignored", " method ": " otp "},
@@ -90,7 +90,7 @@ func TestTransactionModelRemainingValueAndCloneEdges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if context.DataScope() != "all" || context.IdentityVersion() != "v1" || context.WorkflowKey() != "workflow" || context.AutomationKey() != "" || context.RequestID() != "request" || context.IdempotencyKey() != "idem" || context.CorrelationID() != "correlation" || context.CausationID() != "cause" {
+	if context.IdentityVersion() != "v1" || context.WorkflowKey() != "workflow" || context.AutomationKey() != "" || context.RequestID() != "request" || context.IdempotencyKey() != "idem" || context.CorrelationID() != "correlation" || context.CausationID() != "cause" {
 		t.Fatalf("context getters=%+v", context)
 	}
 	if !context.HasEffectAuthority() || len(context.EffectAuthority()) != 1 || context.AssuranceEvidence()["method"] != "otp" {

@@ -197,7 +197,7 @@ func manifestBusinessSeedTargetStates(ctx context.Context, records recordreposit
 			continue
 		}
 		page, err := records.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{
-			Page: 1, PageSize: 1, SkipTotal: true, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
+			Page: 1, PageSize: 1, SkipTotal: true, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
 		})
 		if err != nil {
 			return nil, fmt.Errorf("check domain seed target %s: %w", row.ObjectKey, err)

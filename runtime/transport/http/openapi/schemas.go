@@ -42,6 +42,22 @@ func openAPISchemas(snapshot appschemamodel.ApplicationSchemaSnapshot) map[strin
 				"has_next":  map[string]any{"type": "boolean"},
 			},
 		},
+		"ReferenceOption": map[string]any{
+			"type":                 "object",
+			"additionalProperties": false,
+			"required":             []string{"id", "name"},
+			"properties": map[string]any{
+				"id": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"},
+			},
+		},
+		"ReferenceOptionPage": map[string]any{
+			"type":                 "object",
+			"additionalProperties": false,
+			"required":             []string{"items", "has_more"},
+			"properties": map[string]any{
+				"items": openAPIArray(openAPIRef("ReferenceOption")), "has_more": map[string]any{"type": "boolean"},
+			},
+		},
 		"Action":              openAPIObject(nil),
 		"ActionRequest":       map[string]any{"type": "object", "properties": map[string]any{"data": openAPIObject(nil)}},
 		"ActionResult":        openAPIObject(nil),

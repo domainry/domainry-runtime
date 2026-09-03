@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
 
@@ -50,6 +51,11 @@ type Config struct {
 	RateLimitRedisURL                       string
 	RateLimitRedisPrefix                    string
 	RateLimitRedisConnectTimeout            time.Duration
+	PrincipalCacheBackend                   string
+	PrincipalCacheTTL                       time.Duration
+	PrincipalCacheRedisURL                  string
+	PrincipalCacheRedisPrefix               string
+	PrincipalCacheRedisConnectTimeout       time.Duration
 	CapacityGlobalInFlight                  int
 	CapacityWorkspaceInFlight               int
 	CapacityUseCaseInFlight                 int
@@ -204,6 +210,11 @@ func FromEnv() Config {
 		RateLimitRedisURL:                       strings.TrimSpace(os.Getenv("RATE_LIMIT_REDIS_URL")),
 		RateLimitRedisPrefix:                    env("RATE_LIMIT_REDIS_PREFIX", "domainry:ratelimit:v1:"),
 		RateLimitRedisConnectTimeout:            durationEnv("RATE_LIMIT_REDIS_CONNECT_TIMEOUT", 2*time.Second),
+		PrincipalCacheBackend:                   env("PRINCIPAL_CACHE_BACKEND", "local"),
+		PrincipalCacheTTL:                       durationEnv("PRINCIPAL_CACHE_TTL", identityprincipal.DefaultMaxCacheTTL),
+		PrincipalCacheRedisURL:                  strings.TrimSpace(os.Getenv("PRINCIPAL_CACHE_REDIS_URL")),
+		PrincipalCacheRedisPrefix:               env("PRINCIPAL_CACHE_REDIS_PREFIX", "domainry:identity:principal:v1:"),
+		PrincipalCacheRedisConnectTimeout:       durationEnv("PRINCIPAL_CACHE_REDIS_CONNECT_TIMEOUT", 2*time.Second),
 		CapacityGlobalInFlight:                  intEnv("CAPACITY_GLOBAL_IN_FLIGHT", 256),
 		CapacityWorkspaceInFlight:               intEnv("CAPACITY_WORKSPACE_IN_FLIGHT", 32),
 		CapacityUseCaseInFlight:                 intEnv("CAPACITY_USE_CASE_IN_FLIGHT", 64),
@@ -326,6 +337,13 @@ func (c Config) EffectiveWorkerBatchSize() int {
 		return c.WorkerBatchSize
 	}
 	return 25
+}
+
+func (c Config) EffectivePrincipalCacheTTL() time.Duration {
+	if c.PrincipalCacheTTL > 0 {
+		return c.PrincipalCacheTTL
+	}
+	return identityprincipal.DefaultMaxCacheTTL
 }
 
 func databaseMigrationModeEnv(environment string) string {

@@ -659,7 +659,7 @@ func TestActionScopeDenialAfterLockingReadRollsBackBeforeAtomicFailureAudit(t *t
 		t.Fatalf("failure completion=%+v", completion)
 	}
 	audit := completion.AuditEvents[0]
-	if audit.Event != "record_scope_access_denied" || audit.ObjectKey != "booking" || audit.RecordID != "booking-1" ||
+	if audit.Event != "data_scope_access_denied" || audit.ObjectKey != "booking" || audit.RecordID != "booking-1" ||
 		audit.Metadata["action_key"] != "booking.lock" || audit.Metadata["decision"] != "denied" {
 		t.Fatalf("denial audit=%+v", audit)
 	}

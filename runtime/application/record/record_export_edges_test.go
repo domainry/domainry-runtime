@@ -38,9 +38,17 @@ func recordExportPrincipal(objectKey string) principalmodel.Principal {
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{
 		Permissions: []string{objectKey + ".export"},
 		DataPolicies: []accessfixture.DataPolicyFixture{{
-			ObjectKey: objectKey, Scope: "all_records", Read: true,
+			ObjectKey: objectKey, Scope: "all", Read: true,
 		}},
 	})
+}
+
+func exportRecordDirectForTest(ctx context.Context, service *RecordExportApplicationService, objectKey string, principal principalmodel.Principal, options RecordExportOptions) ([]byte, string, error) {
+	object, fields, evidence, err := service.prepareExport(ctx, objectKey, principal, options, nil, false)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.exportPrepared(ctx, recordExportPrepared{object: object, fields: fields, evidence: evidence, options: options, principal: principal}, recordExportDirectMaxRows)
 }
 
 func TestExportAuthorizationAndFieldSelectionFailures(t *testing.T) {
@@ -62,7 +70,7 @@ func TestExportAuthorizationAndFieldSelectionFailures(t *testing.T) {
 		{name: "requested fields excluded", service: recordExportEdgeService(object, emptyRepository), principal: recordExportPrincipal(object.Key), options: RecordExportOptions{Fields: []string{"missing"}}, wantCode: "backend.export.no_fields"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, _, err := test.service.ExportWithOptions(t.Context(), object.Key, test.principal, test.options)
+			_, _, err := exportRecordDirectForTest(t.Context(), test.service, object.Key, test.principal, test.options)
 			if apperror.CodeOf(err) != test.wantCode {
 				t.Fatalf("err=%v code=%q want=%q", err, apperror.CodeOf(err), test.wantCode)
 			}
@@ -79,25 +87,25 @@ func TestExportSnapshotRepositoryAndCapacityFailures(t *testing.T) {
 		return recordmodel.RecordPageResult{}, nil
 	}})
 	snapshot.dependencies.EnsureSnapshotAccess = func(definitionmodel.ObjectSchema, string, principalmodel.Principal) error { return failure }
-	if _, _, err := snapshot.Export(t.Context(), object.Key, principal); !errors.Is(err, failure) {
+	if _, _, err := exportRecordDirectForTest(t.Context(), snapshot, object.Key, principal, RecordExportOptions{}); !errors.Is(err, failure) {
 		t.Fatalf("snapshot err=%v", err)
 	}
 
 	repositoryFailure := recordExportEdgeService(object, &exportEdgeRepository{list: func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
 		return recordmodel.RecordPageResult{}, failure
 	}})
-	if _, _, err := repositoryFailure.Export(t.Context(), object.Key, principal); apperror.CodeOf(err) != "backend.internal" || !errors.Is(err, failure) {
+	if _, _, err := exportRecordDirectForTest(t.Context(), repositoryFailure, object.Key, principal, RecordExportOptions{}); apperror.CodeOf(err) != "backend.internal" || !errors.Is(err, failure) {
 		t.Fatalf("repository err=%v", err)
 	}
 
-	records := make([]recordmodel.Record, recordExportMaxRows+1)
+	records := make([]recordmodel.Record, recordExportDirectMaxRows+1)
 	for index := range records {
 		records[index] = recordmodel.Record{ID: "record", Data: map[string]any{"name": "value"}}
 	}
 	tooMany := recordExportEdgeService(object, &exportEdgeRepository{list: func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
 		return recordmodel.RecordPageResult{Items: records}, nil
 	}})
-	if _, _, err := tooMany.Export(t.Context(), object.Key, principal); apperror.CodeOf(err) != "backend.export.too_many_records" {
+	if _, _, err := exportRecordDirectForTest(t.Context(), tooMany, object.Key, principal, RecordExportOptions{}); apperror.CodeOf(err) != "backend.export.too_many_records" {
 		t.Fatalf("too many err=%v code=%q", err, apperror.CodeOf(err))
 	}
 
@@ -106,7 +114,7 @@ func TestExportSnapshotRepositoryAndCapacityFailures(t *testing.T) {
 			{ID: "record-1", Data: map[string]any{"name": strings.Repeat("x", recordExportMaxBytes)}},
 		}}, nil
 	}})
-	if _, _, err := tooLarge.Export(t.Context(), object.Key, principal); apperror.CodeOf(err) != "backend.export.output_too_large" {
+	if _, _, err := exportRecordDirectForTest(t.Context(), tooLarge, object.Key, principal, RecordExportOptions{}); apperror.CodeOf(err) != "backend.export.output_too_large" {
 		t.Fatalf("too large err=%v code=%q", err, apperror.CodeOf(err))
 	}
 }
@@ -117,8 +125,14 @@ func TestExportPaginationAccessFilteringAndMidPageCancellation(t *testing.T) {
 	pages := 0
 	repository := &exportEdgeRepository{list: func(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
 		pages++
-		if query.Page == 1 {
+		if query.Page != 1 || query.PageSize != recordExportBatchSize || !query.SkipTotal || len(query.Sort) != 1 || query.Sort[0].Field != "id" || query.Sort[0].Direction != "asc" {
+			t.Fatalf("export did not use stable keyset pagination: %#v", query)
+		}
+		if query.AfterID == "" {
 			return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "hidden", Data: map[string]any{"name": "Hidden"}}}, HasNext: true}, nil
+		}
+		if query.AfterID != "hidden" {
+			t.Fatalf("second page cursor=%q", query.AfterID)
 		}
 		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "visible", Data: map[string]any{"name": "Visible"}}}}, nil
 	}}
@@ -126,7 +140,7 @@ func TestExportPaginationAccessFilteringAndMidPageCancellation(t *testing.T) {
 	service.dependencies.CanAccess = func(_ principalmodel.Principal, _ definitionmodel.ObjectSchema, record recordmodel.Record) bool {
 		return record.ID != "hidden"
 	}
-	content, _, err := service.Export(t.Context(), object.Key, principal)
+	content, _, err := exportRecordDirectForTest(t.Context(), service, object.Key, principal, RecordExportOptions{})
 	if err != nil || pages != 2 || strings.Contains(string(content), "Hidden") || !strings.Contains(string(content), "Visible") {
 		t.Fatalf("pages=%d content=%q err=%v", pages, content, err)
 	}
@@ -140,7 +154,7 @@ func TestExportPaginationAccessFilteringAndMidPageCancellation(t *testing.T) {
 		cancel()
 		return true
 	}
-	if _, _, err := cancelService.Export(ctx, object.Key, principal); !errors.Is(err, context.Canceled) {
+	if _, _, err := exportRecordDirectForTest(ctx, cancelService, object.Key, principal, RecordExportOptions{}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("mid-page cancellation err=%v", err)
 	}
 }

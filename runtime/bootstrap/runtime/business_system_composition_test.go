@@ -44,8 +44,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 			"scheduler.definitions.list", "runtime.workflows.list_ops_workflow_executions", "runtime.workflows.list_ops_workflow_processes",
 			"integration.audit.view",
 		},
-		RecordScope:  "all_records",
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}},
 	}
 	application, admin := newMetadataCompositionAppWithManifest(t, "references", objects, []accessfixture.Bundle{adminRole}, func(manifest *manifestmodel.ManifestSchema) {
 		manifest.Actions = []definitionmodel.ActionSchema{{Key: "customer.qualify", ObjectKey: "customer", Label: "Qualify", Kind: "record_update", AuditEvent: "customer_qualified"}}
@@ -82,8 +81,8 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 func TestBusinessSystemSnapshotCompositionHidesGovernanceFacts(t *testing.T) {
 	objects := []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text"}}}}
 	roles := []accessfixture.Bundle{
-		{Key: "admin", Permissions: []string{"runtime.appschema.validate_application_definition"}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}}},
-		{Key: "viewer", Permissions: []string{"customer.read"}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}}},
+		{Key: "admin", Permissions: []string{"runtime.appschema.validate_application_definition"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}}},
+		{Key: "viewer", Permissions: []string{"customer.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true}}},
 	}
 	application, _ := newMetadataCompositionApp(t, "visibility", objects, roles)
 	defer application.CloseContext(t.Context())

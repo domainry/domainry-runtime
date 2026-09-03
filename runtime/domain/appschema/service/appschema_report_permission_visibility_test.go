@@ -35,7 +35,7 @@ func TestSnapshotReportPermissionAndObjectVisibilityIntersection(t *testing.T) {
 	principal := func(permissions ...string) principalmodel.Principal {
 		return accessfixture.Attach(
 			principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}},
-			accessfixture.Bundle{Permissions: permissions, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: orderLine.Key, Scope: "all_records", Read: true}}},
+			accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)},
 		)
 	}
 

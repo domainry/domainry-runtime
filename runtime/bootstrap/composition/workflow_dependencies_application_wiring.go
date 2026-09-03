@@ -85,7 +85,7 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 		Identity:     records.identityDirectory,
 		Principals:   records.agentPrincipals,
 		Schema:       runtimeWorkflowSchemaProvider{records: records},
-		RecordReader: workflowapplication.NewWorkflowRecordReaderAdapter(records.recordRepo),
+		RecordReader: workflowapplication.NewWorkflowRecordReaderAdapter(records.recordRepo, records.RecordQueryPolicyDomainService.NormalizeListQuery),
 		ObjectForAction: func(ctx context.Context, principal principalmodel.Principal, objectKey, action string) (definitionmodel.ObjectSchema, error) {
 			if err := ctx.Err(); err != nil {
 				return definitionmodel.ObjectSchema{}, err

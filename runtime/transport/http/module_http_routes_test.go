@@ -54,12 +54,12 @@ func TestModuleHTTPRouteAuthorizationUsesDeclaredPermissionPolicy(t *testing.T) 
 		want      int
 		executed  bool
 	}{
-		{name: "anonymous", route: modulehttp.Route{Action: moduleHTTPTestAction("module.resource.public", actioncontract.AuthorizationAnonymousProtocol)}, want: http.StatusNoContent, executed: true},
-		{name: "authenticated missing principal", route: modulehttp.Route{Action: moduleHTTPTestAction("module.resource.self", actioncontract.AuthorizationAuthenticatedPrincipal)}, want: http.StatusUnauthorized},
-		{name: "principal only", route: modulehttp.Route{Action: moduleHTTPTestAction("module.resource.self", actioncontract.AuthorizationAuthenticatedPrincipal)}, principal: &known, want: http.StatusNoContent, executed: true},
-		{name: "required permission denied", route: modulehttp.Route{Action: moduleHTTPTestAction("module.resource.read", actioncontract.AuthorizationExactRolePermission)}, principal: &known, want: http.StatusForbidden},
-		{name: "workspace admin is not an implicit module grant", route: modulehttp.Route{Action: moduleHTTPTestAction("module.resource.read", actioncontract.AuthorizationExactRolePermission)}, principal: &workspaceAdmin, want: http.StatusForbidden},
-		{name: "required permission allowed", route: modulehttp.Route{Action: moduleHTTPTestAction("module.resource.read", actioncontract.AuthorizationExactRolePermission)}, principal: &read, want: http.StatusNoContent, executed: true},
+		{name: "anonymous", route: modulehttp.Route{Action: moduleHTTPTestAction("module.resource.public", actioncontract.AuthorizationAnonymous, false)}, want: http.StatusNoContent, executed: true},
+		{name: "authenticated missing principal", route: modulehttp.Route{Action: moduleHTTPTestAction("module.resource.self", actioncontract.AuthorizationAuthenticated, false)}, want: http.StatusUnauthorized},
+		{name: "principal only", route: modulehttp.Route{Action: moduleHTTPTestAction("module.resource.self", actioncontract.AuthorizationAuthenticated, false)}, principal: &known, want: http.StatusNoContent, executed: true},
+		{name: "required permission denied", route: modulehttp.Route{Action: moduleHTTPTestAction("module.resource.read", actioncontract.AuthorizationAuthenticated, true)}, principal: &known, want: http.StatusForbidden},
+		{name: "workspace admin is not an implicit module grant", route: modulehttp.Route{Action: moduleHTTPTestAction("module.resource.read", actioncontract.AuthorizationAuthenticated, true)}, principal: &workspaceAdmin, want: http.StatusForbidden},
+		{name: "required permission allowed", route: modulehttp.Route{Action: moduleHTTPTestAction("module.resource.read", actioncontract.AuthorizationAuthenticated, true)}, principal: &read, want: http.StatusNoContent, executed: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			status, executed := call(test.route, test.principal)
@@ -70,7 +70,7 @@ func TestModuleHTTPRouteAuthorizationUsesDeclaredPermissionPolicy(t *testing.T) 
 	}
 }
 
-func moduleHTTPTestAction(key string, strategy actioncontract.AuthorizationStrategy) actioncontract.ActionDefinition {
+func moduleHTTPTestAction(key string, strategy actioncontract.AuthorizationStrategy, requirePermission bool) actioncontract.ActionDefinition {
 	separator := strings.LastIndex(key, ".")
 	action := actioncontract.ActionDefinition{
 		Key: key, Owner: "module:test", SourceKind: "module_surface", CapabilityKey: "module.resource", CapabilityLabel: "Module resource",
@@ -78,10 +78,8 @@ func moduleHTTPTestAction(key string, strategy actioncontract.AuthorizationStrat
 		Authorization: actioncontract.Authorization{Strategy: strategy}, HTTP: &actioncontract.HTTPBinding{Method: "GET", RouteTemplate: "/module-resource"},
 		EffectClass: actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "module_resource_read", LifecycleStatus: actioncontract.LifecycleActive,
 	}
-	if strategy == actioncontract.AuthorizationExactRolePermission {
+	if requirePermission {
 		action.Permission = &actioncontract.PermissionDefinition{Key: key, Owner: action.Owner, ResourceKey: key[:separator], OperationKey: key[separator+1:], Label: key, Category: "Module", LifecycleStatus: actioncontract.LifecycleActive}
-	} else if strategy == actioncontract.AuthorizationAnonymousProtocol {
-		action.Authorization.PolicyKey = "module.public_protocol"
 	}
 	return action
 }

@@ -35,10 +35,6 @@ func TestRecordFacadeRejectsUnknownWorkspaceBeforeDependencies(t *testing.T) {
 			_, _, err := service.EnqueueImportJob(t.Context(), "customer", []byte("name\nAcme\n"), "key", principal)
 			return err
 		}},
-		{name: "enqueue export", call: func() error {
-			_, _, err := service.EnqueueExportJob(t.Context(), "customer", "key", RecordExportOptions{}, principal)
-			return err
-		}},
 		{name: "preview import", call: func() error { _, err := service.PreviewImport(t.Context(), "customer", nil, principal); return err }},
 		{name: "apply import", call: func() error { _, err := service.ApplyImport(t.Context(), "customer", nil, principal); return err }},
 		{name: "apply idempotent import", call: func() error {
@@ -66,9 +62,8 @@ func TestRecordFacadeRejectsUnknownWorkspaceBeforeDependencies(t *testing.T) {
 			_, err := service.RestoreRecord(t.Context(), "customer", "customer-1", principal)
 			return err
 		}},
-		{name: "export", call: func() error { _, _, err := service.ExportRecords(t.Context(), "customer", principal); return err }},
-		{name: "export options", call: func() error {
-			_, _, err := service.ExportRecordsWithOptions(t.Context(), "customer", principal, RecordExportOptions{})
+		{name: "dispatch export", call: func() error {
+			_, err := service.DispatchExportIdempotent(t.Context(), "customer", "key", RecordExportOptions{}, principal)
 			return err
 		}},
 	}

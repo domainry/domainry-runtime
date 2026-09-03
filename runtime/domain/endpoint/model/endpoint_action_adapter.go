@@ -44,16 +44,16 @@ func AuthorizationActionDefinition(contract RuntimeEndpointContractV1) (actionco
 	policy := strings.TrimSpace(contract.PermissionPolicyRef)
 	switch {
 	case policy == "anonymous":
-		definition.Authorization = actioncontract.Authorization{Strategy: actioncontract.AuthorizationAnonymousProtocol, PolicyKey: "runtime.http.anonymous"}
+		definition.Authorization = actioncontract.Authorization{Strategy: actioncontract.AuthorizationAnonymous}
 	case strings.HasPrefix(policy, "integration_entrypoint_policy:"), len(contract.ProtocolAudiences) != 0:
 		definition.Authorization = actioncontract.Authorization{
-			Strategy: actioncontract.AuthorizationServiceIdentity, PolicyKey: policy,
+			Strategy: actioncontract.AuthorizationSigned, PolicyKey: policy,
 			Audiences: append([]string(nil), contract.ProtocolAudiences...),
 		}
 	case strings.HasPrefix(policy, "owner_handler_policy:"):
-		definition.Authorization = actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticatedPrincipal}
+		definition.Authorization = actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated}
 	case strings.HasPrefix(policy, "static_permission:"):
-		definition.Authorization = actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission}
+		definition.Authorization = actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated}
 		separator := strings.LastIndex(definition.Key, ".")
 		resourceKey := definition.Key[:separator]
 		definition.Permission = &actioncontract.PermissionDefinition{
@@ -90,7 +90,7 @@ func ValidateHostFacadeAction(contract RuntimeEndpointContractV1, definition act
 		return fmt.Errorf("Action %q does not bind Runtime handler %q", normalized.Key, contract.EndpointIdentity)
 	}
 	if !strings.HasPrefix(strings.TrimSpace(contract.PermissionPolicyRef), "static_permission:") ||
-		normalized.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission ||
+		normalized.Authorization.Strategy != actioncontract.AuthorizationAuthenticated ||
 		normalized.Permission == nil || normalized.Permission.Key != normalized.Key || normalized.Permission.Owner != normalized.Owner {
 		return fmt.Errorf("Action %q is not an exact same-key role Action", normalized.Key)
 	}

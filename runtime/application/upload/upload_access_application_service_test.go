@@ -65,12 +65,8 @@ func uploadAccessPrincipal(permissions ...string) principalmodel.Principal {
 		grantKeys[key] = true
 		grants = append(grants, identitysdk.FunctionGrant{Resource: identitysdk.ResourceType(resource), Action: identitysdk.Action(action), Effect: identitysdk.EffectAllow})
 		if resource == "asset" || resource == "document" {
-			dataAction := identitysdk.DataActionRead
-			if action == "create" || action == "update" || action == "delete" {
-				dataAction = identitysdk.DataActionWrite
-			}
 			dataPolicies = append(dataPolicies, identitysdk.DataPolicy{
-				Key: "upload-test-" + resource + "-" + action, Resource: identitysdk.ResourceType(resource), Action: dataAction, Effect: identitysdk.EffectAllow,
+				Key: "upload-test-" + resource + "-" + action, Resource: identitysdk.ResourceType(resource), Action: identitysdk.Action(action), Effect: identitysdk.EffectAllow,
 				Predicate: identitysdk.Predicate{Fact: "id", Operator: identitysdk.OperatorExists, Value: true},
 			})
 		}

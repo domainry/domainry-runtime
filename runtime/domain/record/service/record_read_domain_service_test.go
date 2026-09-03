@@ -141,7 +141,7 @@ func TestReadServiceActionReadsPreserveSensitiveBusinessFieldsAfterScopeAuthoriz
 		Policy:     readPolicyProbe{object: object, allow: true},
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Read: true, Scope: "all_records"}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Read: true, Scope: "all"}},
 	})
 
 	external, err := service.GetRecord(t.Context(), object.Key, record.ID, principal)
@@ -177,8 +177,8 @@ func TestReadServiceAuditsConfiguredDetailScopeDenialOnly(t *testing.T) {
 			audited = append(audited, gotObject.Key+":"+recordID)
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{DataPolicies: []accessfixture.DataPolicyFixture{{
-		ObjectKey: object.Key, Read: true, Scope: "custom", AuditDenial: true,
+	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: []string{"customer.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{
+		ObjectKey: object.Key, Read: true, AuditDenial: true,
 	}}})
 	if _, err := service.GetRecord(t.Context(), object.Key, "customer-1", principal); apperror.KindOf(err) != apperror.KindNotFound {
 		t.Fatalf("get error = %v", err)

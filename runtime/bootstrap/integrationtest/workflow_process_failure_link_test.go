@@ -40,7 +40,7 @@ func TestWorkflowGraphFailureAndDeadLetterLinkToProcessAndNode(t *testing.T) {
 			Edges: []definitionmodel.WorkflowGraphEdge{{ID: "start-action", Source: "start", Target: "broken_action"}},
 		},
 	}
-	role := accessfixture.Bundle{Key: "admin", Permissions: []string{"workflow." + workflow.Key + ".run"}, RecordScope: "all_records"}
+	role := accessfixture.Bundle{Key: "admin", Permissions: []string{"workflow." + workflow.Key + ".run"}}
 	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "workflow-links", TemplateVersion: "1", Name: "Workflow Links", Objects: nil, Actions: nil, Workflows: []definitionmodel.WorkflowSchema{workflow}, AutomationRules: nil, Dictionaries: nil, Integrations: connectormodel.IntegrationSchema{}, Reports: nil, Skills: nil, Agents: nil, Store: store, WorkflowProcesses: workflowpersistence.NewWorkflowProcessStore(store), WorkflowWorker: workflowpersistence.NewWorkflowWorkerStore(store)})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, role)
 

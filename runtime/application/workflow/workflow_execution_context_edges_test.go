@@ -140,13 +140,14 @@ func TestWorkflowExecutionContextPayloadRetryAndAuditProjection(t *testing.T) {
 	previous := workflowmodel.WorkflowExecution{ID: "previous", Status: "failed", ObjectKey: "order", RecordID: "record", LastError: "provider.timeout", Payload: map[string]any{
 		"request_id": "request", "initiating_user_id": "user", "initiating_role_key": "role", "scheduled_at": "time", "empty": "",
 	}}
-	refreshed := service.workflowRetryPayload(t.Context(), "workspace", previous)
+	retryPrincipal := workflowExecutionPrincipal()
+	refreshed := service.workflowRetryPayload(t.Context(), "workspace", previous, retryPrincipal)
 	if refreshed["name"] != "new" || refreshed["retry_source_execution_id"] != "previous" || refreshed["retry_source_last_error"] != "provider.timeout" || refreshed["request_id"] != "request" {
 		t.Fatalf("refreshed=%v", refreshed)
 	}
 	withoutLastError := previous
 	withoutLastError.LastError = ""
-	if _, exists := service.workflowRetryPayload(t.Context(), "workspace", withoutLastError)["retry_source_last_error"]; exists {
+	if _, exists := service.workflowRetryPayload(t.Context(), "workspace", withoutLastError, retryPrincipal)["retry_source_last_error"]; exists {
 		t.Fatal("empty last error projected")
 	}
 	for name, candidate := range map[string]workflowmodel.WorkflowExecution{
@@ -155,22 +156,22 @@ func TestWorkflowExecutionContextPayloadRetryAndAuditProjection(t *testing.T) {
 		"missing object":   {ObjectKey: "missing", RecordID: "record", Payload: map[string]any{"value": "kept"}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if actual := service.workflowRetryPayload(t.Context(), "workspace", candidate); actual["value"] != "kept" {
+			if actual := service.workflowRetryPayload(t.Context(), "workspace", candidate, retryPrincipal); actual["value"] != "kept" {
 				t.Fatalf("payload=%v", actual)
 			}
 		})
 	}
 	partial := previous
 	partial.Payload = map[string]any{"request_id": "request", "scheduled_at": ""}
-	if actual := service.workflowRetryPayload(t.Context(), "workspace", partial); actual["request_id"] != "request" {
+	if actual := service.workflowRetryPayload(t.Context(), "workspace", partial, retryPrincipal); actual["request_id"] != "request" {
 		t.Fatalf("partial retry payload=%v", actual)
 	}
 	service.recordReader = workflowRecordReaderEdgeStub{errID: "record"}
-	if actual := service.workflowRetryPayload(t.Context(), "workspace", previous); actual["request_id"] != "request" {
+	if actual := service.workflowRetryPayload(t.Context(), "workspace", previous, retryPrincipal); actual["request_id"] != "request" {
 		t.Fatalf("failed read payload=%v", actual)
 	}
 	service.recordReader = workflowRecordReaderEdgeStub{records: map[string]recordmodel.Record{}}
-	if actual := service.workflowRetryPayload(t.Context(), "workspace", previous); actual["request_id"] != "request" {
+	if actual := service.workflowRetryPayload(t.Context(), "workspace", previous, retryPrincipal); actual["request_id"] != "request" {
 		t.Fatalf("missing record payload=%v", actual)
 	}
 

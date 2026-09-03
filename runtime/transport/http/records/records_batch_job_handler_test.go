@@ -58,8 +58,8 @@ func newRecordBatchHTTPFixture(t *testing.T) recordBatchHTTPFixture {
 		t.Fatal(err)
 	}
 	role := accessfixture.Bundle{
-		Key: "admin", Permissions: []string{"customer.create", "customer.read", "customer.update", "customer.delete", "customer.import", "customer.export"}, RecordScope: "all_records",
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}},
+		Key: "admin", Permissions: []string{"customer.create", "customer.read", "customer.update", "customer.delete", "customer.import", "customer.export"},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}},
 	}
 	exchange := &recordBatchDataExchangeProbe{}
 	services := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{
@@ -218,35 +218,35 @@ func (f recordBatchHTTPFixture) call(method, path, body string, headers map[stri
 	return response
 }
 
-func TestRecordBatchJobHTTPExportSubmission(t *testing.T) {
+func TestLegacyRecordExportRoutesAreAbsent(t *testing.T) {
 	fixture := newRecordBatchHTTPFixture(t)
-	if response := fixture.call(http.MethodPost, "/objects/customer/records/export/jobs", "", nil); response.Code != http.StatusBadRequest {
-		t.Fatalf("missing idempotency status=%d body=%s", response.Code, response.Body.String())
+	if response := fixture.call(http.MethodGet, "/objects/customer/records/export", "", nil); response.Code != http.StatusNotFound {
+		t.Fatalf("legacy GET export status=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := fixture.call(http.MethodPost, "/objects/customer/records/export/jobs", "", map[string]string{"Idempotency-Key": "legacy-export-job"}); response.Code != http.StatusNotFound {
+		t.Fatalf("legacy export job status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestRecordExportHTTPAutoDispatchAndOwnedDownload(t *testing.T) {
+	fixture := newRecordBatchHTTPFixture(t)
+	if response := fixture.call(http.MethodPost, "/objects/customer/records/export", "", nil); response.Code != http.StatusBadRequest {
+		t.Fatalf("missing key status=%d body=%s", response.Code, response.Body.String())
+	}
+	direct := fixture.call(http.MethodPost, "/objects/customer/records/export", "", map[string]string{"Idempotency-Key": "direct-export"})
+	if direct.Code != http.StatusOK || direct.Header().Get("X-Export-Delivery") != recordapplication.RecordExportDeliveryDirect || !strings.Contains(direct.Header().Get("Content-Type"), "text/csv") {
+		t.Fatalf("direct status=%d headers=%v body=%s", direct.Code, direct.Header(), direct.Body.String())
 	}
 
-	path := "/objects/customer/records/export/jobs?fields=name&reason=audit&masking_policy=strict&filter_summary=active&page=2&page_size=25"
-	created := fixture.call(http.MethodPost, path, "", map[string]string{"Idempotency-Key": "export-http-1"})
-	var job recordmodel.RecordBatchJob
-	if created.Code != http.StatusAccepted || json.Unmarshal(created.Body.Bytes(), &job) != nil || job.ID == "" || job.Kind != "export" {
-		t.Fatalf("created status=%d job=%+v body=%s", created.Code, job, created.Body.String())
-	}
-	if created.Header().Get("Location") != "/data-exchange/jobs/"+job.ID+"?provider=records&operation=export" {
-		t.Fatalf("location=%q", created.Header().Get("Location"))
-	}
-	var payload struct {
-		Options recordapplication.RecordExportOptions `json:"options"`
-	}
-	if err := json.Unmarshal(fixture.exchange.lastExport.Options, &payload); err != nil || fixture.exchange.lastExport.Provider != "records" || len(payload.Options.Fields) != 1 || payload.Options.Fields[0] != "name" || payload.Options.Reason != "audit" || payload.Options.MaskingPolicy != "strict" || payload.Options.FilterSummary != "active" || payload.Options.Query.Page != 2 || payload.Options.Query.PageSize != 25 {
-		t.Fatalf("payload=%+v err=%v", payload, err)
-	}
-
-	replay := fixture.call(http.MethodPost, path, "", map[string]string{"Idempotency-Key": "export-http-1"})
-	if replay.Code != http.StatusAccepted || replay.Header().Get("Idempotency-Replayed") != "true" {
-		t.Fatalf("replay status=%d headers=%v body=%s", replay.Code, replay.Header(), replay.Body.String())
-	}
-	conflict := fixture.call(http.MethodPost, "/objects/customer/records/export/jobs?fields=name&reason=changed", "", map[string]string{"Idempotency-Key": "export-http-1"})
-	if conflict.Code != http.StatusConflict {
-		t.Fatalf("conflict status=%d body=%s", conflict.Code, conflict.Body.String())
+	jobID := "completed-export"
+	fixture.exchange.jobs = map[string]dataexchange.Job{jobID: {
+		ID: jobID, Provider: "records", Operation: "export", Status: "completed", WorkspaceID: fixture.principal.WorkspaceID, ActorID: fixture.principal.UserID, ObjectKey: "customer", ArtifactID: "artifact",
+	}}
+	fixture.exchange.artifact = dataexchange.Artifact{ID: "artifact", Filename: "customer export.csv", ContentType: "text/csv", Size: 5}
+	fixture.exchange.content = "value"
+	download := fixture.call(http.MethodGet, "/record-exports/"+jobID+"/download", "", nil)
+	if download.Code != http.StatusOK || download.Body.String() != "value" || !strings.Contains(download.Header().Get("Content-Disposition"), "customer export.csv") {
+		t.Fatalf("download status=%d headers=%v body=%q", download.Code, download.Header(), download.Body.String())
 	}
 }
 

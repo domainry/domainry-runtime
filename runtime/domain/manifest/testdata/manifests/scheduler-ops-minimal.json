@@ -8,8 +8,18 @@
       "name": "Scheduler Probe",
       "description": "Business record used by the Scheduler integration fixture; Scheduler lifecycle state remains owner-managed.",
       "fields": [
-        {"key": "name", "name": "Name", "type": "text", "required": true},
-        {"key": "owner", "name": "Owner", "type": "user", "required": true}
+        {
+          "key": "name",
+          "name": "Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "owner",
+          "name": "Owner",
+          "type": "user",
+          "required": true
+        }
       ]
     }
   ],
@@ -18,15 +28,26 @@
       "key": "admin",
       "name": "Admin",
       "permissions": [
-        "admin_console.access",
-        "runtime.appschema.validate_application_definition",
-        "scheduler.command",
-        "scheduler.definition.read",
-        "scheduler_probe.read"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
-        {"object_key": "scheduler_probe", "scope": "all_records", "read": true, "write": true}
+        {
+          "permission_key": "admin_console.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.appschema.validate_application_definition",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "scheduler.command",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "scheduler.definition.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "scheduler_probe.read",
+          "data_scope": "all"
+        }
       ]
     }
   ],
@@ -49,7 +70,9 @@
       "retry_max_delay_seconds": 3600
     }
   ],
-  "menus": [],
+  "menus": [
+
+  ],
   "seed_records": [
     {
       "object_key": "scheduler_probe",

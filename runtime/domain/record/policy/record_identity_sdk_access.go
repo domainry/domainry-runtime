@@ -22,14 +22,32 @@ func RecordAllowsObjectAction(principal principalmodel.Principal, objectKey, act
 	return principal.SystemScope.Valid() && principal.Allows(objectKey, action)
 }
 
-func RecordDataScopeForPrincipal(principal principalmodel.Principal, objectKey, action string) string {
+func RecordDataScopesForPrincipal(principal principalmodel.Principal, objectKey, action string) []identitysdk.DataScope {
 	if principal.AccessBundle != nil {
-		return "identity_policy"
+		resource, normalizedAction := identitysdk.ResourceType(strings.TrimSpace(objectKey)), identitysdk.Action(normalizeSDKRecordAction(action))
+		seen := map[identitysdk.DataScope]bool{}
+		for _, policy := range principal.AccessBundle.DataPolicies {
+			if policy.Resource != resource || policy.Action != normalizedAction || policy.Effect != identitysdk.EffectAllow {
+				continue
+			}
+			for _, scope := range policy.DataScopes {
+				if scope.Valid() {
+					seen[scope] = true
+				}
+			}
+		}
+		result := make([]identitysdk.DataScope, 0, len(seen))
+		for _, scope := range identitysdk.DataScopeValues() {
+			if seen[scope] {
+				result = append(result, scope)
+			}
+		}
+		return result
 	}
 	if principal.SystemScope.Valid() && principal.Allows(objectKey, action) {
-		return "all_records"
+		return []identitysdk.DataScope{identitysdk.DataScopeAll}
 	}
-	return ""
+	return nil
 }
 
 func RecordCanReadFieldForPrincipal(principal principalmodel.Principal, objectKey, fieldKey string) bool {
@@ -111,13 +129,12 @@ func RecordSDKAllowsObjectAction(principal principalmodel.Principal, objectKey, 
 		*principal.AccessBundle,
 		identitysdk.ResourceType(strings.TrimSpace(objectKey)),
 		identitysdk.Action(normalizeSDKRecordAction(action)),
-		recordSDKDataAction(action),
 		time.Now().UTC(),
 	)
 	if err != nil {
 		return false, true
 	}
-	return len(filter.Allow) > 0, true
+	return filter.Unrestricted || len(filter.Allow) > 0, true
 }
 
 // RecordSDKAllowsRecord evaluates the SDK's exact action against one record.
@@ -129,10 +146,9 @@ func RecordSDKAllowsRecord(principal principalmodel.Principal, object definition
 	decision, err := identityevaluator.EvaluateWithContext(
 		*principal.AccessBundle,
 		identitysdk.AccessRequest{
-			ObjectKey:  object.Key,
-			Action:     normalizeSDKRecordAction(action),
-			DataAction: recordSDKDataAction(action),
-			RecordID:   record.ID,
+			ObjectKey: object.Key,
+			Action:    normalizeSDKRecordAction(action),
+			RecordID:  record.ID,
 		},
 		recordSDKResourceFacts(object, record),
 		RecordSDKEvaluationContext(principal),
@@ -203,10 +219,8 @@ func recordSDKResourceFacts(_ definitionmodel.ObjectSchema, record recordmodel.R
 	for key, value := range record.Data {
 		facts[key] = value
 	}
-	// `id exists` is the portable SDK predicate for an unrestricted record
-	// scope. Candidate creates do not have a persisted ID yet, but the record
-	// fact itself still exists; preserve the key with an empty value so the
-	// predicate remains unconditional without fabricating an identifier.
+	// The ID remains available as an ordinary record fact for explicit custom
+	// policies and deny guardrails. Canonical `all` does not evaluate it.
 	facts["id"] = record.ID
 	facts[RecordOwnerUserIDSystemField] = record.OwnerUserID
 	facts[RecordOwnerOrgIDSystemField] = record.OwnerOrgID
@@ -221,20 +235,6 @@ func normalizeSDKRecordAction(action string) string {
 		return "update"
 	default:
 		return strings.TrimSpace(action)
-	}
-}
-
-// recordSDKDataAction is Runtime's owned projection from executable record
-// operations to the deliberately coarse role data contract. The shared SDK
-// does not infer this relationship from action names.
-func recordSDKDataAction(action string) identitysdk.DataAction {
-	switch strings.ToLower(strings.TrimSpace(action)) {
-	case "read", "view", "list", "search", "export":
-		return identitysdk.DataActionRead
-	default:
-		// Runtime-authored business Actions are mutation Actions in the current
-		// ActionDefinition projection, so custom operations belong to write.
-		return identitysdk.DataActionWrite
 	}
 }
 

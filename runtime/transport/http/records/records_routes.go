@@ -4,8 +4,9 @@ import "net/http"
 
 func (h *RecordsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /objects/{objectKey}/records", h.listRecords)
-	mux.HandleFunc("GET /objects/{objectKey}/records/export", h.exportRecords)
-	mux.HandleFunc("POST /objects/{objectKey}/records/export/jobs", h.enqueueExportJob)
+	mux.HandleFunc("GET /objects/{objectKey}/fields/{fieldKey}/reference-options", h.referenceOptions)
+	mux.HandleFunc("POST /objects/{objectKey}/records/export", h.dispatchExport)
+	mux.HandleFunc("GET /record-exports/{jobID}/download", h.downloadExport)
 	mux.HandleFunc("POST /objects/{objectKey}/records/import/preview", h.previewImport)
 	mux.HandleFunc("POST /objects/{objectKey}/records/import/apply", h.applyImport)
 	mux.HandleFunc("POST /objects/{objectKey}/records/import/jobs", h.enqueueImportJob)

@@ -18,8 +18,12 @@ import (
 
 type moduleRouteGuard func(modulehttp.Route, http.Handler) (http.Handler, error)
 
-func newModuleHTTPRouteGuard(binding identitysdk.Binding) (moduleRouteGuard, error) {
-	resolver, err := identityprincipal.NewResolver(binding, identityprincipal.Options{})
+func newModuleHTTPRouteGuard(binding identitysdk.Binding, resolverOptions ...identityprincipal.Options) (moduleRouteGuard, error) {
+	options := identityprincipal.Options{}
+	if len(resolverOptions) > 0 {
+		options = resolverOptions[0]
+	}
+	resolver, err := identityprincipal.NewResolver(binding, options)
 	if err != nil {
 		return nil, fmt.Errorf("construct module HTTP principal resolver: %w", err)
 	}
@@ -31,52 +35,56 @@ func newModuleHTTPRouteGuard(binding identitysdk.Binding) (moduleRouteGuard, err
 		governed := governModuleHTTPRoute(route, next)
 		var protected http.Handler
 		switch route.Action.Authorization.Strategy {
-		case actioncontract.AuthorizationExactRolePermission:
-			if route.Action.Permission == nil {
-				return nil, fmt.Errorf("module action %q has no exact permission", route.Action.Key)
+		case actioncontract.AuthorizationAuthenticated:
+			if route.Action.Permission != nil && strings.TrimSpace(route.Action.Authorization.PolicyKey) == "" {
+				protected = middleware.RequirePermission(route.Action.Permission.Key, governed)
+			} else {
+				// Authenticated source-owned policies such as self access run after
+				// the host has resolved the principal.
+				protected = middleware.RequireAuthenticated(governed)
 			}
-			protected = middleware.RequirePermission(route.Action.Permission.Key, governed)
-		case actioncontract.AuthorizationAuthenticatedPrincipal, actioncontract.AuthorizationSelfOrPermission, actioncontract.AuthorizationOperationsIdentity:
-			protected = middleware.RequireAuthenticated(governed)
-		case actioncontract.AuthorizationServiceIdentity:
+		case actioncontract.AuthorizationSigned:
+			if len(route.Action.Authorization.Audiences) == 0 {
+				// Provider webhooks and delegated credentials have source-owned
+				// signature middleware inside the owning route.
+				return governed, nil
+			}
 			servicesBinding, ok := binding.(identitysdk.ApplicationServiceVerificationBinding)
 			if !ok || servicesBinding.ApplicationServiceVerifier() == nil {
-				return nil, fmt.Errorf("service-authenticated module route %q requires an application service verifier", route.Action.Key)
+				return nil, fmt.Errorf("signed module route %q requires an application service verifier", route.Action.Key)
 			}
-			grant, err := moduleServiceIdentityGrant(route.Action)
+			grant, err := signedModuleGrant(route.Action)
 			if err != nil {
 				return nil, err
 			}
 			audience := identitysdk.ApplicationKey(strings.TrimSpace(binding.Descriptor().Audience))
-			if !audience.Valid() || !containsModuleServiceAudience(route.Action.Authorization.Audiences, string(audience)) {
-				return nil, fmt.Errorf("service-authenticated module route %q does not allow the Runtime audience", route.Action.Key)
+			if !audience.Valid() || !containsSignedModuleAudience(route.Action.Authorization.Audiences, string(audience)) {
+				return nil, fmt.Errorf("signed module route %q does not allow the Runtime audience", route.Action.Key)
 			}
-			return requireModuleServiceIdentity(servicesBinding.ApplicationServiceVerifier(), audience, grant, governed), nil
-		case actioncontract.AuthorizationDelegatedCredential:
-			return governed, nil
-		case actioncontract.AuthorizationAnonymousProtocol:
+			return requireSignedModuleRequest(servicesBinding.ApplicationServiceVerifier(), audience, grant, governed), nil
+		case actioncontract.AuthorizationAnonymous:
 			return governed, nil
 		default:
-			return nil, fmt.Errorf("unsupported module action authorization %q", route.Action.Authorization.Strategy)
+			return nil, fmt.Errorf("unsupported module action authentication %q", route.Action.Authorization.Strategy)
 		}
 		return middleware.Authenticate(protected), nil
 	}, nil
 }
 
-func moduleServiceIdentityGrant(action actioncontract.ActionDefinition) (identitysdk.ApplicationServiceGrant, error) {
+func signedModuleGrant(action actioncontract.ActionDefinition) (identitysdk.ApplicationServiceGrant, error) {
 	policyKey := strings.TrimSpace(action.Authorization.PolicyKey)
 	separator := strings.LastIndexByte(policyKey, '.')
 	if separator <= 0 || separator == len(policyKey)-1 {
-		return identitysdk.ApplicationServiceGrant{}, fmt.Errorf("service-authenticated module action %q has an invalid policy key", action.Key)
+		return identitysdk.ApplicationServiceGrant{}, fmt.Errorf("signed module action %q has an invalid policy key", action.Key)
 	}
 	grant := identitysdk.ApplicationServiceGrant{Resource: identitysdk.ResourceType(policyKey[:separator]), Action: identitysdk.Action(policyKey[separator+1:])}
 	if !grant.Valid() {
-		return identitysdk.ApplicationServiceGrant{}, fmt.Errorf("service-authenticated module action %q has an invalid grant", action.Key)
+		return identitysdk.ApplicationServiceGrant{}, fmt.Errorf("signed module action %q has an invalid grant", action.Key)
 	}
 	return grant, nil
 }
 
-func containsModuleServiceAudience(values []string, audience string) bool {
+func containsSignedModuleAudience(values []string, audience string) bool {
 	for _, value := range values {
 		if strings.TrimSpace(value) == audience {
 			return true
@@ -85,11 +93,11 @@ func containsModuleServiceAudience(values []string, audience string) bool {
 	return false
 }
 
-func requireModuleServiceIdentity(services identitysdk.ApplicationServiceTokenVerifier, audience identitysdk.ApplicationKey, grant identitysdk.ApplicationServiceGrant, next http.Handler) http.Handler {
+func requireSignedModuleRequest(services identitysdk.ApplicationServiceTokenVerifier, audience identitysdk.ApplicationKey, grant identitysdk.ApplicationServiceGrant, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		accessToken, ok := identityhttpmiddleware.BearerToken(request)
 		if !ok {
-			writeModuleGovernanceError(writer, http.StatusUnauthorized, "auth.service_identity_required")
+			writeModuleGovernanceError(writer, http.StatusUnauthorized, "auth.signed_request_required")
 			return
 		}
 		_, err := services.Verify(request.Context(), identitysdk.VerifyApplicationServiceTokenRequest{AccessToken: accessToken, Audience: audience, Grant: grant})
@@ -99,7 +107,7 @@ func requireModuleServiceIdentity(services identitysdk.ApplicationServiceTokenVe
 			if errors.As(err, &sdkError) && sdkError.StatusCode >= http.StatusInternalServerError {
 				status = http.StatusServiceUnavailable
 			}
-			writeModuleGovernanceError(writer, status, "auth.service_identity_invalid")
+			writeModuleGovernanceError(writer, status, "auth.signed_request_invalid")
 			return
 		}
 		next.ServeHTTP(writer, request)

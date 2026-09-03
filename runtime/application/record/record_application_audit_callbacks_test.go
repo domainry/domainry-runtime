@@ -27,7 +27,7 @@ func TestRecordApplicationAuditCallbacksCoverDisabledAndEnabledPaths(t *testing.
 	}
 	service.auditFieldDenials(t.Context(), object, record, "read", []recordservice.RecordFieldPolicyDecision{{FieldKey: "secret", RuleKey: "mask-secret"}}, principal)
 	service.auditScopeDenial(t.Context(), object, record.ID, principal)
-	if len(events) != 2 || events[0] != "field_access_denied" || events[1] != "record_scope_access_denied" {
+	if len(events) != 2 || events[0] != "field_access_denied" || events[1] != "data_scope_access_denied" {
 		t.Fatalf("events=%v", events)
 	}
 }

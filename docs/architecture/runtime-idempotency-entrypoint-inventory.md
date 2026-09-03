@@ -37,7 +37,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `records` | `POST /objects/{objectKey}/actions/{actionKey}/bulk` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/actions/{actionKey}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/records` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /objects/{objectKey}/records/export/jobs` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `records` | `POST /objects/{objectKey}/records/export` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/records/import/apply` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/records/import/jobs` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/records/import/preview` | `not_applicable` | none | `runtime/transport/http/records/records_routes.go` |
@@ -138,8 +138,8 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `record` | `DeleteRecord` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
 | `record` | `DeleteRecordExpected` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
 | `record` | `DeleteRecordExpectedIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
-| `record` | `EnqueueExport` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_data_exchange_application_service.go` |
-| `record` | `EnqueueExportJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
+| `record` | `DispatchExportIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_data_exchange_application_service.go` |
+| `record` | `DispatchExportIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `EnqueueImport` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_data_exchange_application_service.go` |
 | `record` | `EnqueueImportJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `EnqueueImportStream` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_data_exchange_application_service.go` |

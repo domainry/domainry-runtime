@@ -39,8 +39,6 @@ func runtimeProjectRoleCatalog(roles []manifestmodel.RoleSchema, workspaceID, ap
 			Key:                   strings.TrimSpace(role.Key),
 			Name:                  strings.TrimSpace(role.Name),
 			Permissions:           runtimeRolePermissions(role.Permissions),
-			RecordScope:           strings.TrimSpace(role.RecordScope),
-			DataPermissions:       mustProjectRoleJSON(role.DataPermissions),
 			FieldPermissions:      mustProjectRoleJSON(role.FieldPermissions),
 			ReferencePermissions:  mustProjectRoleJSON(role.ReferencePermissions),
 			ExportRules:           mustProjectRoleJSON(role.ExportRules),
@@ -67,14 +65,14 @@ func runtimeProjectRoleCatalog(roles []manifestmodel.RoleSchema, workspaceID, ap
 	return catalog
 }
 
-func runtimeRolePermissions(source []string) []string {
-	result := make([]string, 0, len(source))
+func runtimeRolePermissions(source []manifestmodel.RolePermission) []identitysdk.ProjectRolePermission {
+	result := make([]identitysdk.ProjectRolePermission, 0, len(source))
 	seen := make(map[string]bool, len(source))
 	for _, permission := range source {
-		permission = strings.TrimSpace(permission)
-		if permission != "" && !seen[permission] {
-			seen[permission] = true
-			result = append(result, permission)
+		permission.PermissionKey = strings.TrimSpace(permission.PermissionKey)
+		if permission.PermissionKey != "" && permission.DataScope.Valid() && !seen[permission.PermissionKey] {
+			seen[permission.PermissionKey] = true
+			result = append(result, identitysdk.ProjectRolePermission{PermissionKey: permission.PermissionKey, DataScope: permission.DataScope, AuditDenial: permission.AuditDenial})
 		}
 	}
 	return result

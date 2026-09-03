@@ -79,7 +79,7 @@ func mountModuleHTTPSurfaces(group runtimehttp.ListenerRouteGroup, surfaces []mo
 				return nil, fmt.Errorf("module HTTP route %q is owned by both %q and %q", pattern, owner, identity)
 			}
 			handler := surface.Handler()
-			if route.Action.Authorization.Strategy != actioncontract.AuthorizationAnonymousProtocol {
+			if route.Action.Authorization.Strategy != actioncontract.AuthorizationAnonymous {
 				if guard == nil {
 					return nil, fmt.Errorf("module HTTP route %q requires a host authorization guard", pattern)
 				}

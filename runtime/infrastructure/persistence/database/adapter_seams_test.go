@@ -16,7 +16,7 @@ import (
 
 func TestAdapterSeamsDelegateAndNormalize(t *testing.T) {
 	store := openMigrationEdgeStore(t)
-	where, args, err := store.TenantListWhereClause("workspace", recordmodel.RecordListQuery{Filters: map[string]any{"status": "open"}})
+	where, args, err := store.TenantListWhereClause("workspace", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"status": "open"}})
 	if err != nil || !strings.Contains(where, "workspace_id") || len(args) != 2 {
 		t.Fatalf("where=%q args=%#v err=%v", where, args, err)
 	}

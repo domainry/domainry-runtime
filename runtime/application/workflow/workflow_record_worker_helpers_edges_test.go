@@ -21,11 +21,11 @@ type workflowScheduledReaderEdgeStub struct {
 	err   error
 }
 
-func (s workflowScheduledReaderEdgeStub) GetWorkflowRecord(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error) {
+func (s workflowScheduledReaderEdgeStub) GetWorkflowRecord(context.Context, string, definitionmodel.ObjectSchema, string, principalmodel.Principal) (recordmodel.Record, bool, error) {
 	return recordmodel.Record{}, false, nil
 }
 
-func (s workflowScheduledReaderEdgeStub) ListWorkflowRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
+func (s workflowScheduledReaderEdgeStub) ListWorkflowRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 	return s.pages[query.Page], s.err
 }
 

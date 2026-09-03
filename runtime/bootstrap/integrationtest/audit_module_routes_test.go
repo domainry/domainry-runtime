@@ -87,9 +87,13 @@ func integrationModuleOwnerRoutes(t *testing.T, runtime *bootstrap.Runtime, owne
 				surfaceHandler.ServeHTTP(w, r.WithContext(ctx))
 			}))
 			switch route.Action.Authorization.Strategy {
-			case actioncontract.AuthorizationExactRolePermission:
-				next = identityMiddleware.RequirePermission(route.Action.Permission.Key, next)
-			case actioncontract.AuthorizationAnonymousProtocol:
+			case actioncontract.AuthorizationAuthenticated:
+				if route.Action.Permission != nil && strings.TrimSpace(route.Action.Authorization.PolicyKey) == "" {
+					next = identityMiddleware.RequirePermission(route.Action.Permission.Key, next)
+				} else {
+					next = identityMiddleware.RequireAuthenticated(next)
+				}
+			case actioncontract.AuthorizationAnonymous:
 				mux.Handle(route.Pattern(), next)
 				continue
 			default:
@@ -110,14 +114,14 @@ func integrationModuleOwnerRoutes(t *testing.T, runtime *bootstrap.Runtime, owne
 func integrationModulePrincipal(authorization string) identitysdk.Principal {
 	subject, role := integrationFixtureTokenSubjectRole(strings.TrimSpace(strings.TrimPrefix(authorization, "Bearer ")))
 	permissions := integrationIdentityRolePermissions(role)
-	recordScope := "all_records"
+	recordScope := "all"
 	if role == "sales_rep" || role == "automation_business_tester" {
-		recordScope = "owned_records"
+		recordScope = "owner"
 	}
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
 		ContractVersion: identitysdk.PrincipalContextContractVersion,
 		Known:           true, WorkspaceID: "workspace-primary", UserID: subject, RoleKey: role,
-	}}, accessfixture.Bundle{Key: role, Permissions: permissions, RecordScope: recordScope}).Principal
+	}}, accessfixture.Bundle{Key: role, Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScope(recordScope))}).Principal
 }
 
 func integrationAuditPrincipal(authorization string) identitysdk.Principal {
@@ -130,7 +134,7 @@ func integrationAuditPrincipal(authorization string) identitysdk.Principal {
 	}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
 		ContractVersion: identitysdk.PrincipalContextContractVersion, Known: true, WorkspaceID: "workspace-primary", UserID: subject, RoleKey: role,
-	}}, accessfixture.Bundle{Key: role, Permissions: integrationIdentityRolePermissions(role), RecordScope: "all_records"})
+	}}, accessfixture.Bundle{Key: role, Permissions: integrationIdentityRolePermissions(role), DataPolicies: accessfixture.DataPoliciesForPermissions(integrationIdentityRolePermissions(role), "all")})
 	return principal.Principal
 }
 

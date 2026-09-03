@@ -219,6 +219,10 @@ func (s *WorkflowApplicationService) ProcessScheduledWorkflowWindowPage(ctx cont
 			}
 			continue
 		}
+		scanPrincipal, resolveErr := s.workflowPrincipal(ctx, workflow, principal)
+		if resolveErr != nil {
+			return workflowmodel.WorkflowScheduledPage{}, resolveErr
+		}
 		for _, objectKey := range objectKeys {
 			if checkpoint.WorkflowKey == workflow.Key && checkpoint.ObjectKey != "" && objectKey != checkpoint.ObjectKey {
 				continue
@@ -238,7 +242,7 @@ func (s *WorkflowApplicationService) ProcessScheduledWorkflowWindowPage(ctx cont
 			for page.Scanned < limit {
 				remaining := limit - page.Scanned
 				pageSize := min(200, remaining)
-				result, listErr := s.recordReader.ListWorkflowRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: pageSize, SkipTotal: true, AfterID: afterID, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}})
+				result, listErr := s.recordReader.ListWorkflowRecords(ctx, scanPrincipal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: pageSize, SkipTotal: true, AfterID: afterID, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}}, scanPrincipal)
 				if listErr != nil {
 					return workflowmodel.WorkflowScheduledPage{}, internalError("list records for scheduled workflow", listErr)
 				}

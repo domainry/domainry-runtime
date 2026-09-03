@@ -67,7 +67,7 @@ LIMIT 100
 | 作者不需要重复实现的系统问题 | 框架自动保障 |
 | --- | --- |
 | SQL 能否访问任意内部表或未知字段 | SQL 先经过受限语法解析和语义绑定，只接受声明的数据源以及已发布、未禁用的 Object/Field；不支持的结构在定义发布前失败 |
-| 报表会不会绕过当前用户的数据权限 | Runtime 为每个数据源生成授权后的 Record scope，并在 join、filter、group 和 aggregate 之前注入数据范围 |
+| 报表会不会绕过当前用户的数据权限 | Runtime 为每个数据源编译当前 Permission 的 data scope；`all` 不追加范围条件，其余 scope 在 join、filter、group 和 aggregate 之前下推 |
 | 多租户数据会不会在 JOIN 中串库 | 普通查询自动注入 Workspace predicate；特殊跨 Workspace 聚合要求明确执行模式、superadmin audience 和权限，并补充安全 join 条件 |
 | 敏感字段会不会通过聚合泄露 | 执行前逐字段检查 read policy；不可读、已禁用、masked 或需要逐记录上下文判断的字段直接拒绝进入 Object SQL |
 | 参数会不会造成 SQL 注入 | 作者声明 typed parameter，执行器使用方言参数绑定；参数内容不会拼接成 SQL 结构 |

@@ -58,6 +58,7 @@ func notificationBuiltInEventTypes(locales []string, defaultLocale string, looku
 		integrationResourceHealthEventType("integration.billing.recovered", "integration.billing.recovered.in_app", "info", false),
 		reportSnapshotEventType("report.snapshot.completed", "report.snapshot.completed.in_app", "info"),
 		reportSnapshotEventType("report.snapshot.failed", "report.snapshot.failed.in_app", "critical"),
+		recordExportCompletedEventType(),
 		automationExecutionEventType("automation.execution.completed", "automation.execution.completed.in_app", "info"),
 		automationExecutionEventType("automation.execution.failed", "automation.execution.failed.in_app", "critical"),
 	}
@@ -72,6 +73,17 @@ func notificationBuiltInEventTypes(locales []string, defaultLocale string, looku
 		value.Locales = contents
 	}
 	return types, nil
+}
+
+func recordExportCompletedEventType() notificationmodel.NotificationEventType {
+	return notificationmodel.NotificationEventType{
+		Key: "record.export.completed", Source: "records", Category: "long_task", DefaultSeverity: "info", Surfaces: []string{"business_workspace"}, MandatoryInApp: true,
+		TemplateKey: "record.export.completed.in_app", Variables: []notificationmodel.NotificationTemplateVariable{
+			{Key: "object_key", Type: "string", Required: true}, {Key: "filename", Type: "string", Required: true},
+			{Key: "row_count", Type: "number", Required: true}, {Key: "status", Type: "string", Required: true},
+		},
+		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "record.export.download", Kind: "route", ResourceType: "record_export", SurfaceRoutes: map[string]string{"business_workspace": "record.export.download"}}},
+	}
 }
 
 func automationExecutionEventType(key, templateKey, severity string) notificationmodel.NotificationEventType {
@@ -185,6 +197,8 @@ func notificationBuiltInPresentationKeys(eventType string) ([]string, []string) 
 		return []string{"balanceBand", "observedAt"}, []string{"integration.connection.open"}
 	case "report.snapshot.completed", "report.snapshot.failed":
 		return nil, []string{"report.open"}
+	case "record.export.completed":
+		return nil, []string{"record.export.download"}
 	case "automation.execution.completed", "automation.execution.failed":
 		return nil, []string{"automation.rule.open"}
 	default:

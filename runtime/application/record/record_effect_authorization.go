@@ -18,7 +18,7 @@ import (
 // compiler-owned EffectAuthority is still the final field-level write cap.
 func recordEffectAuthorizationPrincipal(ctx context.Context, principal principalmodel.Principal, objectKey, action string) principalmodel.Principal {
 	action = strings.TrimSpace(action)
-	if action != "create" && action != "update" {
+	if action != "create" && action != "update" && action != "delete" && action != "restore" {
 		return principal
 	}
 	invocation, ok := recordmutation.MutationInvocationFromContext(ctx)
@@ -43,6 +43,7 @@ func recordEffectAuthorizationPrincipal(ctx context.Context, principal principal
 	if principal.AccessBundle != nil {
 		bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{
 			Resource: identitysdk.ResourceType(strings.TrimSpace(objectKey)), Action: identitysdk.Action(action), Fields: append([]string(nil), fields...),
+			SourceResource: identitysdk.ResourceType(strings.TrimSpace(invocation.ActionResource)), SourceAction: identitysdk.Action(strings.TrimSpace(invocation.ActionOperation)),
 		}, time.Now().UTC())
 		if err == nil {
 			authorized.AccessBundle = &bundle

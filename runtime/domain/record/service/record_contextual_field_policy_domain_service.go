@@ -191,7 +191,7 @@ func (s *RecordContextualFieldPolicyDomainService) resolvePagePredicateMatches(c
 			return nil, &apperror.AppError{Kind: apperror.KindInternal, Code: "backend.field_policy.repository_unavailable"}
 		}
 		page, err := s.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{
-			Page: 1, PageSize: len(records), Scope: "custom", RootObjectKey: object.Key,
+			Page: 1, PageSize: len(records), AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key,
 			ScopeExpression: &expression, Filters: map[string]any{"id__in": ids},
 		})
 		if err != nil {
@@ -218,7 +218,7 @@ func (s *RecordContextualFieldPolicyDomainService) matchesSDKPredicate(ctx conte
 		return false, &apperror.AppError{Kind: apperror.KindInternal, Code: "backend.field_policy.repository_unavailable"}
 	}
 	page, err := s.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{
-		Page: 1, PageSize: 1, Scope: "custom", RootObjectKey: object.Key,
+		Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key,
 		ScopeExpression: &expression, Filters: map[string]any{"id__in": []any{record.ID}},
 	})
 	if err != nil {

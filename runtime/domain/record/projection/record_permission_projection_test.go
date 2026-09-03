@@ -16,7 +16,7 @@ func TestRecordFeaturePermissionProjectionPublishesSDKDecisions(t *testing.T) {
 		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-a"}},
 		accessfixture.Bundle{
 			Key: "operator", Permissions: []string{"case.read", "case.update", "case.approve", "case.export", "workflow.approval.run"},
-			DataPolicies:  []accessfixture.DataPolicyFixture{{ObjectKey: "case", Scope: "all_records", Read: true, Write: true}},
+			DataPolicies:  []accessfixture.DataPolicyFixture{{ObjectKey: "case", Scope: "all", Read: true, Write: true}},
 			FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "case", FieldKey: "name", Read: true, Write: true, Export: true}},
 		},
 	)
@@ -31,7 +31,7 @@ func TestRecordFeaturePermissionProjectionPublishesSDKDecisions(t *testing.T) {
 	if snapshot.RoleKey != "operator" || snapshot.UserID != "user-1" || len(snapshot.Objects) != 1 || len(snapshot.Actions) != 1 || len(snapshot.Fields) != 1 || len(snapshot.Exports) != 1 {
 		t.Fatalf("snapshot=%+v", snapshot)
 	}
-	if !snapshot.Actions[0].Allowed || snapshot.Actions[0].Reason != "identity_policy_allowed" || snapshot.Actions[0].DataScope != "identity_policy" {
+	if !snapshot.Actions[0].Allowed || snapshot.Actions[0].Reason != "identity_policy_allowed" || len(snapshot.Actions[0].DataScopes) != 1 || snapshot.Actions[0].DataScopes[0] != identitysdk.DataScopeAll {
 		t.Fatalf("action decision=%+v", snapshot.Actions[0])
 	}
 	if len(snapshot.Actions[0].AssuranceRequired) != 2 || snapshot.Actions[0].AssuranceRequired[0] != "otp" || snapshot.Actions[0].AssuranceRequired[1] != "workflow_approval" {

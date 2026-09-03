@@ -174,13 +174,13 @@ func TestReportDatasetStoreQueryConstructionAndFailureEdges(t *testing.T) {
 		WorkspaceID: "workspace",
 		Plan:        reportmodel.ReportDatasetPlan{Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{Alias: "events", ObjectKey: "event"}}},
 		Objects:     map[string]definitionmodel.ObjectSchema{"events": object},
-		Queries:     map[string]recordmodel.RecordListQuery{"events": {Scope: "all_records", SelectFields: []string{"kind"}}},
+		Queries:     map[string]recordmodel.RecordListQuery{"events": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, SelectFields: []string{"kind"}}},
 	}
 	if _, err := store.ReadReportDatasetRows(t.Context(), base); err == nil || !strings.Contains(err.Error(), "query report dataset rows") {
 		t.Fatalf("missing table query error=%v", err)
 	}
 	badScope := base
-	badScope.Queries = map[string]recordmodel.RecordListQuery{"events": {Scope: "invalid"}}
+	badScope.Queries = map[string]recordmodel.RecordListQuery{"events": {AuthorizationMode: "invalid"}}
 	if _, err := store.ReadReportDatasetRows(t.Context(), badScope); err == nil {
 		t.Fatal("invalid source scope accepted")
 	}
@@ -191,7 +191,7 @@ func TestReportDatasetStoreQueryConstructionAndFailureEdges(t *testing.T) {
 	}
 	relation := recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "id", Values: []string{"allowed"}, Path: []recordmodel.RecordScopePathSegment{{SourceObjectKey: "event", TargetObjectKey: "permission", Direction: "forward", RelationFieldKey: "owner_id"}}}
 	relationRequest := base
-	relationRequest.Queries = map[string]recordmodel.RecordListQuery{"events": {Scope: "custom", RootObjectKey: "event", ScopeExpression: &relation}}
+	relationRequest.Queries = map[string]recordmodel.RecordListQuery{"events": {AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "event", ScopeExpression: &relation}}
 	if _, err := store.ReadReportDatasetRows(t.Context(), relationRequest); err == nil {
 		t.Fatal("relation lookup query failure lost")
 	}
@@ -233,7 +233,7 @@ func TestReportDatasetStoreLeftJoinDropsAbsentRecord(t *testing.T) {
 			"details": {Key: "detail", Fields: []definitionmodel.FieldSchema{{Key: "event_id", Type: "relation"}, {Key: "note", Type: "text"}}},
 		},
 		Queries: map[string]recordmodel.RecordListQuery{
-			"events": {Scope: "all_records", SelectFields: []string{"kind"}}, "details": {Scope: "all_records", SelectFields: []string{"event_id", "note"}},
+			"events": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, SelectFields: []string{"kind"}}, "details": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, SelectFields: []string{"event_id", "note"}},
 		},
 	}
 	rows, err := NewReportDatasetStore(store).ReadReportDatasetRows(t.Context(), request)
@@ -259,7 +259,7 @@ func TestReportDatasetStoreResolvesRelationScopes(t *testing.T) {
 	}
 	expression := recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "id", Values: []string{"owner-1"}, Path: []recordmodel.RecordScopePathSegment{{SourceObjectKey: "event", TargetObjectKey: "permission", Direction: "forward", RelationFieldKey: "owner_id"}}}
 	object := definitionmodel.ObjectSchema{Key: "event", Fields: []definitionmodel.FieldSchema{{Key: "owner_id", Type: "relation"}}}
-	queryValue := recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "event", ScopeExpression: &expression, SelectFields: []string{"owner_id"}}
+	queryValue := recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "event", ScopeExpression: &expression, SelectFields: []string{"owner_id"}}
 	rows, err := NewReportDatasetStore(store).ReadReportDatasetRows(t.Context(), reportcontract.ReportDatasetRowReadRequest{
 		WorkspaceID: "workspace", Plan: reportmodel.ReportDatasetPlan{Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{Alias: "events", ObjectKey: "event"}}},
 		Objects: map[string]definitionmodel.ObjectSchema{"events": object}, Queries: map[string]recordmodel.RecordListQuery{"events": queryValue},
@@ -300,7 +300,7 @@ func TestReportDatasetStoreScriptedDriverFailures(t *testing.T) {
 	request := reportcontract.ReportDatasetRowReadRequest{
 		WorkspaceID: "workspace", Plan: reportmodel.ReportDatasetPlan{Dataset: dataset},
 		Objects: map[string]definitionmodel.ObjectSchema{"events": root, "details": detail},
-		Queries: map[string]recordmodel.RecordListQuery{"events": {Scope: "all_records"}, "details": {Scope: "all_records", SelectFields: []string{"note"}}},
+		Queries: map[string]recordmodel.RecordListQuery{"events": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}, "details": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, SelectFields: []string{"note"}}},
 	}
 	columns := []string{"event_id", "event_created", "event_updated", "detail_id", "detail_created", "detail_updated", "detail_note"}
 	state := &reportDatasetSQLState{steps: []reportDatasetSQLStep{{columns: columns, rows: [][]driver.Value{{"event-1", "created", "updated", nil, nil, nil, "orphan"}}}}}
@@ -319,13 +319,13 @@ func TestReportDatasetStoreScriptedDriverFailures(t *testing.T) {
 	expression := recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "id", Values: []string{"owner"}, Path: []recordmodel.RecordScopePathSegment{{SourceObjectKey: "event", TargetObjectKey: "permission", Direction: "forward", RelationFieldKey: "owner_id"}}}
 	relationRequest := reportcontract.ReportDatasetRowReadRequest{
 		WorkspaceID: "workspace", Plan: reportmodel.ReportDatasetPlan{Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{Alias: "events", ObjectKey: "event"}}},
-		Objects: map[string]definitionmodel.ObjectSchema{"events": root}, Queries: map[string]recordmodel.RecordListQuery{"events": {Scope: "custom", RootObjectKey: "event", ScopeExpression: &expression}},
+		Objects: map[string]definitionmodel.ObjectSchema{"events": root}, Queries: map[string]recordmodel.RecordListQuery{"events": {AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "event", ScopeExpression: &expression}},
 	}
 	state = &reportDatasetSQLState{steps: []reportDatasetSQLStep{{columns: []string{"id"}, rows: [][]driver.Value{{nil}}}}}
 	if _, err := reportDatasetScriptedStore(t, runtimeStore, state).ReadReportDatasetRows(t.Context(), relationRequest); err == nil {
 		t.Fatal("relation scan error lost")
 	}
-	versionRequest := reportcontract.ReportSnapshotSourceVersionRequest{WorkspaceID: "workspace", Objects: map[string]definitionmodel.ObjectSchema{"events": root}, Queries: map[string]recordmodel.RecordListQuery{"events": {Scope: "all_records"}}}
+	versionRequest := reportcontract.ReportSnapshotSourceVersionRequest{WorkspaceID: "workspace", Objects: map[string]definitionmodel.ObjectSchema{"events": root}, Queries: map[string]recordmodel.RecordListQuery{"events": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}}}
 	commitErr := errors.New("commit")
 	state = &reportDatasetSQLState{steps: []reportDatasetSQLStep{{columns: []string{"count", "watermark"}, rows: [][]driver.Value{{int64(1), "updated"}}}}, commitErr: commitErr}
 	if _, err := reportDatasetScriptedStore(t, runtimeStore, state).ReadReportSnapshotSourceVersion(t.Context(), versionRequest); !errors.Is(err, commitErr) {
@@ -333,7 +333,7 @@ func TestReportDatasetStoreScriptedDriverFailures(t *testing.T) {
 	}
 	state = &reportDatasetSQLState{steps: []reportDatasetSQLStep{{columns: []string{"id"}, rows: [][]driver.Value{{nil}}}}}
 	versionRelation := versionRequest
-	versionRelation.Queries = map[string]recordmodel.RecordListQuery{"events": {Scope: "custom", RootObjectKey: "event", ScopeExpression: &expression}}
+	versionRelation.Queries = map[string]recordmodel.RecordListQuery{"events": {AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "event", ScopeExpression: &expression}}
 	if _, err := reportDatasetScriptedStore(t, runtimeStore, state).ReadReportSnapshotSourceVersion(t.Context(), versionRelation); err == nil {
 		t.Fatal("version relation scan error lost")
 	}

@@ -12,6 +12,7 @@ import (
 	identityevaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -91,13 +92,13 @@ func buildActionFailureAudits(ctx context.Context, action definitionmodel.Action
 	auditDenial, err := identityevaluator.AuditDenialRequired(
 		*invocation.Principal.AccessBundle,
 		identitysdk.ResourceType(objectKey),
-		identitysdk.DataActionRead,
+		identitysdk.Action(actionpolicy.ActionName(action)),
 		time.Now().UTC(),
 	)
 	if err != nil || !auditDenial {
 		return nil
 	}
-	event := auditcontract.AuditBuildEvent(ctx, "record_scope_access_denied", objectKey, recordID, invocation.Principal, "Record scope access denied", nil, nil, map[string]any{
+	event := auditcontract.AuditBuildEvent(ctx, "data_scope_access_denied", objectKey, recordID, invocation.Principal, "Data scope access denied", nil, nil, map[string]any{
 		"action":        "read_detail",
 		"action_key":    action.Key,
 		"decision":      "denied",

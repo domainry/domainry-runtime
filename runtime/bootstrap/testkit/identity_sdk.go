@@ -15,7 +15,7 @@ import (
 type IdentityBindingStub struct{ modulecapability.Binding }
 
 func (IdentityBindingStub) Descriptor() identitysdk.Descriptor {
-	return identitysdk.Descriptor{ProtocolVersion: identitysdk.CurrentProtocolVersion, BundleVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationVersion: identitysdk.AuthorizationContractVersionV1, Mode: identitysdk.DeploymentModeModule}
+	return identitysdk.Descriptor{ProtocolVersion: identitysdk.CurrentProtocolVersion, BundleVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationVersion: identitysdk.CurrentAuthorizationContractVersion, Mode: identitysdk.DeploymentModeModule}
 }
 func (IdentityBindingStub) Authentication() identitysdk.Authentication {
 	return identityAuthenticationStub{}

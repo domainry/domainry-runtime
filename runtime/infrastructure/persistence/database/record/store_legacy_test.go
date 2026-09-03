@@ -55,14 +55,14 @@ func TestListRecordsComposesStableOrgScopeWithSearchFiltersPaginationAndSorting(
 	orgScope := recordmodel.RecordScopeExpression{Operator: "in", FieldKey: "owner_org_id", Values: []string{"sales", "enterprise"}}
 
 	page, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page:         2,
-		PageSize:     1,
-		AfterID:      "r1",
-		Search:       "North",
-		SearchFields: []string{"name"},
-		Filters:      map[string]any{"status": "active"},
-		Sort:         []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
-		Scope:        "custom", RootObjectKey: object.Key, ScopeExpression: &orgScope,
+		Page:              2,
+		PageSize:          1,
+		AfterID:           "r1",
+		Search:            "North",
+		SearchFields:      []string{"name"},
+		Filters:           map[string]any{"status": "active"},
+		Sort:              []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
+		AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key, ScopeExpression: &orgScope,
 	})
 	if err != nil {
 		t.Fatalf("list scoped records: %v", err)
@@ -79,13 +79,13 @@ func TestListRecordsComposesStableOrgScopeWithSearchFiltersPaginationAndSorting(
 	insertGeneratedScopedRecord(t, store, object, "r9", "Special Leak North", "active", "sales-aa")
 	specialScope := recordmodel.RecordScopeExpression{Operator: "in", FieldKey: "owner_org_id", Values: []string{"sales_%", "special-child"}}
 	specialPage, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page:         1,
-		PageSize:     10,
-		Search:       "Special",
-		SearchFields: []string{"name"},
-		Filters:      map[string]any{"status": "active"},
-		Sort:         []recordmodel.RecordSortRule{{Field: "name", Direction: "asc"}},
-		Scope:        "custom", RootObjectKey: object.Key, ScopeExpression: &specialScope,
+		Page:              1,
+		PageSize:          10,
+		Search:            "Special",
+		SearchFields:      []string{"name"},
+		Filters:           map[string]any{"status": "active"},
+		Sort:              []recordmodel.RecordSortRule{{Field: "name", Direction: "asc"}},
+		AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key, ScopeExpression: &specialScope,
 	})
 	if err != nil {
 		t.Fatalf("list special-character scoped records: %v", err)
@@ -95,7 +95,7 @@ func TestListRecordsComposesStableOrgScopeWithSearchFiltersPaginationAndSorting(
 	}
 
 	batchPage, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page: 1, PageSize: 10, Filters: map[string]any{"id__in": []any{"r1", "r3"}}, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
+		Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"id__in": []any{"r1", "r3"}}, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
 	})
 	if err != nil {
 		t.Fatalf("list records by batched IDs: %v", err)
@@ -104,24 +104,24 @@ func TestListRecordsComposesStableOrgScopeWithSearchFiltersPaginationAndSorting(
 		t.Fatalf("expected generic id__in batch filter, got %#v", batchPage)
 	}
 	firstWithoutTotal, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page: 1, PageSize: 2, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true,
+		Page: 1, PageSize: 2, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true,
 	})
 	if err != nil || firstWithoutTotal.Total != 0 || !firstWithoutTotal.HasNext || len(firstWithoutTotal.Items) != 2 {
 		t.Fatalf("expected count-free first page with lookahead, got %#v err=%v", firstWithoutTotal, err)
 	}
 	cursorPage, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page: 99, PageSize: 2, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true, AfterID: firstWithoutTotal.Items[len(firstWithoutTotal.Items)-1].ID,
+		Page: 99, PageSize: 2, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true, AfterID: firstWithoutTotal.Items[len(firstWithoutTotal.Items)-1].ID,
 	})
 	if err != nil || len(cursorPage.Items) != 2 || cursorPage.Items[0].ID <= firstWithoutTotal.Items[1].ID {
 		t.Fatalf("expected keyset page strictly after cursor, got %#v err=%v", cursorPage, err)
 	}
 	if _, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page: 1, PageSize: 2, Sort: []recordmodel.RecordSortRule{{Field: "name", Direction: "asc"}}, SkipTotal: true, AfterID: "r1",
+		Page: 1, PageSize: 2, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: "name", Direction: "asc"}}, SkipTotal: true, AfterID: "r1",
 	}); err == nil {
 		t.Fatal("expected non-id keyset sort to be rejected")
 	}
 	lastWithoutTotal, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page: 5, PageSize: 2, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true, AfterID: "r7",
+		Page: 5, PageSize: 2, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true, AfterID: "r7",
 	})
 	if err != nil || lastWithoutTotal.Total != 0 || lastWithoutTotal.HasNext || len(lastWithoutTotal.Items) != 2 {
 		t.Fatalf("expected count-free final page, got %#v err=%v", lastWithoutTotal, err)

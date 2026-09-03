@@ -122,11 +122,6 @@ func (state *validationState) validateActions() {
 		if _, ok := state.objects[strings.TrimSpace(action.ObjectKey)]; !ok {
 			state.add(path+".object_key", "unknown object %q", action.ObjectKey)
 		}
-		for roleIndex, role := range state.manifest.Roles {
-			if containsString(role.Permissions, key) {
-				state.validateActionRoleDataPolicies(fmt.Sprintf("roles[%d].permissions", roleIndex), action, role)
-			}
-		}
 		outputKeys := map[string]bool{}
 		for outputIndex, field := range action.OutputFields {
 			fieldPath := fmt.Sprintf("%s.output_fields[%d]", path, outputIndex)
@@ -156,31 +151,6 @@ func (state *validationState) validateActions() {
 			state.add(path+".defaults."+issue.Field, "%s expected=%s actual=%s", issue.Code, issue.Expected, issue.Actual)
 		}
 	}
-}
-
-func (state *validationState) validateActionRoleDataPolicies(path string, action definitionmodel.ActionSchema, role manifestmodel.RoleSchema) {
-	if action.EffectSet == nil {
-		return
-	}
-	for _, effect := range action.EffectSet.Read {
-		if !roleHasDataPermission(role, effect.ObjectKey, true, false) {
-			state.add(path, "role %q lacks read data permission for object %q", role.Key, effect.ObjectKey)
-		}
-	}
-	for _, effect := range action.EffectSet.Write {
-		if !roleHasDataPermission(role, effect.ObjectKey, false, true) {
-			state.add(path, "role %q lacks write data permission for object %q", role.Key, effect.ObjectKey)
-		}
-	}
-}
-
-func roleHasDataPermission(role manifestmodel.RoleSchema, objectKey string, read, write bool) bool {
-	for _, permission := range role.DataPermissions {
-		if strings.TrimSpace(permission.ObjectKey) == strings.TrimSpace(objectKey) && (!read || permission.Read) && (!write || permission.Write) {
-			return true
-		}
-	}
-	return false
 }
 
 func (state *validationState) validateIntegrationConnections() {

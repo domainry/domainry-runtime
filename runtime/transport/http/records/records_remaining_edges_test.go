@@ -243,12 +243,12 @@ func TestRecordsImportAndBatchReplayFailureEdges(t *testing.T) {
 	}
 }
 
-func TestRecordsExportWriteFailureAndAscendingSort(t *testing.T) {
-	repository := &recordsHTTPRepository{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "one", Data: map[string]any{"name": "Ada"}}}}}
-	handler, _ := recordsHandlerForTest(recordsHTTPPrincipal())
-	handler.queries = recordsHTTPApplication(repository)
+func TestRecordsAutomaticExportWriteFailureAndAscendingSort(t *testing.T) {
+	fixture := newRecordBatchHTTPFixture(t)
 	writer := &recordsWriteProbe{writeErr: errors.New("disconnected")}
-	handler.exportRecords(writer, recordsRequest(http.MethodGet, "/export?sort=name", "", map[string]string{"objectKey": "customer"}))
+	request := recordsRequest(http.MethodPost, "/export?sort=name", "", map[string]string{"objectKey": "customer"})
+	request.Header.Set("Idempotency-Key", "automatic-export-write-failure")
+	fixture.handler.dispatchExport(writer, request)
 	if writer.writes != 1 {
 		t.Fatalf("writes=%d", writer.writes)
 	}

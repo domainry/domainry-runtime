@@ -539,7 +539,9 @@
       "object_key": "customer",
       "label": "Mark At Risk",
       "kind": "record_update",
-      "preconditions": [],
+      "preconditions": [
+
+      ],
       "audit_event": "customer_marked_risk",
       "ui_placement": "record_header"
     },
@@ -548,7 +550,9 @@
       "object_key": "lead",
       "label": "Qualify Lead",
       "kind": "record_operation",
-      "preconditions": [],
+      "preconditions": [
+
+      ],
       "audit_event": "lead_qualified",
       "ui_placement": "row_action"
     },
@@ -568,7 +572,9 @@
       "object_key": "opportunity",
       "label": "Advance Stage",
       "kind": "record_operation",
-      "preconditions": [],
+      "preconditions": [
+
+      ],
       "audit_event": "opportunity_stage_advanced",
       "ui_placement": "record_header",
       "payload_fields": [
@@ -607,7 +613,9 @@
       "object_key": "activity",
       "label": "Assign To Me",
       "kind": "record_update",
-      "preconditions": [],
+      "preconditions": [
+
+      ],
       "audit_event": "activity_assigned",
       "ui_placement": "record_header"
     },
@@ -627,7 +635,9 @@
       "object_key": "activity",
       "label": "Complete Activity",
       "kind": "record_operation",
-      "preconditions": [],
+      "preconditions": [
+
+      ],
       "audit_event": "activity_completed",
       "ui_placement": "row_action"
     },
@@ -669,7 +679,9 @@
       "object_key": "payment",
       "label": "Mark Collected",
       "kind": "record_operation",
-      "preconditions": [],
+      "preconditions": [
+
+      ],
       "audit_event": "payment_collected",
       "ui_placement": "row_action"
     },
@@ -1401,7 +1413,8 @@
       "audit_event": "customer_business_workspace_create_guarded",
       "layout": {
         "version": 1,
-        "nodes": {},
+        "nodes": {
+        },
         "viewport": {
           "x": 0,
           "y": 0,
@@ -1441,7 +1454,9 @@
       },
       "conditions": {
         "mode": "all",
-        "clauses": []
+        "clauses": [
+
+        ]
       },
       "execution": {
         "mode": "async",
@@ -1454,7 +1469,8 @@
       "audit_event": "customer_business_license_verified",
       "layout": {
         "version": 1,
-        "nodes": {},
+        "nodes": {
+        },
         "viewport": {
           "x": 0,
           "y": 0,
@@ -1766,75 +1782,105 @@
       "key": "sales_manager",
       "name": "Sales Manager",
       "permissions": [
-        "activity.create",
-        "activity.export",
-        "activity.read",
-        "activity.update",
-        "admin_console.access",
-        "business.access",
-        "contact.create",
-        "contact.read",
-        "contact.update",
-        "contract.create",
-        "contract.read",
-        "contract.update",
-        "customer.create",
-        "customer.export",
-        "customer.read",
-        "customer.update",
-        "lead.create",
-        "lead.read",
-        "lead.update",
-        "opportunity.create",
-        "opportunity.export",
-        "opportunity.read",
-        "opportunity.update",
-        "payment.read",
-        "runtime.appschema.validate_application_definition"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "customer",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "activity.create",
+          "data_scope": "all"
         },
         {
-          "object_key": "contact",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "activity.export",
+          "data_scope": "all"
         },
         {
-          "object_key": "lead",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "activity.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "opportunity",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "activity.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "activity",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "admin_console.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "contract",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "payment",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "contact.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "contact.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "contact.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "contract.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "contract.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "contract.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.export",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "lead.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "lead.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "lead.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "opportunity.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "opportunity.export",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "opportunity.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "opportunity.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "payment.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.appschema.validate_application_definition",
+          "data_scope": "all"
         }
       ],
       "export_rules": [
@@ -1875,62 +1921,53 @@
       "key": "sales_rep",
       "name": "Sales Rep",
       "permissions": [
-        "activity.create",
-        "activity.read",
-        "activity.update",
-        "business.access",
-        "contact.create",
-        "contact.read",
-        "customer.read",
-        "customer.update",
-        "lead.read",
-        "lead.update",
-        "opportunity.read",
-        "opportunity.update"
-      ],
-      "record_scope": "owned_records",
-      "data_permissions": [
         {
-          "object_key": "customer",
-          "scope": "owned_records",
-          "read": true,
-          "write": true
+          "permission_key": "activity.create",
+          "data_scope": "owner"
         },
         {
-          "object_key": "contact",
-          "scope": "owned_records",
-          "read": true,
-          "write": true
+          "permission_key": "activity.read",
+          "data_scope": "owner"
         },
         {
-          "object_key": "lead",
-          "scope": "owned_records",
-          "read": true,
-          "write": true
+          "permission_key": "activity.update",
+          "data_scope": "owner"
         },
         {
-          "object_key": "opportunity",
-          "scope": "owned_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "activity",
-          "scope": "owned_records",
-          "read": true,
-          "write": true
+          "permission_key": "contact.create",
+          "data_scope": "owner"
         },
         {
-          "object_key": "contract",
-          "scope": "owned_records",
-          "read": true,
-          "write": false
+          "permission_key": "contact.read",
+          "data_scope": "owner"
         },
         {
-          "object_key": "payment",
-          "scope": "owned_records",
-          "read": false,
-          "write": false
+          "permission_key": "customer.read",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "customer.update",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "lead.read",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "lead.update",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "opportunity.read",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "opportunity.update",
+          "data_scope": "owner"
         }
       ],
       "field_permissions": [
@@ -1955,39 +1992,33 @@
       "key": "finance_reviewer",
       "name": "Finance Reviewer",
       "permissions": [
-        "business.access",
-        "contract.read",
-        "customer.read",
-        "opportunity.read",
-        "payment.export",
-        "payment.read",
-        "payment.update"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "customer",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "opportunity",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "contract.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "contract",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "customer.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "payment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "opportunity.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "payment.export",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "payment.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "payment.update",
+          "data_scope": "all"
         }
       ],
       "export_rules": [
@@ -2007,22 +2038,37 @@
       "key": "automation_business_tester",
       "name": "Automation Business Tester",
       "permissions": [
-        "business.access",
-        "customer.apply_automation_verification",
-        "customer.create",
-        "customer.read",
-        "customer.update",
-        "workflow.customer.risk_follow_up.run",
-        "workflow.lead.auto_route.run",
-        "workflow.payment.overdue_escalation.run"
-      ],
-      "record_scope": "owned_records",
-      "data_permissions": [
         {
-          "object_key": "customer",
-          "scope": "owned_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.apply_automation_verification",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "customer.create",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "customer.read",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "customer.update",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "workflow.customer.risk_follow_up.run",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "workflow.lead.auto_route.run",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "workflow.payment.overdue_escalation.run",
+          "data_scope": "all"
         }
       ]
     },
@@ -2030,17 +2076,17 @@
       "key": "automation_history_reviewer",
       "name": "Automation History Reviewer",
       "permissions": [
-        "admin_console.access",
-        "automation.rule.history.read",
-        "automation.rule.read"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "customer",
-          "scope": "all_records",
-          "read": false,
-          "write": false
+          "permission_key": "admin_console.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "automation.rule.history.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "automation.rule.read",
+          "data_scope": "all"
         }
       ]
     },
@@ -2048,25 +2094,49 @@
       "key": "platform_admin",
       "name": "Runtime Operator",
       "permissions": [
-        "admin_console.access",
-        "customer.read",
-        "integration.audit.view",
-        "integration.catalog.view",
-        "integration.retry",
-        "runtime.appschema.validate_application_definition",
-        "runtime.workflows.get_ops_workflow_process",
-        "runtime.workflows.list_ops_workflow_executions",
-        "runtime.workflows.list_ops_workflow_processes",
-        "runtime.workflows.process_ops_workflow_executions",
-        "scheduler.command"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "customer",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "admin_console.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "customer.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "integration.audit.view",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "integration.catalog.view",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "integration.retry",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.appschema.validate_application_definition",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.get_ops_workflow_process",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_executions",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_processes",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.process_ops_workflow_executions",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "scheduler.command",
+          "data_scope": "all"
         }
       ]
     }

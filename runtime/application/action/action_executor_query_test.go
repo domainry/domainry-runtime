@@ -22,7 +22,7 @@ func TestBusinessActionQueryPreservesTypedFilterSortAndProjection(t *testing.T) 
 	var capturedPrincipal principalmodel.Principal
 	original := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{
 		Key: "member", Permissions: []string{"class_booking.book"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "class_booking", Scope: "owned_records", Read: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "class_booking", Scope: "owner", Write: true}},
 	},
 	)
 	execution := &businessActionExecution{
@@ -35,7 +35,10 @@ func TestBusinessActionQueryPreservesTypedFilterSortAndProjection(t *testing.T) 
 			return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "booking-1", Data: map[string]any{"status": "booked"}}}, Total: 51}, nil
 		}},
 		invocation: actionmodel.ActionInvocation{Principal: original},
-		action:     definitionmodel.ActionSchema{EffectSet: &definitionmodel.ActionEffectSet{Read: []definitionmodel.ActionObjectEffect{{ObjectKey: "class_booking"}}}},
+		action: definitionmodel.ActionSchema{
+			Key: "class_booking.book", ObjectKey: "class_booking",
+			EffectSet: &definitionmodel.ActionEffectSet{Read: []definitionmodel.ActionObjectEffect{{ObjectKey: "class_booking"}}},
+		},
 	}
 	result, err := execution.QueryRecords(t.Context(), runtimeext.RecordQuery{
 		Operation: runtimeext.QueryList, ObjectKey: "class_booking",
@@ -73,7 +76,7 @@ func TestBusinessActionQueryPreservesTypedFilterSortAndProjection(t *testing.T) 
 	}
 	capturedRole := accessfixture.Of(capturedPrincipal)
 	if !hasRead ||
-		len(capturedRole.DataPolicies) != 1 || capturedRole.DataPolicies[0].Scope != "owned_records" ||
+		len(capturedRole.DataPolicies) != 1 || capturedRole.DataPolicies[0].Scope != "owner" ||
 		len(original.PermissionKeys()) != 1 {
 		t.Fatalf("authorized=%#v original=%#v", capturedPrincipal, original)
 	}

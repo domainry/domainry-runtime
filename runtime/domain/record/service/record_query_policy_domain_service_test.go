@@ -36,7 +36,10 @@ func TestQueryPolicyServiceObjectPermissionErrorsRemainStructured(t *testing.T) 
 func TestQueryPolicyServiceNormalizesExplicitListQuery(t *testing.T) {
 	service := NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{})
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}, {Key: "owner_id", Type: "user"}}}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user-1", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{RecordScope: "all_records"})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user-1", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{
+		Permissions:  []string{"customer.read"},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true}},
+	})
 
 	query := service.NormalizeListQuery(object, recordmodel.RecordListQuery{PageSize: 50, SearchFields: []string{"name"}, Filters: map[string]any{"owner_id": "user-1"}, Sort: []recordmodel.RecordSortRule{{Field: "name", Direction: "desc"}}}, principal)
 	if query.Page != 1 || query.PageSize != 50 || !reflect.DeepEqual(query.SearchFields, []string{"name"}) {
@@ -48,7 +51,7 @@ func TestQueryPolicyServiceNormalizesExplicitListQuery(t *testing.T) {
 	if len(query.Sort) != 2 || query.Sort[0].Field != "name" || query.Sort[0].Direction != "desc" || query.Sort[1].Field != "id" || query.Sort[1].Direction != "asc" {
 		t.Fatalf("sort normalization = %#v", query.Sort)
 	}
-	if query.Scope != "custom" || query.ScopeExpression == nil {
+	if query.AuthorizationMode != recordmodel.RecordQueryAuthorizationUnrestricted || query.RootObjectKey != "" || query.ScopeExpression != nil {
 		t.Fatalf("authorization projection = %#v", query)
 	}
 }
@@ -60,7 +63,10 @@ func TestQueryPolicyServiceNormalizesBoundedInFilters(t *testing.T) {
 		"identity_user__in": []any{"u2", "u1", "u1", ""},
 		"id__in":            []string{"p2", "p1"},
 		"unknown__in":       []any{"leak"},
-	}}, accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{RecordScope: "all_records"}))
+	}}, accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{
+		Permissions:  []string{"employee_profile.read"},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "employee_profile", Scope: "all", Read: true}},
+	}))
 	if !reflect.DeepEqual(query.Filters["identity_user__in"], []any{"u2", "u1"}) || !reflect.DeepEqual(query.Filters["id__in"], []any{"p2", "p1"}) {
 		t.Fatalf("normalized batch filters = %#v", query.Filters)
 	}
@@ -81,7 +87,7 @@ func TestQueryPolicyServiceAuthorizesCreateCandidateThroughPersistedRelationScop
 	}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{
 		Permissions:  []string{"reservation.read", "reservation.update"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "reservation", Scope: "custom", Read: true, Write: true, Predicate: predicate}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "reservation", Read: true, Write: true, Predicate: predicate}},
 	})
 	called := false
 	service := NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{

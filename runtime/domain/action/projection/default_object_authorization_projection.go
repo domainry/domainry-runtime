@@ -50,7 +50,7 @@ func DefaultActionsForObject(object definitionmodel.ObjectSchema, owner string) 
 			CapabilityKey: objectKey, CapabilityLabel: capabilityLabel,
 			OperationKey: operation.key, OperationLabel: operation.label, Label: capabilityLabel + " · " + operation.label,
 			Exposures:     []actioncontract.Exposure{actioncontract.ExposurePublic},
-			Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission},
+			Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated},
 			HTTP: &actioncontract.HTTPBinding{
 				Method: operation.method, RouteTemplate: operation.route,
 				DisplayRouteTemplate: strings.ReplaceAll(operation.route, "{objectKey}", objectKey),

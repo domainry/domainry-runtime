@@ -183,7 +183,7 @@ func runtimeModuleInventoryAction() actioncontract.ActionDefinition {
 	return actioncontract.ActionDefinition{
 		Key: "runtime.modules.list", Owner: "runtime:builtin", SourceKind: "builtin_surface", CapabilityKey: "runtime.modules", CapabilityLabel: "Runtime modules",
 		OperationKey: "list", OperationLabel: "List Runtime modules", Label: "List Runtime modules", Exposures: []actioncontract.Exposure{actioncontract.ExposureOps},
-		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission},
+		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated},
 		HTTP:          &actioncontract.HTTPBinding{Method: "GET", RouteTemplate: "/operations/modules"},
 		Permission:    &actioncontract.PermissionDefinition{Key: "runtime.modules.list", Owner: "runtime:builtin", ResourceKey: "runtime.modules", OperationKey: "list", Label: "List Runtime modules", Category: "Runtime", LifecycleStatus: actioncontract.LifecycleActive},
 		EffectClass:   actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "runtime_module_inventory_read", LifecycleStatus: actioncontract.LifecycleActive,
@@ -194,7 +194,7 @@ func runtimePermissionUsageQueryAction(identityAudience string) actioncontract.A
 	return actioncontract.ActionDefinition{
 		Key: "runtime.authorization.action_usages.query", Owner: "runtime:builtin", SourceKind: "builtin_surface", CapabilityKey: "runtime.authorization", CapabilityLabel: "Runtime authorization",
 		OperationKey: "action_usages.query", OperationLabel: "Query Action usages", Label: "Query live Action usages", Exposures: []actioncontract.Exposure{actioncontract.ExposureTenantAdmin, actioncontract.ExposureOps},
-		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationServiceIdentity, PolicyKey: "runtime.authorization.action_usages.query", Audiences: []string{strings.TrimSpace(identityAudience)}},
+		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationSigned, PolicyKey: "runtime.authorization.action_usages.query", Audiences: []string{strings.TrimSpace(identityAudience)}},
 		HTTP:          &actioncontract.HTTPBinding{Method: http.MethodPost, RouteTemplate: "/operations/authorization/action-usages/query"},
 		EffectClass:   actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "runtime_action_usage_read", LifecycleStatus: actioncontract.LifecycleActive,
 	}

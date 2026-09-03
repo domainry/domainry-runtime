@@ -68,19 +68,16 @@ func BuildTenantPredicate(s Store, workspace string, queryValue recordmodel.Reco
 	workspace = workspaceID.String()
 	predicates := []query.Predicate{query.Equal("workspace_id", workspace)}
 	appendPredicate := func(predicate query.Predicate) { predicates = append(predicates, predicate) }
-	scope := strings.TrimSpace(queryValue.Scope)
-	if scope == "" {
-		scope = "all_records"
+	authorizationMode := queryValue.AuthorizationMode
+	if authorizationMode != recordmodel.RecordQueryAuthorizationUnrestricted && authorizationMode != recordmodel.RecordQueryAuthorizationPredicate && authorizationMode != recordmodel.RecordQueryAuthorizationDeny {
+		return nil, fmt.Errorf("unsupported record query authorization mode %q", authorizationMode)
 	}
-	if !map[string]bool{"all_records": true, "custom": true, "none": true}[scope] {
-		return nil, fmt.Errorf("unsupported data scope %q", scope)
-	}
-	if scope == "none" {
+	if authorizationMode == recordmodel.RecordQueryAuthorizationDeny {
 		appendPredicate(query.AlwaysFalse())
 	}
-	if scope == "custom" {
+	if authorizationMode == recordmodel.RecordQueryAuthorizationPredicate {
 		if queryValue.ScopeExpression == nil || strings.TrimSpace(queryValue.RootObjectKey) == "" {
-			return nil, fmt.Errorf("custom scope requires compiled expression")
+			return nil, fmt.Errorf("predicate authorization requires compiled expression")
 		}
 		compiled, err := scopeExpressionPredicate(s, queryValue.RootObjectKey, *queryValue.ScopeExpression, 0)
 		if err != nil {
@@ -90,9 +87,9 @@ func BuildTenantPredicate(s Store, workspace string, queryValue recordmodel.Reco
 	}
 	if strings.TrimSpace(queryValue.Search) != "" && len(queryValue.SearchFields) > 0 {
 		searchPredicates := make([]query.Predicate, 0, len(queryValue.SearchFields))
-		searchValue := "%" + strings.ToLower(strings.TrimSpace(queryValue.Search)) + "%"
+		searchValue := "%" + escapeLikePattern(strings.ToLower(strings.TrimSpace(queryValue.Search))) + "%"
 		for _, field := range queryValue.SearchFields {
-			searchPredicates = append(searchPredicates, query.LikeValue(query.Lower(query.Column(field)), searchValue))
+			searchPredicates = append(searchPredicates, query.LikeValueEscaped(query.Lower(query.Column(field)), searchValue))
 		}
 		appendPredicate(query.Or(searchPredicates...))
 	}

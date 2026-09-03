@@ -134,7 +134,7 @@ func (s *RecordTimerApplicationService) CancelRecordTimers(ctx context.Context, 
 	}
 	cancelled := 0
 	for {
-		page, listErr := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 500, Scope: "all_records", Filters: filters, Sort: []recordmodel.RecordSortRule{{Field: "due_at", Direction: "asc"}, {Field: "id", Direction: "asc"}}})
+		page, listErr := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 500, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: filters, Sort: []recordmodel.RecordSortRule{{Field: "due_at", Direction: "asc"}, {Field: "id", Direction: "asc"}}})
 		if listErr != nil {
 			return cancelled, recordTimerInternalError("list record timers to cancel", listErr)
 		}

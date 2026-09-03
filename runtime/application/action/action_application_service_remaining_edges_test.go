@@ -230,12 +230,12 @@ func TestActionFailureAuditFallbacksAndPermissionCombinations(t *testing.T) {
 	action := definitionmodel.ActionSchema{Key: "order.update", ObjectKey: "order"}
 	result := actionmodel.ActionInvocationResult{InvocationID: "invocation-1"}
 	notFound := apperror.New(apperror.KindNotFound, "backend.record.not_found", nil, nil)
-	principal := actionTestPrincipal()
+	principal := actionTestPrincipal("order.update")
 	principal = accessfixture.WithMutation(principal, func(role *accessfixture.Bundle) {
 		role.DataPolicies = []accessfixture.DataPolicyFixture{
-			{ObjectKey: "order", Read: false, AuditDenial: true},
-			{ObjectKey: "order", Read: true, AuditDenial: false},
-			{ObjectKey: "other", Read: true, AuditDenial: true},
+			{ObjectKey: "order", Write: false, AuditDenial: true},
+			{ObjectKey: "order", Write: true, AuditDenial: false},
+			{ObjectKey: "other", Write: true, AuditDenial: true},
 		}
 	})
 	invocation := actionmodel.ActionInvocation{
@@ -249,7 +249,7 @@ func TestActionFailureAuditFallbacksAndPermissionCombinations(t *testing.T) {
 
 	invocation.Principal = accessfixture.WithMutation(invocation.Principal, func(role *accessfixture.Bundle) {
 		role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{
-			ObjectKey: "order", Read: true, AuditDenial: true,
+			ObjectKey: "order", Write: true, AuditDenial: true,
 		})
 	})
 	events := buildActionFailureAudits(t.Context(), action, invocation, result, notFound)

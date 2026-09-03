@@ -38,36 +38,17 @@ func (state *validationState) validateRoles() {
 			state.add(path+".provision_to_workspaces", "system-managed roles cannot be provisioned as tenant login roles")
 		}
 		permissions := map[string]bool{}
-		for permissionIndex, permission := range role.Permissions {
-			permission = strings.TrimSpace(permission)
+		for permissionIndex, grant := range role.Permissions {
+			permission := strings.TrimSpace(grant.PermissionKey)
 			permissionPath := fmt.Sprintf("%s.permissions[%d]", path, permissionIndex)
 			if permission == "" {
-				state.add(permissionPath, "is required")
+				state.add(permissionPath+".permission_key", "is required")
 			} else if permissions[permission] {
-				state.add(permissionPath, "duplicate permission %q", permission)
+				state.add(permissionPath+".permission_key", "duplicate permission %q", permission)
 			}
 			permissions[permission] = true
-		}
-		dataObjects := map[string]bool{}
-		for dataIndex, permission := range role.DataPermissions {
-			dataPath := fmt.Sprintf("%s.data_permissions[%d]", path, dataIndex)
-			objectKey := strings.TrimSpace(permission.ObjectKey)
-			if objectKey == "" {
-				state.add(dataPath+".object_key", "is required")
-			} else if state.objects[objectKey].Key == "" {
-				state.add(dataPath+".object_key", "unknown object %q", objectKey)
-			} else if dataObjects[objectKey] {
-				state.add(dataPath+".object_key", "duplicate data permission for object %q", objectKey)
-			}
-			dataObjects[objectKey] = true
-			if strings.TrimSpace(permission.Scope) == "" {
-				state.add(dataPath+".scope", "is required")
-			}
-			if strings.TrimSpace(permission.Filter) != "" && permission.Predicate != nil {
-				state.add(dataPath, "filter and predicate are mutually exclusive")
-			}
-			if permission.Predicate != nil && state.objects[objectKey].Key != "" {
-				state.validateRolePolicyExpression(dataPath+".predicate", objectKey, *permission.Predicate, 0)
+			if !grant.DataScope.Valid() {
+				state.add(permissionPath+".data_scope", "must be one of all, owner, org, org_child, target_org")
 			}
 		}
 		fieldPermissions := map[string]bool{}
@@ -160,88 +141,7 @@ func (state *validationState) validateRoleReferencePermission(path string, permi
 	}
 }
 
-func (state *validationState) validateRolePolicyExpression(path, rootObjectKey string, expression manifestmodel.RolePolicyExpression, depth int) {
-	if depth > 16 {
-		state.add(path, "exceeds maximum depth")
-		return
-	}
-	operator := strings.ToLower(strings.TrimSpace(expression.Operator))
-	switch operator {
-	case "and", "or":
-		if len(expression.Children) == 0 {
-			state.add(path+".children", "must not be empty for %s", operator)
-		}
-		for index, child := range expression.Children {
-			state.validateRolePolicyExpression(fmt.Sprintf("%s.children[%d]", path, index), rootObjectKey, child, depth+1)
-		}
-		return
-	case "not":
-		if len(expression.Children) != 1 {
-			state.add(path+".children", "must contain exactly one expression for not")
-		}
-		for index, child := range expression.Children {
-			state.validateRolePolicyExpression(fmt.Sprintf("%s.children[%d]", path, index), rootObjectKey, child, depth+1)
-		}
-		return
-	case "eq", "neq", "in", "not_in", "exists", "prefix":
-	case "":
-		state.add(path+".operator", "is required")
-		return
-	default:
-		state.add(path+".operator", "is not executable by Runtime: %q", operator)
-		return
-	}
-	currentKey := rootObjectKey
-	visited := map[string]bool{currentKey: true}
-	for index, segment := range expression.Path {
-		segmentPath := fmt.Sprintf("%s.path[%d]", path, index)
-		targetKey := strings.TrimSpace(segment.TargetObjectKey)
-		target := state.objects[targetKey]
-		if target.Key == "" || visited[targetKey] {
-			state.add(segmentPath+".target_object_key", "unknown or cyclic object %q", targetKey)
-			return
-		}
-		relationKey := strings.TrimSpace(segment.RelationFieldKey)
-		switch strings.TrimSpace(segment.Direction) {
-		case "forward":
-			relation := state.fields[currentKey][relationKey]
-			if !runtimeRoleRelationTargets(relation, targetKey) {
-				state.add(segmentPath+".relation_field_key", "invalid forward relation %s.%s -> %s", currentKey, relationKey, targetKey)
-				return
-			}
-		case "reverse":
-			relation := state.fields[targetKey][relationKey]
-			if !runtimeRoleRelationTargets(relation, currentKey) {
-				state.add(segmentPath+".relation_field_key", "invalid reverse relation %s.%s -> %s", targetKey, relationKey, currentKey)
-				return
-			}
-		default:
-			state.add(segmentPath+".direction", "must be forward or reverse")
-			return
-		}
-		visited[targetKey] = true
-		currentKey = targetKey
-	}
-	fieldKey := strings.TrimSpace(expression.FieldKey)
-	if fieldKey == "" {
-		state.add(path+".field_key", "is required")
-	} else if fieldKey != "id" && !runtimeRoleFieldExists(state.fields[currentKey], fieldKey) {
-		state.add(path+".field_key", "unknown or disabled field %q on object %q", fieldKey, currentKey)
-	}
-	valueSource := strings.TrimSpace(expression.ValueSource)
-	if valueSource != "literal" && valueSource != "actor_claim" {
-		state.add(path+".value_source", "must be literal or actor_claim")
-	} else if valueSource == "actor_claim" && strings.TrimSpace(expression.ClaimKey) == "" {
-		state.add(path+".claim_key", "is required for actor_claim")
-	}
-}
-
 func runtimeRoleFieldExists(fields map[string]definitionmodel.FieldSchema, key string) bool {
 	field, exists := fields[strings.TrimSpace(key)]
 	return exists && strings.TrimSpace(field.DisabledAt) == ""
-}
-
-func runtimeRoleRelationTargets(field definitionmodel.FieldSchema, target string) bool {
-	return strings.TrimSpace(field.Key) != "" && strings.TrimSpace(field.DisabledAt) == "" &&
-		strings.TrimSpace(field.Type) == "relation" && strings.TrimSpace(field.Validation.Target) == strings.TrimSpace(target)
 }

@@ -21,7 +21,6 @@ func RecordCompileSDKDataScopeExpression(object definitionmodel.ObjectSchema, ob
 		*principal.AccessBundle,
 		identitysdk.ResourceType(strings.TrimSpace(object.Key)),
 		identitysdk.Action(normalizeSDKScopeAction(action)),
-		sdkScopeDataAction(action),
 		time.Now().UTC(),
 	)
 	if err != nil {
@@ -32,16 +31,24 @@ func RecordCompileSDKDataScopeExpression(object definitionmodel.ObjectSchema, ob
 		objectMap[candidate.Key] = candidate
 	}
 	evaluation := recordpolicy.RecordSDKEvaluationContext(principal)
+	deny, err := compileSDKPredicateGroup(object, objectMap, evaluation, filter.Deny, "or")
+	if err != nil {
+		return nil, err, true
+	}
+	if filter.Unrestricted {
+		if deny == nil {
+			// Canonical `all` is the absence of an additional data-scope
+			// predicate. Workspace and caller filters remain mandatory.
+			return nil, nil, true
+		}
+		return &recordmodel.RecordScopeExpression{Operator: "not", Children: []recordmodel.RecordScopeExpression{*deny}}, nil, true
+	}
 	allow, err := compileSDKPredicateGroup(object, objectMap, evaluation, filter.Allow, "or")
 	if err != nil {
 		return nil, err, true
 	}
 	if allow == nil {
 		return denyAllRecordScopeExpression(), nil, true
-	}
-	deny, err := compileSDKPredicateGroup(object, objectMap, evaluation, filter.Deny, "or")
-	if err != nil {
-		return nil, err, true
 	}
 	if deny == nil {
 		return allow, nil, true
@@ -50,6 +57,35 @@ func RecordCompileSDKDataScopeExpression(object definitionmodel.ObjectSchema, ob
 		*allow,
 		{Operator: "not", Children: []recordmodel.RecordScopeExpression{*deny}},
 	}}, nil, true
+}
+
+// RecordCompileSDKMutationScopeExpression preserves relation paths as
+// correlated EXISTS predicates. Mutation storage uses this expression in the
+// same UPDATE/DELETE statement as the candidate record ID.
+func RecordCompileSDKMutationScopeExpression(object definitionmodel.ObjectSchema, objects []definitionmodel.ObjectSchema, principal principalmodel.Principal, action string) (*recordmodel.RecordScopeExpression, error, bool) {
+	expression, err, handled := RecordCompileSDKDataScopeExpression(object, objects, principal, action)
+	if err != nil || !handled {
+		return nil, err, handled
+	}
+	return recordMutationScopeExpression(expression), nil, true
+}
+
+func recordMutationScopeExpression(expression *recordmodel.RecordScopeExpression) *recordmodel.RecordScopeExpression {
+	if expression == nil {
+		return nil
+	}
+	result := *expression
+	result.Values = append([]string(nil), expression.Values...)
+	result.Path = append([]recordmodel.RecordScopePathSegment(nil), expression.Path...)
+	result.Children = make([]recordmodel.RecordScopeExpression, len(expression.Children))
+	for index := range expression.Children {
+		child := recordMutationScopeExpression(&expression.Children[index])
+		result.Children[index] = *child
+	}
+	if len(result.Path) > 0 {
+		result.RelationExists = true
+	}
+	return &result
 }
 
 func compileSDKPredicateGroup(object definitionmodel.ObjectSchema, objects map[string]definitionmodel.ObjectSchema, evaluation identityevaluator.EvaluationContext, predicates []identitysdk.Predicate, operator string) (*recordmodel.RecordScopeExpression, error) {
@@ -256,15 +292,6 @@ func normalizeSDKScopeAction(action string) string {
 	}
 }
 
-func sdkScopeDataAction(action string) identitysdk.DataAction {
-	switch strings.ToLower(strings.TrimSpace(action)) {
-	case "read", "view", "list", "search", "export":
-		return identitysdk.DataActionRead
-	default:
-		return identitysdk.DataActionWrite
-	}
-}
-
 func sdkScopeExpressionHasRelation(expression recordmodel.RecordScopeExpression) bool {
 	if len(expression.Path) > 0 {
 		return true
@@ -311,13 +338,6 @@ func directSDKScopeExpressionMatches(expression recordmodel.RecordScopeExpressio
 		return false
 	case "exists", "not_exists":
 		_, exists := directRecordScopeValue(record, expression.FieldKey)
-		if expression.FieldKey == "id" {
-			// A candidate record is still a record fact even before persistence
-			// assigns its ID. Identity uses `id exists true` as the portable
-			// unrestricted-scope predicate, so key existence must not depend on
-			// a non-empty persisted identifier.
-			exists = true
-		}
 		if expression.Operator == "not_exists" {
 			return !exists
 		}

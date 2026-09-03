@@ -95,6 +95,10 @@ func providerSpecs() ([]providerSpec, error) {
 	if err != nil {
 		return nil, err
 	}
+	recordExportAPI, err := modelAPIProjection("record_export")
+	if err != nil {
+		return nil, err
+	}
 	owner := func(values ...string) endpointSelector {
 		accepted := map[string]bool{}
 		for _, value := range values {
@@ -132,7 +136,7 @@ func providerSpecs() ([]providerSpec, error) {
 			scenarios: scenarios(
 				[]string{"A PRD needs CRUD, filtered record lists, related records, bulk record jobs, or deterministic business Actions"},
 				[]string{"The requirement is analytical aggregation, a human approval graph, or external-provider integration rather than transactional record behavior"},
-				[]string{"create update delete record", "record list", "business action", "bulk records", "related records"},
+				[]string{"create update delete record", "record list", "record export", "business action", "bulk records", "related records"},
 				[]string{"records.crud", "records.query", "records.batch", "action.definition", "action.execute"}, []string{"identity", "runtime_schema"}, []string{"audit", "data_exchange", "workflow"},
 				[]string{"schema_to_records", "action_definition_to_guarded_execution", "record_mutation_to_audit_and_realtime"}, []string{"action.definition"},
 				"Maintain orders and expose a guarded approve Action", "Records owns transactional state while the Action definition and generated handler own the business effect",
@@ -142,6 +146,7 @@ func providerSpecs() ([]providerSpec, error) {
 					Kind: "action.definition", Description: "Validate one project Action definition against its referenced object contract.", Coverage: modulecapability.ValidationCoverageAllCandidates, CandidateCollections: []string{"actions"}, ReferencedCollections: []string{"objects"},
 				}}, projections: actions},
 				{key: "records.business", name: "Business records and Actions", description: "Query and mutate records and invoke object- or record-scoped Actions under dynamic owner policy.", chains: []string{"schema_to_records", "record_mutation_to_audit_and_realtime", "action_definition_to_guarded_execution"}, selectEndpoints: owner("records")},
+				{key: "records.export", name: "Record export", description: "Request one authorized record export; Runtime owns delivery and completion handling.", chains: []string{"schema_to_records"}, projections: recordExportAPI},
 			}, validator: validateActionCandidate,
 		},
 		{
@@ -253,6 +258,14 @@ func providerSpecs() ([]providerSpec, error) {
 	}, nil
 }
 
+func modelAPIProjection(operationKeys ...string) ([]modulecapability.SourceProjection, error) {
+	payload, err := capabilitycontract.RuntimeModelAPIContractProjection(operationKeys...)
+	if err != nil {
+		return nil, err
+	}
+	return []modulecapability.SourceProjection{{Kind: "runtime.api_operations", Key: strings.Join(operationKeys, "+"), Payload: json.RawMessage(payload)}}, nil
+}
+
 func buildProvider(document map[string]any, spec providerSpec) (*modulecapability.StaticBinding, error) {
 	paths, ok := document["paths"].(map[string]any)
 	if !ok {
@@ -357,8 +370,12 @@ func runtimeOperationExtension(contract endpointmodel.RuntimeEndpointContractV1)
 	if action.Permission != nil {
 		authorization.Permission = action.Permission.Key
 	}
-	if action.Authorization.Strategy != actioncontract.AuthorizationAnonymousProtocol {
-		authorization.WorkspaceScope = "authenticated_workspace"
+	if action.Authorization.Strategy != actioncontract.AuthorizationAnonymous {
+		if action.Authorization.Strategy == actioncontract.AuthorizationSigned {
+			authorization.WorkspaceScope = "signed_request_workspace"
+		} else {
+			authorization.WorkspaceScope = "authenticated_workspace"
+		}
 	}
 	value := modulecapability.OperationExtension{
 		Owner: endpointOwner(contract), Authorization: authorization, Effect: modulecapability.EffectClass(contract.EffectClass),
@@ -392,20 +409,13 @@ func scenarios(useWhen, doNotUseWhen, signals, provided, required, optional, cha
 }
 
 type authoringProjectionDocument struct {
-	Key                string                                            `json:"key"`
-	Status             string                                            `json:"status"`
-	Lifecycle          string                                            `json:"lifecycle"`
-	AllowedContexts    []string                                          `json:"allowed_contexts,omitempty"`
-	Parameters         []capabilitycontract.CapabilityAuthoringParameter `json:"parameters,omitempty"`
-	Requires           []string                                          `json:"requires,omitempty"`
-	Conflicts          []string                                          `json:"conflicts,omitempty"`
-	Errors             []capabilitycontract.CapabilityAuthoringError     `json:"errors,omitempty"`
-	Examples           []capabilitycontract.CapabilityAuthoringExample   `json:"examples,omitempty"`
-	InputSchema        *capabilitycontract.CapabilityAuthoringSchema     `json:"input_schema,omitempty"`
-	OutputSchema       *capabilitycontract.CapabilityAuthoringSchema     `json:"output_schema,omitempty"`
-	OutputVariables    []capabilitycontract.CapabilityAuthoringOutput    `json:"output_variables,omitempty"`
-	ReferenceContracts []authoringReference                              `json:"reference_contracts,omitempty"`
-	Execution          *capabilitycontract.CapabilityAuthoringExecution  `json:"execution,omitempty"`
+	Key                string                                        `json:"key"`
+	Lifecycle          string                                        `json:"lifecycle"`
+	AllowedContexts    []string                                      `json:"allowed_contexts,omitempty"`
+	Requires           []string                                      `json:"requires,omitempty"`
+	Conflicts          []string                                      `json:"conflicts,omitempty"`
+	InputSchema        *capabilitycontract.CapabilityAuthoringSchema `json:"input_schema,omitempty"`
+	ReferenceContracts []authoringReference                          `json:"reference_contracts,omitempty"`
 }
 
 type authoringReference struct {
@@ -421,10 +431,15 @@ func authoringProjections(definitions []capabilitycontract.CapabilityAuthoringDe
 		for _, reference := range definition.ReferenceContracts {
 			references = append(references, authoringReference{Kind: reference.Kind, InputJSONPointer: reference.InputJSONPointer, ScopeFrom: reference.ScopeFrom})
 		}
+		// A source projection is input to model authoring, not an invocation
+		// protocol. InputSchema is the authoritative candidate shape. Parameters
+		// duplicate that schema, while examples, errors, outputs and execution
+		// describe owner validation or Runtime execution after authoring. Keeping
+		// those fields here made every selected category pay for contracts the
+		// model neither chooses nor implements.
 		value := authoringProjectionDocument{
-			Key: definition.Key, Status: definition.Status, Lifecycle: definition.Lifecycle, AllowedContexts: definition.AllowedContexts,
-			Parameters: definition.Parameters, Requires: definition.Requires, Conflicts: definition.Conflicts, Errors: definition.Errors, Examples: definition.Examples,
-			InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema, OutputVariables: definition.OutputVariables, ReferenceContracts: references, Execution: definition.Execution,
+			Key: definition.Key, Lifecycle: definition.Lifecycle, AllowedContexts: definition.AllowedContexts,
+			Requires: definition.Requires, Conflicts: definition.Conflicts, InputSchema: definition.InputSchema, ReferenceContracts: references,
 		}
 		payload, err := json.Marshal(value)
 		if err != nil {

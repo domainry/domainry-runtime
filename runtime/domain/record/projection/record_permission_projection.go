@@ -25,7 +25,6 @@ func RecordBuildFeaturePermissions(objects []definitionmodel.ObjectSchema, actio
 		Objects:   make([]recordcontract.RecordFeatureObjectPermissions, 0, len(objects)),
 		Actions:   make([]recordcontract.RecordFeatureActionPermission, 0, len(actions)),
 		Functions: functionPermissionSnapshots(principal),
-		Data:      make([]recordcontract.RecordDataScopePermission, 0, len(objects)),
 		Fields:    []recordcontract.RecordFieldPermissionSnapshot{},
 		Exports:   make([]recordcontract.RecordExportPermissionSnapshot, 0, len(objects)),
 		Approvals: []recordcontract.RecordApprovalPermissionSnapshot{},
@@ -37,18 +36,14 @@ func RecordBuildFeaturePermissions(objects []definitionmodel.ObjectSchema, actio
 			item.Actions = append(item.Actions, objectFeatureDecision(principal, object.Key, action))
 		}
 		result.Objects = append(result.Objects, item)
-		result.Data = append(result.Data, dataScopePermission(principal, object))
 		result.Fields = append(result.Fields, fieldPermissionSnapshots(principal, object)...)
 		result.Exports = append(result.Exports, exportPermissionSnapshot(principal, object))
 	}
 	for _, action := range actions {
 		permissionKey := strings.TrimSpace(action.Key)
-		objectKey, permissionAction := splitPermission(permissionKey)
+		objectKey, permissionAction := definitionmodel.ActionPermissionSubject(action)
 		if objectKey == "" {
 			objectKey = action.ObjectKey
-		}
-		if permissionAction == "" {
-			permissionAction = actionName(action)
 		}
 		decision := objectFeatureDecision(principal, objectKey, permissionAction)
 		decision.Key = action.Key
@@ -59,7 +54,7 @@ func RecordBuildFeaturePermissions(objects []definitionmodel.ObjectSchema, actio
 			Label:             action.Label,
 			Kind:              action.Kind,
 			PermissionKey:     permissionKey,
-			DataScope:         decision.DataScope,
+			DataScopes:        decision.DataScopes,
 			Allowed:           decision.Allowed,
 			Reason:            decision.Reason,
 			AssuranceRequired: actionAssuranceRequired(action),
@@ -144,16 +139,15 @@ func objectFeatureDecision(principal principalmodel.Principal, objectKey string,
 		}
 		return recordcontract.RecordFeaturePermissionDecision{
 			Key: permissionKey, ObjectKey: strings.TrimSpace(objectKey), Action: strings.TrimSpace(action),
-			PermissionKey: permissionKey, DataScope: "identity_policy", Allowed: allowed, Reason: reason,
+			PermissionKey: permissionKey, DataScopes: recordpolicy.RecordDataScopesForPrincipal(principal, objectKey, action), Allowed: allowed, Reason: reason,
 		}
 	}
-	dataScope := recordpolicy.RecordDataScopeForPrincipal(principal, objectKey, action)
 	decision := recordcontract.RecordFeaturePermissionDecision{
 		Key:           permissionKey,
 		ObjectKey:     strings.TrimSpace(objectKey),
 		Action:        strings.TrimSpace(action),
 		PermissionKey: permissionKey,
-		DataScope:     dataScope,
+		DataScopes:    recordpolicy.RecordDataScopesForPrincipal(principal, objectKey, action),
 		Allowed:       false,
 		Reason:        "missing_permission",
 	}
@@ -166,47 +160,6 @@ func objectFeatureDecision(principal principalmodel.Principal, objectKey string,
 	}
 	decision.Allowed = true
 	decision.Reason = "runtime_system_capability"
-	return decision
-}
-
-func dataScopePermission(principal principalmodel.Principal, object definitionmodel.ObjectSchema) recordcontract.RecordDataScopePermission {
-	return recordcontract.RecordDataScopePermission{
-		ObjectKey:  object.Key,
-		OwnerField: recordpolicy.RecordOwnerFieldKey(object),
-		OrgIDField: recordpolicy.RecordOwnerOrgIDFieldKey(object),
-		Context: recordcontract.RecordDataScopeContext{
-			OrgID:                 principal.OrgID,
-			OrgScopeIDs:           append([]string(nil), principal.OrgScopeIDs...),
-			ReportingScopeUserIDs: append([]string(nil), principal.ReportingScopeUserIDs...),
-		},
-		Read:  dataScopeDecision(principal, object, "read", false),
-		Write: dataScopeDecision(principal, object, "write", true),
-	}
-}
-
-func dataScopeDecision(principal principalmodel.Principal, object definitionmodel.ObjectSchema, action string, write bool) recordcontract.RecordDataScopeDecision {
-	if allowed, handled := recordpolicy.RecordSDKAllowsObjectAction(principal, object.Key, action); handled {
-		reason := "identity_policy_denied"
-		if allowed {
-			reason = "identity_policy_allowed"
-		}
-		return recordcontract.RecordDataScopeDecision{Action: action, Scope: "identity_policy", Allowed: allowed, Reason: reason}
-	}
-	scope := recordpolicy.RecordDataScopeForPrincipal(principal, object.Key, action)
-	decision := recordcontract.RecordDataScopeDecision{
-		Action:  action,
-		Scope:   scope,
-		Allowed: false,
-		Reason:  "missing_data_permission",
-	}
-	if !principal.Known {
-		decision.Reason = "role_unknown"
-		return decision
-	}
-	if principal.SystemScope.Valid() && principal.Allows(object.Key, action) {
-		decision.Allowed = true
-		decision.Reason = "runtime_system_capability"
-	}
 	return decision
 }
 
@@ -282,17 +235,18 @@ func exportPermissionSnapshot(principal principalmodel.Principal, object definit
 		})
 	}
 	return recordcontract.RecordExportPermissionSnapshot{
-		ObjectKey: object.Key,
-		Allowed:   decision.Allowed,
-		Reason:    decision.Reason,
-		DataScope: decision.DataScope,
-		Fields:    fields,
+		ObjectKey:  object.Key,
+		Allowed:    decision.Allowed,
+		Reason:     decision.Reason,
+		DataScopes: decision.DataScopes,
+		Fields:     fields,
 	}
 }
 
 func approvalOperation(action definitionmodel.ActionSchema) (string, bool) {
 	normalized := strings.ToLower(strings.TrimSpace(strings.ReplaceAll(action.Key, "-", "_")))
-	actionPart := strings.ToLower(strings.TrimSpace(actionName(action)))
+	_, permissionAction := definitionmodel.ActionPermissionSubject(action)
+	actionPart := strings.ToLower(strings.TrimSpace(permissionAction))
 	for _, candidate := range []string{actionPart, normalized, strings.ToLower(action.Kind)} {
 		candidate = strings.ToLower(strings.TrimSpace(candidate))
 		switch {
@@ -348,17 +302,4 @@ func valueOrDefault(value, fallback string) string {
 		return value
 	}
 	return fallback
-}
-
-func splitPermission(value string) (string, string) {
-	parts := strings.Split(strings.TrimSpace(value), ".")
-	if len(parts) < 2 {
-		return "", strings.TrimSpace(value)
-	}
-	return strings.TrimSpace(parts[len(parts)-2]), strings.TrimSpace(parts[len(parts)-1])
-}
-
-func actionName(action definitionmodel.ActionSchema) string {
-	_, name := splitPermission(action.Key)
-	return name
 }

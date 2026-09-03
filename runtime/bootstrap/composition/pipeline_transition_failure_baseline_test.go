@@ -220,9 +220,9 @@ func pipelineFailureFixture(t *testing.T, failCommitAt int, failAudit, failWorkf
 			"pipeline_stage.read", "pipeline_item_history.create",
 		},
 		DataPolicies: []accessfixture.DataPolicyFixture{
-			{ObjectKey: "pipeline_item", Scope: "all_records", Read: true, Write: true},
-			{ObjectKey: "pipeline_stage", Scope: "all_records", Read: true},
-			{ObjectKey: "pipeline_item_history", Scope: "all_records", Write: true},
+			{ObjectKey: "pipeline_item", Scope: "all", Read: true, Write: true},
+			{ObjectKey: "pipeline_stage", Scope: "all", Read: true},
+			{ObjectKey: "pipeline_item_history", Scope: "all", Write: true},
 		},
 	}
 	service := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{

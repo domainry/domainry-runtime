@@ -99,9 +99,13 @@ func schedulerGlobalWorkflowManifest(t *testing.T) string {
 			continue
 		}
 		permissions, _ := role["permissions"].([]any)
-		role["permissions"] = append(permissions, "lead.activate_due_candidates", "lead.create_daily_review_tasks", "lead.fail_due_candidates", "lead.read", "lead.update")
-		dataPermissions, _ := role["data_permissions"].([]any)
-		role["data_permissions"] = append(dataPermissions, map[string]any{"object_key": "lead", "scope": "all_records", "read": true, "write": true})
+		role["permissions"] = append(permissions,
+			map[string]any{"permission_key": "lead.activate_due_candidates", "data_scope": "all"},
+			map[string]any{"permission_key": "lead.create_daily_review_tasks", "data_scope": "all"},
+			map[string]any{"permission_key": "lead.fail_due_candidates", "data_scope": "all"},
+			map[string]any{"permission_key": "lead.read", "data_scope": "all"},
+			map[string]any{"permission_key": "lead.update", "data_scope": "all"},
+		)
 	}
 	workflows, _ := manifest["workflows"].([]any)
 	manifest["workflows"] = append(workflows,

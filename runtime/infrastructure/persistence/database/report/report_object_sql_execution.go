@@ -170,7 +170,7 @@ func (s *ReportDatasetStore) reportObjectSQLSources(ctx context.Context, tx *sql
 	for index, source := range request.Plan.Sources {
 		object, queryValue := request.Objects[source.Alias], request.Queries[source.Alias]
 		if request.CrossWorkspaceAggregate {
-			queryValue = recordmodel.RecordListQuery{SelectFields: append([]string(nil), source.Fields...)}
+			queryValue = recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, SelectFields: append([]string(nil), source.Fields...)}
 			queryValue.SelectFields = append(queryValue.SelectFields, "workspace_id")
 		}
 		if queryValue.ScopeExpression != nil && querypersistence.ScopeExpressionHasRelation(*queryValue.ScopeExpression) {

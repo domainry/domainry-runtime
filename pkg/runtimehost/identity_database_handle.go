@@ -18,7 +18,7 @@ func projectIdentityDatabaseHandle(database *bootstrap.ProjectDatabase, filePath
 	if profile != nil {
 		profileResolver = profile.Resolve
 	}
-	return identitysdk.DatabaseHandle{Pool: database.DB(), Driver: database.Driver(), Schema: database.DatabaseSchema(), FilePath: filePath, BusinessProfileResolver: profileResolver, Migrations: database}
+	return identitysdk.DatabaseHandle{Pool: database.DB(), Driver: database.Driver(), Schema: database.DatabaseSchema(), FilePath: filePath, BusinessProfileResolver: profileResolver, Migrations: database, ModuleMigrations: database}
 }
 
 type runtimeBusinessProfileProjection struct {

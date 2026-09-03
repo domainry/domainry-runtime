@@ -23,8 +23,8 @@ import (
 )
 
 const recordExportBatchSize = 200
-const recordExportMaxRows = 10_000
 const recordExportMaxBytes = 32 << 20
+const recordExportDirectMaxRows = 1_000
 
 type RecordExportOptions struct {
 	Fields         []string
@@ -40,7 +40,6 @@ type RecordExportDependencies struct {
 	Objects              func() map[string]definitionmodel.ObjectSchema
 	EnsureSnapshotAccess func(definitionmodel.ObjectSchema, string, principalmodel.Principal) error
 	NormalizeQuery       func(definitionmodel.ObjectSchema, recordmodel.RecordListQuery, principalmodel.Principal) recordmodel.RecordListQuery
-	CanAccess            func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	ListRecords          func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error)
 	ListDirectoryUsers   func(context.Context) ([]identitysdk.User, error)
 	RecordDisplay        func(definitionmodel.ObjectSchema, recordmodel.Record) (string, string)
@@ -66,41 +65,53 @@ type recordExportEncodedPage struct {
 	content []byte
 	rows    int
 	hasNext bool
+	next    string
 }
 
 func NewRecordExportApplicationService(dependencies RecordExportDependencies) *RecordExportApplicationService {
 	return &RecordExportApplicationService{dependencies: dependencies}
 }
 
-func (s *RecordExportApplicationService) Export(ctx context.Context, objectKey string, principal principalmodel.Principal) ([]byte, string, error) {
-	return s.ExportWithOptions(ctx, objectKey, principal, RecordExportOptions{})
-}
-
-func (s *RecordExportApplicationService) ExportWithOptions(ctx context.Context, objectKey string, principal principalmodel.Principal, options RecordExportOptions) ([]byte, string, error) {
-	return s.exportWithAssurance(ctx, objectKey, principal, options, nil, false)
-}
-
-func (s *RecordExportApplicationService) exportWithVerifiedAssurance(ctx context.Context, objectKey string, principal principalmodel.Principal, options RecordExportOptions, evidence map[string]string) ([]byte, string, error) {
-	return s.exportWithAssurance(ctx, objectKey, principal, options, evidence, true)
-}
-
-func (s *RecordExportApplicationService) exportWithAssurance(ctx context.Context, objectKey string, principal principalmodel.Principal, options RecordExportOptions, evidence map[string]string, preverified bool) ([]byte, string, error) {
-	object, fields, evidence, err := s.prepareExport(ctx, objectKey, principal, options, evidence, preverified)
+func (s *RecordExportApplicationService) prepareDispatch(ctx context.Context, objectKey string, principal principalmodel.Principal, options RecordExportOptions) (recordExportPrepared, int, error) {
+	object, fields, evidence, err := s.prepareExport(ctx, objectKey, principal, options, nil, false)
 	if err != nil {
-		return nil, "", err
+		return recordExportPrepared{}, 0, err
 	}
-	objectKey = object.Key
+	prepared := recordExportPrepared{object: object, fields: fields, evidence: evidence, options: options, principal: principal}
+	total, err := s.countPrepared(ctx, prepared)
+	if err != nil {
+		return recordExportPrepared{}, 0, err
+	}
+	return prepared, total, nil
+}
+
+func (s *RecordExportApplicationService) countPrepared(ctx context.Context, prepared recordExportPrepared) (int, error) {
+	query := prepared.options.Query
+	query.Page, query.PageSize = 1, 1
+	query.SkipTotal, query.AfterID = false, ""
+	if s.dependencies.NormalizeQuery != nil {
+		query = s.dependencies.NormalizeQuery(prepared.object, query, prepared.principal)
+	}
+	page, err := s.dependencies.Repository.ListRecords(ctx, prepared.principal.WorkspaceID, prepared.object, query)
+	if err != nil {
+		return 0, recordExportInternalError("count export records", err)
+	}
+	return page.Total, nil
+}
+
+func (s *RecordExportApplicationService) exportPrepared(ctx context.Context, prepared recordExportPrepared, maxRows int) ([]byte, string, error) {
+	objectKey := prepared.object.Key
 	var buffer bytes.Buffer
 	bounded := dataexchange.BoundedWriter{Writer: &buffer, Limit: recordExportMaxBytes}
-	prepared := recordExportPrepared{object: object, fields: fields, evidence: evidence, options: options, principal: principal}
 	exportedRecords := 0
-	for pageNumber := 1; ; pageNumber++ {
-		page, err := s.encodeExportPage(ctx, prepared, pageNumber, pageNumber == 1, recordExportMaxBytes)
+	cursor := ""
+	for {
+		page, err := s.encodeExportPage(ctx, prepared, cursor, exportedRecords == 0, recordExportMaxBytes)
 		if err != nil {
 			return nil, "", err
 		}
-		if exportedRecords+page.rows > recordExportMaxRows {
-			return nil, "", recordExportError(apperror.KindBadRequest, "backend.export.too_many_records", nil, "limit", fmt.Sprint(recordExportMaxRows))
+		if exportedRecords+page.rows > maxRows {
+			return nil, "", recordExportError(apperror.KindBadRequest, "backend.export.too_many_records", nil, "limit", fmt.Sprint(maxRows))
 		}
 		if _, err := bounded.Write(page.content); err != nil {
 			return nil, "", recordExportError(apperror.KindBadRequest, "backend.export.output_too_large", err)
@@ -109,24 +120,28 @@ func (s *RecordExportApplicationService) exportWithAssurance(ctx context.Context
 		if !page.hasNext {
 			break
 		}
+		if strings.TrimSpace(page.next) == "" || page.next == cursor {
+			return nil, "", recordExportInternalError("advance export cursor", fmt.Errorf("record export cursor did not advance"))
+		}
+		cursor = page.next
 	}
-	maskedFields := recordpolicy.RecordExportMaskedFieldKeysForPrincipal(principal, object)
+	maskedFields := recordpolicy.RecordExportMaskedFieldKeysForPrincipal(prepared.principal, prepared.object)
 	contentDigest := sha256.Sum256(buffer.Bytes())
-	s.audit(ctx, "record_exported", objectKey, principal, fmt.Sprintf("Exported %s records", objectKey), nil, nil, map[string]any{
-		"fields": len(fields), "exported_fields": recordpolicy.RecordExportFieldKeys(fields), "masked_fields": maskedFields, "masked_field_count": len(maskedFields),
-		"record_count": exportedRecords, "data_scope": recordpolicy.RecordDataScopeForPrincipal(principal, object.Key, "export"),
-		"export_reason": strings.TrimSpace(options.Reason), "masking_policy": strings.TrimSpace(options.MaskingPolicy), "filter_summary": strings.TrimSpace(options.FilterSummary),
+	s.audit(ctx, "record_exported", objectKey, prepared.principal, fmt.Sprintf("Exported %s records", objectKey), nil, nil, map[string]any{
+		"fields": len(prepared.fields), "exported_fields": recordpolicy.RecordExportFieldKeys(prepared.fields), "masked_fields": maskedFields, "masked_field_count": len(maskedFields),
+		"record_count":  exportedRecords,
+		"export_reason": strings.TrimSpace(prepared.options.Reason), "masking_policy": strings.TrimSpace(prepared.options.MaskingPolicy), "filter_summary": strings.TrimSpace(prepared.options.FilterSummary),
 		"download_status": "ready", "download_sha256": hex.EncodeToString(contentDigest[:]), "download_bytes": int(bounded.Bytes),
-		"assurance_grant_id": evidence["grant_id"], "assurance_methods": evidence["methods"], "assurance_payload_digest": evidence["payload_digest"],
+		"assurance_grant_id": prepared.evidence["grant_id"], "assurance_methods": prepared.evidence["methods"], "assurance_payload_digest": prepared.evidence["payload_digest"],
 	})
 	return buffer.Bytes(), objectKey + ".csv", nil
 }
 
-// encodeExportPage is the synchronous compatibility encoder. Data Exchange
-// consumes projectExportPage directly so Runtime never encodes CSV only to
-// decode it back into the SDK page contract.
-func (s *RecordExportApplicationService) encodeExportPage(ctx context.Context, prepared recordExportPrepared, pageNumber int, includeHeader bool, maxBytes int64) (recordExportEncodedPage, error) {
-	page, err := s.projectExportPage(ctx, prepared, pageNumber)
+// encodeExportPage is the direct-delivery encoder. Data Exchange consumes
+// projectExportPage directly so Runtime never encodes CSV only to decode it
+// back into the SDK page contract.
+func (s *RecordExportApplicationService) encodeExportPage(ctx context.Context, prepared recordExportPrepared, cursor string, includeHeader bool, maxBytes int64) (recordExportEncodedPage, error) {
+	page, err := s.projectExportPage(ctx, prepared, cursor)
 	if err != nil {
 		return recordExportEncodedPage{}, err
 	}
@@ -145,7 +160,7 @@ func (s *RecordExportApplicationService) encodeExportPage(ctx context.Context, p
 	if err := encoder.Close(); err != nil {
 		return recordExportEncodedPage{}, recordExportError(apperror.KindBadRequest, "backend.export.output_too_large", err)
 	}
-	return recordExportEncodedPage{content: output.Bytes(), rows: len(page.rows), hasNext: page.hasNext}, nil
+	return recordExportEncodedPage{content: output.Bytes(), rows: len(page.rows), hasNext: page.hasNext, next: page.next}, nil
 }
 
 func recordExportHeader(fields []definitionmodel.FieldSchema) []string {
@@ -157,11 +172,6 @@ func recordExportHeader(fields []definitionmodel.FieldSchema) []string {
 		}
 	}
 	return header
-}
-
-func (s *RecordExportApplicationService) authorizeForBatch(ctx context.Context, objectKey string, principal principalmodel.Principal, options RecordExportOptions) (map[string]string, error) {
-	_, _, evidence, err := s.prepareExport(ctx, objectKey, principal, options, nil, false)
-	return evidence, err
 }
 
 func (s *RecordExportApplicationService) prepareExport(ctx context.Context, objectKey string, principal principalmodel.Principal, options RecordExportOptions, evidence map[string]string, preverified bool) (definitionmodel.ObjectSchema, []definitionmodel.FieldSchema, map[string]string, error) {

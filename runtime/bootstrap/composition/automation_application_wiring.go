@@ -39,9 +39,10 @@ func assembleAutomationApplication(records *runtimeAssembly) *automationapplicat
 		InvokeAction: func(ctx context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
 			return records.actionService.Invoke(ctx, actionmodel.ActionSourceAutomation, invocation)
 		},
-		Workflows:    records.Applications().Workflows,
-		CanAccess:    records.RecordQueryPolicyDomainService.CanAccessRecord,
-		ValidateRule: metadata.ValidateAutomationRuleDefinition,
+		Workflows:     records.Applications().Workflows,
+		CanAccess:     records.RecordQueryPolicyDomainService.CanAccessRecord,
+		MutationScope: records.RecordQueryPolicyDomainService.MutationScopeExpression,
+		ValidateRule:  metadata.ValidateAutomationRuleDefinition,
 		AuthoringProjection: func() capabilitycontract.CapabilityAuthoringProjection {
 			return capabilityapplication.RuntimeAuthoringProjection("automation")
 		},

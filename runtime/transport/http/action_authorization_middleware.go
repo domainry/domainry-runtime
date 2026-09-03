@@ -6,7 +6,6 @@ import (
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	runtimeactioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
-	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 )
 
@@ -78,7 +77,7 @@ func defaultObjectOperation(method, routeTemplate string) (string, bool) {
 		return "update", true
 	case "DELETE /objects/{objectKey}/records/{recordID}":
 		return "delete", true
-	case "GET /objects/{objectKey}/records/export", "POST /objects/{objectKey}/records/export/jobs":
+	case "POST /objects/{objectKey}/records/export":
 		return "export", true
 	default:
 		return "", false
@@ -142,36 +141,25 @@ func (s *HTTPRouter) withActionAuthorization(routes *http.ServeMux, next http.Ha
 			next.ServeHTTP(w, r.WithContext(ctx))
 		}
 		switch action.Authorization.Strategy {
-		case actioncontract.AuthorizationAnonymousProtocol:
+		case actioncontract.AuthorizationAnonymous:
 			serveAuthorized()
 			return
-		case actioncontract.AuthorizationDelegatedCredential:
+		case actioncontract.AuthorizationSigned:
+			// Signed Actions are routed to their registered signature middleware.
+			// The outer user-authentication layer intentionally does not resolve a
+			// login Principal for machine requests.
 			serveAuthorized()
 			return
-		case actioncontract.AuthorizationAuthenticatedPrincipal:
-			if principal.Known {
-				serveAuthorized()
+		case actioncontract.AuthorizationAuthenticated:
+			if !principal.Known {
+				writeError(w, r, http.StatusUnauthorized, "auth.session_expired")
 				return
 			}
-			writeError(w, r, http.StatusUnauthorized, "auth.session_expired")
-		case actioncontract.AuthorizationExactRolePermission:
-			if principal.Known && action.Permission != nil && principal.HasExactPermission(action.Permission.Key) {
+			if action.Permission == nil || strings.TrimSpace(action.Authorization.PolicyKey) != "" || principal.HasExactPermission(action.Permission.Key) {
 				serveAuthorized()
 				return
 			}
 			writeError(w, r, http.StatusForbidden, "auth.permission_denied")
-		case actioncontract.AuthorizationServiceIdentity:
-			if principal.Known && strings.TrimSpace(apiKeyTokenFromRequest(r)) != "" {
-				serveAuthorized()
-				return
-			}
-			writeError(w, r, http.StatusUnauthorized, "auth.service_identity_required")
-		case actioncontract.AuthorizationOperationsIdentity:
-			if operationscontract.BuilderTaskID(r.Context()) != "" {
-				serveAuthorized()
-				return
-			}
-			writeError(w, r, http.StatusForbidden, "auth.operations_identity_required")
 		default:
 			writeError(w, r, http.StatusForbidden, "auth.permission_denied")
 		}

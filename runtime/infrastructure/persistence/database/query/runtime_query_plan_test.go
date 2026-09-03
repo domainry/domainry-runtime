@@ -47,7 +47,7 @@ func TestTenantQueryBuilderRejectsMissingWorkspaceAndOwnsWorkspaceFilter(t *test
 		t.Fatal("tenant query builder must reject a missing workspace")
 	}
 	for _, injectedWorkspace := range []string{"workspace-b", "*"} {
-		whereSQL, args, err := store.TenantListWhereClause("workspace-a", recordmodel.RecordListQuery{Filters: map[string]any{"workspace_id": injectedWorkspace, "status": "open"}})
+		whereSQL, args, err := store.TenantListWhereClause("workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"workspace_id": injectedWorkspace, "status": "open"}})
 		if err != nil {
 			t.Fatal(err)
 		}

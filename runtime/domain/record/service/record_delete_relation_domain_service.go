@@ -90,9 +90,10 @@ func (s *RecordDeleteRelationDomainService) References(ctx context.Context, work
 			}
 			for pageNumber := 1; ; pageNumber++ {
 				page, err := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{
-					Page:     pageNumber,
-					PageSize: 200,
-					Filters:  map[string]any{field.Key: targetRecordID},
+					Page:              pageNumber,
+					PageSize:          200,
+					AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted,
+					Filters:           map[string]any{field.Key: targetRecordID},
 				})
 				if err != nil {
 					return nil, recordInternalError("list relation delete references", err)

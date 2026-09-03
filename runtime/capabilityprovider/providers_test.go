@@ -9,6 +9,12 @@ import (
 
 	"github.com/domainry/domainry-foundation/modulecapability"
 	"github.com/domainry/domainry-foundation/modulecapability/contracttest"
+	actionprojection "github.com/domainry/domainry-runtime/runtime/domain/action/projection"
+	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
+	automationpolicy "github.com/domainry/domainry-runtime/runtime/domain/automation/policy"
+	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
+	profilebindingcontract "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/contract"
+	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 )
 
 func TestBindingsConformAndAreDeterministic(t *testing.T) {
@@ -46,6 +52,110 @@ func TestBindingsConformAndAreDeterministic(t *testing.T) {
 			t.Fatalf("provider %s digest is nondeterministic: %s != %s", summary.Identity.Key, firstDigests[summary.Identity.Key], summary.Identity.ContractSHA256)
 		}
 	}
+}
+
+func TestAuthoringProjectionsContainOnlyModelOwnedInput(t *testing.T) {
+	definitions := []capabilitycontract.CapabilityAuthoringDefinition{
+		authoringDefinition(t, appschemacontract.ApplicationSchemaAuthoringDomain(), "schema.object"),
+		authoringDefinition(t, actionprojection.ActionAuthoringDomain(), "action.definition"),
+		authoringDefinition(t, workflowpolicy.WorkflowAuthoringDomain(), "workflow.definition"),
+		authoringDefinition(t, automationpolicy.AutomationAuthoringDomain(), "automation.rule"),
+		profilebindingcontract.ProfileBindingAuthoringCapability(),
+	}
+	projections, err := authoringProjections(definitions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousBytes, compactBytes := 0, 0
+	forbidden := []string{"status", "parameters", "errors", "examples", "output_schema", "output_variables", "execution"}
+	for index, projection := range projections {
+		var payload map[string]json.RawMessage
+		if err := json.Unmarshal(projection.Payload, &payload); err != nil {
+			t.Fatal(err)
+		}
+		for _, key := range []string{"key", "lifecycle", "input_schema"} {
+			if len(payload[key]) == 0 {
+				t.Errorf("projection %s does not disclose required model input %q", projection.Key, key)
+			}
+		}
+		for _, key := range forbidden {
+			if _, exists := payload[key]; exists {
+				t.Errorf("projection %s still discloses owner/runtime field %q", projection.Key, key)
+			}
+		}
+		previous, err := json.Marshal(previousAuthoringProjection(definitions[index]))
+		if err != nil {
+			t.Fatal(err)
+		}
+		previousBytes += len(previous)
+		compactBytes += len(projection.Payload)
+	}
+	if compactBytes*100 > previousBytes*65 {
+		t.Fatalf("authoring projection reduction is too small: previous=%d compact=%d", previousBytes, compactBytes)
+	}
+	t.Logf("authoring projection bytes: previous=%d compact=%d reduction=%.1f%%", previousBytes, compactBytes, float64(previousBytes-compactBytes)*100/float64(previousBytes))
+}
+
+func TestRecordExportCategoryPublishesOnlySemanticDeliveryContract(t *testing.T) {
+	binding := runtimeBindingsByKey(t)["records"]
+	document, err := binding.CapabilityCategory(t.Context(), "records.export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(document.Projections) != 1 || document.Projections[0].Kind != "runtime.api_operations" || document.Projections[0].Key != "record_export" {
+		t.Fatalf("record export projections=%+v", document.Projections)
+	}
+	text := strings.ToLower(string(document.Projections[0].Payload))
+	for _, required := range []string{`"record_export"`, `"result_schema":"file"`} {
+		if !strings.Contains(text, required) {
+			t.Errorf("record export semantic contract is missing %s", required)
+		}
+	}
+	for _, forbidden := range []string{"server_selected", "background", "record_batch_job", "record_export_download", `"202"`, `"method"`, `"path"`, "idempotency", "sse"} {
+		if strings.Contains(text, forbidden) {
+			t.Errorf("record export semantic contract still discloses %q", forbidden)
+		}
+	}
+}
+
+type previousAuthoringProjectionDocument struct {
+	Key                string                                            `json:"key"`
+	Status             string                                            `json:"status"`
+	Lifecycle          string                                            `json:"lifecycle"`
+	AllowedContexts    []string                                          `json:"allowed_contexts,omitempty"`
+	Parameters         []capabilitycontract.CapabilityAuthoringParameter `json:"parameters,omitempty"`
+	Requires           []string                                          `json:"requires,omitempty"`
+	Conflicts          []string                                          `json:"conflicts,omitempty"`
+	Errors             []capabilitycontract.CapabilityAuthoringError     `json:"errors,omitempty"`
+	Examples           []capabilitycontract.CapabilityAuthoringExample   `json:"examples,omitempty"`
+	InputSchema        *capabilitycontract.CapabilityAuthoringSchema     `json:"input_schema,omitempty"`
+	OutputSchema       *capabilitycontract.CapabilityAuthoringSchema     `json:"output_schema,omitempty"`
+	OutputVariables    []capabilitycontract.CapabilityAuthoringOutput    `json:"output_variables,omitempty"`
+	ReferenceContracts []authoringReference                              `json:"reference_contracts,omitempty"`
+	Execution          *capabilitycontract.CapabilityAuthoringExecution  `json:"execution,omitempty"`
+}
+
+func previousAuthoringProjection(definition capabilitycontract.CapabilityAuthoringDefinition) previousAuthoringProjectionDocument {
+	references := make([]authoringReference, 0, len(definition.ReferenceContracts))
+	for _, reference := range definition.ReferenceContracts {
+		references = append(references, authoringReference{Kind: reference.Kind, InputJSONPointer: reference.InputJSONPointer, ScopeFrom: reference.ScopeFrom})
+	}
+	return previousAuthoringProjectionDocument{
+		Key: definition.Key, Status: definition.Status, Lifecycle: definition.Lifecycle, AllowedContexts: definition.AllowedContexts,
+		Parameters: definition.Parameters, Requires: definition.Requires, Conflicts: definition.Conflicts, Errors: definition.Errors, Examples: definition.Examples,
+		InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema, OutputVariables: definition.OutputVariables, ReferenceContracts: references, Execution: definition.Execution,
+	}
+}
+
+func authoringDefinition(t *testing.T, domain capabilitycontract.CapabilityAuthoringDomain, key string) capabilitycontract.CapabilityAuthoringDefinition {
+	t.Helper()
+	for _, definition := range domain.Capabilities {
+		if definition.Key == key {
+			return definition
+		}
+	}
+	t.Fatalf("authoring definition %q is unavailable", key)
+	return capabilitycontract.CapabilityAuthoringDefinition{}
 }
 
 func TestOwnerValidatorsRejectMalformedAndSemanticInvalidCandidates(t *testing.T) {

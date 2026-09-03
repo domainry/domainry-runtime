@@ -62,6 +62,28 @@ func TestRuntimeAPIContractRequiresIdempotencyForEveryRecordMutation(t *testing.
 	}
 }
 
+func TestRuntimeAPIContractUsesOneServerSelectedRecordExportRoute(t *testing.T) {
+	var document struct {
+		Routes map[string]struct {
+			Method                 string            `json:"method"`
+			Path                   string            `json:"path"`
+			DeliveryPolicy         string            `json:"delivery_policy"`
+			RequiresIdempotencyKey bool              `json:"requires_idempotency_key"`
+			Responses              map[string]string `json:"responses"`
+		} `json:"routes"`
+	}
+	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
+		t.Fatal(err)
+	}
+	route := document.Routes["record_export"]
+	if route.Method != "POST" || route.Path != "/objects/{objectKey}/records/export" || route.DeliveryPolicy != "server_selected" || !route.RequiresIdempotencyKey || route.Responses["200"] != "file" || route.Responses["202"] != "record_batch_job" {
+		t.Fatalf("record export route=%+v", route)
+	}
+	if _, exists := document.Routes["record_export_job_create"]; exists {
+		t.Fatal("runtime API contract still exposes caller-selected async export")
+	}
+}
+
 func TestRuntimeAPIContractDoesNotUseFrontendSurfaceForEndpointBehavior(t *testing.T) {
 	var document struct {
 		Identity map[string]json.RawMessage `json:"identity"`

@@ -53,7 +53,7 @@ func (s *BusinessPrincipalApplicationService) ResolveBusinessPrincipal(ctx conte
 		if !ok {
 			return principalmodel.Principal{}, businessPrincipalError(apperror.KindInternal, "backend.identity.business_profile_contract_invalid", fmt.Errorf("unknown profile object %q", extension.ObjectKey))
 		}
-		page, err := s.dependencies.Records.ListRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 2, Filters: map[string]any{extension.IdentityRelationField: principal.UserID}, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}})
+		page, err := s.dependencies.Records.ListRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 2, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{extension.IdentityRelationField: principal.UserID}, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}})
 		if err != nil {
 			return principalmodel.Principal{}, businessPrincipalError(apperror.KindInternal, "backend.identity.business_profile_resolution_failed", err)
 		}

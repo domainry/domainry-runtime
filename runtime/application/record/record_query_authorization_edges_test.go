@@ -200,10 +200,10 @@ func TestRecordFacadeDelegatesAuthorizedWorkspaceToOwnedServices(t *testing.T) {
 		})
 	}
 
-	if content, filename, err := service.ExportRecords(t.Context(), customer.Key, principal); err != nil || filename != "customer.csv" || len(content) == 0 {
-		t.Fatalf("filename=%q content=%q err=%v", filename, content, err)
+	if dispatch, err := service.DispatchExportIdempotent(t.Context(), customer.Key, "export-1", RecordExportOptions{}, principal); err != nil || dispatch.Filename != "customer.csv" || len(dispatch.Content) == 0 || dispatch.Delivery != RecordExportDeliveryDirect {
+		t.Fatalf("dispatch=%+v err=%v", dispatch, err)
 	}
-	if content, filename, err := service.ExportRecordsWithOptions(t.Context(), customer.Key, principal, RecordExportOptions{Fields: []string{"name"}}); err != nil || filename != "customer.csv" || len(content) == 0 {
-		t.Fatalf("filename=%q content=%q err=%v", filename, content, err)
+	if dispatch, err := service.DispatchExportIdempotent(t.Context(), customer.Key, "export-2", RecordExportOptions{Fields: []string{"name"}}, principal); err != nil || dispatch.Filename != "customer.csv" || len(dispatch.Content) == 0 || dispatch.Delivery != RecordExportDeliveryDirect {
+		t.Fatalf("dispatch=%+v err=%v", dispatch, err)
 	}
 }

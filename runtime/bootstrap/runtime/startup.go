@@ -49,6 +49,7 @@ import (
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
+	principalcache "github.com/domainry/domainry-runtime/runtime/infrastructure/principalcache"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
@@ -260,6 +261,8 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	notificationActionAuthorizers.Register("automation_rule", automationNotificationActions.Authorize)
 	projectRecordNotificationActions := &runtimeNotificationResolvedActionAuthorizerBinding{}
 	notificationActionAuthorizers.RegisterResolved("project_record", projectRecordNotificationActions.Authorize)
+	recordExportNotificationActions := &runtimeNotificationResolvedActionAuthorizerBinding{}
+	notificationActionAuthorizers.RegisterResolved("record_export", recordExportNotificationActions.Authorize)
 	notificationActionAuthorizers.Register("workflow_task", newWorkflowTaskNotificationActionAuthorizer(workflowNotificationTasks.GetTask))
 	notificationActionAuthorizers.Register("scheduler_job", newSchedulerNotificationActionAuthorizer(metadataBinding.Definitions()))
 	notificationActionAuthorizers.Freeze()
@@ -342,6 +345,16 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	defer func() {
 		if !rateLimiterTransferred {
 			if closer, ok := sharedRateLimiter.(interface{ Close() error }); ok {
+				_ = closer.Close()
+			}
+		}
+	}()
+	principalCache, err := principalcache.Open(ctx, cfg)
+	mustCompleteRuntimeStartup(err)
+	principalCacheTransferred := false
+	defer func() {
+		if !principalCacheTransferred {
+			if closer, ok := principalCache.(interface{ Close() error }); ok {
 				_ = closer.Close()
 			}
 		}
@@ -459,6 +472,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	reportNotificationActions.authorize = newReportNotificationActionAuthorizer(startupCallbacks.ReportsForPrincipal)
 	automationNotificationActions.authorize = newAutomationNotificationActionAuthorizer(records.Applications().Automations.AutomationRule)
 	projectRecordNotificationActions.authorize = newProjectRecordNotificationActionAuthorizer(records.Applications().Records.GetRecordForAction)
+	recordExportNotificationActions.authorize = newRecordExportNotificationActionAuthorizer(serviceAssembly.dataExchangeBinding)
 	mustCompleteRuntimeStartup(validateRuntimeActionReadiness(records.Applications().Actions))
 	err = synchronizeRuntimeSeeds(ctx, store, manifest, !cfg.BusinessSeedSyncDisabled)
 	mustCompleteRuntimeStartup(err)
@@ -504,6 +518,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		identityBinding:      identityBinding,
 		identityDirectory:    identityDirectory,
 		identityPrincipals:   identityPrincipals,
+		principalCache:       principalCache,
 		integrationMode:      integrationOwner.Binding.Descriptor().Mode,
 		integrationBinding:   integrationOwner.Binding,
 		integrationWorkers:   integrationOwner.Workers,
@@ -535,6 +550,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	runtime.startMetadataSnapshotWatcher(ctx)
 	startupOwnsStore = false
 	rateLimiterTransferred = true
+	principalCacheTransferred = true
 	return BindHTTP(ctx, runtime)
 }
 

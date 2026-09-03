@@ -19,6 +19,8 @@ type MutationMetadataRevisionResolver func(context.Context, principalmodel.Princ
 type MutationInvocation struct {
 	Source            transactionmodel.MutationSource
 	ActionKey         string
+	ActionResource    string
+	ActionOperation   string
 	WorkflowKey       string
 	AutomationKey     string
 	IdempotencyKey    string
@@ -130,8 +132,8 @@ func (s *MutationPlannerApplicationService) planCanonical(ctx context.Context, p
 	}
 	mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
 		WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, RoleKey: principal.RoleKey,
-		Permissions: principal.PermissionKeys(), DataScope: recordpolicy.RecordDataScopeForPrincipal(principal, commit.Object.Key, commit.Operation),
-		Source: invocation.Source, ActionKey: invocation.ActionKey, WorkflowKey: invocation.WorkflowKey,
+		Permissions: principal.PermissionKeys(),
+		Source:      invocation.Source, ActionKey: invocation.ActionKey, WorkflowKey: invocation.WorkflowKey,
 		AutomationKey: invocation.AutomationKey, RequestID: requestID, IdempotencyKey: invocation.IdempotencyKey,
 		CorrelationID: correlationID, CausationID: invocation.CausationID, ApplicationSchemaRevision: revision,
 		EffectAuthority: invocation.EffectAuthority, AssuranceEvidence: invocation.AssuranceEvidence,

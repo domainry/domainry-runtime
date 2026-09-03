@@ -284,8 +284,10 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 }
 
 func (s *ActionApplicationService) execute(ctx context.Context, governed governedActionExecution) (ActionExecutionResult, error) {
+	actionResource, actionOperation := definitionmodel.ActionPermissionSubject(governed.entry.Definition)
 	ctx = recordmutation.WithMutationInvocation(ctx, recordmutation.MutationInvocation{
 		Source: transactionmodel.MutationSourceAction, ActionKey: governed.entry.Definition.Key, IdempotencyKey: governed.invocation.IdempotencyKey,
+		ActionResource: actionResource, ActionOperation: actionOperation,
 		EffectAuthority: actionEffectAuthority(governed.entry.Definition.EffectSet), AssuranceEvidence: governed.invocation.AssuranceEvidence,
 		WorkflowTriggers: []string{"action_executed:" + governed.entry.Definition.Key},
 	})

@@ -28,7 +28,7 @@ func (s *RecordTimerApplicationService) ClaimDueRecordTimers(ctx context.Context
 		return nil, err
 	}
 	query := recordmodel.RecordListQuery{
-		Page: 1, PageSize: limit, Scope: "all_records",
+		Page: 1, PageSize: limit, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted,
 		Filters: map[string]any{"status": "scheduled", "due_at__lte": now.UTC().Format(time.RFC3339Nano)},
 		Sort:    []recordmodel.RecordSortRule{{Field: "priority", Direction: "desc"}, {Field: "sequence", Direction: "asc"}, {Field: "created_at", Direction: "asc"}, {Field: "id", Direction: "asc"}},
 	}

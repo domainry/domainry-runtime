@@ -83,7 +83,7 @@ func TestRecordNormalizeConditionOutcomes(t *testing.T) {
 func TestRecordQueryConditionOutcomes(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}, {Key: "amount", Type: "number"}}}
 	query := recordmodel.RecordListQuery{Page: 2, PageSize: 10, SearchFields: []string{"name"}, Sort: []recordmodel.RecordSortRule{{Field: "name"}}, Filters: map[string]any{"name": nil, "id__in": []any{}, "amount__lte": "10", "fixed": true}}
-	_ = RecordNormalizeListQuery(object, query, principalmodel.Principal{})
+	_ = RecordNormalizeListQuery(object, query)
 	_ = normalizeListFilters(object, map[string]any{"bad": true, "broken": true})
 	_ = normalizedListFilterValues(definitionmodel.FieldSchema{}, []any{"", nil, "x"}, true)
 	_, _ = splitSortRule("name desc")

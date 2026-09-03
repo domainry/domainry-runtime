@@ -64,32 +64,40 @@ type RecordScopePathSegment struct {
 	TargetObjectKey  string `json:"target_object_key"`
 }
 
-type RecordScopeDiagnostic struct {
-	Code      string `json:"code"`
-	ObjectKey string `json:"object_key"`
-	Scope     string `json:"scope"`
-	Path      string `json:"path,omitempty"`
-	Detail    string `json:"detail,omitempty"`
+type RecordQueryAuthorizationMode string
+
+const (
+	RecordQueryAuthorizationUnrestricted RecordQueryAuthorizationMode = "unrestricted"
+	RecordQueryAuthorizationPredicate    RecordQueryAuthorizationMode = "predicate"
+	RecordQueryAuthorizationDeny         RecordQueryAuthorizationMode = "deny"
+)
+
+type RecordAuthorizationDiagnostic struct {
+	Code      string                       `json:"code"`
+	ObjectKey string                       `json:"object_key"`
+	Mode      RecordQueryAuthorizationMode `json:"mode"`
+	Path      string                       `json:"path,omitempty"`
+	Detail    string                       `json:"detail,omitempty"`
 }
 
 type RecordListQuery struct {
-	Page             int                     `json:"page"`
-	PageSize         int                     `json:"page_size"`
-	Search           string                  `json:"search,omitempty"`
-	SearchFields     []string                `json:"search_fields,omitempty"`
-	Filters          map[string]any          `json:"filters,omitempty"`
-	FilterExpression *RecordFilterExpression `json:"filter,omitempty"`
-	Sort             []RecordSortRule        `json:"sort,omitempty"`
-	SelectFields     []string                `json:"select_fields,omitempty"`
-	LockIntent       string                  `json:"lock_intent,omitempty"`
-	Scope            string                  `json:"-"`
-	ScopeExpression  *RecordScopeExpression  `json:"-"`
-	ScopeDiagnostic  *RecordScopeDiagnostic  `json:"-"`
-	RootObjectKey    string                  `json:"-"`
-	Locale           string                  `json:"-"`
-	FallbackLocale   string                  `json:"-"`
-	SkipTotal        bool                    `json:"-"`
-	AfterID          string                  `json:"-"`
+	Page                    int                            `json:"page"`
+	PageSize                int                            `json:"page_size"`
+	Search                  string                         `json:"search,omitempty"`
+	SearchFields            []string                       `json:"search_fields,omitempty"`
+	Filters                 map[string]any                 `json:"filters,omitempty"`
+	FilterExpression        *RecordFilterExpression        `json:"filter,omitempty"`
+	Sort                    []RecordSortRule               `json:"sort,omitempty"`
+	SelectFields            []string                       `json:"select_fields,omitempty"`
+	LockIntent              string                         `json:"lock_intent,omitempty"`
+	AuthorizationMode       RecordQueryAuthorizationMode   `json:"-"`
+	ScopeExpression         *RecordScopeExpression         `json:"-"`
+	AuthorizationDiagnostic *RecordAuthorizationDiagnostic `json:"-"`
+	RootObjectKey           string                         `json:"-"`
+	Locale                  string                         `json:"-"`
+	FallbackLocale          string                         `json:"-"`
+	SkipTotal               bool                           `json:"-"`
+	AfterID                 string                         `json:"-"`
 }
 
 type RecordPageResult struct {

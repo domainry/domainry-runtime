@@ -22,7 +22,7 @@ func TestRecordAuthorizationDelegatesHumanDecisionsToSDKBundle(t *testing.T) {
 		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-a"}},
 		accessfixture.Bundle{
 			Key: "operator", Permissions: []string{"case.create", "case.read", "case.update", "case.export"},
-			DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "case", Scope: "all_records", Read: true, Write: true}},
+			DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "case", Scope: "all", Read: true, Write: true}},
 			FieldPolicies: []accessfixture.FieldPolicyFixture{
 				{ObjectKey: "case", FieldKey: "name", Read: true, Write: true, Export: true},
 				{ObjectKey: "case", FieldKey: "email", Read: true, Export: true, Masked: true},
@@ -33,6 +33,9 @@ func TestRecordAuthorizationDelegatesHumanDecisionsToSDKBundle(t *testing.T) {
 
 	if !RecordAllowsObjectAction(principal, "case", "create") || !RecordAllowsObjectAction(principal, "case", "read") || !RecordAllowsObjectAction(principal, "case", "update") || RecordAllowsObjectAction(principal, "case", "delete") {
 		t.Fatal("SDK object decisions were not preserved")
+	}
+	if scopes := RecordDataScopesForPrincipal(principal, "case", "update"); !reflect.DeepEqual(scopes, []identitysdk.DataScope{identitysdk.DataScopeAll}) {
+		t.Fatalf("canonical permission scopes=%v", scopes)
 	}
 	if !RecordCanAccess(principal, object, record) || !RecordCanWriteScope(principal, object, record.Data) {
 		t.Fatal("SDK all-record policy was not used for record access")
@@ -64,7 +67,7 @@ func TestRecordAuthorizationSuppliesCanonicalBusinessFactsToSDK(t *testing.T) {
 		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-a"}},
 		accessfixture.Bundle{
 			Permissions:  []string{"case.read", "case.update"},
-			DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "case", Scope: "owned_records", Read: true, Write: true}},
+			DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "case", Scope: "owner", Read: true, Write: true}},
 		},
 	)
 	if !RecordCanAccess(principal, object, recordmodel.Record{OwnerUserID: "user-1"}) {

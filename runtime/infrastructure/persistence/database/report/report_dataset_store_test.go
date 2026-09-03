@@ -61,8 +61,8 @@ func TestReportDatasetStorePushesRLSJoinFilterAndExactDecimalProjectionToSQLite(
 		Plan:        reportmodel.ReportDatasetPlan{ReportKey: "revenue", Dataset: dataset, AliasObjects: map[string]string{"accounts": "account", "transactions": "transaction_fact"}},
 		Objects:     objects,
 		Queries: map[string]recordmodel.RecordListQuery{
-			"accounts":     {Scope: "all_records", SelectFields: []string{"segment", "version_counter"}},
-			"transactions": {Scope: "custom", RootObjectKey: "transaction_fact", ScopeExpression: &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "owner_id", Values: []string{"user-1"}}, SelectFields: []string{"account_id", "account_version", "owner_id", "status", "amount"}},
+			"accounts":     {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, SelectFields: []string{"segment", "version_counter"}},
+			"transactions": {AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "transaction_fact", ScopeExpression: &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "owner_id", Values: []string{"user-1"}}, SelectFields: []string{"account_id", "account_version", "owner_id", "status", "amount"}},
 		},
 	}
 	rows, err := NewReportDatasetStore(store).ReadReportDatasetRows(t.Context(), request)

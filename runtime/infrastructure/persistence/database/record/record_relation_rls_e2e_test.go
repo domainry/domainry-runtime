@@ -60,11 +60,11 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	cardPredicate := &accessfixture.PredicateFixture{Operator: "eq", Path: []accessfixture.RelationSegmentFixture{{Direction: "forward", RelationFieldKey: "member_id", TargetObjectKey: "member"}}, FieldKey: "id", ValueSource: "actor_claim", ClaimKey: "business_profile_id"}
 	accountPredicate := &accessfixture.PredicateFixture{Operator: "eq", Path: []accessfixture.RelationSegmentFixture{{Direction: "forward", RelationFieldKey: "card_id", TargetObjectKey: "card"}, {Direction: "forward", RelationFieldKey: "member_id", TargetObjectKey: "member"}}, FieldKey: "id", ValueSource: "actor_claim", ClaimKey: "business_profile_id"}
 	memberRole := accessfixture.Bundle{
-		Key: "member", Permissions: []string{"ledger.read", "ledger.export", "account.read", "account.export", "card.read", "card.export"}, RecordScope: "custom",
+		Key: "member", Permissions: []string{"ledger.read", "ledger.export", "account.read", "account.export", "card.read", "card.export"},
 		DataPolicies: []accessfixture.DataPolicyFixture{
-			{ObjectKey: "ledger", Scope: "custom", Read: true, Predicate: memberPredicate},
-			{ObjectKey: "account", Scope: "custom", Read: true, Predicate: accountPredicate},
-			{ObjectKey: "card", Scope: "custom", Read: true, Predicate: cardPredicate},
+			{ObjectKey: "ledger", Read: true, Predicate: memberPredicate},
+			{ObjectKey: "account", Read: true, Predicate: accountPredicate},
+			{ObjectKey: "card", Read: true, Predicate: cardPredicate},
 		},
 	}
 	memberPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "identity-member-1"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "member-1"}}, memberRole)
@@ -113,7 +113,7 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 			t.Fatalf("permission lookup did not use %s:\n%s", index, permissionPlan)
 		}
 	}
-	rootWhere, _, err := store.TenantListWhereClause("workspace-primary", recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "ledger", ScopeExpression: &resolved})
+	rootWhere, _, err := store.TenantListWhereClause("workspace-primary", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "ledger", ScopeExpression: &resolved})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,6 +150,7 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 		CanAccess:       contextualPolicy.CanAccessRecord,
 		CanWrite:        contextualPolicy.CanWriteRecordScope,
 		CanAccessScope:  contextualPolicy.CanAccessPersistedRecordScope,
+		ScopeForAction:  contextualPolicy.MutationScopeExpression,
 	})
 	updated, err := updater.Update(t.Context(), "ledger", "ledger-1", map[string]any{
 		"description": "member one updated",
@@ -178,9 +179,9 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 		CanAccess:      policy.CanAccessRecord,
 		ListRecords:    reader.ListRecords,
 	})
-	csv, _, err := exporter.Export(t.Context(), "ledger", memberPrincipal)
-	if err != nil || !strings.Contains(string(csv), "ledger-1") || strings.Contains(string(csv), "ledger-2") || strings.Contains(string(csv), "ledger-3") {
-		t.Fatalf("export did not preserve database RLS: csv=%s err=%v", csv, err)
+	csv := dispatchDirectRecordExport(t, exporter, "ledger", memberPrincipal)
+	if !strings.Contains(string(csv), "ledger-1") || strings.Contains(string(csv), "ledger-2") || strings.Contains(string(csv), "ledger-3") {
+		t.Fatalf("export did not preserve database RLS: csv=%s", csv)
 	}
 	reportDefinition := reportmodel.ReportSchema{Key: "member-ledger", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "ledger", Alias: "ledger"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "status", Field: reportmodel.ReportDatasetField{SourceAlias: "ledger", FieldKey: "status"}}}}}
 	sources := readAuthorizedReportSources(t, reportDefinition, memberPrincipal, relationRLSReportAccess{policy: policy}, relationRLSReportRecords{repository: repository})
@@ -191,7 +192,7 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	assertRelationScopeAcrossReadExportAndReport(t, reader, exporter, policy, repository, memberPrincipal, "account", "account-1", "account-2", "card_id")
 
 	coachPredicate := &accessfixture.PredicateFixture{Operator: "eq", Path: []accessfixture.RelationSegmentFixture{{Direction: "reverse", RelationFieldKey: "member_id", TargetObjectKey: "package"}}, FieldKey: "coach_id", ValueSource: "actor_claim", ClaimKey: "business_profile_id"}
-	coachPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "coach-1"}}, accessfixture.Bundle{Key: "coach", Permissions: []string{"member.read"}, RecordScope: "custom", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Scope: "custom", Read: true, Predicate: coachPredicate}}})
+	coachPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "coach-1"}}, accessfixture.Bundle{Key: "coach", Permissions: []string{"member.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Read: true, Predicate: coachPredicate}}})
 	page, err = reader.ListRecords(t.Context(), "member", recordmodel.RecordListQuery{Page: 1, PageSize: 20}, coachPrincipal)
 	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != "member-1" {
 		t.Fatalf("reverse existence scope page=%#v err=%v", page, err)
@@ -205,7 +206,7 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	}
 
 	studentPredicate := &accessfixture.PredicateFixture{Operator: "eq", Path: []accessfixture.RelationSegmentFixture{{Direction: "forward", RelationFieldKey: "package_id", TargetObjectKey: "training_package"}, {Direction: "forward", RelationFieldKey: "student_id", TargetObjectKey: "student"}}, FieldKey: "id", ValueSource: "actor_claim", ClaimKey: "business_profile_id"}
-	studentPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "student-1"}}, accessfixture.Bundle{Key: "student", Permissions: []string{"training_session.read", "training_session.export"}, RecordScope: "custom", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "training_session", Scope: "custom", Read: true, Predicate: studentPredicate}}})
+	studentPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "student-1"}}, accessfixture.Bundle{Key: "student", Permissions: []string{"training_session.read", "training_session.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "training_session", Read: true, Predicate: studentPredicate}}})
 	page, err = reader.ListRecords(t.Context(), "training_session", recordmodel.RecordListQuery{Page: 1, PageSize: 20}, studentPrincipal)
 	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != "training-session-1" {
 		t.Fatalf("session-package-student list scope mismatch: page=%#v err=%v", page, err)
@@ -213,9 +214,9 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	if _, err := reader.GetRecord(t.Context(), "training_session", "training-session-2", studentPrincipal); apperror.KindOf(err) != apperror.KindNotFound {
 		t.Fatalf("session-package-student detail was not concealed: %v", err)
 	}
-	csv, _, err = exporter.Export(t.Context(), "training_session", studentPrincipal)
-	if err != nil || !strings.Contains(string(csv), "training-session-1") || strings.Contains(string(csv), "training-session-2") {
-		t.Fatalf("session-package-student export scope mismatch: csv=%s err=%v", csv, err)
+	csv = dispatchDirectRecordExport(t, exporter, "training_session", studentPrincipal)
+	if !strings.Contains(string(csv), "training-session-1") || strings.Contains(string(csv), "training-session-2") {
+		t.Fatalf("session-package-student export scope mismatch: csv=%s", csv)
 	}
 	sessionDefinition := reportmodel.ReportSchema{Key: "student-sessions", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "training_session", Alias: "training_session"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "status", Field: reportmodel.ReportDatasetField{SourceAlias: "training_session", FieldKey: "status"}}}}}
 	sources = readAuthorizedReportSources(t, sessionDefinition, studentPrincipal, relationRLSReportAccess{policy: policy}, relationRLSReportRecords{repository: repository})
@@ -255,15 +256,25 @@ func assertRelationScopeAcrossReadExportAndReport(t *testing.T, reader *recordse
 	if _, err := reader.GetRecord(t.Context(), objectKey, deniedID, principal); apperror.KindOf(err) != apperror.KindNotFound {
 		t.Fatalf("%s detail scope mismatch: %v", objectKey, err)
 	}
-	csv, _, err := exporter.Export(t.Context(), objectKey, principal)
-	if err != nil || !strings.Contains(string(csv), allowedID) || strings.Contains(string(csv), deniedID) {
-		t.Fatalf("%s export scope mismatch: csv=%s err=%v", objectKey, csv, err)
+	csv := dispatchDirectRecordExport(t, exporter, objectKey, principal)
+	if !strings.Contains(string(csv), allowedID) || strings.Contains(string(csv), deniedID) {
+		t.Fatalf("%s export scope mismatch: csv=%s", objectKey, csv)
 	}
 	reportDefinition := reportmodel.ReportSchema{Key: objectKey + "-scope", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: objectKey, Alias: objectKey}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: reportField, Field: reportmodel.ReportDatasetField{SourceAlias: objectKey, FieldKey: reportField}}}}}
 	sources := readAuthorizedReportSources(t, reportDefinition, principal, relationRLSReportAccess{policy: policy}, relationRLSReportRecords{repository: repository})
 	if len(sources.Records[objectKey]) != 1 {
 		t.Fatalf("%s Report host scope mismatch: sources=%#v", objectKey, sources)
 	}
+}
+
+func dispatchDirectRecordExport(t *testing.T, exporter *recordapplication.RecordExportApplicationService, objectKey string, principal principalmodel.Principal) []byte {
+	t.Helper()
+	dispatcher := recordapplication.NewRecordDataExchangeApplicationService(recordapplication.RecordDataExchangeDependencies{Exporter: exporter})
+	dispatch, err := dispatcher.DispatchExportIdempotent(t.Context(), objectKey, "test-export-"+objectKey, recordapplication.RecordExportOptions{}, principal)
+	if err != nil || dispatch.Delivery != recordapplication.RecordExportDeliveryDirect {
+		t.Fatalf("%s export dispatch=%+v err=%v", objectKey, dispatch, err)
+	}
+	return dispatch.Content
 }
 
 type relationRLSReportAccess struct {

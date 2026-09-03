@@ -112,10 +112,15 @@ func (a *Runtime) close(ctx context.Context) error {
 		rateLimiterErr = closer.Close()
 		a.rateLimiter = nil
 	}
-	if a.borrowedStore {
-		return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, lifecycleErr, integrationErr, auditErr, metadataErr, reportErr, rateLimiterErr)
+	var principalCacheErr error
+	if closer, ok := a.principalCache.(interface{ Close() error }); ok {
+		principalCacheErr = closer.Close()
+		a.principalCache = nil
 	}
-	return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, lifecycleErr, integrationErr, auditErr, metadataErr, reportErr, rateLimiterErr, a.store.Close())
+	if a.borrowedStore {
+		return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, lifecycleErr, integrationErr, auditErr, metadataErr, reportErr, rateLimiterErr, principalCacheErr)
+	}
+	return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, lifecycleErr, integrationErr, auditErr, metadataErr, reportErr, rateLimiterErr, principalCacheErr, a.store.Close())
 }
 
 func (a *Runtime) startTrackedWorker(parent context.Context, start func(context.Context) <-chan struct{}) {

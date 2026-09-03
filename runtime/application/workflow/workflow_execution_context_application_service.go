@@ -204,7 +204,7 @@ func WorkflowPayloadForRecordChange(objectKey string, record recordmodel.Record,
 	return workflowPayloadForRecordChange(objectKey, record, before, trigger)
 }
 
-func (s *WorkflowApplicationService) workflowRetryPayload(ctx context.Context, workspaceID string, previous workflowmodel.WorkflowExecution) map[string]any {
+func (s *WorkflowApplicationService) workflowRetryPayload(ctx context.Context, workspaceID string, previous workflowmodel.WorkflowExecution, principal principalmodel.Principal) map[string]any {
 	payload := workflowpolicy.WorkflowCloneMap(previous.Payload)
 	objectKey := valueOrDefault(strings.TrimSpace(previous.ObjectKey), workflowpolicy.WorkflowPayloadString(payload, "object_key"))
 	recordID := valueOrDefault(strings.TrimSpace(previous.RecordID), workflowpolicy.WorkflowPayloadString(payload, "record_id"))
@@ -215,7 +215,7 @@ func (s *WorkflowApplicationService) workflowRetryPayload(ctx context.Context, w
 	if !ok {
 		return payload
 	}
-	record, ok, err := s.recordReader.GetWorkflowRecord(ctx, workspaceID, object, recordID)
+	record, ok, err := s.recordReader.GetWorkflowRecord(ctx, workspaceID, object, recordID, principal)
 	if err != nil || !ok {
 		return payload
 	}

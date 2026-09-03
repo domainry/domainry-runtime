@@ -65,7 +65,7 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 		t.Fatalf("full replay=%#v err=%v", full, err)
 	}
 	gymLedgerP6AssertBalances(t, full, map[string]string{"bonus": "20.00", "cashflow": "90.00", "principal": "70.00", "refund": "10.00"})
-	role := accessfixture.Bundle{Key: "finance", Permissions: []string{"gym_financial_ledger.read"}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Scope: "all_records", Read: true}}}
+	role := accessfixture.Bundle{Key: "finance", Permissions: []string{"gym_financial_ledger.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Scope: "all", Read: true}}}
 	field := func(key string) reportmodel.ReportDatasetField {
 		return reportmodel.ReportDatasetField{SourceAlias: "ledger", FieldKey: key}
 	}

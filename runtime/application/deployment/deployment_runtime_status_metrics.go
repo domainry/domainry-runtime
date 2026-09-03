@@ -53,7 +53,7 @@ func (s *DeploymentRuntimeStatusApplicationService) businessRecordCounts(ctx con
 	schemaObjects := append([]definitionmodel.ObjectSchema(nil), s.schema.SchemaForPrincipal(ctx, principalmodel.Principal{}).Objects...)
 	sort.Slice(schemaObjects, func(i, j int) bool { return schemaObjects[i].Key < schemaObjects[j].Key })
 	for _, object := range schemaObjects {
-		page, err := s.records.ListRecords(ctx, principalmodel.InstallationWorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 1})
+		page, err := s.records.ListRecords(ctx, principalmodel.InstallationWorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted})
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err

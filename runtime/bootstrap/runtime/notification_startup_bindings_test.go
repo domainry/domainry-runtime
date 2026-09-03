@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
@@ -20,6 +21,16 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
+
+type recordExportNotificationBindingStub struct {
+	dataexchange.Binding
+	job dataexchange.Job
+	err error
+}
+
+func (b recordExportNotificationBindingStub) Job(context.Context, dataexchange.JobRequest) (dataexchange.Job, error) {
+	return b.job, b.err
+}
 
 func TestNotificationStartupRevisionAndPublisherBoundaries(t *testing.T) {
 	if err := requireRuntimeSchemaRevision(" "); err == nil {
@@ -53,6 +64,24 @@ func TestNotificationStartupRevisionAndPublisherBoundaries(t *testing.T) {
 	})
 	if err := callback(t.Context(), notificationmodel.NotificationIntent{}); !errors.Is(err, failure) {
 		t.Fatalf("publisher error=%v", err)
+	}
+}
+
+func TestRecordExportNotificationActionReauthorizesCompletedOwnerJob(t *testing.T) {
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "actor"}}
+	action := notificationmodel.NotificationInboxResolvedAction{RouteParams: map[string]string{"resource_id": "job-1"}}
+	job := dataexchange.Job{ID: "job-1", Provider: "records", Operation: "export", Status: "completed", WorkspaceID: "workspace", ActorID: "actor", ArtifactID: "artifact-1"}
+	authorize := newRecordExportNotificationActionAuthorizer(recordExportNotificationBindingStub{job: job})
+	if err := authorize(t.Context(), action, principal); err != nil {
+		t.Fatal(err)
+	}
+	job.ActorID = "other"
+	if code := apperror.CodeOf(newRecordExportNotificationActionAuthorizer(recordExportNotificationBindingStub{job: job})(t.Context(), action, principal)); code != "backend.notification.inbox_action_forbidden" {
+		t.Fatalf("cross-owner code=%q", code)
+	}
+	job.ActorID, job.Status = "actor", "running"
+	if code := apperror.CodeOf(newRecordExportNotificationActionAuthorizer(recordExportNotificationBindingStub{job: job})(t.Context(), action, principal)); code != "backend.notification.inbox_action_unavailable" {
+		t.Fatalf("running code=%q", code)
 	}
 }
 
@@ -164,7 +193,10 @@ func TestSchedulerNotificationAuthorizerBoundaries(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			authorize := newSchedulerNotificationActionAuthorizer(schedulerNotificationDefinitions{found: test.found, err: test.err})
-			err := authorize(t.Context(), "job", accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: test.permissions}))
+			err := authorize(t.Context(), "job", accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{
+				Permissions:  test.permissions,
+				DataPolicies: accessfixture.DataPoliciesForPermissions(test.permissions, identitysdk.DataScopeAll),
+			}))
 			if test.err != nil && !errors.Is(err, test.err) {
 				t.Fatalf("error=%v", err)
 			}

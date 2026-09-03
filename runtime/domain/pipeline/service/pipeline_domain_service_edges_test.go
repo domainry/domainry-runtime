@@ -218,7 +218,8 @@ func TestPipelinePermissionSLAAndValueEdges(t *testing.T) {
 	if err := service.ValidateStagePermission(stage, principalmodel.Principal{}); errorCode(err) != "backend.pipeline.stage_permission_denied" {
 		t.Fatalf("permission err=%v", err)
 	}
-	if err := service.ValidateStagePermission(stage, accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: []string{"pipeline.advance"}})); err != nil {
+	permissions := []string{"pipeline.advance"}
+	if err := service.ValidateStagePermission(stage, accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)})); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.ValidateStagePermission(recordmodel.Record{Data: map[string]any{}}, principalmodel.Principal{}); err != nil {

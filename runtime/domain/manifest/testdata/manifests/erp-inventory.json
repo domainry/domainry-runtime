@@ -2,16 +2,18 @@
   "actions": [
     {
       "audit_event": "purchase_request_created_from_stock",
-"key": "stock_item.create_purchase_request",
+      "key": "stock_item.create_purchase_request",
       "kind": "create_related",
       "label": "Create Purchase Request",
       "object_key": "stock_item",
-      "preconditions": [],
+      "preconditions": [
+
+      ],
       "ui_placement": "record_header"
     },
     {
       "audit_event": "stock_item.low_stock_watch.execute",
-"key": "stock_item.low_stock_watch.execute",
+      "key": "stock_item.low_stock_watch.execute",
       "kind": "record_operation",
       "label": "Low Stock Watch",
       "object_key": "stock_item",
@@ -195,65 +197,84 @@
         "stock_item.read"
       ],
       "dataset": {
-        "source": {"object_key": "stock_item", "alias": "stock_item"},
-        "joins": [{"alias": "purchase_request", "object_key": "purchase_request", "type": "left", "left_alias": "stock_item", "left_field": "id", "right_field": "stock_item", "cardinality": "one_to_many"}]
+        "source": {
+          "object_key": "stock_item",
+          "alias": "stock_item"
+        },
+        "joins": [
+          {
+            "alias": "purchase_request",
+            "object_key": "purchase_request",
+            "type": "left",
+            "left_alias": "stock_item",
+            "left_field": "id",
+            "right_field": "stock_item",
+            "cardinality": "one_to_many"
+          }
+        ]
       }
     }
   ],
   "roles": [
     {
-      "data_permissions": [
-        {
-          "object_key": "stock_item",
-          "read": true,
-          "scope": "all_records",
-          "write": true
-        },
-        {
-          "object_key": "purchase_request",
-          "read": true,
-          "scope": "all_records",
-          "write": true
-        }
-      ],
       "key": "inventory_manager",
       "name": "Inventory Manager",
       "permissions": [
-        "business.access",
-        "runtime.appschema.validate_application_definition",
-        "stock_item.read",
-        "stock_item.create",
-        "stock_item.update",
-        "purchase_request.read",
-        "purchase_request.create",
-        "purchase_request.update"
-      ],
-      "record_scope": "all_records"
-    },
-    {
-      "data_permissions": [
         {
-          "object_key": "stock_item",
-          "read": true,
-          "scope": "all_records",
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "purchase_request",
-          "read": true,
-          "scope": "all_records",
-          "write": false
+          "permission_key": "runtime.appschema.validate_application_definition",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "stock_item.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "stock_item.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "stock_item.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "purchase_request.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "purchase_request.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "purchase_request.update",
+          "data_scope": "all"
         }
-      ],
+      ]
+    },
+    {
       "key": "warehouse_clerk",
       "name": "Warehouse Clerk",
       "permissions": [
-        "business.access",
-        "stock_item.read",
-        "stock_item.update",
-        "purchase_request.read"
-      ],
-      "record_scope": "all_records"
+        {
+          "permission_key": "business.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "stock_item.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "stock_item.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "purchase_request.read",
+          "data_scope": "all"
+        }
+      ]
     }
   ],
   "seed_records": [

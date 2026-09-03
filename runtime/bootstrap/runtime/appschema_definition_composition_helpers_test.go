@@ -103,7 +103,7 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 		}
 		dataPermissions := make([]accessfixture.DataPolicyFixture, 0, len(dataPermissionKeys))
 		for _, objectKey := range dataPermissionKeys {
-			dataPermissions = append(dataPermissions, accessfixture.DataPolicyFixture{ObjectKey: objectKey, Scope: "all_records", Read: true, Write: true})
+			dataPermissions = append(dataPermissions, accessfixture.DataPolicyFixture{ObjectKey: objectKey, Scope: "all", Read: true, Write: true})
 		}
 		roles = []accessfixture.Bundle{{
 			Key: "admin",

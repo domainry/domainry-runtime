@@ -2,14 +2,18 @@ package record
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-data-exchange-sdk/modulehost"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -25,6 +29,8 @@ type DataExchangeProviders struct {
 	imports         map[string]recordDataExchangeImportAttempt
 	importProviders map[string]modulehost.ImportProvider
 	exportProviders map[string]modulehost.ExportProvider
+	notify          func(context.Context, notificationmodel.NotificationIntent) error
+	now             func() time.Time
 }
 
 type recordDataExchangeImportAttempt struct {
@@ -57,6 +63,12 @@ func (p *DataExchangeProviders) ConfigureResolver(resolve func(context.Context, 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.resolve = resolve
+}
+
+func (p *DataExchangeProviders) ConfigureExportNotifications(notify func(context.Context, notificationmodel.NotificationIntent) error, now func() time.Time) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.notify, p.now = notify, now
 }
 
 // RegisterExportProvider attaches an application-owned provider to the shared
@@ -174,23 +186,82 @@ func (p dataExchangeExportProvider) ReadExportPage(ctx context.Context, r dataex
 		return dataexchange.ExportPage{}, err
 	}
 	prepared := recordExportPrepared{object: object, fields: fields, evidence: evidence, options: payload.Options, principal: principal}
-	pageNumber := 1
-	if r.Cursor != "" {
-		pageNumber, err = strconv.Atoi(strings.TrimPrefix(r.Cursor, "record-page:"))
-		if err != nil || pageNumber < 2 {
-			return dataexchange.ExportPage{}, fmt.Errorf("invalid Record export cursor")
+	cursor, err := decodeRecordExportCursor(r.Cursor)
+	if err != nil {
+		return dataexchange.ExportPage{}, err
+	}
+	total := cursor.Total
+	if strings.TrimSpace(r.Cursor) == "" {
+		total, err = exporter.countPrepared(ctx, prepared)
+		if err != nil {
+			return dataexchange.ExportPage{}, err
 		}
 	}
-	page, err := exporter.projectExportPage(ctx, prepared, pageNumber)
+	page, err := exporter.projectExportPage(ctx, prepared, cursor.AfterID)
 	if err != nil {
 		return dataexchange.ExportPage{}, err
 	}
 	next := ""
 	if page.hasNext {
-		next = "record-page:" + strconv.Itoa(pageNumber+1)
-		return dataexchange.ExportPage{Columns: page.columns, Rows: page.rows, NextCursor: next, Total: pageNumber * recordExportBatchSize}, nil
+		next = encodeRecordExportCursor(recordExportCursor{AfterID: page.next, Total: total})
 	}
-	return dataexchange.ExportPage{Columns: page.columns, Rows: page.rows, Total: (pageNumber-1)*recordExportBatchSize + len(page.rows)}, nil
+	return dataexchange.ExportPage{Columns: page.columns, Rows: page.rows, NextCursor: next, Total: total}, nil
+}
+
+func (p dataExchangeExportProvider) CompleteExport(ctx context.Context, completion dataexchange.ExportCompletion) error {
+	p.owner.mu.Lock()
+	notify, now := p.owner.notify, p.owner.now
+	p.owner.mu.Unlock()
+	if notify == nil {
+		return nil
+	}
+	if now == nil {
+		now = func() time.Time { return time.Now().UTC() }
+	}
+	identity := sha256.Sum256([]byte(completion.JobID + ":completed"))
+	sourceEventID := "record-export:" + completion.JobID + ":completed"
+	expiresAt := ""
+	if !completion.Artifact.ExpiresAt.IsZero() {
+		expiresAt = completion.Artifact.ExpiresAt.UTC().Format(time.RFC3339Nano)
+	}
+	return notify(ctx, notificationmodel.NotificationIntent{
+		ID: "notification_record_export_" + hex.EncodeToString(identity[:12]), WorkspaceID: completion.Scope.WorkspaceID,
+		SourceEventID: sourceEventID, EventType: "record.export.completed", Surface: "business_workspace",
+		RecipientUserIDs: []string{completion.Scope.ActorID}, SubjectType: "record_export", SubjectID: completion.JobID,
+		SubjectVersion: completion.Artifact.SHA256, DedupeKey: sourceEventID, ActionState: notificationmodel.NotificationActionOpen,
+		ExpiresAt: expiresAt, OccurredAt: now().UTC().Format(time.RFC3339Nano),
+		Variables: map[string]any{"object_key": completion.ObjectKey, "filename": completion.Artifact.Filename, "row_count": completion.Rows, "status": "completed"},
+	})
+}
+
+type recordExportCursor struct {
+	AfterID string `json:"after_id"`
+	Total   int    `json:"total"`
+}
+
+func encodeRecordExportCursor(cursor recordExportCursor) string {
+	value, _ := json.Marshal(cursor)
+	return "record-id:" + base64.RawURLEncoding.EncodeToString(value)
+}
+
+func decodeRecordExportCursor(cursor string) (recordExportCursor, error) {
+	cursor = strings.TrimSpace(cursor)
+	if cursor == "" {
+		return recordExportCursor{}, nil
+	}
+	encoded := strings.TrimPrefix(cursor, "record-id:")
+	if encoded == cursor || encoded == "" {
+		return recordExportCursor{}, fmt.Errorf("invalid Record export cursor")
+	}
+	value, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return recordExportCursor{}, fmt.Errorf("invalid Record export cursor")
+	}
+	var decoded recordExportCursor
+	if err := json.Unmarshal(value, &decoded); err != nil || strings.TrimSpace(decoded.AfterID) == "" || decoded.Total < 0 {
+		return recordExportCursor{}, fmt.Errorf("invalid Record export cursor")
+	}
+	return decoded, nil
 }
 
 func projectRecordDataExchangeJob(job dataexchange.Job, scope dataexchange.Scope) (any, error) {
@@ -203,3 +274,4 @@ func projectRecordDataExchangeJob(job dataexchange.Job, scope dataexchange.Scope
 var _ modulehost.Host = (*DataExchangeProviders)(nil)
 var _ modulehost.JobProjector = dataExchangeImportProvider{}
 var _ modulehost.JobProjector = dataExchangeExportProvider{}
+var _ modulehost.ExportCompletionProvider = dataExchangeExportProvider{}

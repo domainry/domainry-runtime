@@ -231,7 +231,7 @@ func (v *RecordRelatedPolicyValidator) ValidateTimeOverlapPolicies(ctx context.C
 			filters[field] = data[field]
 		}
 		for page := 1; ; page++ {
-			result, err := v.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{Page: page, PageSize: 200, Filters: filters})
+			result, err := v.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{Page: page, PageSize: 200, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: filters})
 			if err != nil {
 				return relatedPolicyInternalError("check time overlap policy", err)
 			}
@@ -267,7 +267,7 @@ func (v *RecordRelatedPolicyValidator) blockingRecordExists(ctx context.Context,
 		}
 	}
 	for page := 1; ; page++ {
-		result, err := v.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, targetObject, recordmodel.RecordListQuery{Page: page, PageSize: 200, Filters: equalityFilters})
+		result, err := v.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, targetObject, recordmodel.RecordListQuery{Page: page, PageSize: 200, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: equalityFilters})
 		if err != nil {
 			return false, relatedPolicyInternalError("check blocking related records", err)
 		}
@@ -340,7 +340,7 @@ func (v *RecordRelatedPolicyValidator) lookupRelatedRecord(ctx context.Context, 
 	if recordvalidation.RecordIsEmptyValue(sourceValue) {
 		return targetKey, targetObject, recordmodel.Record{}, false, nil
 	}
-	page, err := v.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, targetObject, recordmodel.RecordListQuery{Page: 1, PageSize: 200, Filters: map[string]any{targetMatchField: sourceValue}})
+	page, err := v.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, targetObject, recordmodel.RecordListQuery{Page: 1, PageSize: 200, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{targetMatchField: sourceValue}})
 	if err != nil {
 		return "", definitionmodel.ObjectSchema{}, recordmodel.Record{}, false, relatedPolicyInternalError("lookup related record policy", err)
 	}
@@ -406,7 +406,7 @@ func (v *RecordRelatedPolicyValidator) targetRecordByMatch(ctx context.Context, 
 	if matchField == "" {
 		return definitionmodel.ObjectSchema{}, recordmodel.Record{}, recordStateMachineError(apperror.KindBadRequest, "backend.policy.related_field_required", "policy", validation.Key)
 	}
-	page, err := v.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, targetObject, recordmodel.RecordListQuery{Page: 1, PageSize: 200, Filters: map[string]any{matchField: matchValue}})
+	page, err := v.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, targetObject, recordmodel.RecordListQuery{Page: 1, PageSize: 200, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{matchField: matchValue}})
 	if err != nil {
 		return definitionmodel.ObjectSchema{}, recordmodel.Record{}, relatedPolicyInternalError("find related numeric target", err)
 	}

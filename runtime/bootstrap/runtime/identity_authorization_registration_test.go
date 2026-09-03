@@ -145,13 +145,13 @@ func TestRuntimeAuthorizationReferencesUseCompleteGeneratedRegistry(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	roles := []manifestmodel.RoleSchema{{Key: "operator", Permissions: []string{"order.read", "module.orders.read", "runtime.appschema.metadata_object_record_count"}}}
+	roles := []manifestmodel.RoleSchema{{Key: "operator", Permissions: []manifestmodel.RolePermission{{PermissionKey: "order.read", DataScope: identitysdk.DataScopeAll}, {PermissionKey: "module.orders.read", DataScope: identitysdk.DataScopeAll}, {PermissionKey: "runtime.appschema.metadata_object_record_count", DataScope: identitysdk.DataScopeAll}}}}
 	if err := validateRuntimeAuthorizationReferences(snapshot, roles, registry); err != nil {
 		t.Fatalf("generated object/module permissions rejected: %v", err)
 	}
-	roles[0].Permissions = append(roles[0].Permissions, "order.typo")
+	roles[0].Permissions = append(roles[0].Permissions, manifestmodel.RolePermission{PermissionKey: "order.typo", DataScope: identitysdk.DataScopeAll})
 	err = validateRuntimeAuthorizationReferences(snapshot, roles, registry)
-	if err == nil || !strings.Contains(err.Error(), `roles[0].permissions[3]="order.typo"`) {
+	if err == nil || !strings.Contains(err.Error(), `roles[0].permissions[3].permission_key="order.typo"`) {
 		t.Fatalf("orphan role permission error=%v", err)
 	}
 	var typed *AuthorizationReferenceError
@@ -159,7 +159,7 @@ func TestRuntimeAuthorizationReferencesUseCompleteGeneratedRegistry(t *testing.T
 		t.Fatalf("orphan permission did not expose structured diagnostics: %#v", err)
 	}
 	diagnostic := typed.Diagnostics[0]
-	if diagnostic.Code != "runtime.authorization.permission_unknown" || diagnostic.Path != "roles[0].permissions[3]" || diagnostic.PermissionKey != "order.typo" || diagnostic.SourceKind != "role" {
+	if diagnostic.Code != "runtime.authorization.permission_unknown" || diagnostic.Path != "roles[0].permissions[3].permission_key" || diagnostic.PermissionKey != "order.typo" || diagnostic.SourceKind != "role" {
 		t.Fatalf("structured orphan permission diagnostic=%+v", diagnostic)
 	}
 	if envelope := typed.Diagnostic(); envelope["code"] != "runtime.authorization.references_invalid" {
@@ -177,7 +177,7 @@ func TestRuntimeAuthorizationRegistryUsesModuleActionAsSingleRouteAuthority(t *t
 		CapabilityKey: "notification.deliveries", CapabilityLabel: "Notification deliveries",
 		OperationKey: "list", OperationLabel: "List deliveries", Label: "List notification deliveries",
 		Exposures:     []actioncontract.Exposure{actioncontract.ExposureTenantAdmin, actioncontract.ExposureOps},
-		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission},
+		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated},
 		HTTP:          &actioncontract.HTTPBinding{Method: http.MethodGet, RouteTemplate: "/notifications/deliveries"},
 		Permission: &actioncontract.PermissionDefinition{
 			Key: actionKey, Owner: "module:notification", ResourceKey: "notification.deliveries", OperationKey: "list",
@@ -209,7 +209,7 @@ func TestRuntimeNotificationFacadeUsesRuntimeOwnedExactDeliveryPermission(t *tes
 	if !ok || delivery.Key != "runtime.notifications.list_deliveries" || delivery.Owner != "runtime:notifications" {
 		t.Fatalf("delivery Action=%+v ok=%t", delivery, ok)
 	}
-	if delivery.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission || delivery.Permission == nil || delivery.Permission.Key != delivery.Key || delivery.Permission.Owner != delivery.Owner {
+	if delivery.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || delivery.Permission == nil || delivery.Permission.Key != delivery.Key || delivery.Permission.Owner != delivery.Owner {
 		t.Fatalf("delivery Action is not an exact same-key Runtime Permission: %+v", delivery)
 	}
 	for _, path := range []string{
@@ -217,7 +217,7 @@ func TestRuntimeNotificationFacadeUsesRuntimeOwnedExactDeliveryPermission(t *tes
 		"/portal/notifications/{notificationID}/actions/{actionKey}/resolve",
 	} {
 		resolved, found := registry.ResolveHTTP(http.MethodGet, path)
-		if !found || resolved.Owner != "runtime:notifications" || resolved.Authorization.Strategy != actioncontract.AuthorizationAuthenticatedPrincipal || resolved.Permission != nil {
+		if !found || resolved.Owner != "runtime:notifications" || resolved.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || resolved.Permission != nil {
 			t.Fatalf("resolved notification facade Action for %q=%+v found=%t", path, resolved, found)
 		}
 	}
@@ -246,7 +246,7 @@ func TestRuntimeWorkflowSurfaceSeparatesSelfRoutesFromExactManagementActions(t *
 	for _, endpoint := range exactRoutes {
 		method, route, _ := strings.Cut(endpoint, " ")
 		action, found := registry.ResolveHTTP(method, route)
-		if !found || action.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission || action.Permission == nil || action.Permission.Key != action.Key {
+		if !found || action.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || action.Permission == nil || action.Permission.Key != action.Key {
 			t.Fatalf("workflow endpoint %q is not an exact same-key Action: %#v found=%v", endpoint, action, found)
 		}
 	}
@@ -261,7 +261,7 @@ func TestRuntimeWorkflowSurfaceSeparatesSelfRoutesFromExactManagementActions(t *
 	for _, endpoint := range principalRoutes {
 		method, route, _ := strings.Cut(endpoint, " ")
 		action, found := registry.ResolveHTTP(method, route)
-		if !found || action.Authorization.Strategy != actioncontract.AuthorizationAuthenticatedPrincipal || action.Permission != nil {
+		if !found || action.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || action.Permission != nil {
 			t.Fatalf("workflow endpoint %q is not principal/domain scoped: %#v found=%v", endpoint, action, found)
 		}
 	}
@@ -276,7 +276,7 @@ func TestRuntimeMetadataObjectRecordCountUsesSameKeyPermission(t *testing.T) {
 	if !ok || definition.Key != "runtime.appschema.metadata_object_record_count" || definition.Owner != "runtime:appschema" {
 		t.Fatalf("record-count Action=%+v ok=%t", definition, ok)
 	}
-	if definition.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission || definition.Permission == nil || definition.Permission.Key != definition.Key || definition.Permission.Owner != definition.Owner {
+	if definition.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || definition.Permission == nil || definition.Permission.Key != definition.Key || definition.Permission.Owner != definition.Owner {
 		t.Fatalf("record-count Action is not an exact same-key Runtime Permission: %+v", definition)
 	}
 }
@@ -325,7 +325,7 @@ func TestRuntimeAuthorizationReconcileCarriesPreviousHashAndRetiresRemovedOwner(
 	action := actioncontract.ActionDefinition{
 		Key: "test.module.read", Owner: "module:test", SourceKind: "module_surface",
 		CapabilityKey: "test.module", CapabilityLabel: "Test module", OperationKey: "read", OperationLabel: "Read", Label: "Read test module",
-		Exposures: []actioncontract.Exposure{actioncontract.ExposurePublic}, Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission},
+		Exposures: []actioncontract.Exposure{actioncontract.ExposurePublic}, Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated},
 		HTTP:        &actioncontract.HTTPBinding{Method: http.MethodGet, RouteTemplate: "/test-module"},
 		Permission:  &actioncontract.PermissionDefinition{Key: "test.module.read", Owner: "module:test", ResourceKey: "test.module", OperationKey: "read", Label: "Read test module", Category: "Test", LifecycleStatus: actioncontract.LifecycleActive},
 		EffectClass: actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "test_module_read", LifecycleStatus: actioncontract.LifecycleActive,
@@ -440,7 +440,7 @@ func testOwnedPermissionAction(key, owner, route string) actioncontract.ActionDe
 	return actioncontract.ActionDefinition{
 		Key: key, Owner: owner, SourceKind: "test_surface",
 		CapabilityKey: resourceKey, CapabilityLabel: resourceKey, OperationKey: operationKey, OperationLabel: "Read", Label: "Read " + resourceKey,
-		Exposures: []actioncontract.Exposure{actioncontract.ExposurePublic}, Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission},
+		Exposures: []actioncontract.Exposure{actioncontract.ExposurePublic}, Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated},
 		HTTP:        &actioncontract.HTTPBinding{Method: http.MethodGet, RouteTemplate: route},
 		Permission:  &actioncontract.PermissionDefinition{Key: key, Owner: owner, ResourceKey: resourceKey, OperationKey: "read", Label: "Read " + resourceKey, Category: resourceKey, LifecycleStatus: actioncontract.LifecycleActive},
 		EffectClass: actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "test_read", LifecycleStatus: actioncontract.LifecycleActive,

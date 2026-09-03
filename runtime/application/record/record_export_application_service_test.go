@@ -68,7 +68,7 @@ func TestExportServiceOwnsCSVRelationDisplayAndAudit(t *testing.T) {
 	})
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}})
 
-	content, filename, err := service.ExportWithOptions(t.Context(), "order", principal, RecordExportOptions{Reason: "analysis", Query: recordmodel.RecordListQuery{Search: "original", Locale: "zh-CN", FallbackLocale: "en-US"}})
+	content, filename, err := exportRecordDirectForTest(t.Context(), service, "order", principal, RecordExportOptions{Reason: "analysis", Query: recordmodel.RecordListQuery{Search: "original", Locale: "zh-CN", FallbackLocale: "en-US"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestExportServiceBindsAssuranceToCanonicalIntentAndAuditEvidence(t *testing
 	})
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}})
 	options := RecordExportOptions{Fields: []string{"name"}, Reason: " month close ", FilterSummary: " active customers ", MaskingPolicy: "strict", Query: recordmodel.RecordListQuery{Search: "Acme"}, AssuranceToken: "verified-token"}
-	content, _, err := service.ExportWithOptions(t.Context(), object.Key, principal, options)
+	content, _, err := exportRecordDirectForTest(t.Context(), service, object.Key, principal, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestExportServiceBindsAssuranceToCanonicalIntentAndAuditEvidence(t *testing
 	unavailable := NewRecordExportApplicationService(RecordExportDependencies{Repository: repository, Objects: func() map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"customer": object}
 	}})
-	if _, _, err := unavailable.ExportWithOptions(t.Context(), object.Key, principal, options); apperror.CodeOf(err) != "backend.export.assurance_unavailable" {
+	if _, _, err := exportRecordDirectForTest(t.Context(), unavailable, object.Key, principal, options); apperror.CodeOf(err) != "backend.export.assurance_unavailable" {
 		t.Fatalf("fail-closed error=%v", err)
 	}
 }
@@ -130,13 +130,13 @@ func TestExportServiceBindsAssuranceToCanonicalIntentAndAuditEvidence(t *testing
 func TestExportServiceKeepsCurrencyCanonicalAndRejectsBinaryFloat(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "invoice", Fields: []definitionmodel.FieldSchema{{Key: "amount", Type: "currency", Config: map[string]any{"precision": 12, "scale": 2, "currency_code": "USD"}}}}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{
-		Permissions: []string{"invoice.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "invoice", Scope: "all_records", Read: true}},
+		Permissions: []string{"invoice.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "invoice", Scope: "all", Read: true}},
 	})
 	repository := &exportRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "invoice-1", Data: map[string]any{"amount": "0.3"}}}}}
 	service := NewRecordExportApplicationService(RecordExportDependencies{Repository: repository, Objects: func() map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"invoice": object}
 	}})
-	content, _, err := service.Export(t.Context(), "invoice", principal)
+	content, _, err := exportRecordDirectForTest(t.Context(), service, "invoice", principal, RecordExportOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestExportServiceKeepsCurrencyCanonicalAndRejectsBinaryFloat(t *testing.T) 
 		t.Fatalf("rows=%#v err=%v", rows, err)
 	}
 	repository.page.Items[0].Data["amount"] = float64(0.3)
-	if _, _, err := service.Export(t.Context(), "invoice", principal); apperror.CodeOf(err) != "backend.export.decimal_value_invalid" {
+	if _, _, err := exportRecordDirectForTest(t.Context(), service, "invoice", principal, RecordExportOptions{}); apperror.CodeOf(err) != "backend.export.decimal_value_invalid" {
 		t.Fatalf("binary float export error=%v", err)
 	}
 }
@@ -163,9 +163,9 @@ func TestExportServiceResolvesIdentityLabelsWithinPrincipalScope(t *testing.T) {
 			return []identitysdk.User{{ID: "u1", Name: "Alice"}, {ID: "u2", Name: "Bob"}}, nil
 		},
 	})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "u1"}}, accessfixture.Bundle{Permissions: []string{"task.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "task", Scope: "owned_records", Read: true}}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "u1"}}, accessfixture.Bundle{Permissions: []string{"task.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "task", Scope: "owner", Read: true}}})
 
-	content, _, err := service.Export(t.Context(), "task", principal)
+	content, _, err := exportRecordDirectForTest(t.Context(), service, "task", principal, RecordExportOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestExportServiceAuditsUnknownPrincipalDenial(t *testing.T) {
 			event = value
 		},
 	})
-	_, _, err := service.Export(t.Context(), "customer", principalmodel.Principal{})
+	_, _, err := exportRecordDirectForTest(t.Context(), service, "customer", principalmodel.Principal{}, RecordExportOptions{})
 	assertRecordApplicationError(t, err, apperror.KindForbidden, "backend.workspace_scope_required", nil)
 	if event != "" {
 		t.Fatalf("audit was called before workspace authorization: %q", event)
@@ -206,11 +206,11 @@ func TestExportServiceBoundsOutputAndHonorsCancellation(t *testing.T) {
 		},
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{
-		Permissions: []string{"customer.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},
+		Permissions: []string{"customer.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true}},
 	})
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, _, err := service.Export(ctx, "customer", principal); !errors.Is(err, context.Canceled) {
+	if _, _, err := exportRecordDirectForTest(ctx, service, "customer", principal, RecordExportOptions{}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancel error=%v", err)
 	}
 }

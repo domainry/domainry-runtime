@@ -90,7 +90,10 @@ func TestIntegrationNotificationActionsReauthorizeTenantAdminResourceAccess(t *t
 			registry := notificationfacade.NewActionAuthorizerRegistry()
 			registerIntegrationNotificationActionAuthorizers(registry, test.reader)
 			registry.Freeze()
-			principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "actor"}}, accessfixture.Bundle{Permissions: test.permissions})
+			principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "actor"}}, accessfixture.Bundle{
+				Permissions:  test.permissions,
+				DataPolicies: accessfixture.DataPoliciesForPermissions(test.permissions, identitysdk.DataScopeAll),
+			})
 			err := registry.Authorize(t.Context(), notificationmodel.NotificationInboxResolvedAction{RouteParams: map[string]string{"resource_type": test.resourceType, "resource_id": test.resourceID}}, principal)
 			if test.wantErr != nil && !errors.Is(err, test.wantErr) {
 				t.Fatalf("err=%v want=%v", err, test.wantErr)

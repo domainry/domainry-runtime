@@ -182,6 +182,68 @@ func TestCommitRecordMutationBatchRollsBackEveryRecordOnConflict(t *testing.T) {
 	}
 }
 
+func TestRecordMutationAuthorizationScopeGuardsUpdateDeleteAndWholeBatch(t *testing.T) {
+	store := openStoreForGeneratedListTest(t)
+	defer store.Close()
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	object := definitionmodel.ObjectSchema{Key: "scoped_mutation", Fields: []definitionmodel.FieldSchema{
+		{Key: "owner_user_id", Type: "text"},
+		{Key: "status", Type: "text"},
+	}}
+	if _, err := store.DB().Exec(`CREATE TABLE scoped_mutation (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, owner_user_id TEXT, status TEXT, PRIMARY KEY (workspace_id, id))`); err != nil {
+		t.Fatal(err)
+	}
+	repository := recordStore(store)
+	for _, candidate := range []recordmodel.Record{
+		{ID: "owned", CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"owner_user_id": "user-a", "status": "pending"}},
+		{ID: "foreign", CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"owner_user_id": "user-b", "status": "pending"}},
+	} {
+		if err := repository.InsertRecord(t.Context(), "workspace-primary", object, candidate); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scope := &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "owner_user_id", Values: []string{"user-a"}}
+	update := func(id, version, status string) transactionmodel.RecordMutationCommit {
+		return transactionmodel.RecordMutationCommit{
+			Operation: "update", Object: object, AuthorizationScope: scope,
+			Record:            recordmodel.Record{ID: id, CreatedAt: "v1", UpdatedAt: version, Data: map[string]any{"owner_user_id": map[string]string{"owned": "user-a", "foreign": "user-b"}[id], "status": status}},
+			ExpectedUpdatedAt: "v1",
+		}
+	}
+
+	assertOutsideScope := func(err error) {
+		t.Helper()
+		var conflict *mutation.PolicyConflictError
+		if !errors.As(err, &conflict) || conflict.Code != "backend.record.outside_scope" || conflict.Field != "authorization_scope" {
+			t.Fatalf("expected typed authorization-scope conflict, conflict=%#v err=%v", conflict, err)
+		}
+	}
+
+	assertOutsideScope(repository.CommitRecordMutation(t.Context(), "workspace-primary", update("foreign", "v2", "forged-update")))
+	foreign, found, err := repository.GetRecord(t.Context(), "workspace-primary", object, "foreign")
+	if err != nil || !found || foreign.Data["status"] != "pending" || foreign.UpdatedAt != "v1" {
+		t.Fatalf("out-of-scope update changed row: record=%#v found=%v err=%v", foreign, found, err)
+	}
+
+	assertOutsideScope(repository.CommitRecordMutation(t.Context(), "workspace-primary", transactionmodel.RecordMutationCommit{
+		Operation: "delete", Object: object, RecordID: "foreign", Record: foreign, ExpectedUpdatedAt: "v1", AuthorizationScope: scope,
+	}))
+	if _, found, err := repository.GetRecord(t.Context(), "workspace-primary", object, "foreign"); err != nil || !found {
+		t.Fatalf("out-of-scope delete removed row: found=%v err=%v", found, err)
+	}
+
+	assertOutsideScope(repository.CommitRecordMutationBatch(t.Context(), "workspace-primary", []transactionmodel.RecordMutationCommit{
+		update("owned", "v2", "approved"),
+		update("foreign", "v2", "forged-batch-update"),
+	}))
+	owned, found, err := repository.GetRecord(t.Context(), "workspace-primary", object, "owned")
+	if err != nil || !found || owned.Data["status"] != "pending" || owned.UpdatedAt != "v1" {
+		t.Fatalf("authorization failure did not roll back whole batch: record=%#v found=%v err=%v", owned, found, err)
+	}
+}
+
 func TestConditionalMutationPredicateIsAtomicAcrossDialects(t *testing.T) {
 	for _, driver := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(driver, func(t *testing.T) {

@@ -84,13 +84,13 @@ func uploadTestRole(permissions ...string) accessfixture.Bundle {
 	for _, permission := range permissions {
 		switch permission {
 		case "document.create", "document.update":
-			role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{ObjectKey: "document", Scope: "all_records", Read: true, Write: true})
+			role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{ObjectKey: "document", Scope: "all", Read: true, Write: true})
 		case "document.read":
-			role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{ObjectKey: "document", Scope: "all_records", Read: true})
+			role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{ObjectKey: "document", Scope: "all", Read: true})
 		case "asset.create", "asset.update":
-			role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{ObjectKey: "asset", Scope: "all_records", Read: true, Write: true})
+			role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{ObjectKey: "asset", Scope: "all", Read: true, Write: true})
 		case "asset.read":
-			role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{ObjectKey: "asset", Scope: "all_records", Read: true})
+			role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{ObjectKey: "asset", Scope: "all", Read: true})
 		}
 	}
 	return role

@@ -39,6 +39,8 @@ type RecordDeleteDependencies struct {
 	ObjectForAction     func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error)
 	CanAccess           func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	CanAccessScope      func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record, bool) (bool, error)
+	ScopeForAction      RecordMutationScopeResolver
+	LoadTargetForAction RecordMutationTargetLoader
 	CanWrite            func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool
 	RunBefore           func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error
 	ValidatePolicies    func(context.Context, definitionmodel.ObjectSchema, map[string]any, map[string]any, string, string, principalmodel.Principal) error
@@ -100,7 +102,8 @@ func (s *RecordDeleteApplicationService) DeleteExpectedIdempotent(ctx context.Co
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	object, err := s.dependencies.ObjectForAction(principal, objectKey, "delete")
+	authorizationPrincipal := recordEffectAuthorizationPrincipal(ctx, principal, objectKey, "delete")
+	object, err := s.dependencies.ObjectForAction(authorizationPrincipal, objectKey, "delete")
 	if err != nil {
 		return false, err
 	}
@@ -170,26 +173,38 @@ func (s *RecordDeleteApplicationService) planDelete(ctx context.Context, objectK
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	authorizationPrincipal := recordEffectAuthorizationPrincipal(ctx, principal, objectKey, "delete")
 	visitKey := objectKey + ":" + recordID
 	if visited[visitKey] {
 		return nil
 	}
 	visited[visitKey] = true
-	object, err := s.dependencies.ObjectForAction(principal, objectKey, "delete")
+	object, err := s.dependencies.ObjectForAction(authorizationPrincipal, objectKey, "delete")
 	if err != nil {
 		return err
 	}
 	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "delete"); err != nil {
 		return err
 	}
-	record, found, err := s.dependencies.Repository.GetRecord(ctx, principal.WorkspaceID, object, recordID)
+	authorizationScope, err := resolveRecordMutationScope(s.dependencies.ScopeForAction, authorizationPrincipal, object, "delete")
 	if err != nil {
-		return recordDeleteInternalError("get record", err)
+		return err
+	}
+	record, found, err := loadRecordMutationTarget(ctx, s.dependencies.LoadTargetForAction, s.dependencies.Repository, principal.WorkspaceID, object, recordID, authorizationScope)
+	if err != nil {
+		operation := "get record"
+		if s.dependencies.LoadTargetForAction != nil {
+			operation = "get scoped mutation target"
+		}
+		return recordDeleteInternalError(operation, err)
 	}
 	if !found {
-		return recordDeleteError(apperror.KindNotFound, "backend.record.not_found", nil)
+		if s.dependencies.LoadTargetForAction == nil {
+			return recordDeleteError(apperror.KindNotFound, "backend.record.not_found", nil)
+		}
+		return recordDeleteError(apperror.KindForbidden, "backend.record.outside_scope", nil)
 	}
-	allowed, err := s.canAccessScope(ctx, principal, object, record)
+	allowed, err := s.canAccessScope(ctx, authorizationPrincipal, object, record)
 	if err != nil {
 		return err
 	}
@@ -212,9 +227,9 @@ func (s *RecordDeleteApplicationService) planDelete(ctx context.Context, objectK
 		return err
 	}
 	if recordpolicy.RecordUsesSoftDelete(object) {
-		return s.planSoftDelete(ctx, objectKey, recordID, expectedUpdatedAt, object, record, beforeData, principal, group)
+		return s.planSoftDelete(ctx, objectKey, recordID, expectedUpdatedAt, object, record, beforeData, principal, authorizationScope, group)
 	}
-	return s.planHardDelete(ctx, objectKey, recordID, expectedUpdatedAt, object, record, beforeData, principal, visited, group)
+	return s.planHardDelete(ctx, objectKey, recordID, expectedUpdatedAt, object, record, beforeData, principal, authorizationScope, visited, group)
 }
 
 func (s *RecordDeleteApplicationService) canAccessScope(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, record recordmodel.Record) (bool, error) {
@@ -224,7 +239,7 @@ func (s *RecordDeleteApplicationService) canAccessScope(ctx context.Context, pri
 	return s.dependencies.CanAccess == nil || s.dependencies.CanAccess(principal, object, record), nil
 }
 
-func (s *RecordDeleteApplicationService) planSoftDelete(ctx context.Context, objectKey, recordID, expectedUpdatedAt string, object definitionmodel.ObjectSchema, record recordmodel.Record, beforeData map[string]any, principal principalmodel.Principal, group *recordDeletePlanGroup) error {
+func (s *RecordDeleteApplicationService) planSoftDelete(ctx context.Context, objectKey, recordID, expectedUpdatedAt string, object definitionmodel.ObjectSchema, record recordmodel.Record, beforeData map[string]any, principal principalmodel.Principal, authorizationScope *recordmodel.RecordScopeExpression, group *recordDeletePlanGroup) error {
 	readRevision := record.UpdatedAt
 	if fmt.Sprint(beforeData["status"]) == "deleted" {
 		return recordDeleteError(apperror.KindBadRequest, "backend.record.already_deleted", nil)
@@ -269,7 +284,7 @@ func (s *RecordDeleteApplicationService) planSoftDelete(ctx context.Context, obj
 	if expectedUpdatedAt == "" {
 		expectedUpdatedAt = readRevision
 	}
-	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: record, Optimistic: transactionmodel.OptimisticPrecondition{ExpectedUpdatedAt: expectedUpdatedAt}}
+	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: record, Optimistic: transactionmodel.OptimisticPrecondition{ExpectedUpdatedAt: expectedUpdatedAt}, AuthorizationScope: authorizationScope}
 	if s.dependencies.BuildAudit != nil {
 		audit := s.dependencies.BuildAudit(ctx, "record_deleted", objectKey, recordID, principal, "Soft-deleted "+objectKey+" record", beforeData, record.Data, map[string]any{"soft_delete": true})
 		commit.Audit = &audit
@@ -295,7 +310,7 @@ func (s *RecordDeleteApplicationService) planSoftDelete(ctx context.Context, obj
 	return nil
 }
 
-func (s *RecordDeleteApplicationService) planHardDelete(ctx context.Context, objectKey, recordID, expectedUpdatedAt string, object definitionmodel.ObjectSchema, record recordmodel.Record, beforeData map[string]any, principal principalmodel.Principal, visited map[string]bool, group *recordDeletePlanGroup) error {
+func (s *RecordDeleteApplicationService) planHardDelete(ctx context.Context, objectKey, recordID, expectedUpdatedAt string, object definitionmodel.ObjectSchema, record recordmodel.Record, beforeData map[string]any, principal principalmodel.Principal, authorizationScope *recordmodel.RecordScopeExpression, visited map[string]bool, group *recordDeletePlanGroup) error {
 	readRevision := record.UpdatedAt
 	if s.dependencies.Relations != nil {
 		if err := s.dependencies.Relations.Apply(ctx, principal.WorkspaceID, objectKey, recordID, recordservice.RecordDeleteRelationCallbacks{
@@ -331,7 +346,7 @@ func (s *RecordDeleteApplicationService) planHardDelete(ctx context.Context, obj
 	if expectedUpdatedAt == "" {
 		expectedUpdatedAt = readRevision
 	}
-	commit := transactionmodel.RecordMutationCommit{Operation: "delete", Object: object, Record: record, RecordID: recordID, Optimistic: transactionmodel.OptimisticPrecondition{ExpectedUpdatedAt: expectedUpdatedAt}}
+	commit := transactionmodel.RecordMutationCommit{Operation: "delete", Object: object, Record: record, RecordID: recordID, Optimistic: transactionmodel.OptimisticPrecondition{ExpectedUpdatedAt: expectedUpdatedAt}, AuthorizationScope: authorizationScope}
 	if s.dependencies.BuildAudit != nil {
 		audit := s.dependencies.BuildAudit(ctx, "record_deleted", objectKey, recordID, principal, "Deleted "+objectKey+" record", beforeData, nil, nil)
 		commit.Audit = &audit

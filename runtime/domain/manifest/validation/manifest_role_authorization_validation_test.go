@@ -4,14 +4,15 @@ import (
 	"strings"
 	"testing"
 
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
 
-func TestManifestActionGrantValidatesRoleDataPoliciesWithoutASecondRoleAllowlist(t *testing.T) {
+func TestManifestActionGrantCarriesItsOwnDataScope(t *testing.T) {
 	manifest := manifestmodel.ManifestSchema{
 		Objects: []definitionmodel.ObjectSchema{{Key: "booking"}},
-		Roles:   []manifestmodel.RoleSchema{{Key: "member", Name: "Member", Permissions: []string{"booking.book"}, RecordScope: "custom", DataPermissions: []manifestmodel.RoleDataPermission{{ObjectKey: "booking", Scope: "custom", Read: true, Write: true}}}},
+		Roles:   []manifestmodel.RoleSchema{{Key: "member", Name: "Member", Permissions: []manifestmodel.RolePermission{{PermissionKey: "booking.book", DataScope: identitysdk.DataScopeOwner}}}},
 		Actions: []definitionmodel.ActionSchema{{Key: "booking.book", ObjectKey: "booking", EffectSet: &definitionmodel.ActionEffectSet{Read: []definitionmodel.ActionObjectEffect{{ObjectKey: "booking"}}, Write: []definitionmodel.ActionObjectEffect{{ObjectKey: "booking"}}}}},
 	}
 	state := newValidationState(manifest, nil)
@@ -22,13 +23,13 @@ func TestManifestActionGrantValidatesRoleDataPoliciesWithoutASecondRoleAllowlist
 		t.Fatalf("valid role authorization rejected: %v", state.errs)
 	}
 
-	manifest.Roles[0].DataPermissions[0].Write = false
+	manifest.Roles[0].Permissions[0].DataScope = ""
 	state = newValidationState(manifest, nil)
 	state.validateObjects()
 	state.validateRoles()
 	state.validateActions()
-	if !strings.Contains(state.errs.Error(), `lacks write data permission`) {
-		t.Fatalf("RoleSchema Action grant without required data permission was not rejected: %v", state.errs)
+	if !strings.Contains(state.errs.Error(), `must be one of all, owner, org, org_child, target_org`) {
+		t.Fatalf("RoleSchema Permission grant without data_scope was not rejected: %v", state.errs)
 	}
 }
 
@@ -44,14 +45,7 @@ func TestManifestRolePoliciesResolveAgainstCurrentRuntimeObjectSchema(t *testing
 				{Key: "member", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}},
 			},
 			Roles: []manifestmodel.RoleSchema{{
-				Key: "member", Name: "Member", Permissions: []string{"booking.read"}, RecordScope: "custom",
-				DataPermissions: []manifestmodel.RoleDataPermission{{
-					ObjectKey: "booking", Scope: "custom", Read: true,
-					Predicate: &manifestmodel.RolePolicyExpression{
-						Operator: "eq", Path: []manifestmodel.RolePolicyRelationSegment{{Direction: "forward", RelationFieldKey: "member_id", TargetObjectKey: "member"}},
-						FieldKey: "name", ValueSource: "actor_claim", ClaimKey: "member_name",
-					},
-				}},
+				Key: "member", Name: "Member", Permissions: []manifestmodel.RolePermission{{PermissionKey: "booking.read", DataScope: identitysdk.DataScopeOwner}},
 				FieldPermissions:     []manifestmodel.RoleFieldPermission{{ObjectKey: "booking", FieldKey: "amount", Read: true, Export: true}},
 				ReferencePermissions: []manifestmodel.RoleReferencePermission{{SourceObjectKey: "booking", RelationFieldKey: "member_id", TargetObjectKey: "member", DisplayFields: []string{"id", "name"}}},
 				ExportRules:          []manifestmodel.RoleExportRule{{ObjectKey: "booking", Mode: "allow_list", Fields: []string{"id", "amount"}}},
@@ -76,15 +70,9 @@ func TestManifestRolePoliciesResolveAgainstCurrentRuntimeObjectSchema(t *testing
 		edit func(*manifestmodel.ManifestSchema)
 		want string
 	}{
-		{name: "predicate field", edit: func(value *manifestmodel.ManifestSchema) {
-			value.Roles[0].DataPermissions[0].Predicate.FieldKey = "missing"
-		}, want: `unknown or disabled field "missing" on object "member"`},
-		{name: "predicate relation", edit: func(value *manifestmodel.ManifestSchema) {
-			value.Roles[0].DataPermissions[0].Predicate.Path[0].RelationFieldKey = "amount"
-		}, want: "invalid forward relation booking.amount -> member"},
-		{name: "predicate operator", edit: func(value *manifestmodel.ManifestSchema) {
-			value.Roles[0].DataPermissions[0].Predicate.Operator = "contains"
-		}, want: `is not executable by Runtime: "contains"`},
+		{name: "data scope", edit: func(value *manifestmodel.ManifestSchema) {
+			value.Roles[0].Permissions[0].DataScope = "custom"
+		}, want: `must be one of all, owner, org, org_child, target_org`},
 		{name: "field", edit: func(value *manifestmodel.ManifestSchema) { value.Roles[0].FieldPermissions[0].FieldKey = "retired" }, want: `unknown or disabled field "retired" on object "booking"`},
 		{name: "reference relation", edit: func(value *manifestmodel.ManifestSchema) {
 			value.Roles[0].ReferencePermissions[0].RelationFieldKey = "amount"

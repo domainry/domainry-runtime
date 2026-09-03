@@ -3,13 +3,19 @@
   "version": "1.0.0",
   "name": "Gym Empty Foundation",
   "source_blueprint_id": "runtime-direct-authoring-v4",
-  "objects": [],
+  "objects": [
+
+  ],
   "roles": [
     {
       "key": "admin",
       "name": "Administrator",
-      "permissions": ["runtime.appschema.validate_application_definition"],
-      "record_scope": "all_records"
+      "permissions": [
+        {
+          "permission_key": "runtime.appschema.validate_application_definition",
+          "data_scope": "all"
+        }
+      ]
     }
   ]
 }

@@ -32,27 +32,32 @@ func (s workflowRecordRepositoryEdgeStub) ListRecords(context.Context, string, d
 }
 
 func TestWorkflowRecordReaderAdapterNilAndRepositoryDelegation(t *testing.T) {
-	empty := NewWorkflowRecordReaderAdapter(nil)
-	if _, found, err := empty.GetWorkflowRecord(t.Context(), "workspace", definitionmodel.ObjectSchema{}, "record"); err != nil || found {
+	normalize := func(_ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, _ principalmodel.Principal) recordmodel.RecordListQuery {
+		query.AuthorizationMode = recordmodel.RecordQueryAuthorizationUnrestricted
+		return query
+	}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace"}}
+	empty := NewWorkflowRecordReaderAdapter(nil, normalize)
+	if _, found, err := empty.GetWorkflowRecord(t.Context(), "workspace", definitionmodel.ObjectSchema{}, "record", principal); err != nil || found {
 		t.Fatalf("nil get found=%v err=%v", found, err)
 	}
-	if page, err := empty.ListWorkflowRecords(t.Context(), "workspace", definitionmodel.ObjectSchema{}, recordmodel.RecordListQuery{}); err != nil || page.Total != 0 {
+	if page, err := empty.ListWorkflowRecords(t.Context(), "workspace", definitionmodel.ObjectSchema{}, recordmodel.RecordListQuery{}, principal); err != nil || page.Total != 0 {
 		t.Fatalf("nil list page=%+v err=%v", page, err)
 	}
-	repository := workflowRecordRepositoryEdgeStub{record: recordmodel.Record{ID: "record"}, found: true, page: recordmodel.RecordPageResult{Total: 1}}
-	adapter := NewWorkflowRecordReaderAdapter(repository)
-	if record, found, err := adapter.GetWorkflowRecord(t.Context(), "workspace", definitionmodel.ObjectSchema{}, "record"); err != nil || !found || record.ID != "record" {
+	repository := workflowRecordRepositoryEdgeStub{record: recordmodel.Record{ID: "record"}, found: true, page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "record"}}, Total: 1}}
+	adapter := NewWorkflowRecordReaderAdapter(repository, normalize)
+	if record, found, err := adapter.GetWorkflowRecord(t.Context(), "workspace", definitionmodel.ObjectSchema{}, "record", principal); err != nil || !found || record.ID != "record" {
 		t.Fatalf("record=%+v found=%v err=%v", record, found, err)
 	}
-	if page, err := adapter.ListWorkflowRecords(t.Context(), "workspace", definitionmodel.ObjectSchema{}, recordmodel.RecordListQuery{}); err != nil || page.Total != 1 {
+	if page, err := adapter.ListWorkflowRecords(t.Context(), "workspace", definitionmodel.ObjectSchema{}, recordmodel.RecordListQuery{}, principal); err != nil || page.Total != 1 {
 		t.Fatalf("page=%+v err=%v", page, err)
 	}
 	failure := errors.New("repository")
-	adapter = NewWorkflowRecordReaderAdapter(workflowRecordRepositoryEdgeStub{getErr: failure, listErr: failure})
-	if _, _, err := adapter.GetWorkflowRecord(t.Context(), "workspace", definitionmodel.ObjectSchema{}, "record"); !errors.Is(err, failure) {
+	adapter = NewWorkflowRecordReaderAdapter(workflowRecordRepositoryEdgeStub{getErr: failure, listErr: failure}, normalize)
+	if _, _, err := adapter.GetWorkflowRecord(t.Context(), "workspace", definitionmodel.ObjectSchema{}, "record", principal); !errors.Is(err, failure) {
 		t.Fatalf("get error=%v", err)
 	}
-	if _, err := adapter.ListWorkflowRecords(t.Context(), "workspace", definitionmodel.ObjectSchema{}, recordmodel.RecordListQuery{}); !errors.Is(err, failure) {
+	if _, err := adapter.ListWorkflowRecords(t.Context(), "workspace", definitionmodel.ObjectSchema{}, recordmodel.RecordListQuery{}, principal); !errors.Is(err, failure) {
 		t.Fatalf("list error=%v", err)
 	}
 }

@@ -30,7 +30,7 @@ func (reportSnapshotSourceStub) ReadReportSnapshotSourceVersion(context.Context,
 }
 
 func reportPrincipal() principalmodel.Principal {
-	bundle := accessfixture.Bundle{Key: "report-export", RecordScope: "all_records", Permissions: []string{"customer.read", "customer.export"}, FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "customer", FieldKey: "id", Read: true, Export: true}}}
+	bundle := accessfixture.Bundle{Key: "report-export", Permissions: []string{"customer.read", "customer.export"}, DataPolicies: accessfixture.DataPoliciesForPermissions([]string{"customer.read", "customer.export"}, "all"), FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "customer", FieldKey: "id", Read: true, Export: true}}}
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator-1", WorkspaceID: "workspace-a"}}, bundle)
 }
 

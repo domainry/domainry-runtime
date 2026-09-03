@@ -57,6 +57,10 @@ func (s *WorkflowApplicationService) processScheduledWorkflowExecutionsForTarget
 			}
 			continue
 		}
+		scanPrincipal, err := s.workflowPrincipal(ctx, workflow, principal)
+		if err != nil {
+			return processed, err
+		}
 		for _, objectKey := range objectKeys {
 			if err := ctx.Err(); err != nil {
 				return processed, err
@@ -70,7 +74,7 @@ func (s *WorkflowApplicationService) processScheduledWorkflowExecutionsForTarget
 			}
 			afterID := ""
 			for {
-				result, err := s.recordReader.ListWorkflowRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 200, SkipTotal: true, AfterID: afterID, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}})
+				result, err := s.recordReader.ListWorkflowRecords(ctx, scanPrincipal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 200, SkipTotal: true, AfterID: afterID, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}}, scanPrincipal)
 				if err != nil {
 					return processed, internalError("list records for scheduled workflow", err)
 				}
@@ -257,7 +261,7 @@ func (s *WorkflowApplicationService) RetryWorkflowExecutionWithKey(ctx context.C
 	if nextAttempt > maxAttempts {
 		return workflowmodel.WorkflowRunResult{}, badRequest("backend.workflow.max_attempts_reached")
 	}
-	payload := s.workflowRetryPayload(ctx, principal.WorkspaceID, previous)
+	payload := s.workflowRetryPayload(ctx, principal.WorkspaceID, previous, principal)
 	execution, err := s.executeWorkflowAttempt(ctx, workflow, payload, principal, "retry:"+previous.ID, nextAttempt, true)
 	if err != nil {
 		return workflowmodel.WorkflowRunResult{}, err

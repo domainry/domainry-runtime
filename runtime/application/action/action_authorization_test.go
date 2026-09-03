@@ -13,12 +13,13 @@ import (
 )
 
 func TestActionAuthorizationAndPersistenceAuthority(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"leave_request.recover"}})
+	permissions := []string{"leave_request.recover"}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)})
 	action := definitionmodel.ActionSchema{Key: "leave_request.recover", ObjectKey: "leave_request"}
 	if !ActionAllowed(principal, action) {
 		t.Fatal("authorized Action was rejected")
 	}
-	persist := ActionPersistencePrincipal(principal, "leave_request")
+	persist := ActionPersistencePrincipal(principal, action, "update")
 	if !persist.HasPermission("leave_request.update") || principal.HasPermission("leave_request.update") || persist.HasPermission("employee_hr_profile.update") {
 		t.Fatalf("unexpected persistence authority: caller=%#v persistence=%#v", principal.PermissionKeys(), persist.PermissionKeys())
 	}
@@ -32,7 +33,7 @@ func TestHandlerActionAuthorizationUsesWriteDataPolicyForExactCustomAction(t *te
 		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "wechat-user", WorkspaceID: "workspace-primary"}},
 		accessfixture.Bundle{
 			Key: "member_onboarding", Permissions: []string{"member.self_enroll"},
-			DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Scope: "owned_records", Write: true}},
+			DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Scope: "owner", Write: true}},
 		},
 	)
 	queryPolicy := recordservice.NewRecordQueryPolicyDomainService(recordservice.RecordQueryPolicyDependencies{
@@ -45,15 +46,18 @@ func TestHandlerActionAuthorizationUsesWriteDataPolicyForExactCustomAction(t *te
 
 func TestHandlerActionAuthorizationUsesOnlyExactPermission(t *testing.T) {
 	action := definitionmodel.ActionSchema{Key: "booking.book", ObjectKey: "booking"}
-	member := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "member", Permissions: []string{"booking.book"}})
+	memberPermissions := []string{"booking.book"}
+	member := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "member", Permissions: memberPermissions, DataPolicies: accessfixture.DataPoliciesForPermissions(memberPermissions, identitysdk.DataScopeAll)})
 	if !ActionAllowed(member, action) {
 		t.Fatal("role with the exact Action permission was rejected")
 	}
-	coach := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "coach", Permissions: []string{"booking.book"}})
+	coachPermissions := []string{"booking.book"}
+	coach := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "coach", Permissions: coachPermissions, DataPolicies: accessfixture.DataPoliciesForPermissions(coachPermissions, identitysdk.DataScopeAll)})
 	if !ActionAllowed(coach, action) {
 		t.Fatal("role key became a second authorization authority")
 	}
-	memberWithoutPermission := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "member", Permissions: []string{"booking.read"}})
+	viewerPermissions := []string{"booking.read"}
+	memberWithoutPermission := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Key: "member", Permissions: viewerPermissions, DataPolicies: accessfixture.DataPoliciesForPermissions(viewerPermissions, identitysdk.DataScopeAll)})
 	if ActionAllowed(memberWithoutPermission, action) {
 		t.Fatal("role without the exact Action permission was authorized")
 	}

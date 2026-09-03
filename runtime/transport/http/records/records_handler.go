@@ -6,6 +6,7 @@ import (
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -17,8 +18,6 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
-
-	"github.com/domainry/domainry-foundation/logging"
 )
 
 type RecordsHandler struct {
@@ -66,28 +65,6 @@ func (h *RecordsHandler) listRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.writeJSON(w, http.StatusOK, page)
-}
-
-func (h *RecordsHandler) exportRecords(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	content, filename, err := h.queries.ExportRecordsWithOptions(r.Context(), strings.TrimSpace(r.PathValue("objectKey")), h.principal(r), recordapplication.RecordExportOptions{
-		Fields:         splitQueryCSV(query.Get("fields")),
-		Reason:         query.Get("reason"),
-		MaskingPolicy:  query.Get("masking_policy"),
-		FilterSummary:  query.Get("filter_summary"),
-		Query:          parseListQuery(r),
-		AssuranceToken: r.Header.Get("X-Assurance-Token"),
-	})
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(content); err != nil {
-		logging.FromContext(r.Context()).Error("write record export failed", logging.StableErrorFields(err)...)
-	}
 }
 
 func (h *RecordsHandler) createRecord(w http.ResponseWriter, r *http.Request) {
@@ -268,31 +245,24 @@ func (h *RecordsHandler) effectivePermissions(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if objectKey != "" {
-		needsRecordDecision := false
-		for _, action := range result.Actions {
-			if action.ObjectKey == objectKey && action.Allowed && actionpolicy.ActionIsRecordKind(action.Kind) {
-				needsRecordDecision = true
-				break
+		for index := range result.Actions {
+			action := &result.Actions[index]
+			if action.ObjectKey != objectKey || !action.Allowed || !actionpolicy.ActionIsRecordKind(action.Kind) {
+				continue
 			}
-		}
-		if needsRecordDecision {
 			if h.queries == nil {
 				h.writeServiceError(w, r, apperror.New(apperror.KindInternal, "backend.permissions.record_service_unavailable", nil, nil))
 				return
 			}
-			allowed, scopeErr := h.queries.RecordScopeAllows(r.Context(), objectKey, recordID, principal)
+			_, permissionAction := definitionmodel.ActionPermissionSubject(definitionmodel.ActionSchema{Key: action.PermissionKey, ObjectKey: action.ObjectKey})
+			allowed, scopeErr := h.queries.RecordScopeAllowsAction(r.Context(), objectKey, recordID, permissionAction, principal)
 			if scopeErr != nil {
 				h.writeServiceError(w, r, scopeErr)
 				return
 			}
 			if !allowed {
-				for index := range result.Actions {
-					action := &result.Actions[index]
-					if action.ObjectKey == objectKey && action.Allowed && actionpolicy.ActionIsRecordKind(action.Kind) {
-						action.Allowed = false
-						action.Reason = "record_scope_denied"
-					}
-				}
+				action.Allowed = false
+				action.Reason = "data_scope_denied"
 			}
 		}
 	}

@@ -2,16 +2,18 @@
   "actions": [
     {
       "audit_event": "kitchen_order_started",
-"key": "kitchen_order.start_cooking",
+      "key": "kitchen_order.start_cooking",
       "kind": "transition_state",
       "label": "Start Cooking",
       "object_key": "kitchen_order",
-      "preconditions": [],
+      "preconditions": [
+
+      ],
       "ui_placement": "card_action"
     },
     {
       "audit_event": "kitchen_order.ready_alert.execute",
-"key": "kitchen_order.ready_alert.execute",
+      "key": "kitchen_order.ready_alert.execute",
       "kind": "record_operation",
       "label": "Ready Alert",
       "object_key": "kitchen_order",
@@ -157,47 +159,58 @@
       "required_permissions": [
         "kitchen_order.read"
       ],
-      "dataset": {"source": {"object_key": "kitchen_order", "alias": "kitchen_order"}}
+      "dataset": {
+        "source": {
+          "object_key": "kitchen_order",
+          "alias": "kitchen_order"
+        }
+      }
     }
   ],
   "roles": [
     {
-      "data_permissions": [
-        {
-          "object_key": "kitchen_order",
-          "read": true,
-          "scope": "all_records",
-          "write": true
-        }
-      ],
       "key": "kitchen_lead",
       "name": "Kitchen Lead",
       "permissions": [
-        "business.access",
-        "runtime.appschema.validate_application_definition",
-        "kitchen_order.read",
-        "kitchen_order.create",
-        "kitchen_order.update"
-      ],
-      "record_scope": "all_records"
+        {
+          "permission_key": "business.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.appschema.validate_application_definition",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "kitchen_order.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "kitchen_order.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "kitchen_order.update",
+          "data_scope": "all"
+        }
+      ]
     },
     {
-      "data_permissions": [
-        {
-          "object_key": "kitchen_order",
-          "read": true,
-          "scope": "all_records",
-          "write": true
-        }
-      ],
       "key": "line_cook",
       "name": "Line Cook",
       "permissions": [
-        "business.access",
-        "kitchen_order.read",
-        "kitchen_order.update"
-      ],
-      "record_scope": "all_records"
+        {
+          "permission_key": "business.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "kitchen_order.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "kitchen_order.update",
+          "data_scope": "all"
+        }
+      ]
     }
   ],
   "seed_records": [

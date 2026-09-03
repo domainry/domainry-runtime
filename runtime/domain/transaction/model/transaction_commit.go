@@ -20,6 +20,7 @@ type RecordMutationCommit struct {
 	Optimistic         OptimisticPrecondition                     `json:"optimistic,omitempty"`
 	Conditions         map[string]any                             `json:"conditions,omitempty"`
 	Predicates         []MutationPredicate                        `json:"predicates,omitempty"`
+	AuthorizationScope *recordmodel.RecordScopeExpression         `json:"-"`
 	Audit              *auditmodel.AuditEvent                     `json:"audit,omitempty"`
 	Audits             []auditmodel.AuditEvent                    `json:"audits,omitempty"`
 	Outbox             []publicationmodel.Message                 `json:"outbox,omitempty"`

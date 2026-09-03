@@ -43,7 +43,7 @@ func (s *WorkflowExecutionVisibilityApplicationService) WorkflowExecutionVisible
 		if len(ids) == 0 {
 			continue
 		}
-		page, err := s.recordReader.ListWorkflowRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: len(ids), SkipTotal: true, Filters: map[string]any{"id__in": ids}})
+		page, err := s.recordReader.ListWorkflowRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: len(ids), SkipTotal: true, Filters: map[string]any{"id__in": ids}}, principal)
 		if err != nil {
 			return false, fmt.Errorf("get Workflow execution Record: %w", err)
 		}

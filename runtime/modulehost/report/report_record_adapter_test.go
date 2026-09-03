@@ -54,7 +54,8 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	})
 	adapter := NewReportRecordAdapter(application, repository, func() map[string]definitionmodel.ObjectSchema { return objects })
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{
-		Key: "report-reader", Permissions: []string{"customer.read", "customer.export"}, RecordScope: "all_records",
+		Key: "report-reader", Permissions: []string{"customer.read", "customer.export"},
+		DataPolicies: accessfixture.DataPoliciesForPermissions([]string{"customer.read", "customer.export"}, "all"),
 		FieldPolicies: []accessfixture.FieldPolicyFixture{
 			{ObjectKey: "customer", FieldKey: "name", Read: true, Export: true},
 			{ObjectKey: "customer", FieldKey: "status", Read: true, Export: true},
@@ -92,7 +93,8 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	}
 	maskedPrincipal := principal
 	accessfixture.Set(&maskedPrincipal, accessfixture.Bundle{
-		Key: "masked-report-reader", Permissions: []string{"customer.export", "customer.read"}, RecordScope: "all_records",
+		Key: "masked-report-reader", Permissions: []string{"customer.export", "customer.read"},
+		DataPolicies:  accessfixture.DataPoliciesForPermissions([]string{"customer.export", "customer.read"}, "all"),
 		FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "customer", FieldKey: "name", Read: true, Export: true, Masked: true}},
 	})
 	if masked, err := adapter.AuthorizeReportExportField(t.Context(), maskedPrincipal, "customer", "name"); err != nil || !masked {
@@ -103,7 +105,8 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	}
 	contextualPrincipal := maskedPrincipal
 	accessfixture.Set(&contextualPrincipal, accessfixture.Bundle{
-		Key: "contextual-report-reader", Permissions: []string{"customer.export", "customer.read"}, RecordScope: "all_records",
+		Key: "contextual-report-reader", Permissions: []string{"customer.export", "customer.read"},
+		DataPolicies:  accessfixture.DataPoliciesForPermissions([]string{"customer.export", "customer.read"}, "all"),
 		FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "customer", FieldKey: "name", Read: true, Policies: []accessfixture.FieldRuleFixture{{Key: "owner-only", Actions: []string{"read"}, Effect: "allow"}}}},
 	})
 	if err := adapter.AuthorizeReportObjectSQLField(t.Context(), contextualPrincipal, object, "name"); apperror.CodeOf(err) != "backend.report.object_sql_field_contextual" {
@@ -111,7 +114,8 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	}
 	readDeniedPrincipal := maskedPrincipal
 	accessfixture.Set(&readDeniedPrincipal, accessfixture.Bundle{
-		Key: "read-denied", Permissions: []string{"customer.read"}, RecordScope: "all_records",
+		Key: "read-denied", Permissions: []string{"customer.read"},
+		DataPolicies:  accessfixture.DataPoliciesForPermissions([]string{"customer.read"}, "all"),
 		FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "customer", FieldKey: "name", Read: false}},
 	})
 	if err := adapter.AuthorizeReportObjectSQLField(t.Context(), readDeniedPrincipal, object, "name"); apperror.CodeOf(err) != "backend.report.object_sql_field_denied" {
@@ -122,7 +126,8 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	}
 	deniedPrincipal := maskedPrincipal
 	accessfixture.Set(&deniedPrincipal, accessfixture.Bundle{
-		Key: "export-denied", Permissions: []string{"customer.read", "customer.export"}, RecordScope: "all_records",
+		Key: "export-denied", Permissions: []string{"customer.read", "customer.export"},
+		DataPolicies:  accessfixture.DataPoliciesForPermissions([]string{"customer.read", "customer.export"}, "all"),
 		FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "customer", FieldKey: "name", Read: true, Export: false}, {ObjectKey: "customer", FieldKey: "id", Read: true, Export: false}},
 	})
 	if _, err := adapter.AuthorizeReportExportField(t.Context(), deniedPrincipal, "customer", "name"); err == nil {

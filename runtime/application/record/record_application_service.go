@@ -190,11 +190,13 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		ExecutionRuntime: dependencies.RecordMutationExecution,
 	})
 	restore := NewRecordRestoreApplicationService(RecordRestoreDependencies{
-		Repository:      dependencies.Repository,
-		MutationKernel:  mutationKernel,
-		ObjectForAction: service.queryPolicy.ObjectForAction,
-		CanAccess:       service.queryPolicy.CanAccessRecord,
-		CanWrite:        service.queryPolicy.CanWriteRecordScope,
+		Repository:          dependencies.Repository,
+		MutationKernel:      mutationKernel,
+		ObjectForAction:     service.queryPolicy.ObjectForAction,
+		CanAccess:           service.queryPolicy.CanAccessRecord,
+		CanWrite:            service.queryPolicy.CanWriteRecordScope,
+		ScopeForAction:      service.queryPolicy.MutationScopeExpression,
+		LoadTargetForAction: recordRepositoryMutationTargetLoader(dependencies.Repository),
 		ValidateRelations: func(ctx context.Context, object definitionmodel.ObjectSchema, data map[string]any, principal principalmodel.Principal) error {
 			return dependencies.Validation.ValidateRelations(ctx, object, data, principal)
 		},
@@ -218,7 +220,9 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		CanAccessScope: func(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, record recordmodel.Record, _ bool) (bool, error) {
 			return service.queryPolicy.CanAccessRecordAction(ctx, principal, object, record, "update")
 		},
-		CanWrite: service.queryPolicy.CanWriteRecordScope,
+		ScopeForAction:      service.queryPolicy.MutationScopeExpression,
+		LoadTargetForAction: recordRepositoryMutationTargetLoader(dependencies.Repository),
+		CanWrite:            service.queryPolicy.CanWriteRecordScope,
 		Denied: func(ctx context.Context, objectKey, recordID string, principal principalmodel.Principal, err error, reason string, patch map[string]any) {
 			recordAppendUpdateDeniedAudit(ctx, service.audit, objectKey, recordID, principal, err, reason, patch)
 		},
@@ -261,7 +265,9 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		CanAccessScope: func(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, record recordmodel.Record, _ bool) (bool, error) {
 			return service.queryPolicy.CanAccessRecordAction(ctx, principal, object, record, "delete")
 		},
-		CanWrite: service.queryPolicy.CanWriteRecordScope,
+		ScopeForAction:      service.queryPolicy.MutationScopeExpression,
+		LoadTargetForAction: recordRepositoryMutationTargetLoader(dependencies.Repository),
+		CanWrite:            service.queryPolicy.CanWriteRecordScope,
 		RunBefore: func(ctx context.Context, objectKey, operation, recordID string, input, before, candidate map[string]any, principal principalmodel.Principal) error {
 			return dependencies.RunBefore(ctx, objectKey, operation, recordID, input, before, candidate, principal)
 		},
@@ -298,8 +304,9 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		Repository:           dependencies.Repository,
 		Objects:              service.schemaMap,
 		EnsureSnapshotAccess: service.queryPolicy.EnsureReportSnapshotAccess,
-		NormalizeQuery:       service.queryPolicy.NormalizeListQuery,
-		CanAccess:            service.queryPolicy.CanAccessRecord,
+		NormalizeQuery: func(object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, principal principalmodel.Principal) recordmodel.RecordListQuery {
+			return service.queryPolicy.NormalizeListQueryForAction(object, query, principal, "export")
+		},
 		ListRecords:          reader.ListRecords,
 		ListDirectoryUsers: func(ctx context.Context) ([]identitysdk.User, error) {
 			if service.IdentityDirectory() == nil {
@@ -350,5 +357,5 @@ func (s *RecordApplicationService) auditScopeDenial(ctx context.Context, object 
 	if s.audit == nil {
 		return
 	}
-	s.audit(ctx, "record_scope_access_denied", object.Key, recordID, principal, "Record scope access denied", nil, nil, map[string]any{"action": "read_detail", "decision": "denied"})
+	s.audit(ctx, "data_scope_access_denied", object.Key, recordID, principal, "Data scope access denied", nil, nil, map[string]any{"action": "read_detail", "decision": "denied"})
 }

@@ -36,7 +36,7 @@ type workflowRecordReaderEdgeStub struct {
 	errID   string
 }
 
-func (s workflowRecordReaderEdgeStub) GetWorkflowRecord(_ context.Context, _ string, _ definitionmodel.ObjectSchema, id string) (recordmodel.Record, bool, error) {
+func (s workflowRecordReaderEdgeStub) GetWorkflowRecord(_ context.Context, _ string, _ definitionmodel.ObjectSchema, id string, _ principalmodel.Principal) (recordmodel.Record, bool, error) {
 	if id == s.errID {
 		return recordmodel.Record{}, false, errors.New("read")
 	}
@@ -44,7 +44,7 @@ func (s workflowRecordReaderEdgeStub) GetWorkflowRecord(_ context.Context, _ str
 	return record, ok, nil
 }
 
-func (s workflowRecordReaderEdgeStub) ListWorkflowRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
+func (s workflowRecordReaderEdgeStub) ListWorkflowRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 	items := []recordmodel.Record{}
 	for _, raw := range query.Filters["id__in"].([]any) {
 		id := fmt.Sprint(raw)

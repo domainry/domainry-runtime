@@ -633,8 +633,8 @@ func TestAgentInteractiveAuthorizationDetectsMidRequestIdentityAndSchemaChanges(
 }
 
 func agentAuthorizationFixture() (*AgentAuthorizationApplicationService, principalmodel.Principal, *agentSchemaProviderStub, *agentPrincipalDirectoryStub) {
-	operatorRole := accessfixture.Bundle{Key: "operator", Permissions: []string{"customer.read", "customer.update"}, RecordScope: "own_records", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "own_records", Read: true, Write: true}}}
-	serviceRole := accessfixture.Bundle{Key: "agent_service", Permissions: []string{"customer.read"}, RecordScope: "own_records", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "own_records", Read: true}}}
+	operatorRole := accessfixture.Bundle{Key: "operator", Permissions: []string{"customer.read", "customer.update"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "owner", Read: true, Write: true}}}
+	serviceRole := accessfixture.Bundle{Key: "agent_service", Permissions: []string{"customer.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "owner", Read: true}}}
 	initiator := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace-1", AuthorizationRevision: "operator-rev-1"}, RequestID: "request-1"}, operatorRole)
 	initiator.AuthorizationRevision = "operator-rev-1"
 	fresh := initiator

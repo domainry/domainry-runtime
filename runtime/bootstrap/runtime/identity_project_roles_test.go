@@ -12,11 +12,10 @@ import (
 func TestRuntimeProjectRoleCatalogPreservesExternalAssignmentSafetyFacts(t *testing.T) {
 	roles := []manifestmodel.RoleSchema{
 		{
-			Key: "member_onboarding", Name: "Member onboarding", Permissions: []string{"course.read"}, RecordScope: "all_records", Audience: "any", AssignmentMode: "manual", RiskLevel: "normal",
-			DataPermissions:  []manifestmodel.RoleDataPermission{{ObjectKey: "course", Scope: "all_records", Read: true}},
+			Key: "member_onboarding", Name: "Member onboarding", Permissions: []manifestmodel.RolePermission{{PermissionKey: "course.read", DataScope: identitysdk.DataScopeAll}}, Audience: "any", AssignmentMode: "manual", RiskLevel: "normal",
 			FieldPermissions: []manifestmodel.RoleFieldPermission{{ObjectKey: "course", FieldKey: "name", Read: true}},
 		},
-		{Key: "operator", Name: "Operator", Permissions: []string{"runtime.appschema.validate_application_definition"}, Audience: "any", AssignmentMode: "manual", RiskLevel: "privileged"},
+		{Key: "operator", Name: "Operator", Permissions: []manifestmodel.RolePermission{{PermissionKey: "runtime.appschema.validate_application_definition", DataScope: identitysdk.DataScopeAll}}, Audience: "any", AssignmentMode: "manual", RiskLevel: "privileged"},
 		{Key: "member", Name: "Member", Audience: "business", RequiredBindingKey: "member", AssignmentMode: "system_managed", RiskLevel: "normal"},
 	}
 
@@ -33,15 +32,11 @@ func TestRuntimeProjectRoleCatalogPreservesExternalAssignmentSafetyFacts(t *test
 			t.Fatalf("role[%d] has no schema hash", index)
 		}
 	}
-	if catalog.Roles[1].Permissions[0] != "runtime.appschema.validate_application_definition" {
+	if catalog.Roles[1].Permissions[0].PermissionKey != "runtime.appschema.validate_application_definition" || catalog.Roles[1].Permissions[0].DataScope != identitysdk.DataScopeAll {
 		t.Fatalf("privileged permission was weakened: %#v", catalog.Roles[1])
 	}
 	if len(catalog.Roles[0].Permissions) != 1 || len(catalog.Roles[1].Permissions) != 1 {
 		t.Fatalf("role publication invented permissions: %#v", catalog.Roles)
-	}
-	var dataPermissions []manifestmodel.RoleDataPermission
-	if err := json.Unmarshal(catalog.Roles[0].DataPermissions, &dataPermissions); err != nil || len(dataPermissions) != 1 || dataPermissions[0].ObjectKey != "course" || !dataPermissions[0].Read {
-		t.Fatalf("data permissions were not preserved: %#v, err=%v", dataPermissions, err)
 	}
 	var fieldPermissions []manifestmodel.RoleFieldPermission
 	if err := json.Unmarshal(catalog.Roles[0].FieldPermissions, &fieldPermissions); err != nil || len(fieldPermissions) != 1 || fieldPermissions[0].FieldKey != "name" || !fieldPermissions[0].Read {
@@ -50,8 +45,8 @@ func TestRuntimeProjectRoleCatalogPreservesExternalAssignmentSafetyFacts(t *test
 }
 
 func TestRuntimeRolePermissionsKeepsOnlyExactDeclaredKeys(t *testing.T) {
-	permissions := runtimeRolePermissions([]string{" customer.read ", "customer.read", "runtime.appschema.validate_application_definition"})
-	if len(permissions) != 2 || permissions[0] != "customer.read" || permissions[1] != "runtime.appschema.validate_application_definition" {
+	permissions := runtimeRolePermissions([]manifestmodel.RolePermission{{PermissionKey: " customer.read ", DataScope: identitysdk.DataScopeOwner}, {PermissionKey: "customer.read", DataScope: identitysdk.DataScopeOrg}, {PermissionKey: "runtime.appschema.validate_application_definition", DataScope: identitysdk.DataScopeAll}})
+	if len(permissions) != 2 || permissions[0].PermissionKey != "customer.read" || permissions[0].DataScope != identitysdk.DataScopeOwner || permissions[1].PermissionKey != "runtime.appschema.validate_application_definition" {
 		t.Fatalf("permissions=%#v", permissions)
 	}
 }

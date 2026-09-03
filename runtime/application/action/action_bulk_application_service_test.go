@@ -136,7 +136,8 @@ func (p *bulkExecutionProbe) CommitExecution(ctx context.Context, _ []transactio
 }
 
 func TestActionBulkApplicationServiceFiltersAndSortsAvailableActions(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{"order.approve", "order.cancel"}})
+	permissions := []string{"order.approve", "order.cancel"}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)})
 	service := NewActionBulkApplicationService(ActionBulkDependencies{
 		Allowed: func(principal principalmodel.Principal, action definitionmodel.ActionSchema) bool {
 			for _, permission := range principal.PermissionKeys() {

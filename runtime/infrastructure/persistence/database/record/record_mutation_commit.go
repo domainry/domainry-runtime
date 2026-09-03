@@ -2,6 +2,7 @@ package record
 
 import (
 	"github.com/domainry/domainry-orm/query"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	"github.com/domainry/domainry-foundation/mutation"
@@ -17,6 +18,7 @@ import (
 	"strings"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	querypersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/query"
 
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
 )
@@ -63,6 +65,19 @@ func recordMutationTxOptions() *sql.TxOptions {
 func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionExecutor, workspaceID string, commit transactionmodel.RecordMutationCommit) error {
 	s := r.store
 	operation := strings.TrimSpace(commit.Operation)
+	if commit.AuthorizationScope != nil && (operation == "update" || operation == "restore" || operation == "delete") {
+		recordID := strings.TrimSpace(commit.RecordID)
+		if recordID == "" {
+			recordID = strings.TrimSpace(commit.Record.ID)
+		}
+		allowed, inspectErr := recordMutationScopeAllowedTx(ctx, tx, s, workspaceID, commit.Object, recordID, commit.AuthorizationScope)
+		if inspectErr != nil {
+			return inspectErr
+		}
+		if !allowed {
+			return mutation.PolicyConflict("backend.record.outside_scope", commit.Object.Key, recordID, "authorization_scope")
+		}
+	}
 	if operation == "create" || operation == "update" || operation == "restore" {
 		if err := r.validateRelatedAggregateInvariantsTx(ctx, tx, workspaceID, commit, operation); err != nil {
 			return err
@@ -109,6 +124,15 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			}
 		}
 		predicates := []query.Predicate{query.Equal("id", commit.Record.ID)}
+		if commit.AuthorizationScope != nil {
+			authorizationPredicate, err := querypersistence.BuildTenantPredicate(s, workspaceID, recordmodel.RecordListQuery{
+				AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: commit.Object.Key, ScopeExpression: commit.AuthorizationScope,
+			})
+			if err != nil {
+				return fmt.Errorf("compile record mutation authorization scope: %w", err)
+			}
+			predicates = append(predicates, authorizationPredicate)
+		}
 		conditionKeys := make([]string, 0, len(commit.Conditions))
 		for key := range commit.Conditions {
 			if strings.TrimSpace(key) != "" && key != "id" && key != "updated_at" {
@@ -167,11 +191,20 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		if id == "" {
 			id = commit.Record.ID
 		}
-		predicate := query.Predicate(query.Equal("id", id))
-		if expected := strings.TrimSpace(commit.OptimisticUpdatedAt()); expected != "" {
-			predicate = query.And(predicate, query.Equal("updated_at", expected))
+		predicates := []query.Predicate{query.Equal("id", id)}
+		if commit.AuthorizationScope != nil {
+			authorizationPredicate, err := querypersistence.BuildTenantPredicate(s, workspaceID, recordmodel.RecordListQuery{
+				AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: commit.Object.Key, ScopeExpression: commit.AuthorizationScope,
+			})
+			if err != nil {
+				return fmt.Errorf("compile record delete authorization scope: %w", err)
+			}
+			predicates = append(predicates, authorizationPredicate)
 		}
-		queryValue, args, buildErr := query.NewWorkspaceDeleteBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Where(predicate).Build()
+		if expected := strings.TrimSpace(commit.OptimisticUpdatedAt()); expected != "" {
+			predicates = append(predicates, query.Equal("updated_at", expected))
+		}
+		queryValue, args, buildErr := query.NewWorkspaceDeleteBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Where(query.And(predicates...)).Build()
 		if buildErr != nil {
 			return buildErr
 		}
@@ -231,4 +264,30 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		}
 	}
 	return nil
+}
+
+func recordMutationScopeAllowedTx(ctx context.Context, tx TransactionExecutor, store *database.RuntimeStore, workspaceID string, object definitionmodel.ObjectSchema, recordID string, scope *recordmodel.RecordScopeExpression) (bool, error) {
+	predicate, err := querypersistence.BuildTenantPredicate(store, workspaceID, recordmodel.RecordListQuery{
+		AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key, ScopeExpression: scope,
+	})
+	if err != nil {
+		return false, fmt.Errorf("compile record mutation scope inspection: %w", err)
+	}
+	statement, args, err := query.NewWorkspaceSelectBuilder(store.SQLRenderer, object.Key, workspaceID).
+		Columns("id").
+		Where(query.And(query.Equal("id", recordID), predicate)).
+		Limit(1).
+		Build()
+	if err != nil {
+		return false, err
+	}
+	var found string
+	err = tx.QueryRowContext(ctx, statement, args...).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("inspect record mutation authorization scope: %w", err)
+	}
+	return strings.TrimSpace(found) != "", nil
 }

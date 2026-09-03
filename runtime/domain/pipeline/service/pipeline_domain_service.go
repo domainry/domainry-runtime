@@ -239,7 +239,7 @@ func (s *PipelineDomainService) stages(ctx context.Context, workspaceID, pipelin
 	if !ok {
 		return nil, pipelineError(apperror.KindBadRequest, "backend.pipeline.stage_object_missing", nil)
 	}
-	page, err := s.dependencies.Repository.ListRecords(ctx, workspaceID, stageObject, recordmodel.RecordListQuery{Page: 1, PageSize: 500, Filters: map[string]any{"pipeline": pipelineID}})
+	page, err := s.dependencies.Repository.ListRecords(ctx, workspaceID, stageObject, recordmodel.RecordListQuery{Page: 1, PageSize: 500, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"pipeline": pipelineID}})
 	if err != nil {
 		return nil, pipelineError(apperror.KindInternal, "backend.internal", err, "operation", "list pipeline stages")
 	}

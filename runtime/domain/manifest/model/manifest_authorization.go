@@ -1,6 +1,9 @@
 package manifestmodel
 
-import localizationmodel "github.com/domainry/domainry-runtime/runtime/domain/localization/model"
+import (
+	identitysdk "github.com/domainry/domainry-identity-sdk"
+	localizationmodel "github.com/domainry/domainry-runtime/runtime/domain/localization/model"
+)
 
 // RoleSchema transports application-authored policy to Identity. Runtime does
 // not derive a human AccessBundle from it; the SDK bundle remains authoritative.
@@ -8,9 +11,7 @@ type RoleSchema struct {
 	Key                   string                             `json:"key"`
 	Name                  string                             `json:"name"`
 	I18n                  localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
-	Permissions           []string                           `json:"permissions"`
-	RecordScope           string                             `json:"record_scope"`
-	DataPermissions       []RoleDataPermission               `json:"data_permissions,omitempty"`
+	Permissions           []RolePermission                   `json:"permissions"`
 	FieldPermissions      []RoleFieldPermission              `json:"field_permissions,omitempty"`
 	ReferencePermissions  []RoleReferencePermission          `json:"reference_permissions,omitempty"`
 	ExportRules           []RoleExportRule                   `json:"export_rules,omitempty"`
@@ -48,28 +49,10 @@ type RoleFieldRestriction struct {
 	Reason    string   `json:"reason,omitempty"`
 }
 
-type RoleDataPermission struct {
-	ObjectKey   string                `json:"object_key"`
-	Scope       string                `json:"scope"`
-	Read        bool                  `json:"read"`
-	Write       bool                  `json:"write"`
-	Filter      string                `json:"filter,omitempty"`
-	AuditDenial bool                  `json:"audit_denial,omitempty"`
-	Predicate   *RolePolicyExpression `json:"predicate,omitempty"`
-}
-type RolePolicyExpression struct {
-	Operator    string                      `json:"operator"`
-	Path        []RolePolicyRelationSegment `json:"path,omitempty"`
-	FieldKey    string                      `json:"field_key,omitempty"`
-	ValueSource string                      `json:"value_source,omitempty"`
-	ClaimKey    string                      `json:"claim_key,omitempty"`
-	Values      []string                    `json:"values,omitempty"`
-	Children    []RolePolicyExpression      `json:"children,omitempty"`
-}
-type RolePolicyRelationSegment struct {
-	Direction        string `json:"direction"`
-	RelationFieldKey string `json:"relation_field_key"`
-	TargetObjectKey  string `json:"target_object_key"`
+type RolePermission struct {
+	PermissionKey string                `json:"permission_key"`
+	DataScope     identitysdk.DataScope `json:"data_scope"`
+	AuditDenial   bool                  `json:"audit_denial,omitempty"`
 }
 type RoleFieldPermission struct {
 	ObjectKey string `json:"object_key"`

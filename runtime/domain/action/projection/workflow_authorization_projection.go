@@ -28,7 +28,7 @@ func AuthorizationActionForWorkflow(workflow definitionmodel.WorkflowSchema, own
 		CapabilityKey: "workflow." + workflowKey, CapabilityLabel: label,
 		OperationKey: "run", OperationLabel: "Run", Label: "Run " + label,
 		Exposures:     []actioncontract.Exposure{actioncontract.ExposurePublic},
-		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationExactRolePermission},
+		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated},
 		NonHTTP: []actioncontract.NonHTTPBinding{{
 			Kind: workflowcontract.RunActionBindingKind, InvocationKey: workflowKey,
 		}},

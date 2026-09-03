@@ -54,7 +54,7 @@ func TestGymPRDSection2FiveRoleRBACMatrixUsesGenericRuntimePermissions(t *testin
 		for _, role := range roles {
 			grant := row.grants[role]
 			schema := roleSchemas[role]
-			dataPermission := accessfixture.DataPolicyFixture{ObjectKey: row.object, Scope: "all_records", Read: strings.Contains(grant, "r"), Write: strings.ContainsAny(grant, "cuda")}
+			dataPermission := accessfixture.DataPolicyFixture{ObjectKey: row.object, Scope: "all", Read: strings.Contains(grant, "r"), Write: strings.ContainsAny(grant, "cuda")}
 			if grant != "" {
 				schema.DataPolicies = append(schema.DataPolicies, dataPermission)
 			}

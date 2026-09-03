@@ -280,19 +280,9 @@ func metadataSDKAllowsObjectAction(principal principalmodel.Principal, objectKey
 		*principal.AccessBundle,
 		identitysdk.ResourceType(strings.TrimSpace(objectKey)),
 		identitysdk.Action(strings.TrimSpace(action)),
-		metadataDataAction(action),
 		time.Now().UTC(),
 	)
-	return err == nil && len(filter.Allow) > 0, true
-}
-
-func metadataDataAction(action string) identitysdk.DataAction {
-	switch strings.ToLower(strings.TrimSpace(action)) {
-	case "read", "view", "list", "search", "export":
-		return identitysdk.DataActionRead
-	default:
-		return identitysdk.DataActionWrite
-	}
+	return err == nil && (filter.Unrestricted || len(filter.Allow) > 0), true
 }
 
 func metadataSDKFieldAllowed(principal principalmodel.Principal, objectKey, fieldKey, action string) (allowed, handled bool) {

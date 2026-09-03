@@ -44,7 +44,7 @@ func TestRecordStoreWorkspaceIsolationContract(t *testing.T) {
 	}
 
 	for _, workspaceID := range []string{workspaceA, workspaceB} {
-		page, err := repository.ListRecords(t.Context(), workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
+		page, err := repository.ListRecords(t.Context(), workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted})
 		if err != nil || page.Total != 1 || len(page.Items) != 1 {
 			t.Fatalf("workspace %s list leaked or lost records: page=%+v err=%v", workspaceID, page, err)
 		}

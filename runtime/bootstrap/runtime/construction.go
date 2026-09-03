@@ -9,6 +9,7 @@ import (
 	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
@@ -39,6 +40,7 @@ type runtimeConstructionInput struct {
 	identityBinding      identitysdk.Binding
 	identityDirectory    identitysdk.Directory
 	identityPrincipals   identitysdk.PrincipalResolver
+	principalCache       identityprincipal.Cache
 	integrationMode      integrationsdk.DeploymentMode
 	integrationBinding   integrationsdk.Binding
 	integrationWorkers   integrationsdk.LocalWorkers
@@ -78,6 +80,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		identityBinding:      input.identityBinding,
 		identityDirectory:    input.identityDirectory,
 		identityPrincipals:   input.identityPrincipals,
+		principalCache:       input.principalCache,
 		integrationMode:      input.integrationMode,
 		integrationBinding:   input.integrationBinding,
 		integrationWorkers:   input.integrationWorkers,

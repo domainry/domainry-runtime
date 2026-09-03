@@ -33,7 +33,8 @@ func TestRelatedPolicyValidatorOrchestratesDomainPoliciesAndDeniedObserver(t *te
 		t.Fatalf("denied observer = (%v, %q), want (%v, threshold_permission)", deniedErr, deniedType, err)
 	}
 
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"invoice.approve_discount"}})
+	permissions := []string{"invoice.approve_discount"}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)})
 	deniedType = ""
 	err = validator.ValidateDomainPolicies(t.Context(), object, before, next, "invoice-1", "update", principal, func(_ error, policyType string) {
 		deniedType = policyType
@@ -51,7 +52,8 @@ func TestRelatedPolicyValidatorDomainPoliciesAcceptAuthorizedThreshold(t *testin
 	object := definitionmodel.ObjectSchema{Key: "invoice", Validations: []definitionmodel.ValidationSchema{{
 		Key: "large_discount", Type: "threshold_permission", FieldKey: "discount", Config: map[string]any{"threshold": 20, "permission": "invoice.approve_discount"},
 	}}}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"invoice.approve_discount"}})
+	permissions := []string{"invoice.approve_discount"}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)})
 	if err := validator.ValidateDomainPolicies(t.Context(), object, nil, map[string]any{"discount": 25}, "invoice-1", "update", principal, nil); err != nil {
 		t.Fatalf("authorized policies rejected: %v", err)
 	}

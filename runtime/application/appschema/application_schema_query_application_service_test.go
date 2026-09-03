@@ -26,7 +26,7 @@ func TestApplicationSchemaQueryApplicationServiceOwnsFeaturePermissionProjection
 	application := NewApplicationSchemaQueryApplicationService(metadataSchemaApplicationProviderStub{snapshot: appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}}}}, nil)
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "admin"}}, accessfixture.Bundle{
 		Permissions:  []string{"customer.read"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true}},
 	})
 	permissions, err := application.FeaturePermissions(t.Context(), admin)
 	if err != nil || len(permissions.Objects) != 1 || !permissions.Objects[0].Actions[0].Allowed {

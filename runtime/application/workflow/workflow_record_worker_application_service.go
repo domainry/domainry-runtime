@@ -215,7 +215,7 @@ func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Co
 			processed = append(processed, claimed)
 			continue
 		}
-		payload := s.workflowRetryPayload(ctx, principal.WorkspaceID, previous)
+		payload := s.workflowRetryPayload(ctx, principal.WorkspaceID, previous, principal)
 		workCtx, stopHeartbeat := s.workflowExecutionHeartbeat(ctx, claimed)
 		execution, err := s.executeWorkflowAttempt(workCtx, workflow, payload, principal, "worker:"+previous.ID, nextAttempt, true)
 		if heartbeatErr := stopHeartbeat(); err == nil && heartbeatErr != nil {

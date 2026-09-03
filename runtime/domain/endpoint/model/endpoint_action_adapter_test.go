@@ -24,7 +24,7 @@ func TestAuthorizationActionDefinitionProjectsStaticEndpointAsSameKeyPermission(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if definition.Key != contract.ActionKey || definition.OperationLabel != contract.ApplicationUseCase || definition.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission || definition.Permission == nil || definition.Permission.Key != definition.Key {
+	if definition.Key != contract.ActionKey || definition.OperationLabel != contract.ApplicationUseCase || definition.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || definition.Permission == nil || definition.Permission.Key != definition.Key {
 		t.Fatalf("definition=%#v", definition)
 	}
 	if definition.HTTP == nil || definition.HTTP.RouteTemplate != "/tenant-admin/workspaces/provision" || definition.ApprovalPolicies[0] != actioncontract.ApprovalConfirmation {
@@ -68,7 +68,7 @@ func TestAuthorizationActionDefinitionPreservesDispatcherAndAnonymousPolicies(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if definition.Authorization.Strategy != actioncontract.AuthorizationAuthenticatedPrincipal || definition.Permission != nil {
+	if definition.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || definition.Permission != nil {
 		t.Fatalf("dispatcher definition=%#v", definition)
 	}
 	if definition.HTTP.DisplayRouteTemplate != "" {
@@ -83,7 +83,7 @@ func TestAuthorizationActionDefinitionPreservesDispatcherAndAnonymousPolicies(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if definition.Authorization.Strategy != actioncontract.AuthorizationAnonymousProtocol || definition.Authorization.PolicyKey == "" || definition.HTTP.DisplayRouteTemplate != "/" {
+	if definition.Authorization.Strategy != actioncontract.AuthorizationAnonymous || definition.Authorization.PolicyKey != "" || definition.HTTP.DisplayRouteTemplate != "/" {
 		t.Fatalf("anonymous definition=%#v", definition)
 	}
 }
@@ -103,7 +103,7 @@ func TestAuthorizationActionDefinitionPreservesServiceAudienceAndOwnerPolicy(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if definition.Authorization.Strategy != actioncontract.AuthorizationServiceIdentity || definition.Authorization.PolicyKey != contract.PermissionPolicyRef || len(definition.Authorization.Audiences) != 1 || definition.Authorization.Audiences[0] != "scheduler_service_service" {
+	if definition.Authorization.Strategy != actioncontract.AuthorizationSigned || definition.Authorization.PolicyKey != contract.PermissionPolicyRef || len(definition.Authorization.Audiences) != 1 || definition.Authorization.Audiences[0] != "scheduler_service_service" {
 		t.Fatalf("service definition=%#v", definition)
 	}
 }

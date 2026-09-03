@@ -83,7 +83,7 @@ func TestRecordOrderedClaimCoversGenericContractAndRepositoryEdges(t *testing.T)
 	if err != nil || !claimed || success.attempts != 2 || claimedRecord.Data["status"] != "processing" || claimedRecord.Data["owner"] != "user" || claimedRecord.Data[""] != nil {
 		t.Fatalf("record=%#v claimed=%v attempts=%d err=%v", claimedRecord, claimed, success.attempts, err)
 	}
-	if success.query.Page != 1 || success.query.PageSize != 1 || success.query.Scope != "all_records" || len(success.query.Sort) != 4 {
+	if success.query.Page != 1 || success.query.PageSize != 1 || success.query.AuthorizationMode != recordmodel.RecordQueryAuthorizationUnrestricted || len(success.query.Sort) != 4 {
 		t.Fatalf("query=%#v", success.query)
 	}
 

@@ -36,17 +36,31 @@ func recordImportPreviewOpenAPISchema() map[string]any {
 	})
 }
 
+func recordExportDispatchOpenAPIResponses(operation map[string]any) map[string]any {
+	deliveryHeader := map[string]any{"description": "UI delivery signal; background means show a preparation notice and wait for Notification Inbox SSE", "schema": map[string]any{"type": "string", "enum": []string{"direct", "background"}}}
+	directResponse := openAPIResponseValue("Direct CSV export", "text/csv", map[string]any{"type": "string", "format": "binary"})
+	directResponse["headers"] = map[string]any{"X-Export-Delivery": deliveryHeader}
+	backgroundResponse := openAPIResponseValue("Background export accepted", "application/json", recordBatchJobOpenAPISchema())
+	backgroundResponse["headers"] = map[string]any{"X-Export-Delivery": deliveryHeader, "Location": map[string]any{"description": "Opaque job status location for UI infrastructure", "schema": map[string]any{"type": "string"}}}
+	operation["responses"] = map[string]any{
+		"200":     directResponse,
+		"202":     backgroundResponse,
+		"default": openAPIJSONResponse("Error", openAPIRef("Error")).Value,
+	}
+	return operation
+}
+
 func addRecordBatchOpenAPIPaths(paths map[string]any) {
 	idempotencyKey := openAPIParameter{Value: openAPIHeaderParameter("Idempotency-Key", "Stable caller key; replay returns the existing result and a different fingerprint conflicts", true)}
 	objectKey := openAPIPathParameter("objectKey", "Object key")
-	paths["/objects/{objectKey}/records/export"] = map[string]any{"get": openAPIRuntimeClient(openAPIOperation(
-		"exportObjectRecords", "Objects", "Export object records as an authorized bounded CSV", openAPIAdminSecurity(), objectKey,
-		openAPIResponse("CSV export", "text/csv", map[string]any{"type": "string", "format": "binary"}),
-	), "exportRecords")}
-	paths["/objects/{objectKey}/records/export/jobs"] = map[string]any{"post": openAPIRuntimeClient(openAPIOperation(
-		"enqueueObjectRecordExport", "Objects", "Submit a durable bounded asynchronous CSV export to Data Exchange", openAPIAdminSecurity(), objectKey, idempotencyKey,
-		openAPIJSONResponse("Queued Data Exchange job", recordBatchJobOpenAPISchema()),
-	), "enqueueRecordExport")}
+	exportDispatch := recordExportDispatchOpenAPIResponses(openAPIRuntimeClient(openAPIOperation(
+		"dispatchObjectRecordExport", "Objects", "Export records; Runtime automatically returns a direct file or creates a background download", openAPIAdminSecurity(), objectKey, idempotencyKey,
+	), "exportRecords"))
+	paths["/objects/{objectKey}/records/export"] = map[string]any{"post": exportDispatch}
+	paths["/record-exports/{jobID}/download"] = map[string]any{"get": openAPIRuntimeClient(openAPIOperation(
+		"downloadObjectRecordExport", "Objects", "Download a completed record export owned by the current user", openAPIAdminSecurity(), openAPIPathParameter("jobID", "Export job ID"),
+		openAPIResponse("Export artifact", "text/csv", map[string]any{"type": "string", "format": "binary"}),
+	), "downloadRecordExport")}
 	paths["/objects/{objectKey}/records/import/preview"] = map[string]any{"post": openAPIRuntimeClient(openAPIOperation(
 		"previewObjectRecordImport", "Objects", "Preview and validate object record CSV without mutation", openAPIAdminSecurity(), objectKey, recordCSVRequestBody(),
 		openAPIJSONResponse("Import preview", recordImportPreviewOpenAPISchema()),

@@ -357,9 +357,9 @@ func routeModuleHTTPContractVersion(surface modulehttp.Surface) string {
 
 func moduleHTTPRouteSecurity(route modulehttp.Route) openAPISecurity {
 	switch route.Action.Authorization.Strategy {
-	case actioncontract.AuthorizationAnonymousProtocol, actioncontract.AuthorizationDelegatedCredential:
+	case actioncontract.AuthorizationAnonymous:
 		return openAPIPublicSecurity()
-	case actioncontract.AuthorizationServiceIdentity:
+	case actioncontract.AuthorizationSigned:
 		return openAPIServiceCredentialSecurity()
 	default:
 		return openAPIAdminSecurity()

@@ -20,7 +20,7 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
-func AutomationFindBeforeCreateReplay(ctx context.Context, rules []automationmodel.AutomationRuleSchema, repository automationcontract.AutomationRecordReader, object definitionmodel.ObjectSchema, input map[string]any, principal principalmodel.Principal, canAccess func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool) (recordmodel.Record, bool, error) {
+func AutomationFindBeforeCreateReplay(ctx context.Context, rules []automationmodel.AutomationRuleSchema, repository automationcontract.AutomationRecordReader, object definitionmodel.ObjectSchema, input map[string]any, principal principalmodel.Principal, resolveScope func(principalmodel.Principal, definitionmodel.ObjectSchema, string) (*recordmodel.RecordScopeExpression, error), canAccess func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool) (recordmodel.Record, bool, error) {
 	for _, rule := range automationdomain.MatchingRules(rules, object.Key, "before", "create", nil, input) {
 		if len(rule.Execution.IdempotencyKeys) == 0 {
 			continue
@@ -38,7 +38,20 @@ func AutomationFindBeforeCreateReplay(ctx context.Context, rules []automationmod
 		if !complete {
 			continue
 		}
-		page, err := repository.ListRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 2, Filters: filters})
+		if resolveScope == nil {
+			return recordmodel.Record{}, false, automationError(apperror.KindInternal, "backend.automation.record_scope_unavailable", nil)
+		}
+		scope, err := resolveScope(principal, object, "create")
+		if err != nil {
+			return recordmodel.Record{}, false, err
+		}
+		query := recordmodel.RecordListQuery{Page: 1, PageSize: 2, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: filters}
+		if scope != nil {
+			query.AuthorizationMode = recordmodel.RecordQueryAuthorizationPredicate
+			query.RootObjectKey = object.Key
+			query.ScopeExpression = scope
+		}
+		page, err := repository.ListRecords(ctx, principal.WorkspaceID, object, query)
 		if err != nil {
 			return recordmodel.Record{}, false, automationError(apperror.KindInternal, "backend.internal", err, "operation", "find automation create replay")
 		}

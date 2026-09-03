@@ -9,6 +9,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/idempotency"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
@@ -18,11 +19,11 @@ type scheduledKeysetReader struct {
 	queries []recordmodel.RecordListQuery
 }
 
-func (r *scheduledKeysetReader) GetWorkflowRecord(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error) {
+func (r *scheduledKeysetReader) GetWorkflowRecord(context.Context, string, definitionmodel.ObjectSchema, string, principalmodel.Principal) (recordmodel.Record, bool, error) {
 	return recordmodel.Record{}, false, nil
 }
 
-func (r *scheduledKeysetReader) ListWorkflowRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
+func (r *scheduledKeysetReader) ListWorkflowRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 	r.queries = append(r.queries, query)
 	start := 0
 	if query.AfterID != "" {

@@ -163,6 +163,7 @@ func mutationCloneCommit(commit RecordMutationCommit) RecordMutationCommit {
 	for index := range result.Predicates {
 		result.Predicates[index].Value = mutationCloneValue(commit.Predicates[index].Value)
 	}
+	result.AuthorizationScope = mutationCloneAuthorizationScope(commit.AuthorizationScope)
 	if commit.Audit != nil {
 		audit := *commit.Audit
 		audit.Before = mutationCloneMap(commit.Audit.Before)
@@ -188,6 +189,21 @@ func mutationCloneCommit(commit RecordMutationCommit) RecordMutationCommit {
 	}
 	result.LocalizedValues = append([]recordmodel.RecordLocalizedValueMutation(nil), commit.LocalizedValues...)
 	return result
+}
+
+func mutationCloneAuthorizationScope(scope *recordmodel.RecordScopeExpression) *recordmodel.RecordScopeExpression {
+	if scope == nil {
+		return nil
+	}
+	result := *scope
+	result.Values = slices.Clone(scope.Values)
+	result.Path = slices.Clone(scope.Path)
+	result.Children = make([]recordmodel.RecordScopeExpression, len(scope.Children))
+	for index := range scope.Children {
+		child := mutationCloneAuthorizationScope(&scope.Children[index])
+		result.Children[index] = *child
+	}
+	return &result
 }
 
 func mutationCloneObjectSchema(object definitionmodel.ObjectSchema) definitionmodel.ObjectSchema {

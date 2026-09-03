@@ -77,7 +77,7 @@ func (s *PipelineTransitionApplicationService) Plan(ctx context.Context, objectK
 	}
 	object, err := s.dependencies.ObjectForAction(principal, objectKey, actionpolicy.ActionName(action))
 	if err != nil {
-		s.audit(ctx, "action_denied", objectKey, recordID, principal, "Action data permission denied: "+action.Key, nil, map[string]any{"action_key": action.Key, "decision": "denied", "reason": "data_permission"})
+		s.audit(ctx, "action_denied", objectKey, recordID, principal, "Action data scope denied: "+action.Key, nil, map[string]any{"action_key": action.Key, "decision": "denied", "reason": "data_scope"})
 		return actionmodel.ActionResult{}, nil, err
 	}
 	record, ok, err := s.dependencies.GetRecord(ctx, principal.WorkspaceID, object, recordID)
@@ -88,7 +88,7 @@ func (s *PipelineTransitionApplicationService) Plan(ctx context.Context, objectK
 		return actionmodel.ActionResult{}, nil, pipelineTransitionError(apperror.KindNotFound, "backend.record.not_found", nil)
 	}
 	if s.dependencies.CanAccess != nil && !s.dependencies.CanAccess(principal, object, record) {
-		s.audit(ctx, "action_denied", objectKey, recordID, principal, "Action record scope denied: "+action.Key, record.Data, map[string]any{"action_key": action.Key, "decision": "denied", "reason": "record_scope"})
+		s.audit(ctx, "action_denied", objectKey, recordID, principal, "Action data scope denied: "+action.Key, record.Data, map[string]any{"action_key": action.Key, "decision": "denied", "reason": "data_scope"})
 		return actionmodel.ActionResult{}, nil, pipelineTransitionError(apperror.KindForbidden, "backend.record.outside_scope", nil)
 	}
 	if s.dependencies.CheckPrecondition != nil {

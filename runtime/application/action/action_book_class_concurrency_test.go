@@ -194,7 +194,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 					return recordmodel.Record{}, fmt.Errorf("unexpected class lock %s/%s", objectKey, recordID)
 				}
 				page, err := records.ListRecords(ctx, principal.WorkspaceID, groupClass, recordmodel.RecordListQuery{
-					Page: 1, PageSize: 1, Filters: map[string]any{"id__in": []any{recordID}},
+					Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"id__in": []any{recordID}},
 					LockIntent: recordmodel.RecordQueryLockForUpdate,
 				})
 				if err != nil {
@@ -337,7 +337,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 		storedClass.Data["remaining_waitlist_capacity"] != int64(0) {
 		t.Fatalf("stored class=%#v found=%v err=%v", storedClass, found, err)
 	}
-	page, err := records.ListRecords(t.Context(), "workspace-a", classBooking, recordmodel.RecordListQuery{Page: 1, PageSize: 100})
+	page, err := records.ListRecords(t.Context(), "workspace-a", classBooking, recordmodel.RecordListQuery{Page: 1, PageSize: 100, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted})
 	if err != nil || page.Total != 30 || len(page.Items) != 30 {
 		t.Fatalf("bookings total=%d items=%d err=%v", page.Total, len(page.Items), err)
 	}

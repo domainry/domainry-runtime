@@ -93,7 +93,7 @@ func TestRecordPolicyWiringDelegatesEveryPort(t *testing.T) {
 	queryPolicy := recordQueryPolicyAdapter{service: runtime.RecordQueryPolicyDomainService}
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
 		Permissions:  []string{"customer.read", "customer.update"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}},
 	})
 	if got := queryPolicy.normalizeListQuery(object, recordmodel.RecordListQuery{Page: 1}, admin); got.Page != 1 {
 		t.Fatalf("query adapter result=%#v", got)
@@ -136,9 +136,10 @@ func TestWorkflowDependencyWiringCoversCancellationLookupAndMissingOwner(t *test
 		Actions: []definitionmodel.ActionSchema{{Key: "customer.activate", ObjectKey: "customer", Kind: "record"}},
 	}})
 	dependencies := workflowDependencies(runtime)
+	permissions := []string{"customer.read", "customer.activate"}
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
-		Permissions:  []string{"customer.read", "customer.activate"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},
+		Permissions:  permissions,
+		DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll),
 	})
 	if objects := dependencies.ObjectMap(t.Context()); objects["customer"].Key != "customer" {
 		t.Fatalf("workflow object map=%#v", objects)
@@ -206,7 +207,7 @@ func TestRuntimeConstructionRejectsNilContext(t *testing.T) {
 }
 
 func TestRecordApplicationDependencyClosuresUseCanonicalOwners(t *testing.T) {
-	dynamicPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "persisted-user", AuthorizationRevision: "identity-revision-7"}}, accessfixture.Bundle{Key: "persisted-role", RecordScope: "all_records"})
+	dynamicPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "persisted-user", AuthorizationRevision: "identity-revision-7"}}, accessfixture.Bundle{Key: "persisted-role"})
 	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Manifest: manifestmodel.ManifestSchema{
 		Objects:                   []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}},
 		IdentityProfileExtensions: []profilebindingmodel.Binding{{ObjectKey: "customer", IdentityRelationField: "owner"}},
@@ -246,7 +247,7 @@ func TestRecordDomainWiringInvokesSchemaWorkflowAndPipelinePorts(t *testing.T) {
 	}})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
 		Permissions:  []string{"activity.read"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "activity", Scope: "all_records", Read: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "activity", Scope: "all", Read: true}},
 	})
 
 	repository := &pipelineFailureRepository{records: map[string]map[string]recordmodel.Record{
@@ -284,7 +285,7 @@ func TestWorkflowSchemaWiringHandlesOptionalIdentityDirectory(t *testing.T) {
 	}
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
 		Permissions:  []string{"customer.read", "customer.activate"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true}},
 	})
 	if snapshot := provider.WorkflowSchemaSnapshot(t.Context(), admin); len(snapshot.Actions) != 1 {
 		t.Fatalf("workflow snapshot=%#v", snapshot)

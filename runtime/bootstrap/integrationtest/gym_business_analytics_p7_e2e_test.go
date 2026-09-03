@@ -124,13 +124,13 @@ func gymAnalyticsP7Object() definitionmodel.ObjectSchema {
 }
 
 func gymAnalyticsP7Roles() []accessfixture.Bundle {
-	permission := accessfixture.DataPolicyFixture{ObjectKey: "gym_metric_fact", Scope: "all_records", Read: true, Write: true}
+	permission := accessfixture.DataPolicyFixture{ObjectKey: "gym_metric_fact", Scope: "all", Read: true, Write: true}
 	owned := permission
-	owned.Scope = "owned_records"
+	owned.Scope = "owner"
 	return []accessfixture.Bundle{
-		{Key: "manager", Permissions: []string{"runtime.appschema.validate_application_definition", "gym_metric_fact.read"}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{permission}},
-		{Key: "coach", Permissions: []string{"gym_metric_fact.read"}, RecordScope: "owned_records", DataPolicies: []accessfixture.DataPolicyFixture{owned}},
-		{Key: "advisor", Permissions: []string{"gym_metric_fact.read"}, RecordScope: "owned_records", DataPolicies: []accessfixture.DataPolicyFixture{owned}},
+		{Key: "manager", Permissions: []string{"runtime.appschema.validate_application_definition", "gym_metric_fact.read"}, DataPolicies: []accessfixture.DataPolicyFixture{permission}},
+		{Key: "coach", Permissions: []string{"gym_metric_fact.read"}, DataPolicies: []accessfixture.DataPolicyFixture{owned}},
+		{Key: "advisor", Permissions: []string{"gym_metric_fact.read"}, DataPolicies: []accessfixture.DataPolicyFixture{owned}},
 	}
 }
 

@@ -240,7 +240,7 @@ func TestRecordInitializationAuditProjectorCoversPresentationAndFailures(t *test
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "auditor", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
 		Permissions:  []string{"audit.business.read", "customer.audit"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true}},
 	})
 	events, err := runtime.auditApplicationService.Events(t.Context(), auditmodel.AuditEventQuery{}, principal)
 	if err != nil || len(events) != 6 {
@@ -310,7 +310,7 @@ func TestCompositionActionWithoutRegisteredHandlerFailsClosed(t *testing.T) {
 	})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
 		Permissions:  []string{"customer.call"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}},
 	})
 	if _, err := runtime.actionService.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: "customer.call", ObjectKey: "customer", IdempotencyKey: "customer-call-owner-check", Principal: admin}); apperror.CodeOf(err) != "backend.action.owner_unresolved" {
 		t.Fatalf("unregistered source-owned handler error=%v code=%q", err, apperror.CodeOf(err))
@@ -554,7 +554,7 @@ func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *test
 	}
 	role := accessfixture.Bundle{
 		Key: "operator", Permissions: []string{actionKey},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "notification_job", Scope: "all_records", Read: true, Write: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "notification_job", Scope: "all", Read: true, Write: true}},
 	}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a"}}, role)
 	newService := func(t *testing.T, repository appschemarepository.ApplicationSchemaRepository, withIntent bool) *runtimeAssembly {
@@ -665,7 +665,7 @@ func TestRecordQueryPolicyCompositionCandidateEvaluatorAvailability(t *testing.T
 		Principal:      identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"},
 		BusinessClaims: map[string]profilebindingmodel.ClaimValue{"warehouse_ids": {Type: "relation_list", Value: []string{"warehouse-north"}}},
 	}, accessfixture.Bundle{Permissions: []string{"reservation.update"}, DataPolicies: []accessfixture.DataPolicyFixture{{
-		ObjectKey: "reservation", Scope: "custom", Read: true, Write: true, Predicate: predicate,
+		ObjectKey: "reservation", Read: true, Write: true, Predicate: predicate,
 	}}},
 	)
 	candidate := recordmodel.Record{ID: "reservation-new", Data: map[string]any{"order_id": "order-north"}}

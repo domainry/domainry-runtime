@@ -901,7 +901,9 @@
         }
       },
       "kind": "record_operation",
-      "preconditions": [],
+      "preconditions": [
+
+      ],
       "audit_event": "leave_request_submitted",
       "ui_placement": "record_header",
       "idempotency_keys": [
@@ -975,7 +977,9 @@
         }
       },
       "kind": "record_operation",
-      "preconditions": [],
+      "preconditions": [
+
+      ],
       "audit_event": "leave_request_approved",
       "ui_placement": "workflow_only"
     },
@@ -992,7 +996,9 @@
         }
       },
       "kind": "record_operation",
-      "preconditions": [],
+      "preconditions": [
+
+      ],
       "audit_event": "leave_request_rejected",
       "ui_placement": "workflow_only"
     },
@@ -1581,51 +1587,33 @@
         }
       },
       "permissions": [
-        "business.access",
-        "employee_profile.create",
-        "employee_profile.read",
-        "employee_profile.update",
-        "hr_position.read",
-        "qualification_profile.read",
-        "runtime.appschema.validate_application_definition"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "leave_request",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "leave_balance",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "employee_profile.create",
+          "data_scope": "all"
         },
         {
-          "object_key": "leave_balance_ledger",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "employee_profile.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "hr_position",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "employee_profile.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "employee_profile",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "hr_position.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "qualification_profile",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "qualification_profile.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.appschema.validate_application_definition",
+          "data_scope": "all"
         }
       ]
     },
@@ -1641,52 +1629,61 @@
         }
       },
       "permissions": [
-        "business.access",
-        "employee_profile.read",
-        "employee_profile.update",
-        "hr_position.read",
-        "identity.users.read",
-        "leave_balance.read",
-        "leave_balance_ledger.read",
-        "leave_request.create",
-        "leave_request.read",
-        "leave_request.update",
-        "runtime.workflows.get_ops_workflow_process",
-        "runtime.workflows.list_ops_workflow_executions",
-        "runtime.workflows.list_ops_workflow_processes",
-        "workflow.leave_request_approval.run"
-      ],
-      "record_scope": "owned_records",
-      "data_permissions": [
         {
-          "object_key": "leave_request",
-          "scope": "owned_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "leave_balance",
-          "scope": "owned_records",
-          "read": true,
-          "write": false
+          "permission_key": "employee_profile.read",
+          "data_scope": "owner"
         },
         {
-          "object_key": "leave_balance_ledger",
-          "scope": "owned_records",
-          "read": true,
-          "write": false
+          "permission_key": "employee_profile.update",
+          "data_scope": "owner"
         },
         {
-          "object_key": "hr_position",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "hr_position.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "employee_profile",
-          "scope": "owned_records",
-          "read": true,
-          "write": true
+          "permission_key": "identity.users.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "leave_balance.read",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "leave_balance_ledger.read",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "leave_request.create",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "leave_request.read",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "leave_request.update",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "runtime.workflows.get_ops_workflow_process",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_executions",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_processes",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "workflow.leave_request_approval.run",
+          "data_scope": "all"
         }
       ],
       "field_permissions": [
@@ -1719,54 +1716,69 @@
         }
       },
       "permissions": [
-        "business.access",
-        "employee_profile.read",
-        "hr_position.read",
-        "identity.organization_units.read",
-        "identity.users.read",
-        "leave_balance.read",
-        "leave_balance_ledger.read",
-        "leave_request.read",
-        "leave_request.update",
-        "runtime.workflows.approve_business_workflow_task",
-        "runtime.workflows.get_ops_workflow_process",
-        "runtime.workflows.list_ops_workflow_executions",
-        "runtime.workflows.list_ops_workflow_processes",
-        "runtime.workflows.reject_business_workflow_task",
-        "runtime.workflows.return_business_workflow_task",
-        "workflow.leave_request_approval.run"
-      ],
-      "record_scope": "organization_and_children",
-      "data_permissions": [
         {
-          "object_key": "leave_request",
-          "scope": "organization_and_children",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "leave_balance",
-          "scope": "organization_and_children",
-          "read": true,
-          "write": false
+          "permission_key": "employee_profile.read",
+          "data_scope": "org_child"
         },
         {
-          "object_key": "leave_balance_ledger",
-          "scope": "organization_and_children",
-          "read": true,
-          "write": false
+          "permission_key": "hr_position.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "hr_position",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "identity.organization_units.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "employee_profile",
-          "scope": "organization_and_children",
-          "read": true,
-          "write": false
+          "permission_key": "identity.users.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "leave_balance.read",
+          "data_scope": "org_child"
+        },
+        {
+          "permission_key": "leave_balance_ledger.read",
+          "data_scope": "org_child"
+        },
+        {
+          "permission_key": "leave_request.read",
+          "data_scope": "org_child"
+        },
+        {
+          "permission_key": "leave_request.update",
+          "data_scope": "org_child"
+        },
+        {
+          "permission_key": "runtime.workflows.approve_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.get_ops_workflow_process",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_executions",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_processes",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.reject_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.return_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "workflow.leave_request_approval.run",
+          "data_scope": "all"
         }
       ],
       "field_permissions": [
@@ -1791,60 +1803,93 @@
         }
       },
       "permissions": [
-        "business.access",
-        "employee_profile.create",
-        "employee_profile.read",
-        "employee_profile.update",
-        "hr_position.read",
-        "identity.organization_units.read",
-        "identity.roles.read",
-        "identity.users.read",
-        "leave_balance.read",
-        "leave_balance.update",
-        "leave_balance_ledger.create",
-        "leave_balance_ledger.read",
-        "leave_request.create",
-        "leave_request.read",
-        "leave_request.update",
-        "runtime.workflows.approve_business_workflow_task",
-        "runtime.workflows.get_ops_workflow_process",
-        "runtime.workflows.list_ops_workflow_executions",
-        "runtime.workflows.list_ops_workflow_processes",
-        "runtime.workflows.reject_business_workflow_task",
-        "runtime.workflows.return_business_workflow_task",
-        "runtime.workflows.validate_workflow_definition"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "leave_request",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "leave_balance",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "employee_profile.create",
+          "data_scope": "all"
         },
         {
-          "object_key": "leave_balance_ledger",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "employee_profile.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "hr_position",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "employee_profile.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "employee_profile",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "hr_position.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "identity.organization_units.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "identity.roles.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "identity.users.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "leave_balance.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "leave_balance.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "leave_balance_ledger.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "leave_balance_ledger.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "leave_request.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "leave_request.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "leave_request.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.approve_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.get_ops_workflow_process",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_executions",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_processes",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.reject_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.return_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.validate_workflow_definition",
+          "data_scope": "all"
         }
       ]
     },
@@ -1860,17 +1905,17 @@
         }
       },
       "permissions": [
-        "business.access",
-        "identity.users.read",
-        "leave_request.read"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "leave_request",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "business.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "identity.users.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "leave_request.read",
+          "data_scope": "all"
         }
       ]
     }

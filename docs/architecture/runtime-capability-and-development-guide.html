@@ -524,7 +524,7 @@ LIMIT 100
 </tr>
 <tr>
 <td>报表会不会绕过当前用户的数据权限</td>
-<td>Runtime 为每个数据源生成授权后的 Record scope，并在 join、filter、group 和 aggregate 之前注入数据范围</td>
+<td>Runtime 为每个数据源编译当前 Permission 的 data scope；all 不追加范围条件，其余 scope 在 join、filter、group 和 aggregate 之前下推</td>
 </tr>
 <tr>
 <td>多租户数据会不会在 JOIN 中串库</td>

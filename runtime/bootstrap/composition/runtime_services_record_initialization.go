@@ -31,6 +31,9 @@ func (s *runtimeAssembly) reportRecordSchemaMap() map[string]definitionmodel.Obj
 
 func initializeRecordApplications(s *runtimeAssembly) {
 	dependencies := buildRecordApplicationDependencies(s)
+	if s.dataExchangeProviders != nil {
+		s.dataExchangeProviders.ConfigureExportNotifications(s.notificationIntentPublisher, s.workerDependencies.Clock.Now)
+	}
 	s.mutationKernel = dependencies.MutationKernel
 	s.recordApplicationService = recordapplication.NewRecordApplicationService(dependencies)
 	s.RecordDomainService = s.recordApplicationService.RecordDomainService

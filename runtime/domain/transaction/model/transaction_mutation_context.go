@@ -24,7 +24,6 @@ type MutationContextInput struct {
 	ActorID                   string
 	RoleKey                   string
 	Permissions               []string
-	DataScope                 string
 	IdentityVersion           string
 	Source                    MutationSource
 	ActionKey                 string
@@ -44,7 +43,6 @@ type MutationContext struct {
 	actorID           string
 	roleKey           string
 	permissions       []string
-	dataScope         string
 	identityVersion   string
 	source            MutationSource
 	actionKey         string
@@ -72,7 +70,6 @@ func NewMutationContext(input MutationContextInput) (MutationContext, error) {
 	input.WorkspaceID = strings.TrimSpace(input.WorkspaceID)
 	input.ActorID = strings.TrimSpace(input.ActorID)
 	input.RoleKey = strings.TrimSpace(input.RoleKey)
-	input.DataScope = strings.TrimSpace(input.DataScope)
 	input.IdentityVersion = strings.TrimSpace(input.IdentityVersion)
 	input.ActionKey = strings.TrimSpace(input.ActionKey)
 	input.WorkflowKey = strings.TrimSpace(input.WorkflowKey)
@@ -103,7 +100,7 @@ func NewMutationContext(input MutationContextInput) (MutationContext, error) {
 	}
 	return MutationContext{
 		workspaceID: input.WorkspaceID, actorID: input.ActorID, roleKey: input.RoleKey,
-		permissions: mutationNormalizedStrings(input.Permissions), dataScope: input.DataScope, identityVersion: input.IdentityVersion,
+		permissions: mutationNormalizedStrings(input.Permissions), identityVersion: input.IdentityVersion,
 		source: input.Source, actionKey: input.ActionKey, workflowKey: input.WorkflowKey, automationKey: input.AutomationKey,
 		requestID: input.RequestID, idempotencyKey: input.IdempotencyKey, correlationID: input.CorrelationID,
 		causationID: input.CausationID, metadataRevision: input.ApplicationSchemaRevision,
@@ -115,7 +112,6 @@ func (c MutationContext) WorkspaceID() string               { return c.workspace
 func (c MutationContext) ActorID() string                   { return c.actorID }
 func (c MutationContext) RoleKey() string                   { return c.roleKey }
 func (c MutationContext) Permissions() []string             { return slices.Clone(c.permissions) }
-func (c MutationContext) DataScope() string                 { return c.dataScope }
 func (c MutationContext) IdentityVersion() string           { return c.identityVersion }
 func (c MutationContext) Source() MutationSource            { return c.source }
 func (c MutationContext) ActionKey() string                 { return c.actionKey }

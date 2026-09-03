@@ -214,18 +214,18 @@ func TestListRecordsRejectsInvalidContractsAndPropagatesRelationSnapshotFailures
 	object := definitionmodel.ObjectSchema{Key: "records", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
 	store := scriptedRecordStore(t, &recordSQLState{})
 	invalidFilter := recordmodel.RecordFilterExpression{Operator: "eq", Field: "missing", Value: "x"}
-	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{FilterExpression: &invalidFilter}); err == nil || !strings.Contains(err.Error(), "normalize record filter") {
+	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, FilterExpression: &invalidFilter}); err == nil || !strings.Contains(err.Error(), "normalize record filter") {
 		t.Fatalf("invalid filter error=%v", err)
 	}
-	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{SelectFields: []string{"missing"}}); err == nil || !strings.Contains(err.Error(), "normalize record projection") {
+	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, SelectFields: []string{"missing"}}); err == nil || !strings.Contains(err.Error(), "normalize record projection") {
 		t.Fatalf("invalid projection error=%v", err)
 	}
-	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{ScopeDiagnostic: &recordmodel.RecordScopeDiagnostic{Code: "auth.scope_denied", ObjectKey: object.Key, Detail: "denied"}}); err == nil {
+	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{AuthorizationDiagnostic: &recordmodel.RecordAuthorizationDiagnostic{Code: "auth.scope_denied", ObjectKey: object.Key, Detail: "denied"}}); err == nil {
 		t.Fatal("scope diagnostic accepted")
 	}
 
 	store = scriptedRecordStore(t, &recordSQLState{beginErr: errRecordSQL})
-	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{ScopeExpression: recordStoreRelationScope()}); !errors.Is(err, errRecordSQL) {
+	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key, ScopeExpression: recordStoreRelationScope()}); !errors.Is(err, errRecordSQL) {
 		t.Fatalf("begin relation snapshot error=%v", err)
 	}
 	for name, step := range map[string]recordSQLQueryStep{
@@ -235,7 +235,7 @@ func TestListRecordsRejectsInvalidContractsAndPropagatesRelationSnapshotFailures
 	} {
 		t.Run(name, func(t *testing.T) {
 			store := scriptedRecordStore(t, &recordSQLState{querySteps: []recordSQLQueryStep{step}})
-			if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{ScopeExpression: recordStoreRelationScope()}); !errors.Is(err, errRecordSQL) && name != "scan" {
+			if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key, ScopeExpression: recordStoreRelationScope()}); !errors.Is(err, errRecordSQL) && name != "scan" {
 				t.Fatalf("relation %s error=%v", name, err)
 			} else if name == "scan" && err == nil {
 				t.Fatal("relation scan mismatch accepted")
@@ -245,7 +245,7 @@ func TestListRecordsRejectsInvalidContractsAndPropagatesRelationSnapshotFailures
 
 	badScope := &recordmodel.RecordScopeExpression{Operator: "unsupported"}
 	store = scriptedRecordStore(t, &recordSQLState{})
-	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: object.Key, ScopeExpression: badScope}); err == nil {
+	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key, ScopeExpression: badScope}); err == nil {
 		t.Fatal("invalid persisted scope expression accepted")
 	}
 
@@ -253,7 +253,7 @@ func TestListRecordsRejectsInvalidContractsAndPropagatesRelationSnapshotFailures
 		{columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}},
 		{columns: []string{"id", "created_at", "updated_at", "status"}, closeErr: errRecordSQL},
 	}})
-	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10}); !errors.Is(err, errRecordSQL) {
+	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}); !errors.Is(err, errRecordSQL) {
 		t.Fatalf("close rows error=%v", err)
 	}
 
@@ -262,7 +262,7 @@ func TestListRecordsRejectsInvalidContractsAndPropagatesRelationSnapshotFailures
 		{columns: []string{"count"}, rows: [][]driver.Value{{int64(0)}}},
 		{columns: []string{"id", "created_at", "updated_at", "status"}},
 	}})
-	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, ScopeExpression: recordStoreRelationScope()}); !errors.Is(err, errRecordSQL) {
+	if _, err := store.ListRecords(t.Context(), "workspace", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key, ScopeExpression: recordStoreRelationScope()}); !errors.Is(err, errRecordSQL) {
 		t.Fatalf("commit relation snapshot error=%v", err)
 	}
 }

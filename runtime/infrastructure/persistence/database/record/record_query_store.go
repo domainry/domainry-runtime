@@ -45,8 +45,8 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 		return recordmodel.RecordPageResult{}, fmt.Errorf("record query lock intent %q is invalid", lockIntent)
 	}
 	s := r.store
-	if queryValue.ScopeDiagnostic != nil {
-		return recordmodel.RecordPageResult{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: queryValue.ScopeDiagnostic.Code, Params: map[string]string{"object_key": queryValue.ScopeDiagnostic.ObjectKey, "detail": queryValue.ScopeDiagnostic.Detail}}
+	if queryValue.AuthorizationDiagnostic != nil {
+		return recordmodel.RecordPageResult{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: queryValue.AuthorizationDiagnostic.Code, Params: map[string]string{"object_key": queryValue.AuthorizationDiagnostic.ObjectKey, "detail": queryValue.AuthorizationDiagnostic.Detail}}
 	}
 	queryValue = recordQueryDBValues(s.RuntimeEngine, object, queryValue)
 	executor := r.queryExecutor(ctx)

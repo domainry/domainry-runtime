@@ -85,7 +85,7 @@ func (s *ApplicationSchemaApplicationService) ApplicationSchemaObjectRecordCount
 	if s.records == nil {
 		return 0, metadataInternalError("count metadata object records")
 	}
-	page, err := s.records.ListRecords(ctx, principalmodel.InstallationWorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 1})
+	page, err := s.records.ListRecords(ctx, principalmodel.InstallationWorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted})
 	if err != nil {
 		return 0, wrapMetadataError(err)
 	}

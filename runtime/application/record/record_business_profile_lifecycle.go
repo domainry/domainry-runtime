@@ -68,12 +68,13 @@ func (s *RecordApplicationService) ReactivateBusinessProfile(
 
 func businessProfileActionMutationContext(ctx context.Context, objectKey, statusField string) (context.Context, error) {
 	definition, ok := runtimeactioncontract.AuthorizedActionFromContext(ctx)
-	if !ok || definition.Authorization.Strategy != actioncontract.AuthorizationExactRolePermission ||
+	if !ok || definition.Authorization.Strategy != actioncontract.AuthorizationAuthenticated ||
 		definition.Permission == nil || definition.Permission.Key != definition.Key {
 		return ctx, apperror.New(apperror.KindInternal, "backend.action.authorization_context_required", nil, nil)
 	}
 	return recordmutation.WithMutationInvocation(ctx, recordmutation.MutationInvocation{
 		Source: transactionmodel.MutationSourceAction, ActionKey: definition.Key,
+		ActionResource: string(definition.Permission.ResourceKey), ActionOperation: string(definition.Permission.OperationKey),
 		EffectAuthority: map[string][]string{strings.TrimSpace(objectKey): {strings.TrimSpace(statusField)}},
 	}), nil
 }

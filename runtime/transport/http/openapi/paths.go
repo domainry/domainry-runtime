@@ -25,8 +25,9 @@ func addObjectOpenAPIPaths(paths map[string]any, object definitionmodel.ObjectSc
 	paths["/objects/"+objectKey+"/records/import/apply"] = map[string]any{
 		"post": openAPIOperation("apply"+openAPIOperationName(objectKey)+"Import", tag, "Apply CSV import for "+tag, openAPIEndpointAccess(), openAPIAdminSecurity(), openAPIJSONResponse("Import result", openAPIObject(nil))),
 	}
+	exportDispatch := recordExportDispatchOpenAPIResponses(openAPIOperation("dispatch"+openAPIOperationName(objectKey)+"RecordExport", tag, "Export "+tag+" records with automatic direct or background delivery", openAPIAdminSecurity(), openAPIParameter{Value: openAPIHeaderParameter("Idempotency-Key", "Stable caller operation key", true)}, openAPIQueryParameter("locale", "Export resolved localized record fields in this BCP 47 locale.", map[string]any{"type": "string"})))
 	paths["/objects/"+objectKey+"/records/export"] = map[string]any{
-		"get": openAPIOperation("export"+openAPIOperationName(objectKey)+"Records", tag, "Export "+tag+" records as CSV", openAPIAdminSecurity(), openAPIQueryParameter("locale", "Export resolved localized record fields in this BCP 47 locale.", map[string]any{"type": "string"}), openAPIResponse("CSV export", "text/csv", map[string]any{"type": "string"})),
+		"post": exportDispatch,
 	}
 	paths["/objects/"+objectKey+"/records/{recordID}"] = map[string]any{
 		"get":    openAPIOperation("get"+openAPIOperationName(objectKey)+"Record", tag, "Get "+tag+" record", openAPIAdminSecurity(), openAPIPathParameter("recordID", "Record ID"), openAPIQueryParameter("locale", "Resolve localized record fields in this BCP 47 locale.", map[string]any{"type": "string"}), openAPIJSONResponse("Record", recordSchema)),
@@ -49,6 +50,17 @@ func addRuntimeContractOpenAPIPaths(paths map[string]any) {
 	paths["/objects/{objectKey}/records"] = map[string]any{
 		"get":  openAPIOperation("listObjectRecords", "Objects", "List object records", openAPIAdminSecurity(), openAPIPathParameter("objectKey", "Object key"), openAPIJSONResponse("Record page", openAPIRef("PageResult"))),
 		"post": openAPIOperation("createObjectRecord", "Objects", "Create an object record", openAPIAdminSecurity(), openAPIPathParameter("objectKey", "Object key"), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Created record", openAPIRef("Record"))),
+	}
+	paths["/objects/{objectKey}/fields/{fieldKey}/reference-options"] = map[string]any{
+		"get": openAPIOperation(
+			"listObjectFieldReferenceOptions", "Objects", "Resolve an authorized relation input to a bounded id/name option page; query is raw text and Runtime builds the contains predicate",
+			openAPIAdminSecurity(), openAPIPathParameter("objectKey", "Source object key"), openAPIPathParameter("fieldKey", "Source relation field key"),
+			openAPIQueryParameter("query", "Raw name search text; SQL wildcard syntax is not accepted", map[string]any{"type": "string"}),
+			openAPIQueryParameter("page", "One-based page", map[string]any{"type": "integer", "minimum": 1}),
+			openAPIQueryParameter("limit", "Bounded page size", map[string]any{"type": "integer", "minimum": 1, "maximum": 50, "default": 20}),
+			openAPIQueryParameter("locale", "Resolve localized display fields in this BCP 47 locale", map[string]any{"type": "string"}),
+			openAPIJSONResponse("Reference options", openAPIRef("ReferenceOptionPage")),
+		),
 	}
 	paths["/objects/{objectKey}/records/{recordID}"] = map[string]any{
 		"get":    openAPIOperation("getObjectRecord", "Objects", "Get an object record", openAPIAdminSecurity(), openAPIPathParameter("objectKey", "Object key"), openAPIPathParameter("recordID", "Record ID"), openAPIJSONResponse("Record", openAPIRef("Record"))),

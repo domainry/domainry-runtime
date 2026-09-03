@@ -217,7 +217,7 @@ func (v *reportDefinitionValidator) validateEvidenceFields(path string, object d
 func (v *reportDefinitionValidator) validateCurrentEvidence(ctx context.Context, path string, object definitionmodel.ObjectSchema, requirement reportmodel.ReportEvidenceRequirement) {
 	qualified := 0
 	for pageNumber := 1; ; pageNumber++ {
-		page, err := v.records.ListRecords(ctx, v.workspaceID, object, recordmodel.RecordListQuery{Page: pageNumber, PageSize: 200})
+		page, err := v.records.ListRecords(ctx, v.workspaceID, object, recordmodel.RecordListQuery{Page: pageNumber, PageSize: 200, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted})
 		if err != nil {
 			v.issue("backend.report.evidence_unavailable", path, map[string]string{"object": object.Key})
 			return

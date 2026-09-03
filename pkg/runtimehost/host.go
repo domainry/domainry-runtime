@@ -18,6 +18,7 @@ import (
 	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/telemetry"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
@@ -25,6 +26,7 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	principalcache "github.com/domainry/domainry-runtime/runtime/infrastructure/principalcache"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
@@ -364,6 +366,24 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	zap.L().Info("Runtime configuration snapshot", zap.String("revision", configSnapshot.Revision))
 	lifecycleCtx, stop := dependencies.notifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	modulePrincipalCache, err := principalcache.Open(context.WithoutCancel(lifecycleCtx), cfg)
+	if err != nil {
+		return fmt.Errorf("open Identity principal cache: %w", err)
+	}
+	defer func() {
+		if closer, ok := modulePrincipalCache.(interface{ Close() error }); ok {
+			if err := closer.Close(); err != nil {
+				zap.L().Warn("close Identity principal cache", zap.String("error_kind", "identity_principal_cache_close_failed"), zap.Error(err))
+			}
+		}
+	}()
+	principalResolverOptions := identityprincipal.Options{
+		MaxCacheTTL: cfg.EffectivePrincipalCacheTTL(),
+		Cache:       modulePrincipalCache,
+		OnCacheError: func(err error) {
+			zap.L().Warn("Identity principal cache operation failed; resolving from authoritative binding", zap.String("error_kind", "identity_principal_cache_operation_failed"), zap.Error(err))
+		},
+	}
 	shutdownTelemetry, telemetryErr := dependencies.initializeTracer(lifecycleCtx, telemetry.Config{
 		ServiceName: "domainry-domain-runtime", ServiceVersion: cfg.RuntimeVersion,
 		Exporter: cfg.TelemetryExporter, Endpoint: cfg.TelemetryEndpoint, Headers: cfg.TelemetryHeaders,
@@ -410,7 +430,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	identityRouters := make(map[runtimehttp.ListenerRouteGroup]*identitySurfaceRouter, len(handlers))
 	var initialModuleGuard moduleRouteGuard
 	if binding := tenantManager.Binding(); binding != nil {
-		initialModuleGuard, err = newModuleHTTPRouteGuard(binding)
+		initialModuleGuard, err = newModuleHTTPRouteGuard(binding, principalResolverOptions)
 		if err != nil {
 			return err
 		}
@@ -450,7 +470,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			if identityBinding == nil {
 				return nil, errors.New("initialized tenant returned no Identity binding")
 			}
-			moduleGuard, err := newModuleHTTPRouteGuard(identityBinding)
+			moduleGuard, err := newModuleHTTPRouteGuard(identityBinding, principalResolverOptions)
 			if err != nil {
 				return nil, err
 			}

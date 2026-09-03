@@ -476,7 +476,7 @@ func TestBusinessActionExecutionTransactionOwnsLockingReadAndFinalCommit(t *test
 		t.Fatal(err)
 	}
 	page, err := records.ListRecords(transaction.Context(t.Context()), "workspace-a", object, recordmodel.RecordListQuery{
-		Page: 1, PageSize: 1, Filters: map[string]any{"id__in": []any{"record-1"}}, LockIntent: recordmodel.RecordQueryLockForUpdate,
+		Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"id__in": []any{"record-1"}}, LockIntent: recordmodel.RecordQueryLockForUpdate,
 	})
 	if err != nil || len(page.Items) != 1 || page.Items[0].Data["status"] != "pending" {
 		_ = transaction.RollBack(t.Context())
@@ -561,9 +561,9 @@ func TestBusinessActionExecutionStoreCommitsFailureReceiptAndDenialAuditAtomical
 		t.Fatal(err)
 	}
 	audit := auditmodel.AuditEvent{
-		ID: "scope-denial-audit", WorkspaceID: "workspace-a", Event: "record_scope_access_denied",
+		ID: "scope-denial-audit", WorkspaceID: "workspace-a", Event: "data_scope_access_denied",
 		ObjectKey: "booking", RecordID: "booking-south", ActorID: "operator-a", RoleKey: "operator",
-		Summary: "Record scope access denied", CreatedAt: now.Format(time.RFC3339Nano),
+		Summary: "Data scope access denied", CreatedAt: now.Format(time.RFC3339Nano),
 	}
 	completed, err := commitBusinessActionExecution(t.Context(), repository, nil, actionmodel.ActionExecutionCompletion{
 		Execution: claim.Execution, ExecutionID: claim.Execution.ID,

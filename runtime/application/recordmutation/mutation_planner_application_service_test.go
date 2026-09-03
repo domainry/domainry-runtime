@@ -22,7 +22,9 @@ func TestMutationPlannerBuildsCanonicalContextFromPrincipalAndInvocation(t *test
 	planner := NewMutationPlannerApplicationService(func(context.Context, principalmodel.Principal) (string, error) { return "published-17", nil })
 	ctx := requestcontext.WithCorrelationID(t.Context(), "correlation-1")
 	ctx = WithMutationInvocation(ctx, MutationInvocation{Source: transactionmodel.MutationSourceAction, ActionKey: "order.pay", IdempotencyKey: "idem-1", EffectAuthority: map[string][]string{"order": {"status"}}, AssuranceEvidence: map[string]string{"mfa": "verified"}})
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a", UserID: "user-a"}, RequestID: "request-1"}, accessfixture.Bundle{Key: "cashier", Permissions: []string{"order.update"}, RecordScope: "owned"})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a", UserID: "user-a"}, RequestID: "request-1"}, accessfixture.Bundle{
+		Key: "cashier", Permissions: []string{"order.update"}, DataPolicies: accessfixture.DataPoliciesForPermissions([]string{"order.update"}, "owner"),
+	})
 	plan, err := planner.Plan(ctx, principal, transactionmodel.RecordMutationCommit{Operation: "update", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "paid"}}}, map[string]any{"status": "draft"})
 	if err != nil {
 		t.Fatal(err)

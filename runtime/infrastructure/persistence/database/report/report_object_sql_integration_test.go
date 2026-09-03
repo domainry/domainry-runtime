@@ -78,7 +78,7 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 		SourceObjects: []string{"sale"},
 		Parameters:    []reportmodel.ReportObjectSQLParameter{{Key: "refunded_status", Type: "text", Required: true}},
 		ResultSchema:  []reportmodel.ReportResultColumnSchema{{Key: "employee_id", Type: "text", Kind: "dimension"}, {Key: "revenue", Type: "currency", Kind: "measure", Precision: 19, Scale: 2}, {Key: "average_sale", Type: "currency", Kind: "measure", Precision: 19, Scale: 2}, {Key: "discounts", Type: "currency", Kind: "measure", Precision: 19, Scale: 2}, {Key: "refunds", Type: "currency", Kind: "measure", Precision: 19, Scale: 2}, {Key: "units_per_sale", Type: "decimal", Kind: "measure"}},
-	}, map[string]recordmodel.RecordListQuery{"s": {Scope: "all_records"}}, map[string]any{"refunded_status": "refunded"})
+	}, map[string]recordmodel.RecordListQuery{"s": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}}, map[string]any{"refunded_status": "refunded"})
 	if len(sales) != 2 || sales[0]["employee_id"] != "e1" || sales[0]["revenue"] != "30.30" || sales[0]["average_sale"] != "15.15" || sales[0]["discounts"] != "1.50" || sales[0]["refunds"] != "5.05" || sales[0]["units_per_sale"] != "1" || sales[1]["revenue"] != "0.10" {
 		t.Fatalf("sales=%#v", sales)
 	}
@@ -89,7 +89,7 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 			{Key: "average_ticket", Type: "currency", Kind: "measure", Precision: 19, Scale: 2},
 			{Key: "unit_economics", Type: "currency", Kind: "measure", Precision: 19, Scale: 2},
 		},
-	}, map[string]recordmodel.RecordListQuery{"s": {Scope: "all_records"}}, map[string]any{"unit_count": "2.5"})
+	}, map[string]recordmodel.RecordListQuery{"s": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}}, map[string]any{"unit_count": "2.5"})
 	if len(currencyDivision) != 1 || currencyDivision[0]["average_ticket"] != "10.13" || currencyDivision[0]["unit_economics"] != "12.16" {
 		t.Fatalf("currency division=%#v", currencyDivision)
 	}
@@ -97,7 +97,7 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 	payments := execute(reportmodel.ReportObjectSQLSchema{
 		SQL: `SELECT p.kind AS payment_kind, SUM(p.amount) AS paid_amount FROM payment p GROUP BY p.kind ORDER BY payment_kind LIMIT 10`, SourceObjects: []string{"payment"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "payment_kind", Type: "text", Kind: "dimension"}, {Key: "paid_amount", Type: "currency", Kind: "measure", Precision: 19, Scale: 2}},
-	}, map[string]recordmodel.RecordListQuery{"p": {Scope: "custom", RootObjectKey: "payment", ScopeExpression: &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "owner_id", Values: []string{"user-1"}}}})
+	}, map[string]recordmodel.RecordListQuery{"p": {AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "payment", ScopeExpression: &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "owner_id", Values: []string{"user-1"}}}})
 	if len(payments) != 1 || payments[0]["payment_kind"] != "cash" || payments[0]["paid_amount"] != "15.15" {
 		t.Fatalf("payments=%#v", payments)
 	}
@@ -106,14 +106,14 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 		SQL: `SELECT s.id AS sale_id, COALESCE(SUM(p.amount), 0) AS visible_paid FROM sale s LEFT JOIN payment p ON p.sale_id = s.id GROUP BY s.id ORDER BY sale_id LIMIT 10`, SourceObjects: []string{"sale", "payment"},
 		JoinCardinalities: []reportmodel.ReportObjectSQLCardinality{{Alias: "p", Cardinality: "one_to_many"}},
 		ResultSchema:      []reportmodel.ReportResultColumnSchema{{Key: "sale_id", Type: "text", Kind: "dimension"}, {Key: "visible_paid", Type: "currency", Kind: "measure", Precision: 19, Scale: 2}},
-	}, map[string]recordmodel.RecordListQuery{"s": {Scope: "all_records"}, "p": {Scope: "custom", RootObjectKey: "payment", ScopeExpression: &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "owner_id", Values: []string{"user-1"}}}})
+	}, map[string]recordmodel.RecordListQuery{"s": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}, "p": {AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "payment", ScopeExpression: &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "owner_id", Values: []string{"user-1"}}}})
 	if len(joined) != 3 || joined[0]["visible_paid"] != "10.10" || joined[1]["visible_paid"] != "5.05" || joined[2]["visible_paid"] != "0.00" {
 		t.Fatalf("left joined=%#v", joined)
 	}
 	zeroDivision := execute(reportmodel.ReportObjectSQLSchema{
 		SQL: `SELECT s.id AS sale_id, s.units / NULLIF(s.units, 0) AS safe_ratio FROM sale s ORDER BY sale_id LIMIT 10`, SourceObjects: []string{"sale"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "sale_id", Type: "text", Kind: "dimension"}, {Key: "safe_ratio", Type: "decimal", Kind: "measure"}},
-	}, map[string]recordmodel.RecordListQuery{"s": {Scope: "all_records"}})
+	}, map[string]recordmodel.RecordListQuery{"s": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}})
 	if len(zeroDivision) != 3 || zeroDivision[0]["safe_ratio"] != "1" || zeroDivision[1]["safe_ratio"] != "" || zeroDivision[2]["safe_ratio"] != "1" {
 		t.Fatalf("zero division=%#v", zeroDivision)
 	}
@@ -123,13 +123,13 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 		query recordmodel.RecordListQuery
 		want  string
 	}{
-		"owned": {query: recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "sale", ScopeExpression: &recordmodel.RecordScopeExpression{
+		"owned": {query: recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "sale", ScopeExpression: &recordmodel.RecordScopeExpression{
 			Operator: "eq", FieldKey: "employee_id", Values: []string{"e1"},
 		}}, want: "2"},
-		"organization": {query: recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "sale", ScopeExpression: &recordmodel.RecordScopeExpression{
+		"organization": {query: recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "sale", ScopeExpression: &recordmodel.RecordScopeExpression{
 			Operator: "eq", FieldKey: "organization_path", Values: []string{"sales/east"},
 		}}, want: "2"},
-		"custom": {query: recordmodel.RecordListQuery{Scope: "custom", RootObjectKey: "sale", ScopeExpression: &recordmodel.RecordScopeExpression{
+		"custom": {query: recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "sale", ScopeExpression: &recordmodel.RecordScopeExpression{
 			Operator: "eq", FieldKey: "status", Values: []string{"paid"},
 		}}, want: "2"},
 	}
@@ -144,7 +144,7 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 	injectionSchema := countSchema
 	injectionSchema.SQL = `SELECT COUNT(*) AS visible_count FROM sale s WHERE s.status = :status LIMIT 1`
 	injectionSchema.Parameters = []reportmodel.ReportObjectSQLParameter{{Key: "status", Type: "text", Required: true}}
-	injectionRows := executeWithParameters(injectionSchema, map[string]recordmodel.RecordListQuery{"s": {Scope: "all_records"}}, map[string]any{"status": `paid' OR 1=1 --`})
+	injectionRows := executeWithParameters(injectionSchema, map[string]recordmodel.RecordListQuery{"s": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}}, map[string]any{"status": `paid' OR 1=1 --`})
 	if len(injectionRows) != 1 || injectionRows[0]["visible_count"] != "0" {
 		t.Fatalf("parameter injection escaped binding: %#v", injectionRows)
 	}
@@ -192,7 +192,7 @@ func TestReportObjectSQLExecutesInexactNumberAndExactPercentAggregatesWithRows(t
 	if plan.ResultSchema[2].Precision != 8 || plan.ResultSchema[2].Scale != 2 {
 		t.Fatalf("exact percent result schema=%#v", plan.ResultSchema[2])
 	}
-	query := recordmodel.RecordListQuery{Scope: "all_records", SelectFields: append([]string(nil), plan.Sources[0].Fields...)}
+	query := recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, SelectFields: append([]string(nil), plan.Sources[0].Fields...)}
 	result, err := NewReportDatasetStore(store).ExecuteReportObjectSQL(t.Context(), reportcontract.ReportObjectSQLExecutionRequest{
 		WorkspaceID: "workspace-a", Plan: plan, Objects: map[string]definitionmodel.ObjectSchema{"b": object}, Queries: map[string]recordmodel.RecordListQuery{"b": query}, Parameters: map[string]any{"status": "posted"}, Timeout: 2 * time.Second,
 	})

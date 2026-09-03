@@ -20,7 +20,6 @@ type Bundle struct {
 	Key               string
 	Permissions       []string
 	FunctionGrants    []FunctionGrantFixture
-	RecordScope       string
 	DataPolicies      []DataPolicyFixture
 	FieldPolicies     []FieldPolicyFixture
 	ReferencePolicies []ReferencePolicyFixture
@@ -38,11 +37,36 @@ type FunctionGrantFixture struct {
 
 type DataPolicyFixture struct {
 	ObjectKey   string
-	Scope       string
+	Action      string
+	Scope       identitysdk.DataScope
 	Read        bool
 	Write       bool
 	AuditDenial bool
 	Predicate   *PredicateFixture
+}
+
+// DataPoliciesForPermissions creates one explicit SDK data policy for every
+// exact permission key. It exists only to keep test setup compact; unlike the
+// removed role-wide default it cannot silently broaden an unrelated Action.
+func DataPoliciesForPermissions(permissionKeys []string, scope identitysdk.DataScope) []DataPolicyFixture {
+	if !scope.Valid() {
+		panic("identity SDK fixture requires a canonical data scope")
+	}
+	result := make([]DataPolicyFixture, 0, len(permissionKeys))
+	for _, permissionKey := range permissionKeys {
+		resource, action, ok := permissionParts(permissionKey)
+		if !ok {
+			continue
+		}
+		result = append(result, DataPolicyFixture{
+			ObjectKey: string(resource),
+			Action:    string(action),
+			Scope:     scope,
+			Read:      fixtureReadAction(action),
+			Write:     !fixtureReadAction(action),
+		})
+	}
+	return result
 }
 
 type FieldPolicyFixture struct {
@@ -141,6 +165,8 @@ func Attach(principal principalmodel.Principal, spec Bundle) principalmodel.Prin
 			SubjectID:             identitysdk.SubjectID(valueOrDefault(principal.UserID, "test-subject")),
 			OrgID:                 principal.OrgID,
 			OrgScopeIDs:           append([]string(nil), principal.OrgScopeIDs...),
+			SupportOrgID:          principal.SupportOrgID,
+			SupportOrgScopeIDs:    append([]string(nil), principal.SupportOrgScopeIDs...),
 			ReportingScopeUserIDs: subjectIDs(principal.ReportingScopeUserIDs),
 		},
 	}
@@ -178,36 +204,8 @@ func Attach(principal principalmodel.Principal, spec Bundle) principalmodel.Prin
 		}
 		addGrant(identitysdk.ResourceType(strings.TrimSpace(grant.ResourceKey)), identitysdk.Action(strings.TrimSpace(grant.ActionKey)))
 	}
-	explicitDataResources := map[identitysdk.ResourceType]bool{}
-	for _, permission := range spec.DataPolicies {
-		explicitDataResources[identitysdk.ResourceType(strings.TrimSpace(permission.ObjectKey))] = true
-	}
-	defaultScope := strings.TrimSpace(spec.RecordScope)
-	if defaultScope == "" && len(spec.DataPolicies) == 0 {
-		// Test callers that exercise a record path with only a function grant
-		// mean an unrestricted SDK data policy. Production Identity always
-		// materializes this policy from its own spec configuration and catalog.
-		defaultScope = "all_records"
-	}
-	if defaultScope != "" && defaultScope != "none" {
-		dataPolicyKeys := map[string]bool{}
-		for _, grant := range grants {
-			if explicitDataResources[grant.Resource] {
-				continue
-			}
-			dataAction := sdkDataAction(grant.Action)
-			policyKey := string(grant.Resource) + "\x00" + string(dataAction)
-			if dataPolicyKeys[policyKey] {
-				continue
-			}
-			dataPolicyKeys[policyKey] = true
-			policy := dataPolicy(grant.Resource, dataAction, defaultScope, false, nil)
-			policy.Key += ".record_scope"
-			bundle.DataPolicies = append(bundle.DataPolicies, policy)
-		}
-	}
 	for permissionIndex, permission := range spec.DataPolicies {
-		actions := dataPolicyActions(permission)
+		actions := dataPolicyActions(permission, grants)
 		for actionIndex, action := range actions {
 			policy := dataPolicy(identitysdk.ResourceType(permission.ObjectKey), action, permission.Scope, permission.AuditDenial, permission.Predicate)
 			policy.Key += fmt.Sprintf(".%d.%d", permissionIndex, actionIndex)
@@ -326,31 +324,26 @@ func FromPrincipal(principal principalmodel.Principal) Bundle {
 	if principal.AccessBundle == nil {
 		return spec
 	}
-	if len(principal.AccessBundle.DataPolicies) > 0 {
-		// Preserve an explicit removal of projected data policies during fixture
-		// mutation instead of re-inventing a default unrestricted scope.
-		spec.RecordScope = "none"
-	}
 	dataByResource := map[identitysdk.ResourceType]int{}
 	for _, policy := range principal.AccessBundle.DataPolicies {
+		scope := dataPolicyScope(policy)
 		index, exists := dataByResource[policy.Resource]
 		if !exists {
 			spec.DataPolicies = append(spec.DataPolicies, DataPolicyFixture{
-				ObjectKey: string(policy.Resource), Scope: scopeFromPredicate(policy.Predicate),
+				ObjectKey: string(policy.Resource), Scope: scope,
 			})
 			index = len(spec.DataPolicies) - 1
 			dataByResource[policy.Resource] = index
 		}
 		permission := &spec.DataPolicies[index]
 		permission.AuditDenial = permission.AuditDenial || policy.AuditDenial
-		if permission.Predicate == nil && scopeFromPredicate(policy.Predicate) == "custom" {
+		if permission.Predicate == nil && !scope.Valid() && !policy.Predicate.IsZero() {
 			predicate := policyExpressionFromSDK(policy.Predicate)
 			permission.Predicate = &predicate
 		}
-		switch policy.Action {
-		case "read":
+		if fixtureReadAction(policy.Action) {
 			permission.Read = policy.Effect == identitysdk.EffectAllow
-		case "write", "create", "update", "delete":
+		} else {
 			permission.Write = permission.Write || policy.Effect == identitysdk.EffectAllow
 		}
 	}
@@ -455,34 +448,58 @@ func containsFixturePermission(permissions []string, permissionKey string) bool 
 	return false
 }
 
-func dataPolicyActions(permission DataPolicyFixture) []identitysdk.DataAction {
-	actions := make([]identitysdk.DataAction, 0, 2)
-	if permission.Read {
-		actions = append(actions, identitysdk.DataActionRead)
+func dataPolicyActions(permission DataPolicyFixture, grants []identitysdk.FunctionGrant) []identitysdk.Action {
+	actions := []identitysdk.Action{}
+	resource := identitysdk.ResourceType(strings.TrimSpace(permission.ObjectKey))
+	if action := identitysdk.Action(strings.TrimSpace(permission.Action)); action != "" {
+		for _, grant := range grants {
+			if grant.Resource == resource && grant.Action == action {
+				return []identitysdk.Action{action}
+			}
+		}
+		return actions
 	}
-	if permission.Write {
-		actions = append(actions, identitysdk.DataActionWrite)
+	for _, grant := range grants {
+		if grant.Resource != resource || fixtureReadAction(grant.Action) && !permission.Read || !fixtureReadAction(grant.Action) && !permission.Write {
+			continue
+		}
+		if !containsFixtureAction(actions, grant.Action) {
+			actions = append(actions, grant.Action)
+		}
 	}
 	return actions
 }
 
-func sdkDataAction(action identitysdk.Action) identitysdk.DataAction {
+func fixtureReadAction(action identitysdk.Action) bool {
 	switch action {
 	case "read", "list", "view", "search", "report", "audit", "export":
-		return identitysdk.DataActionRead
+		return true
 	default:
-		return identitysdk.DataActionWrite
+		return false
 	}
 }
 
-func dataPolicy(resource identitysdk.ResourceType, action identitysdk.DataAction, scope string, auditDenial bool, predicate *PredicateFixture) identitysdk.DataPolicy {
+func containsFixtureAction(actions []identitysdk.Action, expected identitysdk.Action) bool {
+	for _, action := range actions {
+		if action == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func dataPolicy(resource identitysdk.ResourceType, action identitysdk.Action, scope identitysdk.DataScope, auditDenial bool, predicate *PredicateFixture) identitysdk.DataPolicy {
 	resolved := scopePredicate(scope)
 	if predicate != nil {
 		resolved = sdkPolicyExpression(*predicate)
 	}
+	var dataScopes []identitysdk.DataScope
+	if scope.Valid() {
+		dataScopes = []identitysdk.DataScope{scope}
+	}
 	return identitysdk.DataPolicy{
 		Key: string(resource) + "." + string(action) + ".test", Resource: resource, Action: action, Effect: identitysdk.EffectAllow,
-		Predicate: resolved, AuditDenial: auditDenial,
+		DataScopes: dataScopes, Predicate: resolved, AuditDenial: auditDenial,
 	}
 }
 
@@ -630,35 +647,44 @@ func fieldRulesFromSDK(values []identitysdk.FieldRule) []FieldRuleFixture {
 	return result
 }
 
-func scopePredicate(scope string) identitysdk.Predicate {
-	switch strings.TrimSpace(scope) {
-	case "owned_records", "owned":
+func scopePredicate(scope identitysdk.DataScope) identitysdk.Predicate {
+	switch scope {
+	case "owner":
 		return identitysdk.Predicate{Fact: "owner_user_id", Operator: identitysdk.OperatorEqual, Value: "$subject.id"}
-	case "organization":
+	case "org":
 		return identitysdk.Predicate{Fact: "owner_org_id", Operator: identitysdk.OperatorEqual, Value: "$subject.org_id"}
-	case "organization_and_children":
+	case "org_child":
 		return identitysdk.Predicate{Fact: "owner_org_id", Operator: identitysdk.OperatorIn, Value: "$subject.org_scope_ids"}
-	case "self_and_subordinates":
-		return identitysdk.Predicate{Fact: "owner_user_id", Operator: identitysdk.OperatorIn, Value: "$subject.reporting_scope_user_ids"}
+	case "target_org":
+		return identitysdk.Predicate{Fact: "owner_org_id", Operator: identitysdk.OperatorIn, Value: "$subject.support_org_scope_ids"}
+	case "all":
+		return identitysdk.Predicate{}
 	default:
-		return identitysdk.Predicate{Fact: "id", Operator: identitysdk.OperatorExists, Value: true}
+		return identitysdk.Predicate{Fact: "id", Operator: identitysdk.OperatorIn, Value: []string{}}
 	}
 }
 
-func scopeFromPredicate(predicate identitysdk.Predicate) string {
+func dataPolicyScope(policy identitysdk.DataPolicy) identitysdk.DataScope {
+	if len(policy.DataScopes) == 1 && policy.DataScopes[0].Valid() {
+		return policy.DataScopes[0]
+	}
+	return scopeFromPredicate(policy.Predicate)
+}
+
+func scopeFromPredicate(predicate identitysdk.Predicate) identitysdk.DataScope {
 	switch {
 	case predicate.Fact == "owner_user_id" && predicate.Operator == identitysdk.OperatorEqual:
-		return "owned_records"
+		return "owner"
 	case predicate.Fact == "owner_org_id" && predicate.Operator == identitysdk.OperatorEqual:
-		return "organization"
+		return "org"
+	case predicate.Fact == "owner_org_id" && predicate.Operator == identitysdk.OperatorIn && predicate.Value == "$subject.support_org_scope_ids":
+		return "target_org"
 	case predicate.Fact == "owner_org_id" && predicate.Operator == identitysdk.OperatorIn:
-		return "organization_and_children"
-	case predicate.Fact == "owner_user_id" && predicate.Operator == identitysdk.OperatorIn:
-		return "self_and_subordinates"
+		return "org_child"
 	case predicate.Fact == "id" && predicate.Operator == identitysdk.OperatorExists:
-		return "all_records"
+		return "all"
 	default:
-		return "custom"
+		return ""
 	}
 }
 

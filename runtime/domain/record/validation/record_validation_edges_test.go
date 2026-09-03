@@ -2,12 +2,13 @@ package validation
 
 import (
 	"errors"
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
 func recordValidationErrorCode(err error) string {
@@ -43,7 +44,8 @@ func TestRecordAccessValidationEdges(t *testing.T) {
 	if got := recordValidationErrorCode(RecordValidateThresholdPermissionPolicies(object, nil, map[string]any{"amount": 101}, "update", principalmodel.Principal{})); got != "backend.policy.threshold_permission_required" {
 		t.Fatalf("got %s", got)
 	}
-	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: []string{"order.approve"}})
+	permissions := []string{"order.approve"}
+	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)})
 	if err := RecordValidateThresholdPermissionPolicies(object, nil, map[string]any{"amount": 101}, "update", principal); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +140,8 @@ func TestRecordStateMachineValidationEdges(t *testing.T) {
 	if got := recordValidationErrorCode(RecordValidateStateMachinePolicies(object, map[string]any{"status": "draft"}, map[string]any{"status": "approved", "note": "ok"}, principalmodel.Principal{})); got != "backend.transition.permission_required" {
 		t.Fatalf("got %s", got)
 	}
-	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: []string{"order.approve"}})
+	permissions := []string{"order.approve"}
+	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)})
 	if err := RecordValidateStateMachinePolicies(object, map[string]any{"status": "draft"}, map[string]any{"status": "approved", "note": "ok"}, principal); err != nil {
 		t.Fatal(err)
 	}

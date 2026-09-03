@@ -137,7 +137,7 @@ type manifestIdentityBinding struct {
 }
 
 func (binding *manifestIdentityBinding) Descriptor() identitysdk.Descriptor {
-	return identitysdk.Descriptor{ProtocolVersion: identitysdk.CurrentProtocolVersion, BundleVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationVersion: identitysdk.AuthorizationContractVersionV1, Mode: identitysdk.DeploymentModeModule, Issuer: "plane-testkit-identity", Audience: string(binding.application.ApplicationKey)}
+	return identitysdk.Descriptor{ProtocolVersion: identitysdk.CurrentProtocolVersion, BundleVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationVersion: identitysdk.CurrentAuthorizationContractVersion, Mode: identitysdk.DeploymentModeModule, Issuer: "plane-testkit-identity", Audience: string(binding.application.ApplicationKey)}
 }
 func (binding *manifestIdentityBinding) Authentication() identitysdk.Authentication { return binding }
 func (binding *manifestIdentityBinding) Tokens() identitysdk.TokenVerifier          { return binding }
@@ -478,10 +478,6 @@ func (binding *manifestIdentityBinding) accessBundle(subject, roleKey string) id
 		if !resources[grant.Resource] {
 			continue
 		}
-		dataAction, ok := fixtureDataAction(grant.Action)
-		if !ok {
-			continue
-		}
 		predicate := identitysdk.Predicate{}
 		switch {
 		case role.AllowAllBusinessData:
@@ -491,7 +487,7 @@ func (binding *manifestIdentityBinding) accessBundle(subject, roleKey string) id
 		default:
 			continue
 		}
-		dataPolicies = append(dataPolicies, identitysdk.DataPolicy{Key: fmt.Sprintf("plane-testkit-%s-%s-%d", grant.Resource, dataAction, index), Resource: grant.Resource, Action: dataAction, Effect: identitysdk.EffectAllow, Predicate: predicate})
+		dataPolicies = append(dataPolicies, identitysdk.DataPolicy{Key: fmt.Sprintf("plane-testkit-%s-%s-%d", grant.Resource, grant.Action, index), Resource: grant.Resource, Action: grant.Action, Effect: identitysdk.EffectAllow, Predicate: predicate})
 	}
 	fieldPolicies := map[string]identitysdk.FieldPolicy{}
 	if role.AllowAllBusinessData {
@@ -528,20 +524,6 @@ func (binding *manifestIdentityBinding) accessBundle(subject, roleKey string) id
 		ContractVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationRevision: "plane-testkit-authorization", ExpiresAt: time.Now().Add(time.Hour),
 		Subject: identitysdk.Subject{WorkspaceID: binding.application.WorkspaceID, SubjectID: identitysdk.SubjectID(subject)}, FunctionGrants: grants, DataPolicies: dataPolicies, FieldPolicies: fields,
 		ExportPolicies: append([]identitysdk.ExportPolicy(nil), role.ExportPolicies...), Guardrails: append([]identitysdk.Guardrail(nil), role.Guardrails...),
-	}
-}
-
-// fixtureDataAction is Runtime-owned test policy for its five default object
-// operations. Identity's evaluator receives this explicit coarse effect and
-// never derives it from an arbitrary Action name.
-func fixtureDataAction(action identitysdk.Action) (identitysdk.DataAction, bool) {
-	switch action {
-	case "read", "export":
-		return identitysdk.DataActionRead, true
-	case "create", "update", "delete":
-		return identitysdk.DataActionWrite, true
-	default:
-		return "", false
 	}
 }
 

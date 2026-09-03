@@ -57,9 +57,10 @@ func TestLocalizedSchemaOptionHelpersPreserveShapeAndInputs(t *testing.T) {
 }
 
 func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testing.T) {
-	role := accessfixture.Bundle{Key: "sales", Permissions: []string{
+	permissions := []string{
 		"customer.read", "customer.update", "customer.approve", "integration.tool.crm_sync", "report.read",
-	}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}}}
+	}
+	role := accessfixture.Bundle{Key: "sales", Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll)}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, role)
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{
@@ -134,16 +135,18 @@ func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testi
 	if got := SnapshotForPrincipal(snapshot, principalmodel.Principal{}); len(got.Objects) != len(snapshot.Objects) || len(got.AgentServicePrincipals) != 0 {
 		t.Fatal("unknown principal snapshot should preserve public metadata without service principal bindings")
 	}
-	workspaceGovernor := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
+	governancePermissions := []string{"runtime.appschema.validate_application_definition"}
+	workspaceGovernor := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: governancePermissions, DataPolicies: accessfixture.DataPoliciesForPermissions(governancePermissions, identitysdk.DataScopeAll)})
 	if got := SnapshotForPrincipal(snapshot, workspaceGovernor); len(got.Objects) != 0 || got.SchemaHash != SchemaSnapshotHash(got) {
 		t.Fatal("workspace governance permission must not bypass object visibility")
 	}
 }
 
 func TestVisibilityPermissionAndToolHelperEdges(t *testing.T) {
+	permissions := []string{"customer.read", "customer.create", "integration.tool.external", "integration.tool.admin", "report.read"}
 	role := accessfixture.Bundle{
-		Key: "member", Permissions: []string{"customer.read", "customer.create", "integration.tool.external", "integration.tool.admin", "report.read"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}},
+		Key: "member", Permissions: permissions,
+		DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll),
 	}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, role)
 	visible := map[string]bool{"customer": true}

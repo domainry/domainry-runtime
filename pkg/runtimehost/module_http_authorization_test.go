@@ -41,7 +41,7 @@ func (stub moduleServiceBindingStub) ApplicationServiceVerifier() identitysdk.Ap
 }
 
 func TestModuleHTTPGovernanceEnforcesIdempotencyReasonAndConfirmation(t *testing.T) {
-	action := runtimeHostTestAction("test.governed.execute", "POST /governed", []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationExactRolePermission)
+	action := runtimeHostTestAction("test.governed.execute", "POST /governed", []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationAuthenticated)
 	action.EffectClass = actioncontract.EffectWrite
 	action.IdempotencyDecision = "caller_key_required"
 	action.ApprovalPolicies = []actioncontract.ApprovalPolicy{actioncontract.ApprovalConfirmation}
@@ -70,15 +70,15 @@ func TestModuleHTTPGovernanceEnforcesIdempotencyReasonAndConfirmation(t *testing
 	}
 }
 
-func TestModuleHTTPServiceIdentityVerifiesExactAudienceAndGrant(t *testing.T) {
+func TestModuleHTTPSignedRequestVerifiesExactAudienceAndGrant(t *testing.T) {
 	verifier := &moduleServiceVerifierStub{}
 	guard, err := newModuleHTTPRouteGuard(moduleServiceBindingStub{services: verifier})
 	if err != nil {
 		t.Fatal(err)
 	}
-	action := runtimeHostTestAction("runtime.authorization.action_usages.query", "POST /operations/authorization/action-usages/query", []actioncontract.Exposure{actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationServiceIdentity)
+	action := runtimeHostTestAction("runtime.authorization.action_usages.query", "POST /operations/authorization/action-usages/query", []actioncontract.Exposure{actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationSigned)
 	action.Authorization = actioncontract.Authorization{
-		Strategy: actioncontract.AuthorizationServiceIdentity, PolicyKey: "runtime.authorization.action_usages.query", Audiences: []string{"domainry-runtime"},
+		Strategy: actioncontract.AuthorizationSigned, PolicyKey: "runtime.authorization.action_usages.query", Audiences: []string{"domainry-runtime"},
 	}
 	executed := 0
 	handler, err := guard(modulehttp.Route{Action: action}, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {

@@ -1,16 +1,59 @@
 package service
 
 import (
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
+
+func TestSDKDataScopeCompilerTreatsAllAsNoAdditionalPredicate(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "case"}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
+		Known: true, UserID: "user-1", WorkspaceID: "workspace-1",
+	}}, accessfixture.Bundle{
+		Permissions:  []string{"case.read", "case.update"},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "case", Scope: "all", Read: true, Write: true}},
+	})
+
+	for _, action := range []string{"read", "update"} {
+		expression, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, principal, action)
+		if err != nil || !handled || expression != nil {
+			t.Fatalf("all action=%s expression=%#v handled=%v err=%v", action, expression, handled, err)
+		}
+	}
+}
+
+func TestSDKDataScopeCompilerRetainsDenyPredicateUnderAll(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "case"}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
+		Known: true, UserID: "user-1", WorkspaceID: "workspace-1",
+	}}, accessfixture.Bundle{
+		Permissions:  []string{"case.read"},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "case", Scope: "all", Read: true}},
+	})
+	principal.AccessBundle.DataPolicies = append(principal.AccessBundle.DataPolicies, identitysdk.DataPolicy{
+		Key: "case.read.deny-owner", Resource: "case", Action: "read", Effect: identitysdk.EffectDeny,
+		DataScopes: []identitysdk.DataScope{identitysdk.DataScopeOwner},
+		Predicate:  identitysdk.Predicate{Fact: "owner_user_id", Operator: identitysdk.OperatorEqual, Value: "$subject.id"},
+	})
+
+	expression, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, principal, "read")
+	if err != nil || !handled || expression == nil || expression.Operator != "not" || len(expression.Children) != 1 {
+		t.Fatalf("expression=%#v handled=%v err=%v", expression, handled, err)
+	}
+	if directSDKScopeExpressionMatches(*expression, recordmodel.Record{OwnerUserID: "user-1"}) {
+		t.Fatal("deny predicate was lost under all")
+	}
+	if !directSDKScopeExpressionMatches(*expression, recordmodel.Record{OwnerUserID: "other"}) {
+		t.Fatal("all did not allow a record outside the deny predicate")
+	}
+}
 
 func TestSDKDataScopeCompilerUnionsIdentityIssuedPolicies(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "case"}
@@ -19,8 +62,8 @@ func TestSDKDataScopeCompilerUnionsIdentityIssuedPolicies(t *testing.T) {
 	}}, accessfixture.Bundle{
 		Permissions: []string{"case.read"},
 		DataPolicies: []accessfixture.DataPolicyFixture{
-			{ObjectKey: "case", Scope: "owned_records", Read: true},
-			{ObjectKey: "case", Scope: "organization", Read: true},
+			{ObjectKey: "case", Scope: "owner", Read: true},
+			{ObjectKey: "case", Scope: "org", Read: true},
 		},
 	})
 
@@ -39,22 +82,22 @@ func TestSDKDataScopeCompilerUnionsIdentityIssuedPolicies(t *testing.T) {
 	}
 }
 
-func TestSDKDataScopeCompilerUsesIdentityIssuedSubtreeIDs(t *testing.T) {
+func TestSDKDataScopeCompilerUsesIdentityIssuedOrganizationScopes(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "case"}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
-		Known: true, UserID: "manager", OrgID: "region", OrgScopeIDs: []string{"region", "store"}, ReportingScopeUserIDs: []string{"manager", "seller"},
+		Known: true, UserID: "manager", OrgID: "region", OrgScopeIDs: []string{"region", "store"}, SupportOrgScopeIDs: []string{"support", "support-child"},
 	}}, accessfixture.Bundle{Permissions: []string{"case.read"}, DataPolicies: []accessfixture.DataPolicyFixture{
-		{ObjectKey: "case", Scope: "organization_and_children", Read: true},
-		{ObjectKey: "case", Scope: "self_and_subordinates", Read: true},
+		{ObjectKey: "case", Scope: "org_child", Read: true},
+		{ObjectKey: "case", Scope: "target_org", Read: true},
 	}})
 	expression, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, principal, "read")
 	if err != nil || !handled || expression == nil {
 		t.Fatalf("expression=%#v handled=%v err=%v", expression, handled, err)
 	}
 	if !directSDKScopeExpressionMatches(*expression, recordmodel.Record{OwnerOrgID: "store"}) ||
-		!directSDKScopeExpressionMatches(*expression, recordmodel.Record{OwnerUserID: "seller"}) ||
+		!directSDKScopeExpressionMatches(*expression, recordmodel.Record{OwnerOrgID: "support-child"}) ||
 		directSDKScopeExpressionMatches(*expression, recordmodel.Record{OwnerOrgID: "outside", OwnerUserID: "outside"}) {
-		t.Fatalf("subtree expression=%#v", expression)
+		t.Fatalf("organization scope expression=%#v", expression)
 	}
 }
 
@@ -75,7 +118,7 @@ func TestSDKDataScopeCompilerTranslatesRelationsAndBusinessClaims(t *testing.T) 
 		BusinessClaims: map[string]profilebindingmodel.ClaimValue{"coach_id": {Type: "relation", Value: "coach-1"}},
 	}, accessfixture.Bundle{
 		Permissions:  []string{"booking.read"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "booking", Read: true, Scope: "custom", Predicate: predicate}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "booking", Read: true, Predicate: predicate}},
 	})
 
 	expression, err, handled := RecordCompileSDKDataScopeExpression(booking, []definitionmodel.ObjectSchema{booking, member, coach}, principal, "read")
@@ -102,7 +145,7 @@ func TestSDKDataScopeCompilerFailsClosed(t *testing.T) {
 
 	bad := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{
 		Permissions: []string{"case.read"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "case", Read: true, Scope: "custom", Predicate: &accessfixture.PredicateFixture{
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "case", Read: true, Predicate: &accessfixture.PredicateFixture{
 			Operator: "eq", FieldKey: "missing", ValueSource: "literal", Values: []string{"one"},
 		}}},
 	})

@@ -63,6 +63,7 @@ type AutomationApplicationDependencies struct {
 	InvokeAction          func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
 	Workflows             AutomationWorkflowRunner
 	CanAccess             func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
+	MutationScope         func(principalmodel.Principal, definitionmodel.ObjectSchema, string) (*recordmodel.RecordScopeExpression, error)
 	ValidateRule          func(context.Context, automationmodel.AutomationRuleSchema) error
 	AuthoringProjection   func() capability.CapabilityAuthoringProjection
 	Worker                workerplatform.Dependencies
@@ -92,6 +93,7 @@ type AutomationApplicationService struct {
 	invokeAction        func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error)
 	workflows           AutomationWorkflowRunner
 	canAccess           func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
+	mutationScope       func(principalmodel.Principal, definitionmodel.ObjectSchema, string) (*recordmodel.RecordScopeExpression, error)
 	validateRule        func(context.Context, automationmodel.AutomationRuleSchema) error
 	management          *AutomationManagementApplicationService
 	worker              workerplatform.Dependencies
@@ -107,7 +109,7 @@ func NewAutomationApplicationService(dependencies AutomationApplicationDependenc
 		deliveryRepo: dependencies.DeliveryRepository,
 		audit:        dependencies.Audit, principal: dependencies.Principal, schema: dependencies.Schema,
 		invokeAction: dependencies.InvokeAction, workflows: dependencies.Workflows,
-		canAccess: dependencies.CanAccess, validateRule: dependencies.ValidateRule,
+		canAccess: dependencies.CanAccess, mutationScope: dependencies.MutationScope, validateRule: dependencies.ValidateRule,
 		worker: dependencies.Worker, compileNotification: dependencies.NotificationCompiler, commitNotification: dependencies.NotificationCommitter,
 	}
 	service.management = NewAutomationManagementApplicationService(AutomationManagementDependencies{
@@ -194,7 +196,7 @@ func (s *AutomationApplicationService) FindBeforeCreateReplay(ctx context.Contex
 	if err := automationAuthorizeQuery(principal); err != nil {
 		return recordmodel.Record{}, false, err
 	}
-	return AutomationFindBeforeCreateReplay(ctx, s.rules.List(), s.recordRepo, object, input, principal, s.canAccess)
+	return AutomationFindBeforeCreateReplay(ctx, s.rules.List(), s.recordRepo, object, input, principal, s.mutationScope, s.canAccess)
 }
 
 func (s *AutomationApplicationService) AfterOutbox(objectKey, operation string, before map[string]any, record recordmodel.Record, principal principalmodel.Principal) []publicationmodel.Message {

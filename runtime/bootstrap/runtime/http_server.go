@@ -24,6 +24,7 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 	runtime.api = transportbootstrap.AssembleRuntimeHTTPServer(ctx, transportbootstrap.HTTPServerDependencies{
 		Config: runtime.cfg, Records: runtime.records,
 		IdentityBinding:      runtime.identityBinding,
+		PrincipalCache:       runtime.principalCache,
 		AuthorizationActions: runtime.authorizationActions,
 		MonitoringBinding:    runtime.monitoringBinding,
 		SchedulerBinding:     runtime.schedulerBinding,

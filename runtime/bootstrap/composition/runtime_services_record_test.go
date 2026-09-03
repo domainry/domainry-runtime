@@ -30,6 +30,7 @@ import (
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
+	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -830,7 +831,7 @@ func TestRecordActionApplicationWiringCoversRoutingAndCoreValidationBoundaries(t
 	baseRole := accessfixture.Bundle{
 		Key:          "operator",
 		Permissions:  []string{baseAction.Key},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true, Write: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}},
 	}
 	baseRecord := recordmodel.Record{ID: "customer-1", Data: map[string]any{"status": "draft", "version": 1, "created_by": "maker"}}
 
@@ -860,7 +861,7 @@ func TestRecordActionApplicationWiringCoversRoutingAndCoreValidationBoundaries(t
 		t.Fatal("Action object mismatch must fail")
 	}
 
-	deniedRuntime, deniedPrincipal := fixture(baseObject, baseAction, accessfixture.Bundle{Key: "denied", RecordScope: "all_records"}, newRepository())
+	deniedRuntime, deniedPrincipal := fixture(baseObject, baseAction, accessfixture.Bundle{Key: "denied"}, newRepository())
 	if _, err := invoke(deniedRuntime.Applications().Actions, "customer", baseAction.Key, deniedPrincipal); err == nil {
 		t.Fatal("Action permission denial must fail")
 	}
@@ -910,9 +911,10 @@ func TestRecordActionApplicationWiringCoversRoutingAndCoreValidationBoundaries(t
 
 func TestBusinessReferenceProjectionSupportsOptionalPorts(t *testing.T) {
 	service := assembleChangePlanReferenceApplication(nil, nil, nil)
+	permissions := []string{changeplanapplication.ActionBusinessReferenceGraph, "customer.read"}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
-		Permissions:  []string{changeplanapplication.ActionBusinessReferenceGraph, "customer.read"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all_records", Read: true}},
+		Permissions:  permissions,
+		DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll),
 	})
 	if graph, err := service.Graph(t.Context(), principal); err != nil || len(graph.Nodes) != 0 {
 		t.Fatalf("empty reference graph=%#v error=%v", graph, err)
@@ -982,7 +984,7 @@ func TestRecordExportSupportsOptionalIdentityDirectory(t *testing.T) {
 		Dependencies: RuntimeServicesDependencies{Records: repository},
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"task.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "task", Scope: "own", Read: true}}})
-	if _, _, err := services.Applications().Records.ExportRecords(t.Context(), "task", principal); err != nil {
+	if _, err := services.Applications().Records.DispatchExportIdempotent(t.Context(), "task", "without-directory", recordapplication.RecordExportOptions{}, principal); err != nil {
 		t.Fatalf("export without Identity Directory error=%v", err)
 	}
 	services = newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
@@ -991,7 +993,7 @@ func TestRecordExportSupportsOptionalIdentityDirectory(t *testing.T) {
 		}}},
 		Dependencies: RuntimeServicesDependencies{Records: repository, IdentityDirectory: compositionIdentityDirectory{}},
 	})
-	if _, _, err := services.Applications().Records.ExportRecords(t.Context(), "task", principal); err != nil {
+	if _, err := services.Applications().Records.DispatchExportIdempotent(t.Context(), "task", "with-directory", recordapplication.RecordExportOptions{}, principal); err != nil {
 		t.Fatalf("export with Identity Directory error=%v", err)
 	}
 }

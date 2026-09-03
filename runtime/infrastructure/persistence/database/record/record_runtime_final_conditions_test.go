@@ -113,7 +113,7 @@ func TestRecordListWithActionTransactionCoversLockAndRelationSnapshotBypass(t *t
 	}}
 	store := scriptedRecordStore(t, state)
 	ctx := WithActionExecutionTransaction(t.Context(), store.database())
-	page, err := store.ListRecords(ctx, "workspace", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, LockIntent: recordmodel.RecordQueryLockForUpdate, ScopeExpression: recordStoreRelationScope()})
+	page, err := store.ListRecords(ctx, "workspace", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, LockIntent: recordmodel.RecordQueryLockForUpdate, AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key, ScopeExpression: recordStoreRelationScope()})
 	if err != nil || page.Total != 0 {
 		t.Fatalf("transactional relation page=%#v err=%v", page, err)
 	}

@@ -40,7 +40,7 @@ func TestRecordStoreImplementsContractAndCancelsSQL(t *testing.T) {
 	}
 	expired, expiredCancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer expiredCancel()
-	if _, err := repository.ListRecords(expired, "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10}); !errors.Is(err, context.DeadlineExceeded) {
+	if _, err := repository.ListRecords(expired, "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected SQL deadline error, got %v", err)
 	}
 	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{ID: "record_1", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}}

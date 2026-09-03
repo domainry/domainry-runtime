@@ -178,12 +178,12 @@ func (h *ReportModuleQueryHost) AuthorizeReportObjectSQLPlan(ctx context.Context
 	return nil
 }
 
-func (h *ReportModuleQueryHost) AuthorizeReportExportSource(_ context.Context, objectKey string, subject reportmodel.ReportSubject) (string, error) {
+func (h *ReportModuleQueryHost) AuthorizeReportExportSource(_ context.Context, objectKey string, subject reportmodel.ReportSubject) error {
 	principal := RuntimePrincipalFromReportSubject(subject)
 	if !recordpolicy.RecordAllowsObjectAction(principal, objectKey, "export") {
-		return "", stableReportHostError(&apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.permission.denied"})
+		return stableReportHostError(&apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.permission.denied"})
 	}
-	return recordpolicy.RecordDataScopeForPrincipal(principal, objectKey, "export"), nil
+	return nil
 }
 
 func (h *ReportModuleQueryHost) AuthorizeReportExportField(ctx context.Context, objectKey, fieldKey string, subject reportmodel.ReportSubject) (bool, error) {

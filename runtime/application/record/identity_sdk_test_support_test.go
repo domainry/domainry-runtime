@@ -26,5 +26,5 @@ func recordFullAccessBundle(additionalPermissions ...string) accessfixture.Bundl
 			permissions = append(permissions, objectKey+"."+action)
 		}
 	}
-	return accessfixture.Bundle{Key: "test-record-admin", Permissions: permissions, RecordScope: "all_records"}
+	return accessfixture.Bundle{Key: "test-record-admin", Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, "all")}
 }

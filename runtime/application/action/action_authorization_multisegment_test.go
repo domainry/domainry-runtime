@@ -29,7 +29,7 @@ func TestActionAuthorizationMultiSegmentPermissionKeyConsistent(t *testing.T) {
 			PermissionKey: "ticket.transition.start", ResourceKey: "ticket", ActionKey: "transition.start",
 		}},
 		DataPolicies: []accessfixture.DataPolicyFixture{
-			{ObjectKey: "ticket", Scope: "all_records", Read: true, Write: true},
+			{ObjectKey: "ticket", Scope: "all", Read: true, Write: true},
 		},
 	},
 	)
@@ -53,7 +53,7 @@ func TestActionAuthorizationMultiSegmentPermissionKeyConsistent(t *testing.T) {
 		Key:         "viewer",
 		Permissions: []string{"ticket.read"},
 		DataPolicies: []accessfixture.DataPolicyFixture{
-			{ObjectKey: "ticket", Scope: "all_records", Read: true, Write: true},
+			{ObjectKey: "ticket", Scope: "all", Read: true, Write: true},
 		},
 	})
 	if ActionAllowed(denied, action) {

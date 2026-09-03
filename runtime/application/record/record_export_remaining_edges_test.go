@@ -23,7 +23,7 @@ func TestRecordExportProjectionFailureIsReturned(t *testing.T) {
 	service.dependencies.ProjectRecords = func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, []recordmodel.Record, string) ([]recordmodel.Record, error) {
 		return nil, failure
 	}
-	if _, _, err := service.Export(t.Context(), object.Key, recordExportPrincipal(object.Key)); !errors.Is(err, failure) {
+	if _, _, err := exportRecordDirectForTest(t.Context(), service, object.Key, recordExportPrincipal(object.Key), RecordExportOptions{}); !errors.Is(err, failure) {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -44,7 +44,7 @@ func TestRecordExportAssurancePreverifiedAndValidatorFailures(t *testing.T) {
 	service.dependencies.ValidateAssurance = func(context.Context, definitionmodel.ObjectSchema, principalmodel.Principal, map[string]any, string) (map[string]string, error) {
 		return nil, failure
 	}
-	if _, _, err := service.ExportWithOptions(t.Context(), object.Key, principal, RecordExportOptions{}); !errors.Is(err, failure) {
+	if _, _, err := exportRecordDirectForTest(t.Context(), service, object.Key, principal, RecordExportOptions{}); !errors.Is(err, failure) {
 		t.Fatalf("validator err=%v", err)
 	}
 }
@@ -72,7 +72,7 @@ func TestRecordExportScopedProjectedMissingAndNilFields(t *testing.T) {
 	service.dependencies.ProjectRecords = func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, []recordmodel.Record, string) ([]recordmodel.Record, error) {
 		return []recordmodel.Record{{ID: "customer-1", Data: map[string]any{"nil_value": nil}}}, nil
 	}
-	content, _, err := service.Export(t.Context(), object.Key, recordExportPrincipal(object.Key))
+	content, _, err := exportRecordDirectForTest(t.Context(), service, object.Key, recordExportPrincipal(object.Key), RecordExportOptions{})
 	if err != nil || !strings.Contains(string(content), "customer-1") {
 		t.Fatalf("content=%q err=%v", content, err)
 	}

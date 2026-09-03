@@ -46,23 +46,23 @@ func TestQueryPolicyCustomScopeCompilationAndFallbackEdges(t *testing.T) {
 	service := NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{Objects: func() []definitionmodel.ObjectSchema { return []definitionmodel.ObjectSchema{object} }})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1"}}, accessfixture.Bundle{
 		Permissions:  []string{"customer.read", "customer.update"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Scope: "custom", Read: true, Write: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Read: true, Write: true, Predicate: &accessfixture.PredicateFixture{Operator: "eq", FieldKey: "owner_id", ValueSource: "actor_claim", ClaimKey: "user_id"}}},
 	})
 
 	query := service.NormalizeListQuery(object, recordmodel.RecordListQuery{}, principal)
-	if query.ScopeExpression == nil || query.ScopeDiagnostic != nil {
-		t.Fatalf("default custom fixture did not compile through SDK: %#v", query)
+	if query.ScopeExpression == nil || query.AuthorizationDiagnostic != nil {
+		t.Fatalf("explicit SDK predicate did not compile: %#v", query)
 	}
-	allowed, err := service.CanAccessPersistedRecordScope(t.Context(), principal, object, recordmodel.Record{}, false)
+	allowed, err := service.CanAccessPersistedRecordScope(t.Context(), principal, object, recordmodel.Record{Data: map[string]any{"owner_id": "user-1"}}, false)
 	if err != nil || !allowed {
-		t.Fatalf("SDK unrestricted predicate denied candidate record allowed=%v err=%v", allowed, err)
+		t.Fatalf("SDK predicate denied matching candidate record allowed=%v err=%v", allowed, err)
 	}
 
 	accessfixture.Mutate(&principal, func(role *accessfixture.Bundle) {
 		role.DataPolicies[0].Predicate = &accessfixture.PredicateFixture{Operator: "invalid"}
 	})
 	query = service.NormalizeListQuery(object, recordmodel.RecordListQuery{}, principal)
-	if query.ScopeDiagnostic == nil {
+	if query.AuthorizationDiagnostic == nil {
 		t.Fatalf("invalid custom expression query=%#v", query)
 	}
 	if allowed, err = service.CanAccessPersistedRecordScope(t.Context(), principal, object, recordmodel.Record{}, true); allowed || apperror.CodeOf(err) != "backend.policy.expression_invalid" {
@@ -73,7 +73,7 @@ func TestQueryPolicyCustomScopeCompilationAndFallbackEdges(t *testing.T) {
 		role.DataPolicies[0].Predicate = &accessfixture.PredicateFixture{Operator: "eq", FieldKey: "owner_id", ValueSource: "actor_claim", ClaimKey: "user_id"}
 	})
 	query = service.NormalizeListQuery(object, recordmodel.RecordListQuery{}, principal)
-	if query.ScopeExpression == nil || query.ScopeDiagnostic != nil {
+	if query.ScopeExpression == nil || query.AuthorizationDiagnostic != nil {
 		t.Fatalf("valid custom expression query=%#v", query)
 	}
 	allowed, err = service.CanAccessPersistedRecordScope(t.Context(), principal, object, recordmodel.Record{Data: map[string]any{"owner_id": "user-1"}}, false)
@@ -83,7 +83,7 @@ func TestQueryPolicyCustomScopeCompilationAndFallbackEdges(t *testing.T) {
 
 	accessfixture.Set(&principal, accessfixture.Bundle{
 		Permissions:  []string{"customer.read", "customer.update"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Scope: "all_records", Read: true, Write: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Scope: "all", Read: true, Write: true}},
 	})
 	for _, write := range []bool{false, true} {
 		allowed, err = service.CanAccessPersistedRecordScope(t.Context(), principal, object, recordmodel.Record{Data: map[string]any{"owner_id": "user-1"}}, write)
@@ -110,7 +110,7 @@ func TestQueryPolicyReportSnapshotAccessMatrix(t *testing.T) {
 	assertRecordAppError(t, service.EnsureReportSnapshotAccess(snapshot, "read", permissionOnly), apperror.KindForbidden, "backend.report.permission_denied", nil)
 	accessfixture.Set(&permissionOnly, accessfixture.Bundle{
 		Permissions:  []string{"sales_snapshot.read"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "sales_snapshot", Read: true, Scope: "all_records"}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "sales_snapshot", Read: true, Scope: "all"}},
 	})
 	if err := service.EnsureReportSnapshotAccess(snapshot, "read", permissionOnly); err != nil {
 		t.Fatal(err)
@@ -125,7 +125,7 @@ func TestQueryPolicyFallbackAndReportingOwnerEdges(t *testing.T) {
 	service := NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{})
 	all := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager"}}, accessfixture.Bundle{
 		Permissions:  []string{"deal.read", "deal.update"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "deal", Scope: "all_records", Read: true, Write: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "deal", Scope: "all", Read: true, Write: true}},
 	})
 	if !service.CanAccessRecord(all, object, recordmodel.Record{Data: map[string]any{"owner": "other"}}) {
 		t.Fatal("all-record fallback denied read")

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/telemetry"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -44,9 +45,17 @@ func (s *RecordUpdateApplicationService) PlanUpdateMutation(ctx context.Context,
 	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "update"); err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
-	record, found, err := s.dependencies.Repository.GetRecord(ctx, principal.WorkspaceID, object, recordID)
+	authorizationScope, err := resolveRecordMutationScope(s.dependencies.ScopeForAction, authorizationPrincipal, object, "update")
 	if err != nil {
-		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindInternal, "backend.internal", err, "operation", "get record")
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
+	}
+	record, found, err := loadRecordMutationTarget(ctx, s.dependencies.LoadTargetForAction, s.dependencies.Repository, principal.WorkspaceID, object, recordID, authorizationScope)
+	if err != nil {
+		operation := "get record"
+		if s.dependencies.LoadTargetForAction != nil {
+			operation = "get scoped mutation target"
+		}
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindInternal, "backend.internal", err, "operation", operation)
 	}
 	if !found {
 		if planned := recordservice.RecordPlannedRelations(ctx); planned[objectKey] != nil {
@@ -54,7 +63,10 @@ func (s *RecordUpdateApplicationService) PlanUpdateMutation(ctx context.Context,
 		}
 	}
 	if !found {
-		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindNotFound, "backend.record.not_found", nil)
+		if s.dependencies.LoadTargetForAction == nil {
+			return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindNotFound, "backend.record.not_found", nil)
+		}
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindForbidden, "backend.record.outside_scope", nil)
 	}
 	allowed, err := s.canAccessScope(ctx, authorizationPrincipal, object, record, false)
 	if err != nil {
@@ -63,7 +75,7 @@ func (s *RecordUpdateApplicationService) PlanUpdateMutation(ctx context.Context,
 	if !allowed {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindForbidden, "backend.record.outside_scope", nil)
 	}
-	planned, err := s.planUpdate(ctx, objectKey, object, record, patch, nil, nil, principal, authorizationPrincipal)
+	planned, err := s.planUpdate(ctx, objectKey, object, record, patch, nil, nil, principal, authorizationPrincipal, authorizationScope)
 	if err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
@@ -78,8 +90,12 @@ func (s *RecordApplicationService) EnqueueImportStream(ctx context.Context, obje
 	return s.dataExchange.EnqueueImportStream(ctx, objectKey, source, filename, contentType, maxBytes, key, principal)
 }
 
-func (s *RecordApplicationService) EnqueueExportJob(ctx context.Context, objectKey, key string, options RecordExportOptions, principal principalmodel.Principal) (recordmodel.RecordBatchJob, bool, error) {
-	return s.dataExchange.EnqueueExport(ctx, objectKey, key, options, principal)
+func (s *RecordApplicationService) DispatchExportIdempotent(ctx context.Context, objectKey, key string, options RecordExportOptions, principal principalmodel.Principal) (RecordExportDispatch, error) {
+	return s.dataExchange.DispatchExportIdempotent(ctx, objectKey, key, options, principal)
+}
+
+func (s *RecordApplicationService) DownloadExport(ctx context.Context, jobID string, principal principalmodel.Principal) (dataexchange.Artifact, error) {
+	return s.dataExchange.DownloadExport(ctx, jobID, principal)
 }
 
 func (s *RecordApplicationService) StartDataExchangeWorker(ctx context.Context, interval time.Duration, limit int) <-chan struct{} {
@@ -291,18 +307,4 @@ func (s *RecordApplicationService) RestoreRecord(ctx context.Context, objectKey,
 		return recordmodel.Record{}, err
 	}
 	return s.restore.Restore(ctx, objectKey, recordID, principal)
-}
-
-func (s *RecordApplicationService) ExportRecords(ctx context.Context, objectKey string, principal principalmodel.Principal) ([]byte, string, error) {
-	if err := recordAuthorizeQuery(principal); err != nil {
-		return nil, "", err
-	}
-	return s.exporter.Export(ctx, objectKey, principal)
-}
-
-func (s *RecordApplicationService) ExportRecordsWithOptions(ctx context.Context, objectKey string, principal principalmodel.Principal, options RecordExportOptions) ([]byte, string, error) {
-	if err := recordAuthorizeQuery(principal); err != nil {
-		return nil, "", err
-	}
-	return s.exporter.ExportWithOptions(ctx, objectKey, principal, options)
 }

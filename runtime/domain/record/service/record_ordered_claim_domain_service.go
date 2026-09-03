@@ -50,7 +50,7 @@ func RecordClaimFirstEligible(ctx context.Context, repository recordrepository.R
 	}
 	query := request.Query
 	query.Page, query.PageSize = 1, 1
-	query.Scope = "all_records"
+	query.AuthorizationMode = recordmodel.RecordQueryAuthorizationUnrestricted
 	if query.Filters == nil {
 		query.Filters = map[string]any{}
 	}

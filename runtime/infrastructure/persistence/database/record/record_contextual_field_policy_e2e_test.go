@@ -48,7 +48,7 @@ func TestContextualFieldPolicyEndToEndKeepsReadExportReportAuditAndWriteAligned(
 	allowRelated := accessfixture.FieldRuleFixture{Key: "related-clear", Priority: 100, Actions: []string{"read", "export", "report", "audit", "write"}, Effect: "allow", Predicate: relationship}
 	maskOther := accessfixture.FieldRuleFixture{Key: "other-mask", Priority: 10, Actions: []string{"read", "export", "report", "audit"}, Effect: "mask", MaskStrategy: &accessfixture.MaskFixture{Type: "phone"}}
 	hideOther := accessfixture.FieldRuleFixture{Key: "other-hide", Priority: 10, Actions: []string{"read", "export", "report", "audit"}, Effect: "hide", AuditDenial: true}
-	role := accessfixture.Bundle{Key: "coach", Permissions: []string{"member.read", "member.export"}, RecordScope: "all_records", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Scope: "all_records", Read: true}}, FieldPolicies: []accessfixture.FieldPolicyFixture{
+	role := accessfixture.Bundle{Key: "coach", Permissions: []string{"member.read", "member.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Scope: "all", Read: true}}, FieldPolicies: []accessfixture.FieldPolicyFixture{
 		{ObjectKey: "member", FieldKey: "name", Read: true, Export: true},
 		{ObjectKey: "member", FieldKey: "phone", Read: true, Export: true, Policies: []accessfixture.FieldRuleFixture{allowRelated, maskOther}},
 		{ObjectKey: "member", FieldKey: "health_note", Read: true, Export: true, Policies: []accessfixture.FieldRuleFixture{allowRelated, hideOther}},
@@ -93,9 +93,9 @@ func TestContextualFieldPolicyEndToEndKeepsReadExportReportAuditAndWriteAligned(
 			return projected, projectErr
 		},
 	})
-	csv, _, err := exporter.Export(t.Context(), "member", principal)
-	if err != nil || !strings.Contains(string(csv), "10000000004") || strings.Contains(string(csv), "10000000005") || strings.Contains(string(csv), "allergy-b") {
-		t.Fatalf("contextual export leaked or hid wrong value: csv=%s err=%v", csv, err)
+	csv := dispatchDirectRecordExport(t, exporter, "member", principal)
+	if !strings.Contains(string(csv), "10000000004") || strings.Contains(string(csv), "10000000005") || strings.Contains(string(csv), "allergy-b") {
+		t.Fatalf("contextual export leaked or hid wrong value: csv=%s", csv)
 	}
 
 	reportAccess := contextualFieldReportAccess{policy: policy, fields: fieldPolicy}
@@ -115,7 +115,7 @@ func TestContextualFieldPolicyEndToEndKeepsReadExportReportAuditAndWriteAligned(
 
 	selfPredicate := &accessfixture.PredicateFixture{Operator: "eq", FieldKey: "id", ValueSource: "actor_claim", ClaimKey: "business_profile_id"}
 	selfAllow := accessfixture.FieldRuleFixture{Key: "self-clear", Priority: 100, Actions: []string{"read", "export", "report", "audit"}, Effect: "allow", Predicate: selfPredicate}
-	memberRole := accessfixture.Bundle{Key: "member", Permissions: []string{"member.read", "member.export"}, RecordScope: "custom", DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Scope: "custom", Read: true, AuditDenial: true, Predicate: selfPredicate}}, FieldPolicies: []accessfixture.FieldPolicyFixture{
+	memberRole := accessfixture.Bundle{Key: "member", Permissions: []string{"member.read", "member.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Read: true, AuditDenial: true, Predicate: selfPredicate}}, FieldPolicies: []accessfixture.FieldPolicyFixture{
 		{ObjectKey: "member", FieldKey: "name", Read: true, Export: true},
 		{ObjectKey: "member", FieldKey: "phone", Read: true, Export: true, Policies: []accessfixture.FieldRuleFixture{selfAllow, maskOther}},
 		{ObjectKey: "member", FieldKey: "health_note", Read: true, Export: true, Policies: []accessfixture.FieldRuleFixture{selfAllow, hideOther}},

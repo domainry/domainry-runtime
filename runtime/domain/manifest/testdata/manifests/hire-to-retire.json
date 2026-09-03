@@ -1165,76 +1165,13 @@
       "key": "admin",
       "name": "Admin",
       "permissions": [
-        "business.access",
-        "runtime.appschema.validate_application_definition"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "position_plan",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "candidate_offer",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "employee_lifecycle",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "onboarding_task",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "benefit_enrollment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "asset_assignment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "access_assignment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "offboarding_task",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "termination_case",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "employee_lifecycle_ledger",
-          "scope": "all_records",
-          "read": true,
-          "write": true
-        },
-        {
-          "object_key": "termination_notification",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "runtime.appschema.validate_application_definition",
+          "data_scope": "all"
         }
       ]
     },
@@ -1242,81 +1179,81 @@
       "key": "recruiter",
       "name": "Recruiter",
       "permissions": [
-        "access_assignment.create",
-        "asset_assignment.create",
-        "benefit_enrollment.create",
-        "business.access",
-        "candidate_offer.create",
-        "candidate_offer.read",
-        "candidate_offer.update",
-        "employee_lifecycle.create",
-        "employee_lifecycle.read",
-        "employee_lifecycle_ledger.create",
-        "offboarding_task.create",
-        "onboarding_task.create",
-        "position_plan.read",
-        "runtime.workflows.get_ops_workflow_process",
-        "runtime.workflows.list_ops_workflow_executions",
-        "runtime.workflows.list_ops_workflow_processes",
-        "workflow.candidate_offer.multilevel_approval.run",
-        "workflow.termination_case.approval.run",
-        "workflow.termination_case.due_scheduler.run"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "position_plan",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "access_assignment.create",
+          "data_scope": "all"
         },
         {
-          "object_key": "candidate_offer",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "asset_assignment.create",
+          "data_scope": "all"
         },
         {
-          "object_key": "employee_lifecycle",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "benefit_enrollment.create",
+          "data_scope": "all"
         },
         {
-          "object_key": "onboarding_task",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "benefit_enrollment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "candidate_offer.create",
+          "data_scope": "all"
         },
         {
-          "object_key": "asset_assignment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "candidate_offer.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "access_assignment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "candidate_offer.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "offboarding_task",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "employee_lifecycle.create",
+          "data_scope": "all"
         },
         {
-          "object_key": "employee_lifecycle_ledger",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "employee_lifecycle.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "employee_lifecycle_ledger.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "offboarding_task.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "onboarding_task.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "position_plan.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.get_ops_workflow_process",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_executions",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_processes",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "workflow.candidate_offer.multilevel_approval.run",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "workflow.termination_case.approval.run",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "workflow.termination_case.due_scheduler.run",
+          "data_scope": "all"
         }
       ]
     },
@@ -1324,36 +1261,45 @@
       "key": "hiring_manager",
       "name": "Hiring Manager",
       "permissions": [
-        "business.access",
-        "candidate_offer.read",
-        "employee_lifecycle.read",
-        "onboarding_task.read",
-        "runtime.workflows.approve_business_workflow_task",
-        "runtime.workflows.get_ops_workflow_process",
-        "runtime.workflows.list_ops_workflow_executions",
-        "runtime.workflows.list_ops_workflow_processes",
-        "runtime.workflows.reject_business_workflow_task",
-        "runtime.workflows.return_business_workflow_task"
-      ],
-      "record_scope": "organization_and_children",
-      "data_permissions": [
         {
-          "object_key": "candidate_offer",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "employee_lifecycle",
-          "scope": "organization_and_children",
-          "read": true,
-          "write": false
+          "permission_key": "candidate_offer.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "onboarding_task",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "employee_lifecycle.read",
+          "data_scope": "org_child"
+        },
+        {
+          "permission_key": "onboarding_task.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.approve_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.get_ops_workflow_process",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_executions",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_processes",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.reject_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.return_business_workflow_task",
+          "data_scope": "all"
         }
       ],
       "field_permissions": [
@@ -1379,105 +1325,129 @@
       "key": "hr_admin",
       "name": "HR Admin",
       "permissions": [
-        "access_assignment.read",
-        "asset_assignment.read",
-        "benefit_enrollment.read",
-        "benefit_enrollment.update",
-        "business.access",
-        "candidate_offer.read",
-        "candidate_offer.update",
-        "employee_lifecycle.read",
-        "employee_lifecycle.update",
-        "employee_lifecycle_ledger.create",
-        "employee_lifecycle_ledger.read",
-        "identity.audit.view",
-        "identity.users.read",
-        "identity.users.write",
-        "offboarding_task.read",
-        "offboarding_task.update",
-        "onboarding_task.read",
-        "onboarding_task.update",
-        "runtime.operations.list_operations",
-        "position_plan.read",
-        "position_plan.update",
-        "runtime.workflows.approve_business_workflow_task",
-        "runtime.workflows.get_ops_workflow_process",
-        "runtime.workflows.list_ops_workflow_executions",
-        "runtime.workflows.list_ops_workflow_processes",
-        "runtime.workflows.reject_business_workflow_task",
-        "runtime.workflows.return_business_workflow_task",
-        "termination_case.create",
-        "termination_case.read",
-        "termination_case.update",
-        "termination_notification.read"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "position_plan",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "access_assignment.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "candidate_offer",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "asset_assignment.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "employee_lifecycle",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "benefit_enrollment.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "onboarding_task",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "benefit_enrollment.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "benefit_enrollment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "asset_assignment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "candidate_offer.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "access_assignment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "candidate_offer.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "offboarding_task",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "employee_lifecycle.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "termination_case",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "employee_lifecycle.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "employee_lifecycle_ledger",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "employee_lifecycle_ledger.create",
+          "data_scope": "all"
         },
         {
-          "object_key": "termination_notification",
-          "scope": "all_records",
-          "read": true,
-          "write": false
+          "permission_key": "employee_lifecycle_ledger.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "identity.audit.view",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "identity.users.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "identity.users.write",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "offboarding_task.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "offboarding_task.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "onboarding_task.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "onboarding_task.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.operations.list_operations",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "position_plan.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "position_plan.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.approve_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.get_ops_workflow_process",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_executions",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_processes",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.reject_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.return_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "termination_case.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "termination_case.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "termination_case.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "termination_notification.read",
+          "data_scope": "all"
         }
       ]
     },
@@ -1485,62 +1455,77 @@
       "key": "it_admin",
       "name": "IT Admin",
       "permissions": [
-        "access_assignment.read",
-        "access_assignment.update",
-        "asset_assignment.read",
-        "asset_assignment.update",
-        "business.access",
-        "employee_lifecycle.read",
-        "employee_lifecycle.update",
-        "employee_lifecycle_ledger.create",
-        "offboarding_task.read",
-        "offboarding_task.update",
-        "runtime.workflows.approve_business_workflow_task",
-        "runtime.workflows.get_ops_workflow_process",
-        "runtime.workflows.list_ops_workflow_executions",
-        "runtime.workflows.list_ops_workflow_processes",
-        "runtime.workflows.reject_business_workflow_task",
-        "runtime.workflows.return_business_workflow_task",
-        "termination_case.read",
-        "termination_case.update"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "termination_case",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "access_assignment.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "employee_lifecycle",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "access_assignment.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "asset_assignment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "asset_assignment.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "access_assignment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "asset_assignment.update",
+          "data_scope": "all"
         },
         {
-          "object_key": "offboarding_task",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "employee_lifecycle_ledger",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "employee_lifecycle.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "employee_lifecycle.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "employee_lifecycle_ledger.create",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "offboarding_task.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "offboarding_task.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.approve_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.get_ops_workflow_process",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_executions",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.list_ops_workflow_processes",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.reject_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "runtime.workflows.return_business_workflow_task",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "termination_case.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "termination_case.update",
+          "data_scope": "all"
         }
       ]
     },
@@ -1548,25 +1533,25 @@
       "key": "facilities",
       "name": "Facilities",
       "permissions": [
-        "asset_assignment.read",
-        "asset_assignment.update",
-        "business.access",
-        "onboarding_task.read",
-        "onboarding_task.update"
-      ],
-      "record_scope": "all_records",
-      "data_permissions": [
         {
-          "object_key": "asset_assignment",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "asset_assignment.read",
+          "data_scope": "all"
         },
         {
-          "object_key": "onboarding_task",
-          "scope": "all_records",
-          "read": true,
-          "write": true
+          "permission_key": "asset_assignment.update",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "business.access",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "onboarding_task.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "onboarding_task.update",
+          "data_scope": "all"
         }
       ]
     },
@@ -1574,44 +1559,29 @@
       "key": "employee",
       "name": "Employee",
       "permissions": [
-        "access_assignment.read",
-        "asset_assignment.read",
-        "benefit_enrollment.read",
-        "business.access",
-        "employee_lifecycle.read",
-        "onboarding_task.read"
-      ],
-      "record_scope": "owned_records",
-      "data_permissions": [
         {
-          "object_key": "employee_lifecycle",
-          "scope": "owned_records",
-          "read": true,
-          "write": false
+          "permission_key": "access_assignment.read",
+          "data_scope": "owner"
         },
         {
-          "object_key": "onboarding_task",
-          "scope": "owned_records",
-          "read": true,
-          "write": false
+          "permission_key": "asset_assignment.read",
+          "data_scope": "owner"
         },
         {
-          "object_key": "benefit_enrollment",
-          "scope": "owned_records",
-          "read": true,
-          "write": false
+          "permission_key": "benefit_enrollment.read",
+          "data_scope": "owner"
         },
         {
-          "object_key": "asset_assignment",
-          "scope": "owned_records",
-          "read": true,
-          "write": false
+          "permission_key": "business.access",
+          "data_scope": "all"
         },
         {
-          "object_key": "access_assignment",
-          "scope": "owned_records",
-          "read": true,
-          "write": false
+          "permission_key": "employee_lifecycle.read",
+          "data_scope": "owner"
+        },
+        {
+          "permission_key": "onboarding_task.read",
+          "data_scope": "owner"
         }
       ],
       "field_permissions": [

@@ -50,7 +50,7 @@ func TestBusinessRecordStreamDoesNotRequireAuditPermission(t *testing.T) {
 	handler, _ := recordsHandlerForTest(recordsHTTPPrincipal())
 	handler.audit = auditapplication.NewAuditApplicationService(repository)
 	handler.principal = func(*http.Request) principalmodel.Principal {
-		return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "hiring-manager"}}, accessfixture.Bundle{Key: "hiring_manager", RecordScope: "owned_records"})
+		return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "hiring-manager"}}, accessfixture.Bundle{Key: "hiring_manager"})
 	}
 
 	ctx, cancel := context.WithCancel(t.Context())

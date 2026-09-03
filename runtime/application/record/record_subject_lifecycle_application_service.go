@@ -203,7 +203,7 @@ func (s *RecordSubjectLifecycleApplicationService) subjectRecords(ctx context.Co
 		for _, fieldKey := range identityFieldKeys {
 			afterID := ""
 			for {
-				values, err := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: recordSubjectPageSize, SkipTotal: true, AfterID: afterID, Filters: map[string]any{fieldKey: resolvedIdentity}, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}})
+				values, err := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: recordSubjectPageSize, SkipTotal: true, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, AfterID: afterID, Filters: map[string]any{fieldKey: resolvedIdentity}, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}})
 				if err != nil {
 					return nil, err
 				}

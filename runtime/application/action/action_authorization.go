@@ -51,10 +51,15 @@ func ActionAllowed(principal principalmodel.Principal, action definitionmodel.Ac
 
 // ActionPersistencePrincipal preserves an already-approved Action as the
 // write authority for its own object. Record scope and field rules still apply.
-func ActionPersistencePrincipal(principal principalmodel.Principal, objectKey string) principalmodel.Principal {
+
+func ActionPersistencePrincipal(principal principalmodel.Principal, action definitionmodel.ActionSchema, operation string) principalmodel.Principal {
+	resourceKey, operationKey := definitionmodel.ActionPermissionSubject(action)
+	objectKey := strings.TrimSpace(action.ObjectKey)
+	operation = strings.TrimSpace(operation)
 	if principal.AccessBundle != nil {
 		bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{
-			Resource: identitysdk.ResourceType(strings.TrimSpace(objectKey)), Action: identitysdk.Action("update"),
+			Resource: identitysdk.ResourceType(objectKey), Action: identitysdk.Action(operation),
+			SourceResource: identitysdk.ResourceType(resourceKey), SourceAction: identitysdk.Action(operationKey),
 		}, time.Now().UTC())
 		if err == nil {
 			principal.AccessBundle = &bundle
@@ -62,7 +67,7 @@ func ActionPersistencePrincipal(principal principalmodel.Principal, objectKey st
 		return principal
 	}
 	if principal.SystemScope.Valid() {
-		permission := strings.TrimSpace(objectKey) + ".update"
+		permission := objectKey + "." + operation
 		if !principal.HasPermission(permission) {
 			principal.SystemCapabilities = append(append([]string(nil), principal.SystemCapabilities...), permission)
 		}

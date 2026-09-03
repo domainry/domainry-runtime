@@ -12,16 +12,21 @@ type recordExportProjectedPage struct {
 	columns []string
 	rows    [][]string
 	hasNext bool
+	next    string
 }
 
-// projectExportPage is the sole Record-policy projection used by both the
-// synchronous compatibility response and the external Data Exchange owner.
-func (s *RecordExportApplicationService) projectExportPage(ctx context.Context, prepared recordExportPrepared, pageNumber int) (recordExportProjectedPage, error) {
+// projectExportPage is the sole Record-policy projection used by both direct
+// delivery and the external Data Exchange owner.
+func (s *RecordExportApplicationService) projectExportPage(ctx context.Context, prepared recordExportPrepared, cursor string) (recordExportProjectedPage, error) {
 	if err := ctx.Err(); err != nil {
 		return recordExportProjectedPage{}, err
 	}
 	queryOptions := prepared.options.Query
-	queryOptions.Page, queryOptions.PageSize = pageNumber, recordExportBatchSize
+	queryOptions.Page, queryOptions.PageSize = 1, recordExportBatchSize
+	queryOptions.SkipTotal, queryOptions.AfterID = true, strings.TrimSpace(cursor)
+	// Export iteration has one canonical order. This makes the cursor stable and
+	// prevents deep OFFSET pagination while preserving all filter/search scope.
+	queryOptions.Sort = []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}
 	query := queryOptions
 	if s.dependencies.NormalizeQuery != nil {
 		query = s.dependencies.NormalizeQuery(prepared.object, queryOptions, prepared.principal)
@@ -45,9 +50,6 @@ func (s *RecordExportApplicationService) projectExportPage(ctx context.Context, 
 	for _, record := range page.Items {
 		if err := ctx.Err(); err != nil {
 			return recordExportProjectedPage{}, err
-		}
-		if query.ScopeExpression == nil && s.dependencies.CanAccess != nil && !s.dependencies.CanAccess(prepared.principal, prepared.object, record) {
-			continue
 		}
 		projected := record
 		if s.dependencies.ProjectRecords != nil {
@@ -77,5 +79,9 @@ func (s *RecordExportApplicationService) projectExportPage(ctx context.Context, 
 		}
 		rows = append(rows, row)
 	}
-	return recordExportProjectedPage{columns: recordExportHeader(prepared.fields), rows: rows, hasNext: page.HasNext}, nil
+	next := ""
+	if page.HasNext && len(page.Items) > 0 {
+		next = page.Items[len(page.Items)-1].ID
+	}
+	return recordExportProjectedPage{columns: recordExportHeader(prepared.fields), rows: rows, hasNext: page.HasNext, next: next}, nil
 }

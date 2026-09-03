@@ -14,6 +14,7 @@ import (
 	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
@@ -47,6 +48,7 @@ type Runtime struct {
 	identityBinding      identitysdk.Binding
 	identityDirectory    identitysdk.Directory
 	identityPrincipals   identitysdk.PrincipalResolver
+	principalCache       identityprincipal.Cache
 	integrationMode      integrationsdk.DeploymentMode
 	integrationBinding   integrationsdk.Binding
 	integrationWorkers   integrationsdk.LocalWorkers
