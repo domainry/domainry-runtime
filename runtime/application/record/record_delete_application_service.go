@@ -6,6 +6,7 @@ import (
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
+	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
@@ -47,6 +48,7 @@ type RecordDeleteDependencies struct {
 	ExecuteWorkflow     func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
 	PlanUpdateReference func(context.Context, recordservice.RecordDeleteReference, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error)
 	BuildAudit          func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) auditmodel.AuditEvent
+	ExecutionRuntime    *recordruntime.RecordMutationExecutionRuntime
 	Now                 func() time.Time
 }
 
@@ -89,6 +91,48 @@ func (s *RecordDeleteApplicationService) DeleteExpected(ctx context.Context, obj
 		}
 	}
 	return nil
+}
+
+func (s *RecordDeleteApplicationService) DeleteExpectedIdempotent(ctx context.Context, objectKey, recordID, expectedUpdatedAt, idempotencyKey string, principal principalmodel.Principal) (bool, error) {
+	if err := recordAuthorizeCommand(principal); err != nil {
+		return false, err
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	object, err := s.dependencies.ObjectForAction(principal, objectKey, "delete")
+	if err != nil {
+		return false, err
+	}
+	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "delete"); err != nil {
+		return false, err
+	}
+	if s.dependencies.ExecutionRuntime == nil {
+		return false, recordDeleteError(apperror.KindInternal, "backend.idempotency.receipt_unavailable", nil)
+	}
+	claim, replayed, err := s.dependencies.ExecutionRuntime.BeginDelete(ctx, objectKey, recordID, idempotencyKey, expectedUpdatedAt, principal)
+	if err != nil || replayed {
+		return replayed, err
+	}
+	group, err := s.planDeleteMutation(ctx, objectKey, recordID, expectedUpdatedAt, principal)
+	if err != nil {
+		return false, err
+	}
+	receipt := func(ctx context.Context, commits []transactionmodel.RecordMutationCommit) error {
+		return s.dependencies.ExecutionRuntime.CommitBatch(ctx, claim, commits)
+	}
+	if err := s.dependencies.MutationKernel.CommitBatch(ctx, group.plans, receipt); err != nil {
+		return false, recordDeleteInternalError("commit idempotent delete mutation batch", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	for _, effect := range group.effects {
+		if s.dependencies.ExecuteWorkflow != nil {
+			s.dependencies.ExecuteWorkflow(ctx, effect.commit.WorkflowIntents, principal)
+		}
+	}
+	return false, nil
 }
 
 // PlanDeleteMutation prepares the complete delete mutation batch, including

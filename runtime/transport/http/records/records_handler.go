@@ -238,9 +238,18 @@ func (h *RecordsHandler) deleteRecord(w http.ResponseWriter, r *http.Request) {
 	if expected == "" {
 		expected = strings.Trim(strings.TrimSpace(r.Header.Get("If-Match")), `"`)
 	}
-	if err := h.queries.DeleteRecordExpected(r.Context(), strings.TrimSpace(r.PathValue("objectKey")), strings.TrimSpace(r.PathValue("recordID")), expected, h.principal(r)); err != nil {
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if idempotencyKey == "" {
+		h.writeActionServiceError(w, r, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, map[string]string{"use_case": "record.delete"}))
+		return
+	}
+	replayed, err := h.queries.DeleteRecordExpectedIdempotent(r.Context(), strings.TrimSpace(r.PathValue("objectKey")), strings.TrimSpace(r.PathValue("recordID")), expected, idempotencyKey, h.principal(r))
+	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
+	}
+	if replayed {
+		w.Header().Set("Idempotency-Replayed", "true")
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -5,6 +5,7 @@ import appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appsc
 import (
 	"testing"
 
+	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
@@ -142,5 +143,32 @@ func TestOpenAPISpecCoversFrontendRuntimeContract(t *testing.T) {
 		if _, ok := paths[concretePath]; !ok {
 			t.Fatalf("OpenAPI concrete schema-derived path %s missing", concretePath)
 		}
+	}
+}
+
+func TestOpenAPIPublishesRuntimeOwnedAuthoringEvidenceContract(t *testing.T) {
+	spec := Build(appschemamodel.ApplicationSchemaSnapshot{})
+	extension, ok := spec["x-domainry-runtime-authoring-evidence"].(map[string]any)
+	if !ok || extension["trust_policy"] != changeplanmodel.RuntimeAuthoringEvidenceTrustPolicy {
+		t.Fatalf("evidence extension=%#v", spec["x-domainry-runtime-authoring-evidence"])
+	}
+	requestHeaders := extension["request_headers"].(map[string]any)
+	responseHeaders := extension["response_headers"].(map[string]any)
+	if requestHeaders["scenario_id"] != changeplanmodel.RuntimeAuthoringScenarioIDHeader || responseHeaders["step_receipt"] != changeplanmodel.RuntimeAuthoringStepReceiptHeader {
+		t.Fatalf("request headers=%#v response headers=%#v", requestHeaders, responseHeaders)
+	}
+	paths := spec["paths"].(map[string]any)
+	delivery := paths["/domain-system-delivery-verification"].(map[string]any)["post"].(map[string]any)
+	body := delivery["requestBody"].(map[string]any)
+	content := body["content"].(map[string]any)
+	schema := content["application/json"].(map[string]any)["schema"].(map[string]any)
+	properties := schema["properties"].(map[string]any)
+	if properties["version"].(map[string]any)["const"] != changeplanmodel.RuntimeAuthoringDeliveryEvidenceVersion {
+		t.Fatalf("delivery evidence schema=%#v", schema)
+	}
+	scenarios := properties["scenarios"].(map[string]any)["items"].(map[string]any)
+	steps := scenarios["properties"].(map[string]any)["steps"].(map[string]any)["items"].(map[string]any)
+	if steps["properties"].(map[string]any)["runtime_receipt"] == nil {
+		t.Fatalf("delivery step schema=%#v", steps)
 	}
 }

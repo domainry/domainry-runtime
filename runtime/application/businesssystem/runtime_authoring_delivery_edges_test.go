@@ -31,12 +31,30 @@ func TestRuntimeAuthoringValidationMapsCoverageDetailDiagnostics(t *testing.T) {
 		return snapshot, nil
 	}
 	ledger := &changeplanmodel.RuntimeAuthoringCoverageLedger{
-		Version:      changeplanmodel.RuntimeAuthoringCoverageLedgerVersion,
-		Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{RequirementID: "missing-details"}},
+		Version: changeplanmodel.RuntimeAuthoringCoverageLedgerVersion,
+		Requirements: []changeplanmodel.RuntimeAuthoringCoverageRequirement{{
+			RequirementID: "missing-details", CapabilityKeys: []string{"unknown.capability"},
+			Resources: []changeplanmodel.RuntimeAuthoringCoverageResource{{ResourceType: "object", ResourceKey: "missing"}}, ScenarioIDs: []string{"missing.scenario"},
+		}},
 	}
 	report, err := NewRuntimeAuthoringValidationApplicationService(dependencies).ValidateWithCoverage(t.Context(), runtimeAuthoringValidationAdmin(), ledger)
 	if err != nil || report.Valid || len(report.Coverage.Entries[0].Issues) == 0 || len(report.Coverage.SourcelessResources) != 1 || len(report.Coverage.UnreachableResources) != 1 {
 		t.Fatalf("report=%#v err=%v", report, err)
+	}
+	foundCapabilityRepair, foundResourceRepair := false, false
+	for _, diagnostic := range report.Diagnostics {
+		if diagnostic.Repair == nil {
+			continue
+		}
+		if diagnostic.Repair.CapabilityKey == "unknown.capability" && diagnostic.Repair.JSONPointer == "/coverage/requirements/0/capability_keys" && diagnostic.Repair.ReferenceEndpoint == "/tenant-admin/platform-capabilities/capabilities/unknown.capability" {
+			foundCapabilityRepair = true
+		}
+		if diagnostic.Repair.ResourceType == "object" && diagnostic.Repair.ResourceKey == "missing" && diagnostic.Repair.JSONPointer == "/coverage/requirements/0/resources" {
+			foundResourceRepair = true
+		}
+	}
+	if !foundCapabilityRepair || !foundResourceRepair {
+		t.Fatalf("structured repair facts missing: %#v", report.Diagnostics)
 	}
 }
 

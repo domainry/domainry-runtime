@@ -8,7 +8,6 @@ func ApplicationSchemaFieldAuthoringCapability() capabilitycontract.CapabilityAu
 		Key: "schema.field", Status: "supported", Lifecycle: "versioned_metadata",
 		SystemDraftResourceType: "field",
 		Parameters: []capabilitycontract.CapabilityAuthoringParameter{
-			{Key: "key", Type: "string", Required: true, MinLength: metadataIntPointer(1)},
 			{Key: "name", Type: "string", Required: true, MinLength: metadataIntPointer(1)},
 			{Key: "type", Type: "string", Required: true, Enum: ApplicationSchemaAuthoringFieldTypes()},
 			{Key: "required", Type: "boolean", Default: false}, {Key: "unique", Type: "boolean", Default: false},
@@ -32,6 +31,7 @@ func ApplicationSchemaFieldAuthoringCapability() capabilitycontract.CapabilityAu
 		Execution:          metadataAuthoringExecution("schema.field"),
 		Errors: []capabilitycontract.CapabilityAuthoringError{
 			{Code: "backend.metadata.field_definition_invalid", FieldPath: "field", MessageKey: "backend.metadata.field_definition_invalid"},
+			{Code: "backend.metadata.field_key_mismatch", FieldPath: "payload.key", ParameterKeys: []string{"field"}, MessageKey: "backend.metadata.field_key_mismatch"},
 			{Code: "backend.validation.required", FieldPath: "field", ParameterKeys: []string{"field"}, MessageKey: "backend.validation.required"},
 			{Code: "backend.decimal.precision_invalid", FieldPath: "config.precision", MessageKey: "backend.decimal.precision_invalid"},
 			{Code: "backend.decimal.scale_invalid", FieldPath: "config.scale", MessageKey: "backend.decimal.scale_invalid"},
@@ -39,9 +39,9 @@ func ApplicationSchemaFieldAuthoringCapability() capabilitycontract.CapabilityAu
 			{Code: "backend.decimal.currency_code_invalid", FieldPath: "config.currency_code", MessageKey: "backend.decimal.currency_code_invalid"},
 		},
 		Examples: []capabilitycontract.CapabilityAuthoringExample{
-			{Name: "minimal_valid", Value: map[string]any{"object_key": "order", "expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"key": "status", "name": "Status", "type": "text", "required": false}}},
-			{Name: "representative", Value: map[string]any{"object_key": "order", "expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"key": "amount", "name": "Amount", "type": "currency", "required": true, "config": map[string]any{"precision": 19, "scale": 2, "rounding_mode": "half_even", "currency_code": "CNY"}}}},
-			{Name: "invalid_with_repair", Value: map[string]any{"object_key": "order", "expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"key": "amount", "name": "Amount", "type": "currency", "config": map[string]any{"precision": 2, "scale": 3}}}, ExpectedErrorCodes: []string{"backend.decimal.scale_invalid"}},
+			{Name: "minimal_valid", Value: map[string]any{"object_key": "order", "expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"name": "Status", "type": "text", "required": false}}},
+			{Name: "representative", Value: map[string]any{"object_key": "order", "expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"name": "Amount", "type": "currency", "required": true, "config": map[string]any{"precision": 19, "scale": 2, "rounding_mode": "half_even", "currency_code": "CNY"}}}},
+			{Name: "invalid_with_repair", Value: map[string]any{"object_key": "order", "expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"name": "Amount", "type": "currency", "config": map[string]any{"precision": 2, "scale": 3}}}, ExpectedErrorCodes: []string{"backend.decimal.scale_invalid"}},
 		},
 		Sources: []capabilitycontract.CapabilityAuthoringSource{
 			{Kind: "contract", Path: "runtime/domain/appschema/contract/appschema_field_authoring.go", Symbol: "ApplicationSchemaFieldAuthoringCapability"},

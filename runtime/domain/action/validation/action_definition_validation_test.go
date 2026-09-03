@@ -33,6 +33,17 @@ func TestActionDefinitionValidationAcceptsSourceOwnedActionMetadata(t *testing.T
 	}
 }
 
+func TestActionDefinitionValidationAllowsCompilerDefaultAuditEvent(t *testing.T) {
+	action := definitionmodel.ActionSchema{
+		Key: "order.submit", ObjectKey: "order", Label: "Submit", Kind: definitionmodel.ActionKindRecordOperation,
+	}
+	for _, issue := range ActionValidateDefinitionIssues(action) {
+		if issue.FieldPath == "audit_event" {
+			t.Fatalf("optional audit_event was rejected: %#v", issue)
+		}
+	}
+}
+
 func TestActionDefinitionValidationRejectsRuntimeIdempotencyPayloadField(t *testing.T) {
 	action := definitionmodel.ActionSchema{
 		Key: "order.complete", ObjectKey: "order", Label: "Complete", Kind: "record_update", AuditEvent: "order.completed",

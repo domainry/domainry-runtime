@@ -34,5 +34,6 @@ type RecordIdentitySeedRepository interface {
 // Application layer has resolved ordering and references.
 type RecordBusinessSeedRepository interface {
 	ListRecords(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error)
+	GetRecord(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error)
 	InsertRecord(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record) error
 }

@@ -52,6 +52,14 @@ func (s *mutationExecutionStoreStub) CommitRecordMutationExecution(_ context.Con
 	return completionExecution(completion), s.commitErr
 }
 
+func (s *mutationExecutionStoreStub) CommitRecordMutationBatchExecution(_ context.Context, commits []transactionmodel.RecordMutationCommit, completion recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error) {
+	if len(commits) > 0 {
+		s.commitValue = commits[len(commits)-1]
+	}
+	s.commitCompletion = completion
+	return completionExecution(completion), s.commitErr
+}
+
 func (s *mutationExecutionStoreStub) CompleteRecordMutationExecution(_ context.Context, completion recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error) {
 	s.completion = completion
 	return completionExecution(completion), s.completeErr
@@ -178,6 +186,28 @@ func TestBeginUpdateScopesReceiptToTargetAndReplaysResult(t *testing.T) {
 	}
 }
 
+func TestBeginDeleteScopesFingerprintAndReplaysWithoutReadingDeletedRecord(t *testing.T) {
+	store := &mutationExecutionStoreStub{claim: recordmodel.RecordMutationClaimResult{
+		Decision:  idempotency.DecisionReplay,
+		Execution: recordmodel.RecordMutationExecution{LeaseExpiresAt: time.Now().Add(time.Second).Format(time.RFC3339Nano)},
+	}}
+	claim, replayed, err := NewRecordMutationExecutionRuntime(store).BeginDelete(
+		t.Context(), " customer ", " customer-1 ", " delete-1 ", " revision-1 ",
+		principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace", UserID: "operator"}, RequestID: "request"},
+	)
+	if err != nil || !replayed || claim.Decision != idempotency.DecisionReplay {
+		t.Fatalf("claim=%+v replayed=%v err=%v", claim, replayed, err)
+	}
+	request := store.beginRequests[0]
+	if request.Execution.Operation != "delete" || request.Execution.ObjectKey != "customer" || request.Execution.TargetID != "customer-1" || request.Execution.IdempotencyKey != "delete-1" || request.RequestFingerprint == "" {
+		t.Fatalf("delete claim request=%+v", request)
+	}
+
+	conflictStore := &mutationExecutionStoreStub{claim: recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionFingerprintConflict}}
+	_, _, err = NewRecordMutationExecutionRuntime(conflictStore).BeginDelete(t.Context(), "customer", "customer-1", "delete-1", "revision-2", initializedMutationPrincipal())
+	assertRecordAppError(t, err, apperror.KindConflict, idempotency.ErrorCodeKeyReused, map[string]string{"object_key": "customer"})
+}
+
 func TestBeginImportDecisionReplayAndDecodeMatrix(t *testing.T) {
 	var nilRuntime *RecordMutationExecutionRuntime
 	_, _, _, err := nilRuntime.BeginImport(t.Context(), "customer", "key", []byte("name\nAlice"), principalmodel.Principal{})
@@ -299,6 +329,8 @@ func TestCommitAndCompleteOperationValidateAndForwardCompletion(t *testing.T) {
 	var nilRuntime *RecordMutationExecutionRuntime
 	assertRecordAppError(t, nilRuntime.Commit(t.Context(), claim, commit), apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil)
 	assertRecordAppError(t, NewRecordMutationExecutionRuntime(nil).Commit(t.Context(), claim, commit), apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil)
+	assertRecordAppError(t, nilRuntime.CommitBatch(t.Context(), claim, []transactionmodel.RecordMutationCommit{commit}), apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil)
+	assertRecordAppError(t, NewRecordMutationExecutionRuntime(nil).CommitBatch(t.Context(), claim, []transactionmodel.RecordMutationCommit{commit}), apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil)
 	assertRecordAppError(t, nilRuntime.CompleteOperation(t.Context(), claim, nil), apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil)
 	assertRecordAppError(t, NewRecordMutationExecutionRuntime(nil).CompleteOperation(t.Context(), claim, nil), apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil)
 
@@ -316,6 +348,12 @@ func TestCommitAndCompleteOperationValidateAndForwardCompletion(t *testing.T) {
 	}
 	if store.commitCompletion.ExecutionID != "execution-1" || store.commitCompletion.LeaseOwner != "owner" || store.commitCompletion.FencingToken != 7 || store.commitCompletion.Result.(recordmodel.Record).ID != "record-1" || !store.commitCompletion.ExpiresAt.After(store.commitCompletion.Now) {
 		t.Fatalf("commit completion=%+v", store.commitCompletion)
+	}
+	if err := runtime.CommitBatch(t.Context(), claim, []transactionmodel.RecordMutationCommit{commit}); err != nil {
+		t.Fatal(err)
+	}
+	if store.commitCompletion.Result.(map[string]any)["deleted"] != true {
+		t.Fatalf("batch completion=%+v", store.commitCompletion)
 	}
 
 	completeErr := errors.New("complete failed")

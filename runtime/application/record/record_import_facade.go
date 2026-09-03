@@ -279,6 +279,13 @@ func (s *RecordApplicationService) DeleteRecordExpected(ctx context.Context, obj
 	return s.delete.DeleteExpected(ctx, objectKey, recordID, expectedUpdatedAt, principal)
 }
 
+func (s *RecordApplicationService) DeleteRecordExpectedIdempotent(ctx context.Context, objectKey, recordID, expectedUpdatedAt, idempotencyKey string, principal principalmodel.Principal) (bool, error) {
+	if err := recordAuthorizeCommand(principal); err != nil {
+		return false, err
+	}
+	return s.delete.DeleteExpectedIdempotent(ctx, objectKey, recordID, expectedUpdatedAt, idempotencyKey, principal)
+}
+
 func (s *RecordApplicationService) RestoreRecord(ctx context.Context, objectKey, recordID string, principal principalmodel.Principal) (recordmodel.Record, error) {
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.Record{}, err

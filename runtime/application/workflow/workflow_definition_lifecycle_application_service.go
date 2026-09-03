@@ -190,6 +190,9 @@ func workflowMetadataPublishKey(version workflowmodel.WorkflowDefinitionVersion)
 func (s *WorkflowApplicationService) validateWorkflowDefinition(ctx context.Context, workflow definitionmodel.WorkflowSchema) workflowmodel.WorkflowValidation {
 	report := emptyWorkflowValidation()
 	report.ValidatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	if workflow.Graph != nil && workflow.Graph.Version == 0 {
+		workflow.Graph.Version = 2
+	}
 	if err := workflowvalidation.WorkflowValidateGraph(workflow.Graph); err != nil {
 		code, diagnostic := valueOrDefault(apperror.CodeOf(err), "backend.workflow.graph_invalid"), err.Error()
 		report.Issues = append(report.Issues, workflowvalidation.WorkflowValidationIssueFromError(err, code, diagnostic))

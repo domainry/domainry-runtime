@@ -33,7 +33,11 @@ func synchronizeRuntimeSeeds(ctx context.Context, store *persistence.RuntimeStor
 				if !businessSeedSyncEnabled {
 					return nil
 				}
-				return businessseed.SyncManifestBusinessSeeds(workspaceContext, recordStore, manifest, businessseed.ManifestBusinessSeedRowsFromManifest(manifest))
+				rows, err := businessseed.BuildManifestBusinessSeedRows(manifest)
+				if err != nil {
+					return err
+				}
+				return businessseed.SyncManifestBusinessSeeds(workspaceContext, recordStore, manifest, rows)
 			},
 			synchronizeAutomation: func() error {
 				return automationseed.SyncExecutionSeeds(workspaceContext, automationpersistence.NewAutomationExecutionStore(store), automationExecutionSeeds)

@@ -26,12 +26,18 @@ func TestBuilderAgentCapabilityDocumentTracksRuntimeContract(t *testing.T) {
 			t.Errorf("Agent document omits Blueprint collection %s", collection)
 		}
 	}
-	for _, value := range []string{
+	for _, compilerOwned := range []string{
 		agentsdk.AgentTaskContractVersion,
 		agentsdk.AgentEntrypointContractVersion,
 		agentsdk.AgentServicePrincipalContractVersion,
 		agentsdk.GlobalAgentContextContractVersion,
 		agentsdk.AgentRoutingContractVersion,
+	} {
+		if strings.Contains(document, compilerOwned) {
+			t.Errorf("Agent document leaks compiler-owned protocol value %q", compilerOwned)
+		}
+	}
+	for _, value := range []string{
 		agentsdk.AgentTaskSideEffectAnalysisOnly,
 		agentsdk.AgentTaskSideEffectProposalOnly,
 		agentsdk.AgentTaskSideEffectActionAllowed,

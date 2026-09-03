@@ -54,7 +54,7 @@ func AuthorizationActionDefinition(schema definitionmodel.ActionSchema, context 
 		},
 		EffectClass: actioncontract.EffectWrite, RiskLevel: actioncontract.RiskLevel(actionmodel.ActionRiskLevel(schema)),
 		AssuranceRequired: actionmodel.ActionAssuranceMethods(schema), ApprovalPolicies: actionApprovalPolicies(schema),
-		IdempotencyDecision: "caller_key_required", AuditClass: "business_action", AuditEvent: strings.TrimSpace(schema.AuditEvent), LifecycleStatus: lifecycle,
+		IdempotencyDecision: "caller_key_required", AuditClass: "business_action", AuditEvent: definitionmodel.EffectiveActionAuditEvent(schema), LifecycleStatus: lifecycle,
 	}
 	normalized, err := actioncontract.NormalizeDefinition(definition)
 	if err != nil {

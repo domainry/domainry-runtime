@@ -103,6 +103,39 @@ func TestCapabilityDiscoveryRoutesLoadIndexDomainDetailAndReferences(t *testing.
 	}
 }
 
+func TestCapabilityIndexExpandsEndpointContractsOnlyOnExplicitRequest(t *testing.T) {
+	service := capabilityapplication.NewCapabilityAuthoringApplicationService(nil)
+	handler := NewCapabilitiesHandler(CapabilitiesDependencies{
+		Service: service,
+		Principal: func(*http.Request) principalmodel.Principal {
+			return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin"}}
+		},
+		WriteJSON: func(w http.ResponseWriter, status int, value any) {
+			w.WriteHeader(status)
+			_ = json.NewEncoder(w).Encode(value)
+		},
+		WriteServiceError: func(w http.ResponseWriter, _ *http.Request, _ error) { w.WriteHeader(http.StatusBadRequest) },
+	})
+	for _, test := range []struct {
+		path     string
+		expanded bool
+	}{
+		{path: "/tenant-admin/platform-capabilities/index"},
+		{path: "/tenant-admin/platform-capabilities/index?include=endpoint_contracts", expanded: true},
+	} {
+		response := httptest.NewRecorder()
+		handler.capabilityIndex(response, httptest.NewRequest(http.MethodGet, test.path, nil))
+		var body map[string]any
+		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &body) != nil {
+			t.Fatalf("path=%s status=%d body=%s", test.path, response.Code, response.Body.String())
+		}
+		_, hasContracts := body["endpoint_contracts"]
+		if hasContracts != test.expanded || body["endpoint_contract_count"] == nil || body["endpoint_contracts_hash"] == nil {
+			t.Fatalf("path=%s expanded=%v body=%s", test.path, hasContracts, response.Body.String())
+		}
+	}
+}
+
 func TestCapabilityDiscoveryHandlersMapAuthorizationAndHashFailures(t *testing.T) {
 	service := capabilityapplication.NewCapabilityAuthoringApplicationService(func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema {
 		return capabilitycontract.CapabilityInstanceSchema{}

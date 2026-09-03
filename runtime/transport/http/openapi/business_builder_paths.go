@@ -4,12 +4,38 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/modulehttp"
+	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 func runtimeAuthoringCoverageRequestSchema() map[string]any {
-	return openAPIObject(map[string]any{"coverage": openAPIObject(map[string]any{
-		"version": map[string]any{"type": "string", "const": "runtime-authoring-coverage-v1"},
+	return openAPIObject(map[string]any{
+		"coverage":      runtimeAuthoringCoverageLedgerSchema(),
+		"evidence_plan": runtimeAuthoringEvidencePlanSchema(),
+	})
+}
+
+func runtimeAuthoringEvidencePlanSchema() map[string]any {
+	step := openAPIRequiredObject([]string{"step_id", "label", "method", "path", "expected_status"}, map[string]any{
+		"step_id": map[string]any{"type": "string"}, "label": map[string]any{"type": "string"},
+		"observation": map[string]any{"type": "string", "enum": []string{"before_state", "after_state"}},
+		"method":      map[string]any{"type": "string"}, "path": map[string]any{"type": "string"},
+		"expected_status": openAPIArray(map[string]any{"type": "integer", "minimum": 100, "maximum": 599}),
+	})
+	scenario := openAPIRequiredObject([]string{"scenario_id", "categories", "steps"}, map[string]any{
+		"scenario_id": map[string]any{"type": "string"},
+		"categories":  openAPIArray(map[string]any{"type": "string", "enum": changeplanmodel.RuntimeAuthoringRequiredScenarioCategories}),
+		"steps":       openAPIArray(step),
+	})
+	return openAPIRequiredObject([]string{"version", "scenarios"}, map[string]any{
+		"version":   map[string]any{"type": "string", "const": changeplanmodel.RuntimeAuthoringEvidencePlanVersion},
+		"scenarios": openAPIArray(scenario),
+	})
+}
+
+func runtimeAuthoringCoverageLedgerSchema() map[string]any {
+	return openAPIObject(map[string]any{
+		"version": map[string]any{"type": "string", "const": changeplanmodel.RuntimeAuthoringCoverageLedgerVersion},
 		"requirements": openAPIArray(openAPIObject(map[string]any{
 			"requirement_id": map[string]any{"type": "string"}, "capability_keys": openAPIArray(map[string]any{"type": "string"}),
 			"resources": openAPIArray(openAPIObject(map[string]any{
@@ -17,7 +43,44 @@ func runtimeAuthoringCoverageRequestSchema() map[string]any {
 			})),
 			"scenario_ids": openAPIArray(map[string]any{"type": "string"}),
 		})),
-	})})
+	})
+}
+
+func runtimeAuthoringDeliveryEvidenceSchema() map[string]any {
+	binding := openAPIRequiredObject([]string{"runtime_version", "contract_hash", "instance_hash", "snapshot_hash", "coverage_hash", "resource_hashes"}, map[string]any{
+		"runtime_version": map[string]any{"type": "string"}, "contract_hash": map[string]any{"type": "string"},
+		"instance_hash": map[string]any{"type": "string"}, "snapshot_hash": map[string]any{"type": "string"},
+		"coverage_hash": map[string]any{"type": "string"}, "resource_hashes": openAPIObject(nil),
+	})
+	step := openAPIRequiredObject([]string{"runtime_receipt"}, map[string]any{
+		"runtime_receipt": map[string]any{"type": "string", "description": "Opaque Runtime-issued HMAC receipt returned by the observed HTTP call."},
+	})
+	scenario := openAPIRequiredObject([]string{"version", "scenario_id", "steps"}, map[string]any{
+		"version":     map[string]any{"type": "string", "const": changeplanmodel.RuntimeAuthoringScenarioEvidenceVersion},
+		"scenario_id": map[string]any{"type": "string"}, "steps": openAPIArray(step),
+	})
+	return openAPIRequiredObject([]string{"coverage"}, map[string]any{
+		"version": map[string]any{"type": "string", "const": changeplanmodel.RuntimeAuthoringDeliveryEvidenceVersion},
+		"binding": binding, "coverage": runtimeAuthoringCoverageLedgerSchema(),
+		"scenarios": openAPIArray(scenario),
+		"receipts":  openAPIArray(map[string]any{"type": "string", "description": "Runtime-issued receipts. When present, Runtime reconstructs scenarios and binding without duplicated caller-authored wrappers."}),
+	})
+}
+
+func runtimeAuthoringEvidenceOpenAPIExtension() map[string]any {
+	return map[string]any{
+		"version": changeplanmodel.RuntimeAuthoringEvidenceCollectionVersion, "trust_policy": changeplanmodel.RuntimeAuthoringEvidenceTrustPolicy,
+		"step_receipt_version": changeplanmodel.RuntimeAuthoringStepReceiptVersion,
+		"request_headers": map[string]any{
+			"evidence_step_token": changeplanmodel.RuntimeAuthoringEvidenceStepTokenHeader,
+			"builder_task":        changeplanmodel.RuntimeAuthoringBuilderTaskHeader, "scenario_id": changeplanmodel.RuntimeAuthoringScenarioIDHeader,
+			"scenario_categories": changeplanmodel.RuntimeAuthoringScenarioCategoriesHeader, "step_label": changeplanmodel.RuntimeAuthoringStepLabelHeader,
+			"step_observation": changeplanmodel.RuntimeAuthoringStepObservationHeader, "expected_status": changeplanmodel.RuntimeAuthoringExpectedStatusHeader,
+			"snapshot_hash": changeplanmodel.RuntimeAuthoringSnapshotHashHeader, "coverage_hash": changeplanmodel.RuntimeAuthoringCoverageHashHeader,
+		},
+		"response_headers":           map[string]any{"step_receipt": changeplanmodel.RuntimeAuthoringStepReceiptHeader, "evidence_error": changeplanmodel.RuntimeAuthoringEvidenceErrorHeader},
+		"streaming_path_restriction": changeplanmodel.RuntimeAuthoringEvidenceStreamingPathRestriction,
+	}
 }
 
 // addBusinessBuilderOpenAPIPaths publishes domain-system authoring and

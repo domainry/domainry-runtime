@@ -1,7 +1,9 @@
 package validation
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -14,6 +16,7 @@ import (
 // by their published reference contracts or by full-rule validation.
 func AutomationValidateAuthoringFragment(capabilityKey string, value map[string]any) error {
 	capabilityKey = strings.TrimSpace(capabilityKey)
+	value = AutomationAuthoringFragmentWithDefaults(capabilityKey, value)
 	switch capabilityKey {
 	case "automation.trigger":
 		var trigger automationmodel.AutomationTriggerSchema
@@ -40,10 +43,6 @@ func AutomationValidateAuthoringFragment(capabilityKey string, value map[string]
 		if err := automationDecodeAuthoringFragment(value, &instruction); err != nil {
 			return err
 		}
-		expectedType := strings.TrimPrefix(capabilityKey, "automation.instruction.")
-		if instruction.Type != expectedType {
-			return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.automation.instruction_type_invalid", Params: map[string]string{"instruction": instruction.Key, "type": instruction.Type, "expected": expectedType}}
-		}
 		phase := "after"
 		if instruction.Type == "derive_fields" || instruction.Type == "assert" {
 			phase = "before"
@@ -54,12 +53,32 @@ func AutomationValidateAuthoringFragment(capabilityKey string, value map[string]
 	}
 }
 
+// AutomationAuthoringFragmentWithDefaults materializes values determined by
+// the selected capability route. Callers author instruction intent only; the
+// route already identifies the instruction type.
+func AutomationAuthoringFragmentWithDefaults(capabilityKey string, value map[string]any) map[string]any {
+	normalized := make(map[string]any, len(value)+1)
+	for key, item := range value {
+		normalized[key] = item
+	}
+	if strings.HasPrefix(strings.TrimSpace(capabilityKey), "automation.instruction.") {
+		normalized["type"] = strings.TrimPrefix(strings.TrimSpace(capabilityKey), "automation.instruction.")
+	}
+	return normalized
+}
+
 func automationDecodeAuthoringFragment(value map[string]any, target any) error {
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.automation.authoring_fragment_invalid", Err: err}
 	}
-	if err := json.Unmarshal(raw, target); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.automation.authoring_fragment_invalid", Err: err}
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
 		return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.automation.authoring_fragment_invalid", Err: err}
 	}
 	return nil

@@ -11,12 +11,19 @@ import (
 // object shell. Fields are intentionally authored through schema.field so the
 // object creation contract stays small and repairable.
 func ApplicationSchemaValidateObjectDefinition(resourceKey string, payload json.RawMessage) (json.RawMessage, error) {
+	var declared map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &declared); err != nil {
+		return nil, badRequest("backend.metadata.object_definition_invalid")
+	}
 	var object definitionmodel.ObjectSchema
-	if err := json.Unmarshal(payload, &object); err != nil {
+	if err := decodeClosedAuthoringJSON(payload, &object); err != nil {
 		return nil, badRequest("backend.metadata.object_definition_invalid")
 	}
 	resourceKey = strings.TrimSpace(resourceKey)
 	object.Key = strings.TrimSpace(object.Key)
+	if object.Key == "" && declared["key"] == nil {
+		object.Key = resourceKey
+	}
 	object.Name = strings.TrimSpace(object.Name)
 	if object.Key == "" || object.Key != resourceKey {
 		return nil, badRequest("backend.metadata.object_key_mismatch", "object", resourceKey)
@@ -68,7 +75,13 @@ func ApplicationSchemaValidateObjectDefinition(resourceKey string, payload json.
 	}
 	if object.LedgerPolicy != nil {
 		object.LedgerPolicy.Integrity = strings.TrimSpace(object.LedgerPolicy.Integrity)
+		if object.LedgerPolicy.Integrity == "" {
+			object.LedgerPolicy.Integrity = definitionmodel.ObjectLedgerIntegritySHA256Chain
+		}
 		object.LedgerPolicy.Signature = strings.TrimSpace(object.LedgerPolicy.Signature)
+		if object.LedgerPolicy.Signature == "" {
+			object.LedgerPolicy.Signature = definitionmodel.ObjectLedgerSignatureNone
+		}
 		if object.LedgerPolicy.Integrity != definitionmodel.ObjectLedgerIntegritySHA256Chain || object.LifecyclePolicy == nil || object.LifecyclePolicy.Mode != definitionmodel.ObjectLifecycleAppendOnly {
 			return nil, badRequest("backend.metadata.object_ledger_policy_invalid", "object", resourceKey)
 		}

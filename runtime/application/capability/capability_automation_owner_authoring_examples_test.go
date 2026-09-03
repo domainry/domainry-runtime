@@ -2,6 +2,7 @@ package capability
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -18,7 +19,8 @@ func TestAutomationInstructionExamplesExecuteOwnerValidator(t *testing.T) {
 			continue
 		}
 		for _, example := range capability.Examples {
-			payload, err := json.Marshal(example.Value)
+			normalized := automationvalidation.AutomationAuthoringFragmentWithDefaults(capability.Key, example.Value)
+			payload, err := json.Marshal(normalized)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -50,7 +52,10 @@ func TestAutomationInstructionExamplesExecuteOwnerValidator(t *testing.T) {
 
 func TestAutomationRuleAndComponentExamplesExecuteOwnerValidator(t *testing.T) {
 	validator := automationOwnerExampleValidator()
-	for _, capability := range automationpolicy.AutomationAuthoringDomain().Capabilities[:4] {
+	for _, capability := range automationpolicy.AutomationAuthoringDomain().Capabilities {
+		if strings.HasPrefix(capability.Key, "automation.instruction.") {
+			continue
+		}
 		for _, example := range capability.Examples {
 			rule := automationOwnerExampleRule(t, capability.Key, example.Value)
 			err := validator.Validate(t.Context(), rule)

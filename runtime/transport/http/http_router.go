@@ -14,6 +14,7 @@ import (
 	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	businesseventapplication "github.com/domainry/domainry-runtime/runtime/application/businessevent"
+	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	capabilitybusiness "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
@@ -38,60 +39,61 @@ type httpRouteRegistrar interface {
 }
 
 type HTTPRouter struct {
-	recordHTTP              httpRouteRegistrar
-	uploadHTTP              httpRouteRegistrar
-	discoveryHTTP           httpRouteRegistrar
-	openAPIHTTP             httpRouteRegistrar
-	operationsHTTP          httpRouteRegistrar
-	lifecycleHTTP           httpRouteRegistrar
-	workflowHTTP            httpRouteRegistrar
-	automationHTTP          httpRouteRegistrar
-	schedulerHTTP           httpRouteRegistrar
-	businessReferenceHTTP   httpRouteRegistrar
-	publicationHandoffHTTP  httpRouteRegistrar
-	businessSystemHTTP      httpRouteRegistrar
-	capabilityHTTP          httpRouteRegistrar
-	applicationSchemaHTTP   httpRouteRegistrar
-	notificationHTTP        httpRouteRegistrar
-	authorizationActions    func() *actioncontract.Registry
-	identityAuthorization   identitysdk.PrincipalResolver
-	businessPrincipal       BusinessPrincipalResolver
-	identityAuthentication  IdentityRequestMiddleware
-	identityPrincipal       IdentityPrincipalProjection
-	integrationAuth         IntegrationAuthenticationPrincipalProvider
-	securityAudit           SecurityAuditAppender
-	runtimeStatus           DeploymentRuntimeStatusProvider
-	corsAllowedOrigins      []string
-	listenerGroupPolicies   map[ListenerRouteGroup]ListenerRouteGroupPolicy
-	listenerGroupCapacity   map[ListenerRouteGroup]*capacityplatform.Controller
-	rateLimiter             ratelimit.Limiter
-	allowDevAuthHeaders     bool
-	technicalMetrics        TechnicalMetricsProvider
-	httpMetrics             HTTPMetricsCollector
-	healthRegistry          *runtimeHealthRegistry
-	healthCheckTimeout      time.Duration
-	maxJSONBodyBytes        int64
-	capacityController      *capacityplatform.Controller
-	requestTimeout          time.Duration
-	backpressure            func(context.Context) bool
-	operationsControlState  OperationsControlStateProvider
-	runtimeReleaseAdmission RuntimeReleaseAdmissionProvider
-	runtimeReleaseIntegrity RuntimeReleaseIntegrityProvider
-	runtimeInstanceID       string
-	workerControl           *workerplatform.Controller
-	businessEvents          *businesseventapplication.BusinessEventApplicationService
-	businessEventHTTP       *businesseventhttp.BusinessEventsHandler
-	workspaceProvisionHTTP  httpRouteRegistrar
-	serviceKind             string
-	productBrandName        string
-	runtimeVersion          string
-	apiContractVersion      string
-	apiContractHash         string
-	manifestTemplateID      string
-	manifestHash            string
-	manifest                manifestmodel.ManifestSchema
-	releaseIdentity         RuntimeReleaseIdentity
-	moduleHTTPRoutes        map[string]moduleHTTPRoute
+	recordHTTP                       httpRouteRegistrar
+	uploadHTTP                       httpRouteRegistrar
+	discoveryHTTP                    httpRouteRegistrar
+	openAPIHTTP                      httpRouteRegistrar
+	operationsHTTP                   httpRouteRegistrar
+	lifecycleHTTP                    httpRouteRegistrar
+	workflowHTTP                     httpRouteRegistrar
+	automationHTTP                   httpRouteRegistrar
+	schedulerHTTP                    httpRouteRegistrar
+	businessReferenceHTTP            httpRouteRegistrar
+	publicationHandoffHTTP           httpRouteRegistrar
+	businessSystemHTTP               httpRouteRegistrar
+	capabilityHTTP                   httpRouteRegistrar
+	applicationSchemaHTTP            httpRouteRegistrar
+	notificationHTTP                 httpRouteRegistrar
+	authorizationActions             func() *actioncontract.Registry
+	identityAuthorization            identitysdk.PrincipalResolver
+	businessPrincipal                BusinessPrincipalResolver
+	identityAuthentication           IdentityRequestMiddleware
+	identityPrincipal                IdentityPrincipalProjection
+	integrationAuth                  IntegrationAuthenticationPrincipalProvider
+	securityAudit                    SecurityAuditAppender
+	runtimeStatus                    DeploymentRuntimeStatusProvider
+	corsAllowedOrigins               []string
+	listenerGroupPolicies            map[ListenerRouteGroup]ListenerRouteGroupPolicy
+	listenerGroupCapacity            map[ListenerRouteGroup]*capacityplatform.Controller
+	rateLimiter                      ratelimit.Limiter
+	allowDevAuthHeaders              bool
+	technicalMetrics                 TechnicalMetricsProvider
+	httpMetrics                      HTTPMetricsCollector
+	healthRegistry                   *runtimeHealthRegistry
+	healthCheckTimeout               time.Duration
+	maxJSONBodyBytes                 int64
+	capacityController               *capacityplatform.Controller
+	requestTimeout                   time.Duration
+	backpressure                     func(context.Context) bool
+	operationsControlState           OperationsControlStateProvider
+	runtimeReleaseAdmission          RuntimeReleaseAdmissionProvider
+	runtimeReleaseIntegrity          RuntimeReleaseIntegrityProvider
+	runtimeInstanceID                string
+	workerControl                    *workerplatform.Controller
+	businessEvents                   *businesseventapplication.BusinessEventApplicationService
+	businessEventHTTP                *businesseventhttp.BusinessEventsHandler
+	workspaceProvisionHTTP           httpRouteRegistrar
+	serviceKind                      string
+	productBrandName                 string
+	runtimeVersion                   string
+	apiContractVersion               string
+	apiContractHash                  string
+	manifestTemplateID               string
+	manifestHash                     string
+	manifest                         manifestmodel.ManifestSchema
+	releaseIdentity                  RuntimeReleaseIdentity
+	moduleHTTPRoutes                 map[string]moduleHTTPRoute
+	runtimeAuthoringScenarioReceipts *businesssystemapplication.RuntimeAuthoringScenarioReceiptService
 }
 
 func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRouter {
@@ -132,7 +134,8 @@ func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRo
 		runtimeReleaseAdmission: deps.RuntimeReleaseAdmission,
 		runtimeReleaseIntegrity: deps.RuntimeReleaseIntegrity,
 		runtimeVersion:          "dev", apiContractVersion: BusinessRuntimeAPIContractVersion, apiContractHash: BusinessRuntimeAPIContractHash(),
-		moduleHTTPRoutes: buildModuleHTTPRouteIndex(deps.ModuleHTTPSurfaces),
+		moduleHTTPRoutes:                 buildModuleHTTPRouteIndex(deps.ModuleHTTPSurfaces),
+		runtimeAuthoringScenarioReceipts: deps.RuntimeAuthoringScenarioReceipts,
 	}
 	for group, policy := range config.ListenerGroupPolicies {
 		if policy.RateLimitPerMinute <= 0 {
@@ -238,7 +241,7 @@ func (s *HTTPRouter) Routes() http.Handler {
 	highRiskAuthorized := s.withHighRiskOperationPolicy(mux, published)
 	actionAuthorized := s.withActionAuthorization(mux, highRiskAuthorized)
 	authenticated := s.withAuth(mux, actionAuthorized)
-	return s.withMetrics(s.withRecovery(s.withCORS(authenticated)))
+	return s.withMetrics(s.withRecovery(s.withCORS(s.withRuntimeAuthoringScenarioEvidence(authenticated))))
 }
 
 // RoutesForListenerGroup builds an externally attached listener mux from the

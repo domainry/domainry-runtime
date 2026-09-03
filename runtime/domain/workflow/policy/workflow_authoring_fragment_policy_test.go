@@ -33,6 +33,16 @@ func TestWorkflowAuthoringFragmentRejectsUnknownCapability(t *testing.T) {
 	}
 }
 
+func TestWorkflowNormalizeAuthoringFragmentMaterializesRouteDefaultsAndRejectsUnknownFields(t *testing.T) {
+	normalized, err := WorkflowNormalizeAuthoringFragment("workflow.graph_v2", workflowGraphExamples()[0].Value)
+	if err != nil || normalized["version"] != 2 {
+		t.Fatalf("normalized=%#v err=%v", normalized, err)
+	}
+	if _, err := WorkflowNormalizeAuthoringFragment("workflow.trigger_contract", map[string]any{"type": "manual", "unknown": true}); apperror.CodeOf(err) != "backend.workflow.authoring_fragment_invalid" {
+		t.Fatalf("unknown field err=%v", err)
+	}
+}
+
 func TestWorkflowAuthoringFragmentRejectsUndecodablePayloadForEveryOwnerCapability(t *testing.T) {
 	invalid := map[string]any{"invalid": func() {}}
 	for _, capabilityKey := range []string{

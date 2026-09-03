@@ -13,7 +13,7 @@ func AutomationAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 			{Key: "key", Type: "rule_key", Required: true}, {Key: "name", Type: "string", Required: true}, {Key: "object_key", Type: "object_key", Required: true},
 			{Key: "enabled", Type: "boolean", Required: true}, {Key: "priority", Type: "integer"}, {Key: "trigger", Type: "automation_trigger", Required: true},
 			{Key: "conditions", Type: "automation_condition_group"}, {Key: "instructions", Type: "array", ItemSchema: "automation_instruction", Required: true},
-			{Key: "execution", Type: "automation_execution_policy"}, {Key: "audit_event", Type: "event_key"}, {Key: "i18n", Type: "object"}, {Key: "layout", Type: "automation_layout"},
+			{Key: "execution", Type: "automation_execution_policy"}, {Key: "i18n", Type: "object"},
 		}, Permissions: []string{
 			"runtime.appschema.validate_application_definition",
 			"runtime.automation.validate_automation_rule",
@@ -32,7 +32,6 @@ func AutomationAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 }
 
 func automationAuthoringComponentCapabilities() []capabilitycontract.CapabilityAuthoringDefinition {
-	automationSource := capabilitycontract.CapabilityAuthoringSource{Kind: "domain", Path: "runtime/domain/automation/model/automation_schema.go", Symbol: "AutomationRuleSchema"}
 	components := []capabilitycontract.CapabilityAuthoringDefinition{
 		{
 			Key: "automation.trigger", Status: "supported", Lifecycle: "record_lifecycle",
@@ -49,16 +48,6 @@ func automationAuthoringComponentCapabilities() []capabilitycontract.CapabilityA
 				{Key: "mode", Type: "string", Default: "all", Enum: []string{"all", "any"}}, {Key: "clauses", Type: "array", ItemSchema: "automation_condition_clause"},
 				{Key: "groups", Type: "array", ItemSchema: "automation_condition_group"},
 			}, Requires: []string{"automation.rule"}, ValidationEndpoint: "POST /automation-rules/authoring-fragments/{capabilityKey}/validate", Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/automation/validation/automation_definition_validator.go", Symbol: "validateAutomationConditionGroup"}},
-		},
-		{
-			Key: "automation.execution_policy", Status: "supported", Lifecycle: "record_lifecycle",
-			Parameters: []capabilitycontract.CapabilityAuthoringParameter{
-				{Key: "mode", Type: "string", Enum: capabilitycontract.RuntimeAutomationCapabilities().ExecutionModes},
-				{Key: "run_as", Type: "string", Enum: capabilitycontract.RuntimeAutomationCapabilities().RunAsModes},
-				{Key: "result_notification", Type: "string", Enum: capabilitycontract.RuntimeAutomationCapabilities().ResultNotificationModes},
-				{Key: "timeout_seconds", Type: "integer", Minimum: automationAuthoringFloatPointer(0)}, {Key: "max_depth", Type: "integer", Minimum: automationAuthoringFloatPointer(0)},
-				{Key: "idempotency_keys", Type: "array", ItemSchema: "field_key"},
-			}, Requires: []string{"automation.rule"}, ValidationEndpoint: "POST /automation-rules/authoring-fragments/{capabilityKey}/validate", Sources: []capabilitycontract.CapabilityAuthoringSource{automationSource},
 		},
 	}
 	for index := range components {
@@ -87,8 +76,8 @@ func automationAuthoringComponentCapabilities() []capabilitycontract.CapabilityA
 
 func automationAuthoringInstruction(instructionType string, configParameters []capabilitycontract.CapabilityAuthoringParameter) capabilitycontract.CapabilityAuthoringDefinition {
 	parameters := []capabilitycontract.CapabilityAuthoringParameter{
-		{Key: "key", Type: "instruction_key", Required: true}, {Key: "type", Type: "string", Required: true, Enum: []string{instructionType}},
-		{Key: "name", Type: "string"}, {Key: "i18n", Type: "object"}, {Key: "mode", Type: "string"}, {Key: "result_alias", Type: "string"}, {Key: "on_error", Type: "string", Enum: []string{"continue", "fail"}},
+		{Key: "key", Type: "instruction_key", Required: true},
+		{Key: "name", Type: "string"}, {Key: "i18n", Type: "object"}, {Key: "result_alias", Type: "string"}, {Key: "on_error", Type: "string", Enum: []string{"continue", "fail"}},
 		{Key: "config", Type: "automation_instruction_config", Required: true},
 	}
 	capability := capabilitycontract.CapabilityAuthoringDefinition{
@@ -120,7 +109,12 @@ func automationInstructionInputSchema(instructionType string, parameters, config
 			required = append(required, parameter.Key)
 		}
 	}
-	properties["type"] = capabilitycontract.CapabilityAuthoringSchema{Type: "string", Const: instructionType, Enum: []any{instructionType}}
+	for _, parameter := range parameters {
+		if parameter.Key == "type" {
+			properties["type"] = capabilitycontract.CapabilityAuthoringSchema{Type: "string", Const: instructionType, Enum: []any{instructionType}}
+			break
+		}
+	}
 	return &capabilitycontract.CapabilityAuthoringSchema{Schema: "https://json-schema.org/draft/2020-12/schema", Type: "object", AdditionalProperties: &closed, Properties: properties, Required: required}
 }
 
@@ -173,7 +167,7 @@ func automationInstructionErrors(instructionType string) []capabilitycontract.Ca
 		"invoke_business_action": "backend.automation.business_action_key_required", "start_workflow": "backend.automation.workflow_key_required", "emit_event": "backend.automation.instruction_key_invalid",
 	}
 	code := codes[instructionType]
-	return []capabilitycontract.CapabilityAuthoringError{{Code: code, FieldPath: "instructions[].config", MessageKey: code}, {Code: "backend.automation.instruction_type_invalid", FieldPath: "instructions[].type", MessageKey: "backend.automation.instruction_type_invalid"}}
+	return []capabilitycontract.CapabilityAuthoringError{{Code: code, FieldPath: "instructions[].config", MessageKey: code}}
 }
 
 func automationInstructionExamples(instructionType string) []capabilitycontract.CapabilityAuthoringExample {
@@ -186,6 +180,8 @@ func automationInstructionExamples(instructionType string) []capabilitycontract.
 	}[instructionType]
 	minimal := automationAuthoringCopyMap(valid)
 	representative := automationAuthoringCopyMap(valid)
+	delete(minimal, "type")
+	delete(representative, "type")
 	delete(minimal, "name")
 	delete(minimal, "on_error")
 	minimalConfig, _ := minimal["config"].(map[string]any)
@@ -208,6 +204,7 @@ func automationInstructionExamples(instructionType string) []capabilitycontract.
 		delete(minimalConfig, "metadata")
 	}
 	invalid := automationAuthoringCopyMap(valid)
+	delete(invalid, "type")
 	config, _ := invalid["config"].(map[string]any)
 	errorCode := automationInstructionErrors(instructionType)[0].Code
 	switch instructionType {

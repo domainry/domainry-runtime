@@ -441,7 +441,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	)
 	authorizationModuleActions, err := moduleBindings.AuthorizationActions()
 	mustCompleteRuntimeStartup(err)
-	authorizationRegistry, err := reconcileRuntimeIdentityAuthorization(ctx, identityBinding, records.Schema(), authorizationModuleActions, nil, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs)
+	authorizationRegistry, err := reconcileRuntimeIdentityAuthorization(ctx, identityBinding, records.Schema(), authorizationModuleActions, nil, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs)
 	mustCompleteRuntimeStartup(err)
 	authorizationRegistrySnapshot := &runtimeAuthorizationRegistrySnapshot{}
 	authorizationRegistrySnapshot.Store(authorizationRegistry)
@@ -473,7 +473,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		publishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
 		previousRegistry := authorizationRegistrySnapshot.Load()
-		candidateRegistry, err := reconcileRuntimeIdentityAuthorization(publishCtx, identityBinding, snapshot, authorizationModuleActions, previousRegistry, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs)
+		candidateRegistry, err := reconcileRuntimeIdentityAuthorization(publishCtx, identityBinding, snapshot, authorizationModuleActions, previousRegistry, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs)
 		if err != nil {
 			return appschemaapplication.ApplicationSchemaReloadPreparation{}, fmt.Errorf("reconcile Runtime authorization definitions with Identity: %w", err)
 		}

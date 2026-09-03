@@ -39,21 +39,39 @@ func SyncManifestBusinessSeeds(ctx context.Context, records recordrepository.Rec
 	if workspaceID == "" {
 		workspaceID = principalmodel.InstallationWorkspaceID
 	}
-	if empty, err := manifestBusinessSeedTargetsEmpty(ctx, records, workspaceID, objectByKey, rows); err != nil {
+	targets, err := manifestBusinessSeedTargetStates(ctx, records, workspaceID, objectByKey, rows)
+	if err != nil {
 		return err
-	} else if !empty {
-		return nil
 	}
 	ordered, err := orderManifestBusinessSeedRows(rows)
 	if err != nil {
 		return err
 	}
 	idsByKey := manifestBusinessSeedIDs(rows)
+	for _, row := range rows {
+		state := targets[row.ObjectKey]
+		if state.HasRecords && strings.TrimSpace(state.FirstRecordID) != "" {
+			idsByKey[strings.TrimSpace(row.Key)] = strings.TrimSpace(state.FirstRecordID)
+		}
+	}
+	for _, row := range ordered {
+		if targets[row.ObjectKey].HasRecords {
+			continue
+		}
+		for _, ref := range collectManifestBusinessSeedRefs(row.DataJSON) {
+			if strings.TrimSpace(idsByKey[ref]) == "" {
+				return fmt.Errorf("resolve domain seed %s/%s: existing target for %s has no readable record id", row.ObjectKey, row.Key, ref)
+			}
+		}
+	}
 	runID := manifestBusinessSeedRunID()
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, row := range ordered {
 		object, ok := objectByKey[row.ObjectKey]
 		if !ok {
+			continue
+		}
+		if targets[row.ObjectKey].HasRecords {
 			continue
 		}
 		data := map[string]any{}
@@ -75,10 +93,28 @@ func SyncManifestBusinessSeeds(ctx context.Context, records recordrepository.Rec
 			record.ID = manifestBusinessSeedRecordID(row.ObjectKey, row.Key)
 		}
 		if err := records.InsertRecord(ctx, workspaceID, object, record); err != nil {
+			// Multiple Runtime instances may observe an empty table at the same
+			// time. Generated IDs are deterministic, so an already-present row
+			// means the concurrent bootstrap converged on the same result.
+			if _, found, lookupErr := records.GetRecord(ctx, workspaceID, object, record.ID); lookupErr == nil && found {
+				continue
+			}
 			return fmt.Errorf("sync domain seed %s/%s: %w", row.ObjectKey, row.Key, err)
 		}
 	}
 	return nil
+}
+
+// BuildManifestBusinessSeedRows preserves any trusted legacy seed rows and
+// fills only uncovered business objects with one Runtime-generated baseline
+// row. Model-authored manifests no longer need to carry per-table fixtures.
+func BuildManifestBusinessSeedRows(manifest manifestmodel.ManifestSchema) ([]manifestBusinessSeedRow, error) {
+	rows := ManifestBusinessSeedRowsFromManifest(manifest)
+	generated, err := generateManifestBusinessSeedRows(manifest, rows)
+	if err != nil {
+		return nil, err
+	}
+	return append(rows, generated...), nil
 }
 
 func ManifestBusinessSeedRowsFromManifest(manifest manifestmodel.ManifestSchema) []manifestBusinessSeedRow {
@@ -143,7 +179,13 @@ func manifestBusinessSeedObjects(manifest manifestmodel.ManifestSchema) map[stri
 	return out
 }
 
-func manifestBusinessSeedTargetsEmpty(ctx context.Context, records recordrepository.RecordBusinessSeedRepository, workspaceID string, objectByKey map[string]definitionmodel.ObjectSchema, rows []manifestBusinessSeedRow) (bool, error) {
+type manifestBusinessSeedTargetState struct {
+	HasRecords    bool
+	FirstRecordID string
+}
+
+func manifestBusinessSeedTargetStates(ctx context.Context, records recordrepository.RecordBusinessSeedRepository, workspaceID string, objectByKey map[string]definitionmodel.ObjectSchema, rows []manifestBusinessSeedRow) (map[string]manifestBusinessSeedTargetState, error) {
+	states := map[string]manifestBusinessSeedTargetState{}
 	checked := map[string]bool{}
 	for _, row := range rows {
 		if checked[row.ObjectKey] {
@@ -154,15 +196,19 @@ func manifestBusinessSeedTargetsEmpty(ctx context.Context, records recordreposit
 		if !ok {
 			continue
 		}
-		page, err := records.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 1})
+		page, err := records.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{
+			Page: 1, PageSize: 1, SkipTotal: true, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
+		})
 		if err != nil {
-			return false, fmt.Errorf("check domain seed target %s: %w", row.ObjectKey, err)
+			return nil, fmt.Errorf("check domain seed target %s: %w", row.ObjectKey, err)
 		}
-		if page.Total > 0 {
-			return false, nil
+		state := manifestBusinessSeedTargetState{HasRecords: len(page.Items) > 0}
+		if len(page.Items) > 0 {
+			state.FirstRecordID = strings.TrimSpace(page.Items[0].ID)
 		}
+		states[row.ObjectKey] = state
 	}
-	return true, nil
+	return states, nil
 }
 
 func orderManifestBusinessSeedRows(rows []manifestBusinessSeedRow) ([]manifestBusinessSeedRow, error) {

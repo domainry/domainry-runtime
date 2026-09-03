@@ -2,28 +2,18 @@
 
 This is the conservative production-code scan for empty Runtime workspace
 fallbacks and hard-coded `default` values in Application and Infrastructure.
-The baseline is tightened whenever a reviewed fallback is removed. A match remains in
-the inventory until it is removed or explicitly adjudicated; provider concepts
-such as Asana's own workspace and installation-global default policy keys are
-kept visible rather than silently excluded.
+`TestRuntimeWorkspaceFallbackReviewBaseline` enforces the exact, content-bound
+finding list in `runtime-workspace-fallback-review-baseline.txt`. A new or
+changed candidate fails the Runtime boundary suite; removing a fallback must be
+followed by tightening that baseline.
 
 Scan scope: production `*.go` files below `runtime/application` and
 `runtime/infrastructure`; `*_test.go` is excluded. The scan matches
 empty workspace comparisons, workspace/default proximity, and literal
 `"default"` / `'default'` values.
 
-| Matches | Production file |
-| ---: | --- |
-| 1 | `runtime/application/seed/business/records.go` |
-| 1 | `runtime/application/seed/globalcapability/runtime.go` |
-| 1 | `runtime/application/appschema/appschema_localized_text_coverage_application_service.go` |
-| 1 | `runtime/infrastructure/persistence/database/automation/sql_values.go` |
-| 3 | `runtime/infrastructure/persistence/database/deployment/runtime_status_store.go` |
-| 1 | `runtime/infrastructure/persistence/database/appschema/manifest_store.go` |
-| 1 | `runtime/infrastructure/persistence/database/appschema/definition_store.go` |
-| 1 | `runtime/infrastructure/persistence/database/schema/idempotency_receipt_migration.go` |
-| 1 | `runtime/infrastructure/persistence/database/schema/evidence_tables.go` |
-| 1 | `runtime/infrastructure/persistence/database/transaction/boundary_intent_store.go` |
-
-The next checklist item turns this inventory into an executable exact baseline
-that may only decrease. This scan itself does not authorize any fallback.
+The scanner records production lines containing `workspace` together with an
+empty-string comparison or the literal `"default"`. It intentionally finds
+both real fallbacks and explicit system-scope branches: the baseline records
+that each occurrence was adjudicated, not that fallback behavior is generally
+authorized.

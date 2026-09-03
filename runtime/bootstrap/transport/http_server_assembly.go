@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"crypto/sha256"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
@@ -20,6 +21,7 @@ import (
 
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
+	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
@@ -71,16 +73,17 @@ type HTTPServerDependencies struct {
 }
 
 type httpServerAssembly struct {
-	dependencies  HTTPServerDependencies
-	server        *runtimehttp.HTTPRouter
-	callbacks     runtimehttp.HandlerCallbacks
-	handlers      runtimehttp.HTTPRouterHandlers
-	recordQueries *recordapplication.RecordApplicationService
-	publications  *publicationhandoff.PublicationHandoffApplicationService
-	metadata      *appschemaapplication.ApplicationSchemaApplicationService
-	operations    *operationsapplication.OperationsApplicationService
-	identityHTTP  *identityhttpmiddleware.Middleware
-	principals    identitysdk.PrincipalResolver
+	dependencies     HTTPServerDependencies
+	server           *runtimehttp.HTTPRouter
+	callbacks        runtimehttp.HandlerCallbacks
+	handlers         runtimehttp.HTTPRouterHandlers
+	recordQueries    *recordapplication.RecordApplicationService
+	publications     *publicationhandoff.PublicationHandoffApplicationService
+	metadata         *appschemaapplication.ApplicationSchemaApplicationService
+	operations       *operationsapplication.OperationsApplicationService
+	identityHTTP     *identityhttpmiddleware.Middleware
+	principals       identitysdk.PrincipalResolver
+	scenarioReceipts *businesssystemapplication.RuntimeAuthoringScenarioReceiptService
 }
 
 func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDependencies) *runtimehttp.HTTPRouter {
@@ -111,6 +114,8 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		panic("transport.AssembleRuntimeHTTPServer requires a complete Identity SDK Binding")
 	}
 	var integrationAuthentication runtimehttp.IntegrationAuthenticationPrincipalProvider
+	scenarioReceiptKey := sha256.Sum256([]byte("domainry-runtime-authoring-scenario-receipt-v1:" + dependencies.Config.IntegrationSecretKey))
+	scenarioReceipts := businesssystemapplication.NewRuntimeAuthoringScenarioReceiptService(scenarioReceiptKey[:])
 	server := runtimehttp.NewHTTPRouter(runtimehttp.HTTPRouterConfig{
 		ProductBrandName:   dependencies.Config.EffectiveProductBrandName(),
 		CORSAllowedOrigins: dependencies.Config.CORSAllowedOrigins, AllowDevAuthHeaders: dependencies.Config.RuntimeAllowDevIdentityHeaders,
@@ -157,19 +162,21 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		TechnicalMetrics: func(ctx context.Context) string {
 			return runtimeTechnicalOpenMetrics(ctx, dependencies.Store, records.Applications().RuntimeStatus) + runtimeOptionalWorkerMetrics(dependencies.WorkerControl)
 		},
-		WorkerControl:           dependencies.WorkerControl,
-		RuntimeInstanceID:       dependencies.RuntimeInstanceID,
-		OperationsControlState:  runtimeOperationsControlState(dependencies.Store),
-		RuntimeReleaseAdmission: dependencies.ReleaseAdmission,
-		RuntimeReleaseIntegrity: dependencies.ReleaseIntegrity,
-		BusinessEventBackplane:  backplane,
-		ModuleHTTPSurfaces:      dependencies.ModuleHTTPSurfaces,
+		WorkerControl:                    dependencies.WorkerControl,
+		RuntimeInstanceID:                dependencies.RuntimeInstanceID,
+		OperationsControlState:           runtimeOperationsControlState(dependencies.Store),
+		RuntimeReleaseAdmission:          dependencies.ReleaseAdmission,
+		RuntimeReleaseIntegrity:          dependencies.ReleaseIntegrity,
+		BusinessEventBackplane:           backplane,
+		ModuleHTTPSurfaces:               dependencies.ModuleHTTPSurfaces,
+		RuntimeAuthoringScenarioReceipts: scenarioReceipts,
 	})
 	assembly := &httpServerAssembly{
 		dependencies: dependencies, server: server, callbacks: server.HandlerCallbacks(),
 		recordQueries: recordApplication, publications: publications,
 		metadata: records.Applications().ApplicationSchema, identityHTTP: identityAuthentication,
-		principals: identityPrincipals,
+		principals:       identityPrincipals,
+		scenarioReceipts: scenarioReceipts,
 	}
 	assembly.wireOperationsApplication()
 	assembly.bindAgentApplicationHost()

@@ -35,6 +35,17 @@ func TestValidateManifestAcceptsRuntimeFixtures(t *testing.T) {
 	}
 }
 
+func TestValidateManifestDoesNotRequireSeedRecords(t *testing.T) {
+	manifest := loadFixtureManifest(t, "domain-only-minimal.json")
+	manifest.SeedRecords = nil
+	for reportIndex := range manifest.Reports {
+		manifest.Reports[reportIndex].EvidenceRequirements = nil
+	}
+	if err := ValidateManifest(manifest); err != nil {
+		t.Fatalf("manifest without model-authored seed records was rejected: %v", err)
+	}
+}
+
 func TestValidateManifestAcceptsRuntimeIdentityFoundationRelationTargets(t *testing.T) {
 	manifest := loadFixtureManifest(t, "domain-only-minimal.json")
 	for _, target := range []string{"identity_user", "identity_organization_unit"} {
@@ -183,13 +194,6 @@ func TestValidateManifestRejectsInvalidArtifacts(t *testing.T) {
 				manifest.Objects[0].Fields[1].Validation.Options = []string{"潜在客户"}
 			},
 			wantErr: "stable English storage value",
-		},
-		{
-			name: "missing seed data",
-			mutate: func(manifest *manifestmodel.ManifestSchema) {
-				manifest.SeedRecords = nil
-			},
-			wantErr: "domain schema must declare seed data",
 		},
 		{
 			name: "missing required seed field",

@@ -13,6 +13,9 @@ func WorkflowValidateGraph(graph *definitionmodel.WorkflowGraphSchema) error {
 	if graph == nil {
 		return badRequest("backend.workflow.graph_v2_required")
 	}
+	if graph.Version == 0 {
+		graph.Version = 2
+	}
 	if graph.Version != 2 || len(graph.Nodes) == 0 {
 		return badRequest("backend.workflow.graph_invalid")
 	}

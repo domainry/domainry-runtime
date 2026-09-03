@@ -6,6 +6,13 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 profile="${1:-deterministic}"
 evidence_dir="${RUNTIME_OPERATIONS_EVIDENCE_DIR:-${repo_root}/.artifacts/runtime-operations-reliability}"
 run_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+case "${profile}" in
+  deterministic|race|real-dialects|load|drill|ci|all) ;;
+  *)
+    printf 'unknown profile %q; use deterministic, race, real-dialects, load, drill, ci, or all\n' "${profile}" >&2
+    exit 2
+    ;;
+esac
 mkdir -p "${evidence_dir}"
 cd "${repo_root}"
 
@@ -28,31 +35,19 @@ case "${profile}" in
 esac
 case "${profile}" in
   drill|all)
-    command -v docker >/dev/null
-    command -v jq >/dev/null
-    command -v sqlite3 >/dev/null
+	: "${RUNTIME_DRILL_DRIVER:?RUNTIME_DRILL_DRIVER must name the executable infrastructure-owned backup/restore drill driver}"
+	if [[ "${RUNTIME_DRILL_DRIVER}" != /* || ! -x "${RUNTIME_DRILL_DRIVER}" ]]; then
+		printf 'RUNTIME_DRILL_DRIVER must be an absolute executable path: %q\n' "${RUNTIME_DRILL_DRIVER}" >&2
+		exit 2
+	fi
     ;;
 esac
 
+# Every summary must describe only this invocation; stale logs from another
+# profile would otherwise be indistinguishable from evidence produced now.
+rm -f "${evidence_dir}"/*.log "${evidence_dir}/gate-summary-${profile}.json"
 case "${profile}" in
-  deterministic)
-    rm -f "${evidence_dir}"/{correctness,worker-recovery,protocol-observability,operations-boundaries,migration-recovery,capacity}.log "${evidence_dir}/gate-summary-deterministic.json"
-    ;;
-  race)
-    rm -f "${evidence_dir}"/{race-core,race-runtime-lifecycle}.log "${evidence_dir}/gate-summary-race.json"
-    ;;
-  real-dialects)
-    rm -f "${evidence_dir}/real-dialects.log" "${evidence_dir}/gate-summary-real-dialects.json"
-    ;;
-  load)
-    rm -f "${evidence_dir}"/{state-soak,queue-retry-backlog,postgres-pool-soak}.log "${evidence_dir}/gate-summary-load.json"
-    ;;
-  drill)
-    rm -f "${evidence_dir}"/{migration-retirement,key-rotation-retention}.log "${evidence_dir}/gate-summary-drill.json" "${evidence_dir}"/disaster-recovery/runtime-dr-*.json
-    ;;
-  ci|all)
-    rm -f "${evidence_dir}"/*.log "${evidence_dir}/gate-summary-${profile}.json" "${evidence_dir}"/disaster-recovery/runtime-dr-*.json
-    ;;
+  drill|all) rm -f "${evidence_dir}"/disaster-recovery/runtime-dr-*.json ;;
 esac
 
 run_test() {
@@ -67,13 +62,15 @@ deterministic_gate() {
     ./runtime/domain/operations/... \
     ./runtime/application/operations \
     ./runtime/infrastructure/persistence/database/operations
-  run_test foundation-worker go -C ../domainry-foundation test -count=1 -timeout=5m ./worker/...
+  run_test foundation-worker go test -count=1 -timeout=5m github.com/domainry/domainry-foundation/worker/...
   run_test worker-recovery go test -count=1 -timeout=5m \
     ./runtime/application/publicationhandoff \
-    ./runtime/infrastructure/persistence/database/publicationhandoff \
+    ./runtime/infrastructure/persistence/database/publicationhandoff
+  run_test runtime-worker-recovery go test -count=1 -timeout=5m \
+    -run '^(TestControlledWorkers|TestControlledInstance|TestRuntimeStopWorkers|TestRuntimeCloseStopsWorkers|TestRuntimeCloseLeavesStoreOpenWhenWorkerShutdownTimesOut|TestControlledWorker)' \
     ./runtime/bootstrap/runtime
-  run_test integration-owner-workers go -C ../domainry-integration test -count=1 -timeout=5m \
-    ./internal/infrastructure/persistence/database/integration \
+  run_test integration-owner-workers go test -count=1 -timeout=5m \
+    github.com/domainry/domainry-integration/internal/infrastructure/persistence/database/integration \
     -run '^TestLocalWorkersPersistProviderStateBeforeDispatchingEvent$'
   run_test protocol-observability go test -count=1 -timeout=5m \
     ./runtime/transport/http \
@@ -81,24 +78,25 @@ deterministic_gate() {
   run_test operations-boundaries go test -count=1 -timeout=5m \
     ./runtime/application/operations \
     ./runtime/transport/http/operations \
-    ./runtime/transport/http/openapi
+    ./runtime/transport/http/openapi \
+    ./runtime/boundary
   run_test migration-recovery go test -count=1 -timeout=5m \
-    ./runtime/infrastructure/persistence/database/migration \
-    ./scripts/operations/runtime_disaster_recovery
-  run_test capacity go -C ../domainry-foundation test -count=1 -timeout=5m \
-    ./capacity \
-    ./ratelimit
+    ./runtime/infrastructure/persistence/database/migration
+  run_test capacity go test -count=1 -timeout=5m \
+    github.com/domainry/domainry-foundation/capacity \
+    github.com/domainry/domainry-foundation/ratelimit
 }
 
 race_gate() {
-  run_test race-foundation-worker go -C ../domainry-foundation test -race -count=1 -timeout=20m ./worker/...
-  run_test race-foundation-controls go -C ../domainry-foundation test -race -count=1 -timeout=20m \
-    ./capacity \
-    ./ratelimit
+  run_test race-foundation-worker go test -race -count=1 -timeout=20m github.com/domainry/domainry-foundation/worker/...
+  run_test race-foundation-controls go test -race -count=1 -timeout=20m \
+    github.com/domainry/domainry-foundation/capacity \
+    github.com/domainry/domainry-foundation/ratelimit
   run_test race-core go test -race -count=1 -timeout=20m \
-    ./runtime/application/lifecycle \
-    ./runtime/infrastructure/persistence/database/lifecycle \
-    ./runtime/infrastructure/persistence/database/operations
+    ./runtime/application/operations \
+    ./runtime/application/publicationhandoff \
+    ./runtime/infrastructure/persistence/database/operations \
+    ./runtime/infrastructure/persistence/database/publicationhandoff
   run_test race-runtime-lifecycle go test -race -count=1 -timeout=5m \
     -run 'TestRuntimeStopWorkers|TestControlledWorkers|TestControlledInstance' \
     ./runtime/bootstrap/runtime
@@ -113,7 +111,7 @@ real_dialect_gate() {
   # fixture owned by another package while tests inside each package still
   # exercise real database concurrency.
   run_test real-dialects go test -p=1 -count=1 -timeout=10m \
-    ./runtime/infrastructure/persistence/database/agent \
+    ./runtime/infrastructure/persistence/database \
     ./runtime/infrastructure/persistence/database/operations \
     ./runtime/infrastructure/persistence/database/dialecttest \
     ./runtime/infrastructure/persistence/database/automation \
@@ -122,8 +120,8 @@ real_dialect_gate() {
 
 load_soak_gate() {
   : "${RUNTIME_POSTGRES_TEST_DSN:?RUNTIME_POSTGRES_TEST_DSN is required}"
-  run_test state-soak go -C ../domainry-foundation test -count=1 -timeout=5m \
-    ./capacity \
+  run_test state-soak go test -count=1 -timeout=5m \
+    github.com/domainry/domainry-foundation/capacity \
     -run '^TestBoundedFoundationStateSoakDoesNotGrow$'
 	run_test publication-recovery-backlog go test -count=1 -timeout=5m \
 		./runtime/infrastructure/persistence/database/publicationhandoff \
@@ -136,15 +134,16 @@ load_soak_gate() {
 
 recovery_drill_gate() {
   RUNTIME_DRILL_SCHEMA_VERSION="$(sed -n 's/.*CurrentRuntimeSchemaVersion = "\([^"]*\)".*/\1/p' runtime/infrastructure/persistence/database/runtime_schema.go | head -n 1)" \
-    scripts/operations/runtime_disaster_recovery/drill_external.sh "${evidence_dir}/disaster-recovery"
+    "${RUNTIME_DRILL_DRIVER}" "${evidence_dir}/disaster-recovery"
   run_test migration-retirement env RUNTIME_REQUIRE_REAL_DIALECTS=1 go test -count=1 -timeout=10m \
     ./runtime/infrastructure/persistence/database/migration \
     ./runtime/infrastructure/persistence/database/operations \
     -run '^(TestRuntimeSchemaMigrationBacksUpExistingDataAndRecordsVersion|TestRuntimeSchemaMigrationFailureLeavesDirtyLedger|TestDatabaseRetirementWriteProtectionAndQuarantineAcrossExternalDialects)$'
-  run_test key-rotation-retention go test -count=1 -timeout=5m \
-    ./runtime/infrastructure/plugins \
-    ./runtime/application/lifecycle \
-    ./runtime/infrastructure/persistence/database/lifecycle
+  run_test lifecycle-retention go test -count=1 -timeout=5m \
+    github.com/domainry/domainry-lifecycle/internal/infrastructure/persistence/database/lifecycle \
+    ./runtime/infrastructure/persistence/database \
+    ./runtime/bootstrap/runtime \
+    -run '^Test(LifecycleStorePersistsOwnedAggregate|LifecycleModuleAloneAppliesOwnedMigrationToHostLedger|LifecycleModuleReopenAdoptsExistingOwnedSchemaOnce|NotificationSystemRetentionProjectsRuntimeLifecycleWithoutSQL)$'
 }
 
 case "${profile}" in
@@ -172,11 +171,8 @@ case "${profile}" in
     deterministic_gate
     race_gate
     real_dialect_gate
+    load_soak_gate
     recovery_drill_gate
-    ;;
-  *)
-    printf 'unknown profile %q; use deterministic, race, real-dialects, load, drill, ci, or all\n' "${profile}" >&2
-    exit 2
     ;;
 esac
 
@@ -248,7 +244,7 @@ summary = {
     "contracts": {
         "openapi_contract_sha256": digest_tree("runtime/transport/http/openapi"),
         "operations_inventory_sha256": digest("docs/architecture/runtime-operations-inventory.md"),
-        "runbook_sha256": digest("scripts/operations/contracts/runtime-operations-reliability-runbook.md"),
+        "test_matrix_sha256": digest("scripts/operations/contracts/runtime-operations-reliability-test-matrix.md"),
         "config_contract_sha256": digest_tree("runtime/platform/config"),
     },
     "environment": {

@@ -8,7 +8,7 @@ func ApplicationSchemaDictionaryAuthoringCapabilities() []capabilitycontract.Cap
 		Key: "schema.dictionary", Status: "supported", Lifecycle: "versioned_metadata",
 		SystemDraftResourceType: "dictionary",
 		Parameters: []capabilitycontract.CapabilityAuthoringParameter{
-			{Key: "key", Type: "string", Required: true}, {Key: "name", Type: "string"}, {Key: "description", Type: "string"},
+			{Key: "name", Type: "string"}, {Key: "description", Type: "string"},
 			{Key: "items", Type: "array", ItemSchema: "dictionary_item"}, {Key: "config", Type: "object"},
 		},
 		Permissions: []string{"runtime.appschema.validate_application_definition"}, AuditEvents: []string{"metadata_definition_upserted", "metadata_definition_deleted"},
@@ -28,8 +28,8 @@ func ApplicationSchemaDictionaryAuthoringCapabilities() []capabilitycontract.Cap
 			{Code: "backend.dictionary.item_parent_cycle", FieldPath: "items[].parent_key", ParameterKeys: []string{"item"}, MessageKey: "backend.dictionary.item_parent_cycle"},
 		},
 		Examples: []capabilitycontract.CapabilityAuthoringExample{
-			{Name: "minimal_valid", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"key": "order_status", "items": []any{map[string]any{"key": "draft", "value": "draft"}}}}},
-			{Name: "representative", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"key": "order_status", "name": "Order Status", "items": []any{map[string]any{"key": "draft", "label": "Draft", "value": "draft", "sort_order": 10, "status": "active"}, map[string]any{"key": "confirmed", "label": "Confirmed", "value": "confirmed", "sort_order": 20, "status": "active"}}}}},
+			{Name: "minimal_valid", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"items": []any{map[string]any{"key": "draft", "value": "draft"}}}}},
+			{Name: "representative", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"name": "Order Status", "items": []any{map[string]any{"key": "draft", "label": "Draft", "value": "draft", "sort_order": 10, "status": "active"}, map[string]any{"key": "confirmed", "label": "Confirmed", "value": "confirmed", "sort_order": 20, "status": "active"}}}}},
 			{Name: "invalid_with_repair", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"key": "order_status", "items": []any{map[string]any{"key": "draft"}}}}, ExpectedErrorCodes: []string{"backend.dictionary.item_key_value_required"}},
 		},
 		Sources: []capabilitycontract.CapabilityAuthoringSource{

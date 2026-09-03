@@ -53,7 +53,7 @@ func workflowDefinitionSchemaDefinitions(nodeTypes []string) map[string]capabili
 		"trigger_contract": {Ref: "#/$defs/workflow_trigger"}, "condition_contract": {Ref: "#/$defs/workflow_condition"},
 		"run_as": {Type: "string"}, "idempotency_keys": {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}},
 		"retry": {Ref: "#/$defs/workflow_retry_policy"}, "dead_letter_policy": workflowGraphOpenObjectSchema(),
-		"timeout_seconds": {Type: "integer", Minimum: workflowAuthoringFloatPointer(0)}, "audit_event": {Type: "string"}, "graph": {Ref: "#/$defs/workflow_graph"},
+		"timeout_seconds": {Type: "integer", Minimum: workflowAuthoringFloatPointer(0)}, "graph": {Ref: "#/$defs/workflow_graph"},
 	}}
 	graph := *workflowGraphInputSchema(nodeTypes)
 	graph.Schema, graph.Definitions = "", nil
@@ -77,7 +77,7 @@ func workflowComponentSchemaForKey(capabilityKey string) capabilitycontract.Capa
 func workflowDefinitionExamples() []capabilitycontract.CapabilityAuthoringExample {
 	graphs := workflowGraphExamples()
 	minimalWorkflow := map[string]any{"key": "order.complete", "name": "Complete order", "enabled": true, "trigger_contract": map[string]any{"type": "manual"}, "graph": graphs[0].Value}
-	representativeWorkflow := map[string]any{"key": "order.approval", "name": "Order approval", "enabled": true, "trigger_contract": map[string]any{"type": "field_changed", "object_key": "order", "field_key": "status"}, "condition_contract": map[string]any{"type": "field_equals", "field": "status", "value": "submitted"}, "idempotency_keys": []any{"record_id"}, "retry": map[string]any{"max_attempts": 3, "delay_seconds": 5}, "timeout_seconds": 86400, "audit_event": "order.approval.completed", "graph": graphs[1].Value}
+	representativeWorkflow := map[string]any{"key": "order.approval", "name": "Order approval", "enabled": true, "trigger_contract": map[string]any{"type": "field_changed", "object_key": "order", "field_key": "status"}, "condition_contract": map[string]any{"type": "field_equals", "field": "status", "value": "submitted"}, "idempotency_keys": []any{"record_id"}, "retry": map[string]any{"max_attempts": 3, "delay_seconds": 5}, "timeout_seconds": 86400, "graph": graphs[1].Value}
 	invalidWorkflow := map[string]any{"key": "order.invalid", "name": "Invalid workflow", "enabled": true, "trigger_contract": map[string]any{"type": "manual"}, "graph": graphs[2].Value}
 	return []capabilitycontract.CapabilityAuthoringExample{
 		{Name: "minimal_valid", Value: map[string]any{"payload": minimalWorkflow}},

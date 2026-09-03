@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"os"
 	"testing"
 
@@ -12,6 +11,7 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
+	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	changeplanprojection "github.com/domainry/domainry-runtime/runtime/domain/changeplan/projection"
@@ -57,6 +57,16 @@ func TestRuntimeAuthoringValidationAcceptsCanonicalRuntimeManifest(t *testing.T)
 		RequirementID: "customer-management", CapabilityKeys: []string{"schema.object"},
 		Resources: []changeplanmodel.RuntimeAuthoringCoverageResource{{ResourceType: "object", ResourceKey: "customer"}}, ScenarioIDs: []string{"customer.create.success"},
 	}}}
+	configuration, err := service.Validate(t.Context(), runtimeAuthoringValidationAdmin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !configuration.Valid || configuration.Scope != runtimeAuthoringConfigurationValidationScope || configuration.Checks["coverage_ledger"] != "" || configuration.Binding.CoverageHash != "" {
+		t.Fatalf("configuration report=%#v", configuration)
+	}
+	if configuration.EvidenceCollection.TrustPolicy != changeplanmodel.RuntimeAuthoringEvidenceTrustPolicy || configuration.EvidenceCollection.StepReceiptHeader != changeplanmodel.RuntimeAuthoringStepReceiptHeader {
+		t.Fatalf("evidence collection contract=%#v", configuration.EvidenceCollection)
+	}
 	first, err := service.ValidateWithCoverage(t.Context(), runtimeAuthoringValidationAdmin(), coverage)
 	if err != nil {
 		t.Fatal(err)
@@ -65,8 +75,18 @@ func TestRuntimeAuthoringValidationAcceptsCanonicalRuntimeManifest(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !first.Valid || first.Status != "valid" || first.SnapshotHash == "" || first.SnapshotHash != second.SnapshotHash {
+	if !first.Valid || first.Status != "valid" || first.Scope != runtimeAuthoringCoverageValidationScope || first.SnapshotHash == "" || first.SnapshotHash != second.SnapshotHash {
 		t.Fatalf("first=%#v second=%#v", first, second)
+	}
+}
+
+func TestRuntimeAuthoringCoverageValidationRequiresLedger(t *testing.T) {
+	report, err := NewRuntimeAuthoringValidationApplicationService(runtimeAuthoringEdgeDependencies()).ValidateWithCoverage(t.Context(), runtimeAuthoringValidationAdmin(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Valid || report.Scope != runtimeAuthoringCoverageValidationScope || report.Checks["coverage_ledger"] != "invalid" {
+		t.Fatalf("report=%#v", report)
 	}
 }
 
@@ -92,7 +112,7 @@ func TestRuntimeAuthoringValidationMapsOwnerDiagnosticsAndReadiness(t *testing.T
 		t.Fatalf("report=%#v", report)
 	}
 	for _, key := range []string{"cross_resource_references", "cycles", "permission_closure", "foundation_usage"} {
-		if report.Checks[key] != "invalid" {
+		if report.Checks[key] != "ok" {
 			t.Fatalf("manifest-backed check %s=%q report=%#v", key, report.Checks[key], report)
 		}
 	}
@@ -100,7 +120,7 @@ func TestRuntimeAuthoringValidationMapsOwnerDiagnosticsAndReadiness(t *testing.T
 	for _, diagnostic := range report.Diagnostics {
 		capabilities[diagnostic.CapabilityKey] = true
 	}
-	if !capabilities["seed.record"] || !capabilities["deployment.runtime"] {
+	if capabilities["seed.record"] || !capabilities["deployment.runtime"] {
 		t.Fatalf("owner diagnostics=%#v", report.Diagnostics)
 	}
 }

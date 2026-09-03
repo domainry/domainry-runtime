@@ -13,7 +13,7 @@ import (
 
 func TestAutomationAuthoringDomainIsOwnerOwnedAndUsesRuntimeEnums(t *testing.T) {
 	domain := AutomationAuthoringDomain()
-	if domain.Key != "automation" || len(domain.Capabilities) != 9 {
+	if domain.Key != "automation" || len(domain.Capabilities) != 8 {
 		t.Fatalf("domain=%#v", domain)
 	}
 	catalog := capabilitycontract.RuntimeAutomationCapabilities()
@@ -21,6 +21,9 @@ func TestAutomationAuthoringDomainIsOwnerOwnedAndUsesRuntimeEnums(t *testing.T) 
 	for _, capability := range domain.Capabilities {
 		if strings.HasPrefix(capability.Key, "automation.instruction.") {
 			instructionTypes = append(instructionTypes, strings.TrimPrefix(capability.Key, "automation.instruction."))
+			if _, exists := capability.InputSchema.Properties["type"]; exists {
+				t.Fatalf("route-derived instruction type leaked into %s input", capability.Key)
+			}
 		}
 	}
 	sort.Strings(instructionTypes)

@@ -154,6 +154,54 @@ func (r RecordStore) CommitRecordMutationExecution(ctx context.Context, commit t
 	return r.findRecordMutationExecutionByID(ctx, workspaceID, completion.ExecutionID)
 }
 
+func (r RecordStore) CommitRecordMutationBatchExecution(ctx context.Context, commits []transactionmodel.RecordMutationCommit, completion recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error) {
+	workspaceID, err := requireRecordWorkspaceID(completion.WorkspaceID)
+	if err != nil {
+		return recordmodel.RecordMutationExecution{}, err
+	}
+	if len(commits) == 0 {
+		return recordmodel.RecordMutationExecution{}, fmt.Errorf("commit record mutation batch execution: commits are required")
+	}
+	tx, err := r.database().BeginTx(ctx, recordMutationTxOptions())
+	if err != nil {
+		return recordmodel.RecordMutationExecution{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, commit := range commits {
+		if err := r.applyRecordMutationTx(ctx, tx, workspaceID, commit); err != nil {
+			return recordmodel.RecordMutationExecution{}, err
+		}
+	}
+	resultJSON, err := json.Marshal(completion.Result)
+	if err != nil {
+		return recordmodel.RecordMutationExecution{}, err
+	}
+	now := completion.Now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	queryValue, args, err := recordMutationCompletionUpdate(r.store, workspaceID, completion, string(resultJSON), 204, now)
+	if err != nil {
+		return recordmodel.RecordMutationExecution{}, err
+	}
+	result, err := tx.ExecContext(ctx, queryValue, args...)
+	if err != nil {
+		return recordmodel.RecordMutationExecution{}, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return recordmodel.RecordMutationExecution{}, err
+	}
+	if rows != 1 {
+		r.observeRecordMutationLeaseLost(ctx, workspaceID, completion.ExecutionID)
+		return recordmodel.RecordMutationExecution{}, mutation.MutationConflict("record_mutation_execution", completion.ExecutionID, mutation.MutationConflictLeaseLost, nil)
+	}
+	if err := tx.Commit(); err != nil {
+		return recordmodel.RecordMutationExecution{}, err
+	}
+	return r.findRecordMutationExecutionByID(ctx, workspaceID, completion.ExecutionID)
+}
+
 func (r RecordStore) CompleteRecordMutationExecution(ctx context.Context, completion recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error) {
 	workspaceID, err := requireRecordWorkspaceID(completion.WorkspaceID)
 	if err != nil {

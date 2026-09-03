@@ -47,7 +47,8 @@ func (h *CapabilitiesHandler) platformCapabilities(w http.ResponseWriter, r *htt
 }
 
 func (h *CapabilitiesHandler) capabilityIndex(w http.ResponseWriter, r *http.Request) {
-	result, err := h.service.DiscoveryIndex(r.Context(), h.discoveryPrincipal(r))
+	includeEndpointContracts := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("include")), "endpoint_contracts")
+	result, err := h.service.DiscoveryIndexExpanded(r.Context(), h.discoveryPrincipal(r), includeEndpointContracts)
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return

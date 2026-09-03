@@ -6,18 +6,14 @@ const metadataJSONSchemaDraft = "https://json-schema.org/draft/2020-12/schema"
 
 func metadataAuthoringRequestSchema(payload capabilitycontract.CapabilityAuthoringSchema, objectKeyRequired bool) *capabilitycontract.CapabilityAuthoringSchema {
 	required := []string{"payload"}
+	properties := map[string]capabilitycontract.CapabilityAuthoringSchema{"payload": payload}
 	if objectKeyRequired {
 		required = append(required, "object_key")
+		properties["object_key"] = metadataStringSchema("Runtime object owning this resource.")
 	}
 	return &capabilitycontract.CapabilityAuthoringSchema{
 		Schema: metadataJSONSchemaDraft, Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: required,
-		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-			"object_key":  metadataStringSchema("Runtime object owning this resource."),
-			"name":        metadataStringSchema("Optional display name stored with the definition."),
-			"source_kind": metadataStringSchema("Stable authoring source kind."),
-			"source_id":   metadataStringSchema("Stable authoring source identifier."),
-			"payload":     payload,
-		},
+		Properties: properties,
 	}
 }
 
@@ -70,9 +66,8 @@ func metadataObjectPayloadSchema() capabilitycontract.CapabilityAuthoringSchema 
 		},
 	}
 	ledgerPolicy := capabilitycontract.CapabilityAuthoringSchema{
-		Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: []string{"integrity"},
+		Type: "object", AdditionalProperties: metadataBoolPointer(false),
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-			"integrity": {Type: "string", Enum: []any{"sha256_chain"}},
 			"signature": {Type: "string", Enum: []any{"none", "hmac_sha256"}, Default: "none"},
 		},
 	}
@@ -96,9 +91,9 @@ func metadataObjectPayloadSchema() capabilitycontract.CapabilityAuthoringSchema 
 		},
 	}
 	return capabilitycontract.CapabilityAuthoringSchema{
-		Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: []string{"key", "name"},
+		Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: []string{"name"},
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-			"key":                     metadataNonEmptyStringSchema("Stable lowercase object key matching the resourceKey path."),
+			"key":                     metadataNonEmptyStringSchema("Compatibility input only; Runtime materializes the authoritative resourceKey path value when omitted."),
 			"name":                    metadataNonEmptyStringSchema("Human-readable object name."),
 			"description":             {Type: "string"},
 			"capabilities":            capabilities,
@@ -129,9 +124,9 @@ func metadataFieldPayloadSchema(fieldTypes []string) capabilitycontract.Capabili
 		},
 	}
 	return capabilitycontract.CapabilityAuthoringSchema{
-		Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: []string{"key", "name", "type"},
+		Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: []string{"name", "type"},
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-			"key": metadataNonEmptyStringSchema("Stable field key."), "name": metadataNonEmptyStringSchema("Human-readable field name."), "description": {Type: "string"},
+			"key": metadataNonEmptyStringSchema("Compatibility input only; Runtime materializes the authoritative resourceKey path value when omitted."), "name": metadataNonEmptyStringSchema("Human-readable field name."), "description": {Type: "string"},
 			"type": {Type: "string", Enum: values}, "required": {Type: "boolean", Default: false}, "unique": {Type: "boolean", Default: false},
 			"default": {}, "default_value": {}, "config": config,
 		},
@@ -161,9 +156,9 @@ func metadataDictionaryItemSchema() capabilitycontract.CapabilityAuthoringSchema
 func metadataDictionaryPayloadSchema() capabilitycontract.CapabilityAuthoringSchema {
 	item := metadataDictionaryItemSchema()
 	return capabilitycontract.CapabilityAuthoringSchema{
-		Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: []string{"items", "key"},
+		Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: []string{"items"},
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-			"key": metadataNonEmptyStringSchema("Stable dictionary key matching the resourceKey path."), "name": {Type: "string"}, "description": {Type: "string"},
+			"key": metadataNonEmptyStringSchema("Compatibility input only; Runtime materializes the authoritative resourceKey path value when omitted."), "name": {Type: "string"}, "description": {Type: "string"},
 			"items": {Type: "array", Items: &item}, "config": {Type: "object", AdditionalProperties: metadataBoolPointer(false)},
 		},
 	}

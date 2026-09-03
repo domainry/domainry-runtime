@@ -277,7 +277,8 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		PlanUpdateReference: func(ctx context.Context, reference recordservice.RecordDeleteReference, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 			return update.PlanUpdateMutation(ctx, reference.Object.Key, reference.Record.ID, map[string]any{reference.Field.Key: nil}, principal)
 		},
-		BuildAudit: dependencies.BuildAudit,
+		BuildAudit:       dependencies.BuildAudit,
+		ExecutionRuntime: dependencies.RecordMutationExecution,
 	})
 	importer := NewRecordImportApplicationService(RecordImportDependencies{
 		Repository:      dependencies.Repository,

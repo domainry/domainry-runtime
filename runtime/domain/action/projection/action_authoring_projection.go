@@ -16,7 +16,6 @@ func ActionDefinitionAuthoringCapability() capabilitycontract.CapabilityAuthorin
 			{Key: "object_key", Type: "object_key", Required: true},
 			{Key: "kind", Type: "string", Required: true, Enum: actionAuthoringKinds()},
 			{Key: "risk_level", Type: "string", Enum: []string{"low", "medium", "high", "critical"}},
-			{Key: "audit_event", Type: "audit_event_key", Required: true},
 			{Key: "assurance_policy", Type: "object"},
 			{Key: "expected_schema_hash", Type: "string", Required: true},
 		},
@@ -72,11 +71,10 @@ func actionAuthoringRequestSchema() *capabilitycontract.CapabilityAuthoringSchem
 	}
 	payload := capabilitycontract.CapabilityAuthoringSchema{
 		Type: "object", AdditionalProperties: &closed,
-		Required: []string{"audit_event", "key", "kind", "label", "object_key"},
+		Required: []string{"key", "kind", "label", "object_key"},
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 			"key": {Type: "string"}, "object_key": {Type: "string"}, "label": {Type: "string"},
 			"kind": {Type: "string", Enum: actionStringEnums(actionAuthoringKinds())}, "risk_level": {Type: "string", Enum: actionStringEnums([]string{"low", "medium", "high", "critical"})},
-			"audit_event":    {Type: "string"},
 			"preconditions":  {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}},
 			"payload_fields": {Type: "array", Items: &payloadField}, "defaults": {Type: "object"},
 			"optimistic_concurrency": {Type: "boolean", Default: false}, "concurrency_field": {Type: "string"}, "assurance_policy": assurancePolicy,
@@ -86,7 +84,6 @@ func actionAuthoringRequestSchema() *capabilitycontract.CapabilityAuthoringSchem
 		Schema: "https://json-schema.org/draft/2020-12/schema", Type: "object", AdditionalProperties: &closed,
 		Required: []string{"expected_schema_hash", "payload"},
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-			"object_key": {Type: "string"}, "name": {Type: "string"}, "source_kind": {Type: "string"}, "source_id": {Type: "string"},
 			"expected_schema_hash": {Type: "string"}, "payload": payload,
 		},
 	}
@@ -106,7 +103,7 @@ func actionAuthoringOutputSchema() *capabilitycontract.CapabilityAuthoringSchema
 }
 
 func actionAuthoringExamples() []capabilitycontract.CapabilityAuthoringExample {
-	base := map[string]any{"key": "order.complete", "object_key": "order", "label": "Complete order", "kind": "record_update", "audit_event": "order_completed"}
+	base := map[string]any{"key": "order.complete", "object_key": "order", "label": "Complete order", "kind": "record_update"}
 	representative := actionExampleCopy(base)
 	representative["preconditions"] = []any{"status == paid"}
 	representative["payload_fields"] = []any{map[string]any{"key": "reason", "type": "text", "required": true}}

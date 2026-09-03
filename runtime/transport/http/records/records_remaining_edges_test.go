@@ -38,9 +38,17 @@ func TestRecordsCRUDSuccessReplayAndNilPatch(t *testing.T) {
 	if updated.Code != http.StatusOK || json.Unmarshal(updated.Body.Bytes(), &record) != nil || record.Data["name"] != "Grace" {
 		t.Fatalf("update status=%d record=%+v body=%s", updated.Code, record, updated.Body.String())
 	}
-	deleted := fixture.call(http.MethodDelete, "/objects/customer/records/"+record.ID+"?expected_updated_at="+record.UpdatedAt, "", nil)
+	missingDeleteKey := fixture.call(http.MethodDelete, "/objects/customer/records/"+record.ID+"?expected_updated_at="+record.UpdatedAt, "", nil)
+	if missingDeleteKey.Code != http.StatusBadRequest || !strings.Contains(missingDeleteKey.Body.String(), idempotency.ErrorCodeMissingKey) {
+		t.Fatalf("missing delete key status=%d body=%s", missingDeleteKey.Code, missingDeleteKey.Body.String())
+	}
+	deleted := fixture.call(http.MethodDelete, "/objects/customer/records/"+record.ID+"?expected_updated_at="+record.UpdatedAt, "", map[string]string{"Idempotency-Key": "record-delete-edge"})
 	if deleted.Code != http.StatusNoContent {
 		t.Fatalf("delete status=%d body=%s", deleted.Code, deleted.Body.String())
+	}
+	replayedDelete := fixture.call(http.MethodDelete, "/objects/customer/records/"+record.ID+"?expected_updated_at="+record.UpdatedAt, "", map[string]string{"Idempotency-Key": "record-delete-edge"})
+	if replayedDelete.Code != http.StatusNoContent || replayedDelete.Header().Get("Idempotency-Replayed") != "true" {
+		t.Fatalf("delete replay status=%d headers=%v body=%s", replayedDelete.Code, replayedDelete.Header(), replayedDelete.Body.String())
 	}
 
 	handler, serviceErr := recordsHandlerForTest(principalmodel.Principal{})

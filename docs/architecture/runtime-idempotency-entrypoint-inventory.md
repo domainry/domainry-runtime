@@ -5,7 +5,7 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (63)
+## HTTP mutation routes (54)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -32,8 +32,8 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `operations` | `POST /operations/idempotency/receipts/{owner}/{receiptID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
 | `operations` | `POST /operations/leases/{owner}/{resourceID}/force-release` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
 | `operations` | `PUT /operations/controls/{controlKind}/{owner}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/operations/operations_routes.go` |
-| `records` | `DELETE /objects/{objectKey}/records/{recordID}` | `optimistic_only` | workspace plus resource identity and expected version | `runtime/transport/http/records/records_routes.go` |
-| `records` | `PATCH /objects/{objectKey}/records/{recordID}` | `optimistic_only` | workspace plus resource identity and expected version | `runtime/transport/http/records/records_routes.go` |
+| `records` | `DELETE /objects/{objectKey}/records/{recordID}` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `records` | `PATCH /objects/{objectKey}/records/{recordID}` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/actions/{actionKey}/bulk` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/actions/{actionKey}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/records` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
@@ -44,15 +44,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `records` | `POST /objects/{objectKey}/records/{recordID}/actions/{actionKey}` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/records/{recordID}/deactivate-profile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /objects/{objectKey}/records/{recordID}/reactivate-profile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `scheduler` | `POST /operations/scheduler/dead-letters/{deadLetterID}/requeue` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
-| `scheduler` | `POST /operations/scheduler/dead-letters/{deadLetterID}/resolve` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
-| `scheduler` | `POST /operations/scheduler/definitions/{definitionID}/reschedule` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
-| `scheduler` | `POST /operations/scheduler/definitions/{definitionID}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
-| `scheduler` | `POST /operations/scheduler/runs/{runID}/cancel` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
-| `scheduler` | `POST /operations/scheduler/runs/{runID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
-| `scheduler` | `POST /tenant-admin/scheduler/definitions/validate` | `not_applicable` | none | `runtime/transport/http/scheduler/scheduler_routes.go` |
-| `scheduler` | `POST /tenant-admin/scheduler/definitions/{definitionID}/simulate` | `not_applicable` | none | `runtime/transport/http/scheduler/scheduler_routes.go` |
-| `scheduler` | `POST /tenant-admin/scheduler/schedules/preview` | `not_applicable` | none | `runtime/transport/http/scheduler/scheduler_routes.go` |
 | `scheduler` | `POST /v1/scheduler-triggers:accept` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
 | `uploads` | `POST /files` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/uploads/uploads_routes.go` |
 | `workflows` | `POST /business/workflow/processes/{processID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
@@ -73,7 +64,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workspaceprovision` | `POST /tenant-admin/workspaces/provision` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 | `workspaceprovision` | `POST /tenant-admin/workspaces/{workspaceID}/roles/reconcile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 
-## Application mutation commands (125)
+## Application mutation commands (123)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -143,32 +134,30 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `record` | `CreateRecordIdempotentResult` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `Delete` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_delete_application_service.go` |
 | `record` | `DeleteExpected` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_delete_application_service.go` |
+| `record` | `DeleteExpectedIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_delete_application_service.go` |
 | `record` | `DeleteRecord` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
 | `record` | `DeleteRecordExpected` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
+| `record` | `DeleteRecordExpectedIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `EnqueueExport` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_data_exchange_application_service.go` |
 | `record` | `EnqueueExportJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `EnqueueImport` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_data_exchange_application_service.go` |
 | `record` | `EnqueueImportJob` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `EnqueueImportStream` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_data_exchange_application_service.go` |
 | `record` | `EnqueueImportStream` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
-| `record` | `Insert` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_internal_mutation_application_service.go` |
-| `record` | `Rebuild` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/record/record_owner_department_path_application_service.go` |
-| `record` | `RebuildOwnerDepartmentPaths` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/record/record_import_facade.go` |
 | `record` | `RecordReferences` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_display.go` |
 | `record` | `RecordScopeAllows` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_display.go` |
 | `record` | `RecordScopeAllowsAction` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_display.go` |
 | `record` | `ResolveSubject` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_subject_lifecycle_application_service.go` |
 | `record` | `Restore` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_restore_application_service.go` |
 | `record` | `RestoreRecord` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
-| `record` | `Update` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_internal_mutation_application_service.go` |
 | `record` | `Update` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_update_application_service.go` |
-| `record` | `UpdateIdempotent` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_update_application_service.go` |
+| `record` | `UpdateIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_update_application_service.go` |
 | `record` | `UpdateLocalized` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_update_application_service.go` |
-| `record` | `UpdateLocalizedIdempotent` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_update_application_service.go` |
+| `record` | `UpdateLocalizedIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_update_application_service.go` |
 | `record` | `UpdateLocalizedRecord` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
-| `record` | `UpdateLocalizedRecordIdempotent` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
+| `record` | `UpdateLocalizedRecordIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `record` | `UpdateRecord` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
-| `record` | `UpdateRecordIdempotent` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/record/record_import_facade.go` |
+| `record` | `UpdateRecordIdempotent` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/record/record_import_facade.go` |
 | `recordmutation` | `Dispatch` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/recordmutation/record_mutation_application_service.go` |
 | `recordtimer` | `CancelRecordTimers` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_core.go` |
 | `recordtimer` | `ProcessDueForAllWorkspaces` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/recordtimer/record_timer_processing.go` |

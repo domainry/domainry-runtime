@@ -90,6 +90,29 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 	if _, found, err := repository.GetRecord(t.Context(), request.Execution.WorkspaceID, object, record.ID); err != nil || !found {
 		t.Fatalf("stale delete removed record found=%v err=%v", found, err)
 	}
+	deleteRequest := recordmodel.RecordMutationClaimRequest{
+		Execution:          recordmodel.RecordMutationExecution{WorkspaceID: "workspace-a", Operation: "delete", ObjectKey: object.Key, TargetID: record.ID, IdempotencyKey: "delete-1", ActorID: "admin"},
+		RequestFingerprint: "delete-fingerprint", LeaseOwner: "runtime-delete", LeaseTTL: time.Minute, Now: now,
+	}
+	deleteClaim, err := repository.TryBeginRecordMutation(t.Context(), deleteRequest)
+	if err != nil || deleteClaim.Decision != idempotency.DecisionAcquired {
+		t.Fatalf("delete claim=%+v err=%v", deleteClaim, err)
+	}
+	deleteCommit := transactionmodel.RecordMutationCommit{Operation: "delete", Object: object, RecordID: record.ID, ExpectedUpdatedAt: record.UpdatedAt}
+	completedDelete, err := repository.CommitRecordMutationBatchExecution(t.Context(), []transactionmodel.RecordMutationCommit{deleteCommit}, recordmodel.RecordMutationCompletion{
+		WorkspaceID: deleteClaim.Execution.WorkspaceID, ExecutionID: deleteClaim.Execution.ID, LeaseOwner: deleteClaim.Execution.LeaseOwner, FencingToken: deleteClaim.Execution.FencingToken,
+		Result: map[string]any{"deleted": true}, ExpiresAt: now.Add(24 * time.Hour), Now: now,
+	})
+	if err != nil || completedDelete.Status != string(idempotency.StatusSucceeded) || completedDelete.ResponseStatus != 204 {
+		t.Fatalf("completed delete=%+v err=%v", completedDelete, err)
+	}
+	if _, found, err := repository.GetRecord(t.Context(), request.Execution.WorkspaceID, object, record.ID); err != nil || found {
+		t.Fatalf("idempotent delete found=%v err=%v", found, err)
+	}
+	deleteReplay, err := repository.TryBeginRecordMutation(t.Context(), deleteRequest)
+	if err != nil || deleteReplay.Decision != idempotency.DecisionReplay || deleteReplay.Execution.OperationResult["deleted"] != true {
+		t.Fatalf("delete replay=%+v err=%v", deleteReplay, err)
+	}
 
 	rollbackRequest := request
 	rollbackRequest.Execution.IdempotencyKey = "create-rollback"

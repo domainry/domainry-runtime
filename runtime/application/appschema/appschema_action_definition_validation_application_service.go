@@ -25,8 +25,8 @@ func validateBusinessActionDefinitionIssuesWithObjects(action definitionmodel.Ac
 func ValidateStructuredApplicationDefinition(resourceType string, payload json.RawMessage) ([]appschemamodel.ApplicationDefinitionValidationIssue, bool) {
 	switch resourceType {
 	case "action":
-		var action definitionmodel.ActionSchema
-		if err := json.Unmarshal(payload, &action); err != nil {
+		action, err := decodeActionDefinitionPayload(payload)
+		if err != nil {
 			return []appschemamodel.ApplicationDefinitionValidationIssue{newApplicationDefinitionValidationIssue("backend.action.definition_invalid", "definition", "", "", nil)}, true
 		}
 		return validateBusinessActionDefinitionIssues(action), true

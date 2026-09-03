@@ -65,10 +65,7 @@ func (s *ActionApplicationService) failOwnedInvocation(ctx context.Context, unit
 }
 
 func buildActionSuccessAudit(ctx context.Context, action definitionmodel.ActionSchema, invocation actionmodel.ActionInvocation, result actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
-	event := strings.TrimSpace(action.AuditEvent)
-	if event == "" {
-		event = "business_action_executed"
-	}
+	event := definitionmodel.EffectiveActionAuditEvent(action)
 	return auditcontract.AuditBuildEvent(ctx, event, action.ObjectKey, invocation.RecordID, invocation.Principal, "Executed action "+action.Key, nil, nil, map[string]any{"action_key": action.Key, "invocation_id": result.InvocationID, "owner_source": invocation.Source, "status": result.Status})
 }
 

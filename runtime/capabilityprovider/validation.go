@@ -140,6 +140,9 @@ func validateWorkflowCandidate(_ context.Context, request modulecapability.Valid
 	if workflow.Key != request.Candidate.Key {
 		return validationDiagnostics(errorDiagnostic("workflows", "workflow.definition.key_mismatch", "$.candidate.value.key", fmt.Errorf("workflow key %q differs from fragment key %q", workflow.Key, request.Candidate.Key), nil)), nil
 	}
+	if workflow.Graph != nil && workflow.Graph.Version == 0 {
+		workflow.Graph.Version = 2
+	}
 	diagnostics := []modulecapability.Diagnostic{}
 	if strings.TrimSpace(workflow.Key) == "" || strings.TrimSpace(workflow.Name) == "" {
 		diagnostics = append(diagnostics, errorDiagnostic("workflows", "backend.workflow.definition_identity_required", "$.candidate.value.key", errors.New("workflow key and name are required"), nil))
@@ -205,6 +208,11 @@ func validateProfileBindingCandidate(_ context.Context, request modulecapability
 		return validationDiagnostics(errorDiagnostic("profilebinding", "profilebinding.object.key_mismatch", "$.candidate.value.key", fmt.Errorf("object key %q differs from fragment key %q", object.Key, request.Candidate.Key), nil)), nil
 	}
 	ux, _ := source["ux"].(map[string]any)
+	if ux != nil {
+		if _, declared := ux["kind"]; !declared {
+			ux["kind"] = "identity_profile_extension"
+		}
+	}
 	if strings.TrimSpace(textValue(ux["kind"])) != "identity_profile_extension" {
 		return validationDiagnostics(errorDiagnostic("profilebinding", "profilebinding.object.kind_invalid", "$.candidate.value.ux.kind", fmt.Errorf("ux.kind must be identity_profile_extension"), nil)), nil
 	}

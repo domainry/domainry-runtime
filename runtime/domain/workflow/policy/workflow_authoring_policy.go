@@ -18,7 +18,6 @@ func WorkflowAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 	graphCapability := capabilitycontract.CapabilityAuthoringDefinition{
 		Key: "workflow.graph_v2", Status: "supported", Lifecycle: "draft_publish_immutable_version",
 		Parameters: []capabilitycontract.CapabilityAuthoringParameter{
-			{Key: "version", Type: "integer", Required: true, Default: 2, Enum: []string{"2"}},
 			{Key: "nodes", Type: "array", Required: true, ItemSchema: "workflow_graph_node"},
 			{Key: "edges", Type: "array", Required: true, ItemSchema: "workflow_graph_edge"},
 			{Key: "viewport", Type: "object"},
@@ -137,7 +136,11 @@ func workflowCompleteComponentAuthoringContract(capability *capabilitycontract.C
 }
 
 func workflowValidationOutputVariables() []capabilitycontract.CapabilityAuthoringOutput {
-	return []capabilitycontract.CapabilityAuthoringOutput{{Name: "valid", JSONPointer: "/valid", Type: "boolean", VisibleTo: "subsequent_capability_calls"}, {Name: "issues", JSONPointer: "/issues", Type: "workflow_validation_issues", VisibleTo: "subsequent_capability_calls"}}
+	return []capabilitycontract.CapabilityAuthoringOutput{
+		{Name: "valid", JSONPointer: "/valid", Type: "boolean", VisibleTo: "subsequent_capability_calls"},
+		{Name: "normalized_fragment", JSONPointer: "/fragment", Type: "object", VisibleTo: "subsequent_capability_calls"},
+		{Name: "issues", JSONPointer: "/issues", Type: "workflow_validation_issues", VisibleTo: "subsequent_capability_calls"},
+	}
 }
 
 func workflowComponentReferenceContracts(parameters []capabilitycontract.CapabilityAuthoringParameter) []capabilitycontract.CapabilityAuthoringReference {
@@ -229,8 +232,8 @@ func workflowValidationOutputSchema() *capabilitycontract.CapabilityAuthoringSch
 		"node_id": {Type: "string"}, "edge_id": {Type: "string"}, "params": {Type: "object", AdditionalProperties: &openParams},
 		"capability_key": {Type: "string"}, "contract_version": {Type: "string"}, "diagnostic": {Type: "string"},
 	}}
-	return &capabilitycontract.CapabilityAuthoringSchema{Schema: "https://json-schema.org/draft/2020-12/schema", Type: "object", AdditionalProperties: &closed, Required: []string{"valid", "issues", "validated_at"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-		"valid": {Type: "boolean"}, "issues": {Type: "array", Items: &issue}, "validated_at": {Type: "string", Format: "date-time"},
+	return &capabilitycontract.CapabilityAuthoringSchema{Schema: "https://json-schema.org/draft/2020-12/schema", Type: "object", AdditionalProperties: &closed, Required: []string{"valid", "capability_key", "issues", "validated_at"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+		"valid": {Type: "boolean"}, "capability_key": {Type: "string"}, "fragment": workflowGraphOpenObjectSchema(), "issues": {Type: "array", Items: &issue}, "validated_at": {Type: "string", Format: "date-time"},
 	}}
 }
 

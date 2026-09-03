@@ -48,7 +48,7 @@ func candidateApplySlice[T any](values *[]T, key string, payload json.RawMessage
 
 func candidateDecode[T any](payload json.RawMessage, expectedKey string, keyOf func(T) string) (T, error) {
 	var value T
-	if err := json.Unmarshal(payload, &value); err != nil {
+	if err := decodeClosedDefinitionPayload(payload, &value); err != nil {
 		return value, err
 	}
 	actual := strings.TrimSpace(keyOf(value))
@@ -107,9 +107,22 @@ func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionReque
 		return normalized, nil, err
 	}
 	if resourceType == "dictionary" {
-		if err := appschemavalidation.ApplicationSchemaValidateDictionaryDefinition(resourceKey, req.Payload); err != nil {
+		normalized, err := appschemavalidation.ApplicationSchemaNormalizeDictionaryDefinition(resourceKey, req.Payload)
+		if err != nil {
 			return nil, nil, err
 		}
+		return normalized, nil, nil
+	}
+	if resourceType == "field" {
+		fieldKey := strings.TrimSpace(resourceKey)
+		if separator := strings.LastIndex(fieldKey, "."); separator >= 0 {
+			fieldKey = strings.TrimSpace(fieldKey[separator+1:])
+		}
+		normalizedPayload, err := materializeDefinitionRouteKey(req.Payload, fieldKey, "backend.metadata.field_key_mismatch")
+		if err != nil {
+			return nil, nil, err
+		}
+		req.Payload = normalizedPayload
 	}
 	if resourceType == "action" {
 		action, err := decodeActionDefinitionPayload(req.Payload)
@@ -131,7 +144,7 @@ func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionReque
 	}
 	if resourceType == "report" {
 		var report reportmodel.ReportSchema
-		if err := json.Unmarshal(req.Payload, &report); err != nil {
+		if err := decodeClosedDefinitionPayload(req.Payload, &report); err != nil {
 			return nil, nil, badRequest("backend.report.definition_invalid")
 		}
 		if issues := s.validateReportDefinitionIssues(ctx, report); len(issues) > 0 {
@@ -146,6 +159,24 @@ func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionReque
 	return normalized.Payload, nil, nil
 }
 
+func materializeDefinitionRouteKey(payload json.RawMessage, resourceKey, mismatchCode string) (json.RawMessage, error) {
+	value := map[string]any{}
+	if err := json.Unmarshal(payload, &value); err != nil {
+		return payload, err
+	}
+	resourceKey = strings.TrimSpace(resourceKey)
+	if declared, exists := value["key"]; exists {
+		key, ok := declared.(string)
+		if !ok || strings.TrimSpace(key) != resourceKey {
+			return payload, badRequest(mismatchCode, "field", resourceKey)
+		}
+	} else {
+		value["key"] = resourceKey
+	}
+	normalized, err := json.Marshal(value)
+	return normalized, err
+}
+
 func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionPayload(ctx context.Context, resourceType string, req appschemamodel.ApplicationDefinitionUpsertRequest) (appschemamodel.ApplicationDefinitionUpsertRequest, error) {
 	if retiredPresentationDefinitionType(resourceType) {
 		return req, badRequest("backend.app_schema.resource_type_unsupported", "resource_type", resourceType)
@@ -155,15 +186,25 @@ func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionPaylo
 		return s.normalizeAndValidateFieldMetadataMutation(ctx, req)
 	case "automation_rule":
 		var rule automationmodel.AutomationRuleSchema
-		if err := json.Unmarshal(req.Payload, &rule); err != nil {
+		if err := decodeClosedDefinitionPayload(req.Payload, &rule); err != nil {
 			return req, badRequest("backend.automation.definition_invalid")
 		}
 		return req, s.ValidateAutomationRuleDefinition(ctx, rule)
 	case "identity_profile_binding":
 		var binding profilebindingmodel.Binding
-		if err := json.Unmarshal(req.Payload, &binding); err != nil {
+		if err := decodeClosedDefinitionPayload(req.Payload, &binding); err != nil {
 			return req, badRequest("backend.identity.profile_binding_invalid")
 		}
+		if binding.ContractVersion == "" {
+			binding.ContractVersion = profilebindingmodel.ContractVersion
+		}
+		if binding.MinReaderVersion == "" {
+			binding.MinReaderVersion = profilebindingmodel.MinimumReaderVersion
+		}
+		if binding.Cardinality == "" {
+			binding.Cardinality = "one_to_one"
+		}
+		req.Payload, _ = json.Marshal(binding)
 		bindings := make([]profilebindingmodel.Binding, 0, len(s.runtime.Schema().IdentityProfileExtensions)+1)
 		for _, current := range s.runtime.Schema().IdentityProfileExtensions {
 			if current.ObjectKey != binding.ObjectKey {
@@ -189,7 +230,7 @@ func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionPaylo
 		return req, nil
 	case "report":
 		var report reportmodel.ReportSchema
-		if err := json.Unmarshal(req.Payload, &report); err != nil {
+		if err := decodeClosedDefinitionPayload(req.Payload, &report); err != nil {
 			return req, badRequest("backend.report.definition_invalid")
 		}
 		return req, validateReportDefinitionForSnapshot(ctx, s.runtime.Schema(), s.records, report)
@@ -209,19 +250,29 @@ func retiredPresentationDefinitionType(resourceType string) bool {
 
 func decodeActionDefinitionPayload(payload json.RawMessage) (definitionmodel.ActionSchema, error) {
 	var action definitionmodel.ActionSchema
+	if err := decodeClosedDefinitionPayload(payload, &action); err != nil {
+		return definitionmodel.ActionSchema{}, err
+	}
+	return action, nil
+}
+
+func decodeClosedDefinitionPayload(payload json.RawMessage, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&action); err != nil {
-		return definitionmodel.ActionSchema{}, err
+	if err := decoder.Decode(target); err != nil {
+		if strings.Contains(err.Error(), "unexpected EOF") {
+			return fmt.Errorf("unexpected end of JSON input")
+		}
+		return err
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		if err == nil {
-			return definitionmodel.ActionSchema{}, fmt.Errorf("action definition contains trailing JSON value")
+			return fmt.Errorf("definition contains trailing JSON value")
 		}
-		return definitionmodel.ActionSchema{}, err
+		return err
 	}
-	return action, nil
+	return nil
 }
 
 func validateBusinessActionDefinition(action definitionmodel.ActionSchema) error {

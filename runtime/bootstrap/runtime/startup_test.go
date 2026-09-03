@@ -3,6 +3,7 @@ package runtime
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,8 +37,10 @@ import (
 	monitoringcapability "github.com/domainry/domainry-monitoring/capability"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
+	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -445,7 +448,7 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 	if _, err := runtime.records.Applications().BusinessSystem.Snapshot(t.Context(), admin); err != nil {
 		t.Fatalf("direct domain-system snapshot: %v params=%#v cause=%v", err, apperror.ParamsOf(err), errors.Unwrap(err))
 	}
-	snapshot := runtimeAuthoringRequest(t, runtime, http.MethodGet, "/domain-system-snapshot", nil, false)
+	snapshot := runtimeAuthoringRequest(t, runtime, http.MethodGet, "/domain-system-snapshot?projection=full", nil, false)
 	resources := []any{}
 	for _, value := range snapshot["resource_sources"].([]any) {
 		resource := value.(map[string]any)
@@ -479,7 +482,7 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 	if valid, _ := report["valid"].(bool); !valid {
 		t.Fatalf("canonical Runtime did not pass global validation: %#v", report)
 	}
-	if report["version"] != "runtime-authoring-validation-v2" {
+	if report["version"] != "runtime-authoring-validation-v4" || report["scope"] != "configuration_and_coverage" {
 		t.Fatalf("global validation did not use the complete configuration contract: %#v", report)
 	}
 	checks, ok := report["checks"].(map[string]any)
@@ -503,21 +506,44 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 	if err != nil || !found || updated.Status != provision.LifecycleStatusVerifying || updated.SnapshotHash != fmt.Sprint(report["snapshot_hash"]) {
 		t.Fatalf("lifecycle=%#v found=%v err=%v report=%#v", updated, found, err, report)
 	}
-	step := func(label, path string, status int, responseHash string) map[string]any {
-		return map[string]any{"label": label, "method": "GET", "path": path, "expected_status": []any{status}, "actual_status": status, "request_hash": strings.Repeat("a", 64), "response_hash": responseHash, "passed": true}
+	bindingRaw, err := json.Marshal(report["binding"])
+	if err != nil {
+		t.Fatal(err)
 	}
-	replayOne, replayTwo := step("replay-one", "/objects/customer/records", 200, strings.Repeat("b", 64)), step("replay-two", "/objects/customer/records", 200, strings.Repeat("b", 64))
-	replayOne["idempotency_key"], replayTwo["idempotency_key"] = "customer-create-1", "customer-create-1"
-	replayTwo["idempotency_replayed"] = true
+	var binding changeplanmodel.RuntimeAuthoringEvidenceBinding
+	if err := json.Unmarshal(bindingRaw, &binding); err != nil {
+		t.Fatal(err)
+	}
+	receiptKey := sha256.Sum256([]byte("domainry-runtime-authoring-scenario-receipt-v1:" + cfg.IntegrationSecretKey))
+	receipts := businesssystemapplication.NewRuntimeAuthoringScenarioReceiptService(receiptKey[:])
+	categories := append([]string(nil), changeplanmodel.RuntimeAuthoringRequiredScenarioCategories...)
+	step := func(label, path string, status int, responseHash, observation, idempotencyKey string, replayed bool) map[string]any {
+		t.Helper()
+		token, err := receipts.Issue(businesssystemapplication.RuntimeAuthoringScenarioStepObservation{
+			BuilderTaskID: "builder-task-e2e", SnapshotHash: binding.SnapshotHash, CoverageHash: binding.CoverageHash,
+			ScenarioID: "canonical-runtime.startup", Categories: categories, Label: label, Observation: observation,
+			Method: "GET", Path: path, ExpectedStatus: []int{status}, ActualStatus: status,
+			RequestHash: strings.Repeat("a", 64), ResponseHash: responseHash, IdempotencyKey: idempotencyKey, IdempotencyReplayed: replayed,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return map[string]any{"runtime_receipt": token}
+	}
+	replayOne := step("replay-one", "/objects/customer/records", 200, strings.Repeat("b", 64), "", "customer-create-1", false)
+	replayTwo := step("replay-two", "/objects/customer/records", 200, strings.Repeat("b", 64), "", "customer-create-1", true)
+	stateHash := strings.Repeat("3", 64)
 	scenarios := []any{map[string]any{
-		"version": "runtime-authoring-scenario-evidence-v1", "scenario_id": "canonical-runtime.startup", "passed": true,
+		"version": "runtime-authoring-scenario-evidence-v2", "scenario_id": "canonical-runtime.startup", "passed": true,
 		"categories":        []any{"success", "permission_denied", "precondition_rejected", "atomic_rollback", "idempotent_replay", "audit", "event", "outbox"},
 		"before_state_hash": "same", "after_state_hash": "same", "steps": []any{
-			step("success", "/objects/customer/records/customer-1", 200, strings.Repeat("c", 64)),
-			step("denied", "/objects/customer/records/customer-1", 403, strings.Repeat("d", 64)),
-			step("precondition", "/objects/customer/records/customer-1/actions/update", 422, strings.Repeat("e", 64)),
-			replayOne, replayTwo, step("audit", "/audit-events", 200, strings.Repeat("f", 64)),
-			step("event", "/events", 200, strings.Repeat("1", 64)), step("outbox", "/integration-outbox", 200, strings.Repeat("2", 64)),
+			step("success", "/objects/customer/records/customer-1", 200, strings.Repeat("c", 64), "", "", false),
+			step("denied", "/objects/customer/records/customer-1", 403, strings.Repeat("d", 64), "", "", false),
+			step("precondition", "/objects/customer/records/customer-1/actions/update", 422, strings.Repeat("e", 64), "", "", false),
+			step("before", "/objects/customer/records/customer-1", 200, stateHash, "before_state", "", false),
+			step("after", "/objects/customer/records/customer-1", 200, stateHash, "after_state", "", false),
+			replayOne, replayTwo, step("audit", "/audit-events", 200, strings.Repeat("f", 64), "", "", false),
+			step("event", "/events", 200, strings.Repeat("1", 64), "", "", false), step("outbox", "/integration-outbox", 200, strings.Repeat("2", 64), "", "", false),
 		},
 	}}
 	alteredCoverage := map[string]any{
@@ -526,7 +552,7 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 		}},
 	}
 	alteredDelivery := runtimeAuthoringRequest(t, runtime, http.MethodPost, "/domain-system-delivery-verification", map[string]any{
-		"version": "runtime-authoring-delivery-evidence-v1", "binding": report["binding"], "coverage": alteredCoverage, "scenarios": scenarios,
+		"version": "runtime-authoring-delivery-evidence-v2", "binding": report["binding"], "coverage": alteredCoverage, "scenarios": scenarios,
 	}, false)
 	if valid, _ := alteredDelivery["valid"].(bool); valid {
 		t.Fatalf("delivery accepted a coverage ledger changed after global validation: %#v", alteredDelivery)
@@ -536,7 +562,7 @@ func TestGlobalValidationAndDeliveryGateMoveOwnedRuntimeToReady(t *testing.T) {
 		t.Fatalf("invalid delivery changed lifecycle: lifecycle=%#v found=%v err=%v", stillVerifying, found, err)
 	}
 	delivery := runtimeAuthoringRequest(t, runtime, http.MethodPost, "/domain-system-delivery-verification", map[string]any{
-		"version": "runtime-authoring-delivery-evidence-v1", "binding": report["binding"], "coverage": coverage, "scenarios": scenarios,
+		"version": "runtime-authoring-delivery-evidence-v2", "binding": report["binding"], "coverage": coverage, "scenarios": scenarios,
 	}, false)
 	if valid, _ := delivery["valid"].(bool); !valid || fmt.Sprint(delivery["evidence_hash"]) == "" {
 		t.Fatalf("bound delivery evidence was rejected: %#v", delivery)

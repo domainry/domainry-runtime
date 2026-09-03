@@ -8,7 +8,6 @@ func ApplicationSchemaObjectAuthoringCapability() capabilitycontract.CapabilityA
 		Key: "schema.object", Status: "supported", Lifecycle: "versioned_metadata",
 		SystemDraftResourceType: "object",
 		Parameters: []capabilitycontract.CapabilityAuthoringParameter{
-			{Key: "key", Type: "string", Required: true, MinLength: metadataIntPointer(1)},
 			{Key: "name", Type: "string", Required: true, MinLength: metadataIntPointer(1)},
 			{Key: "write_policy", Type: "string", Enum: []string{"direct_crud", "action_only"}},
 		},
@@ -33,8 +32,8 @@ func ApplicationSchemaObjectAuthoringCapability() capabilitycontract.CapabilityA
 			{Code: "backend.metadata.object_export_assurance_policy_invalid", FieldPath: "payload.export_assurance_policy", ParameterKeys: []string{"object"}, MessageKey: "backend.metadata.object_export_assurance_policy_invalid"},
 		},
 		Examples: []capabilitycontract.CapabilityAuthoringExample{
-			{Name: "minimal_valid", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"key": "order", "name": "Order", "fields": []any{}, "config": map[string]any{"write_policy": "direct_crud"}}}},
-			{Name: "representative", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "name": "Order", "source_kind": "builder_v4", "source_id": "$builder_task_id", "payload": map[string]any{"key": "order", "name": "Order", "description": "Customer order", "fields": []any{}, "config": map[string]any{"write_policy": "action_only"}, "lifecycle_policy": map[string]any{"mode": "mutable"}, "ux": map[string]any{"display": map[string]any{"title_field": "number"}}}}},
+			{Name: "minimal_valid", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"name": "Order", "fields": []any{}, "config": map[string]any{"write_policy": "direct_crud"}}}},
+			{Name: "representative", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"name": "Order", "description": "Customer order", "fields": []any{}, "config": map[string]any{"write_policy": "action_only"}, "lifecycle_policy": map[string]any{"mode": "mutable"}, "ux": map[string]any{"display": map[string]any{"title_field": "number"}}}}},
 			{Name: "invalid_with_repair", Value: map[string]any{"expected_schema_hash": "$instance.schema_hash", "payload": map[string]any{"key": "invoice", "name": "Order"}}, ExpectedErrorCodes: []string{"backend.metadata.object_key_mismatch"}},
 		},
 		Sources: []capabilitycontract.CapabilityAuthoringSource{

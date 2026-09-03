@@ -2,6 +2,7 @@ package capability
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -23,8 +24,24 @@ func TestCapabilityDiscoveryProgressivelyLoadsRuntimeOwnedDomains(t *testing.T) 
 	})
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
 	index, err := service.DiscoveryIndex(t.Context(), admin)
-	if err != nil || len(index.Domains) != 6 || index.ContractHash == "" || index.InstanceHash == "" {
+	if err != nil || len(index.Domains) != 6 || index.ContractHash == "" || index.InstanceHash == "" || index.EndpointContractCount == 0 || index.EndpointContractsHash == "" {
 		t.Fatalf("index=%#v err=%v", index, err)
+	}
+	if len(index.EndpointContracts) != 0 {
+		t.Fatalf("default discovery index expanded %d endpoint contracts", len(index.EndpointContracts))
+	}
+	encoded, err := json.Marshal(index)
+	if err != nil || json.Valid(encoded) == false || string(encoded) == "" {
+		t.Fatalf("marshal compact index: %s err=%v", encoded, err)
+	}
+	var wire map[string]any
+	_ = json.Unmarshal(encoded, &wire)
+	if _, expanded := wire["endpoint_contracts"]; expanded {
+		t.Fatalf("compact index leaked endpoint contracts: %s", encoded)
+	}
+	expanded, err := service.DiscoveryIndexExpanded(t.Context(), admin, true)
+	if err != nil || len(expanded.EndpointContracts) != index.EndpointContractCount || expanded.EndpointContractsHash != index.EndpointContractsHash {
+		t.Fatalf("expanded index=%#v err=%v", expanded, err)
 	}
 	for _, domain := range index.Domains {
 		if domain.Key == "identity" || domain.Key == "integration" || domain.Key == "report" || domain.Key == "scheduler" {

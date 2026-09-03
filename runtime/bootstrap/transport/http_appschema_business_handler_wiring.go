@@ -101,6 +101,7 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 			ValidateDefinitions: a.metadata.ValidateCurrentRuntimeDefinitions,
 			CurrentSnapshot:     records.Applications().BusinessSystem.Snapshot,
 			StorageReadiness:    records.Applications().RuntimeStatus.StorageReadiness, MigrationReadiness: records.Applications().RuntimeStatus.MigrationReadiness,
+			ScenarioReceipts: a.scenarioReceipts,
 		}),
 		Principal:       a.callbacks.Principal,
 		RuntimeMetadata: a.server.BusinessSystemRuntimeMetadata, WriteJSON: a.callbacks.WriteJSON, WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,

@@ -19,7 +19,7 @@ func ActionValidateDefinitionIssues(action definitionmodel.ActionSchema) []appsc
 func ActionValidateDefinitionIssuesWithObjects(action definitionmodel.ActionSchema, objects []definitionmodel.ObjectSchema) []appschemamodel.ApplicationDefinitionValidationIssue {
 	issues := make([]appschemamodel.ApplicationDefinitionValidationIssue, 0)
 	for _, identity := range []struct{ path, value string }{
-		{"key", action.Key}, {"object_key", action.ObjectKey}, {"audit_event", action.AuditEvent},
+		{"key", action.Key}, {"object_key", action.ObjectKey},
 	} {
 		if strings.TrimSpace(identity.value) == "" {
 			issues = append(issues, actionDefinitionValidationIssue("backend.action.definition_invalid", identity.path, map[string]string{"field": identity.path}))

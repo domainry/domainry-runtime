@@ -25,3 +25,13 @@ func TestDictionaryValidationReturnsIndexedParentFieldPath(t *testing.T) {
 		t.Fatalf("error=%v", err)
 	}
 }
+
+func TestDictionaryNormalizationMaterializesRouteKeyAndRejectsUnknownFields(t *testing.T) {
+	normalized, err := ApplicationSchemaNormalizeDictionaryDefinition("status", json.RawMessage(`{"items":[{"key":"open","value":"open"}]}`))
+	if err != nil || string(normalized) != `{"key":"status","items":[{"key":"open","value":"open"}]}` {
+		t.Fatalf("normalized=%s err=%v", normalized, err)
+	}
+	if _, err := ApplicationSchemaNormalizeDictionaryDefinition("status", json.RawMessage(`{"items":[],"unknown":true}`)); apperror.CodeOf(err) != "backend.dictionary.definition_invalid" {
+		t.Fatalf("unknown field err=%v", err)
+	}
+}

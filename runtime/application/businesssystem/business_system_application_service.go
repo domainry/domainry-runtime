@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
@@ -23,6 +24,7 @@ import (
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	changeplanvalidation "github.com/domainry/domainry-runtime/runtime/domain/changeplan/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -120,26 +122,141 @@ func (s *BusinessSystemApplicationService) Snapshot(ctx context.Context, princip
 	return snapshot, nil
 }
 
+// SnapshotIndex builds the default model-facing projection without first
+// loading effective permissions, operational records, workflow history, or
+// per-object record counts. Those facts remain available through explicit
+// projections, while the default path scales with schema and source metadata
+// rather than live business data.
+func (s *BusinessSystemApplicationService) SnapshotIndex(ctx context.Context, principal principalmodel.Principal) (changeplanprojection.BusinessSystemSnapshotIndex, error) {
+	if !principal.Known {
+		return changeplanprojection.BusinessSystemSnapshotIndex{}, businessSystemForbidden("auth.permission_denied")
+	}
+	authoring := businessSystemRuntimeAuthoringCapabilities()
+	capabilityKeys := make([]string, 0)
+	for _, capabilityDomain := range authoring.Domains {
+		for _, capability := range capabilityDomain.Capabilities {
+			capabilityKeys = append(capabilityKeys, capability.Key)
+		}
+	}
+	schema := s.snapshotProjection.schemaForPrincipal(ctx, principal)
+	schema.SchemaHash = appschemaservice.SchemaSnapshotHash(schema)
+	visibility := map[string]string{"schema": "summarized"}
+	hidden := []string{}
+	resources := []changeplanprojection.SystemResourceSource{}
+	seeds := []businessseedmodel.BusinessSeedProvenance{}
+	if principal.HasExactPermission(ActionBusinessSystemSnapshot) {
+		var err error
+		resources, err = s.businessResourceSources(ctx, principal)
+		if err != nil {
+			return changeplanprojection.BusinessSystemSnapshotIndex{}, err
+		}
+		if s.evidence != nil {
+			seeds, err = s.evidence.ListSeedProvenance(ctx)
+			if err != nil {
+				return changeplanprojection.BusinessSystemSnapshotIndex{}, businessSystemInternalError("list domain seed provenance", err)
+			}
+		}
+		visibility["resource_sources"] = "summarized"
+		visibility["object_record_counts"] = "available_on_demand"
+		for _, category := range []string{"runtime_state.automation", "runtime_state.integrations", "runtime_state.reports", "runtime_state.scheduler"} {
+			visibility[category] = "available_on_demand"
+		}
+	} else {
+		for _, category := range businessSnapshotGovernanceCategories {
+			visibility[category] = "hidden"
+			hidden = append(hidden, category)
+		}
+	}
+	return (changeplanprojection.BusinessSystemSnapshot{
+		RuntimeVersion:           capabilitycontract.RuntimeCapabilityContractVersion,
+		AuthoringContractVersion: authoring.ContractVersion, AuthoringContractHash: authoring.ContractHash,
+		SchemaHash: schema.SchemaHash, ResourceSources: resources, SeedRecords: seeds,
+		CapabilityKeys: capabilityKeys, HiddenResourceCategories: hidden, ResourceVisibility: visibility,
+	}).CompactIndex(), nil
+}
+
+func (s *BusinessSystemApplicationService) SnapshotResourcePage(ctx context.Context, principal principalmodel.Principal, resourceType, cursor string, limit int) (changeplanprojection.BusinessSystemResourcePage, bool, error) {
+	if err := authorizeBusinessSystemSnapshotDetail(principal); err != nil {
+		return changeplanprojection.BusinessSystemResourcePage{}, false, err
+	}
+	resources, err := s.businessResourceSources(ctx, principal)
+	if err != nil {
+		return changeplanprojection.BusinessSystemResourcePage{}, false, err
+	}
+	page, valid := changeplanprojection.ProjectBusinessSystemResourcePage(resources, resourceType, cursor, limit)
+	return page, valid, nil
+}
+
+func (s *BusinessSystemApplicationService) SnapshotResourceDetail(ctx context.Context, principal principalmodel.Principal, resourceType, resourceKey string) (changeplanprojection.BusinessSystemResourceDetail, bool, error) {
+	if err := authorizeBusinessSystemSnapshotDetail(principal); err != nil {
+		return changeplanprojection.BusinessSystemResourceDetail{}, false, err
+	}
+	resourceType, resourceKey = strings.TrimSpace(resourceType), strings.TrimSpace(resourceKey)
+	if resourceType == "" || resourceKey == "" {
+		return changeplanprojection.BusinessSystemResourceDetail{}, false, nil
+	}
+	if s.snapshotProjection.metadataDefinitions == nil {
+		return changeplanprojection.BusinessSystemResourceDetail{}, false, businessSystemInternalError("get Metadata definition", nil)
+	}
+	definition, found, err := s.snapshotProjection.metadataDefinitions.Get(ctx, resourceType, resourceKey)
+	if err != nil {
+		return changeplanprojection.BusinessSystemResourceDetail{}, false, err
+	}
+	if !found {
+		return changeplanprojection.BusinessSystemResourceDetail{}, false, nil
+	}
+	source := businessSystemResourceSource(definition)
+	detail := changeplanprojection.ProjectBusinessSystemResourceDetail("", source, definition.Payload)
+	return detail, true, nil
+}
+
+func (s *BusinessSystemApplicationService) SnapshotRuntimeStateIndex(ctx context.Context, principal principalmodel.Principal) (changeplanprojection.BusinessSystemRuntimeStateIndex, error) {
+	if err := authorizeBusinessSystemSnapshotDetail(principal); err != nil {
+		return changeplanprojection.BusinessSystemRuntimeStateIndex{}, err
+	}
+	state, err := s.RuntimeStateSnapshot(ctx, principal)
+	if err != nil {
+		return changeplanprojection.BusinessSystemRuntimeStateIndex{}, err
+	}
+	return changeplanprojection.ProjectBusinessSystemRuntimeStateIndex(state), nil
+}
+
+func authorizeBusinessSystemSnapshotDetail(principal principalmodel.Principal) error {
+	if !principal.Known || !principal.HasExactPermission(ActionBusinessSystemSnapshot) {
+		return businessSystemForbidden("auth.permission_denied")
+	}
+	return nil
+}
+
 func (s *BusinessSystemApplicationService) businessResourceSources(ctx context.Context, principal principalmodel.Principal) ([]changeplanprojection.SystemResourceSource, error) {
-	items := []changeplanprojection.SystemResourceSource{}
+	_ = principal
 	if s.snapshotProjection.metadataDefinitions == nil {
 		return nil, businessSystemInternalError("list Metadata definitions", nil)
 	}
+	definitions, err := s.snapshotProjection.metadataDefinitions.Snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	allowed := map[string]bool{}
 	for _, resourceType := range appschemavalidation.ApplicationSchemaBusinessResourceTypes() {
-		definitions, err := s.snapshotProjection.metadataDefinitions.List(ctx, metadatasdk.DefinitionQuery{ResourceType: resourceType})
-		if err != nil {
-			return nil, err
-		}
-		for _, definition := range definitions {
-			items = append(items, changeplanprojection.SystemResourceSource{
-				ResourceType: definition.ResourceType, ResourceKey: definition.ResourceKey, ObjectKey: definition.ObjectKey,
-				Name: definition.Name, SchemaVersion: definition.SchemaVersion, SchemaHash: definition.SchemaHash,
-				SourceKind: businessSystemValueOrDefault(strings.TrimSpace(definition.SourceKind), "unknown"), SourceID: definition.SourceID,
-				Disabled: strings.TrimSpace(definition.DisabledAt) != "",
-			})
+		allowed[resourceType] = true
+	}
+	items := make([]changeplanprojection.SystemResourceSource, 0, len(definitions.Definitions))
+	for _, definition := range definitions.Definitions {
+		if allowed[definition.ResourceType] {
+			items = append(items, businessSystemResourceSource(definition))
 		}
 	}
 	return items, nil
+}
+
+func businessSystemResourceSource(definition metadatasdk.Definition) changeplanprojection.SystemResourceSource {
+	return changeplanprojection.SystemResourceSource{
+		ResourceType: definition.ResourceType, ResourceKey: definition.ResourceKey, ObjectKey: definition.ObjectKey,
+		Name: definition.Name, SchemaVersion: definition.SchemaVersion, SchemaHash: definition.SchemaHash,
+		SourceKind: businessSystemValueOrDefault(strings.TrimSpace(definition.SourceKind), "unknown"), SourceID: definition.SourceID,
+		Disabled: strings.TrimSpace(definition.DisabledAt) != "",
+	}
 }
 
 var businessSnapshotGovernanceCategories = []string{"object_record_counts", "resource_sources", "runtime_state.automation", "runtime_state.integrations", "runtime_state.reports", "runtime_state.scheduler"}
@@ -236,7 +353,176 @@ func (s *RuntimeAuthoringValidationApplicationService) VerifyDelivery(ctx contex
 	if err != nil {
 		return changeplanmodel.RuntimeAuthoringDeliveryReport{}, err
 	}
-	return changeplanvalidation.ValidateRuntimeAuthoringDelivery(evidence, validation.Binding, validation.Valid), nil
+	trustedEvidence, receiptIssues := s.runtimeVerifiedDeliveryEvidence(evidence, validation.Binding, operationscontract.BuilderTaskID(ctx))
+	report := changeplanvalidation.ValidateRuntimeAuthoringDelivery(trustedEvidence, validation.Binding, validation.Valid)
+	report.Checks["runtime_evidence"] = "ok"
+	if len(receiptIssues) > 0 {
+		report.Checks["runtime_evidence"] = "invalid"
+		for _, issue := range receiptIssues {
+			report.Issues = append(report.Issues, "runtime_evidence."+issue)
+		}
+		report.Valid = false
+		report.Status = "invalid"
+	}
+	return report, nil
+}
+
+func (s *RuntimeAuthoringValidationApplicationService) runtimeVerifiedDeliveryEvidence(evidence changeplanmodel.RuntimeAuthoringDeliveryEvidence, binding changeplanmodel.RuntimeAuthoringEvidenceBinding, builderTaskID string) (changeplanmodel.RuntimeAuthoringDeliveryEvidence, []string) {
+	trusted := changeplanmodel.RuntimeAuthoringDeliveryEvidence{
+		Version: changeplanmodel.RuntimeAuthoringDeliveryEvidenceVersion,
+		Binding: binding, Coverage: evidence.Coverage,
+		Scenarios: []changeplanmodel.RuntimeAuthoringScenarioEvidence{},
+	}
+	if s == nil || s.dependencies.ScenarioReceipts == nil {
+		return trusted, []string{"receipt_verifier_unavailable"}
+	}
+	if strings.TrimSpace(builderTaskID) == "" {
+		return trusted, []string{"builder_task_required"}
+	}
+	type scenarioBuild struct {
+		evidence       changeplanmodel.RuntimeAuthoringScenarioEvidence
+		categories     map[string]bool
+		beforeObserved bool
+		afterObserved  bool
+	}
+	newBuild := func(scenarioID string) *scenarioBuild {
+		return &scenarioBuild{evidence: changeplanmodel.RuntimeAuthoringScenarioEvidence{
+			Version:    changeplanmodel.RuntimeAuthoringScenarioEvidenceVersion,
+			ScenarioID: strings.TrimSpace(scenarioID), Categories: []string{}, Steps: []changeplanmodel.RuntimeAuthoringScenarioStepEvidence{},
+		}, categories: map[string]bool{}}
+	}
+	issues := []string{}
+	seenReceipts, seenSteps := map[string]bool{}, map[string]bool{}
+	sessionID := ""
+	verifyReceipt := func(token, prefix string, sessionRequired bool) (RuntimeAuthoringScenarioStepReceipt, bool) {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			issues = append(issues, prefix+".receipt_required")
+			return RuntimeAuthoringScenarioStepReceipt{}, false
+		}
+		if seenReceipts[token] {
+			issues = append(issues, prefix+".receipt_reused")
+			return RuntimeAuthoringScenarioStepReceipt{}, false
+		}
+		seenReceipts[token] = true
+		receipt, verifyErr := s.dependencies.ScenarioReceipts.Verify(token, builderTaskID, binding)
+		if verifyErr != nil {
+			issues = append(issues, prefix+".receipt_invalid")
+			return RuntimeAuthoringScenarioStepReceipt{}, false
+		}
+		if sessionRequired && (receipt.SessionID == "" || receipt.StepID == "") {
+			issues = append(issues, prefix+".evidence_session_required")
+			return RuntimeAuthoringScenarioStepReceipt{}, false
+		}
+		if receipt.StepID != "" {
+			if seenSteps[receipt.StepID] {
+				issues = append(issues, prefix+".step_reused")
+				return RuntimeAuthoringScenarioStepReceipt{}, false
+			}
+			seenSteps[receipt.StepID] = true
+		}
+		if receipt.SessionID != "" {
+			if sessionID == "" {
+				sessionID = receipt.SessionID
+			} else if sessionID != receipt.SessionID {
+				issues = append(issues, prefix+".session_mismatch")
+				return RuntimeAuthoringScenarioStepReceipt{}, false
+			}
+		}
+		return receipt, true
+	}
+	appendReceipt := func(build *scenarioBuild, receipt RuntimeAuthoringScenarioStepReceipt, token, prefix string) {
+		build.evidence.Steps = append(build.evidence.Steps, changeplanmodel.RuntimeAuthoringScenarioStepEvidence{
+			SessionID: receipt.SessionID, StepID: receipt.StepID,
+			Label: receipt.Label, Observation: receipt.Observation, Method: receipt.Method, Path: receipt.Path,
+			ExpectedStatus: append([]int(nil), receipt.ExpectedStatus...), ActualStatus: receipt.ActualStatus,
+			RequestHash: receipt.RequestHash, ResponseHash: receipt.ResponseHash,
+			IdempotencyKey: receipt.IdempotencyKey, IdempotencyReplayed: receipt.IdempotencyReplayed,
+			Passed: runtimeAuthoringObservedStatusExpected(receipt.ActualStatus, receipt.ExpectedStatus), RuntimeReceipt: token,
+		})
+		for _, category := range receipt.Categories {
+			build.categories[category] = true
+		}
+		switch receipt.Observation {
+		case "before_state":
+			if build.beforeObserved {
+				issues = append(issues, prefix+".before_state_duplicate")
+			}
+			build.beforeObserved = true
+			build.evidence.BeforeStateHash = receipt.ResponseHash
+		case "after_state":
+			if build.afterObserved {
+				issues = append(issues, prefix+".after_state_duplicate")
+			}
+			build.afterObserved = true
+			build.evidence.AfterStateHash = receipt.ResponseHash
+		}
+	}
+	builds := []*scenarioBuild{}
+	if len(evidence.Receipts) > 0 {
+		if len(evidence.Scenarios) > 0 {
+			issues = append(issues, "mixed_evidence_formats")
+		}
+		byScenario := map[string]*scenarioBuild{}
+		for receiptIndex, token := range evidence.Receipts {
+			prefix := "receipts[" + strconv.Itoa(receiptIndex) + "]"
+			receipt, verified := verifyReceipt(token, prefix, true)
+			if !verified {
+				continue
+			}
+			build := byScenario[receipt.ScenarioID]
+			if build == nil {
+				build = newBuild(receipt.ScenarioID)
+				byScenario[receipt.ScenarioID] = build
+				builds = append(builds, build)
+			}
+			appendReceipt(build, receipt, token, prefix)
+		}
+	} else {
+		for scenarioIndex, submittedScenario := range evidence.Scenarios {
+			build := newBuild(submittedScenario.ScenarioID)
+			builds = append(builds, build)
+			if strings.TrimSpace(submittedScenario.Version) != changeplanmodel.RuntimeAuthoringScenarioEvidenceVersion {
+				issues = append(issues, "scenarios["+strconv.Itoa(scenarioIndex)+"].version_invalid")
+			}
+			for stepIndex, submittedStep := range submittedScenario.Steps {
+				prefix := "scenarios[" + strconv.Itoa(scenarioIndex) + "].steps[" + strconv.Itoa(stepIndex) + "]"
+				receipt, verified := verifyReceipt(submittedStep.RuntimeReceipt, prefix, false)
+				if !verified {
+					continue
+				}
+				if receipt.ScenarioID != build.evidence.ScenarioID {
+					issues = append(issues, prefix+".scenario_mismatch")
+					continue
+				}
+				appendReceipt(build, receipt, submittedStep.RuntimeReceipt, prefix)
+			}
+		}
+	}
+	for _, build := range builds {
+		for _, category := range changeplanmodel.RuntimeAuthoringRequiredScenarioCategories {
+			if build.categories[category] {
+				build.evidence.Categories = append(build.evidence.Categories, category)
+			}
+		}
+		build.evidence.Passed = len(build.evidence.Steps) > 0
+		for _, step := range build.evidence.Steps {
+			if !step.Passed {
+				build.evidence.Passed = false
+			}
+		}
+		trusted.Scenarios = append(trusted.Scenarios, build.evidence)
+	}
+	return trusted, issues
+}
+
+func runtimeAuthoringObservedStatusExpected(actual int, expected []int) bool {
+	for _, status := range expected {
+		if actual == status {
+			return true
+		}
+	}
+	return false
 }
 
 func runtimeAuthoringEvidenceBinding(snapshot changeplanprojection.BusinessSystemSnapshot, configurationHash string) changeplanmodel.RuntimeAuthoringEvidenceBinding {

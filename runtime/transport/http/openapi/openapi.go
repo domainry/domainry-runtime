@@ -150,8 +150,9 @@ func BuildWithModuleHTTPSurfaces(snapshot appschemamodel.ApplicationSchemaSnapsh
 			{"BearerAuth": []string{}},
 			{"IntegrationAPIKey": []string{}},
 		},
-		"paths":      paths,
-		"components": components,
+		"paths":                                 paths,
+		"components":                            components,
+		"x-domainry-runtime-authoring-evidence": runtimeAuthoringEvidenceOpenAPIExtension(),
 	}
 }
 

@@ -15,7 +15,7 @@ func TestWorkflowAuthoringFragmentValidationHandler(t *testing.T) {
 	writer, request := workflowHTTPRequest(http.MethodPost, "/tenant-admin/workflows/authoring-fragments/workflow.trigger_contract/validate", `{"type":"manual"}`, map[string]string{"capabilityKey": "workflow.trigger_contract"})
 	handler.validateAuthoringFragment(writer, request)
 	result, ok := response.value.(workflowmodel.WorkflowValidation)
-	if response.status != http.StatusOK || !ok || !result.Valid || len(result.Issues) != 0 || response.err != nil {
+	if response.status != http.StatusOK || !ok || !result.Valid || result.CapabilityKey != "workflow.trigger_contract" || result.Fragment["type"] != "manual" || len(result.Issues) != 0 || response.err != nil {
 		t.Fatalf("status=%d result=%#v err=%v", response.status, response.value, response.err)
 	}
 

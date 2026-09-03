@@ -46,6 +46,22 @@ func TestRuntimeAPIContractPublishesClientOwnedIdempotencyLifecycle(t *testing.T
 	}
 }
 
+func TestRuntimeAPIContractRequiresIdempotencyForEveryRecordMutation(t *testing.T) {
+	var document struct {
+		Routes map[string]struct {
+			RequiresIdempotencyKey bool `json:"requires_idempotency_key"`
+		} `json:"routes"`
+	}
+	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
+		t.Fatal(err)
+	}
+	for _, routeKey := range []string{"object_create", "object_update", "object_delete", "object_action", "record_action", "record_bulk_action", "record_import_apply"} {
+		if !document.Routes[routeKey].RequiresIdempotencyKey {
+			t.Fatalf("record mutation %q does not require an idempotency key", routeKey)
+		}
+	}
+}
+
 func TestRuntimeAPIContractDoesNotUseFrontendSurfaceForEndpointBehavior(t *testing.T) {
 	var document struct {
 		Identity map[string]json.RawMessage `json:"identity"`

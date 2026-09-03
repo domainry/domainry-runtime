@@ -20,7 +20,7 @@ import (
 // evaluates compatibility against a caller-provided record snapshot.
 func ApplicationSchemaNormalizeFieldMutation(request appschemamodel.ApplicationDefinitionUpsertRequest, objects []definitionmodel.ObjectSchema, allowedFieldTypes []string, existingRecords []recordmodel.Record, existingRecordCount int) (appschemamodel.ApplicationDefinitionUpsertRequest, error) {
 	var field definitionmodel.FieldSchema
-	if err := json.Unmarshal(request.Payload, &field); err != nil {
+	if err := decodeClosedAuthoringJSON(request.Payload, &field); err != nil {
 		return request, badRequest("backend.metadata.field_definition_invalid")
 	}
 	if !containsFieldType(allowedFieldTypes, field.Type) {

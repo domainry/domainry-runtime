@@ -79,7 +79,7 @@ func automationRuleInputSchema() *capabilitycontract.CapabilityAuthoringSchema {
 			"key": {Type: "string"}, "name": {Type: "string"}, "i18n": automationOpenObjectSchema(), "object_key": {Type: "string"},
 			"enabled": {Type: "boolean"}, "priority": {Type: "integer"}, "trigger": {Ref: "#/$defs/trigger"},
 			"conditions": {Ref: "#/$defs/condition_group"}, "instructions": {Type: "array", Items: &instructionItem},
-			"execution": {Ref: "#/$defs/execution_policy"}, "audit_event": {Type: "string"}, "layout": automationLayoutSchema(),
+			"execution": {Ref: "#/$defs/execution_policy"},
 		},
 		Definitions: automationRuleSchemaDefinitions(),
 	}
@@ -106,7 +106,7 @@ func automationRuleSchemaDefinitions() map[string]capabilitycontract.CapabilityA
 func automationInstructionBaseParameters(instructionType string) []capabilitycontract.CapabilityAuthoringParameter {
 	return []capabilitycontract.CapabilityAuthoringParameter{
 		{Key: "key", Type: "instruction_key", Required: true}, {Key: "type", Type: "string", Required: true, Enum: []string{instructionType}},
-		{Key: "name", Type: "string"}, {Key: "i18n", Type: "object"}, {Key: "mode", Type: "string"}, {Key: "result_alias", Type: "string"},
+		{Key: "name", Type: "string"}, {Key: "i18n", Type: "object"}, {Key: "result_alias", Type: "string"},
 		{Key: "on_error", Type: "string", Enum: []string{"continue", "fail"}}, {Key: "config", Type: "automation_instruction_config", Required: true},
 	}
 }
@@ -149,12 +149,7 @@ func automationConditionDefinitions() map[string]capabilitycontract.CapabilityAu
 func automationExecutionPolicySchema() *capabilitycontract.CapabilityAuthoringSchema {
 	closed := false
 	stringItem := capabilitycontract.CapabilityAuthoringSchema{Type: "string"}
-	catalog := capabilitycontract.RuntimeAutomationCapabilities()
 	return &capabilitycontract.CapabilityAuthoringSchema{Schema: "https://json-schema.org/draft/2020-12/schema", Type: "object", AdditionalProperties: &closed, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-		"mode":                {Type: "string", Enum: automationStringEnums(catalog.ExecutionModes)},
-		"run_as":              {Type: "string", Enum: automationStringEnums(catalog.RunAsModes)},
-		"result_notification": {Type: "string", Enum: automationStringEnums(catalog.ResultNotificationModes)},
-		"timeout_seconds":     {Type: "integer", Minimum: automationAuthoringFloatPointer(0)}, "max_depth": {Type: "integer", Minimum: automationAuthoringFloatPointer(0)},
 		"idempotency_keys": {Type: "array", Items: &stringItem},
 	}}
 }
@@ -182,9 +177,9 @@ func automationStringEnums(values []string) []any {
 func automationComponentError(capabilityKey string) capabilitycontract.CapabilityAuthoringError {
 	codes := map[string]string{
 		"automation.trigger": "backend.automation.operation_invalid", "automation.condition_group": "backend.automation.condition_mode_invalid",
-		"automation.execution_policy": "backend.automation.run_as_invalid",
+		"automation.execution_policy": "backend.automation.execution_mode_invalid",
 	}
-	fields := map[string]string{"automation.trigger": "trigger.operation", "automation.condition_group": "conditions.mode", "automation.execution_policy": "execution.run_as"}
+	fields := map[string]string{"automation.trigger": "trigger.operation", "automation.condition_group": "conditions.mode", "automation.execution_policy": "execution.mode"}
 	code := codes[capabilityKey]
 	return capabilitycontract.CapabilityAuthoringError{Code: code, FieldPath: fields[capabilityKey], MessageKey: code}
 }
@@ -192,7 +187,7 @@ func automationComponentError(capabilityKey string) capabilitycontract.Capabilit
 func automationRuleExamples() []capabilitycontract.CapabilityAuthoringExample {
 	return []capabilitycontract.CapabilityAuthoringExample{
 		{Name: "minimal_valid", Value: map[string]any{"key": "order.prepare", "name": "Prepare order", "object_key": "order", "enabled": true, "trigger": map[string]any{"phase": "before", "operation": "create"}, "instructions": []any{map[string]any{"key": "derive", "type": "derive_fields", "config": map[string]any{"fields": map[string]any{"status": "ready"}}}}}},
-		{Name: "representative", Value: map[string]any{"key": "order.complete", "name": "Complete order", "object_key": "order", "enabled": true, "priority": 10, "trigger": map[string]any{"phase": "after", "operation": "update", "changed_fields": []any{"status"}}, "conditions": map[string]any{"mode": "all", "clauses": []any{map[string]any{"reference": "$record.status", "operator": "eq", "value": "ready"}}}, "instructions": []any{map[string]any{"key": "complete", "type": "invoke_business_action", "config": map[string]any{"action_key": "order.complete"}}, map[string]any{"key": "emit", "type": "emit_event", "config": map[string]any{"event_type": "order.completed"}}}, "execution": map[string]any{"run_as": "initiator", "timeout_seconds": 30, "max_depth": 4, "idempotency_keys": []any{"status"}}, "audit_event": "automation.order.completed"}},
+		{Name: "representative", Value: map[string]any{"key": "order.complete", "name": "Complete order", "object_key": "order", "enabled": true, "priority": 10, "trigger": map[string]any{"phase": "after", "operation": "update", "changed_fields": []any{"status"}}, "conditions": map[string]any{"mode": "all", "clauses": []any{map[string]any{"reference": "$record.status", "operator": "eq", "value": "ready"}}}, "instructions": []any{map[string]any{"key": "complete", "type": "invoke_business_action", "config": map[string]any{"action_key": "order.complete"}}, map[string]any{"key": "emit", "type": "emit_event", "config": map[string]any{"event_type": "order.completed"}}}, "execution": map[string]any{"idempotency_keys": []any{"status"}}}},
 		{Name: "invalid_with_repair", Value: map[string]any{"key": "", "name": "Invalid", "object_key": "order", "enabled": true, "trigger": map[string]any{"phase": "before", "operation": "create"}, "instructions": []any{}}, ExpectedErrorCodes: []string{"backend.automation.identity_required"}},
 	}
 }
@@ -201,7 +196,7 @@ func automationComponentExamples(capabilityKey string) []capabilitycontract.Capa
 	values := map[string][]map[string]any{
 		"automation.trigger":          {{"phase": "after", "operation": "create"}, {"phase": "before", "operation": "update", "changed_fields": []any{"status"}, "source": "api"}, {"phase": "after", "operation": "merge"}},
 		"automation.condition_group":  {{}, {"mode": "any", "clauses": []any{map[string]any{"reference": "$record.status", "operator": "eq", "value": "ready"}}, "groups": []any{map[string]any{"mode": "all", "clauses": []any{map[string]any{"reference": "$record.status", "operator": "not_empty"}}}}}, {"mode": "none"}},
-		"automation.execution_policy": {{}, {"mode": "async", "run_as": "initiator", "result_notification": "failures", "timeout_seconds": 30, "max_depth": 4, "idempotency_keys": []any{"status"}}, {"run_as": "system"}},
+		"automation.execution_policy": {{}, {"idempotency_keys": []any{"status"}}, {}},
 	}
 	examples := values[capabilityKey]
 	return []capabilitycontract.CapabilityAuthoringExample{

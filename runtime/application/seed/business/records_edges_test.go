@@ -18,9 +18,11 @@ import (
 var errBusinessSeedProbe = errors.New("business seed probe failed")
 
 type businessSeedRecordProbe struct {
-	totals      map[string]int
+	existing    map[string][]recordmodel.Record
 	listErr     map[string]error
+	getErr      map[string]error
 	insertErr   map[string]error
+	storedErr   map[string]error
 	listCalls   []string
 	inserted    []recordmodel.Record
 	insertOrder []string
@@ -35,7 +37,28 @@ func (p *businessSeedRecordProbe) ListRecords(_ context.Context, workspace strin
 	if err := p.listErr[object.Key]; err != nil {
 		return recordmodel.RecordPageResult{}, err
 	}
-	return recordmodel.RecordPageResult{Total: p.totals[object.Key]}, nil
+	items := append([]recordmodel.Record(nil), p.existing[object.Key]...)
+	if len(items) > query.PageSize && query.PageSize > 0 {
+		items = items[:query.PageSize]
+	}
+	return recordmodel.RecordPageResult{Total: len(p.existing[object.Key]), Items: items}, nil
+}
+
+func (p *businessSeedRecordProbe) GetRecord(_ context.Context, _ string, object definitionmodel.ObjectSchema, recordID string) (recordmodel.Record, bool, error) {
+	if err := p.getErr[object.Key]; err != nil {
+		return recordmodel.Record{}, false, err
+	}
+	for _, record := range p.existing[object.Key] {
+		if record.ID == recordID {
+			return record, true, nil
+		}
+	}
+	for _, record := range p.inserted {
+		if record.ID == recordID {
+			return record, true, nil
+		}
+	}
+	return recordmodel.Record{}, false, nil
 }
 
 func (p *businessSeedRecordProbe) InsertRecord(_ context.Context, workspace string, object definitionmodel.ObjectSchema, record recordmodel.Record) error {
@@ -45,6 +68,9 @@ func (p *businessSeedRecordProbe) InsertRecord(_ context.Context, workspace stri
 	p.workspaces = append(p.workspaces, workspace)
 	p.insertOrder = append(p.insertOrder, object.Key)
 	p.inserted = append(p.inserted, record)
+	if err := p.storedErr[object.Key]; err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -69,7 +95,7 @@ func TestSyncManifestBusinessSeedsNoopTargetAndLookupFailures(t *testing.T) {
 		t.Fatalf("empty rows err=%v", err)
 	}
 
-	records := &businessSeedRecordProbe{totals: map[string]int{"parent": 1}}
+	records := &businessSeedRecordProbe{existing: map[string][]recordmodel.Record{"parent": {{ID: "parent-existing"}}}}
 	if err := SyncManifestBusinessSeeds(t.Context(), records, manifest, []manifestBusinessSeedRow{row}); err != nil || len(records.inserted) != 0 {
 		t.Fatalf("nonempty inserted=%v err=%v", records.inserted, err)
 	}
@@ -117,7 +143,7 @@ func TestSyncManifestBusinessSeedsOrdersResolvesFiltersAndPersistsEvidence(t *te
 			t.Fatalf("workspace=%q", workspace)
 		}
 	}
-	if len(records.queries) != 2 || records.queries[0].Page != 1 || records.queries[0].PageSize != 1 {
+	if len(records.queries) != 2 || records.queries[0].Page != 1 || records.queries[0].PageSize != 1 || !records.queries[0].SkipTotal {
 		t.Fatalf("queries=%#v calls=%v", records.queries, records.listCalls)
 	}
 }
@@ -235,8 +261,8 @@ func TestManifestBusinessSeedHelpersCoverNestedAndBoundaryValues(t *testing.T) {
 	}
 	rows := []manifestBusinessSeedRow{{Key: "a", ObjectKey: "parent"}, {Key: "b", ObjectKey: "parent"}, {Key: "c", ObjectKey: "missing"}}
 	records := &businessSeedRecordProbe{}
-	if empty, err := manifestBusinessSeedTargetsEmpty(t.Context(), records, principalmodel.InstallationWorkspaceID, objects, rows); err != nil || !empty || !reflect.DeepEqual(records.listCalls, []string{"parent"}) {
-		t.Fatalf("empty=%v calls=%v err=%v", empty, records.listCalls, err)
+	if states, err := manifestBusinessSeedTargetStates(t.Context(), records, principalmodel.InstallationWorkspaceID, objects, rows); err != nil || states["parent"].HasRecords || !reflect.DeepEqual(records.listCalls, []string{"parent"}) {
+		t.Fatalf("states=%#v calls=%v err=%v", states, records.listCalls, err)
 	}
 	if ordered, err := orderManifestBusinessSeedRows([]manifestBusinessSeedRow{{ObjectKey: "parent"}}); err != nil || len(ordered) != 1 {
 		t.Fatalf("blank ordering=%v err=%v", ordered, err)

@@ -53,6 +53,11 @@ func TestAutomationAuthoringFragmentRejectsUnknownPrincipal(t *testing.T) {
 		t.Fatalf("valid fragment result=%+v err=%v", result, err)
 	}
 	if result, err := service.ValidateAutomationAuthoringFragment(
+		t.Context(), "automation.instruction.emit_event", map[string]any{"key": "emit", "config": map[string]any{"event_type": "order.changed"}}, manager,
+	); err != nil || !result.Valid || result.Fragment["type"] != "emit_event" {
+		t.Fatalf("instruction type was not derived from capability route: result=%+v err=%v", result, err)
+	}
+	if result, err := service.ValidateAutomationAuthoringFragment(
 		t.Context(), "automation.unknown", map[string]any{}, manager,
 	); err != nil || result.Valid || len(result.Errors) != 1 {
 		t.Fatalf("invalid fragment result=%+v err=%v", result, err)

@@ -151,6 +151,19 @@ type ActionSchema struct {
 	FileOperations        []string                           `json:"file_operations,omitempty"`
 }
 
+const DefaultBusinessActionAuditEvent = "business_action_executed"
+
+// EffectiveActionAuditEvent returns the stable technical event used when an
+// Action does not need a business-specific subscription event. The Action key
+// remains part of audit metadata, so the default does not collapse distinct
+// business operations into an indistinguishable audit record.
+func EffectiveActionAuditEvent(action ActionSchema) string {
+	if event := strings.TrimSpace(action.AuditEvent); event != "" {
+		return event
+	}
+	return DefaultBusinessActionAuditEvent
+}
+
 // ActionPermissionSubject decomposes the canonical Action key for SDK metadata
 // that still represents a permission as resource plus operation. Authorization
 // must compare the complete Action key directly; this helper is not a mapping.

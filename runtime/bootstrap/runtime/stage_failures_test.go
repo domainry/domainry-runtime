@@ -94,6 +94,7 @@ func TestSynchronizeRuntimeSeedsDoesNotRequireIdentityDirectory(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	manifest.SeedRecords = nil
+	manifest.Objects = nil
 	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, true); err != nil {
 		t.Fatalf("business seed synchronization failed: %v", err)
 	}

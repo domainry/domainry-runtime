@@ -18,8 +18,11 @@ func (s *WorkflowApplicationService) ValidateAuthoringFragment(ctx context.Conte
 		return workflowmodel.WorkflowValidation{}, err
 	}
 	report := emptyWorkflowValidation()
+	report.CapabilityKey = capabilityKey
 	report.ValidatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	if err := workflowpolicy.WorkflowValidateAuthoringFragment(capabilityKey, payload); err != nil {
+	normalized, err := workflowpolicy.WorkflowNormalizeAuthoringFragment(capabilityKey, payload)
+	report.Fragment = normalized
+	if err != nil {
 		code := valueOrDefault(apperror.CodeOf(err), "backend.workflow.authoring_fragment_invalid")
 		issue := workflowvalidation.WorkflowValidationIssueFromError(err, code, err.Error())
 		issue.CapabilityKey = capabilityKey

@@ -62,3 +62,21 @@ func TestMetadataObjectAuthoringPublishesWriteOwnershipChoice(t *testing.T) {
 		t.Fatalf("object write-policy schema=%#v", config)
 	}
 }
+
+func TestMetadataRouteOwnedResourceKeysAreNotModelRequired(t *testing.T) {
+	for _, capability := range []struct {
+		name     string
+		required []string
+	}{
+		{name: "object", required: ApplicationSchemaObjectAuthoringCapability().InputSchema.Properties["payload"].Required},
+		{name: "dictionary", required: ApplicationSchemaDictionaryAuthoringCapabilities()[0].InputSchema.Properties["payload"].Required},
+		{name: "field", required: ApplicationSchemaFieldAuthoringCapability().InputSchema.Properties["payload"].Required},
+		{name: "relation", required: ApplicationSchemaRelationAuthoringCapability().InputSchema.Properties["payload"].Required},
+	} {
+		for _, field := range capability.required {
+			if field == "key" {
+				t.Fatalf("%s capability still requires route-owned payload key", capability.name)
+			}
+		}
+	}
+}

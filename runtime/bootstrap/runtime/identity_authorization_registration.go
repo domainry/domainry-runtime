@@ -14,6 +14,7 @@ import (
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
+	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	operationsprojection "github.com/domainry/domainry-runtime/runtime/domain/operations/projection"
 )
 
@@ -21,9 +22,12 @@ import (
 // submits one complete PermissionDefinition snapshot per canonical Action
 // owner. Object fields, references and facts stay in Runtime metadata and are
 // intentionally absent from the Identity contract.
-func reconcileRuntimeIdentityAuthorization(ctx context.Context, binding identitysdk.Binding, snapshot appschemamodel.ApplicationSchemaSnapshot, moduleActions []actioncontract.ActionDefinition, previousRegistry *actioncontract.Registry, workspaceID, applicationKey string, redirectURLs []string) (*actioncontract.Registry, error) {
+func reconcileRuntimeIdentityAuthorization(ctx context.Context, binding identitysdk.Binding, snapshot appschemamodel.ApplicationSchemaSnapshot, moduleActions []actioncontract.ActionDefinition, previousRegistry *actioncontract.Registry, roles []manifestmodel.RoleSchema, workspaceID, applicationKey string, redirectURLs []string) (*actioncontract.Registry, error) {
 	registry, err := runtimeAuthorizationActionRegistry(snapshot, applicationKey, moduleActions)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateRuntimeAuthorizationReferences(snapshot, roles, registry); err != nil {
 		return nil, err
 	}
 	if binding == nil {
@@ -40,6 +44,90 @@ func reconcileRuntimeIdentityAuthorization(ctx context.Context, binding identity
 		return nil, err
 	}
 	return registry, nil
+}
+
+// validateRuntimeAuthorizationReferences runs only after the complete Runtime
+// Action registry has been assembled. At this point application metadata,
+// embedded modules and HTTP endpoint adapters are all present, so the Runtime
+// can reject orphan grants without asking the Blueprint model to duplicate a
+// Permission resource catalog it cannot know completely.
+func validateRuntimeAuthorizationReferences(snapshot appschemamodel.ApplicationSchemaSnapshot, roles []manifestmodel.RoleSchema, registry *actioncontract.Registry) error {
+	known := map[string]bool{}
+	if registry != nil {
+		for _, permission := range registry.PermissionDefinitions() {
+			known[strings.TrimSpace(permission.Key)] = true
+		}
+	}
+	type permissionReference struct {
+		path, key, sourceKind string
+	}
+	references := []permissionReference{}
+	for roleIndex, role := range roles {
+		for permissionIndex, permission := range role.Permissions {
+			references = append(references, permissionReference{path: fmt.Sprintf("roles[%d].permissions[%d]", roleIndex, permissionIndex), key: permission, sourceKind: "role"})
+		}
+	}
+	for reportIndex, report := range snapshot.Reports {
+		for permissionIndex, permission := range report.RequiredPermissions {
+			references = append(references, permissionReference{path: fmt.Sprintf("reports[%d].required_permissions[%d]", reportIndex, permissionIndex), key: permission, sourceKind: "report"})
+		}
+	}
+	for entrypointIndex, entrypoint := range snapshot.AgentEntrypoints {
+		for permissionIndex, permission := range entrypoint.RequiredPermissions {
+			references = append(references, permissionReference{path: fmt.Sprintf("agent_entrypoints[%d].required_permissions[%d]", entrypointIndex, permissionIndex), key: permission, sourceKind: "agent_entrypoint"})
+		}
+	}
+	for bindingIndex, profile := range snapshot.IdentityProfileExtensions {
+		for permissionIndex, permission := range profile.RequiredPermissions {
+			references = append(references, permissionReference{path: fmt.Sprintf("identity_profile_extensions[%d].required_permissions[%d]", bindingIndex, permissionIndex), key: permission, sourceKind: "identity_profile_extension"})
+		}
+	}
+	unknown := []AuthorizationReferenceDiagnostic{}
+	for _, reference := range references {
+		key := strings.TrimSpace(reference.key)
+		if key == "" || !known[key] {
+			unknown = append(unknown, AuthorizationReferenceDiagnostic{Code: "runtime.authorization.permission_unknown", Path: reference.path, PermissionKey: key, SourceKind: reference.sourceKind})
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Slice(unknown, func(i, j int) bool {
+		if unknown[i].Path != unknown[j].Path {
+			return unknown[i].Path < unknown[j].Path
+		}
+		return unknown[i].PermissionKey < unknown[j].PermissionKey
+	})
+	return &AuthorizationReferenceError{Diagnostics: unknown, KnownPermissionCount: len(known)}
+}
+
+type AuthorizationReferenceDiagnostic struct {
+	Code          string `json:"code"`
+	Path          string `json:"path"`
+	PermissionKey string `json:"permission_key"`
+	SourceKind    string `json:"source_kind"`
+}
+
+type AuthorizationReferenceError struct {
+	Diagnostics          []AuthorizationReferenceDiagnostic `json:"diagnostics"`
+	KnownPermissionCount int                                `json:"known_permission_count"`
+}
+
+func (e *AuthorizationReferenceError) Error() string {
+	unknown := make([]string, 0, len(e.Diagnostics))
+	for _, diagnostic := range e.Diagnostics {
+		unknown = append(unknown, fmt.Sprintf("%s=%q", diagnostic.Path, diagnostic.PermissionKey))
+	}
+	return "Runtime authorization references unknown generated permissions: " + strings.Join(unknown, ", ")
+}
+
+func (e *AuthorizationReferenceError) Diagnostic() map[string]any {
+	return map[string]any{
+		"contract_version":       "domainry-runtime-authorization-diagnostic-v1",
+		"code":                   "runtime.authorization.references_invalid",
+		"known_permission_count": e.KnownPermissionCount,
+		"diagnostics":            append([]AuthorizationReferenceDiagnostic(nil), e.Diagnostics...),
+	}
 }
 
 func reconcileRuntimePermissionRegistries(ctx context.Context, permissions identitysdk.PermissionRegistry, application identitysdk.ApplicationRef, previousRegistry, nextRegistry *actioncontract.Registry) error {

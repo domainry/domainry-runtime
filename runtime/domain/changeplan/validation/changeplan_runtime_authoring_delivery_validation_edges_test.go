@@ -130,6 +130,18 @@ func TestRuntimeAuthoringDeliveryRejectsForgedStepProofs(t *testing.T) {
 	if result := ValidateRuntimeAuthoringDelivery(noReplay, binding, true); result.Valid || !runtimeDeliveryIssuesContain(result.Issues, "idempotent_replay_missing") {
 		t.Fatalf("no replay report=%#v", result)
 	}
+
+	failedAuditRead := runtimeAuthoringDeliveryClone(valid)
+	failedAuditRead.Scenarios[0] = runtimeAuthoringDeliveryEdgeFixtureScenario()
+	for index := range failedAuditRead.Scenarios[0].Steps {
+		if failedAuditRead.Scenarios[0].Steps[index].Label == "audit" {
+			failedAuditRead.Scenarios[0].Steps[index].ExpectedStatus = []int{404}
+			failedAuditRead.Scenarios[0].Steps[index].ActualStatus = 404
+		}
+	}
+	if result := ValidateRuntimeAuthoringDelivery(failedAuditRead, binding, true); result.Valid || !runtimeDeliveryIssuesContain(result.Issues, "audit_evidence_missing") {
+		t.Fatalf("failed audit read report=%#v", result)
+	}
 }
 
 func runtimeAuthoringDeliveryEdgeFixture() (changeplanmodel.RuntimeAuthoringEvidenceBinding, changeplanmodel.RuntimeAuthoringDeliveryEvidence) {

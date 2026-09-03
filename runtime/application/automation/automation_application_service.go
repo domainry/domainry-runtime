@@ -284,6 +284,7 @@ func (s *AutomationApplicationService) ValidateAutomationAuthoringFragment(_ con
 		return automationvalidation.AutomationFragmentValidationResult{}, err
 	}
 	capabilityKey = strings.TrimSpace(capabilityKey)
+	fragment = automationvalidation.AutomationAuthoringFragmentWithDefaults(capabilityKey, fragment)
 	result := automationvalidation.AutomationFragmentValidationResult{Valid: true, CapabilityKey: capabilityKey, Fragment: fragment}
 	if err := automationvalidation.AutomationValidateAuthoringFragment(capabilityKey, fragment); err != nil {
 		issue := automationvalidation.AutomationValidationIssueFromError(automationmodel.AutomationRuleSchema{}, err)

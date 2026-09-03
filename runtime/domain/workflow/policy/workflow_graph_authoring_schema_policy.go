@@ -31,9 +31,9 @@ func workflowGraphInputSchema(nodeTypes []string) *capabilitycontract.Capability
 	edge := capabilitycontract.CapabilityAuthoringSchema{Ref: "#/$defs/workflow_graph_edge"}
 	return &capabilitycontract.CapabilityAuthoringSchema{
 		Schema: "https://json-schema.org/draft/2020-12/schema", Type: "object", AdditionalProperties: &closed,
-		Required: []string{"version", "nodes", "edges"},
+		Required: []string{"nodes", "edges"},
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-			"version": {Type: "integer", Const: 2, Enum: []any{2}}, "nodes": {Type: "array", Items: &node, MinItems: workflowAuthoringIntPointer(1)},
+			"nodes": {Type: "array", Items: &node, MinItems: workflowAuthoringIntPointer(1)},
 			"edges": {Type: "array", Items: &edge}, "viewport": workflowGraphViewportSchema(),
 		}, Definitions: workflowGraphSchemaDefinitions(nodeTypes),
 	}
@@ -121,8 +121,8 @@ func workflowAuthoringStringEnums(values []string) []any {
 
 func workflowGraphExamples() []capabilitycontract.CapabilityAuthoringExample {
 	return []capabilitycontract.CapabilityAuthoringExample{
-		{Name: "minimal_valid", Value: map[string]any{"version": 2, "nodes": []any{map[string]any{"id": "trigger", "type": "trigger"}, map[string]any{"id": "complete", "type": "action", "contract": map[string]any{"action": map[string]any{"action_key": "order.complete"}}}}, "edges": []any{map[string]any{"id": "start", "source": "trigger", "target": "complete"}}}},
-		{Name: "representative", Value: map[string]any{"version": 2, "nodes": []any{map[string]any{"id": "trigger", "type": "trigger", "position": map[string]any{"x": 0, "y": 0}}, map[string]any{"id": "approval", "type": "approval", "contract": map[string]any{"approval": map[string]any{"mode": "any", "resolvers": []any{map[string]any{"type": "role", "role_key": "finance_manager"}}, "empty_assignee_policy": "fail"}}}, map[string]any{"id": "approved", "type": "action", "contract": map[string]any{"action": map[string]any{"action_key": "order.complete"}}}, map[string]any{"id": "rejected", "type": "action", "contract": map[string]any{"action": map[string]any{"action_key": "order.reject"}}}}, "edges": []any{map[string]any{"id": "start", "source": "trigger", "target": "approval"}, map[string]any{"id": "approved", "source": "approval", "target": "approved", "branch": "approved"}, map[string]any{"id": "rejected", "source": "approval", "target": "rejected", "branch": "rejected"}}, "viewport": map[string]any{"x": 0, "y": 0, "zoom": 1}}},
-		{Name: "invalid_with_repair", Value: map[string]any{"version": 2, "nodes": []any{map[string]any{"id": "complete", "type": "action", "contract": map[string]any{"action": map[string]any{"action_key": "order.complete"}}}}, "edges": []any{}}, ExpectedErrorCodes: []string{"backend.workflow.graph_trigger_required"}},
+		{Name: "minimal_valid", Value: map[string]any{"nodes": []any{map[string]any{"id": "trigger", "type": "trigger"}, map[string]any{"id": "complete", "type": "action", "contract": map[string]any{"action": map[string]any{"action_key": "order.complete"}}}}, "edges": []any{map[string]any{"id": "start", "source": "trigger", "target": "complete"}}}},
+		{Name: "representative", Value: map[string]any{"nodes": []any{map[string]any{"id": "trigger", "type": "trigger", "position": map[string]any{"x": 0, "y": 0}}, map[string]any{"id": "approval", "type": "approval", "contract": map[string]any{"approval": map[string]any{"mode": "any", "resolvers": []any{map[string]any{"type": "role", "role_key": "finance_manager"}}, "empty_assignee_policy": "fail"}}}, map[string]any{"id": "approved", "type": "action", "contract": map[string]any{"action": map[string]any{"action_key": "order.complete"}}}, map[string]any{"id": "rejected", "type": "action", "contract": map[string]any{"action": map[string]any{"action_key": "order.reject"}}}}, "edges": []any{map[string]any{"id": "start", "source": "trigger", "target": "approval"}, map[string]any{"id": "approved", "source": "approval", "target": "approved", "branch": "approved"}, map[string]any{"id": "rejected", "source": "approval", "target": "rejected", "branch": "rejected"}}, "viewport": map[string]any{"x": 0, "y": 0, "zoom": 1}}},
+		{Name: "invalid_with_repair", Value: map[string]any{"nodes": []any{map[string]any{"id": "complete", "type": "action", "contract": map[string]any{"action": map[string]any{"action_key": "order.complete"}}}}, "edges": []any{}}, ExpectedErrorCodes: []string{"backend.workflow.graph_trigger_required"}},
 	}
 }

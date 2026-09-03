@@ -142,7 +142,7 @@ func validateDeliveryScenario(report *changeplanmodel.RuntimeAuthoringDeliveryRe
 				deliveryIssue(report, "scenarios", prefix+".idempotent_replay_missing")
 			}
 		case "audit", "event", "outbox":
-			if !deliveryHasPath(paths, category) {
+			if !deliveryHasSuccessfulPath(statuses, paths, category) {
 				deliveryIssue(report, "scenarios", prefix+"."+category+"_evidence_missing")
 			}
 		}
@@ -189,9 +189,9 @@ func deliveryHasStatus(actual []int, expected ...int) bool {
 	return false
 }
 
-func deliveryHasPath(paths []string, part string) bool {
-	for _, path := range paths {
-		if strings.Contains(path, part) {
+func deliveryHasSuccessfulPath(statuses []int, paths []string, part string) bool {
+	for index, path := range paths {
+		if index < len(statuses) && statuses[index] >= 200 && statuses[index] < 300 && strings.Contains(path, part) {
 			return true
 		}
 	}

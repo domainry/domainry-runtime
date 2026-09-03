@@ -13,6 +13,7 @@ import (
 	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	businesseventcontract "github.com/domainry/domainry-runtime/runtime/domain/businessevent/contract"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 
@@ -129,24 +130,25 @@ type DeploymentRuntimeStatusProvider interface {
 }
 
 type HTTPRouterDependencies struct {
-	IdentityAuthentication    IdentityRequestMiddleware
-	IdentityPrincipal         IdentityPrincipalProjection
-	IntegrationAuthentication IntegrationAuthenticationPrincipalProvider
-	IdentityAuthorization     identitysdk.PrincipalResolver
-	AuthorizationActions      func() *actioncontract.Registry
-	BusinessPrincipal         BusinessPrincipalResolver
-	SecurityAudit             SecurityAuditAppender
-	RuntimeStatus             DeploymentRuntimeStatusProvider
-	TechnicalMetrics          TechnicalMetricsProvider
-	Backpressure              func(context.Context) bool
-	WorkerControl             *workerplatform.Controller
-	OperationsControlState    OperationsControlStateProvider
-	RuntimeReleaseAdmission   RuntimeReleaseAdmissionProvider
-	RuntimeReleaseIntegrity   RuntimeReleaseIntegrityProvider
-	RuntimeInstanceID         string
-	BusinessEventBackplane    businesseventcontract.Backplane
-	RateLimiter               ratelimit.Limiter
-	ModuleHTTPSurfaces        []modulehttp.Surface
+	IdentityAuthentication           IdentityRequestMiddleware
+	IdentityPrincipal                IdentityPrincipalProjection
+	IntegrationAuthentication        IntegrationAuthenticationPrincipalProvider
+	IdentityAuthorization            identitysdk.PrincipalResolver
+	AuthorizationActions             func() *actioncontract.Registry
+	BusinessPrincipal                BusinessPrincipalResolver
+	SecurityAudit                    SecurityAuditAppender
+	RuntimeStatus                    DeploymentRuntimeStatusProvider
+	TechnicalMetrics                 TechnicalMetricsProvider
+	Backpressure                     func(context.Context) bool
+	WorkerControl                    *workerplatform.Controller
+	OperationsControlState           OperationsControlStateProvider
+	RuntimeReleaseAdmission          RuntimeReleaseAdmissionProvider
+	RuntimeReleaseIntegrity          RuntimeReleaseIntegrityProvider
+	RuntimeInstanceID                string
+	BusinessEventBackplane           businesseventcontract.Backplane
+	RateLimiter                      ratelimit.Limiter
+	ModuleHTTPSurfaces               []modulehttp.Surface
+	RuntimeAuthoringScenarioReceipts *businesssystemapplication.RuntimeAuthoringScenarioReceiptService
 }
 
 type HTTPRouterHandlers struct {

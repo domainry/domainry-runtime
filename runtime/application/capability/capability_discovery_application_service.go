@@ -2,6 +2,9 @@ package capability
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"net/url"
 	"sort"
 	"strings"
@@ -27,14 +30,25 @@ type CapabilityDetailSelection struct {
 }
 
 func (s *CapabilityAuthoringApplicationService) DiscoveryIndex(ctx context.Context, principal principalmodel.Principal) (capabilitycontract.CapabilityDiscoveryIndex, error) {
+	return s.DiscoveryIndexExpanded(ctx, principal, false)
+}
+
+// DiscoveryIndexExpanded keeps endpoint policies out of the default discovery
+// response. Callers that are explicitly auditing transport policy can opt in
+// without forcing every model-facing capability lookup to carry that catalog.
+func (s *CapabilityAuthoringApplicationService) DiscoveryIndexExpanded(ctx context.Context, principal principalmodel.Principal, includeEndpointContracts bool) (capabilitycontract.CapabilityDiscoveryIndex, error) {
 	contract, err := s.Capabilities(ctx, principal)
 	if err != nil {
 		return capabilitycontract.CapabilityDiscoveryIndex{}, err
 	}
+	endpointContracts := tenantAdminEndpointContracts()
 	result := capabilitycontract.CapabilityDiscoveryIndex{
 		ContractVersion: contract.ContractVersion, EndpointContractVersion: contract.EndpointContractVersion, RuntimeVersion: contract.RuntimeVersion, ContractHash: contract.ContractHash, InstanceHash: contract.InstanceHash,
-		EndpointContracts: tenantAdminEndpointContracts(),
-		Domains:           []capabilitycontract.CapabilityDomainSummary{},
+		EndpointContractCount: len(endpointContracts), EndpointContractsHash: capabilityEndpointContractsHash(endpointContracts),
+		Domains: []capabilitycontract.CapabilityDomainSummary{},
+	}
+	if includeEndpointContracts {
+		result.EndpointContracts = endpointContracts
 	}
 	for _, domain := range contract.Domains {
 		result.Domains = append(result.Domains, capabilitycontract.CapabilityDomainSummary{
@@ -42,6 +56,12 @@ func (s *CapabilityAuthoringApplicationService) DiscoveryIndex(ctx context.Conte
 		})
 	}
 	return result, nil
+}
+
+func capabilityEndpointContractsHash(contracts []endpointmodel.RuntimeEndpointContractV1) string {
+	payload, _ := json.Marshal(contracts)
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:])
 }
 
 func tenantAdminEndpointContracts() []endpointmodel.RuntimeEndpointContractV1 {
@@ -96,22 +116,116 @@ func (s *CapabilityAuthoringApplicationService) CapabilityDetail(ctx context.Con
 }
 
 func (s *CapabilityAuthoringApplicationService) CapabilityDetailSelected(ctx context.Context, principal principalmodel.Principal, capabilityKey string, selection CapabilityDetailSelection) (capabilitycontract.CapabilityDetail, error) {
-	contract, _, err := s.capabilitiesAndSchema(ctx, principal)
+	contract, schema, err := s.capabilitiesAndSchema(ctx, principal)
 	if err != nil {
 		return capabilitycontract.CapabilityDetail{}, err
 	}
 	capabilityKey, selection.ObjectKey, selection.ConnectorKey, selection.ProviderKey, selection.OperationKey = strings.TrimSpace(capabilityKey), strings.TrimSpace(selection.ObjectKey), strings.TrimSpace(selection.ConnectorKey), strings.TrimSpace(selection.ProviderKey), strings.TrimSpace(selection.OperationKey)
+	domainKey := ""
+	var selectedDefinition capabilitycontract.CapabilityAuthoringDefinition
 	for _, domain := range contract.Domains {
 		for _, definition := range domain.Capabilities {
 			if definition.Key == capabilityKey {
-				return capabilitycontract.CapabilityDetail{
-					ContractVersion: contract.ContractVersion, RuntimeVersion: contract.RuntimeVersion, ContractHash: contract.ContractHash,
-					InstanceHash: contract.InstanceHash, Domain: domain.Key, Selection: map[string]string{}, Capability: definition,
-				}, nil
+				domainKey, selectedDefinition = domain.Key, definition
+				break
 			}
 		}
+		if domainKey != "" {
+			break
+		}
 	}
-	return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.not_found", "capability", capabilityKey)
+	if domainKey == "" {
+		return capabilitycontract.CapabilityDetail{}, capabilityDiscoveryNotFound("backend.capability.not_found", "capability", capabilityKey)
+	}
+	selectedInstance, selectedValues, err := capabilitySelectedInstance(contract.Instance, schema, selection)
+	if err != nil {
+		return capabilitycontract.CapabilityDetail{}, err
+	}
+	return capabilitycontract.CapabilityDetail{
+		ContractVersion: contract.ContractVersion, RuntimeVersion: contract.RuntimeVersion, ContractHash: contract.ContractHash,
+		InstanceHash: contract.InstanceHash, Domain: domainKey, Selection: selectedValues, Instance: selectedInstance, Capability: selectedDefinition,
+	}, nil
+}
+
+func capabilitySelectedInstance(instance capabilitycontract.CapabilityAuthoringInstance, schema capabilitycontract.CapabilityInstanceSchema, selection CapabilityDetailSelection) (*capabilitycontract.CapabilityAuthoringInstance, map[string]string, error) {
+	values := map[string]string{}
+	if selection.ObjectKey == "" && selection.ConnectorKey == "" && selection.ProviderKey == "" && selection.OperationKey == "" {
+		return nil, values, nil
+	}
+	if selection.ProviderKey != "" && selection.ConnectorKey == "" || selection.OperationKey != "" && selection.ConnectorKey == "" {
+		return nil, nil, capabilityDiscoveryBadRequest("backend.capability.selection_connector_required", "connector_key", selection.ConnectorKey)
+	}
+	selected := capabilitycontract.CapabilityAuthoringInstance{
+		ObjectKeys: []string{}, FieldKeys: []capabilitycontract.CapabilityAuthoringScopedValues{}, ActionKeys: []string{}, WorkflowKeys: []string{}, ReportKeys: []string{},
+		RoleKeys: []string{}, PermissionKeys: []string{}, UserIDs: []string{}, OrgIDs: []string{}, RoleIDs: []string{}, MenuIDs: []string{},
+		ConnectorKeys: []string{}, ConnectionKeys: []string{}, ConnectorOperations: []capabilitycontract.CapabilityAuthoringConnectorBinding{},
+	}
+	if selection.ObjectKey != "" {
+		objectFound := false
+		for _, object := range schema.Objects {
+			if strings.TrimSpace(object.Key) != selection.ObjectKey {
+				continue
+			}
+			objectFound = true
+			selected.ObjectKeys = append(selected.ObjectKeys, selection.ObjectKey)
+			fields := capabilitycontract.CapabilityAuthoringScopedValues{Scope: selection.ObjectKey, Values: []string{}}
+			for _, field := range object.Fields {
+				if key := strings.TrimSpace(field.Key); key != "" {
+					fields.Values = append(fields.Values, key)
+				}
+			}
+			sort.Strings(fields.Values)
+			selected.FieldKeys = append(selected.FieldKeys, fields)
+			break
+		}
+		if !objectFound {
+			return nil, nil, capabilityDiscoveryBadRequest("backend.capability.selection_object_not_found", "object_key", selection.ObjectKey)
+		}
+		for _, action := range schema.Actions {
+			if strings.TrimSpace(action.ObjectKey) == selection.ObjectKey {
+				key := strings.TrimSpace(action.Key)
+				selected.ActionKeys = append(selected.ActionKeys, key)
+				selected.PermissionKeys = append(selected.PermissionKeys, key)
+			}
+		}
+		sort.Strings(selected.ActionKeys)
+		sort.Strings(selected.PermissionKeys)
+		values["object_key"] = selection.ObjectKey
+	}
+	if selection.ConnectorKey != "" {
+		connectorFound := false
+		for _, binding := range instance.ConnectorOperations {
+			if binding.ConnectorKey != selection.ConnectorKey {
+				continue
+			}
+			connectorFound = true
+			selectedBinding := capabilitycontract.CapabilityAuthoringConnectorBinding{ConnectorKey: binding.ConnectorKey, Ready: binding.Ready, ProviderKeys: []string{}, Operations: []string{}}
+			if selection.ProviderKey == "" {
+				selectedBinding.ProviderKeys = append(selectedBinding.ProviderKeys, binding.ProviderKeys...)
+			} else if capabilityStringContains(binding.ProviderKeys, selection.ProviderKey) {
+				selectedBinding.ProviderKeys = append(selectedBinding.ProviderKeys, selection.ProviderKey)
+				values["provider_key"] = selection.ProviderKey
+			} else {
+				return nil, nil, capabilityDiscoveryBadRequest("backend.capability.selection_provider_not_found", "provider_key", selection.ProviderKey)
+			}
+			if selection.OperationKey == "" {
+				selectedBinding.Operations = append(selectedBinding.Operations, binding.Operations...)
+			} else if capabilityStringContains(binding.Operations, selection.OperationKey) {
+				selectedBinding.Operations = append(selectedBinding.Operations, selection.OperationKey)
+				values["operation_key"] = selection.OperationKey
+			} else {
+				return nil, nil, capabilityDiscoveryBadRequest("backend.capability.selection_operation_not_found", "operation_key", selection.OperationKey)
+			}
+			selected.ConnectorKeys = append(selected.ConnectorKeys, binding.ConnectorKey)
+			selected.ConnectorOperations = append(selected.ConnectorOperations, selectedBinding)
+			break
+		}
+		if !connectorFound {
+			return nil, nil, capabilityDiscoveryBadRequest("backend.capability.selection_connector_not_found", "connector_key", selection.ConnectorKey)
+		}
+		values["connector_key"] = selection.ConnectorKey
+	}
+	return &selected, values, nil
 }
 
 func (s *CapabilityAuthoringApplicationService) ReferenceValues(ctx context.Context, principal principalmodel.Principal, kind, scope string) (capabilitycontract.CapabilityReferenceResult, error) {

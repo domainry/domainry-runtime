@@ -89,6 +89,9 @@ func classifyHTTP(method, path string) (string, string) {
 	if method == "PUT" {
 		return "natural_key", "workspace plus stable path resource"
 	}
+	if strings.HasPrefix(path, "/objects/") && strings.Contains(path, "/records/") && (method == "PATCH" || method == "DELETE") {
+		return "caller_key_required", "Idempotency-Key header"
+	}
 	if method == "PATCH" || method == "DELETE" {
 		return "optimistic_only", "workspace plus resource identity and expected version"
 	}
@@ -159,6 +162,9 @@ func isMutationMethod(name string) bool {
 }
 
 func classifyApplicationCommand(name string) (string, string) {
+	if strings.Contains(name, "Idempotent") {
+		return "caller_key_required", "use-case key propagated from transport or parent execution"
+	}
 	for _, prefix := range []string{"Process", "Rebuild", "Dispatch"} {
 		if strings.HasPrefix(name, prefix) {
 			return "system_key_required", "claimed work or deterministic operation identity"

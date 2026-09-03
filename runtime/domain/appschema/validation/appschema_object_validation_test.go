@@ -8,7 +8,7 @@ import (
 )
 
 func TestMetadataValidateObjectDefinitionOwnsSmallObjectShell(t *testing.T) {
-	normalized, err := ApplicationSchemaValidateObjectDefinition("order", json.RawMessage(`{"key":" order ","name":" Order "}`))
+	normalized, err := ApplicationSchemaValidateObjectDefinition("order", json.RawMessage(`{"name":" Order "}`))
 	if err != nil || string(normalized) != `{"key":"order","name":"Order","description":"","fields":[],"capabilities":{"create":true,"read":true,"update":true,"delete":true,"export":true}}` {
 		t.Fatalf("normalized=%s err=%v", normalized, err)
 	}
@@ -22,6 +22,7 @@ func TestMetadataValidateObjectDefinitionOwnsSmallObjectShell(t *testing.T) {
 		{name: "name required", payload: `{"key":"order"}`, code: "backend.metadata.object_name_required"},
 		{name: "nested field rejected", payload: `{"key":"order","name":"Order","fields":[{"key":"total"}]}`, code: "backend.metadata.object_shell_only"},
 		{name: "write policy rejected", payload: `{"key":"order","name":"Order","config":{"write_policy":"implicit"}}`, code: "backend.metadata.object_write_policy_invalid"},
+		{name: "unknown field rejected", payload: `{"name":"Order","unknown":true}`, code: "backend.metadata.object_definition_invalid"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := ApplicationSchemaValidateObjectDefinition("order", json.RawMessage(test.payload))
@@ -69,6 +70,14 @@ func TestMetadataValidateObjectDefinitionNormalizesLedgerPolicy(t *testing.T) {
 	if err != nil || string(normalized) != `{"key":"financial_entry","name":"Financial entry","description":"","fields":[],"capabilities":{"create":true,"read":true,"update":false,"delete":false,"export":true},"lifecycle_policy":{"mode":"append_only"},"ledger_policy":{"integrity":"sha256_chain","signature":"hmac_sha256"}}` {
 		t.Fatalf("normalized=%s err=%v", normalized, err)
 	}
+	normalized, err = ApplicationSchemaValidateObjectDefinition("financial_entry", json.RawMessage(`{"key":"financial_entry","name":"Financial entry","lifecycle_policy":{"mode":"append_only"},"ledger_policy":{"signature":"hmac_sha256"}}`))
+	if err != nil || string(normalized) != `{"key":"financial_entry","name":"Financial entry","description":"","fields":[],"capabilities":{"create":true,"read":true,"update":false,"delete":false,"export":true},"lifecycle_policy":{"mode":"append_only"},"ledger_policy":{"integrity":"sha256_chain","signature":"hmac_sha256"}}` {
+		t.Fatalf("backend-owned ledger integrity was not defaulted: normalized=%s err=%v", normalized, err)
+	}
+	normalized, err = ApplicationSchemaValidateObjectDefinition("financial_entry", json.RawMessage(`{"name":"Financial entry","lifecycle_policy":{"mode":"append_only"},"ledger_policy":{}}`))
+	if err != nil || string(normalized) != `{"key":"financial_entry","name":"Financial entry","description":"","fields":[],"capabilities":{"create":true,"read":true,"update":false,"delete":false,"export":true},"lifecycle_policy":{"mode":"append_only"},"ledger_policy":{"integrity":"sha256_chain","signature":"none"}}` {
+		t.Fatalf("ledger defaults were not fully materialized: normalized=%s err=%v", normalized, err)
+	}
 	for _, payload := range []string{
 		`{"key":"financial_entry","name":"Financial entry","ledger_policy":{"integrity":"sha256_chain"}}`,
 		`{"key":"financial_entry","name":"Financial entry","lifecycle_policy":{"mode":"mutable"},"ledger_policy":{"integrity":"sha256_chain"}}`,
@@ -106,7 +115,7 @@ func TestMetadataValidateObjectDefinitionRemainingConditions(t *testing.T) {
 		errorCode string
 	}{
 		{name: "empty key", resource: "", payload: `{"key":"","name":"Object"}`, errorCode: "backend.metadata.object_key_mismatch"},
-		{name: "validations", resource: "object", payload: `{"key":"object","name":"Object","validations":[{"expression":"true"}]}`, errorCode: "backend.metadata.object_shell_only"},
+		{name: "validations", resource: "object", payload: `{"key":"object","name":"Object","validations":[{"key":"valid","object_key":"object","type":"required"}]}`, errorCode: "backend.metadata.object_shell_only"},
 		{name: "empty state", resource: "object", payload: `{"key":"object","name":"Object","lifecycle_policy":{"mode":"immutable_after_state","state_field":"status","immutable_states":[" "]}}`, errorCode: "backend.metadata.object_lifecycle_policy_invalid"},
 		{name: "mutable states", resource: "object", payload: `{"key":"object","name":"Object","lifecycle_policy":{"mode":"mutable","immutable_states":["closed"]}}`, errorCode: "backend.metadata.object_lifecycle_policy_invalid"},
 		{name: "immutable state field", resource: "object", payload: `{"key":"object","name":"Object","lifecycle_policy":{"mode":"immutable_after_state","immutable_states":["closed"]}}`, errorCode: "backend.metadata.object_lifecycle_policy_invalid"},

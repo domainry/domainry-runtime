@@ -63,6 +63,21 @@ func TestAuthorizationActionDefinitionUsesSameKeyPermission(t *testing.T) {
 	}
 }
 
+func TestAuthorizationActionDefinitionUsesTechnicalAuditDefault(t *testing.T) {
+	definition, err := AuthorizationActionDefinition(definitionmodel.ActionSchema{
+		Key: "order.submit", ObjectKey: "order", Label: "Submit", Kind: definitionmodel.ActionKindRecordOperation,
+	}, AuthorizationContractContext{
+		Owner: "application:orders", CapabilityKey: "order", CapabilityLabel: "Order",
+		PermissionCategory: "Business Actions", Exposures: []actioncontract.Exposure{actioncontract.ExposurePublic},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if definition.AuditEvent != definitionmodel.DefaultBusinessActionAuditEvent {
+		t.Fatalf("audit event=%q", definition.AuditEvent)
+	}
+}
+
 func TestAuthorizationActionDefinitionKeepsDeprecatedActionPermissionActive(t *testing.T) {
 	schema := definitionmodel.ActionSchema{
 		Key: "order.refund", ObjectKey: "order", Label: "Refund order", Kind: definitionmodel.ActionKindRecordOperation,

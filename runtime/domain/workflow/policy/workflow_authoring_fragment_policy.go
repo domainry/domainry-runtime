@@ -1,7 +1,9 @@
 package policy
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"strings"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -12,74 +14,111 @@ import (
 // Workflow draft. Composite node fragments are embedded into the smallest
 // valid graph that exercises the same Workflow graph policy used at runtime.
 func WorkflowValidateAuthoringFragment(capabilityKey string, value map[string]any) error {
+	_, err := WorkflowNormalizeAuthoringFragment(capabilityKey, value)
+	return err
+}
+
+// WorkflowNormalizeAuthoringFragment materializes protocol values implied by
+// the selected capability and validates that exact canonical candidate. Model
+// clients can persist or repair the returned fragment without reimplementing
+// Workflow defaults.
+func WorkflowNormalizeAuthoringFragment(capabilityKey string, value map[string]any) (map[string]any, error) {
 	capabilityKey = strings.TrimSpace(capabilityKey)
+	value = WorkflowAuthoringFragmentWithDefaults(capabilityKey, value)
 	switch capabilityKey {
 	case "workflow.graph_v2":
 		var graph definitionmodel.WorkflowGraphSchema
 		if err := workflowDecodeAuthoringFragment(value, &graph); err != nil {
-			return err
+			return nil, err
 		}
-		return WorkflowValidateGraph(&graph)
+		if err := WorkflowValidateGraph(&graph); err != nil {
+			return nil, err
+		}
 	case "workflow.trigger_contract":
 		var contract definitionmodel.WorkflowTriggerContract
 		if err := workflowDecodeAuthoringFragment(value, &contract); err != nil {
-			return err
+			return nil, err
 		}
 		if !WorkflowTriggerContractTypeIsValid(contract.Type) {
-			return badRequest("backend.workflow.trigger_type_invalid")
+			return nil, badRequest("backend.workflow.trigger_type_invalid")
 		}
-		return nil
 	case "workflow.condition_contract":
 		var contract definitionmodel.WorkflowConditionContract
 		if err := workflowDecodeAuthoringFragment(value, &contract); err != nil {
-			return err
+			return nil, err
 		}
 		if !WorkflowConditionContractIsValid(contract) {
-			return badRequest("backend.workflow.condition_contract_invalid")
+			return nil, badRequest("backend.workflow.condition_contract_invalid")
 		}
-		return nil
 	case "workflow.assignee_resolver":
 		var resolver definitionmodel.WorkflowAssigneeResolver
 		if err := workflowDecodeAuthoringFragment(value, &resolver); err != nil {
-			return err
+			return nil, err
 		}
 		if !WorkflowAssigneeResolverIsValid(resolver) {
-			return badRequest("backend.workflow.approval_resolver_invalid")
+			return nil, badRequest("backend.workflow.approval_resolver_invalid")
 		}
-		return nil
 	case "workflow.node.approval":
 		var contract definitionmodel.WorkflowApprovalNodeContract
 		if err := workflowDecodeAuthoringFragment(value, &contract); err != nil {
-			return err
+			return nil, err
 		}
-		return WorkflowValidateGraph(workflowAuthoringApprovalGraph(contract))
+		if err := WorkflowValidateGraph(workflowAuthoringApprovalGraph(contract)); err != nil {
+			return nil, err
+		}
 	case "workflow.node.action":
 		var contract definitionmodel.WorkflowBusinessActionNodeContract
 		if err := workflowDecodeAuthoringFragment(value, &contract); err != nil {
-			return err
+			return nil, err
 		}
-		return WorkflowValidateGraph(workflowAuthoringActionGraph(contract))
+		if err := WorkflowValidateGraph(workflowAuthoringActionGraph(contract)); err != nil {
+			return nil, err
+		}
 	case "workflow.node.cc":
 		var contract definitionmodel.WorkflowCCNodeContract
 		if err := workflowDecodeAuthoringFragment(value, &contract); err != nil {
-			return err
+			return nil, err
 		}
-		return WorkflowValidateGraph(workflowAuthoringCCGraph(contract))
+		if err := WorkflowValidateGraph(workflowAuthoringCCGraph(contract)); err != nil {
+			return nil, err
+		}
 	case "workflow.node.timer":
 		var contract definitionmodel.WorkflowTimerNodeContract
-		if err := workflowDecodeAuthoringFragment(value, &contract); err != nil {
-			return err
+		contractValue := make(map[string]any, len(value))
+		for key, item := range value {
+			if key != "node_type" {
+				contractValue[key] = item
+			}
 		}
-		return WorkflowValidateGraph(workflowAuthoringTimerGraph(strings.TrimSpace(stringValue(value["node_type"])), contract))
+		if err := workflowDecodeAuthoringFragment(contractValue, &contract); err != nil {
+			return nil, err
+		}
+		if err := WorkflowValidateGraph(workflowAuthoringTimerGraph(strings.TrimSpace(stringValue(value["node_type"])), contract)); err != nil {
+			return nil, err
+		}
 	case "workflow.graph_edge":
 		var edge definitionmodel.WorkflowGraphEdge
 		if err := workflowDecodeAuthoringFragment(value, &edge); err != nil {
-			return err
+			return nil, err
 		}
-		return WorkflowValidateGraph(workflowAuthoringEdgeGraph(edge))
+		if err := WorkflowValidateGraph(workflowAuthoringEdgeGraph(edge)); err != nil {
+			return nil, err
+		}
 	default:
-		return badRequest("backend.workflow.authoring_capability_unsupported", "capability_key", capabilityKey)
+		return nil, badRequest("backend.workflow.authoring_capability_unsupported", "capability_key", capabilityKey)
 	}
+	return value, nil
+}
+
+func WorkflowAuthoringFragmentWithDefaults(capabilityKey string, value map[string]any) map[string]any {
+	normalized := make(map[string]any, len(value)+1)
+	for key, item := range value {
+		normalized[key] = item
+	}
+	if strings.TrimSpace(capabilityKey) == "workflow.graph_v2" {
+		normalized["version"] = 2
+	}
+	return normalized
 }
 
 func workflowDecodeAuthoringFragment(value map[string]any, target any) error {
@@ -87,7 +126,13 @@ func workflowDecodeAuthoringFragment(value map[string]any, target any) error {
 	if err != nil {
 		return badRequest("backend.workflow.authoring_fragment_invalid")
 	}
-	if err := json.Unmarshal(raw, target); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return badRequest("backend.workflow.authoring_fragment_invalid")
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
 		return badRequest("backend.workflow.authoring_fragment_invalid")
 	}
 	return nil

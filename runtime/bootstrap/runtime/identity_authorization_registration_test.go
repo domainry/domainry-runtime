@@ -13,6 +13,7 @@ import (
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
+	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
@@ -132,6 +133,37 @@ func TestRuntimeAuthorizationRegistryPublishesActionsWithoutObjectMetadataMirror
 	}
 	if !found {
 		t.Fatalf("Workflow Permission missing from Identity owner snapshot: %#v", owned)
+	}
+}
+
+func TestRuntimeAuthorizationReferencesUseCompleteGeneratedRegistry(t *testing.T) {
+	moduleAction := testOwnedPermissionAction("module.orders.read", "module:test", "/module-orders-read")
+	snapshot := appschemamodel.ApplicationSchemaSnapshot{
+		Objects: []definitionmodel.ObjectSchema{{Key: "order", Name: "Order"}},
+	}
+	registry, err := runtimeAuthorizationActionRegistry(snapshot, "orders-runtime", []actioncontract.ActionDefinition{moduleAction})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roles := []manifestmodel.RoleSchema{{Key: "operator", Permissions: []string{"order.read", "module.orders.read", "runtime.appschema.metadata_object_record_count"}}}
+	if err := validateRuntimeAuthorizationReferences(snapshot, roles, registry); err != nil {
+		t.Fatalf("generated object/module permissions rejected: %v", err)
+	}
+	roles[0].Permissions = append(roles[0].Permissions, "order.typo")
+	err = validateRuntimeAuthorizationReferences(snapshot, roles, registry)
+	if err == nil || !strings.Contains(err.Error(), `roles[0].permissions[3]="order.typo"`) {
+		t.Fatalf("orphan role permission error=%v", err)
+	}
+	var typed *AuthorizationReferenceError
+	if !errors.As(err, &typed) || typed.KnownPermissionCount == 0 || len(typed.Diagnostics) != 1 {
+		t.Fatalf("orphan permission did not expose structured diagnostics: %#v", err)
+	}
+	diagnostic := typed.Diagnostics[0]
+	if diagnostic.Code != "runtime.authorization.permission_unknown" || diagnostic.Path != "roles[0].permissions[3]" || diagnostic.PermissionKey != "order.typo" || diagnostic.SourceKind != "role" {
+		t.Fatalf("structured orphan permission diagnostic=%+v", diagnostic)
+	}
+	if envelope := typed.Diagnostic(); envelope["code"] != "runtime.authorization.references_invalid" {
+		t.Fatalf("authorization diagnostic envelope=%v", envelope)
 	}
 }
 
@@ -279,7 +311,7 @@ func TestRuntimeAuthorizationReconcileRejectsMismatchedSuccessReceipt(t *testing
 	binding := authorizationIdentityBindingStub{permissions: permissions}
 	_, err := reconcileRuntimeIdentityAuthorization(t.Context(), binding, appschemamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}},
-	}, nil, nil, "workspace-primary", "orders-runtime", nil)
+	}, nil, nil, nil, "workspace-primary", "orders-runtime", nil)
 	if err == nil {
 		t.Fatal("Runtime accepted a reconcile receipt for a different snapshot")
 	}
@@ -313,7 +345,7 @@ func TestRuntimeAuthorizationReconcileCarriesPreviousHashAndRetiresRemovedOwner(
 		"module:test": {WorkspaceID: "workspace-primary", SourceOwner: "module:test", SnapshotHash: wantPreviousHash, Definitions: previousDefinitions},
 	}}
 	binding := authorizationIdentityBindingStub{permissions: permissions}
-	if _, err := reconcileRuntimeIdentityAuthorization(t.Context(), binding, appschemamodel.ApplicationSchemaSnapshot{}, nil, previousRegistry, "workspace-primary", "orders-runtime", nil); err != nil {
+	if _, err := reconcileRuntimeIdentityAuthorization(t.Context(), binding, appschemamodel.ApplicationSchemaSnapshot{}, nil, previousRegistry, nil, "workspace-primary", "orders-runtime", nil); err != nil {
 		t.Fatal(err)
 	}
 	wantEmptyHash, err := identitysdk.PermissionSnapshotHash("module:test", nil)

@@ -35,7 +35,16 @@ func TestAutomationAuthoringFragmentRejectsUnknownCapability(t *testing.T) {
 	}
 }
 
-func TestAutomationAuthoringFragmentRejectsMalformedPayloadsAndMismatchedInstruction(t *testing.T) {
+func TestAutomationAuthoringFragmentRejectsUnknownTopLevelFields(t *testing.T) {
+	err := automationvalidation.AutomationValidateAuthoringFragment("automation.instruction.emit_event", map[string]any{
+		"key": "emit", "name": "Emit", "on_error": "continue", "config": map[string]any{"event_type": "order.changed"}, "unknown": true,
+	})
+	if code := apperror.CodeOf(err); code != "backend.automation.authoring_fragment_invalid" {
+		t.Fatalf("code=%q err=%v", code, err)
+	}
+}
+
+func TestAutomationAuthoringFragmentRejectsMalformedPayloadsAndDerivesInstructionType(t *testing.T) {
 	tests := []struct {
 		capability string
 		value      map[string]any
@@ -44,18 +53,17 @@ func TestAutomationAuthoringFragmentRejectsMalformedPayloadsAndMismatchedInstruc
 		{"automation.trigger", map[string]any{"phase": 1}},
 		{"automation.condition_group", map[string]any{"mode": 1}},
 		{"automation.execution_policy", map[string]any{"mode": 1}},
-		{"automation.instruction.derive_fields", map[string]any{"type": 1}},
 	}
 	for _, test := range tests {
 		if code := apperror.CodeOf(automationvalidation.AutomationValidateAuthoringFragment(test.capability, test.value)); code != "backend.automation.authoring_fragment_invalid" {
 			t.Fatalf("capability=%s code=%s", test.capability, code)
 		}
 	}
-	if code := apperror.CodeOf(automationvalidation.AutomationValidateAuthoringFragment(
+	if err := automationvalidation.AutomationValidateAuthoringFragment(
 		"automation.instruction.derive_fields",
-		map[string]any{"key": "instruction", "type": "assert"},
-	)); code != "backend.automation.instruction_type_invalid" {
-		t.Fatalf("mismatched instruction code=%s", code)
+		map[string]any{"key": "instruction", "config": map[string]any{"fields": map[string]any{"status": "ready"}}},
+	); err != nil {
+		t.Fatalf("route-derived instruction type was not applied: %v", err)
 	}
 }
 

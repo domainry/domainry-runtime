@@ -27,6 +27,10 @@ type recordMutationExecutionLookup interface {
 	FindRecordMutationExecution(context.Context, recordmodel.RecordMutationExecution) (recordmodel.RecordMutationExecution, bool, error)
 }
 
+type recordMutationBatchExecutionStore interface {
+	CommitRecordMutationBatchExecution(context.Context, []transactionmodel.RecordMutationCommit, recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error)
+}
+
 func NewRecordMutationExecutionRuntime(repository recordcontract.RecordMutationExecutionStore) *RecordMutationExecutionRuntime {
 	return &RecordMutationExecutionRuntime{repository: repository}
 }
@@ -85,6 +89,15 @@ func (s *RecordMutationExecutionRuntime) BeginUpdate(ctx context.Context, object
 	return claim.Execution.Result, claim, true, nil
 }
 
+func (s *RecordMutationExecutionRuntime) BeginDelete(ctx context.Context, objectKey, recordID, key, expectedUpdatedAt string, principal principalmodel.Principal) (recordmodel.RecordMutationClaimResult, bool, error) {
+	return s.beginOperationTarget(ctx, "delete", objectKey, recordID, key, idempotency.FingerprintInput{
+		UseCase:      "record.delete",
+		ResourceType: "record",
+		TargetID:     strings.TrimSpace(objectKey) + "/" + strings.TrimSpace(recordID),
+		Payload:      map[string]any{"expected_updated_at": strings.TrimSpace(expectedUpdatedAt)},
+	}, principal)
+}
+
 func (s *RecordMutationExecutionRuntime) Commit(ctx context.Context, claim recordmodel.RecordMutationClaimResult, commit transactionmodel.RecordMutationCommit) error {
 	if s == nil || s.repository == nil {
 		return apperror.New(apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil, nil)
@@ -96,6 +109,25 @@ func (s *RecordMutationExecutionRuntime) Commit(ctx context.Context, claim recor
 	})
 	if err != nil {
 		return recordMutationRuntimeError("commit record mutation execution", err)
+	}
+	return nil
+}
+
+func (s *RecordMutationExecutionRuntime) CommitBatch(ctx context.Context, claim recordmodel.RecordMutationClaimResult, commits []transactionmodel.RecordMutationCommit) error {
+	if s == nil || s.repository == nil {
+		return apperror.New(apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil, nil)
+	}
+	batchStore, ok := s.repository.(recordMutationBatchExecutionStore)
+	if !ok {
+		return apperror.New(apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil, nil)
+	}
+	_, err := batchStore.CommitRecordMutationBatchExecution(ctx, commits, recordmodel.RecordMutationCompletion{
+		WorkspaceID: claim.Execution.WorkspaceID,
+		ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		Result: map[string]any{"deleted": true}, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour), Now: time.Now().UTC(),
+	})
+	if err != nil {
+		return recordMutationRuntimeError("commit record mutation batch execution", err)
 	}
 	return nil
 }

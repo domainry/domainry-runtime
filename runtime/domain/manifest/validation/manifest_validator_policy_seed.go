@@ -4,31 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 )
 
 func (state *validationState) validateSeedRecords() {
-	if len(state.manifest.SeedRecords) == 0 {
-		state.add("seed_records", "domain schema must declare seed data")
-		return
-	}
-	optionalProfileObjects := map[string]bool{}
-	for _, extension := range state.manifest.IdentityProfileExtensions {
-		optionalProfileObjects[extension.ObjectKey] = true
-	}
-	for objectKey := range state.objects {
-		if optionalProfileObjects[objectKey] {
-			continue
-		}
-		if runtimeOwned, _ := state.objects[objectKey].Config["runtime_owned"].(bool); runtimeOwned {
-			continue
-		}
-		if !state.seeded[objectKey] {
-			state.add("seed_records", "object %q has required fields but no seed record", objectKey)
-		}
-	}
 	for index, seed := range state.manifest.SeedRecords {
 		path := fmt.Sprintf("seed_records[%d]", index)
 		objectKey := strings.TrimSpace(seed.ObjectKey)
@@ -54,11 +34,6 @@ func (state *validationState) validateSeedRecords() {
 		}
 	}
 	for _, report := range state.manifest.Reports {
-		for _, objectKey := range reportmodel.ReportDatasetObjectKeys(report.Dataset) {
-			if !state.seeded[objectKey] {
-				state.add("seed_records", "report %q source object %q has no seed evidence", report.Key, objectKey)
-			}
-		}
 		for evidenceIndex, requirement := range report.EvidenceRequirements {
 			qualified := 0
 			for _, seed := range state.manifest.SeedRecords {
@@ -79,11 +54,6 @@ func (state *validationState) validateSeedRecords() {
 			if qualified < requirement.MinimumRecords {
 				state.add(fmt.Sprintf("reports[%s].evidence_requirements[%d]", report.Key, evidenceIndex), "requires at least %d qualifying seed records, found %d", requirement.MinimumRecords, qualified)
 			}
-		}
-	}
-	for _, action := range state.manifest.Actions {
-		if !state.seeded[action.ObjectKey] {
-			state.add("seed_records", "action %q object %q has no seed evidence", action.Key, action.ObjectKey)
 		}
 	}
 }

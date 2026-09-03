@@ -216,7 +216,7 @@ func TestDefinitionValidationRequestEdges(t *testing.T) {
 func TestDictionaryValidationJSONEdges(t *testing.T) {
 	cases := []struct{ name, payload, code string }{
 		{"json", `{`, "backend.dictionary.definition_invalid"},
-		{"empty key", `{}`, "backend.dictionary.key_mismatch"},
+		{"empty key", `{"key":""}`, "backend.dictionary.key_mismatch"},
 		{"mismatch", `{"key":"other"}`, "backend.dictionary.key_mismatch"},
 		{"item key", `{"key":"dict","items":[{"value":"one"}]}`, "backend.dictionary.item_key_value_required"},
 		{"item value", `{"key":"dict","items":[{"key":"one"}]}`, "backend.dictionary.item_key_value_required"},

@@ -31,7 +31,9 @@ type businessSystemEvidenceStub struct {
 }
 
 type businessSystemDefinitionsStub struct {
-	list func(context.Context, metadatasdk.DefinitionQuery) ([]metadatasdk.Definition, error)
+	list     func(context.Context, metadatasdk.DefinitionQuery) ([]metadatasdk.Definition, error)
+	get      func(context.Context, string, string) (metadatasdk.Definition, bool, error)
+	snapshot func(context.Context) (metadatasdk.DefinitionSnapshot, error)
 }
 
 func (stub businessSystemDefinitionsStub) List(ctx context.Context, query metadatasdk.DefinitionQuery) ([]metadatasdk.Definition, error) {
@@ -41,11 +43,17 @@ func (stub businessSystemDefinitionsStub) List(ctx context.Context, query metada
 	return stub.list(ctx, query)
 }
 
-func (businessSystemDefinitionsStub) Get(context.Context, string, string) (metadatasdk.Definition, bool, error) {
+func (stub businessSystemDefinitionsStub) Get(ctx context.Context, resourceType, resourceKey string) (metadatasdk.Definition, bool, error) {
+	if stub.get != nil {
+		return stub.get(ctx, resourceType, resourceKey)
+	}
 	return metadatasdk.Definition{}, false, nil
 }
 
-func (businessSystemDefinitionsStub) Snapshot(context.Context) (metadatasdk.DefinitionSnapshot, error) {
+func (stub businessSystemDefinitionsStub) Snapshot(ctx context.Context) (metadatasdk.DefinitionSnapshot, error) {
+	if stub.snapshot != nil {
+		return stub.snapshot(ctx)
+	}
 	return metadatasdk.DefinitionSnapshot{}, nil
 }
 
@@ -116,6 +124,96 @@ func TestBusinessSystemSnapshotSeparatesAdministratorAndLimitedVisibility(t *tes
 	}
 	if snapshot.ResourceVisibility["runtime_state.integrations"] != "hidden" {
 		t.Fatalf("limited snapshot visibility=%#v", snapshot.ResourceVisibility)
+	}
+}
+
+func TestBusinessSystemSnapshotIndexAvoidsFullProjectionReads(t *testing.T) {
+	dependencies := businessSystemTestDependencies()
+	schemaCalls, metadataCalls, evidenceCalls, expensiveCalls := 0, 0, 0, 0
+	schema := appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "string"}}}}}
+	dependencies.SchemaForPrincipal = func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+		schemaCalls++
+		return schema
+	}
+	dependencies.Definitions = businessSystemDefinitionsStub{snapshot: func(context.Context) (metadatasdk.DefinitionSnapshot, error) {
+		metadataCalls++
+		return metadatasdk.DefinitionSnapshot{Definitions: []metadatasdk.Definition{
+			{ResourceType: "field", ResourceKey: "customer.name", ObjectKey: "customer", SchemaHash: "field-hash", Payload: []byte(`{"key":"name","type":"string"}`)},
+			{ResourceType: "workflow", ResourceKey: "ignored-by-business-resource-index", SchemaHash: "workflow-hash"},
+		}}, nil
+	}}
+	dependencies.Evidence = businessSystemEvidenceStub{values: []businessseedmodel.BusinessSeedProvenance{{}}}
+	dependencies.FeaturePermissions = func(context.Context, principalmodel.Principal) (recordcontract.RecordFeaturePermissionSnapshot, error) {
+		expensiveCalls++
+		return recordcontract.RecordFeaturePermissionSnapshot{}, nil
+	}
+	dependencies.Runtime.WorkflowProcesses = func(context.Context, principalmodel.Principal, workflowmodel.WorkflowProcessFilter) ([]workflowmodel.WorkflowProcessInstance, error) {
+		expensiveCalls++
+		return nil, nil
+	}
+	dependencies.Runtime.ListRecords = func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error) {
+		expensiveCalls++
+		return recordmodel.RecordPageResult{}, nil
+	}
+	service := NewBusinessSystemApplicationService(dependencies)
+	service.evidence = businessSystemEvidenceCounter{calls: &evidenceCalls}
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{ActionBusinessSystemSnapshot}})
+
+	index, err := service.SnapshotIndex(t.Context(), admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if schemaCalls != 1 || metadataCalls != 1 || evidenceCalls != 1 || expensiveCalls != 0 {
+		t.Fatalf("index reads schema=%d metadata=%d evidence=%d expensive=%d", schemaCalls, metadataCalls, evidenceCalls, expensiveCalls)
+	}
+	if index.ResourceCount != 1 || index.ResourceCounts["field"] != 1 || len(index.ResourceCollections) != 1 || index.ResourceCollections[0].CollectionHash == "" {
+		t.Fatalf("index summary=%#v", index)
+	}
+	if index.ResourceVisibility["runtime_state.automation"] != "available_on_demand" || index.Links.RuntimeStateIndex == "" {
+		t.Fatalf("index lost on-demand runtime discoverability: %#v", index)
+	}
+}
+
+type businessSystemEvidenceCounter struct{ calls *int }
+
+func (counter businessSystemEvidenceCounter) ListSeedProvenance(context.Context) ([]businessseedmodel.BusinessSeedProvenance, error) {
+	(*counter.calls)++
+	return []businessseedmodel.BusinessSeedProvenance{{}}, nil
+}
+
+func TestBusinessSystemSnapshotResourceQueriesAreBoundedAndExact(t *testing.T) {
+	definitions := []metadatasdk.Definition{
+		{ResourceType: "field", ResourceKey: "customer.email", ObjectKey: "customer", SchemaHash: "email-hash", Payload: []byte(`{"key":"email","type":"email"}`)},
+		{ResourceType: "field", ResourceKey: "customer.name", ObjectKey: "customer", SchemaHash: "name-hash", Payload: []byte(`{"key":"name","type":"string"}`)},
+	}
+	dependencies := businessSystemTestDependencies()
+	dependencies.Definitions = businessSystemDefinitionsStub{
+		snapshot: func(context.Context) (metadatasdk.DefinitionSnapshot, error) {
+			return metadatasdk.DefinitionSnapshot{Definitions: definitions}, nil
+		},
+		get: func(_ context.Context, resourceType, resourceKey string) (metadatasdk.Definition, bool, error) {
+			for _, definition := range definitions {
+				if definition.ResourceType == resourceType && definition.ResourceKey == resourceKey {
+					return definition, true, nil
+				}
+			}
+			return metadatasdk.Definition{}, false, nil
+		},
+	}
+	service := NewBusinessSystemApplicationService(dependencies)
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{Permissions: []string{ActionBusinessSystemSnapshot}})
+
+	page, valid, err := service.SnapshotResourcePage(t.Context(), admin, "field", "", 1)
+	if err != nil || !valid || len(page.Items) != 1 || page.Items[0].ResourceKey != "customer.email" || page.NextCursor == "" {
+		t.Fatalf("page=%#v valid=%t err=%v", page, valid, err)
+	}
+	detail, found, err := service.SnapshotResourceDetail(t.Context(), admin, "field", "customer.email")
+	if err != nil || !found || detail.ResourceHash != "email-hash" || string(detail.Definition) != `{"key":"email","type":"email"}` {
+		t.Fatalf("detail=%#v found=%t err=%v", detail, found, err)
+	}
+	limited := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{})
+	if _, _, err := service.SnapshotResourcePage(t.Context(), limited, "field", "", 1); err == nil {
+		t.Fatal("limited principal received resource page")
 	}
 }
 
@@ -205,13 +303,8 @@ func TestBusinessSystemRuntimeStatePropagatesEveryOwnerFailure(t *testing.T) {
 
 func TestBusinessSystemResourceProjectionPreservesEvidence(t *testing.T) {
 	dependencies := businessSystemTestDependencies()
-	returned := false
-	dependencies.Definitions = businessSystemDefinitionsStub{list: func(context.Context, metadatasdk.DefinitionQuery) ([]metadatasdk.Definition, error) {
-		if returned {
-			return nil, nil
-		}
-		returned = true
-		return []metadatasdk.Definition{{ResourceType: "object", ResourceKey: "customer", Name: "Customer", DisabledAt: "now"}}, nil
+	dependencies.Definitions = businessSystemDefinitionsStub{snapshot: func(context.Context) (metadatasdk.DefinitionSnapshot, error) {
+		return metadatasdk.DefinitionSnapshot{Definitions: []metadatasdk.Definition{{ResourceType: "object", ResourceKey: "customer", Name: "Customer", DisabledAt: "now"}}}, nil
 	}}
 	service := NewBusinessSystemApplicationService(dependencies)
 	sources, err := service.businessResourceSources(t.Context(), principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
@@ -232,8 +325,8 @@ func TestBusinessSystemResourceProjectionPreservesEvidence(t *testing.T) {
 func TestBusinessSystemResourceProjectionPropagatesMetadataFailure(t *testing.T) {
 	want := errors.New("metadata unavailable")
 	dependencies := businessSystemTestDependencies()
-	dependencies.Definitions = businessSystemDefinitionsStub{list: func(context.Context, metadatasdk.DefinitionQuery) ([]metadatasdk.Definition, error) {
-		return nil, want
+	dependencies.Definitions = businessSystemDefinitionsStub{snapshot: func(context.Context) (metadatasdk.DefinitionSnapshot, error) {
+		return metadatasdk.DefinitionSnapshot{}, want
 	}}
 	service := NewBusinessSystemApplicationService(dependencies)
 	if _, err := service.businessResourceSources(t.Context(), principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}); !errors.Is(err, want) {
@@ -248,8 +341,8 @@ func TestBusinessSystemAdministratorSnapshotPropagatesEveryProjectionFailure(t *
 		mutate func(*BusinessSystemApplicationDependencies)
 	}{
 		{name: "resource sources", mutate: func(deps *BusinessSystemApplicationDependencies) {
-			deps.Definitions = businessSystemDefinitionsStub{list: func(context.Context, metadatasdk.DefinitionQuery) ([]metadatasdk.Definition, error) {
-				return nil, want
+			deps.Definitions = businessSystemDefinitionsStub{snapshot: func(context.Context) (metadatasdk.DefinitionSnapshot, error) {
+				return metadatasdk.DefinitionSnapshot{}, want
 			}}
 		}},
 		{name: "runtime state", mutate: func(deps *BusinessSystemApplicationDependencies) {

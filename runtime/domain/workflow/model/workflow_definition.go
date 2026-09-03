@@ -45,9 +45,11 @@ type WorkflowDefinitionVersion struct {
 }
 
 type WorkflowValidation struct {
-	Valid       bool                      `json:"valid"`
-	Issues      []WorkflowValidationIssue `json:"issues"`
-	ValidatedAt string                    `json:"validated_at"`
+	Valid         bool                      `json:"valid"`
+	CapabilityKey string                    `json:"capability_key,omitempty"`
+	Fragment      map[string]any            `json:"fragment,omitempty"`
+	Issues        []WorkflowValidationIssue `json:"issues"`
+	ValidatedAt   string                    `json:"validated_at"`
 }
 
 type WorkflowValidationIssue struct {

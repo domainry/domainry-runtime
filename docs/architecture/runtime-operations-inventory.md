@@ -76,7 +76,7 @@ durable maintenance/drain state and the stable `RUNTIME_INSTANCE_ID`.
 | Integration | `POST /tenant-admin/integrations/events/{eventID}/replay` | `integration.admin`; workspace principal | owner event identity plus replay semantics | Integration-owned correlated event evidence | source-owned `integration.event.replay`; Runtime exposes no Integration recovery facade |
 | Runtime publication handoff | `POST /operations/dead-letters/runtime_publication_outbox/{messageID}/retry` | Runtime operator policy; workspace principal | required caller key plus publication identity | Runtime handoff evidence and terminal shared receipt | wrapped by `runtime.publication.retry`; retry ends at idempotent Integration acceptance and never owns Provider delivery outcome |
 | Metadata / Migration | `GET /metadata/migration-plan`, manifest provision/apply, Runtime startup migration | provision/admin or process configuration; installation/system scope | migration checksum/lock | durable migration ledger, checksum, release identity and backup ID | process-owned migration receipt is the ordered ledger; it is not exposed as a workspace HTTP mutation |
-| Backup / Restore | `go run ./scripts/operations/runtime_disaster_recovery backup|restore|plan-restore` | infrastructure operator boundary; restore request requires operator/change plan and maintenance/drain evidence | backup ID and immutable target guards | validated machine-readable backup/drill receipt with actual RPO/RTO and reconciliation | external receipt is intentionally stored outside the database being restored and uploaded by the release/drill gate |
+| Backup / Restore | infrastructure-owned executable passed as `RUNTIME_DRILL_DRIVER` | infrastructure operator boundary; Runtime does not own database backup credentials or storage | backup ID and immutable target guards are enforced by the driver | validated machine-readable backup/drill receipt with actual RPO/RTO and reconciliation | external receipt is intentionally stored outside the database being restored and uploaded by the release/drill gate |
 | Retention | lifecycle policy and cleanup workers | owner/system scope | caller key plus owner cleanup semantics | policy/cleanup evidence and terminal shared receipt | manual cleanup execution is wrapped by `retention.cleanup`; scheduled cleanup remains a fenced process-owned worker |
 | Idempotency receipt recovery | `/operations/idempotency/receipts/*` | admin; workspace principal | required caller key plus receipt identity | explicit security audit and terminal shared receipt | retry/reset delegate to Deployment owner through `idempotency.receipt.retry|reset`; replay does not duplicate owner mutation or audit |
 
@@ -92,7 +92,8 @@ durable maintenance/drain state and the stable `RUNTIME_INSTANCE_ID`.
 - release construction is gated by
   `scripts/operations/verify_runtime_operations_reliability.sh ci`; the gate requires real
   PostgreSQL/MySQL contracts, race coverage and versioned evidence. Recovery
-  drills use the sibling `drill` profile and retain per-engine RPO/RTO.
+  drills use the `drill` profile with an explicit infrastructure-owned
+  `RUNTIME_DRILL_DRIVER` and retain per-engine RPO/RTO.
 
 These gaps remain open in
 the Runtime operations reliability verification gate; this inventory must

@@ -21,6 +21,13 @@ func TestMetadataAuthoringExamplesExecuteOwnerValidators(t *testing.T) {
 			case "schema.object":
 				_, err = ApplicationSchemaValidateObjectDefinition("order", payload)
 			case "schema.field", "schema.relation":
+				var routeOwned map[string]any
+				if json.Unmarshal(payload, &routeOwned) == nil {
+					if _, declared := routeOwned["key"]; !declared {
+						routeOwned["key"] = "field"
+						payload, _ = json.Marshal(routeOwned)
+					}
+				}
 				request.Payload = payload
 				_, err = ApplicationSchemaNormalizeFieldMutation(request, objects, metadataauthoring.ApplicationSchemaAuthoringFieldTypes(), nil, 0)
 			case "schema.dictionary":

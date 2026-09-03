@@ -63,6 +63,13 @@ func (s recordsHTTPMutationExecutionStore) CommitRecordMutationExecution(_ conte
 	}, nil
 }
 
+func (s recordsHTTPMutationExecutionStore) CommitRecordMutationBatchExecution(_ context.Context, commits []transactionmodel.RecordMutationCommit, completion recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error) {
+	if s.commit != nil && len(commits) > 0 {
+		*s.commit = commits[len(commits)-1]
+	}
+	return recordmodel.RecordMutationExecution{ID: completion.ExecutionID, WorkspaceID: completion.WorkspaceID}, nil
+}
+
 func (recordsHTTPMutationExecutionStore) CompleteRecordMutationExecution(_ context.Context, completion recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error) {
 	return recordmodel.RecordMutationExecution{ID: completion.ExecutionID, WorkspaceID: completion.WorkspaceID}, nil
 }
@@ -294,6 +301,7 @@ func TestRecordsMutationAndRelatedHandlersForwardApplicationErrors(t *testing.T)
 		{name: "delete", call: func(w http.ResponseWriter) {
 			r := recordsRequest("DELETE", "/record", "", map[string]string{"objectKey": "customer", "recordID": "one"})
 			r.Header.Set("If-Match", `"version"`)
+			r.Header.Set("Idempotency-Key", "delete")
 			handler.deleteRecord(w, r)
 		}},
 		{name: "preview", call: func(w http.ResponseWriter) {
