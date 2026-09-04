@@ -31,7 +31,7 @@ type WorkflowApplicationService struct {
 	audit                     func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any)
 	auditMetadata             func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	decisions                 workflowcontract.WorkflowDecisionRuntime
-	identity                  identitysdk.Directory
+	identity                  identitysdk.Projection
 	principals                identitysdk.PrincipalResolver
 	schema                    WorkflowSchemaProvider
 	schemaMap                 func(context.Context) map[string]definitionmodel.ObjectSchema

@@ -10,7 +10,7 @@ import (
 
 func workflowTaskNotificationEvent(id, sourceID string) notificationmodel.NotificationEvent {
 	return notificationmodel.NotificationEvent{
-		ID: id, WorkspaceID: "workspace-a", Source: "workflow", SourceEventID: sourceID, EventType: "workflow.task.assigned", Category: "approval", Severity: "info", Surface: "business_workspace",
+		ID: id, WorkspaceID: "workspace-a", Source: "workflow", SourceEventID: sourceID, EventType: "workflow.task.assigned", Category: "approval", Severity: "info",
 		RecipientUserIDs: []string{"manager"}, SubjectType: "workflow_task", SubjectID: "task-1", ActionState: "open", OccurredAt: "2026-07-28T00:00:00Z",
 		Snapshot: notificationmodel.NotificationInboxSnapshot{Title: "Approval required", Body: "Please review", TemplateKey: "workflow.task.assigned.in_app", TemplateVersion: 1, TemplateLocale: "en-US", TemplateContentHash: "hash", Actions: []notificationmodel.NotificationInboxActionRef{{Key: "workflow.task.open", Kind: "route", Label: "Review task", ResourceType: "workflow_task", ResourceID: "task-1"}}},
 		Status:   "queued", CreatedAt: "2026-07-28T00:00:00Z", UpdatedAt: "2026-07-28T00:00:00Z",

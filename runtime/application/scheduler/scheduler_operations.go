@@ -24,7 +24,7 @@ type ScheduledWorkflowRuntime = schedulermodulehost.ScheduledWorkflowRuntime
 type TargetedScheduledWorkflowRuntime = schedulermodulehost.TargetedScheduledWorkflowRuntime
 type WindowedScheduledWorkflowRuntime = schedulermodulehost.WindowedScheduledWorkflowRuntime
 
-func (s *SchedulerApplicationService) SimulateTenantAdminDefinition(ctx context.Context, definitionID string, principal principalmodel.Principal) (SchedulerDefinitionSimulation, error) {
+func (s *SchedulerApplicationService) SimulateManagementDefinition(ctx context.Context, definitionID string, principal principalmodel.Principal) (SchedulerDefinitionSimulation, error) {
 	if err := schedulerExactQueryAllowed(principal, ActionSimulateSchedulerJob); err != nil {
 		return SchedulerDefinitionSimulation{}, err
 	}

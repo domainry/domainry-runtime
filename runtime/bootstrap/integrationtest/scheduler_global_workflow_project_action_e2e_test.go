@@ -23,25 +23,25 @@ func TestSchedulerGlobalWorkflowProjectActionDurableEffectAndFailurePropagation(
 
 	activationLeadID := runtimeFixtureRecordIDByField(t, handler, "sales_manager", "lead", "status", "new")
 	dailyReviewLeadID := runtimeFixtureRecordIDByField(t, handler, "sales_manager", "lead", "status", "working")
-	succeeded := schedulerSmokeRequest(t, handler, http.MethodPost, "/operations/scheduler/definitions/business_config_activation_job/run", nil, http.StatusOK)
+	succeeded := schedulerSmokeRequest(t, handler, http.MethodPost, "/scheduler/definitions/business_config_activation_job/run", nil, http.StatusOK)
 	if succeeded["status"] != "succeeded" {
 		store := openRuntimePersistenceFixture(t, cfg)
 		executions, listErr := workflowpersistence.NewWorkflowWorkerStore(store).ListExecutions(t.Context(), "workspace-primary", 100)
 		t.Fatalf("success workflow executions=%#v listErr=%v response=%#v", executions, listErr, succeeded)
 	}
 	assertSchedulerRunStatus(t, succeeded, "succeeded")
-	persisted := runtimeFixtureRequest[recordmodel.Record](t, handler, "sales_manager", http.MethodGet, "/objects/lead/records/"+activationLeadID, nil)
+	persisted := runtimeFixtureRequest[recordmodel.Record](t, handler, "sales_manager", http.MethodGet, "/records/objects/lead/records/"+activationLeadID, nil)
 	if persisted.Data["status"] != "qualified" {
 		t.Fatalf("scheduler succeeded without durable project Action effect: lead=%#v response=%#v", persisted, succeeded)
 	}
-	dailyReview := schedulerSmokeRequest(t, handler, http.MethodPost, "/operations/scheduler/definitions/daily_operations_review_job/run", nil, http.StatusOK)
+	dailyReview := schedulerSmokeRequest(t, handler, http.MethodPost, "/scheduler/definitions/daily_operations_review_job/run", nil, http.StatusOK)
 	assertSchedulerRunStatus(t, dailyReview, "succeeded")
-	dailyPersisted := runtimeFixtureRequest[recordmodel.Record](t, handler, "sales_manager", http.MethodGet, "/objects/lead/records/"+dailyReviewLeadID, nil)
+	dailyPersisted := runtimeFixtureRequest[recordmodel.Record](t, handler, "sales_manager", http.MethodGet, "/records/objects/lead/records/"+dailyReviewLeadID, nil)
 	if dailyPersisted.Data["status"] != "qualified" {
 		t.Fatalf("daily_operations_review_job succeeded without durable project Action effect: lead=%#v response=%#v", dailyPersisted, dailyReview)
 	}
 
-	failed := schedulerSmokeRequest(t, handler, http.MethodPost, "/operations/scheduler/definitions/lead_activation_failure_job/run", nil, http.StatusOK)
+	failed := schedulerSmokeRequest(t, handler, http.MethodPost, "/scheduler/definitions/lead_activation_failure_job/run", nil, http.StatusOK)
 	assertSchedulerRunStatus(t, failed, "succeeded")
 	store := openRuntimePersistenceFixture(t, cfg)
 	executions, err := workflowpersistence.NewWorkflowWorkerStore(store).ListExecutions(t.Context(), "workspace-primary", 100)

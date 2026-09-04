@@ -48,7 +48,7 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 		QueryPolicy:             s.RecordQueryPolicyDomainService,
 		Pipeline:                s.PipelineApplicationService,
 		Validation:              s.RecordValidationDomainService,
-		IdentityDirectory:       s.identityDirectory,
+		IdentityProjection:      s.identityProjection,
 		Audit:                   s.auditApplicationService.AppendWithMetadata,
 		BuildAudit:              auditapplication.AuditBuildEvent,
 		RecordMutationExecution: s.RecordMutationExecutionRuntime,
@@ -74,7 +74,7 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 		},
 		ResolveBatchPrincipal: func(ctx context.Context, userID, roleKey string) principalmodel.Principal {
 			// Batch jobs must re-authorize through the same persisted Identity
-			// directory used by HTTP prepare. The manifest-only principal service
+			// projection used by HTTP prepare. The manifest-only principal service
 			// does not carry user-role assignments, organization facts, or the
 			// authorization revision and therefore cannot reproduce a frozen
 			// Report authorization-scope hash.

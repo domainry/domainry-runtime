@@ -6,18 +6,14 @@
       "kind": "transition_state",
       "label": "Start Cooking",
       "object_key": "kitchen_order",
-      "preconditions": [
-
-      ],
-      "ui_placement": "card_action"
+      "preconditions": []
     },
     {
       "audit_event": "kitchen_order.ready_alert.execute",
       "key": "kitchen_order.ready_alert.execute",
       "kind": "record_operation",
       "label": "Ready Alert",
-      "object_key": "kitchen_order",
-      "ui_placement": "workflow_only"
+      "object_key": "kitchen_order"
     }
   ],
   "dictionaries": [
@@ -74,27 +70,6 @@
       ],
       "key": "kitchen_station",
       "name": "Kitchen Station"
-    }
-  ],
-  "menus": [
-    {
-      "key": "restaurant_ops",
-      "label": "Restaurant Ops",
-      "roles": [
-        "kitchen_lead",
-        "line_cook"
-      ],
-      "route": "/restaurant/operations"
-    },
-    {
-      "key": "kitchen_board",
-      "label": "Kitchen Board",
-      "parent_key": "restaurant_ops",
-      "roles": [
-        "kitchen_lead",
-        "line_cook"
-      ],
-      "route": "/restaurant/kitchen"
     }
   ],
   "name": "Runtime Restaurant Kitchen",
@@ -173,10 +148,6 @@
       "name": "Kitchen Lead",
       "permissions": [
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "runtime.appschema.validate_application_definition",
           "data_scope": "all"
         },
@@ -198,10 +169,6 @@
       "key": "line_cook",
       "name": "Line Cook",
       "permissions": [
-        {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
         {
           "permission_key": "kitchen_order.read",
           "data_scope": "all"
@@ -237,18 +204,6 @@
   ],
   "template_id": "runtime_restaurant_kitchen",
   "version": "0.1.0",
-  "views": [
-    {
-      "config": {
-        "group_by": "status",
-        "lane_field": "station"
-      },
-      "key": "kitchen_board",
-      "name": "Kitchen Board",
-      "object_key": "kitchen_order",
-      "type": "board"
-    }
-  ],
   "workflows": [
     {
       "action": {
@@ -305,5 +260,6 @@
         "type": "record_updated"
       }
     }
-  ]
+  ],
+  "schema_version": "2"
 }

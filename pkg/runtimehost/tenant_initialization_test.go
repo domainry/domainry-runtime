@@ -25,7 +25,7 @@ func TestProjectTenantManagerKeepsTenantBindingsClosedUntilAtomicInitialization(
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = manager.Close(t.Context()) })
-	if manager.Binding() != nil || len(manager.Surfaces()) != 0 {
+	if manager.Binding() != nil || len(manager.Adapters()) != 0 {
 		t.Fatal("ordinary tenant Identity surfaces opened before initialization")
 	}
 	if _, found, err := workspaceprovision.LoadInstallation(t.Context(), database); err != nil || found {
@@ -55,7 +55,7 @@ func TestProjectTenantManagerKeepsTenantBindingsClosedUntilAtomicInitialization(
 
 func TestProjectTenantManagerMissingPasswordLeavesNoTenantRows(t *testing.T) {
 	cfg := serverTestConfig()
-	cfg.InitialTenantAdminPassword = ""
+	cfg.InitialManagementPassword = ""
 	cfg.DatabaseDriver = "sqlite"
 	cfg.DBPath = filepath.Join(t.TempDir(), "tenant-manager-missing-password.db")
 	database, err := bootstrap.PrepareProjectDatabase(t.Context(), cfg)
@@ -70,7 +70,7 @@ func TestProjectTenantManagerMissingPasswordLeavesNoTenantRows(t *testing.T) {
 	t.Cleanup(func() { _ = manager.Close(t.Context()) })
 
 	err = manager.Activate(t.Context(), manifestmodel.ManifestSchema{})
-	if err == nil || !strings.Contains(err.Error(), "INITIAL_TENANT_ADMIN_PASSWORD") {
+	if err == nil || !strings.Contains(err.Error(), "INITIAL_MANAGEMENT_PASSWORD") {
 		t.Fatalf("activation error=%v", err)
 	}
 	for _, table := range []string{"_tenant_installation", "_tenant_registry", "_workspaces", "_workspace_configuration", "_workspace_provisioning_receipts"} {

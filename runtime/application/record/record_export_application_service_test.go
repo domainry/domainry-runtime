@@ -49,7 +49,6 @@ func TestExportServiceOwnsCSVRelationDisplayAndAudit(t *testing.T) {
 			query.Search = "filtered"
 			return query
 		},
-		CanAccess: func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true },
 		ListRecords: func(_ context.Context, objectKey string, query recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 			relationCalls++
 			if objectKey != "customer" || query.PageSize != 1 {
@@ -158,8 +157,7 @@ func TestExportServiceResolvesIdentityLabelsWithinPrincipalScope(t *testing.T) {
 		Objects: func() map[string]definitionmodel.ObjectSchema {
 			return map[string]definitionmodel.ObjectSchema{"task": object}
 		},
-		CanAccess: func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true },
-		ListDirectoryUsers: func(context.Context) ([]identitysdk.User, error) {
+		ListIdentityUsers: func(context.Context) ([]identitysdk.User, error) {
 			return []identitysdk.User{{ID: "u1", Name: "Alice"}, {ID: "u2", Name: "Bob"}}, nil
 		},
 	})

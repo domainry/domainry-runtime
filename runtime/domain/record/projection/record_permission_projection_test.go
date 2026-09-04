@@ -66,7 +66,7 @@ func TestRecordPermissionProjectionHelpers(t *testing.T) {
 	if got := actionAssuranceRequired(definitionmodel.ActionSchema{}); got == nil || len(got) != 0 {
 		t.Fatalf("empty assurance=%v", got)
 	}
-	if objectKey, action := splitPermission("ops.case.update"); objectKey != "case" || action != "update" {
+	if objectKey, action := definitionmodel.ActionPermissionSubject(definitionmodel.ActionSchema{Key: "case.transition.start", ObjectKey: "case"}); objectKey != "case" || action != "transition.start" {
 		t.Fatalf("split=%q/%q", objectKey, action)
 	}
 }

@@ -1,7 +1,7 @@
 # Report 模块
 
 状态：独立源码 Module 已接入；Runtime 通过显式 Factory 支持 Module/SaaS 拓扑
-Owner：Report 定义仓、查询与 Object SQL 业务规则、快照运行状态、导出策略和产品 HTTP Surface
+Owner：Report 定义仓、查询与 Object SQL 业务规则、快照运行状态、导出策略和产品 HTTP Adapter
 实现/SDK：`domainry-report` / `domainry-report-sdk`
 
 ## 当前边界
@@ -32,6 +32,6 @@ Runtime 不再发布 Report handler、静态 OpenAPI path、endpoint policy、�
 
 ## Module/SaaS 运维约束
 
-- Factory 必须通过 Report protocol v3 校验，并声明 `definitions.sync`、`queries.execute`、`snapshots.manage`、`exports.manage` 与 `http.surface`。
+- Factory 必须通过 Report protocol v3 校验，并声明 `definitions.sync`、`queries.execute`、`snapshots.manage`、`exports.manage` 与 `http.adapter`。
 - Module 模式通过 `Host.DatabaseFor(ctx)` 继承宿主事务，使 snapshot terminal transition 与 Notification inbox 原子提交，并复用宿主唯一 `_schema_migrations` ledger。
 - SaaS 模式不能伪装成本地事务；跨服务 Notification 与 Data Exchange 协作必须显式实现 receipt/outbox、幂等、重试和 reconciliation，并在切流前验证同一业务语义。

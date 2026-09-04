@@ -20,33 +20,33 @@ import (
 
 func TestRecordsCRUDSuccessReplayAndNilPatch(t *testing.T) {
 	fixture := newRecordBatchHTTPFixture(t)
-	created := fixture.call(http.MethodPost, "/objects/customer/records", `{"data":{"name":"Ada"}}`, map[string]string{"Idempotency-Key": "record-create-edge"})
+	created := fixture.call(http.MethodPost, "/records/objects/customer/records", `{"data":{"name":"Ada"}}`, map[string]string{"Idempotency-Key": "record-create-edge"})
 	var record recordmodel.Record
 	if created.Code != http.StatusCreated || json.Unmarshal(created.Body.Bytes(), &record) != nil || record.ID == "" {
 		t.Fatalf("create status=%d record=%+v body=%s", created.Code, record, created.Body.String())
 	}
-	replayed := fixture.call(http.MethodPost, "/objects/customer/records", `{"data":{"name":"Ada"}}`, map[string]string{"Idempotency-Key": "record-create-edge"})
+	replayed := fixture.call(http.MethodPost, "/records/objects/customer/records", `{"data":{"name":"Ada"}}`, map[string]string{"Idempotency-Key": "record-create-edge"})
 	if replayed.Code != http.StatusCreated || replayed.Header().Get("Idempotency-Replayed") != "true" {
 		t.Fatalf("replay status=%d headers=%v body=%s", replayed.Code, replayed.Header(), replayed.Body.String())
 	}
 
-	missingUpdateKey := fixture.call(http.MethodPatch, "/objects/customer/records/"+record.ID, `{"data":{"name":"Grace","expected_updated_at":"`+record.UpdatedAt+`"}}`, nil)
+	missingUpdateKey := fixture.call(http.MethodPatch, "/records/objects/customer/records/"+record.ID, `{"data":{"name":"Grace","expected_updated_at":"`+record.UpdatedAt+`"}}`, nil)
 	if missingUpdateKey.Code != http.StatusBadRequest || !strings.Contains(missingUpdateKey.Body.String(), idempotency.ErrorCodeMissingKey) {
 		t.Fatalf("missing update key status=%d body=%s", missingUpdateKey.Code, missingUpdateKey.Body.String())
 	}
-	updated := fixture.call(http.MethodPatch, "/objects/customer/records/"+record.ID, `{"data":{"name":"Grace","expected_updated_at":"`+record.UpdatedAt+`"}}`, map[string]string{"Idempotency-Key": "record-update-edge"})
+	updated := fixture.call(http.MethodPatch, "/records/objects/customer/records/"+record.ID, `{"data":{"name":"Grace","expected_updated_at":"`+record.UpdatedAt+`"}}`, map[string]string{"Idempotency-Key": "record-update-edge"})
 	if updated.Code != http.StatusOK || json.Unmarshal(updated.Body.Bytes(), &record) != nil || record.Data["name"] != "Grace" {
 		t.Fatalf("update status=%d record=%+v body=%s", updated.Code, record, updated.Body.String())
 	}
-	missingDeleteKey := fixture.call(http.MethodDelete, "/objects/customer/records/"+record.ID+"?expected_updated_at="+record.UpdatedAt, "", nil)
+	missingDeleteKey := fixture.call(http.MethodDelete, "/records/objects/customer/records/"+record.ID+"?expected_updated_at="+record.UpdatedAt, "", nil)
 	if missingDeleteKey.Code != http.StatusBadRequest || !strings.Contains(missingDeleteKey.Body.String(), idempotency.ErrorCodeMissingKey) {
 		t.Fatalf("missing delete key status=%d body=%s", missingDeleteKey.Code, missingDeleteKey.Body.String())
 	}
-	deleted := fixture.call(http.MethodDelete, "/objects/customer/records/"+record.ID+"?expected_updated_at="+record.UpdatedAt, "", map[string]string{"Idempotency-Key": "record-delete-edge"})
+	deleted := fixture.call(http.MethodDelete, "/records/objects/customer/records/"+record.ID+"?expected_updated_at="+record.UpdatedAt, "", map[string]string{"Idempotency-Key": "record-delete-edge"})
 	if deleted.Code != http.StatusNoContent {
 		t.Fatalf("delete status=%d body=%s", deleted.Code, deleted.Body.String())
 	}
-	replayedDelete := fixture.call(http.MethodDelete, "/objects/customer/records/"+record.ID+"?expected_updated_at="+record.UpdatedAt, "", map[string]string{"Idempotency-Key": "record-delete-edge"})
+	replayedDelete := fixture.call(http.MethodDelete, "/records/objects/customer/records/"+record.ID+"?expected_updated_at="+record.UpdatedAt, "", map[string]string{"Idempotency-Key": "record-delete-edge"})
 	if replayedDelete.Code != http.StatusNoContent || replayedDelete.Header().Get("Idempotency-Replayed") != "true" {
 		t.Fatalf("delete replay status=%d headers=%v body=%s", replayedDelete.Code, replayedDelete.Header(), replayedDelete.Body.String())
 	}
@@ -79,7 +79,7 @@ func TestRecordsCRUDSuccessReplayAndNilPatch(t *testing.T) {
 
 func TestRecordCreateMissingKeyUsesOperationsEnvelopeContract(t *testing.T) {
 	fixture := newRecordBatchHTTPFixture(t)
-	response := fixture.call(http.MethodPost, "/objects/customer/records", `{"data":{"name":"Ada"}}`, nil)
+	response := fixture.call(http.MethodPost, "/records/objects/customer/records", `{"data":{"name":"Ada"}}`, nil)
 	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "operations.idempotency_contract_required") {
 		t.Fatalf("missing create key status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -204,7 +204,7 @@ func TestRecordsActionHandlersRejectMissingTypedResults(t *testing.T) {
 
 func TestRecordsImportAndBatchReplayFailureEdges(t *testing.T) {
 	fixture := newRecordBatchHTTPFixture(t)
-	path := "/objects/customer/records/import/jobs"
+	path := "/records/objects/customer/records/import/jobs"
 	created := fixture.call(http.MethodPost, path, "name\nAda\n", map[string]string{"Content-Type": "text/csv", "Idempotency-Key": "import-replay-edge"})
 	if created.Code != http.StatusAccepted {
 		t.Fatalf("create status=%d body=%s", created.Code, created.Body.String())
@@ -218,7 +218,7 @@ func TestRecordsImportAndBatchReplayFailureEdges(t *testing.T) {
 		t.Fatalf("conflict status=%d body=%s", conflict.Code, conflict.Body.String())
 	}
 
-	applyPath := "/objects/customer/records/import/apply"
+	applyPath := "/records/objects/customer/records/import/apply"
 	applied := fixture.call(http.MethodPost, applyPath, "name\nLin\n", map[string]string{"Content-Type": "text/csv", "Idempotency-Key": "apply-replay-edge"})
 	if applied.Code != http.StatusOK {
 		t.Fatalf("apply status=%d body=%s", applied.Code, applied.Body.String())

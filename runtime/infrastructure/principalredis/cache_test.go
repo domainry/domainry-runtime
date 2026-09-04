@@ -100,6 +100,7 @@ func cacheTestEntry(expiresAt time.Time) identityprincipal.CacheEntry {
 		ExpiresAt:             expiresAt,
 		Subject:               identity.Subject{WorkspaceID: "workspace-1", SubjectID: "user-1"},
 		FunctionGrants:        []identity.FunctionGrant{{Resource: "orders", Action: "read", Effect: identity.EffectAllow}},
+		DataPolicies:          []identity.DataPolicy{{Key: "orders.read", Resource: "orders", Action: "read", Effect: identity.EffectAllow, DataScopes: []identity.DataScope{identity.DataScopeAll}}},
 	}
 	return identityprincipal.CacheEntry{Principal: identity.Principal{
 		ContractVersion:       identity.PrincipalContextContractVersion,

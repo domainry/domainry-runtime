@@ -93,6 +93,7 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 	manifest.Reports, manifest.Skills, manifest.Agents, manifest.SeedRecords = nil, nil, nil, nil
 	manifest.BusinessLoops, manifest.StateMachines, manifest.ValidationPlan = nil, nil, nil
 	manifest.IdentityProfileExtensions, manifest.SensitiveFieldPolicies, manifest.ReportExportControls = nil, nil, nil
+	manifest.Roles = nil
 	if configure != nil {
 		configure(&manifest)
 	}
@@ -109,9 +110,9 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 			Key: "admin",
 			Permissions: []string{
 				"runtime.appschema.validate_application_definition",
-				"scheduler.definitions.list", "scheduler.definition.write", "scheduler.command",
+				"scheduler.definitions.list", "scheduler.definitions.run",
 				"runtime.workflows.list_ops_workflow_executions", "runtime.workflows.list_ops_workflow_processes", "runtime.workflows.get_ops_workflow_process",
-				"integration.audit.view", "integration.retry",
+				"integration.invocations.list", "integration.events.replay",
 			},
 			DataPolicies: dataPermissions,
 		}}

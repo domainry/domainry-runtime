@@ -24,8 +24,8 @@ func (bootstrapIdentityBindingStub) Authorization() identitysdk.Authorization {
 func (bootstrapIdentityBindingStub) Principals() identitysdk.PrincipalResolver {
 	return bootstrapIdentityPrincipalResolverStub{}
 }
-func (bootstrapIdentityBindingStub) Directory() identitysdk.Directory {
-	return bootstrapIdentityDirectoryStub{}
+func (bootstrapIdentityBindingStub) Projection() identitysdk.Projection {
+	return bootstrapIdentityProjectionStub{}
 }
 func (bootstrapIdentityBindingStub) Applications() identitysdk.ApplicationRegistry {
 	return bootstrapIdentityApplicationRegistryStub{}
@@ -89,21 +89,21 @@ func (bootstrapIdentityPrincipalResolverStub) Resolve(context.Context, identitys
 	return identitysdk.PrincipalResolution{}, nil
 }
 
-type bootstrapIdentityDirectoryStub struct{}
+type bootstrapIdentityProjectionStub struct{}
 
-func (bootstrapIdentityDirectoryStub) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
+func (bootstrapIdentityProjectionStub) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	return identitysdk.User{}, false, nil
 }
-func (bootstrapIdentityDirectoryStub) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+func (bootstrapIdentityProjectionStub) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
 	return identitysdk.OrganizationUnit{}, false, nil
 }
-func (bootstrapIdentityDirectoryStub) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
+func (bootstrapIdentityProjectionStub) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
 	return nil, nil
 }
-func (bootstrapIdentityDirectoryStub) ListRoles(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.Role, error) {
+func (bootstrapIdentityProjectionStub) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	return nil, nil
 }
-func (bootstrapIdentityDirectoryStub) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
+func (bootstrapIdentityProjectionStub) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
 	return nil, nil
 }
 

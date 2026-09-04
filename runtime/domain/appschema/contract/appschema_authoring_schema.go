@@ -189,12 +189,12 @@ func metadataAuthoringExecution(resource string) *capabilitycontract.CapabilityA
 }
 
 func metadataConfigurationRoutes(resourceType string) []string {
-	base := "/tenant-admin/metadata/definitions/" + resourceType + "/{resourceKey}"
+	base := "/metadata/definitions/" + resourceType + "/{resourceKey}"
 	return []string{
 		"GET " + base,
 		"POST " + base + "/validate",
-		"GET /domain-system-snapshot",
-		"GET /domain-reference-graph",
+		"GET /business-system/snapshot",
+		"GET /business-references/graph",
 	}
 }
 
@@ -226,11 +226,11 @@ func VersionedApplicationDefinitionExecution(resource string) *capabilitycontrac
 }
 
 func metadataObjectReference(pointer string) capabilitycontract.CapabilityAuthoringReference {
-	return capabilitycontract.CapabilityAuthoringReference{Kind: "object_key", InputJSONPointer: pointer, ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/object_key"}
+	return capabilitycontract.CapabilityAuthoringReference{Kind: "object_key", InputJSONPointer: pointer, ResolverEndpoint: "GET /capabilities/references/object_key"}
 }
 
 func metadataRelationTargetReference(pointer string) capabilitycontract.CapabilityAuthoringReference {
-	return capabilitycontract.CapabilityAuthoringReference{Kind: "relation_target_object_key", InputJSONPointer: pointer, ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/relation_target_object_key"}
+	return capabilitycontract.CapabilityAuthoringReference{Kind: "relation_target_object_key", InputJSONPointer: pointer, ResolverEndpoint: "GET /capabilities/references/relation_target_object_key"}
 }
 
 func metadataStringSchema(description string) capabilitycontract.CapabilityAuthoringSchema {

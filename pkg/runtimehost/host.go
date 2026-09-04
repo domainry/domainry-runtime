@@ -63,8 +63,8 @@ type runtimeListenerProcess interface {
 	RoutesForListenerGroup(runtimehttp.ListenerRouteGroup) http.Handler
 }
 
-type runtimeModuleSurfaceProcess interface {
-	ModuleHTTPSurfaces() []modulehttp.Surface
+type runtimeModuleAdapterProcess interface {
+	ModuleHTTPAdapters() []modulehttp.Adapter
 }
 
 type bootstrapRuntimeProcess struct{ *bootstrap.Runtime }
@@ -77,8 +77,8 @@ func (r bootstrapRuntimeProcess) RoutesForListenerGroup(group runtimehttp.Listen
 	return bootstrap.RoutesForListenerGroup(r.Runtime, group)
 }
 
-func (r bootstrapRuntimeProcess) ModuleHTTPSurfaces() []modulehttp.Surface {
-	return r.Runtime.ModuleHTTPSurfaces()
+func (r bootstrapRuntimeProcess) ModuleHTTPAdapters() []modulehttp.Adapter {
+	return r.Runtime.ModuleHTTPAdapters()
 }
 
 func (r bootstrapRuntimeProcess) connectorGateway() runtimeConnectorGateway {
@@ -209,8 +209,8 @@ func runtimeHTTPListeners(cfg config.Config) []runtimeHTTPListener {
 	if strings.TrimSpace(cfg.HTTPPublicAddr) != "" {
 		listeners = append(listeners, runtimeHTTPListener{name: "public", addr: strings.TrimSpace(cfg.HTTPPublicAddr), group: runtimehttp.ListenerRouteGroupPublic})
 	}
-	if strings.TrimSpace(cfg.HTTPTenantAdminAddr) != "" {
-		listeners = append(listeners, runtimeHTTPListener{name: "tenant-admin", addr: strings.TrimSpace(cfg.HTTPTenantAdminAddr), group: runtimehttp.ListenerRouteGroupTenantAdmin})
+	if strings.TrimSpace(cfg.HTTPManagementAddr) != "" {
+		listeners = append(listeners, runtimeHTTPListener{name: "management", addr: strings.TrimSpace(cfg.HTTPManagementAddr), group: runtimehttp.ListenerRouteGroupManagement})
 	}
 	if strings.TrimSpace(cfg.HTTPOpsAddr) != "" {
 		listeners = append(listeners, runtimeHTTPListener{name: "ops", addr: strings.TrimSpace(cfg.HTTPOpsAddr), group: runtimehttp.ListenerRouteGroupOps})
@@ -427,7 +427,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	for _, listener := range listenerDefinitions {
 		handlers[listener.group] = &bootstrap.EntrypointMux{}
 	}
-	identityRouters := make(map[runtimehttp.ListenerRouteGroup]*identitySurfaceRouter, len(handlers))
+	identityRouters := make(map[runtimehttp.ListenerRouteGroup]*identityAdapterRouter, len(handlers))
 	var initialModuleGuard moduleRouteGuard
 	if binding := tenantManager.Binding(); binding != nil {
 		initialModuleGuard, err = newModuleHTTPRouteGuard(binding, principalResolverOptions)
@@ -436,9 +436,9 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 		}
 	}
 	for group, handler := range handlers {
-		identityRouters[group] = newIdentitySurfaceRouter(group, handler)
-		if err := identityRouters[group].Bind(tenantManager.Surfaces(), initialModuleGuard); err != nil {
-			return fmt.Errorf("mount initialized Identity HTTP surfaces: %w", err)
+		identityRouters[group] = newIdentityAdapterRouter(group, handler)
+		if err := identityRouters[group].Bind(tenantManager.Adapters(), initialModuleGuard); err != nil {
+			return fmt.Errorf("mount initialized Identity HTTP adapters: %w", err)
 		}
 	}
 	lifecycleState, lifecycleFound, lifecycleErr := provision.ReadLifecycle(cfg.ManifestPath)
@@ -475,8 +475,8 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 				return nil, err
 			}
 			for group, router := range identityRouters {
-				if err := router.Bind(tenantManager.Surfaces(), moduleGuard); err != nil {
-					return nil, fmt.Errorf("mount Identity HTTP surfaces on %s listener: %w", group, err)
+				if err := router.Bind(tenantManager.Adapters(), moduleGuard); err != nil {
+					return nil, fmt.Errorf("mount Identity HTTP adapters on %s listener: %w", group, err)
 				}
 			}
 			runtimeConfig := tenantManager.Config()
@@ -487,13 +487,13 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			if runtime == nil {
 				return nil, errors.New("Runtime bootstrap returned no process")
 			}
-			moduleSurfaces := append([]modulehttp.Surface(nil), tenantManager.Surfaces()...)
-			if provider, ok := runtime.(runtimeModuleSurfaceProcess); ok {
-				moduleSurfaces = append(moduleSurfaces, provider.ModuleHTTPSurfaces()...)
+			moduleAdapters := append([]modulehttp.Adapter(nil), tenantManager.Adapters()...)
+			if provider, ok := runtime.(runtimeModuleAdapterProcess); ok {
+				moduleAdapters = append(moduleAdapters, provider.ModuleHTTPAdapters()...)
 			}
 			for group, router := range identityRouters {
-				if err := router.Bind(moduleSurfaces); err != nil {
-					return nil, fmt.Errorf("mount module HTTP surfaces on %s listener: %w", group, err)
+				if err := router.Bind(moduleAdapters); err != nil {
+					return nil, fmt.Errorf("mount module HTTP adapters on %s listener: %w", group, err)
 				}
 			}
 			bound, started := false, false
@@ -534,7 +534,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 		if readErr != nil {
 			return fmt.Errorf("read Runtime manifest: %w", readErr)
 		}
-		manifest, _, decodeErr := manifestmodel.DecodeManifest(rawManifest)
+		manifest, decodeErr := manifestmodel.DecodeManifest(rawManifest)
 		if decodeErr != nil {
 			return fmt.Errorf("decode Runtime manifest: %w", decodeErr)
 		}

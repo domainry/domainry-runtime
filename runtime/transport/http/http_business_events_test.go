@@ -22,7 +22,7 @@ func TestBusinessEventPublicationMiddlewarePublishesOnlySuccessfulAuthenticatedM
 	defer subscription.Close()
 
 	handler := router.withBusinessEventPublication(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusCreated) }))
-	request := requestWithPrincipal(httptest.NewRequest(http.MethodPost, "/objects/customer/records", nil), principal)
+	request := requestWithPrincipal(httptest.NewRequest(http.MethodPost, "/records/objects/customer/records", nil), principal)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	select {
@@ -35,7 +35,7 @@ func TestBusinessEventPublicationMiddlewarePublishesOnlySuccessfulAuthenticatedM
 	}
 
 	failed := router.withBusinessEventPublication(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusConflict) }))
-	failed.ServeHTTP(httptest.NewRecorder(), requestWithPrincipal(httptest.NewRequest(http.MethodPost, "/objects/customer/records", nil), principal))
+	failed.ServeHTTP(httptest.NewRecorder(), requestWithPrincipal(httptest.NewRequest(http.MethodPost, "/records/objects/customer/records", nil), principal))
 	if service.Snapshot(t.Context()).PublishedTotal != 1 {
 		t.Fatalf("failed mutation published event: %+v", service.Snapshot(t.Context()))
 	}

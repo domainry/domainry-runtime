@@ -22,7 +22,7 @@ import (
 )
 
 var objectAuthoringKeys = stringSet(
-	"config", "description", "fields", "i18n", "key", "name", "provenance", "ux", "validations", "version_history",
+	"capabilities", "config", "description", "export_assurance_policy", "fields", "i18n", "key", "ledger_policy", "lifecycle_policy", "name", "provenance", "ux", "validations", "version_history",
 )
 
 var fieldAuthoringKeys = stringSet(

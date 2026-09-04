@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	healthplatform "github.com/domainry/domainry-foundation/health"
@@ -13,7 +12,7 @@ import (
 
 func (s *HTTPRouter) withOperationalControls(routes *http.ServeMux, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.operationsControlState == nil || operationalControlExempt(r, routePolicyFor(routes, r).path) {
+		if s.operationsControlState == nil || s.operationalControlExempt(routes, r) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -119,7 +118,7 @@ func (s *HTTPRouter) readinessSnapshot(ctx context.Context) healthplatform.Snaps
 	return s.healthRegistry.Evaluate(ctx, checks)
 }
 
-func operationalControlExempt(r *http.Request, routePath string) bool {
+func (s *HTTPRouter) operationalControlExempt(routes *http.ServeMux, r *http.Request) bool {
 	if r == nil {
 		return true
 	}
@@ -127,6 +126,6 @@ func operationalControlExempt(r *http.Request, routePath string) bool {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
 		return true
 	}
-	path := strings.TrimSpace(routePath)
-	return strings.HasPrefix(path, "/operations/") || path == "/operations"
+	resolved := s.resolveRequestAction(routes, r)
+	return resolved.found && resolved.definition.Owner == "runtime:operations"
 }

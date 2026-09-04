@@ -14,18 +14,18 @@ type moduleHTTPRoute struct {
 	owner   string
 }
 
-func buildModuleHTTPRouteIndex(surfaces []modulehttp.Surface) map[string]moduleHTTPRoute {
+func buildModuleHTTPRouteIndex(adapters []modulehttp.Adapter) map[string]moduleHTTPRoute {
 	index := map[string]moduleHTTPRoute{}
-	for _, surface := range surfaces {
-		if err := modulehttp.ValidateSurface(surface); err != nil {
-			panic("invalid module HTTP surface: " + err.Error())
+	for _, adapter := range adapters {
+		if err := modulehttp.ValidateAdapter(adapter); err != nil {
+			panic("invalid module HTTP adapter: " + err.Error())
 		}
-		for _, route := range surface.Routes() {
+		for _, route := range adapter.Routes() {
 			identity := strings.TrimSpace(route.Pattern())
 			if previous, exists := index[identity]; exists {
-				panic("module HTTP route " + identity + " is declared by both " + previous.owner + " and " + surface.Owner())
+				panic("module HTTP route " + identity + " is declared by both " + previous.owner + " and " + adapter.Owner())
 			}
-			index[identity] = moduleHTTPRoute{route: route, handler: surface.Handler(), owner: strings.TrimSpace(surface.Owner())}
+			index[identity] = moduleHTTPRoute{route: route, handler: adapter.Handler(), owner: strings.TrimSpace(adapter.Owner())}
 		}
 	}
 	return index
@@ -104,8 +104,8 @@ func moduleRouteVisibleOnListener(route modulehttp.Route, group ListenerRouteGro
 	switch group {
 	case ListenerRouteGroupPublic:
 		want = modulehttp.ExposurePublic
-	case ListenerRouteGroupTenantAdmin:
-		want = modulehttp.ExposureTenantAdmin
+	case ListenerRouteGroupManagement:
+		want = modulehttp.ExposureManagement
 	case ListenerRouteGroupOps:
 		want = modulehttp.ExposureOps
 	default:

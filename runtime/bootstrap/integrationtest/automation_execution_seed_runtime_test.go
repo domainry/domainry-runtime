@@ -52,21 +52,21 @@ func TestBusinessWorkspaceIdentityCreatesCustomerAndPersistsBeforeAutomationHist
 
 	const (
 		userID     = "automation_business_tester_user"
-		beforeRule = "customer.business_workspace_create_guard"
+		beforeRule = "customer.create_guard"
 	)
 	businessSession := runtimeIdentityFixtureSession(t, userID, "automation_business_tester")
 
-	effective := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, businessSession.AccessToken, http.MethodGet, "/permissions/effective", nil)
+	effective := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, businessSession.AccessToken, http.MethodGet, "/records/permissions/effective", nil)
 	if runtimeFixtureFunctionPermissionAllowed(t, effective, "runtime.appschema.validate_application_definition") ||
 		!runtimeFixtureObjectActionAllowed(t, effective, "customer", "create") {
 		t.Fatalf("backend effective permissions do not match the isolated business role: %#v", effective)
 	}
-	adminAttempt := requestStatus(businessSession.AccessToken, http.MethodGet, "/automation-rules/executions", nil)
+	adminAttempt := requestStatus(businessSession.AccessToken, http.MethodGet, "/automation/rules/executions", nil)
 	if adminAttempt.Code != http.StatusForbidden {
 		t.Fatalf("business identity must not cross into tenant Admin, got %d: %s", adminAttempt.Code, adminAttempt.Body.String())
 	}
 
-	created := runtimeFixtureAuthorizedRequest[recordmodel.Record](t, handler, businessSession.AccessToken, http.MethodPost, "/objects/customer/records", map[string]any{
+	created := runtimeFixtureAuthorizedRequest[recordmodel.Record](t, handler, businessSession.AccessToken, http.MethodPost, "/records/objects/customer/records", map[string]any{
 		"data": map[string]any{
 			"name":   "Business workspace automation evidence",
 			"status": "prospect",
@@ -78,13 +78,13 @@ func TestBusinessWorkspaceIdentityCreatesCustomerAndPersistsBeforeAutomationHist
 	}
 
 	reviewerSession := runtimeIdentityFixtureSession(t, "automation_history_reviewer_user", "automation_history_reviewer")
-	reviewerEffective := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, reviewerSession.AccessToken, http.MethodGet, "/permissions/effective", nil)
+	reviewerEffective := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, reviewerSession.AccessToken, http.MethodGet, "/records/permissions/effective", nil)
 	if !runtimeFixtureFunctionPermissionAllowed(t, reviewerEffective, "runtime.automation.list_automation_executions") ||
 		runtimeFixtureFunctionPermissionAllowed(t, reviewerEffective, "runtime.appschema.validate_application_definition") ||
 		runtimeFixtureObjectActionAllowed(t, reviewerEffective, "customer", "create") {
 		t.Fatalf("backend effective permissions do not isolate the history reviewer: %#v", reviewerEffective)
 	}
-	reviewerBusinessAttempt := requestStatus(reviewerSession.AccessToken, http.MethodPost, "/objects/customer/records", map[string]any{
+	reviewerBusinessAttempt := requestStatus(reviewerSession.AccessToken, http.MethodPost, "/records/objects/customer/records", map[string]any{
 		"data": map[string]any{"name": "Forbidden Admin create", "status": "prospect", "owner": "automation_history_reviewer_user"},
 	})
 	if reviewerBusinessAttempt.Code != http.StatusForbidden {
@@ -92,14 +92,14 @@ func TestBusinessWorkspaceIdentityCreatesCustomerAndPersistsBeforeAutomationHist
 	}
 	history := runtimeFixtureAuthorizedRequest[automationprojection.AutomationExecutionHistory](
 		t, handler, reviewerSession.AccessToken, http.MethodGet,
-		"/automation-rules/executions?rule_key="+beforeRule+"&record_id="+created.ID+"&phase=before", nil,
+		"/automation/rules/executions?rule_key="+beforeRule+"&record_id="+created.ID+"&phase=before", nil,
 	)
 	if history.Count != 1 || len(history.Items) != 1 {
 		t.Fatalf("expected one persisted before-rule execution, got %#v", history)
 	}
 	adminHistory := runtimeFixtureAuthorizedRequest[automationprojection.AutomationExecutionHistory](
 		t, handler, reviewerSession.AccessToken, http.MethodGet,
-		"/automation-rules/executions?rule_key="+beforeRule+"&record_id="+created.ID+"&phase=before", nil,
+		"/automation/rules/executions?rule_key="+beforeRule+"&record_id="+created.ID+"&phase=before", nil,
 	)
 	if adminHistory.Count != 1 || len(adminHistory.Items) != 1 || adminHistory.Items[0].ID != history.Items[0].ID {
 		t.Fatalf("Tenant Admin and Runtime Ops projections must read the same authorized execution evidence: admin=%#v ops=%#v", adminHistory, history)
@@ -156,7 +156,7 @@ func TestAutomationManagementPermissions(t *testing.T) {
 	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
-	for _, path := range []string{"/automation-rules", "/automation-rules/capabilities", "/automation-rules/executions"} {
+	for _, path := range []string{"/automation/rules", "/automation/rules/capabilities", "/automation/rules/executions"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		applyIntegrationIdentity(req, "sales_rep")
 		res := httptest.NewRecorder()
@@ -168,7 +168,7 @@ func TestAutomationManagementPermissions(t *testing.T) {
 
 	rules := runtimeFixtureRequest[struct {
 		Count int `json:"count"`
-	}](t, handler, "sales_manager", http.MethodGet, "/automation-rules", nil)
+	}](t, handler, "sales_manager", http.MethodGet, "/automation/rules", nil)
 	if rules.Count == 0 {
 		t.Fatalf("expected sales_manager to read automation rules")
 	}
@@ -182,7 +182,7 @@ func TestLegacyIntegrationAgentEntrypointIsNotRuntimeOwned(t *testing.T) {
 	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
-	req := httptest.NewRequest(http.MethodPost, "/integrations/agents/crm_assistant/tools/createRecord/invoke", nil)
+	req := httptest.NewRequest(http.MethodPost, "/integration/agents/crm_assistant/tools/createRecord/invoke", nil)
 	applyIntegrationIdentity(req, "sales_manager")
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)

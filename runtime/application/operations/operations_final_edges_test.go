@@ -15,7 +15,7 @@ import (
 )
 
 func TestOperationsCoreFinalConditionEdges(t *testing.T) {
-	admin := operationsTestAdmin()
+	admin := operationsAdminPrincipal()
 	service := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, nil, func() string { return "edge" })
 	validRequest := OperationsSubmitRequest{Kind: "retention.cleanup", ResourceType: "retention_policy", Reason: "test"}
 	if _, _, err := NewOperationsApplicationService(nil, nil, nil, nil).Submit(t.Context(), validRequest, "key", admin); apperror.CodeOf(err) != "backend.operations.repository_unavailable" {
@@ -34,7 +34,7 @@ func TestOperationsCoreFinalConditionEdges(t *testing.T) {
 	t.Run("workspace administrator does not expand to runtime operations", func(t *testing.T) {
 		principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true,
 			WorkspaceID: admin.WorkspaceID,
-			UserID:      "tenant-admin"},
+			UserID:      "management"},
 		}, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}},
 		)
 		if err := operationsAuthorize(principal, "runtime.operations.pause_worker_owner"); apperror.KindOf(err) != apperror.KindForbidden {
@@ -81,7 +81,7 @@ func TestOperationsCoreFinalConditionEdges(t *testing.T) {
 }
 
 func TestOperationsBreakGlassFinalAvailabilityReplayAndListEdges(t *testing.T) {
-	admin := operationsTestAdmin()
+	admin := operationsAdminPrincipal()
 	var nilService *OperationsApplicationService
 	if err := NewOperationsApplicationService(nil, nil, nil, nil).RegisterBreakGlass(&breakGlassRepositoryProbe{}, nil); apperror.CodeOf(err) != "backend.operations.break_glass_registration_invalid" {
 		t.Fatalf("nil alert registration error = %v", err)

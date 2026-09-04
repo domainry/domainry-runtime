@@ -99,7 +99,7 @@ func TestNewRecordApplicationServiceWiresOptionalCallbacks(t *testing.T) {
 	if err := service.delete.dependencies.RunBefore(t.Context(), object.Key, "delete", record.ID, nil, nil, record.Data, principal); err != nil {
 		t.Fatal(err)
 	}
-	if users, err := service.exporter.dependencies.ListDirectoryUsers(t.Context()); err != nil || users != nil {
+	if users, err := service.exporter.dependencies.ListIdentityUsers(t.Context()); err != nil || users != nil {
 		t.Fatalf("users=%#v err=%v", users, err)
 	}
 

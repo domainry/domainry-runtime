@@ -35,7 +35,7 @@ func TestReportModuleOwnsProductHTTPAndApplicationBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, removed := range []string{
-		"transport/http/reports",
+		"transport/http/report",
 		"application/report/adapter",
 		"application/report/query",
 		"application/report/snapshot",
@@ -69,7 +69,7 @@ func TestReportModuleOwnsProductHTTPAndApplicationBoundary(t *testing.T) {
 			if readErr != nil {
 				t.Fatal(readErr)
 			}
-			for _, productPath := range []string{"/reports/{reportKey}", "/report-exports/{jobID}", "/report-exports/downloads/{token}"} {
+			for _, productPath := range []string{"/report/{reportKey}", "/report-exports/{jobID}", "/report-exports/downloads/{token}"} {
 				if strings.Contains(string(content), productPath) {
 					rel, _ := filepath.Rel(root, file)
 					t.Errorf("Runtime static product contract %s remains in %s", productPath, filepath.ToSlash(rel))

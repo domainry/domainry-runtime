@@ -9,9 +9,9 @@ import (
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 )
 
-// BusinessWorkflowTaskDTO intentionally omits resolver snapshots and Runtime
+// ParticipantWorkflowTaskDTO intentionally omits resolver snapshots and Runtime
 // execution details. It is the participant-facing task contract.
-type BusinessWorkflowTaskDTO struct {
+type ParticipantWorkflowTaskDTO struct {
 	ID              string `json:"id"`
 	ProcessID       string `json:"process_id"`
 	NodeInstanceID  string `json:"node_instance_id"`
@@ -31,7 +31,7 @@ type BusinessWorkflowTaskDTO struct {
 	UpdatedAt       string `json:"updated_at"`
 }
 
-type BusinessWorkflowProcessDTO struct {
+type ParticipantWorkflowProcessDTO struct {
 	ID               string   `json:"id"`
 	WorkflowKey      string   `json:"workflow_key"`
 	WorkflowName     string   `json:"workflow_name"`
@@ -46,14 +46,14 @@ type BusinessWorkflowProcessDTO struct {
 	CompletedAt      string   `json:"completed_at,omitempty"`
 }
 
-type BusinessWorkflowRunDTO struct {
+type ParticipantWorkflowRunDTO struct {
 	WorkflowKey string `json:"workflow_key"`
 	Name        string `json:"name"`
 	Status      string `json:"status"`
 	ProcessID   string `json:"process_id,omitempty"`
 }
 
-type BusinessWorkflowNodeDTO struct {
+type ParticipantWorkflowNodeDTO struct {
 	ID          string `json:"id"`
 	NodeID      string `json:"node_id"`
 	Name        string `json:"name"`
@@ -66,7 +66,7 @@ type BusinessWorkflowNodeDTO struct {
 	CompletedAt string `json:"completed_at,omitempty"`
 }
 
-type BusinessWorkflowEventDTO struct {
+type ParticipantWorkflowEventDTO struct {
 	ID        string `json:"id"`
 	NodeID    string `json:"node_id,omitempty"`
 	TaskID    string `json:"task_id,omitempty"`
@@ -76,11 +76,11 @@ type BusinessWorkflowEventDTO struct {
 	CreatedAt string `json:"created_at"`
 }
 
-type BusinessWorkflowProcessDetailDTO struct {
-	Process BusinessWorkflowProcessDTO `json:"process"`
-	Nodes   []BusinessWorkflowNodeDTO  `json:"nodes"`
-	Tasks   []BusinessWorkflowTaskDTO  `json:"tasks"`
-	Events  []BusinessWorkflowEventDTO `json:"events"`
+type ParticipantWorkflowProcessDetailDTO struct {
+	Process ParticipantWorkflowProcessDTO `json:"process"`
+	Nodes   []ParticipantWorkflowNodeDTO  `json:"nodes"`
+	Tasks   []ParticipantWorkflowTaskDTO  `json:"tasks"`
+	Events  []ParticipantWorkflowEventDTO `json:"events"`
 }
 
 type OpsWorkflowExecutionDTO struct {
@@ -153,8 +153,8 @@ type OpsWorkflowProcessBatchDTO struct {
 	Executions []OpsWorkflowExecutionDTO `json:"executions"`
 }
 
-func ProjectBusinessWorkflowProcess(process workflowmodel.WorkflowProcessInstance) BusinessWorkflowProcessDTO {
-	return BusinessWorkflowProcessDTO{
+func ProjectParticipantWorkflowProcess(process workflowmodel.WorkflowProcessInstance) ParticipantWorkflowProcessDTO {
+	return ParticipantWorkflowProcessDTO{
 		ID: process.ID, WorkflowKey: process.WorkflowKey, WorkflowName: process.WorkflowName,
 		ObjectKey: process.ObjectKey, RecordID: process.RecordID, InitiatorID: process.InitiatorID,
 		Status: process.Status, CurrentNodeNames: process.CurrentNodeNames, BusinessOutcome: process.BusinessOutcome,
@@ -162,14 +162,14 @@ func ProjectBusinessWorkflowProcess(process workflowmodel.WorkflowProcessInstanc
 	}
 }
 
-func ProjectBusinessWorkflowRun(result workflowmodel.WorkflowRunResult) BusinessWorkflowRunDTO {
-	return BusinessWorkflowRunDTO{
+func ProjectParticipantWorkflowRun(result workflowmodel.WorkflowRunResult) ParticipantWorkflowRunDTO {
+	return ParticipantWorkflowRunDTO{
 		WorkflowKey: result.WorkflowKey, Name: result.Name, Status: result.Status, ProcessID: result.Execution.ProcessID,
 	}
 }
 
-func projectBusinessWorkflowTask(task workflowmodel.WorkflowTask) BusinessWorkflowTaskDTO {
-	return BusinessWorkflowTaskDTO{
+func projectParticipantWorkflowTask(task workflowmodel.WorkflowTask) ParticipantWorkflowTaskDTO {
+	return ParticipantWorkflowTaskDTO{
 		ID: task.ID, ProcessID: task.ProcessID, NodeInstanceID: task.NodeInstanceID, NodeID: task.NodeID,
 		Title: task.Title, AssigneeUserID: task.AssigneeUserID, AssigneeName: task.AssigneeName,
 		AssigneeRoleKey: task.AssigneeRoleKey, Sequence: task.Sequence, Status: task.Status,
@@ -179,12 +179,12 @@ func projectBusinessWorkflowTask(task workflowmodel.WorkflowTask) BusinessWorkfl
 	}
 }
 
-func ProjectBusinessWorkflowProcessDetail(detail WorkflowProcessDetail) BusinessWorkflowProcessDetailDTO {
-	projected := BusinessWorkflowProcessDetailDTO{
-		Process: ProjectBusinessWorkflowProcess(detail.Process),
-		Nodes:   make([]BusinessWorkflowNodeDTO, 0, len(detail.Nodes)),
-		Tasks:   make([]BusinessWorkflowTaskDTO, 0, len(detail.Tasks)),
-		Events:  make([]BusinessWorkflowEventDTO, 0, len(detail.Events)),
+func ProjectParticipantWorkflowProcessDetail(detail WorkflowProcessDetail) ParticipantWorkflowProcessDetailDTO {
+	projected := ParticipantWorkflowProcessDetailDTO{
+		Process: ProjectParticipantWorkflowProcess(detail.Process),
+		Nodes:   make([]ParticipantWorkflowNodeDTO, 0, len(detail.Nodes)),
+		Tasks:   make([]ParticipantWorkflowTaskDTO, 0, len(detail.Tasks)),
+		Events:  make([]ParticipantWorkflowEventDTO, 0, len(detail.Events)),
 	}
 	for _, node := range detail.Nodes {
 		name, actionKey := node.NodeID, ""
@@ -205,16 +205,16 @@ func ProjectBusinessWorkflowProcessDetail(detail WorkflowProcessDetail) Business
 				break
 			}
 		}
-		projected.Nodes = append(projected.Nodes, BusinessWorkflowNodeDTO{
+		projected.Nodes = append(projected.Nodes, ParticipantWorkflowNodeDTO{
 			ID: node.ID, NodeID: node.NodeID, Name: name, NodeType: node.NodeType, ActionKey: actionKey, Iteration: node.Iteration,
 			Status: node.Status, ErrorCode: node.ErrorCode, StartedAt: node.StartedAt, CompletedAt: node.CompletedAt,
 		})
 	}
 	for _, task := range detail.Tasks {
-		projected.Tasks = append(projected.Tasks, projectBusinessWorkflowTask(task))
+		projected.Tasks = append(projected.Tasks, projectParticipantWorkflowTask(task))
 	}
 	for _, event := range detail.Events {
-		projected.Events = append(projected.Events, BusinessWorkflowEventDTO{
+		projected.Events = append(projected.Events, ParticipantWorkflowEventDTO{
 			ID: event.ID, NodeID: event.NodeID, TaskID: event.TaskID, Event: event.Event,
 			ActorID: event.ActorID, Summary: event.Summary, CreatedAt: event.CreatedAt,
 		})
@@ -247,19 +247,19 @@ func ProjectOpsWorkflowProcess(process workflowmodel.WorkflowProcessInstance) Op
 	}
 }
 
-func (s *WorkflowApplicationService) BusinessWorkflowTasks(ctx context.Context, principal principalmodel.Principal, status string, limit int) ([]BusinessWorkflowTaskDTO, error) {
+func (s *WorkflowApplicationService) ParticipantWorkflowTasks(ctx context.Context, principal principalmodel.Principal, status string, limit int) ([]ParticipantWorkflowTaskDTO, error) {
 	tasks, err := s.MyWorkflowTasks(ctx, principal, status, limit)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]BusinessWorkflowTaskDTO, 0, len(tasks))
+	result := make([]ParticipantWorkflowTaskDTO, 0, len(tasks))
 	for _, task := range tasks {
-		result = append(result, projectBusinessWorkflowTask(task))
+		result = append(result, projectParticipantWorkflowTask(task))
 	}
 	return result, nil
 }
 
-func (s *WorkflowApplicationService) BusinessTeamWorkflowTasks(ctx context.Context, principal principalmodel.Principal, status string, limit int) ([]BusinessWorkflowTaskDTO, error) {
+func (s *WorkflowApplicationService) BusinessTeamWorkflowTasks(ctx context.Context, principal principalmodel.Principal, status string, limit int) ([]ParticipantWorkflowTaskDTO, error) {
 	if err := workflowAuthorizeQuery(principal); err != nil {
 		return nil, err
 	}
@@ -277,21 +277,21 @@ func (s *WorkflowApplicationService) BusinessTeamWorkflowTasks(ctx context.Conte
 		return nil, internalError("list team workflow tasks", err)
 	}
 	tasks = s.workflowTasksWithAssigneeNames(ctx, tasks)
-	result := make([]BusinessWorkflowTaskDTO, 0, len(tasks))
+	result := make([]ParticipantWorkflowTaskDTO, 0, len(tasks))
 	for _, task := range tasks {
-		result = append(result, projectBusinessWorkflowTask(task))
+		result = append(result, projectParticipantWorkflowTask(task))
 	}
 	return result, nil
 }
 
-func (s *WorkflowApplicationService) BusinessWorkflowProcesses(ctx context.Context, principal principalmodel.Principal, filter workflowmodel.WorkflowProcessFilter) ([]BusinessWorkflowProcessDTO, error) {
+func (s *WorkflowApplicationService) ParticipantWorkflowProcesses(ctx context.Context, principal principalmodel.Principal, filter workflowmodel.WorkflowProcessFilter) ([]ParticipantWorkflowProcessDTO, error) {
 	processes, err := s.WorkflowProcesses(ctx, principal, filter)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]BusinessWorkflowProcessDTO, 0, len(processes))
+	result := make([]ParticipantWorkflowProcessDTO, 0, len(processes))
 	for _, process := range processes {
-		result = append(result, ProjectBusinessWorkflowProcess(process))
+		result = append(result, ProjectParticipantWorkflowProcess(process))
 	}
 	return result, nil
 }

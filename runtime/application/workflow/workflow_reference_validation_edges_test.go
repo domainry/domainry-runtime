@@ -59,22 +59,22 @@ func (s workflowReferenceSchemaEdgeStub) ConnectorAdapterExists(_ context.Contex
 }
 
 type workflowReferenceIdentityEdgeStub struct {
-	workflowDirectoryTestStub
+	workflowIdentityProjectionTestStub
 	users    []identitysdk.User
 	roles    []identitysdk.Role
 	usersErr error
 	rolesErr error
 }
 
-func (s workflowReferenceIdentityEdgeStub) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
+func (s workflowReferenceIdentityEdgeStub) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
 	return s.users, s.usersErr
 }
 
-func (s workflowReferenceIdentityEdgeStub) ListRoles(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.Role, error) {
+func (s workflowReferenceIdentityEdgeStub) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	return s.roles, s.rolesErr
 }
 
-func workflowReferenceValidatorFixture(identity identitysdk.Directory) *WorkflowReferenceValidator {
+func workflowReferenceValidatorFixture(identity identitysdk.Projection) *WorkflowReferenceValidator {
 	object := definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user"}, {Key: "disabled", Type: "user", DisabledAt: "now"}, {Key: "status", Type: "text"}}}
 	actions := []definitionmodel.ActionSchema{
 		{Key: "send", Label: "Send", ObjectKey: "order", PayloadFields: []definitionmodel.ActionPayloadField{{Key: "required", Required: true}, {Key: "optional"}}, Defaults: map[string]any{}},
@@ -216,17 +216,17 @@ func TestWorkflowReferenceDependencyMapRecursiveAndActionBindingOutcomes(t *test
 }
 
 func TestWorkflowReferenceIdentityResolversRunAsAndGraphNodeOutcomes(t *testing.T) {
-	identity := workflowReferenceIdentityEdgeStub{users: []identitysdk.User{{ID: "user"}}, roles: []identitysdk.Role{{Key: "directory-role"}}}
+	identity := workflowReferenceIdentityEdgeStub{users: []identitysdk.User{{ID: "user"}}, roles: []identitysdk.Role{{Key: "projection-role"}}}
 	validator := workflowReferenceValidatorFixture(identity)
 	users, roles := validator.workflowIdentityReferenceCatalog(t.Context())
-	if !users["user"] || !roles["directory-role"] || roles["sender"] {
+	if !users["user"] || !roles["projection-role"] || roles["sender"] {
 		t.Fatalf("users=%v roles=%v", users, roles)
 	}
 	catalogUsers, catalogRoles := users, roles
 	failingIdentity := workflowReferenceIdentityEdgeStub{usersErr: errors.New("users"), rolesErr: errors.New("roles")}
 	users, roles = workflowReferenceValidatorFixture(failingIdentity).workflowIdentityReferenceCatalog(t.Context())
 	if len(users) != 0 || len(roles) != 0 {
-		t.Fatalf("failed Identity directory must not fall back to Runtime roles: users=%v roles=%v", users, roles)
+		t.Fatalf("failed Identity projection must not fall back to Runtime roles: users=%v roles=%v", users, roles)
 	}
 	workflow := definitionmodel.WorkflowSchema{TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "record_updated", ObjectKey: "order"}}
 	resolvers := []definitionmodel.WorkflowAssigneeResolver{

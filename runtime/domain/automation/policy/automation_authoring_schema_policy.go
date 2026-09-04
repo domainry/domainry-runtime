@@ -12,10 +12,10 @@ func automationCompleteRuleAuthoringContract(capability *capabilitycontract.Capa
 	capability.OutputVariables = automationFragmentValidationOutputVariables()
 	capability.Execution = appschemacontract.VersionedApplicationDefinitionExecution("automation.rule")
 	capability.ReferenceContracts = []capabilitycontract.CapabilityAuthoringReference{
-		{Kind: "object_key", InputJSONPointer: "/object_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/object_key"},
-		{Kind: "field_key", InputJSONPointer: "/trigger/changed_fields/*", ScopeFrom: "/object_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/field_key"},
-		{Kind: "action_key", InputJSONPointer: "/instructions/*/config/action_key", ScopeFrom: "/object_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/action_key"},
-		{Kind: "workflow_key", InputJSONPointer: "/instructions/*/config/workflow_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/workflow_key"},
+		{Kind: "object_key", InputJSONPointer: "/object_key", ResolverEndpoint: "/capabilities/references/object_key"},
+		{Kind: "field_key", InputJSONPointer: "/trigger/changed_fields/*", ScopeFrom: "/object_key", ResolverEndpoint: "/capabilities/references/field_key"},
+		{Kind: "action_key", InputJSONPointer: "/instructions/*/config/action_key", ScopeFrom: "/object_key", ResolverEndpoint: "/capabilities/references/action_key"},
+		{Kind: "workflow_key", InputJSONPointer: "/instructions/*/config/workflow_key", ResolverEndpoint: "/capabilities/references/workflow_key"},
 	}
 	capability.Errors = append(capability.Errors,
 		capabilitycontract.CapabilityAuthoringError{Code: "backend.automation.identity_required", FieldPath: "key", MessageKey: "backend.automation.identity_required"},

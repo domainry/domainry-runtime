@@ -1,14 +1,14 @@
 # Runtime Workspace Scope Inventory
 
 This inventory is the auditable source list for the Runtime workspace-isolation
-roadmap. Every surface has one required scope classification. A classification
-describes the security boundary the surface must enforce, not whether the
+roadmap. Every adapter has one required scope classification. A classification
+describes the security boundary the adapter must enforce, not whether the
 current implementation already enforces it.
 
 The only permitted classifications are `workspace_scoped`, `runtime_global`,
 `installation_scoped`, and `public`.
 
-## Database schema surfaces
+## Database schema adapters
 
 The machine gate creates a fresh Runtime SQLite schema and requires every
 physical table to be named in this document. Runtime-generated business object
@@ -108,21 +108,21 @@ Registered schema tables:
   — `workspace_scoped`
 - Runtime health/version capability response (no persisted tenant data) — `public`
 
-## File and object-storage surfaces
+## File and object-storage adapters
 
 - upload roots and record attachment paths (`application/upload`, `UploadService`) — `workspace_scoped`
 - report/export/download artifacts (Report-owned jobs and export result references) — `workspace_scoped`
 - staged transaction files and commit markers (`StagedFile`, `CommitMarker`) — inherit the owning `workspace_scoped` mutation
 - migration SQL, migration backups, manifests and installation artifacts — `installation_scoped`
 
-## Process-memory and cache surfaces
+## Process-memory and cache adapters
 
 - `dictionaryCache` — `installation_scoped`
 - in-memory rate-limit buckets (`foundation/ratelimit.MemoryLimiter`) — `workspace_scoped`
 - idempotency metrics (`MemoryMetricsCollector`) — `workspace_scoped`
 - localization catalog resources (installation-static, read-only after load) — `installation_scoped`
 
-## Durable task and payload surfaces
+## Durable task and payload adapters
 
 - workflow executions, processes, nodes, tasks, events and execution receipts — `workspace_scoped`
 - automation rule/instruction executions — `workspace_scoped`
@@ -134,7 +134,7 @@ Registered schema tables:
 - report/export/download task payloads — `workspace_scoped`
 - idempotency cleanup leases — `runtime_global`; cross-boundary intents — `workspace_scoped`
 
-## External connection and identity surfaces
+## External connection and identity adapters
 
 - integration connections, API keys, secrets and encrypted secret materials — `workspace_scoped`
 - provider credentials and credential-refresh leases — `workspace_scoped`
@@ -162,7 +162,7 @@ Principal before the first Repository call and has a zero-call failure test.
 | Lifecycle | complete | `TestLifecycleApplicationAuthorizesWorkspaceBeforeRepositoryAccess` |
 | Metadata | complete | `TestMetadataApplicationAuthorizesWorkspaceBeforeRepositoryAccess` |
 | Notification | complete | `TestNotificationApplicationAuthorizesWorkspaceBeforeRepositoryAccess`; `TestNotificationOutboxPolicyEvaluationCarriesWorkspace` |
-| Scheduler facade | complete | `TestSchedulerSurfaceAuthorizationUsesSchedulerCapabilities`; Runtime authorizes projection/preview/delegation only and holds no Scheduler state repository |
+| Scheduler facade | complete | `TestSchedulerAdapterAuthorizationUsesSchedulerCapabilities`; Runtime authorizes projection/preview/delegation only and holds no Scheduler state repository |
 | Record Timer | complete | worker commands require explicit Runtime `SystemScope`; operator recovery requires Workspace principal and Record Timer capability |
 | Workflow | complete | `TestWorkflowApplicationAuthorizesWorkspaceBeforeRepositoryAccess` |
 

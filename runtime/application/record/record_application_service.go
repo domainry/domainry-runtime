@@ -52,7 +52,7 @@ type RecordApplicationDependencies struct {
 	QueryPolicy                  *recordservice.RecordQueryPolicyDomainService
 	Pipeline                     *pipelineapplication.PipelineApplicationService
 	Validation                   *recordservice.RecordValidationDomainService
-	IdentityDirectory            identitysdk.Directory
+	IdentityProjection           identitysdk.Projection
 	Audit                        func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	PrepareWorkflow              func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error)
 	ExecuteWorkflow              func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
@@ -307,12 +307,12 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		NormalizeQuery: func(object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, principal principalmodel.Principal) recordmodel.RecordListQuery {
 			return service.queryPolicy.NormalizeListQueryForAction(object, query, principal, "export")
 		},
-		ListRecords:          reader.ListRecords,
-		ListDirectoryUsers: func(ctx context.Context) ([]identitysdk.User, error) {
-			if service.IdentityDirectory() == nil {
+		ListRecords: reader.ListRecords,
+		ListIdentityUsers: func(ctx context.Context) ([]identitysdk.User, error) {
+			if service.IdentityProjection() == nil {
 				return nil, nil
 			}
-			return service.IdentityDirectory().ListUsers(ctx, identitysdk.DirectoryQuery{})
+			return service.IdentityProjection().ListUsers(ctx, identitysdk.ProjectionQuery{})
 		},
 		RecordDisplay: recordApplicationDisplay,
 		ProjectRecords: func(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, records []recordmodel.Record, action string) ([]recordmodel.Record, error) {
@@ -328,7 +328,7 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 	dataExchange := NewRecordDataExchangeApplicationService(RecordDataExchangeDependencies{Importer: importer, Exporter: exporter, DataExchange: dependencies.DataExchange})
 	service.RecordDomainService = recordservice.NewRecordDomainService(recordservice.RecordDomainServiceDependencies{
 		Repository: dependencies.Repository, Reader: reader, References: references,
-		IdentityDirectory: dependencies.IdentityDirectory,
+		IdentityProjection: dependencies.IdentityProjection,
 	})
 	service.create = create
 	service.update = update

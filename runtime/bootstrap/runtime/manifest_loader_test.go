@@ -4,14 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestLoadManifestSeedAppliesRuntimeIdentityDefaults(t *testing.T) {
-	path := writeManifestLoaderFixture(t, `{"objects":[{"key":"account","name":"Account"}]}`)
+	path := writeManifestLoaderFixture(t, `{"schema_version":"2","objects":[{"key":"account","name":"Account"}]}`)
 	manifest, err := loadManifestSeed(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
@@ -32,23 +28,10 @@ func TestLoadManifestSeedAcceptsCurrentSchemaWithoutMigration(t *testing.T) {
 	}
 }
 
-func TestLoadManifestSeedWritesMigrationWarningsToStructuredLogger(t *testing.T) {
-	core, observed := observer.New(zapcore.WarnLevel)
-	previousLogger := zap.L()
-	zap.ReplaceGlobals(zap.New(core))
-	defer zap.ReplaceGlobals(previousLogger)
-
+func TestLoadManifestSeedRejectsUnreleasedLegacyContract(t *testing.T) {
 	path := writeManifestLoaderFixture(t, `{"schema_version":"1","objects":[{"key":"account","name":"Account"}],"surfaces":[]}`)
-	if _, err := loadManifestSeed(t.Context(), path); err != nil {
-		t.Fatal(err)
-	}
-	entries := observed.FilterMessage("manifest migration warning").All()
-	if len(entries) != 1 {
-		t.Fatalf("migration warning entries = %d", len(entries))
-	}
-	fields := entries[0].ContextMap()
-	if fields["warning_code"] != "manifest.v1.frontend_payload_removed" || fields["manifest_path"] != "/surfaces" {
-		t.Fatalf("migration warning fields = %#v", fields)
+	if _, err := loadManifestSeed(t.Context(), path); err == nil {
+		t.Fatal("unreleased legacy manifest must fail")
 	}
 }
 
@@ -59,7 +42,7 @@ func TestLoadManifestSeedRejectsUnreadableInvalidAndObjectlessManifest(t *testin
 	if _, err := loadManifestSeed(t.Context(), writeManifestLoaderFixture(t, `{`)); err == nil {
 		t.Fatal("invalid manifest must fail")
 	}
-	if _, err := loadManifestSeed(t.Context(), writeManifestLoaderFixture(t, `{}`)); err == nil {
+	if _, err := loadManifestSeed(t.Context(), writeManifestLoaderFixture(t, `{"schema_version":"2"}`)); err == nil {
 		t.Fatal("objectless manifest must fail")
 	}
 }

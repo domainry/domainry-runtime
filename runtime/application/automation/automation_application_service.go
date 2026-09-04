@@ -282,7 +282,7 @@ func (s *AutomationApplicationService) ValidateAutomationRule(ctx context.Contex
 // ValidateAutomationAuthoringFragment validates one Automation leaf payload
 // without creating or persisting a complete rule.
 func (s *AutomationApplicationService) ValidateAutomationAuthoringFragment(_ context.Context, capabilityKey string, fragment map[string]any, principal principalmodel.Principal) (automationvalidation.AutomationFragmentValidationResult, error) {
-	if err := automationAuthorizeEndpoint(principal, "POST /automation-rules/authoring-fragments/{capabilityKey}/validate"); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "POST /automation/rules/authoring-fragments/{capabilityKey}/validate"); err != nil {
 		return automationvalidation.AutomationFragmentValidationResult{}, err
 	}
 	capabilityKey = strings.TrimSpace(capabilityKey)
@@ -302,7 +302,7 @@ func (s *AutomationApplicationService) SimulateAutomationRule(ctx context.Contex
 	if request.Rule != nil {
 		rule = *request.Rule
 	} else {
-		if err := automationAuthorizeEndpoint(principal, "POST /automation-rules/{ruleKey}/simulate"); err != nil {
+		if err := automationAuthorizeEndpoint(principal, "POST /automation/rules/{ruleKey}/simulate"); err != nil {
 			return automationprojection.AutomationSimulationResult{}, err
 		}
 		var found bool

@@ -14,10 +14,13 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/apperror"
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
@@ -229,18 +232,26 @@ func TestRefreshAndExemptOperationalControlEdges(t *testing.T) {
 		t.Fatalf("operational state maintenance=%v draining=%v", router.healthRegistry.Maintenance(), router.healthRegistry.Draining())
 	}
 
+	registry, err := actionservice.BuildAuthorizationRegistry(actionservice.AuthorizationRegistryInput{ApplicationKey: "runtime", EndpointContracts: endpointmodel.EndpointContracts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	router.authorizationActions = func() *actioncontract.Registry { return registry }
+	routes := http.NewServeMux()
+	routes.HandleFunc("PUT /operations/controls/{controlKind}/{owner}", func(http.ResponseWriter, *http.Request) {})
+	routes.HandleFunc("POST /records", func(http.ResponseWriter, *http.Request) {})
 	for _, test := range []struct {
 		method, path string
 		exempt       bool
 	}{
 		{http.MethodGet, "/records", true}, {http.MethodHead, "/records", true}, {http.MethodOptions, "/records", true},
-		{http.MethodPost, "/operations", true}, {http.MethodDelete, "/operations/jobs/1", true}, {http.MethodPost, "/records", false},
+		{http.MethodPut, "/operations/controls/maintenance/runtime", true}, {http.MethodPost, "/records", false},
 	} {
-		if got := operationalControlExempt(httptest.NewRequest(test.method, test.path, nil), test.path); got != test.exempt {
+		if got := router.operationalControlExempt(routes, httptest.NewRequest(test.method, test.path, nil)); got != test.exempt {
 			t.Fatalf("%s %s exempt=%v want=%v", test.method, test.path, got, test.exempt)
 		}
 	}
-	if !operationalControlExempt(nil, "") {
+	if !router.operationalControlExempt(routes, nil) {
 		t.Fatal("nil request must be exempt")
 	}
 }
@@ -260,13 +271,13 @@ func TestRoutePolicyAndAnonymousPathCompleteMatrix(t *testing.T) {
 		t.Fatalf("root catch-all policy=%+v", policy)
 	}
 
-	paths := []string{"/", "/live", "/ready", "/startup", "/i18n/en"}
+	paths := []string{"/", "/live", "/ready", "/startup", "/discovery/i18n/en"}
 	for _, path := range paths {
 		if !anonymousAuthPath(path) {
 			t.Errorf("anonymous path rejected: %s", path)
 		}
 	}
-	for _, path := range []string{"", "/records", "/metrics", "/openapi.json", "/schema", "/tenant-admin/platform-capabilities", "/domain-system-snapshot", "/metadata/manifests/x", "/api/x", "/auth/me", "/auth/change-password", "/auth/external-accounts", "/integrations/webhooks/provider/events", "/agent-dialog/task-tools/invoke"} {
+	for _, path := range []string{"", "/records", "/metrics", "/openapi.json", "/schema", "/capabilities", "/business-system/snapshot", "/metadata/manifests/x", "/api/x", "/auth/me", "/auth/change-password", "/auth/external-accounts", "/integration/webhooks/provider/events", "/agent/task-tools/invoke"} {
 		if anonymousAuthPath(path) {
 			t.Errorf("protected path accepted as anonymous: %s", path)
 		}
@@ -389,14 +400,14 @@ func TestHTTPRouterListenerGroupConstructionAndOriginEdges(t *testing.T) {
 
 	router := completeRouterForListenerGroupTests(HTTPRouterConfig{
 		ListenerGroupPolicies: map[ListenerRouteGroup]ListenerRouteGroupPolicy{
-			ListenerRouteGroupPublic:      {RateLimitPerMinute: 1},
-			ListenerRouteGroupTenantAdmin: {},
+			ListenerRouteGroupPublic:     {RateLimitPerMinute: 1},
+			ListenerRouteGroupManagement: {},
 		},
 	})
 	if router.listenerGroupCapacity[ListenerRouteGroupPublic] == nil {
 		t.Fatal("positive listener rate limit did not create a capacity controller")
 	}
-	if router.listenerGroupCapacity[ListenerRouteGroupTenantAdmin] != nil {
+	if router.listenerGroupCapacity[ListenerRouteGroupManagement] != nil {
 		t.Fatal("zero listener rate limit created a capacity controller")
 	}
 
@@ -430,8 +441,8 @@ func TestHTTPRouterListenerGroupConstructionAndOriginEdges(t *testing.T) {
 			t.Fatal("public handler is nil")
 		}
 	}()
-	if handler := router.RoutesForListenerGroup(ListenerRouteGroupTenantAdmin); handler == nil {
-		t.Fatal("tenant-admin handler is nil")
+	if handler := router.RoutesForListenerGroup(ListenerRouteGroupManagement); handler == nil {
+		t.Fatal("management handler is nil")
 	}
 
 	if ListenerRouteGroupEndpointCount(ListenerRouteGroupAll) != len(runtimeEndpointContracts) {

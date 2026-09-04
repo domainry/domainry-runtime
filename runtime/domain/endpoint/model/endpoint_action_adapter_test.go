@@ -9,9 +9,9 @@ import (
 
 func endpointActionTestContract() RuntimeEndpointContractV1 {
 	return RuntimeEndpointContractV1{
-		ContractVersion: ContractVersion, EndpointIdentity: "POST /tenant-admin/workspaces/provision",
+		ContractVersion: ContractVersion, EndpointIdentity: "POST /workspace/provision",
 		ActionKey: "runtime.workspaceprovision.provision_workspace", SourceOwner: "workspaceprovision", ApplicationUseCase: "provisionWorkspace",
-		ListenerExposures:   []ListenerExposure{ListenerExposureTenantAdmin, ListenerExposureOps},
+		ListenerExposures:   []ListenerExposure{ListenerExposureManagement, ListenerExposureOps},
 		RequiredPermissions: []string{"runtime.workspaceprovision.provision_workspace"}, PermissionPolicyRef: "static_permission:runtime.workspaceprovision.provision_workspace",
 		EffectClass: EndpointEffectWrite, HighRiskPolicy: HighRiskActionConfirmRequired,
 		IdempotencyDecision: "caller_key_required", AuditClass: "mutation_audit_required",
@@ -27,7 +27,7 @@ func TestAuthorizationActionDefinitionProjectsStaticEndpointAsSameKeyPermission(
 	if definition.Key != contract.ActionKey || definition.OperationLabel != contract.ApplicationUseCase || definition.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || definition.Permission == nil || definition.Permission.Key != definition.Key {
 		t.Fatalf("definition=%#v", definition)
 	}
-	if definition.HTTP == nil || definition.HTTP.RouteTemplate != "/tenant-admin/workspaces/provision" || definition.ApprovalPolicies[0] != actioncontract.ApprovalConfirmation {
+	if definition.HTTP == nil || definition.HTTP.RouteTemplate != "/workspace/provision" || definition.ApprovalPolicies[0] != actioncontract.ApprovalConfirmation {
 		t.Fatalf("binding/governance=%#v", definition)
 	}
 }
@@ -57,7 +57,7 @@ func TestEndpointContractRejectsAnyRolePermissionShapeExceptExactSameKey(t *test
 
 func TestAuthorizationActionDefinitionPreservesDispatcherAndAnonymousPolicies(t *testing.T) {
 	dynamic := endpointActionTestContract()
-	dynamic.EndpointIdentity = "GET /objects/{objectKey}/records/{recordID}"
+	dynamic.EndpointIdentity = "GET /records/objects/{objectKey}/records/{recordID}"
 	dynamic.ActionKey = "runtime.records.get_record"
 	dynamic.SourceOwner, dynamic.ApplicationUseCase = "records", "getRecord"
 	dynamic.RequiredPermissions = nil
@@ -90,7 +90,7 @@ func TestAuthorizationActionDefinitionPreservesDispatcherAndAnonymousPolicies(t 
 
 func TestAuthorizationActionDefinitionPreservesServiceAudienceAndOwnerPolicy(t *testing.T) {
 	contract := endpointActionTestContract()
-	contract.EndpointIdentity = "POST /v1/scheduler-triggers:accept"
+	contract.EndpointIdentity = "POST /scheduler/triggers/accept"
 	contract.ActionKey = "runtime.scheduler.accept_scheduler_trigger"
 	contract.SourceOwner, contract.ApplicationUseCase = "scheduler", "acceptSchedulerTrigger"
 	contract.ListenerExposures = []ListenerExposure{ListenerExposurePublic}

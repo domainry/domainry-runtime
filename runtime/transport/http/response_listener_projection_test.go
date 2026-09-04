@@ -43,10 +43,10 @@ func TestOpenAPIProjectionExcludesCrossListenerOperations(t *testing.T) {
 	if _, exists := publicPaths["/operations"]; exists {
 		t.Fatal("public OpenAPI contains /operations")
 	}
-	if _, exists := publicPaths["/operations/scheduler/state"]; exists {
+	if _, exists := publicPaths["/scheduler/state"]; exists {
 		t.Fatal("public OpenAPI contains scheduler Ops state")
 	}
-	if _, exists := publicPaths["/objects/{objectKey}/records"]; !exists {
+	if _, exists := publicPaths["/records/objects/{objectKey}/records"]; !exists {
 		t.Fatal("public OpenAPI lost Business record API")
 	}
 	if len(publicPaths) >= fullPathCount {
@@ -61,7 +61,7 @@ func TestOpenAPIProjectionExcludesCrossListenerOperations(t *testing.T) {
 	if _, exists := opsPaths["/operations"]; !exists {
 		t.Fatal("Ops OpenAPI does not contain /operations")
 	}
-	if item, exists := opsPaths["/objects/{objectKey}/records"]; exists {
+	if item, exists := opsPaths["/records/objects/{objectKey}/records"]; exists {
 		if _, hasGET := item.(map[string]any)["get"]; hasGET {
 			t.Fatal("Ops OpenAPI contains Business record list")
 		}
@@ -72,7 +72,7 @@ func TestOpenAPIProjectionUsesModuleRouteExposureWithoutRuntimeEndpointContract(
 	operation := map[string]any{"x-domainry-module-route": map[string]any{"exposures": []any{"ops"}}}
 	newDocument := func() map[string]any {
 		return map[string]any{"paths": map[string]any{
-			"/operations/monitoring/metrics": map[string]any{"get": operation},
+			"/monitoring/metrics": map[string]any{"get": operation},
 		}}
 	}
 
@@ -80,16 +80,16 @@ func TestOpenAPIProjectionUsesModuleRouteExposureWithoutRuntimeEndpointContract(
 	if err := projectOpenAPIForListenerGroup(ops, ListenerRouteGroupOps); err != nil {
 		t.Fatal(err)
 	}
-	if _, exists := ops["paths"].(map[string]any)["/operations/monitoring/metrics"]; !exists {
+	if _, exists := ops["paths"].(map[string]any)["/monitoring/metrics"]; !exists {
 		t.Fatal("Ops projection removed the Monitoring module route")
 	}
 
 	tenantAdmin := newDocument()
-	if err := projectOpenAPIForListenerGroup(tenantAdmin, ListenerRouteGroupTenantAdmin); err != nil {
+	if err := projectOpenAPIForListenerGroup(tenantAdmin, ListenerRouteGroupManagement); err != nil {
 		t.Fatal(err)
 	}
-	if _, exists := tenantAdmin["paths"].(map[string]any)["/operations/monitoring/metrics"]; exists {
-		t.Fatal("tenant-admin projection exposed the Ops-only Monitoring module route")
+	if _, exists := tenantAdmin["paths"].(map[string]any)["/monitoring/metrics"]; exists {
+		t.Fatal("management projection exposed the Ops-only Monitoring module route")
 	}
 }
 

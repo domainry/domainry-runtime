@@ -28,7 +28,7 @@ func TestInsertIntentParticipatesInCallerTransaction(t *testing.T) {
 	if err := store.BindNotificationSaaSPublications(database.NotificationSaaSPublicationScope{TenantID: "tenant-a", WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}); err != nil {
 		t.Fatal(err)
 	}
-	intent := notificationmodel.NotificationIntent{ID: "request-a", WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", Surface: "business_workspace", OccurredAt: "2026-08-28T00:00:00Z", Variables: map[string]any{"name": "A"}}
+	intent := notificationmodel.NotificationIntent{ID: "request-a", WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", OccurredAt: "2026-08-28T00:00:00Z", Variables: map[string]any{"name": "A"}}
 	publication := NewPublicationOutboxStore(store)
 
 	tx, err := store.DB().BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
@@ -291,7 +291,7 @@ func TestRelayRecoversExpiredLeaseAfterProcessRestart(t *testing.T) {
 	}
 
 	store := open()
-	intent := notificationmodel.NotificationIntent{ID: "restart-request", WorkspaceID: "workspace-a", SourceEventID: "record-restart:created", EventType: "record.created", Surface: "business_workspace", OccurredAt: "2026-08-28T00:00:00Z"}
+	intent := notificationmodel.NotificationIntent{ID: "restart-request", WorkspaceID: "workspace-a", SourceEventID: "record-restart:created", EventType: "record.created", OccurredAt: "2026-08-28T00:00:00Z"}
 	publication := NewPublicationOutboxStore(store)
 	tx, err := store.DB().BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
@@ -384,7 +384,7 @@ func openPublicationStore(t *testing.T) (*database.RuntimeStore, PublicationOutb
 	if err := store.BindNotificationSaaSPublications(database.NotificationSaaSPublicationScope{TenantID: "tenant-a", WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}); err != nil {
 		t.Fatal(err)
 	}
-	return store, NewPublicationOutboxStore(store), notificationmodel.NotificationIntent{ID: "request-a", WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", Surface: "business_workspace", OccurredAt: "2026-08-28T00:00:00Z"}
+	return store, NewPublicationOutboxStore(store), notificationmodel.NotificationIntent{ID: "request-a", WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", OccurredAt: "2026-08-28T00:00:00Z"}
 }
 
 func assertPublicationCount(t *testing.T, store *database.RuntimeStore, want int) {

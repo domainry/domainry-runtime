@@ -33,7 +33,7 @@ func NewCapabilitiesHandler(deps CapabilitiesDependencies) *CapabilitiesHandler 
 
 func WriteLegacyProjectionHeaders(w http.ResponseWriter) {
 	w.Header().Set("X-Domainry-Capability-Mode", "compatibility-projection")
-	w.Header().Set("Link", `</tenant-admin/platform-capabilities>; rel="successor-version"`)
+	w.Header().Set("Link", `</capabilities>; rel="successor-version"`)
 }
 
 func (h *CapabilitiesHandler) platformCapabilities(w http.ResponseWriter, r *http.Request) {

@@ -52,7 +52,7 @@ func (r *gymTimerFixtureRuntime) ExecuteRecordTimer(ctx context.Context, executi
 			return err
 		}
 		page, err := r.repository.ListRecords(ctx, execution.WorkspaceID, r.objects["gym_waitlist_entry"], recordmodel.RecordListQuery{
-			Page: 1, PageSize: 1, Filters: map[string]any{"session_id": entry.Data["session_id"], "status": "waiting"},
+			Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"session_id": entry.Data["session_id"], "status": "waiting"},
 			Sort: []recordmodel.RecordSortRule{{Field: "position", Direction: "asc"}, {Field: "id", Direction: "asc"}},
 		})
 		if err != nil || len(page.Items) == 0 {
@@ -179,7 +179,7 @@ func TestGymClassCancellationCancelsEveryFutureAttendanceTimer(t *testing.T) {
 	if err != nil || cancelled != 4 {
 		t.Fatalf("cancelled attendance timers=%d err=%v", cancelled, err)
 	}
-	page, err := repository.ListRecords(t.Context(), "workspace-primary", recordTimerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"object_key": classSession.Key, "record_id": "class-1", "status": "scheduled"}})
+	page, err := repository.ListRecords(t.Context(), "workspace-primary", recordTimerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"object_key": classSession.Key, "record_id": "class-1", "status": "scheduled"}})
 	if err != nil || page.Total != 0 {
 		t.Fatalf("future attendance timers=%d err=%v", page.Total, err)
 	}
@@ -243,7 +243,7 @@ func TestGymCardPackageExpiryAndNinetyDayReviewUseRelativeRecordTimers(t *testin
 			t.Fatalf("timer %s due_at=%v want=%s", testCase.key, timer.Data["due_at"], testCase.want.Format(time.RFC3339Nano))
 		}
 	}
-	page, err := repository.ListRecords(t.Context(), "workspace-primary", recordTimerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 10, Filters: map[string]any{"status": "scheduled"}})
+	page, err := repository.ListRecords(t.Context(), "workspace-primary", recordTimerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"status": "scheduled"}})
 	if err != nil || page.Total != 3 {
 		t.Fatalf("lifecycle timers=%d err=%v", page.Total, err)
 	}

@@ -26,7 +26,7 @@ func TestWorkflowWaitDurationUsesDurableRecordTimerAndResumesAfterFire(t *testin
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	identityStore := newIntegrationTestIdentityDirectory()
+	identityStore := newIntegrationTestIdentityProjection()
 	if err := metadataStore(store).SyncManifest(t.Context(), recordTimerInstallationScope(), manifestmodel.ManifestSchema{Objects: recordtimerprojection.RecordTimerSystemObjects()}); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestWorkflowWaitDurationUsesDurableRecordTimerAndResumesAfterFire(t *testin
 		t.Fatalf("waiting process=%#v err=%v", process, err)
 	}
 	timerObject := recordTimerRuntimeObjectByKey(t, recordtimerprojection.RecordTimerSystemObjects(), "record_timer")
-	timers, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
+	timers, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted})
 	if err != nil || timers.Total != 1 || timers.Items[0].Data["status"] != "scheduled" {
 		t.Fatalf("durable workflow timer page=%#v err=%v", timers, err)
 	}
@@ -76,7 +76,7 @@ func TestWorkflowApprovalDeadlineUsesDurableRecordTimerForEscalation(t *testing.
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	identityStore := newIntegrationTestIdentityDirectory()
+	identityStore := newIntegrationTestIdentityProjection()
 	if err := metadataStore(store).SyncManifest(t.Context(), recordTimerInstallationScope(), manifestmodel.ManifestSchema{Objects: recordtimerprojection.RecordTimerSystemObjects()}); err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestWorkflowApprovalDeadlineUsesDurableRecordTimerForEscalation(t *testing.
 		t.Fatalf("approval process=%#v err=%v", process, err)
 	}
 	timerObject := recordTimerRuntimeObjectByKey(t, recordtimerprojection.RecordTimerSystemObjects(), "record_timer")
-	timers, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10})
+	timers, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted})
 	if err != nil || timers.Total != 1 || timers.Items[0].Data["target_key"] != "approval_deadline" || timers.Items[0].Data["purpose"] != "approval_escalation" {
 		t.Fatalf("approval timers=%#v err=%v", timers, err)
 	}

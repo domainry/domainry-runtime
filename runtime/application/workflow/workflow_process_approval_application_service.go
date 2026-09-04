@@ -187,7 +187,7 @@ func (e *WorkflowProcessEngine) resolveApprovalAssigneeStrategy(ctx context.Cont
 }
 
 func (e *WorkflowProcessEngine) usersForApprovalRole(ctx context.Context, roleKey string) ([]string, error) {
-	roles, err := e.runtime.dependencies.Identity.ListRoles(ctx, identitysdk.DirectoryQuery{})
+	roles, err := e.runtime.dependencies.Identity.ListRoles(ctx, identitysdk.ProjectionQuery{})
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +201,7 @@ func (e *WorkflowProcessEngine) usersForApprovalRole(ctx context.Context, roleKe
 	if roleID == "" {
 		return nil, badRequest("backend.workflow.approval_role_not_found", "role", roleKey)
 	}
-	users, err := e.runtime.dependencies.Identity.ListUsers(ctx, identitysdk.DirectoryQuery{})
+	users, err := e.runtime.dependencies.Identity.ListUsers(ctx, identitysdk.ProjectionQuery{})
 	if err != nil {
 		return nil, err
 	}

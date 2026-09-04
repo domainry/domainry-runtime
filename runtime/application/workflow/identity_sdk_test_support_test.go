@@ -8,28 +8,28 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
-// workflowDirectoryTestStub supplies the SDK Directory methods a focused test
+// workflowIdentityProjectionTestStub supplies the SDK projection methods a focused test
 // does not care about. Individual test doubles override only the projection
 // calls exercised by that scenario.
-type workflowDirectoryTestStub struct{}
+type workflowIdentityProjectionTestStub struct{}
 
-func (workflowDirectoryTestStub) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
+func (workflowIdentityProjectionTestStub) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	return identitysdk.User{}, false, nil
 }
 
-func (workflowDirectoryTestStub) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+func (workflowIdentityProjectionTestStub) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
 	return identitysdk.OrganizationUnit{}, false, nil
 }
 
-func (workflowDirectoryTestStub) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
+func (workflowIdentityProjectionTestStub) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
 	return nil, nil
 }
 
-func (workflowDirectoryTestStub) ListRoles(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.Role, error) {
+func (workflowIdentityProjectionTestStub) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	return nil, nil
 }
 
-func (workflowDirectoryTestStub) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
+func (workflowIdentityProjectionTestStub) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
 	return nil, nil
 }
 

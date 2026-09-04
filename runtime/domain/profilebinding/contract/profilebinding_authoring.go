@@ -18,10 +18,6 @@ func ProfileBindingAuthoringCapability() capabilitycontract.CapabilityAuthoringD
 		"allow_unbound": {Type: "boolean"}, "invitation_channels": {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string", Enum: []any{"email", "sms", "external_idp"}}},
 		"claim_proofs": {Type: "array", Items: &claimProof}, "rebind_requires_approval": {Type: "boolean"}, "rebind_revokes_sessions": {Type: "boolean"},
 	}}
-	directory := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: closed, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-		"enabled": {Type: "boolean"}, "label": {Type: "string"}, "plural_label": {Type: "string"},
-		"summary_fields": strings, "filter_fields": strings, "status_field": {Type: "string"}, "action_keys": strings,
-	}}
 	businessIdentity := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: closed, Required: []string{"key"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 		"key": {Type: "string", MinLength: profileBindingIntPointer(1)}, "status_field": {Type: "string"}, "active_status_values": strings,
 		"blacklist_field": {Type: "string"}, "claims": {Type: "array", Items: &claim},
@@ -32,7 +28,6 @@ func ProfileBindingAuthoringCapability() capabilitycontract.CapabilityAuthoringD
 			"object_key": {Type: "string", MinLength: profileBindingIntPointer(1)}, "identity_relation_field": {Type: "string", MinLength: profileBindingIntPointer(1)},
 			"business_identity": businessIdentity,
 			"binding_lifecycle": bindingLifecycle,
-			"directory":         directory,
 			"summary_fields":    strings, "profile_tabs": strings, "profile_tab_labels": {Type: "object", AdditionalProperties: open},
 			"profile_tab_fields": {Type: "object", AdditionalProperties: open}, "profile_tab_related_objects": {Type: "object", AdditionalProperties: open},
 			"profile_tab_components": {Type: "object", AdditionalProperties: open}, "default_visibility": {Type: "string", Enum: []any{"when_readable", "hidden"}},
@@ -45,10 +40,10 @@ func ProfileBindingAuthoringCapability() capabilitycontract.CapabilityAuthoringD
 		SystemDraftResourceType: "identity_profile_binding",
 		Parameters:              []capabilitycontract.CapabilityAuthoringParameter{{Key: "object_key", Type: "object_key", Required: true}, {Key: "identity_relation_field", Type: "field_key", Required: true}, {Key: "business_identity", Type: "object", Required: true}, {Key: "expected_schema_hash", Type: "schema_hash", Required: true}},
 		Permissions:             []string{"runtime.appschema.validate_application_definition"}, AuditEvents: []string{"metadata_definition_upserted"},
-		ValidationEndpoint: "POST /tenant-admin/metadata/definitions/identity_profile_binding/{resourceKey}/validate", ConfigurationRoutes: appschemacontract.VersionedApplicationDefinitionRoutes("identity_profile_binding"), ResourceKeyPathParameter: "resourceKey",
+		ValidationEndpoint: "POST /metadata/definitions/identity_profile_binding/{resourceKey}/validate", ConfigurationRoutes: appschemacontract.VersionedApplicationDefinitionRoutes("identity_profile_binding"), ResourceKeyPathParameter: "resourceKey",
 		ResourceOperations: appschemacontract.VersionedApplicationDefinitionOperations("identity_profile_binding"), InputSchema: appschemacontract.VersionedApplicationDefinitionRequestSchema(payload, false), OutputSchema: appschemacontract.VersionedApplicationDefinitionOutputSchema(payload),
 		OutputVariables:    []capabilitycontract.CapabilityAuthoringOutput{{Name: "resource_key", JSONPointer: "/definition/resource_key", Type: "identity_profile_binding_key", VisibleTo: "subsequent_capability_calls"}, {Name: "schema_hash", JSONPointer: "/definition/schema_hash", Type: "schema_hash", VisibleTo: "subsequent_capability_calls"}},
-		ReferenceContracts: []capabilitycontract.CapabilityAuthoringReference{{Kind: "object_key", InputJSONPointer: "/payload/object_key", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/object_key"}, {Kind: "field_key", InputJSONPointer: "/payload/identity_relation_field", ScopeFrom: "/payload/object_key", ResolverEndpoint: "GET /tenant-admin/platform-capabilities/references/field_key"}},
+		ReferenceContracts: []capabilitycontract.CapabilityAuthoringReference{{Kind: "object_key", InputJSONPointer: "/payload/object_key", ResolverEndpoint: "GET /capabilities/references/object_key"}, {Kind: "field_key", InputJSONPointer: "/payload/identity_relation_field", ScopeFrom: "/payload/object_key", ResolverEndpoint: "GET /capabilities/references/field_key"}},
 		Execution:          execution,
 		Errors:             []capabilitycontract.CapabilityAuthoringError{{Code: "backend.identity.profile_binding_invalid", FieldPath: "payload", ParameterKeys: []string{"diagnostic"}, MessageKey: "backend.identity.profile_binding_invalid"}},
 		Examples: []capabilitycontract.CapabilityAuthoringExample{

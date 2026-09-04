@@ -9,10 +9,10 @@ import (
 
 const (
 	ContractVersion = "runtimeext-v18"
-	ContractSHA256  = "7498496f4d8ca00939e2edbf4fa55a56ee4b486db1bb039cefeb4b0decbdffb3"
+	ContractSHA256  = "858d3a59ade02810d9dcd99e6116e23bd795be99958a02cf5370465ded03f62f"
 )
 
-const contractSurfaceV18 = `runtimeext-v18
+const contractDefinitionV18 = `runtimeext-v18
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -58,23 +58,23 @@ func ComputedContractSHA256() string {
 		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ExtensionSet{},
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 	}
-	var surface strings.Builder
-	surface.WriteString(contractSurfaceV18)
+	var definition strings.Builder
+	definition.WriteString(contractDefinitionV18)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
-		surface.WriteString(current.Name())
-		surface.WriteByte('{')
+		definition.WriteString(current.Name())
+		definition.WriteByte('{')
 		for index := 0; index < current.NumField(); index++ {
 			if index > 0 {
-				surface.WriteByte(',')
+				definition.WriteByte(',')
 			}
 			field := current.Field(index)
-			surface.WriteString(field.Name)
-			surface.WriteByte(':')
-			surface.WriteString(field.Type.String())
+			definition.WriteString(field.Name)
+			definition.WriteByte(':')
+			definition.WriteString(field.Type.String())
 		}
-		surface.WriteString("}\n")
+		definition.WriteString("}\n")
 	}
-	sum := sha256.Sum256([]byte(surface.String()))
+	sum := sha256.Sum256([]byte(definition.String()))
 	return hex.EncodeToString(sum[:])
 }

@@ -28,7 +28,7 @@ func TestBusinessRecordStreamPublishesContentFreeCursor(t *testing.T) {
 	handler.audit = auditapplication.NewAuditApplicationService(repository)
 
 	ctx, cancel := context.WithCancel(t.Context())
-	request := httptest.NewRequest(http.MethodGet, "/business/records/stream", nil).WithContext(ctx)
+	request := httptest.NewRequest(http.MethodGet, "/records/stream", nil).WithContext(ctx)
 	response := &cancelAfterWriteRecorder{ResponseRecorder: httptest.NewRecorder(), cancel: cancel}
 	handler.streamBusinessRecords(response, request)
 
@@ -54,7 +54,7 @@ func TestBusinessRecordStreamDoesNotRequireAuditPermission(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(t.Context())
-	request := httptest.NewRequest(http.MethodGet, "/business/records/stream", nil).WithContext(ctx)
+	request := httptest.NewRequest(http.MethodGet, "/records/stream", nil).WithContext(ctx)
 	response := &cancelAfterWriteRecorder{ResponseRecorder: httptest.NewRecorder(), cancel: cancel}
 	handler.streamBusinessRecords(response, request)
 
@@ -71,7 +71,7 @@ func TestBusinessRecordStreamHonorsResumeCursor(t *testing.T) {
 	cursor := base64.RawURLEncoding.EncodeToString(identity)
 
 	ctx, cancel := context.WithCancel(t.Context())
-	request := httptest.NewRequest(http.MethodGet, "/business/records/stream?cursor="+cursor, nil).WithContext(ctx)
+	request := httptest.NewRequest(http.MethodGet, "/records/stream?cursor="+cursor, nil).WithContext(ctx)
 	response := &cancelAfterWriteRecorder{ResponseRecorder: httptest.NewRecorder(), cancel: cancel}
 	handler.streamBusinessRecords(response, request)
 	if body := response.Body.String(); !strings.Contains(body, "event: business.ready") || strings.Contains(body, "event: business.sync") {
@@ -98,7 +98,7 @@ func TestBusinessRecordStreamPollsChangesAndHeartbeats(t *testing.T) {
 			repository.events = []auditmodel.AuditEvent{{ID: "second", CreatedAt: "2026-08-08T00:01:00Z"}}
 		}
 	}}
-	handler.streamBusinessRecords(response, httptest.NewRequest(http.MethodGet, "/business/records/stream", nil).WithContext(ctx))
+	handler.streamBusinessRecords(response, httptest.NewRequest(http.MethodGet, "/records/stream", nil).WithContext(ctx))
 	if body := response.Body.String(); strings.Count(body, "event: business.sync") != 2 {
 		t.Fatalf("poll stream body=%s", body)
 	}
@@ -107,7 +107,7 @@ func TestBusinessRecordStreamPollsChangesAndHeartbeats(t *testing.T) {
 	handler.streamHeartbeat = time.Millisecond
 	ctx, cancel = context.WithCancel(t.Context())
 	heartbeat := &cancelAfterNWriteRecorder{ResponseRecorder: httptest.NewRecorder(), cancel: cancel, remaining: 2}
-	handler.streamBusinessRecords(heartbeat, httptest.NewRequest(http.MethodGet, "/business/records/stream", nil).WithContext(ctx))
+	handler.streamBusinessRecords(heartbeat, httptest.NewRequest(http.MethodGet, "/records/stream", nil).WithContext(ctx))
 	if !strings.Contains(heartbeat.Body.String(), ": keepalive") {
 		t.Fatalf("heartbeat body=%s", heartbeat.Body.String())
 	}
@@ -117,7 +117,7 @@ func TestBusinessRecordStreamStateAndDefaultIntervalFailures(t *testing.T) {
 	handler, _ := recordsHandlerForTest(recordsHTTPPrincipal())
 	handler.audit = auditapplication.NewAuditApplicationService(&recordsAuditRepository{err: errors.New("audit unavailable")})
 	response := httptest.NewRecorder()
-	handler.streamBusinessRecords(response, httptest.NewRequest(http.MethodGet, "/business/records/stream", nil))
+	handler.streamBusinessRecords(response, httptest.NewRequest(http.MethodGet, "/records/stream", nil))
 	if response.Code == http.StatusOK {
 		t.Fatalf("audit failure status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -133,7 +133,7 @@ func TestBusinessRecordStreamStateAndDefaultIntervalFailures(t *testing.T) {
 	handler.streamHeartbeat = 0
 	ctx, cancel := context.WithCancel(t.Context())
 	responseWithCancel := &cancelAfterWriteRecorder{ResponseRecorder: httptest.NewRecorder(), cancel: cancel}
-	handler.streamBusinessRecords(responseWithCancel, httptest.NewRequest(http.MethodGet, "/business/records/stream", nil).WithContext(ctx))
+	handler.streamBusinessRecords(responseWithCancel, httptest.NewRequest(http.MethodGet, "/records/stream", nil).WithContext(ctx))
 
 	handler, _ = recordsHandlerForTest(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}, SystemScope: principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "stream system principal")})
 	if _, err := handler.businessRecordSyncState(httptest.NewRequest(http.MethodGet, "/", nil)); err == nil {
@@ -146,21 +146,21 @@ func TestBusinessRecordStreamWriteAndPollFailureBranches(t *testing.T) {
 	handler.audit = auditapplication.NewAuditApplicationService(&recordsAuditRepository{})
 	handler.streamPollInterval, handler.streamHeartbeat = time.Hour, time.Hour
 	initialFailure := &streamSequenceWriter{ResponseRecorder: httptest.NewRecorder(), failWriteAt: 1}
-	handler.streamBusinessRecords(initialFailure, httptest.NewRequest(http.MethodGet, "/business/records/stream", nil))
+	handler.streamBusinessRecords(initialFailure, httptest.NewRequest(http.MethodGet, "/records/stream", nil))
 
 	pollError := errors.New("poll audit failure")
 	handler.audit = auditapplication.NewAuditApplicationService(&recordsAuditRepository{errors: []error{nil, pollError}})
 	handler.streamPollInterval, handler.streamHeartbeat = time.Millisecond, time.Hour
-	handler.streamBusinessRecords(&streamSequenceWriter{ResponseRecorder: httptest.NewRecorder()}, httptest.NewRequest(http.MethodGet, "/business/records/stream", nil))
+	handler.streamBusinessRecords(&streamSequenceWriter{ResponseRecorder: httptest.NewRecorder()}, httptest.NewRequest(http.MethodGet, "/records/stream", nil))
 
 	handler.audit = auditapplication.NewAuditApplicationService(&recordsAuditRepository{eventBatches: [][]auditmodel.AuditEvent{{{ID: "one"}}, {{ID: "two"}}}})
 	pollWriteFailure := &streamSequenceWriter{ResponseRecorder: httptest.NewRecorder(), failWriteAt: 2}
-	handler.streamBusinessRecords(pollWriteFailure, httptest.NewRequest(http.MethodGet, "/business/records/stream", nil))
+	handler.streamBusinessRecords(pollWriteFailure, httptest.NewRequest(http.MethodGet, "/records/stream", nil))
 
 	handler.audit = auditapplication.NewAuditApplicationService(&recordsAuditRepository{})
 	ctx, cancel := context.WithCancel(t.Context())
 	time.AfterFunc(5*time.Millisecond, cancel)
-	handler.streamBusinessRecords(&streamSequenceWriter{ResponseRecorder: httptest.NewRecorder()}, httptest.NewRequest(http.MethodGet, "/business/records/stream", nil).WithContext(ctx))
+	handler.streamBusinessRecords(&streamSequenceWriter{ResponseRecorder: httptest.NewRecorder()}, httptest.NewRequest(http.MethodGet, "/records/stream", nil).WithContext(ctx))
 }
 
 func TestBusinessRecordStreamHeartbeatWriteAndFlushFailures(t *testing.T) {
@@ -171,7 +171,7 @@ func TestBusinessRecordStreamHeartbeatWriteAndFlushFailures(t *testing.T) {
 		{ResponseRecorder: httptest.NewRecorder(), failWriteAt: 2},
 		{ResponseRecorder: httptest.NewRecorder(), failFlushAt: 2},
 	} {
-		handler.streamBusinessRecords(writer, httptest.NewRequest(http.MethodGet, "/business/records/stream", nil))
+		handler.streamBusinessRecords(writer, httptest.NewRequest(http.MethodGet, "/records/stream", nil))
 	}
 }
 

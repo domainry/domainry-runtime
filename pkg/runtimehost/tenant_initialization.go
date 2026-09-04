@@ -24,7 +24,7 @@ type projectTenantManager struct {
 	handle    identitysdk.DatabaseHandle
 	bootstrap identitysdk.BootstrapBinding
 	binding   identitysdk.Binding
-	surfaces  []identityhttpapi.Surface
+	adapters  []identityhttpapi.Adapter
 }
 
 func newProjectTenantManager(ctx context.Context, cfg config.Config, factory identitysdk.Factory, database *bootstrap.ProjectDatabase, handle identitysdk.DatabaseHandle) (*projectTenantManager, error) {
@@ -100,14 +100,14 @@ func initialTenantRequest(cfg config.Config) (workspaceprovisionmodel.Request, s
 	if configuration == nil {
 		return workspaceprovisionmodel.Request{}, "", fmt.Errorf("INITIAL_TENANT_STORE_CONFIGURATION must be a JSON object")
 	}
-	password := strings.TrimSpace(cfg.InitialTenantAdminPassword)
+	password := strings.TrimSpace(cfg.InitialManagementPassword)
 	if password == "" {
-		return workspaceprovisionmodel.Request{}, "", fmt.Errorf("INITIAL_TENANT_ADMIN_PASSWORD or INITIAL_TENANT_ADMIN_PASSWORD_FILE is required before tenant initialization")
+		return workspaceprovisionmodel.Request{}, "", fmt.Errorf("INITIAL_MANAGEMENT_PASSWORD or INITIAL_MANAGEMENT_PASSWORD_FILE is required before tenant initialization")
 	}
 	return workspaceprovisionmodel.Request{
 		RequestID: strings.TrimSpace(cfg.InitialTenantRequestID), TenantCode: strings.TrimSpace(cfg.InitialTenantCode),
-		TenantName: strings.TrimSpace(cfg.InitialTenantName), AdminLoginID: strings.TrimSpace(cfg.InitialTenantAdminLoginID),
-		AdminName: strings.TrimSpace(cfg.InitialTenantAdminName), StoreConfiguration: configuration,
+		TenantName: strings.TrimSpace(cfg.InitialTenantName), AdminLoginID: strings.TrimSpace(cfg.InitialManagementLoginID),
+		AdminName: strings.TrimSpace(cfg.InitialManagementName), StoreConfiguration: configuration,
 	}, password, nil
 }
 
@@ -116,11 +116,11 @@ func (manager *projectTenantManager) bindInitializedIdentity(ctx context.Context
 	if err != nil {
 		return err
 	}
-	binding, surfaces, err := openProjectIdentity(ctx, cfg, manager.factory, manager.handle)
+	binding, adapters, err := openProjectIdentity(ctx, cfg, manager.factory, manager.handle)
 	if err != nil {
 		return err
 	}
-	manager.cfg, manager.binding, manager.surfaces = cfg, binding, surfaces
+	manager.cfg, manager.binding, manager.adapters = cfg, binding, adapters
 	return nil
 }
 
@@ -157,10 +157,10 @@ func (manager *projectTenantManager) Binding() identitysdk.Binding {
 	return manager.binding
 }
 
-func (manager *projectTenantManager) Surfaces() []identityhttpapi.Surface {
+func (manager *projectTenantManager) Adapters() []identityhttpapi.Adapter {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
-	return append([]identityhttpapi.Surface(nil), manager.surfaces...)
+	return append([]identityhttpapi.Adapter(nil), manager.adapters...)
 }
 
 func (manager *projectTenantManager) Close(ctx context.Context) error {

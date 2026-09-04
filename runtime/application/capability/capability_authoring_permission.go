@@ -43,7 +43,7 @@ func resolveAuthoringCapabilityPermissions(contract *capabilitycontract.Capabili
 	// Requires describes capability/data dependencies, not authorization
 	// inheritance. Each operation declares the permission required to execute
 	// that operation; inheriting an authoring permission from a dependency would
-	// incorrectly turn read-only Runtime surfaces into workspace-admin APIs.
+	// incorrectly turn read-only Runtime endpoints into workspace-admin APIs.
 	// Legacy leaf capabilities without an explicit policy still inherit their
 	// parent's policy until they are migrated to a direct declaration.
 	if len(permissionSet) == 0 {

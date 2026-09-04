@@ -389,7 +389,7 @@ func ReportAuthorityFromRuntimePrincipal(principal principalmodel.Principal) (re
 		return reportmodel.ReportAuthority{}, err
 	}
 	subject := reportSubjectFromPrincipal(principal, accessHash)
-	return reportmodel.ReportAuthority{Surface: "internal_orchestration", RequestID: principal.RequestID, Subject: &subject}, nil
+	return reportmodel.ReportAuthority{RequestID: principal.RequestID, Subject: &subject}, nil
 }
 
 func portableBusinessProfile(profile profilebindingmodel.Reference) reportmodel.ReportBusinessProfile {

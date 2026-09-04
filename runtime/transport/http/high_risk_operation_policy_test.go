@@ -27,10 +27,10 @@ func highRiskPolicyTestRouter(t *testing.T) *HTTPRouter {
 
 func TestHighRiskOperationPolicyIsEnforcedFromResolvedActionManifest(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /operations/scheduler/definitions/{definitionID}/run", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("POST /scheduler/definitions/{definitionID}/run", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("POST /operations/scheduler/runs/{runID}/cancel", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("POST /scheduler/runs/{runID}/cancel", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("POST /operations/break-glass", func(w http.ResponseWriter, _ *http.Request) {
@@ -45,10 +45,10 @@ func TestHighRiskOperationPolicyIsEnforcedFromResolvedActionManifest(t *testing.
 		confirmation string
 		wantStatus   int
 	}{
-		{name: "reason missing", path: "/operations/scheduler/definitions/job-1/run", wantStatus: http.StatusBadRequest},
-		{name: "reason supplied", path: "/operations/scheduler/definitions/job-1/run", reason: "incident-42 manual run", wantStatus: http.StatusNoContent},
-		{name: "confirmation missing", path: "/operations/scheduler/runs/run-1/cancel", reason: "incident-42 stuck lease", wantStatus: http.StatusBadRequest},
-		{name: "confirmation supplied", path: "/operations/scheduler/runs/run-1/cancel", reason: "incident-42 stuck lease", confirmation: operationConfirmedValue, wantStatus: http.StatusNoContent},
+		{name: "reason missing", path: "/scheduler/definitions/job-1/run", wantStatus: http.StatusBadRequest},
+		{name: "reason supplied", path: "/scheduler/definitions/job-1/run", reason: "incident-42 manual run", wantStatus: http.StatusNoContent},
+		{name: "confirmation missing", path: "/scheduler/runs/run-1/cancel", reason: "incident-42 stuck lease", wantStatus: http.StatusBadRequest},
+		{name: "confirmation supplied", path: "/scheduler/runs/run-1/cancel", reason: "incident-42 stuck lease", confirmation: operationConfirmedValue, wantStatus: http.StatusNoContent},
 		{name: "break glass requires distinct confirmation", path: "/operations/break-glass", reason: "incident-42 emergency recovery", confirmation: operationConfirmedValue, wantStatus: http.StatusBadRequest},
 		{name: "break glass supplied", path: "/operations/break-glass", reason: "incident-42 emergency recovery", confirmation: operationBreakGlassValue, wantStatus: http.StatusNoContent},
 	}
@@ -72,7 +72,7 @@ func TestHighRiskOperationPolicyIsEnforcedFromResolvedActionManifest(t *testing.
 
 func TestHighRiskOperationPolicyDoesNotApplyToReadsOrUnclassifiedFallback(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /operations/scheduler/state", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /scheduler/state", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -81,7 +81,7 @@ func TestHighRiskOperationPolicyDoesNotApplyToReadsOrUnclassifiedFallback(t *tes
 	handler := highRiskPolicyTestRouter(t).withHighRiskOperationPolicy(mux, mux)
 
 	for _, request := range []*http.Request{
-		httptest.NewRequest(http.MethodGet, "/operations/scheduler/state", nil),
+		httptest.NewRequest(http.MethodGet, "/scheduler/state", nil),
 		httptest.NewRequest(http.MethodGet, "/not-registered", nil),
 	} {
 		response := httptest.NewRecorder()
@@ -95,13 +95,13 @@ func TestHighRiskOperationPolicyDoesNotApplyToReadsOrUnclassifiedFallback(t *tes
 func TestHighRiskOperationPolicyDecodesUTF8Reason(t *testing.T) {
 	mux := http.NewServeMux()
 	var received string
-	mux.HandleFunc("POST /operations/scheduler/definitions/{definitionID}/run", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /scheduler/definitions/{definitionID}/run", func(w http.ResponseWriter, r *http.Request) {
 		received = r.Header.Get(operationReasonHeader)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	handler := highRiskPolicyTestRouter(t).withHighRiskOperationPolicy(mux, mux)
 
-	request := httptest.NewRequest(http.MethodPost, "/operations/scheduler/definitions/job-1/run", nil)
+	request := httptest.NewRequest(http.MethodPost, "/scheduler/definitions/job-1/run", nil)
 	request.Header.Set(operationReasonHeader, "UTF-8''%E8%A1%A5%E5%85%85%E7%BB%93%E7%AE%97%E6%98%8E%E7%BB%86")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -116,12 +116,12 @@ func TestHighRiskOperationPolicyDecodesUTF8Reason(t *testing.T) {
 
 func TestHighRiskOperationPolicyRejectsInvalidUTF8ReasonEncoding(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /operations/scheduler/definitions/{definitionID}/run", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("POST /scheduler/definitions/{definitionID}/run", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	handler := highRiskPolicyTestRouter(t).withHighRiskOperationPolicy(mux, mux)
 
-	request := httptest.NewRequest(http.MethodPost, "/operations/scheduler/definitions/job-1/run", nil)
+	request := httptest.NewRequest(http.MethodPost, "/scheduler/definitions/job-1/run", nil)
 	request.Header.Set(operationReasonHeader, "UTF-8''%zz")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)

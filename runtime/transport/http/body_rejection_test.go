@@ -10,7 +10,7 @@ import (
 func TestDecodeJSONBoundsBodiesAndRecordsStableRejectionReason(t *testing.T) {
 	collector := NewMemoryHTTPMetricsCollector(8)
 	router := &HTTPRouter{httpMetrics: collector, maxJSONBodyBytes: 8}
-	request := httptest.NewRequest(http.MethodPost, "/objects/customer/records", strings.NewReader(`{"value":"payload"}`))
+	request := httptest.NewRequest(http.MethodPost, "/records/objects/customer/records", strings.NewReader(`{"value":"payload"}`))
 	response := httptest.NewRecorder()
 	if router.decodeJSONBody(response, request, &map[string]any{}) {
 		t.Fatal("oversized body was accepted")

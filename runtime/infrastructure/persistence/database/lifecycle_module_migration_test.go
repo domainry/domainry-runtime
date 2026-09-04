@@ -50,7 +50,7 @@ func TestLifecycleModuleAloneAppliesOwnedMigrationToHostLedger(t *testing.T) {
 		}
 	}
 	var migrations int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:lifecycle' AND dirty=FALSE`).Scan(&migrations); err != nil || migrations != 2 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:lifecycle' AND dirty=FALSE`).Scan(&migrations); err != nil || migrations != 3 {
 		t.Fatalf("Lifecycle ledger rows=%d err=%v", migrations, err)
 	}
 }
@@ -62,12 +62,36 @@ func TestLifecycleModuleReopenAdoptsExistingOwnedSchemaOnce(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	openLifecycleMigrationBinding(t, store, "lifecycle-first-open")
+	// Recreate the legitimate pre-data-scope module shape: versions 1 and 2
+	// existed before the host ledger adopted this formerly embedded schema.
+	for _, index := range []string{
+		"idx_lifecycle_policy_publisher", "idx_lifecycle_policy_owner_org",
+		"idx_lifecycle_hold_creator", "idx_lifecycle_hold_owner_org",
+		"idx_lifecycle_cleanup_requester", "idx_lifecycle_cleanup_owner_org",
+		"idx_lifecycle_subject_requester", "idx_lifecycle_subject_owner_org",
+	} {
+		if _, err := store.DB().ExecContext(t.Context(), `DROP INDEX IF EXISTS `+index); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for table, columns := range map[string][]string{
+		"_lifecycle_policy_versions":  {"published_by", "owner_org_id"},
+		"_lifecycle_legal_holds":      {"created_by", "owner_org_id"},
+		"_lifecycle_cleanup_jobs":     {"requested_by", "owner_org_id"},
+		"_lifecycle_subject_requests": {"requested_by", "owner_org_id"},
+	} {
+		for _, column := range columns {
+			if _, err := store.DB().ExecContext(t.Context(), `ALTER TABLE `+table+` DROP COLUMN `+column); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	if _, err := store.DB().ExecContext(t.Context(), `DELETE FROM _schema_migrations WHERE kind='module:lifecycle'`); err != nil {
 		t.Fatal(err)
 	}
 	openLifecycleMigrationBinding(t, store, "lifecycle-adoption")
 	var clean int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:lifecycle' AND dirty=FALSE`).Scan(&clean); err != nil || clean != 2 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:lifecycle' AND dirty=FALSE`).Scan(&clean); err != nil || clean != 3 {
 		t.Fatalf("adopted lifecycle ledger rows=%d err=%v", clean, err)
 	}
 }

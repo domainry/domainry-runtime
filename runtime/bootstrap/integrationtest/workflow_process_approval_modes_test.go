@@ -91,7 +91,7 @@ func approvalModeTestRuntime(t *testing.T, mode string) (*persistence.RuntimeSto
 		Nodes: []definitionmodel.WorkflowGraphNode{{ID: "trigger", Type: "trigger", Name: "Trigger"}, {ID: "approval", Type: "approval", Name: "Approval", Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{Mode: mode, ResolverMode: "union", EmptyAssigneePolicy: "fail", Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"approver_a", "approver_b"}}}}}}},
 		Edges: []definitionmodel.WorkflowGraphEdge{{ID: "trigger-approval", Source: "trigger", Target: "approval"}},
 	}}
-	identity := newIntegrationTestIdentityDirectory()
+	identity := newIntegrationTestIdentityProjection()
 	for _, userID := range []string{"approver_a", "approver_b"} {
 		identity.upsertUser(identitysdk.User{ID: userID, Status: identitysdk.UserStatusActive})
 	}

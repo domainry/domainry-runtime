@@ -13,30 +13,30 @@ import (
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
 
-type integrationHTTPSurface struct {
+type integrationHTTPAdapter struct {
 	name    string
 	routes  []identityhttpapi.Route
 	handler http.Handler
 }
 
-func (integrationHTTPSurface) ContractVersion() string { return identityhttpapi.ContractVersion }
-func (integrationHTTPSurface) Owner() string           { return "identity" }
-func (surface integrationHTTPSurface) Name() string    { return surface.name }
-func (surface integrationHTTPSurface) Routes() []identityhttpapi.Route {
-	return append([]identityhttpapi.Route(nil), surface.routes...)
+func (integrationHTTPAdapter) ContractVersion() string { return identityhttpapi.ContractVersion }
+func (integrationHTTPAdapter) Owner() string           { return "identity" }
+func (adapter integrationHTTPAdapter) Name() string    { return adapter.name }
+func (adapter integrationHTTPAdapter) Routes() []identityhttpapi.Route {
+	return append([]identityhttpapi.Route(nil), adapter.routes...)
 }
-func (surface integrationHTTPSurface) Handler() http.Handler { return surface.handler }
+func (adapter integrationHTTPAdapter) Handler() http.Handler { return adapter.handler }
 
 type moduleBindingStub struct {
 	runtimetestkit.IdentityBindingStub
-	surfaces []identityhttpapi.Surface
+	adapters []identityhttpapi.Adapter
 }
 
 func (moduleBindingStub) Descriptor() identitysdk.Descriptor {
 	return identitysdk.Descriptor{Mode: identitysdk.DeploymentModeModule}
 }
-func (binding moduleBindingStub) HTTPSurfaces() []identityhttpapi.Surface {
-	return append([]identityhttpapi.Surface(nil), binding.surfaces...)
+func (binding moduleBindingStub) HTTPAdapters() []identityhttpapi.Adapter {
+	return append([]identityhttpapi.Adapter(nil), binding.adapters...)
 }
 
 func TestProjectHostMountsModuleIdentityHTTPOutsideRuntime(t *testing.T) {
@@ -44,20 +44,20 @@ func TestProjectHostMountsModuleIdentityHTTPOutsideRuntime(t *testing.T) {
 		w.Header().Set("X-Owner", "identity")
 		w.WriteHeader(http.StatusNoContent)
 	})
-	surface := integrationHTTPSurface{name: "identity", handler: identityHandler, routes: []identityhttpapi.Route{
-		{Action: runtimeHostTestAction("auth.login", "POST /auth/login", []actioncontract.Exposure{actioncontract.ExposurePublic, actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationAnonymous)},
-		{Action: runtimeHostTestAction("identity.users.list", "GET /identity/users", []actioncontract.Exposure{actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationAuthenticated)},
+	adapter := integrationHTTPAdapter{name: "identity", handler: identityHandler, routes: []identityhttpapi.Route{
+		{Action: runtimeHostTestAction("auth.login", "POST /auth/login", []actioncontract.Exposure{actioncontract.ExposurePublic, actioncontract.ExposureManagement}, actioncontract.AuthorizationAnonymous)},
+		{Action: runtimeHostTestAction("identity.users.list", "GET /identity/users", []actioncontract.Exposure{actioncontract.ExposureManagement}, actioncontract.AuthorizationAuthenticated)},
 	}}
 	runtimeHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Owner", "runtime")
 		w.WriteHeader(http.StatusAccepted)
 	})
 
-	public, err := mountIdentityHTTPSurfaces(runtimehttp.ListenerRouteGroupPublic, []identityhttpapi.Surface{surface}, runtimeHandler)
+	public, err := mountIdentityHTTPAdapters(runtimehttp.ListenerRouteGroupPublic, []identityhttpapi.Adapter{adapter}, runtimeHandler)
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin, err := mountIdentityHTTPSurfaces(runtimehttp.ListenerRouteGroupTenantAdmin, []identityhttpapi.Surface{surface}, runtimeHandler)
+	admin, err := mountIdentityHTTPAdapters(runtimehttp.ListenerRouteGroupManagement, []identityhttpapi.Adapter{adapter}, runtimeHandler)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,28 +78,28 @@ func TestProjectHostMountsModuleIdentityHTTPOutsideRuntime(t *testing.T) {
 func TestProjectIdentityTopologyRejectsMissingModuleHTTPAndSaaSSurfaces(t *testing.T) {
 	cfg := config.Config{IdentityWorkspaceID: "workspace-primary", IdentityAudience: "orders"}
 	if _, _, err := openProjectIdentity(t.Context(), cfg, identityFactoryStub{binding: moduleBindingStub{}}); err == nil {
-		t.Fatal("module binding without HTTP surfaces was accepted")
+		t.Fatal("module binding without HTTP adapters was accepted")
 	}
-	surface := integrationHTTPSurface{name: "identity", handler: http.NotFoundHandler(), routes: []identityhttpapi.Route{{Action: runtimeHostTestAction("identity.users.list", "GET /identity/users", []actioncontract.Exposure{actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationAuthenticated)}}}
-	saasWithHTTP := saasHTTPBindingStub{surfaces: []identityhttpapi.Surface{surface}}
+	adapter := integrationHTTPAdapter{name: "identity", handler: http.NotFoundHandler(), routes: []identityhttpapi.Route{{Action: runtimeHostTestAction("identity.users.list", "GET /identity/users", []actioncontract.Exposure{actioncontract.ExposureManagement}, actioncontract.AuthorizationAuthenticated)}}}
+	saasWithHTTP := saasHTTPBindingStub{adapters: []identityhttpapi.Adapter{adapter}}
 	if _, _, err := openProjectIdentity(t.Context(), cfg, identityFactoryStub{binding: saasWithHTTP}); err == nil {
-		t.Fatal("SaaS binding with in-process HTTP surfaces was accepted")
+		t.Fatal("SaaS binding with in-process HTTP adapters was accepted")
 	}
-	if binding, surfaces, err := openProjectIdentity(t.Context(), cfg, identityFactoryStub{binding: identityBindingStub{}}); err != nil || binding == nil || len(surfaces) != 0 {
-		t.Fatalf("SaaS binding=%#v surfaces=%d err=%v", binding, len(surfaces), err)
+	if binding, adapters, err := openProjectIdentity(t.Context(), cfg, identityFactoryStub{binding: identityBindingStub{}}); err != nil || binding == nil || len(adapters) != 0 {
+		t.Fatalf("SaaS binding=%#v adapters=%d err=%v", binding, len(adapters), err)
 	}
 }
 
 type saasHTTPBindingStub struct {
 	identityBindingStub
-	surfaces []identityhttpapi.Surface
+	adapters []identityhttpapi.Adapter
 }
 
-func (binding saasHTTPBindingStub) HTTPSurfaces() []identityhttpapi.Surface {
-	return append([]identityhttpapi.Surface(nil), binding.surfaces...)
+func (binding saasHTTPBindingStub) HTTPAdapters() []identityhttpapi.Adapter {
+	return append([]identityhttpapi.Adapter(nil), binding.adapters...)
 }
 
 var _ identitysdk.Binding = moduleBindingStub{}
 var _ identityhttpapi.Provider = moduleBindingStub{}
-var _ identityhttpapi.Surface = integrationHTTPSurface{}
+var _ identityhttpapi.Adapter = integrationHTTPAdapter{}
 var _ identitysdk.Factory = identityFactoryStub{}

@@ -43,7 +43,7 @@ func (e *WorkflowProcessEngine) insertApprovalTaskWithNotification(ctx context.C
 func (e *WorkflowProcessEngine) compileTaskAssignedNotification(process workflowmodel.WorkflowProcessInstance, task workflowmodel.WorkflowTask, locale string, compiler func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)) (notificationmodel.NotificationEvent, error) {
 	return compiler(notificationmodel.NotificationIntent{
 		ID: "notification_" + task.ID + "_assigned", WorkspaceID: process.WorkspaceID,
-		SourceEventID: task.ID + ":assigned:" + task.UpdatedAt, EventType: "workflow.task.assigned", Surface: "business_workspace",
+		SourceEventID: task.ID + ":assigned:" + task.UpdatedAt, EventType: "workflow.task.assigned",
 		RecipientUserIDs: []string{task.AssigneeUserID}, SubjectType: "workflow_task", SubjectID: task.ID, SubjectVersion: task.UpdatedAt, GroupKey: workflowTaskNotificationGroupKey(task.ID),
 		OccurredAt: task.CreatedAt, ExpiresAt: task.DueAt, Locale: locale,
 		Variables: map[string]any{"task_title": task.Title, "workflow_name": process.WorkflowName, "due_at": task.DueAt},
@@ -58,7 +58,7 @@ func compileWorkflowTaskLifecycleNotification(compiler func(notificationmodel.No
 	eventRevision := fmt.Sprintf("%x", sha256.Sum256([]byte(task.ID+":"+lifecycle+":"+task.UpdatedAt)))[:16]
 	return compiler(notificationmodel.NotificationIntent{
 		ID: "notification_" + task.ID + "_" + lifecycle + "_" + eventRevision, WorkspaceID: process.WorkspaceID,
-		SourceEventID: task.ID + ":" + lifecycle + ":" + task.UpdatedAt, EventType: eventType, Surface: "business_workspace",
+		SourceEventID: task.ID + ":" + lifecycle + ":" + task.UpdatedAt, EventType: eventType,
 		RecipientUserIDs: []string{task.AssigneeUserID}, SubjectType: "workflow_task", SubjectID: task.ID, SubjectVersion: task.UpdatedAt,
 		GroupKey: workflowTaskNotificationGroupKey(task.ID), ActionState: actionState, OccurredAt: occurredAt, Locale: locale,
 		Variables: map[string]any{"task_title": task.Title, "workflow_name": process.WorkflowName, "decision": task.Decision},

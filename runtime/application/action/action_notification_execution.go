@@ -68,7 +68,6 @@ func (e *businessActionExecution) prepareNotificationBatch(ctx context.Context, 
 		event.WorkspaceID = e.workspace.ID
 		event.SourceEventID = strings.TrimSpace(intent.SourceEventID)
 		event.EventType = strings.TrimSpace(intent.EventType)
-		event.Surface = strings.TrimSpace(intent.Surface)
 		event.RecipientUserIDs = append([]string(nil), intent.RecipientUserIDs...)
 		event.SubjectType = strings.TrimSpace(intent.SubjectObjectKey)
 		event.SubjectID = strings.TrimSpace(intent.SubjectRecordID)

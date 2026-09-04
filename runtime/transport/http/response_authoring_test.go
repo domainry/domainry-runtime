@@ -25,7 +25,7 @@ func TestAuthoringErrorResponsePreservesMachineReadableContract(t *testing.T) {
 
 func TestAuthoringErrorResponseRedactsSensitiveParams(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/integrations/connections/example", nil)
+	request := httptest.NewRequest(http.MethodPost, "/integration/connections/example", nil)
 	writeErrorWithParams(recorder, request, http.StatusBadRequest, "backend.integration.connection.invalid", map[string]string{"field_path": "connection.client_secret", "actual": "plain-secret", "connector": "crm"})
 	var response struct {
 		CapabilityKey string            `json:"capability_key"`

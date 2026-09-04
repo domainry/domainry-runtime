@@ -76,7 +76,7 @@ func TestRuntimeAPIContractUsesOneServerSelectedRecordExportRoute(t *testing.T) 
 		t.Fatal(err)
 	}
 	route := document.Routes["record_export"]
-	if route.Method != "POST" || route.Path != "/objects/{objectKey}/records/export" || route.DeliveryPolicy != "server_selected" || !route.RequiresIdempotencyKey || route.Responses["200"] != "file" || route.Responses["202"] != "record_batch_job" {
+	if route.Method != "POST" || route.Path != "/records/objects/{objectKey}/records/export" || route.DeliveryPolicy != "server_selected" || !route.RequiresIdempotencyKey || route.Responses["200"] != "file" || route.Responses["202"] != "record_batch_job" {
 		t.Fatalf("record export route=%+v", route)
 	}
 	if _, exists := document.Routes["record_export_job_create"]; exists {
@@ -120,7 +120,7 @@ func TestRuntimeAPIContractPublishesActionInvocationScope(t *testing.T) {
 	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
 		t.Fatal(err)
 	}
-	if route := document.Routes["action_catalog"]; route.Method != "GET" || route.Path != "/objects/{objectKey}/actions" {
+	if route := document.Routes["action_catalog"]; route.Method != "GET" || route.Path != "/records/objects/{objectKey}/actions" {
 		t.Fatalf("unexpected Action catalog route: %+v", route)
 	}
 	scope := document.Schemas["action_definition"].InvocationScopeByKind
@@ -165,7 +165,7 @@ func TestRuntimeAPIContractDoesNotRepublishAgentOwnedHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	for key, route := range document.Routes {
-		if strings.HasPrefix(key, "agent_") || strings.HasPrefix(route.Path, "/agent-dialog/") || strings.HasPrefix(route.Path, "/operations/agent/") {
+		if strings.HasPrefix(key, "agent_") || strings.HasPrefix(route.Path, "/agent/") || strings.HasPrefix(route.Path, "/agent/") {
 			t.Errorf("Runtime contract retained Agent-owned route %s=%s", key, route.Path)
 		}
 	}
@@ -198,7 +198,7 @@ func TestRuntimeAPIContractRouteSchemasAreClosed(t *testing.T) {
 	}
 }
 
-func TestRuntimeAPIContractDoesNotRepublishReportOwnedSurface(t *testing.T) {
+func TestRuntimeAPIContractDoesNotRepublishReportOwnedAdapter(t *testing.T) {
 	var document struct {
 		Routes  map[string]json.RawMessage `json:"routes"`
 		Schemas map[string]json.RawMessage `json:"schemas"`
@@ -227,7 +227,7 @@ func stringSliceContains(values []string, wanted string) bool {
 	return false
 }
 
-func TestRuntimeAPIContractPublishesBusinessWorkflowLifecycle(t *testing.T) {
+func TestRuntimeAPIContractPublishesParticipantWorkflowLifecycle(t *testing.T) {
 	var document struct {
 		Routes map[string]struct {
 			Method                 string   `json:"method"`
@@ -249,17 +249,16 @@ func TestRuntimeAPIContractPublishesBusinessWorkflowLifecycle(t *testing.T) {
 		response string
 		mutation bool
 	}{
-		"workflow_process_list":     {"GET", "/business/workflow/processes", "workflow_process_list", false},
-		"workflow_process_detail":   {"GET", "/business/workflow/processes/{processID}", "workflow_process_detail", false},
-		"workflow_task_list":        {"GET", "/business/workflow/tasks", "workflow_task_list", false},
-		"workflow_team_task_list":   {"GET", "/business/workflow/team-tasks", "workflow_task_list", false},
-		"workflow_run":              {"POST", "/business/workflows/{workflowKey}/run", "workflow_run_result", true},
-		"portal_workflow_run":       {"POST", "/portal/workflows/{workflowKey}/run", "workflow_run_result", true},
-		"workflow_task_approve":     {"POST", "/business/workflow/tasks/{taskID}/approve", "workflow_process", true},
-		"workflow_task_reject":      {"POST", "/business/workflow/tasks/{taskID}/reject", "workflow_process", true},
-		"workflow_task_return":      {"POST", "/business/workflow/tasks/{taskID}/return", "workflow_process", true},
-		"workflow_process_withdraw": {"POST", "/business/workflow/processes/{processID}/withdraw", "workflow_process", true},
-		"workflow_process_retry":    {"POST", "/business/workflow/processes/{processID}/retry", "workflow_process", true},
+		"workflow_process_list":     {"GET", "/workflow/processes", "workflow_process_list", false},
+		"workflow_process_detail":   {"GET", "/workflow/processes/{processID}", "workflow_process_detail", false},
+		"workflow_task_list":        {"GET", "/workflow/tasks", "workflow_task_list", false},
+		"workflow_team_task_list":   {"GET", "/workflow/team-tasks", "workflow_task_list", false},
+		"workflow_run":              {"POST", "/workflow/definitions/{workflowKey}/run", "workflow_run_result", true},
+		"workflow_task_approve":     {"POST", "/workflow/tasks/{taskID}/approve", "workflow_process", true},
+		"workflow_task_reject":      {"POST", "/workflow/tasks/{taskID}/reject", "workflow_process", true},
+		"workflow_task_return":      {"POST", "/workflow/tasks/{taskID}/return", "workflow_process", true},
+		"workflow_process_withdraw": {"POST", "/workflow/processes/{processID}/withdraw", "workflow_process", true},
+		"workflow_process_retry":    {"POST", "/workflow/processes/{processID}/retry", "workflow_process", true},
 	} {
 		route, ok := document.Routes[key]
 		if !ok || route.Method != expected.method || route.Path != expected.path || route.Response != expected.response ||
@@ -290,7 +289,7 @@ func TestRuntimeAPIContractPublishesBusinessAuditQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 	route := document.Routes["business_audit_event_list"]
-	if route.Method != "GET" || route.Path != "/business/audit-events" ||
+	if route.Method != "GET" || route.Path != "/audit/events" ||
 		route.Response != "business_audit_event_page" || len(route.Query) != 9 {
 		t.Fatalf("unexpected business audit route: %+v", route)
 	}
@@ -323,11 +322,11 @@ func TestRuntimeAPIContractPublishesGovernedBusinessAuditExport(t *testing.T) {
 		t.Fatal(err)
 	}
 	prepare := document.Routes["business_audit_event_export_prepare"]
-	if prepare.Method != "POST" || prepare.Path != "/business/audit-event-exports" || prepare.Request != "business_audit_event_export_request" || prepare.Response != "business_audit_event_export_prepared" || !prepare.RequiresIdempotencyKey {
+	if prepare.Method != "POST" || prepare.Path != "/audit/exports" || prepare.Request != "business_audit_event_export_request" || prepare.Response != "business_audit_event_export_prepared" || !prepare.RequiresIdempotencyKey {
 		t.Fatalf("unexpected prepare route: %+v", prepare)
 	}
 	download := document.Routes["business_audit_event_export_download"]
-	if download.Method != "GET" || download.Path != "/business/audit-event-exports/downloads/{token}" || download.Response != "file" {
+	if download.Method != "GET" || download.Path != "/audit/exports/downloads/{token}" || download.Response != "file" {
 		t.Fatalf("unexpected download route: %+v", download)
 	}
 	if !reflect.DeepEqual(document.Schemas["business_audit_event_export_request"].Required, []string{"filters"}) {
@@ -363,11 +362,11 @@ func TestRuntimeAPIContractKeepsOnlyRuntimePublicationHandoff(t *testing.T) {
 	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
 		t.Fatal(err)
 	}
-	if route := document.Routes["publication_handoff_result"]; route.Path != "/business/publication-handoffs/{messageID}" {
+	if route := document.Routes["publication_handoff_result"]; route.Path != "/publication-handoff/messages/{messageID}" {
 		t.Fatalf("publication handoff route=%+v", route)
 	}
 	for key, route := range document.Routes {
-		if strings.Contains(key, "web_push") || strings.Contains(route.Path, "/integration-intents") || strings.Contains(route.Path, "/notifications/web-push") {
+		if strings.Contains(key, "web_push") || strings.Contains(route.Path, "/integration-intents") || strings.Contains(route.Path, "/notification/web-push") {
 			t.Errorf("Integration-owned route leaked into Runtime API contract: %s=%s", key, route.Path)
 		}
 	}
@@ -377,7 +376,7 @@ func TestRuntimeAPIContractKeepsOnlyRuntimePublicationHandoff(t *testing.T) {
 		}
 	}
 	for _, route := range document.AdminBusinessReuse.Routes {
-		if route.SourceOwner == "integrations" || strings.Contains(route.EndpointIdentity, "/notifications/web-push") {
+		if route.SourceOwner == "integrations" || strings.Contains(route.EndpointIdentity, "/notification/web-push") {
 			t.Errorf("Integration-owned admin reuse leaked into Runtime API contract: %+v", route)
 		}
 	}

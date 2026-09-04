@@ -40,7 +40,7 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 		ReleaseIdentity:          runtime.releaseIdentity,
 		ReleaseAdmission:         runtime.releaseAdmission.Check,
 		ReleaseIntegrity:         runtime.releaseIntegrity,
-		ModuleHTTPSurfaces:       runtime.ModuleHTTPSurfaces(),
+		ModuleHTTPAdapters:       runtime.ModuleHTTPAdapters(),
 		NotificationInboxActions: runtime.notificationHTTP,
 	})
 	return runtime

@@ -141,12 +141,12 @@ func TestAutomationRoutesBindMethodsAndPaths(t *testing.T) {
 	mux := http.NewServeMux()
 	fixture.handler.RegisterRoutes(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/automation-rules", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/automation/rules", nil))
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"welcome"`) {
 		t.Fatalf("list route status=%d body=%s", response.Code, response.Body.String())
 	}
 	response = httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPatch, "/automation-rules/welcome", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPatch, "/automation/rules/welcome", nil))
 	if response.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("method route status=%d", response.Code)
 	}
@@ -158,25 +158,25 @@ func TestAutomationAuthoringFragmentValidationRoute(t *testing.T) {
 	fixture.handler.RegisterRoutes(mux)
 
 	valid := httptest.NewRecorder()
-	mux.ServeHTTP(valid, httptest.NewRequest(http.MethodPost, "/automation-rules/authoring-fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"any"}`)))
+	mux.ServeHTTP(valid, httptest.NewRequest(http.MethodPost, "/automation/rules/authoring-fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"any"}`)))
 	if valid.Code != http.StatusOK || !strings.Contains(valid.Body.String(), `"valid":true`) || !strings.Contains(valid.Body.String(), `"capability_key":"automation.condition_group"`) {
 		t.Fatalf("valid status=%d body=%s", valid.Code, valid.Body.String())
 	}
 
 	invalid := httptest.NewRecorder()
-	mux.ServeHTTP(invalid, httptest.NewRequest(http.MethodPost, "/automation-rules/authoring-fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"none"}`)))
+	mux.ServeHTTP(invalid, httptest.NewRequest(http.MethodPost, "/automation/rules/authoring-fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"none"}`)))
 	if invalid.Code != http.StatusOK || !strings.Contains(invalid.Body.String(), `"valid":false`) || !strings.Contains(invalid.Body.String(), `backend.automation.condition_mode_invalid`) {
 		t.Fatalf("invalid status=%d body=%s", invalid.Code, invalid.Body.String())
 	}
 
 	badJSON := httptest.NewRecorder()
-	mux.ServeHTTP(badJSON, httptest.NewRequest(http.MethodPost, "/automation-rules/authoring-fragments/automation.condition_group/validate", strings.NewReader(`{`)))
+	mux.ServeHTTP(badJSON, httptest.NewRequest(http.MethodPost, "/automation/rules/authoring-fragments/automation.condition_group/validate", strings.NewReader(`{`)))
 	if badJSON.Code != http.StatusBadRequest {
 		t.Fatalf("bad JSON status=%d", badJSON.Code)
 	}
 	accessfixture.Set(fixture.principal, accessfixture.Bundle{})
 	denied := httptest.NewRecorder()
-	mux.ServeHTTP(denied, httptest.NewRequest(http.MethodPost, "/automation-rules/authoring-fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"any"}`)))
+	mux.ServeHTTP(denied, httptest.NewRequest(http.MethodPost, "/automation/rules/authoring-fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"any"}`)))
 	if denied.Code != http.StatusUnprocessableEntity || fixture.capture.serviceErr == nil {
 		t.Fatalf("denied status=%d error=%v", denied.Code, fixture.capture.serviceErr)
 	}
@@ -185,19 +185,19 @@ func TestAutomationAuthoringFragmentValidationRoute(t *testing.T) {
 func TestAutomationHandlersListCapabilitiesHistoryAndGet(t *testing.T) {
 	fixture := newAutomationHandlerFixture()
 	rules := httptest.NewRecorder()
-	fixture.handler.listAutomationRules(rules, automationRequest(http.MethodGet, "/automation-rules", "", ""))
+	fixture.handler.listAutomationRules(rules, automationRequest(http.MethodGet, "/automation/rules", "", ""))
 	if rules.Code != http.StatusOK || !strings.Contains(rules.Body.String(), `"count":1`) || !strings.Contains(rules.Body.String(), `"welcome"`) {
 		t.Fatalf("rules status=%d body=%s", rules.Code, rules.Body.String())
 	}
 
 	capabilities := httptest.NewRecorder()
-	fixture.handler.automationCapabilities(capabilities, automationRequest(http.MethodGet, "/automation-rules/capabilities", "", ""))
+	fixture.handler.automationCapabilities(capabilities, automationRequest(http.MethodGet, "/automation/rules/capabilities", "", ""))
 	if capabilities.Code != http.StatusOK || fixture.capture.legacyCalls != 1 || capabilities.Header().Get("X-Legacy-Projection") != "true" {
 		t.Fatalf("capabilities status=%d legacy=%d headers=%v", capabilities.Code, fixture.capture.legacyCalls, capabilities.Header())
 	}
 
 	history := httptest.NewRecorder()
-	fixture.handler.listAutomationExecutions(history, automationRequest(http.MethodGet, "/automation-rules/executions?rule_key=welcome&object_key=customer&record_id=record-1&phase=before&status=succeeded&connector_key=crm&from=2026-01-01&to=2026-02-01&limit=25", "", ""))
+	fixture.handler.listAutomationExecutions(history, automationRequest(http.MethodGet, "/automation/rules/executions?rule_key=welcome&object_key=customer&record_id=record-1&phase=before&status=succeeded&connector_key=crm&from=2026-01-01&to=2026-02-01&limit=25", "", ""))
 	filter := fixture.executions.filter
 	if history.Code != http.StatusOK || filter.RuleKey != "welcome" || filter.ObjectKey != "customer" || filter.RecordID != "record-1" || filter.Phase != "before" || filter.Status != "succeeded" || filter.ConnectorKey != "crm" || filter.From != "2026-01-01" || filter.To != "2026-02-01" || filter.Limit != 25 {
 		t.Fatalf("history status=%d filter=%#v body=%s", history.Code, filter, history.Body.String())

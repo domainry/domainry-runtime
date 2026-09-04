@@ -31,16 +31,16 @@ func TestSchedulerDefinitionSurfaceReadsPublishedDefinitions(t *testing.T) {
 	published := PublishedDefinition{Key: "nightly", Data: map[string]any{"key": "nightly", "status": "enabled", "target_type": "workflow"}}
 	service := NewSchedulerApplicationService(nil)
 	service.UseDefinitionSource(schedulerSurfaceDefinitionSource{definitions: []PublishedDefinition{published}, definition: published, found: true, versions: []SchedulerDefinitionVersion{{VersionID: "v1", Event: "published", Data: published.Data}}})
-	principal := schedulerTestPrincipal(ActionListTenantAdminSchedulerDefinitions, ActionGetTenantAdminSchedulerDefinition)
-	definitions, err := service.TenantAdminDefinitions(t.Context(), principal)
+	principal := schedulerTestPrincipal(ActionListManagementSchedulerDefinitions, ActionGetManagementSchedulerDefinition)
+	definitions, err := service.ManagementDefinitions(t.Context(), principal)
 	if err != nil || len(definitions) != 1 || definitions[0].Key != "nightly" {
 		t.Fatalf("definitions = %+v, err = %v", definitions, err)
 	}
-	definition, err := service.TenantAdminDefinition(t.Context(), "nightly", principal)
+	definition, err := service.ManagementDefinition(t.Context(), "nightly", principal)
 	if err != nil || definition.Key != "nightly" {
 		t.Fatalf("definition = %+v, err = %v", definition, err)
 	}
-	versions, err := service.TenantAdminDefinitionVersions(t.Context(), "nightly", principal)
+	versions, err := service.ManagementDefinitionVersions(t.Context(), "nightly", principal)
 	if err != nil || len(versions) != 1 || versions[0].VersionID != "v1" {
 		t.Fatalf("versions = %+v, err = %v", versions, err)
 	}
@@ -48,12 +48,12 @@ func TestSchedulerDefinitionSurfaceReadsPublishedDefinitions(t *testing.T) {
 
 func TestSchedulerDefinitionSurfaceReportsSourceFailures(t *testing.T) {
 	service := NewSchedulerApplicationService(nil)
-	principal := schedulerTestPrincipal(ActionListTenantAdminSchedulerDefinitions)
-	if _, err := service.TenantAdminDefinitions(t.Context(), principal); apperror.CodeOf(err) != "backend.scheduler.definition_source_unavailable" {
+	principal := schedulerTestPrincipal(ActionListManagementSchedulerDefinitions)
+	if _, err := service.ManagementDefinitions(t.Context(), principal); apperror.CodeOf(err) != "backend.scheduler.definition_source_unavailable" {
 		t.Fatalf("missing source error = %v", err)
 	}
 	service.UseDefinitionSource(schedulerSurfaceDefinitionSource{listErr: errors.New("read failed")})
-	if _, err := service.TenantAdminDefinitions(t.Context(), principal); apperror.CodeOf(err) != "backend.internal" {
+	if _, err := service.ManagementDefinitions(t.Context(), principal); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("source failure = %v", err)
 	}
 }
@@ -67,9 +67,9 @@ func TestSchedulerOpsAuthorizationDoesNotProjectRuntimeJobLifecycle(t *testing.T
 	}
 }
 
-func TestSchedulerSurfaceAuthorizationRequiresItsExactAction(t *testing.T) {
+func TestSchedulerManagementAuthorizationRequiresItsExactAction(t *testing.T) {
 	service := NewSchedulerApplicationService(nil)
-	for _, permission := range []string{"runtime.operations.list_operations", "scheduler.command", "runtime.appschema.validate_application_definition"} {
+	for _, permission := range []string{"runtime.operations.list_operations", "scheduler.definitions.run", "runtime.appschema.validate_application_definition"} {
 		if err := service.AuthorizeOpsRead(t.Context(), schedulerTestPrincipal(permission)); apperror.CodeOf(err) != "backend.scheduler.permission_required" {
 			t.Fatalf("unrelated permission %q authorized Scheduler state: %v", permission, err)
 		}

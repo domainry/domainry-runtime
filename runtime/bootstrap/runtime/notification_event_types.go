@@ -77,33 +77,33 @@ func notificationBuiltInEventTypes(locales []string, defaultLocale string, looku
 
 func recordExportCompletedEventType() notificationmodel.NotificationEventType {
 	return notificationmodel.NotificationEventType{
-		Key: "record.export.completed", Source: "records", Category: "long_task", DefaultSeverity: "info", Surfaces: []string{"business_workspace"}, MandatoryInApp: true,
+		Key: "record.export.completed", Source: "records", Category: "long_task", DefaultSeverity: "info", MandatoryInApp: true,
 		TemplateKey: "record.export.completed.in_app", Variables: []notificationmodel.NotificationTemplateVariable{
 			{Key: "object_key", Type: "string", Required: true}, {Key: "filename", Type: "string", Required: true},
 			{Key: "row_count", Type: "number", Required: true}, {Key: "status", Type: "string", Required: true},
 		},
-		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "record.export.download", Kind: "route", ResourceType: "record_export", SurfaceRoutes: map[string]string{"business_workspace": "record.export.download"}}},
+		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "record.export.download", Kind: "route", ResourceType: "record_export", RouteKey: "record.export.download"}},
 	}
 }
 
 func automationExecutionEventType(key, templateKey, severity string) notificationmodel.NotificationEventType {
 	return notificationmodel.NotificationEventType{
-		Key: key, Source: "automation", Category: "automation", DefaultSeverity: severity, Surfaces: []string{"business_workspace"}, MandatoryInApp: false,
+		Key: key, Source: "automation", Category: "automation", DefaultSeverity: severity, MandatoryInApp: false,
 		TemplateKey: templateKey, Variables: []notificationmodel.NotificationTemplateVariable{
 			{Key: "rule_key", Type: "string", Required: true}, {Key: "object_key", Type: "string", Required: true}, {Key: "execution_id", Type: "string", Required: true},
 			{Key: "status", Type: "string", Required: true}, {Key: "error_code", Type: "string"},
 		},
-		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "automation.rule.open", Kind: "route", ResourceType: "automation_rule", SurfaceRoutes: map[string]string{"business_workspace": "automation.rule.detail"}}},
+		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "automation.rule.open", Kind: "route", ResourceType: "automation_rule", RouteKey: "automation.rule.detail"}},
 	}
 }
 
 func reportSnapshotEventType(key, templateKey, severity string) notificationmodel.NotificationEventType {
 	return notificationmodel.NotificationEventType{
-		Key: key, Source: "report", Category: "long_task", DefaultSeverity: severity, Surfaces: []string{"business_workspace"}, MandatoryInApp: true,
+		Key: key, Source: "report", Category: "long_task", DefaultSeverity: severity, MandatoryInApp: true,
 		TemplateKey: templateKey, Variables: []notificationmodel.NotificationTemplateVariable{
 			{Key: "report_key", Type: "string", Required: true}, {Key: "status", Type: "string", Required: true}, {Key: "error_code", Type: "string"},
 		},
-		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "report.open", Kind: "route", ResourceType: "report", SurfaceRoutes: map[string]string{"business_workspace": "report.detail"}}},
+		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "report.open", Kind: "route", ResourceType: "report", RouteKey: "report.detail"}},
 	}
 }
 
@@ -113,14 +113,14 @@ func workflowTaskActionEventType(key, templateKey, severity string, dueFact bool
 		variables = append(variables, notificationmodel.NotificationTemplateVariable{Key: "due_at", Type: "string"})
 	}
 	return notificationmodel.NotificationEventType{
-		Key: key, Source: "workflow", Category: "approval", DefaultSeverity: severity, Surfaces: []string{"business_workspace"}, MandatoryInApp: true,
+		Key: key, Source: "workflow", Category: "approval", DefaultSeverity: severity, MandatoryInApp: true,
 		TemplateKey: templateKey, Variables: variables, AudienceResolvers: []string{"workflow_task_assignee"},
-		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "workflow.task.open", Kind: "route", ResourceType: "workflow_task", SurfaceRoutes: map[string]string{"business_workspace": "workflow.task.detail"}}},
+		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "workflow.task.open", Kind: "route", ResourceType: "workflow_task", RouteKey: "workflow.task.detail"}},
 	}
 }
 
 func workflowTaskTerminalEventType(key, templateKey string) notificationmodel.NotificationEventType {
-	return notificationmodel.NotificationEventType{Key: key, Source: "workflow", Category: "approval", DefaultSeverity: "info", Surfaces: []string{"business_workspace"}, MandatoryInApp: true, TemplateKey: templateKey, Variables: workflowTaskLifecycleVariables(), AudienceResolvers: []string{"workflow_task_assignee"}}
+	return notificationmodel.NotificationEventType{Key: key, Source: "workflow", Category: "approval", DefaultSeverity: "info", MandatoryInApp: true, TemplateKey: templateKey, Variables: workflowTaskLifecycleVariables(), AudienceResolvers: []string{"workflow_task_assignee"}}
 }
 
 func workflowTaskLifecycleVariables() []notificationmodel.NotificationTemplateVariable {
@@ -129,18 +129,18 @@ func workflowTaskLifecycleVariables() []notificationmodel.NotificationTemplateVa
 
 func schedulerEventType(key, templateKey, severity string, actionable bool) notificationmodel.NotificationEventType {
 	value := notificationmodel.NotificationEventType{
-		Key: key, Source: "scheduler", Category: "scheduler", DefaultSeverity: severity, Surfaces: []string{"business_workspace"}, MandatoryInApp: true,
+		Key: key, Source: "scheduler", Category: "scheduler", DefaultSeverity: severity, MandatoryInApp: true,
 		TemplateKey: templateKey, Variables: []notificationmodel.NotificationTemplateVariable{{Key: "job_name", Type: "string", Required: true}, {Key: "scheduled_for", Type: "string"}, {Key: "status", Type: "string"}, {Key: "error_code", Type: "string"}, {Key: "occurrence_count", Type: "number"}},
 	}
 	if actionable {
-		value.Actions = []notificationmodel.NotificationInboxActionDescriptor{{Key: "scheduler.job.open", Kind: "route", ResourceType: "scheduler_job", SurfaceRoutes: map[string]string{"business_workspace": "scheduler.job.detail"}}}
+		value.Actions = []notificationmodel.NotificationInboxActionDescriptor{{Key: "scheduler.job.open", Kind: "route", ResourceType: "scheduler_job", RouteKey: "scheduler.job.detail"}}
 	}
 	return value
 }
 
 func integrationCredentialEventType(key, templateKey, severity, resourceType, actionKey string) notificationmodel.NotificationEventType {
 	value := notificationmodel.NotificationEventType{
-		Key: key, Source: "integration", Category: "integration", DefaultSeverity: severity, Surfaces: []string{"business_workspace"}, MandatoryInApp: true,
+		Key: key, Source: "integration", Category: "integration", DefaultSeverity: severity, MandatoryInApp: true,
 		TemplateKey: templateKey, Variables: []notificationmodel.NotificationTemplateVariable{
 			{Key: "credential_name", Type: "string", Required: true}, {Key: "connection_name", Type: "string"},
 			{Key: "expires_at", Type: "string"}, {Key: "days_remaining", Type: "number"}, {Key: "error_code", Type: "string"},
@@ -151,14 +151,14 @@ func integrationCredentialEventType(key, templateKey, severity, resourceType, ac
 		if resourceType == "integration_connection" {
 			routeKey = "integration.connection.detail"
 		}
-		value.Actions = []notificationmodel.NotificationInboxActionDescriptor{{Key: actionKey, Kind: "route", ResourceType: resourceType, SurfaceRoutes: map[string]string{"business_workspace": routeKey}}}
+		value.Actions = []notificationmodel.NotificationInboxActionDescriptor{{Key: actionKey, Kind: "route", ResourceType: resourceType, RouteKey: routeKey}}
 	}
 	return value
 }
 
 func integrationResourceHealthEventType(key, templateKey, severity string, actionable bool) notificationmodel.NotificationEventType {
 	value := notificationmodel.NotificationEventType{
-		Key: key, Source: "integration", Category: "integration", DefaultSeverity: severity, Surfaces: []string{"business_workspace"}, MandatoryInApp: true,
+		Key: key, Source: "integration", Category: "integration", DefaultSeverity: severity, MandatoryInApp: true,
 		TemplateKey: templateKey, Variables: []notificationmodel.NotificationTemplateVariable{
 			{Key: "connection_name", Type: "string", Required: true}, {Key: "provider_key", Type: "string"},
 			{Key: "quota_used_percent", Type: "number"}, {Key: "balance_band", Type: "string"},
@@ -166,7 +166,7 @@ func integrationResourceHealthEventType(key, templateKey, severity string, actio
 		},
 	}
 	if actionable {
-		value.Actions = []notificationmodel.NotificationInboxActionDescriptor{{Key: "integration.connection.open", Kind: "route", ResourceType: "integration_connection", SurfaceRoutes: map[string]string{"business_workspace": "integration.connection.detail"}}}
+		value.Actions = []notificationmodel.NotificationInboxActionDescriptor{{Key: "integration.connection.open", Kind: "route", ResourceType: "integration_connection", RouteKey: "integration.connection.detail"}}
 	}
 	return value
 }

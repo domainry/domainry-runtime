@@ -38,20 +38,20 @@ func newRuntimeAuditApplicationHost(records *recordapplication.RecordApplication
 	return runtimeAuditApplicationHost{recordAccess: recordAccess, principals: principalResolver, exportKey: append([]byte(nil), exportKey...)}
 }
 
-func (h runtimeAuditApplicationHost) ResolveAuditSurfacePrincipal(ctx context.Context, request auditmodulehost.AuditSurfacePrincipalRequest) (auditmodulehost.AuditSurfacePrincipal, error) {
+func (h runtimeAuditApplicationHost) ResolveAuditPrincipal(ctx context.Context, request auditmodulehost.AuditPrincipalRequest) (auditmodulehost.AuditPrincipal, error) {
 	principal := principalmodel.NewPrincipalFromIdentity(request.Identity, strings.TrimSpace(request.RequestID))
 	principal.CorrelationID = strings.TrimSpace(request.CorrelationID)
 	resolved, err := h.principals.ResolveBusinessPrincipal(ctx, principal, request.BusinessProfileKey, request.BusinessProfileID)
 	if err != nil {
-		return auditmodulehost.AuditSurfacePrincipal{}, err
+		return auditmodulehost.AuditPrincipal{}, err
 	}
-	return auditmodulehost.AuditSurfacePrincipal{
+	return auditmodulehost.AuditPrincipal{
 		Identity: request.Identity, BusinessProfileKey: strings.TrimSpace(request.BusinessProfileKey), BusinessProfileID: strings.TrimSpace(request.BusinessProfileID),
 		RequestID: strings.TrimSpace(request.RequestID), CorrelationID: strings.TrimSpace(request.CorrelationID), AuthorizationRevision: resolved.AuthorizationRevision,
 	}, nil
 }
 
-func (h runtimeAuditApplicationHost) AuthorizeAuditRecord(ctx context.Context, principal auditmodulehost.AuditSurfacePrincipal, objectKey, recordID string) error {
+func (h runtimeAuditApplicationHost) AuthorizeAuditRecord(ctx context.Context, principal auditmodulehost.AuditPrincipal, objectKey, recordID string) error {
 	resolved, err := h.runtimePrincipal(ctx, principal)
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (h runtimeAuditApplicationHost) AuthorizeAuditRecord(ctx context.Context, p
 	return h.recordAccess.AuthorizeAuditRecord(ctx, resolved, strings.TrimSpace(objectKey), strings.TrimSpace(recordID))
 }
 
-func (h runtimeAuditApplicationHost) ProjectAuditEvents(ctx context.Context, principal auditmodulehost.AuditSurfacePrincipal, events []contract.Event) ([]contract.Event, error) {
+func (h runtimeAuditApplicationHost) ProjectAuditEvents(ctx context.Context, principal auditmodulehost.AuditPrincipal, events []contract.Event) ([]contract.Event, error) {
 	resolved, err := h.runtimePrincipal(ctx, principal)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func (h runtimeAuditApplicationHost) AuditExportTokenKey() []byte {
 	return append([]byte(nil), h.exportKey...)
 }
 
-func (h runtimeAuditApplicationHost) runtimePrincipal(ctx context.Context, principal auditmodulehost.AuditSurfacePrincipal) (principalmodel.Principal, error) {
+func (h runtimeAuditApplicationHost) runtimePrincipal(ctx context.Context, principal auditmodulehost.AuditPrincipal) (principalmodel.Principal, error) {
 	base := principalmodel.NewPrincipalFromIdentity(principal.Identity, principal.RequestID)
 	base.CorrelationID = principal.CorrelationID
 	return h.principals.ResolveBusinessPrincipal(ctx, base, principal.BusinessProfileKey, principal.BusinessProfileID)

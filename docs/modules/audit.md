@@ -8,7 +8,7 @@ Owner：不可变审计事件、查询、subject lifecycle 与审计保留证据
 
 Runtime 在 bootstrap 中直接构造 `domainry-audit/module.Factory`，通过 `runtime/infrastructure/persistence/auditmodule.NewHost` 打开 Module Binding。Audit migration 由 Runtime schema 协调器纳入 owner migration。Runtime adapter 将 SDK Binding 适配给现有 Audit append/query/lifecycle port。
 
-Audit 的业务、租户治理和运维 HTTP 路由及 OpenAPI 由 `domainry-audit/internal/transport/http/module` 持有，并通过 Foundation `modulehttp` Surface 交给 Runtime Host 挂载。Runtime 不再在 `records` Handler 或静态 OpenAPI 中复制这些接口。由于业务审计会读取 Runtime Record，Binding 在 Runtime 应用服务完成后通过 Audit SDK `ApplicationHostBinder` 绑定一个窄 Host：Runtime 只负责业务身份补全、Record 数据权限校验和字段级投影；查询范围、留存窗口、脱敏、分页及导出生命周期仍由 Audit owner 负责。
+Audit 的业务、租户治理和运维 HTTP 路由及 OpenAPI 由 `domainry-audit/internal/transport/http/module` 持有，并通过 Foundation `modulehttp` Adapter 交给 Runtime Host 挂载。Runtime 不再在 `records` Handler 或静态 OpenAPI 中复制这些接口。由于业务审计会读取 Runtime Record，Binding 在 Runtime 应用服务完成后通过 Audit SDK `ApplicationHostBinder` 绑定一个窄 Host：Runtime 只负责业务身份补全、Record 数据权限校验和字段级投影；查询范围、留存窗口、脱敏、分页及导出生命周期仍由 Audit owner 负责。
 
 Audit 还提供 `AppendPreparedWithin`，使业务 mutation 与审计事件在同一数据库事务内提交。这一原子性是当前 Module 形态的重要语义，不能在远程化时假装仍由数据库事务保证。
 

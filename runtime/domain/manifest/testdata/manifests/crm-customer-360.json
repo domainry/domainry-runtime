@@ -449,112 +449,22 @@
       ]
     }
   ],
-  "views": [
-    {
-      "key": "customer_list",
-      "name": "Customer List",
-      "object_key": "customer",
-      "type": "table",
-      "config": {
-        "columns": [
-          "name",
-          "status",
-          "owner",
-          "health_score",
-          "next_follow_up_at"
-        ]
-      }
-    },
-    {
-      "key": "lead_queue",
-      "name": "Lead Queue",
-      "object_key": "lead",
-      "type": "table",
-      "config": {
-        "columns": [
-          "company_name",
-          "contact_name",
-          "source",
-          "status",
-          "owner"
-        ]
-      }
-    },
-    {
-      "key": "opportunity_pipeline",
-      "name": "Opportunity Pipeline",
-      "object_key": "opportunity",
-      "type": "kanban",
-      "config": {
-        "group_by": "stage",
-        "title_field": "customer"
-      }
-    },
-    {
-      "key": "activity_queue",
-      "name": "Activity Queue",
-      "object_key": "activity",
-      "type": "table",
-      "config": {
-        "columns": [
-          "summary",
-          "status",
-          "due_at",
-          "owner"
-        ]
-      }
-    },
-    {
-      "key": "contract_follow_up",
-      "name": "Contract Follow Up",
-      "object_key": "contract",
-      "type": "table",
-      "config": {
-        "columns": [
-          "customer",
-          "status",
-          "value",
-          "signed_at"
-        ]
-      }
-    },
-    {
-      "key": "payment_follow_up",
-      "name": "Payment Follow Up",
-      "object_key": "payment",
-      "type": "table",
-      "config": {
-        "columns": [
-          "contract",
-          "status",
-          "amount",
-          "due_at"
-        ]
-      }
-    }
-  ],
   "actions": [
     {
       "key": "customer.mark_risk",
       "object_key": "customer",
       "label": "Mark At Risk",
       "kind": "record_update",
-      "preconditions": [
-
-      ],
-      "audit_event": "customer_marked_risk",
-      "ui_placement": "record_header"
+      "preconditions": [],
+      "audit_event": "customer_marked_risk"
     },
     {
       "key": "lead.qualify",
       "object_key": "lead",
       "label": "Qualify Lead",
       "kind": "record_operation",
-      "preconditions": [
-
-      ],
-      "audit_event": "lead_qualified",
-      "ui_placement": "row_action"
+      "preconditions": [],
+      "audit_event": "lead_qualified"
     },
     {
       "key": "lead.convert",
@@ -564,19 +474,15 @@
       "preconditions": [
         "status == qualified"
       ],
-      "audit_event": "lead_converted",
-      "ui_placement": "record_header"
+      "audit_event": "lead_converted"
     },
     {
       "key": "opportunity.advance_stage",
       "object_key": "opportunity",
       "label": "Advance Stage",
       "kind": "record_operation",
-      "preconditions": [
-
-      ],
+      "preconditions": [],
       "audit_event": "opportunity_stage_advanced",
-      "ui_placement": "record_header",
       "payload_fields": [
         {
           "key": "stage",
@@ -594,8 +500,7 @@
       "preconditions": [
         "stage == negotiation"
       ],
-      "audit_event": "opportunity_won",
-      "ui_placement": "record_header"
+      "audit_event": "opportunity_won"
     },
     {
       "key": "opportunity.mark_lost",
@@ -605,19 +510,15 @@
       "preconditions": [
         "stage == negotiation"
       ],
-      "audit_event": "opportunity_lost",
-      "ui_placement": "record_header"
+      "audit_event": "opportunity_lost"
     },
     {
       "key": "activity.assign_to_me",
       "object_key": "activity",
       "label": "Assign To Me",
       "kind": "record_update",
-      "preconditions": [
-
-      ],
-      "audit_event": "activity_assigned",
-      "ui_placement": "record_header"
+      "preconditions": [],
+      "audit_event": "activity_assigned"
     },
     {
       "key": "activity.start",
@@ -627,19 +528,15 @@
       "preconditions": [
         "status == open"
       ],
-      "audit_event": "activity_started",
-      "ui_placement": "record_header"
+      "audit_event": "activity_started"
     },
     {
       "key": "activity.complete",
       "object_key": "activity",
       "label": "Complete Activity",
       "kind": "record_operation",
-      "preconditions": [
-
-      ],
-      "audit_event": "activity_completed",
-      "ui_placement": "row_action"
+      "preconditions": [],
+      "audit_event": "activity_completed"
     },
     {
       "key": "activity.escalate_overdue",
@@ -649,8 +546,7 @@
       "preconditions": [
         "status == in_progress"
       ],
-      "audit_event": "activity_overdue_escalated",
-      "ui_placement": "record_header"
+      "audit_event": "activity_overdue_escalated"
     },
     {
       "key": "contract.approve",
@@ -660,8 +556,7 @@
       "preconditions": [
         "status == draft"
       ],
-      "audit_event": "contract_approved",
-      "ui_placement": "record_header"
+      "audit_event": "contract_approved"
     },
     {
       "key": "contract.sign",
@@ -671,38 +566,29 @@
       "preconditions": [
         "status == approved"
       ],
-      "audit_event": "contract_signed",
-      "ui_placement": "record_header"
+      "audit_event": "contract_signed"
     },
     {
       "key": "payment.mark_collected",
       "object_key": "payment",
       "label": "Mark Collected",
       "kind": "record_operation",
-      "preconditions": [
-
-      ],
-      "audit_event": "payment_collected",
-      "ui_placement": "row_action"
+      "preconditions": [],
+      "audit_event": "payment_collected"
     },
     {
       "key": "customer.verify_business_license",
       "object_key": "customer",
       "label": "Verify Business License",
       "kind": "record_operation",
-      "audit_event": "customer_business_license_verified",
-      "idempotency_keys": [
-        "business_license_no"
-      ],
-      "ui_placement": "automation_only"
+      "audit_event": "customer_business_license_verified"
     },
     {
       "key": "customer.record_risk_follow_up",
       "object_key": "customer",
       "label": "Record Risk Follow Up",
       "kind": "record_operation",
-      "audit_event": "risk_follow_up_requested",
-      "ui_placement": "workflow_only"
+      "audit_event": "risk_follow_up_requested"
     },
     {
       "key": "customer.apply_automation_verification",
@@ -723,27 +609,21 @@
           "type": "text",
           "required": true
         }
-      ],
-      "idempotency_keys": [
-        "source"
-      ],
-      "ui_placement": "automation_only"
+      ]
     },
     {
       "key": "lead.record_ready_for_conversion",
       "object_key": "lead",
       "label": "Record Lead Ready for Conversion",
       "kind": "record_operation",
-      "audit_event": "lead_ready_for_conversion",
-      "ui_placement": "workflow_only"
+      "audit_event": "lead_ready_for_conversion"
     },
     {
       "key": "payment.record_overdue_escalation",
       "object_key": "payment",
       "label": "Record Payment Overdue Escalation",
       "kind": "record_operation",
-      "audit_event": "payment_overdue_escalated",
-      "ui_placement": "workflow_only"
+      "audit_event": "payment_overdue_escalated"
     }
   ],
   "workflows": [
@@ -1387,7 +1267,7 @@
   },
   "automation_rules": [
     {
-      "key": "customer.business_workspace_create_guard",
+      "key": "customer.create_guard",
       "name": "Customer Business Workspace Create Guard",
       "object_key": "customer",
       "enabled": true,
@@ -1410,11 +1290,10 @@
         "timeout_seconds": 5,
         "max_depth": 3
       },
-      "audit_event": "customer_business_workspace_create_guarded",
+      "audit_event": "customer_create_guarded",
       "layout": {
         "version": 1,
-        "nodes": {
-        },
+        "nodes": {},
         "viewport": {
           "x": 0,
           "y": 0,
@@ -1454,9 +1333,7 @@
       },
       "conditions": {
         "mode": "all",
-        "clauses": [
-
-        ]
+        "clauses": []
       },
       "execution": {
         "mode": "async",
@@ -1469,8 +1346,7 @@
       "audit_event": "customer_business_license_verified",
       "layout": {
         "version": 1,
-        "nodes": {
-        },
+        "nodes": {},
         "viewport": {
           "x": 0,
           "y": 0,
@@ -1677,93 +1553,6 @@
       ]
     }
   ],
-  "menus": [
-    {
-      "key": "crm_sales",
-      "label": "Sales",
-      "route": "/crm/sales",
-      "roles": [
-        "sales_manager",
-        "sales_rep"
-      ]
-    },
-    {
-      "key": "crm_customer_360",
-      "label": "Customer 360",
-      "parent_key": "crm_sales",
-      "route": "/objects/customer",
-      "roles": [
-        "sales_manager",
-        "sales_rep"
-      ]
-    },
-    {
-      "key": "crm_lead_queue",
-      "label": "Lead Queue",
-      "parent_key": "crm_sales",
-      "route": "/crm/leads",
-      "roles": [
-        "sales_manager",
-        "sales_rep"
-      ]
-    },
-    {
-      "key": "crm_pipeline",
-      "label": "Pipeline",
-      "parent_key": "crm_sales",
-      "route": "/crm/pipeline",
-      "roles": [
-        "sales_manager",
-        "sales_rep"
-      ]
-    },
-    {
-      "key": "crm_activities",
-      "label": "Activities",
-      "parent_key": "crm_sales",
-      "route": "/crm/activities",
-      "roles": [
-        "sales_manager",
-        "sales_rep"
-      ]
-    },
-    {
-      "key": "crm_revenue",
-      "label": "Revenue",
-      "route": "/crm/revenue",
-      "roles": [
-        "sales_manager",
-        "finance_reviewer"
-      ]
-    },
-    {
-      "key": "crm_contracts",
-      "label": "Contracts",
-      "parent_key": "crm_revenue",
-      "route": "/crm/contracts",
-      "roles": [
-        "sales_manager",
-        "finance_reviewer"
-      ]
-    },
-    {
-      "key": "crm_payments",
-      "label": "Payments",
-      "parent_key": "crm_revenue",
-      "route": "/crm/payments",
-      "roles": [
-        "finance_reviewer"
-      ]
-    },
-    {
-      "key": "crm_analytics",
-      "label": "Analytics",
-      "route": "/crm/analytics",
-      "roles": [
-        "sales_manager"
-      ]
-    }
-  ],
   "agents": [
     {
       "key": "crm_assistant",
@@ -1796,14 +1585,6 @@
         },
         {
           "permission_key": "activity.update",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "admin_console.access",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "business.access",
           "data_scope": "all"
         },
         {
@@ -1934,10 +1715,6 @@
           "data_scope": "owner"
         },
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "contact.create",
           "data_scope": "owner"
         },
@@ -1993,10 +1770,6 @@
       "name": "Finance Reviewer",
       "permissions": [
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "contract.read",
           "data_scope": "all"
         },
@@ -2039,10 +1812,6 @@
       "name": "Automation Business Tester",
       "permissions": [
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "customer.apply_automation_verification",
           "data_scope": "owner"
         },
@@ -2077,15 +1846,11 @@
       "name": "Automation History Reviewer",
       "permissions": [
         {
-          "permission_key": "admin_console.access",
+          "permission_key": "runtime.automation.list_automation_executions",
           "data_scope": "all"
         },
         {
-          "permission_key": "automation.rule.history.read",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "automation.rule.read",
+          "permission_key": "runtime.automation.list_automation_rules",
           "data_scope": "all"
         }
       ]
@@ -2095,23 +1860,23 @@
       "name": "Runtime Operator",
       "permissions": [
         {
-          "permission_key": "admin_console.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "customer.read",
           "data_scope": "all"
         },
         {
-          "permission_key": "integration.audit.view",
+          "permission_key": "integration.invocations.list",
           "data_scope": "all"
         },
         {
-          "permission_key": "integration.catalog.view",
+          "permission_key": "integration.events.list",
           "data_scope": "all"
         },
         {
-          "permission_key": "integration.retry",
+          "permission_key": "integration.catalog.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "integration.events.replay",
           "data_scope": "all"
         },
         {
@@ -2135,27 +1900,29 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "scheduler.command",
+          "permission_key": "scheduler.definitions.run",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "scheduler.definitions.reschedule",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "scheduler.runs.retry",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "scheduler.runs.cancel",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "scheduler.dead_letters.resolve",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "scheduler.dead_letters.requeue",
           "data_scope": "all"
         }
-      ]
-    }
-  ],
-  "users": [
-    {
-      "id": "automation_business_tester_user",
-      "name": "Automation Business Tester",
-      "email": "automation-business-tester@example.com",
-      "role_keys": [
-        "automation_business_tester"
-      ]
-    },
-    {
-      "id": "automation_history_reviewer_user",
-      "name": "Automation History Reviewer",
-      "email": "automation-history-reviewer@example.com",
-      "role_keys": [
-        "automation_history_reviewer"
       ]
     }
   ],
@@ -2320,5 +2087,6 @@
         "owner": "finance_reviewer"
       }
     }
-  ]
+  ],
+  "schema_version": "2"
 }

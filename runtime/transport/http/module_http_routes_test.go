@@ -73,8 +73,8 @@ func TestModuleHTTPRouteAuthorizationUsesDeclaredPermissionPolicy(t *testing.T) 
 func moduleHTTPTestAction(key string, strategy actioncontract.AuthorizationStrategy, requirePermission bool) actioncontract.ActionDefinition {
 	separator := strings.LastIndex(key, ".")
 	action := actioncontract.ActionDefinition{
-		Key: key, Owner: "module:test", SourceKind: "module_surface", CapabilityKey: "module.resource", CapabilityLabel: "Module resource",
-		OperationKey: key[separator+1:], OperationLabel: key, Label: key, Exposures: []actioncontract.Exposure{actioncontract.ExposureTenantAdmin},
+		Key: key, Owner: "module:test", SourceKind: "module_http", CapabilityKey: "module.resource", CapabilityLabel: "Module resource",
+		OperationKey: key[separator+1:], OperationLabel: key, Label: key, Exposures: []actioncontract.Exposure{actioncontract.ExposureManagement},
 		Authorization: actioncontract.Authorization{Strategy: strategy}, HTTP: &actioncontract.HTTPBinding{Method: "GET", RouteTemplate: "/module-resource"},
 		EffectClass: actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "module_resource_read", LifecycleStatus: actioncontract.LifecycleActive,
 	}
@@ -86,6 +86,7 @@ func moduleHTTPTestAction(key string, strategy actioncontract.AuthorizationStrat
 
 func moduleHTTPAuthorizationPrincipal(permissions ...string) principalmodel.Principal {
 	grants := make([]identitysdk.FunctionGrant, 0, len(permissions))
+	policies := make([]identitysdk.DataPolicy, 0, len(permissions))
 	for _, permission := range permissions {
 		separator := strings.LastIndexByte(permission, '.')
 		if separator <= 0 || separator == len(permission)-1 {
@@ -96,11 +97,19 @@ func moduleHTTPAuthorizationPrincipal(permissions ...string) principalmodel.Prin
 			Action:   identitysdk.Action(permission[separator+1:]),
 			Effect:   identitysdk.EffectAllow,
 		})
+		policies = append(policies, identitysdk.DataPolicy{
+			Key:        "test:" + permission,
+			Resource:   identitysdk.ResourceType(permission[:separator]),
+			Action:     identitysdk.Action(permission[separator+1:]),
+			Effect:     identitysdk.EffectAllow,
+			DataScopes: []identitysdk.DataScope{identitysdk.DataScopeAll},
+		})
 	}
 	return principalmodel.Principal{Principal: identitysdk.Principal{
 		Known: true,
 		AccessBundle: &identitysdk.AccessBundle{
 			FunctionGrants: grants,
+			DataPolicies:   policies,
 		},
 	}}
 }

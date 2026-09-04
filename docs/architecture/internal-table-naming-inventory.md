@@ -41,7 +41,7 @@ Schema control and catalog:
 `_identity_workspace_write_fences`, `_identity_metadata_refresh_intents`,
 `_identity_localized_texts`.
 
-Authentication and account directory:
+Authentication and account projection:
 
 `_identity_users`, `_identity_credentials`, `_identity_mfa_factors`,
 `_identity_external_accounts`, `_identity_auth_provider_credentials`,
@@ -58,7 +58,7 @@ Authorization and review:
 `_identity_access_review_items`, `_identity_access_review_receipts`,
 `_identity_authoring_receipts`, `_identity_entitlement_batch_receipts`.
 
-Organization directory:
+Organization projection:
 
 `_identity_organization_units`. Personnel and reporting-line facts are columns
 of `_identity_users`; there is no separate Workforce aggregate or assignment

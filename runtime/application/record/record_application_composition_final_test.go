@@ -18,21 +18,21 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
-type recordCompositionDirectory struct{}
+type recordCompositionIdentityProjection struct{}
 
-func (recordCompositionDirectory) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
+func (recordCompositionIdentityProjection) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	return identitysdk.User{}, false, nil
 }
-func (recordCompositionDirectory) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+func (recordCompositionIdentityProjection) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
 	return identitysdk.OrganizationUnit{}, false, nil
 }
-func (recordCompositionDirectory) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
+func (recordCompositionIdentityProjection) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
 	return []identitysdk.User{{ID: "user-1"}}, nil
 }
-func (recordCompositionDirectory) ListRoles(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.Role, error) {
+func (recordCompositionIdentityProjection) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	return nil, nil
 }
-func (recordCompositionDirectory) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
+func (recordCompositionIdentityProjection) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
 	return nil, nil
 }
 
@@ -60,7 +60,7 @@ func TestRecordApplicationCompositionForwardsEveryOwnedClosure(t *testing.T) {
 	service := NewRecordApplicationService(RecordApplicationDependencies{
 		Repository: repository, QueryPolicy: queryPolicy, Pipeline: pipeline, Validation: validation,
 		MutationKernel:            recordmutation.NewMutationKernelApplicationService(repository, nil),
-		IdentityDirectory:         recordCompositionDirectory{},
+		IdentityProjection:        recordCompositionIdentityProjection{},
 		SchemaMap:                 func() map[string]definitionmodel.ObjectSchema { return objects },
 		IdentityProfileExtensions: func() []profilebindingmodel.Binding { return nil },
 		RunBefore: func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error {
@@ -109,8 +109,8 @@ func TestRecordApplicationCompositionForwardsEveryOwnedClosure(t *testing.T) {
 
 	_ = service.importer.dependencies.ValidateRelations(ctx, object, record.Data, principal)
 	_, _ = service.importer.dependencies.CreateRecord(ctx, "missing", record.Data, principal)
-	users, err := service.exporter.dependencies.ListDirectoryUsers(ctx)
+	users, err := service.exporter.dependencies.ListIdentityUsers(ctx)
 	if err != nil || len(users) != 1 {
-		t.Fatalf("directory users=%#v err=%v", users, err)
+		t.Fatalf("projection users=%#v err=%v", users, err)
 	}
 }

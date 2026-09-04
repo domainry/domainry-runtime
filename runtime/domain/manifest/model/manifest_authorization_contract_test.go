@@ -8,7 +8,7 @@ func TestDecodeManifestAcceptsScopedRolePermissionsAndActionDefinition(t *testin
 		"roles":[{"key":"member","name":"Member","permissions":[{"permission_key":"booking.read","data_scope":"owner"},{"permission_key":"booking.book","data_scope":"org"}]}],
 		"actions":[{"key":"booking.book","object_key":"booking","label":"Book","kind":"record_operation","preconditions":[],"audit_event":"booking.booked"}]
 	}`)
-	manifest, _, err := DecodeManifest(raw)
+	manifest, err := DecodeManifest(raw)
 	if err != nil {
 		t.Fatalf("strict Runtime manifest rejected RoleSchema authorization contract: %v", err)
 	}
@@ -25,7 +25,7 @@ func TestDecodeManifestRejectsRemovedActionRoleAllowlist(t *testing.T) {
 		"schema_version":"2","template_id":"gym","version":"1","objects":[],"roles":[],
 		"actions":[{"key":"booking.book","object_key":"booking","label":"Book","kind":"record_operation","preconditions":[],"audit_event":"booking.booked","authorization":{"allowed_roles":["member"]}}]
 	}`)
-	if _, _, err := DecodeManifest(raw); err == nil {
+	if _, err := DecodeManifest(raw); err == nil {
 		t.Fatal("removed Action authorization role allowlist was silently accepted")
 	}
 }

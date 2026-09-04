@@ -25,8 +25,8 @@ func (transportIdentityBindingStub) Authorization() identitysdk.Authorization {
 func (transportIdentityBindingStub) Principals() identitysdk.PrincipalResolver {
 	return transportIdentityPrincipalResolverStub{}
 }
-func (transportIdentityBindingStub) Directory() identitysdk.Directory {
-	return transportIdentityDirectoryStub{}
+func (transportIdentityBindingStub) Projection() identitysdk.Projection {
+	return transportIdentityProjectionStub{}
 }
 func (transportIdentityBindingStub) Applications() identitysdk.ApplicationRegistry {
 	return transportIdentityApplicationRegistryStub{}
@@ -105,21 +105,21 @@ func (transportIdentityPrincipalResolverStub) Resolve(_ context.Context, request
 	return identitysdk.PrincipalResolution{Principal: principal, AccessBundle: bundle}, nil
 }
 
-type transportIdentityDirectoryStub struct{}
+type transportIdentityProjectionStub struct{}
 
-func (transportIdentityDirectoryStub) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
+func (transportIdentityProjectionStub) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	return identitysdk.User{}, false, nil
 }
-func (transportIdentityDirectoryStub) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+func (transportIdentityProjectionStub) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
 	return identitysdk.OrganizationUnit{}, false, nil
 }
-func (transportIdentityDirectoryStub) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
+func (transportIdentityProjectionStub) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
 	return nil, nil
 }
-func (transportIdentityDirectoryStub) ListRoles(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.Role, error) {
+func (transportIdentityProjectionStub) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	return nil, nil
 }
-func (transportIdentityDirectoryStub) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
+func (transportIdentityProjectionStub) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
 	return nil, nil
 }
 

@@ -65,8 +65,6 @@ type NotificationIntent struct {
 	EventType        string
 	SourceEventID    string
 	RecipientUserIDs []string
-	// Surface is required and identifies the event's target product surface.
-	Surface          string
 	SubjectObjectKey string
 	SubjectRecordID  string
 	SubjectVersion   string
@@ -78,7 +76,7 @@ type NotificationIntent struct {
 }
 
 func (v NotificationIntent) Valid() bool {
-	if strings.TrimSpace(v.EventType) == "" || strings.TrimSpace(v.SourceEventID) == "" || len(v.RecipientUserIDs) == 0 || strings.TrimSpace(v.Surface) == "" || strings.TrimSpace(v.SubjectObjectKey) == "" || strings.TrimSpace(v.SubjectRecordID) == "" || strings.TrimSpace(v.SubjectVersion) == "" || strings.TrimSpace(v.DedupeKey) == "" || v.OccurredAt.IsZero() || (v.Alert && strings.TrimSpace(v.GroupKey) == "") {
+	if strings.TrimSpace(v.EventType) == "" || strings.TrimSpace(v.SourceEventID) == "" || len(v.RecipientUserIDs) == 0 || strings.TrimSpace(v.SubjectObjectKey) == "" || strings.TrimSpace(v.SubjectRecordID) == "" || strings.TrimSpace(v.SubjectVersion) == "" || strings.TrimSpace(v.DedupeKey) == "" || v.OccurredAt.IsZero() || (v.Alert && strings.TrimSpace(v.GroupKey) == "") {
 		return false
 	}
 	seenRecipients, seenVariables := map[string]bool{}, map[string]bool{}

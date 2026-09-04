@@ -20,18 +20,18 @@ func TestRuntimeCRMRelatedRecordsArePagedAndRoleScoped(t *testing.T) {
 	handler := application.Routes()
 
 	customerID := runtimeFixtureRecordIDByField(t, handler, "sales_manager", "customer", "name", "Acme Manufacturing")
-	contacts := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/objects/customer/records/"+customerID+"/related/contact?field=customer&page=1&page_size=10", nil)
+	contacts := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/records/objects/customer/records/"+customerID+"/related/contact?field=customer&page=1&page_size=10", nil)
 	assertRuntimeFixturePageTotal(t, contacts, 1)
-	opportunities := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/objects/customer/records/"+customerID+"/related/opportunity?field=customer&page=1&page_size=10", nil)
+	opportunities := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/records/objects/customer/records/"+customerID+"/related/opportunity?field=customer&page=1&page_size=10", nil)
 	assertRuntimeFixturePageTotal(t, opportunities, 1)
-	contracts := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/objects/customer/records/"+customerID+"/related/contract?field=customer&page=1&page_size=10", nil)
+	contracts := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/records/objects/customer/records/"+customerID+"/related/contract?field=customer&page=1&page_size=10", nil)
 	assertRuntimeFixturePageTotal(t, contracts, 2)
 
 	contractID := runtimeFixtureRecordIDByField(t, handler, "sales_manager", "contract", "status", "signed")
-	payments := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/objects/contract/records/"+contractID+"/related/payment?field=contract&page=1&page_size=10", nil)
+	payments := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/records/objects/contract/records/"+contractID+"/related/payment?field=contract&page=1&page_size=10", nil)
 	assertRuntimeFixturePageTotal(t, payments, 2)
 
-	runtimeFixtureRequestStatus(t, handler, "sales_rep", http.MethodGet, "/objects/contract/records/"+contractID+"/related/payment?field=contract&page=1&page_size=10", nil, http.StatusNotFound)
+	runtimeFixtureRequestStatus(t, handler, "sales_rep", http.MethodGet, "/records/objects/contract/records/"+contractID+"/related/payment?field=contract&page=1&page_size=10", nil, http.StatusNotFound)
 }
 
 func assertRuntimeFixturePageTotal(t *testing.T, payload map[string]any, expected int) {

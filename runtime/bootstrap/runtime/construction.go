@@ -38,7 +38,7 @@ type runtimeConstructionInput struct {
 	authorizationActions func() *actioncontract.Registry
 	moduleBindings       runtimeModuleBindingInventory
 	identityBinding      identitysdk.Binding
-	identityDirectory    identitysdk.Directory
+	identityProjection   identitysdk.Projection
 	identityPrincipals   identitysdk.PrincipalResolver
 	principalCache       identityprincipal.Cache
 	integrationMode      integrationsdk.DeploymentMode
@@ -78,7 +78,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		authorizationActions: input.authorizationActions,
 		moduleBindings:       input.moduleBindings.clone(),
 		identityBinding:      input.identityBinding,
-		identityDirectory:    input.identityDirectory,
+		identityProjection:   input.identityProjection,
 		identityPrincipals:   input.identityPrincipals,
 		principalCache:       input.principalCache,
 		integrationMode:      input.integrationMode,

@@ -20,7 +20,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 )
 
-// AutomationDefinitionCatalog is the read-only metadata surface needed to validate an
+// AutomationDefinitionCatalog is the read-only metadata contract needed to validate an
 // automation definition. Integration remains the owner of connection storage;
 // automation only consumes the catalog through ListConnections.
 type AutomationDefinitionCatalog struct {

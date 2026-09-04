@@ -22,10 +22,10 @@ func (workflowAuthoringIdentityStub) FindUser(context.Context, identitysdk.UserL
 func (workflowAuthoringIdentityStub) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
 	return identitysdk.OrganizationUnit{}, false, nil
 }
-func (workflowAuthoringIdentityStub) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
+func (workflowAuthoringIdentityStub) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
 	return nil, nil
 }
-func (workflowAuthoringIdentityStub) ListRoles(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.Role, error) {
+func (workflowAuthoringIdentityStub) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	return []identitysdk.Role{{Key: "finance_manager"}}, nil
 }
 func (workflowAuthoringIdentityStub) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {

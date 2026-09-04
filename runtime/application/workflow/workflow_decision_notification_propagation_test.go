@@ -17,7 +17,7 @@ func TestTerminalWorkflowDecisionPropagatesNotificationCompilationAcrossAllCommi
 	compiler := func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error) {
 		return notificationmodel.NotificationEvent{}, compileErr
 	}
-	run := func(t *testing.T, process workflowmodel.WorkflowProcessInstance, task workflowmodel.WorkflowTask, tasks []workflowmodel.WorkflowTask, identity identitysdk.Directory) {
+	run := func(t *testing.T, process workflowmodel.WorkflowProcessInstance, task workflowmodel.WorkflowTask, tasks []workflowmodel.WorkflowTask, identity identitysdk.Projection) {
 		t.Helper()
 		store := &workflowProcessStoreEdgeStub{
 			workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{"process": {{NodeID: task.NodeID, Status: "waiting"}}}},

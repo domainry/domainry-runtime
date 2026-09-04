@@ -208,7 +208,7 @@ func TestRecordTimerCancellationDrainsEveryPage(t *testing.T) {
 	if err != nil || cancelled != 501 {
 		t.Fatalf("cancelled=%d err=%v", cancelled, err)
 	}
-	page, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", recordTimerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 1, Filters: map[string]any{"object_key": "source", "record_id": "source-1", "status": "scheduled"}})
+	page, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", recordTimerRuntimeObjectByKey(t, objects, "record_timer"), recordmodel.RecordListQuery{Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"object_key": "source", "record_id": "source-1", "status": "scheduled"}})
 	if err != nil || page.Total != 0 {
 		t.Fatalf("scheduled timers after cancellation=%d err=%v", page.Total, err)
 	}
@@ -235,7 +235,7 @@ func TestRecordTimerFailureReleasesEntireClaimBatchAndStopsAtAttemptLimit(t *tes
 		t.Fatalf("first failed batch processed=%d err=%v", processed, err)
 	}
 	timerObject := recordTimerRuntimeObjectByKey(t, objects, "record_timer")
-	page, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}})
+	page, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}})
 	if err != nil || len(page.Items) != 2 {
 		t.Fatalf("failed timers=%#v err=%v", page, err)
 	}

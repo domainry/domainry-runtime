@@ -143,7 +143,7 @@ func (binding *manifestIdentityBinding) Authentication() identitysdk.Authenticat
 func (binding *manifestIdentityBinding) Tokens() identitysdk.TokenVerifier          { return binding }
 func (binding *manifestIdentityBinding) Authorization() identitysdk.Authorization   { return binding }
 func (binding *manifestIdentityBinding) Principals() identitysdk.PrincipalResolver  { return binding }
-func (binding *manifestIdentityBinding) Directory() identitysdk.Directory           { return binding }
+func (binding *manifestIdentityBinding) Projection() identitysdk.Projection         { return binding }
 func (binding *manifestIdentityBinding) Applications() identitysdk.ApplicationRegistry {
 	return binding
 }
@@ -272,7 +272,7 @@ func (binding *manifestIdentityBinding) FindUser(_ context.Context, lookup ident
 func (binding *manifestIdentityBinding) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
 	return identitysdk.OrganizationUnit{}, false, nil
 }
-func (binding *manifestIdentityBinding) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
+func (binding *manifestIdentityBinding) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
 	keys := make([]string, 0, len(binding.users))
 	for key := range binding.users {
 		keys = append(keys, key)
@@ -284,7 +284,7 @@ func (binding *manifestIdentityBinding) ListUsers(context.Context, identitysdk.D
 	}
 	return users, nil
 }
-func (binding *manifestIdentityBinding) ListRoles(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.Role, error) {
+func (binding *manifestIdentityBinding) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	keys := make([]string, 0, len(binding.roles))
 	for key := range binding.roles {
 		keys = append(keys, key)
@@ -475,19 +475,21 @@ func (binding *manifestIdentityBinding) accessBundle(subject, roleKey string) id
 	}
 	dataPolicies := append([]identitysdk.DataPolicy(nil), role.DataPolicies...)
 	for index, grant := range grants {
-		if !resources[grant.Resource] {
-			continue
-		}
-		predicate := identitysdk.Predicate{}
+		policy := identitysdk.DataPolicy{Key: fmt.Sprintf("plane-testkit-%s-%s-%d", grant.Resource, grant.Action, index), Resource: grant.Resource, Action: grant.Action, Effect: identitysdk.EffectAllow}
 		switch {
+		case !resources[grant.Resource]:
+			// Runtime and module Actions have no business-record row scope. The
+			// exact function grant is therefore expanded to an explicit all-scope
+			// policy by the fixture compiler instead of being repeated by callers.
+			policy.DataScopes = []identitysdk.DataScope{identitysdk.DataScopeAll}
 		case role.AllowAllBusinessData:
-			predicate = identitysdk.Predicate{Fact: "id", Operator: identitysdk.OperatorExists, Value: true}
+			policy.DataScopes = []identitysdk.DataScope{identitysdk.DataScopeAll}
 		case role.DataPredicate != nil:
-			predicate = *role.DataPredicate
+			policy.Predicate = *role.DataPredicate
 		default:
 			continue
 		}
-		dataPolicies = append(dataPolicies, identitysdk.DataPolicy{Key: fmt.Sprintf("plane-testkit-%s-%s-%d", grant.Resource, grant.Action, index), Resource: grant.Resource, Action: grant.Action, Effect: identitysdk.EffectAllow, Predicate: predicate})
+		dataPolicies = append(dataPolicies, policy)
 	}
 	fieldPolicies := map[string]identitysdk.FieldPolicy{}
 	if role.AllowAllBusinessData {
@@ -522,7 +524,7 @@ func (binding *manifestIdentityBinding) accessBundle(subject, roleKey string) id
 	})
 	return identitysdk.AccessBundle{
 		ContractVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationRevision: "plane-testkit-authorization", ExpiresAt: time.Now().Add(time.Hour),
-		Subject: identitysdk.Subject{WorkspaceID: binding.application.WorkspaceID, SubjectID: identitysdk.SubjectID(subject)}, FunctionGrants: grants, DataPolicies: dataPolicies, FieldPolicies: fields,
+		Subject: identitysdk.Subject{TenantID: binding.application.TenantID, WorkspaceID: binding.application.WorkspaceID, SubjectID: identitysdk.SubjectID(subject)}, FunctionGrants: grants, DataPolicies: dataPolicies, FieldPolicies: fields,
 		ExportPolicies: append([]identitysdk.ExportPolicy(nil), role.ExportPolicies...), Guardrails: append([]identitysdk.Guardrail(nil), role.Guardrails...),
 	}
 }

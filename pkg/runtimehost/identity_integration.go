@@ -12,7 +12,7 @@ import (
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
 
-func openProjectIdentity(ctx context.Context, cfg config.Config, factory identitysdk.Factory, databases ...identitysdk.DatabaseHandle) (identitysdk.Binding, []identityhttpapi.Surface, error) {
+func openProjectIdentity(ctx context.Context, cfg config.Config, factory identitysdk.Factory, databases ...identitysdk.DatabaseHandle) (identitysdk.Binding, []identityhttpapi.Adapter, error) {
 	if factory == nil {
 		return nil, nil, fmt.Errorf("generated project composition did not supply an Identity SDK Factory")
 	}
@@ -33,36 +33,36 @@ func openProjectIdentity(ctx context.Context, cfg config.Config, factory identit
 	if binding == nil {
 		return nil, nil, fmt.Errorf("Identity SDK Factory returned no Binding")
 	}
-	var surfaces []identityhttpapi.Surface
+	var adapters []identityhttpapi.Adapter
 	if provider, ok := binding.(identityhttpapi.Provider); ok {
-		surfaces = provider.HTTPSurfaces()
+		adapters = provider.HTTPAdapters()
 	}
 	switch binding.Descriptor().Mode {
 	case identitysdk.DeploymentModeModule:
-		if len(surfaces) == 0 {
+		if len(adapters) == 0 {
 			_ = binding.Close(context.WithoutCancel(ctx))
-			return nil, nil, fmt.Errorf("Identity module returned no HTTP surfaces")
+			return nil, nil, fmt.Errorf("Identity module returned no HTTP adapters")
 		}
 	case identitysdk.DeploymentModeSaaS:
-		if len(surfaces) != 0 {
+		if len(adapters) != 0 {
 			_ = binding.Close(context.WithoutCancel(ctx))
-			return nil, nil, fmt.Errorf("Identity SaaS binding returned in-process HTTP surfaces")
+			return nil, nil, fmt.Errorf("Identity SaaS binding returned in-process HTTP adapters")
 		}
 	default:
 		_ = binding.Close(context.WithoutCancel(ctx))
 		return nil, nil, fmt.Errorf("unsupported Identity deployment mode %q", binding.Descriptor().Mode)
 	}
-	return binding, append([]identityhttpapi.Surface(nil), surfaces...), nil
+	return binding, append([]identityhttpapi.Adapter(nil), adapters...), nil
 }
 
-type identitySurfaceRouter = moduleSurfaceRouter
+type identityAdapterRouter = moduleAdapterRouter
 
-func newIdentitySurfaceRouter(group runtimehttp.ListenerRouteGroup, fallback http.Handler) *identitySurfaceRouter {
-	return newModuleSurfaceRouter(group, fallback)
+func newIdentityAdapterRouter(group runtimehttp.ListenerRouteGroup, fallback http.Handler) *identityAdapterRouter {
+	return newModuleAdapterRouter(group, fallback)
 }
 
-func mountIdentityHTTPSurfaces(group runtimehttp.ListenerRouteGroup, surfaces []identityhttpapi.Surface, fallback http.Handler) (http.Handler, error) {
-	return mountModuleHTTPSurfaces(group, surfaces, fallback, func(_ modulehttp.Route, handler http.Handler) (http.Handler, error) { return handler, nil })
+func mountIdentityHTTPAdapters(group runtimehttp.ListenerRouteGroup, adapters []identityhttpapi.Adapter, fallback http.Handler) (http.Handler, error) {
+	return mountModuleHTTPAdapters(group, adapters, fallback, func(_ modulehttp.Route, handler http.Handler) (http.Handler, error) { return handler, nil })
 }
 
 func identityRouteVisible(group runtimehttp.ListenerRouteGroup, exposures []identityhttpapi.Exposure) bool {

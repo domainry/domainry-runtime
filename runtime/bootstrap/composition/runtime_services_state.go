@@ -129,7 +129,7 @@ type runtimeAssembly struct {
 	automationExecutionRepo             automationrepository.AutomationExecutionRepository
 	businessEvidenceRepo                changeplanrepository.ChangePlanEvidenceRepository
 	runtimeStatusRepo                   deploymentrepository.DeploymentRuntimeStatusRepository
-	identityDirectory                   identitysdk.Directory
+	identityProjection                  identitysdk.Projection
 	actionAssuranceStore                actioncontract.ActionAssuranceStore
 	workflowProcesses                   *workflowapplication.WorkflowProcessEngine
 	connectorRegistry                   *runtimeConnectorCatalog

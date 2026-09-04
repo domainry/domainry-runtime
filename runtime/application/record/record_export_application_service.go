@@ -41,7 +41,7 @@ type RecordExportDependencies struct {
 	EnsureSnapshotAccess func(definitionmodel.ObjectSchema, string, principalmodel.Principal) error
 	NormalizeQuery       func(definitionmodel.ObjectSchema, recordmodel.RecordListQuery, principalmodel.Principal) recordmodel.RecordListQuery
 	ListRecords          func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error)
-	ListDirectoryUsers   func(context.Context) ([]identitysdk.User, error)
+	ListIdentityUsers    func(context.Context) ([]identitysdk.User, error)
 	RecordDisplay        func(definitionmodel.ObjectSchema, recordmodel.Record) (string, string)
 	ProjectRecords       func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, []recordmodel.Record, string) ([]recordmodel.Record, error)
 	ValidateAssurance    func(context.Context, definitionmodel.ObjectSchema, principalmodel.Principal, map[string]any, string) (map[string]string, error)
@@ -326,15 +326,15 @@ func (s *RecordExportApplicationService) relationLabels(ctx context.Context, sou
 
 // identityUsersListAction is owned by identity:builtin. Runtime only uses the
 // exact cross-owner grant to decide whether an export may resolve other users'
-// directory labels.
+// projection labels.
 const identityUsersListAction = "identity.users.list"
 
 func (s *RecordExportApplicationService) identityLabels(ctx context.Context, ids map[string]bool, principal principalmodel.Principal, labels map[string]string) {
 	canRead := principal.HasExactPermission(identityUsersListAction)
-	if s.dependencies.ListDirectoryUsers == nil || (!canRead && !ids[principal.UserID]) {
+	if s.dependencies.ListIdentityUsers == nil || (!canRead && !ids[principal.UserID]) {
 		return
 	}
-	users, err := s.dependencies.ListDirectoryUsers(ctx)
+	users, err := s.dependencies.ListIdentityUsers(ctx)
 	if err != nil {
 		return
 	}

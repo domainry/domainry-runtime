@@ -775,118 +775,6 @@
       "standalone_workspace": false
     }
   ],
-  "views": [
-    {
-      "key": "my_leave_workbench",
-      "name": "My Leave",
-      "object_key": "leave_request",
-      "type": "workbench",
-      "i18n": {
-        "zh-CN": {
-          "name": "我的请假"
-        },
-        "en": {
-          "name": "My Leave"
-        }
-      },
-      "config": {
-        "route": "/hr/leave",
-        "columns": [
-          "leave_type",
-          "start_date",
-          "end_date",
-          "days",
-          "status"
-        ]
-      }
-    },
-    {
-      "key": "team_leave_schedule",
-      "name": "Team Leave",
-      "object_key": "leave_request",
-      "type": "schedule",
-      "i18n": {
-        "zh-CN": {
-          "name": "团队请假"
-        },
-        "en": {
-          "name": "Team Leave"
-        }
-      },
-      "config": {
-        "route": "/hr/team-leave",
-        "start_field": "start_date",
-        "end_field": "end_date",
-        "group_by": "employee_user"
-      }
-    },
-    {
-      "key": "leave_ledger",
-      "name": "Leave Ledger",
-      "object_key": "leave_balance_ledger",
-      "type": "ledger",
-      "i18n": {
-        "zh-CN": {
-          "name": "余额台账"
-        },
-        "en": {
-          "name": "Leave Ledger"
-        }
-      },
-      "config": {
-        "route": "/hr/leave-ledger",
-        "columns": [
-          "employee_user",
-          "leave_type",
-          "change_days",
-          "balance_after",
-          "reason"
-        ]
-      }
-    }
-  ],
-  "surfaces": [
-    {
-      "key": "position_detail",
-      "name": "职位详情",
-      "components": [
-        "position_profile_tabs"
-      ],
-      "config": {
-        "workspace_query_contract": [
-          {
-            "key": "selected_bundle",
-            "selected_context": "hr_position",
-            "objects": [
-              "hr_position",
-              "employee_profile"
-            ],
-            "strategy": "surface_context"
-          }
-        ]
-      }
-    }
-  ],
-  "components": [
-    {
-      "key": "position_profile_tabs",
-      "name": "职位档案关联",
-      "i18n": {
-        "zh-CN": {
-          "name": "职位档案关联"
-        },
-        "en": {
-          "name": "Position profiles"
-        }
-      },
-      "surface_key": "position_detail",
-      "primitive": "detail_tabs",
-      "object_keys": [
-        "employee_profile"
-      ],
-      "permission": "employee_profile.read"
-    }
-  ],
   "actions": [
     {
       "key": "leave_request.submit",
@@ -901,14 +789,8 @@
         }
       },
       "kind": "record_operation",
-      "preconditions": [
-
-      ],
-      "audit_event": "leave_request_submitted",
-      "ui_placement": "record_header",
-      "idempotency_keys": [
-        "request_id"
-      ]
+      "preconditions": [],
+      "audit_event": "leave_request_submitted"
     },
     {
       "key": "leave_request.withdraw",
@@ -923,11 +805,7 @@
         }
       },
       "kind": "record_operation",
-      "audit_event": "leave_request_withdrawn",
-      "ui_placement": "record_header",
-      "idempotency_keys": [
-        "request_id"
-      ]
+      "audit_event": "leave_request_withdrawn"
     },
     {
       "key": "leave_request.cancel",
@@ -942,11 +820,7 @@
         }
       },
       "kind": "record_operation",
-      "audit_event": "leave_request_cancelled",
-      "ui_placement": "record_header",
-      "idempotency_keys": [
-        "request_id"
-      ]
+      "audit_event": "leave_request_cancelled"
     },
     {
       "key": "leave_request.return_for_revision",
@@ -961,8 +835,7 @@
         }
       },
       "kind": "record_operation",
-      "audit_event": "leave_request_returned",
-      "ui_placement": "workflow_only"
+      "audit_event": "leave_request_returned"
     },
     {
       "key": "leave_request.approve",
@@ -977,11 +850,8 @@
         }
       },
       "kind": "record_operation",
-      "preconditions": [
-
-      ],
-      "audit_event": "leave_request_approved",
-      "ui_placement": "workflow_only"
+      "preconditions": [],
+      "audit_event": "leave_request_approved"
     },
     {
       "key": "leave_request.reject",
@@ -996,11 +866,8 @@
         }
       },
       "kind": "record_operation",
-      "preconditions": [
-
-      ],
-      "audit_event": "leave_request_rejected",
-      "ui_placement": "workflow_only"
+      "preconditions": [],
+      "audit_event": "leave_request_rejected"
     },
     {
       "key": "leave_request.notify_approval_reminder",
@@ -1015,8 +882,7 @@
         }
       },
       "kind": "record_operation",
-      "audit_event": "leave_request_approval_reminder_queued",
-      "ui_placement": "workflow_only"
+      "audit_event": "leave_request_approval_reminder_queued"
     },
     {
       "key": "leave_request.notify_result",
@@ -1031,8 +897,7 @@
         }
       },
       "kind": "record_operation",
-      "audit_event": "leave_request_result_notified",
-      "ui_placement": "workflow_only"
+      "audit_event": "leave_request_result_notified"
     }
   ],
   "notification_templates": [
@@ -1466,114 +1331,6 @@
       ]
     }
   ],
-  "menus": [
-    {
-      "key": "hr",
-      "label": "Human Resources",
-      "i18n": {
-        "zh-CN": {
-          "label": "人事"
-        },
-        "en": {
-          "label": "Human Resources"
-        }
-      },
-      "icon": "calendar-days",
-      "sort_order": 100,
-      "roles": [
-        "admin",
-        "employee",
-        "line_manager",
-        "hr_admin"
-      ]
-    },
-    {
-      "key": "hr_my_leave",
-      "label": "My Leave",
-      "i18n": {
-        "zh-CN": {
-          "label": "我的请假"
-        },
-        "en": {
-          "label": "My Leave"
-        }
-      },
-      "parent_key": "hr",
-      "route": "/hr/leave",
-      "icon": "calendar-plus",
-      "sort_order": 110,
-      "roles": [
-        "admin",
-        "employee",
-        "line_manager",
-        "hr_admin"
-      ]
-    },
-    {
-      "key": "hr_approvals",
-      "label": "Approval Inbox",
-      "i18n": {
-        "zh-CN": {
-          "label": "审批待办"
-        },
-        "en": {
-          "label": "Approval Inbox"
-        }
-      },
-      "parent_key": "hr",
-      "route": "/hr/approvals",
-      "icon": "list-checks",
-      "sort_order": 120,
-      "roles": [
-        "admin",
-        "line_manager",
-        "hr_admin"
-      ]
-    },
-    {
-      "key": "hr_team_leave",
-      "label": "Team Leave",
-      "i18n": {
-        "zh-CN": {
-          "label": "团队请假"
-        },
-        "en": {
-          "label": "Team Leave"
-        }
-      },
-      "parent_key": "hr",
-      "route": "/hr/team-leave",
-      "icon": "calendar-range",
-      "sort_order": 130,
-      "roles": [
-        "admin",
-        "line_manager",
-        "hr_admin"
-      ]
-    },
-    {
-      "key": "hr_leave_ledger",
-      "label": "Leave Ledger",
-      "i18n": {
-        "zh-CN": {
-          "label": "余额台账"
-        },
-        "en": {
-          "label": "Leave Ledger"
-        }
-      },
-      "parent_key": "hr",
-      "route": "/hr/leave-ledger",
-      "icon": "book-open-check",
-      "sort_order": 140,
-      "roles": [
-        "admin",
-        "employee",
-        "line_manager",
-        "hr_admin"
-      ]
-    }
-  ],
   "roles": [
     {
       "key": "admin",
@@ -1587,10 +1344,6 @@
         }
       },
       "permissions": [
-        {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
         {
           "permission_key": "employee_profile.create",
           "data_scope": "all"
@@ -1630,10 +1383,6 @@
       },
       "permissions": [
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "employee_profile.read",
           "data_scope": "owner"
         },
@@ -1643,10 +1392,6 @@
         },
         {
           "permission_key": "hr_position.read",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "identity.users.read",
           "data_scope": "all"
         },
         {
@@ -1717,23 +1462,11 @@
       },
       "permissions": [
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "employee_profile.read",
           "data_scope": "org_child"
         },
         {
           "permission_key": "hr_position.read",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "identity.organization_units.read",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "identity.users.read",
           "data_scope": "all"
         },
         {
@@ -1753,7 +1486,7 @@
           "data_scope": "org_child"
         },
         {
-          "permission_key": "runtime.workflows.approve_business_workflow_task",
+          "permission_key": "runtime.workflows.approve_workflow_task",
           "data_scope": "all"
         },
         {
@@ -1769,11 +1502,11 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.reject_business_workflow_task",
+          "permission_key": "runtime.workflows.reject_workflow_task",
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.return_business_workflow_task",
+          "permission_key": "runtime.workflows.return_workflow_task",
           "data_scope": "all"
         },
         {
@@ -1804,10 +1537,6 @@
       },
       "permissions": [
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "employee_profile.create",
           "data_scope": "all"
         },
@@ -1821,18 +1550,6 @@
         },
         {
           "permission_key": "hr_position.read",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "identity.organization_units.read",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "identity.roles.read",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "identity.users.read",
           "data_scope": "all"
         },
         {
@@ -1864,7 +1581,7 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.approve_business_workflow_task",
+          "permission_key": "runtime.workflows.approve_workflow_task",
           "data_scope": "all"
         },
         {
@@ -1880,11 +1597,11 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.reject_business_workflow_task",
+          "permission_key": "runtime.workflows.reject_workflow_task",
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.return_business_workflow_task",
+          "permission_key": "runtime.workflows.return_workflow_task",
           "data_scope": "all"
         },
         {
@@ -1906,101 +1623,9 @@
       },
       "permissions": [
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "identity.users.read",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "leave_request.read",
           "data_scope": "all"
         }
-      ]
-    }
-  ],
-  "identity_bootstrap": {
-    "version": "1",
-    "organization_units": [
-      {
-        "id": "default",
-        "code": "default",
-        "name": "Default",
-        "node_type": "company"
-      }
-    ],
-    "users": [
-      {
-        "id": "employee_user",
-        "name": "Employee",
-        "email": "employee@example.com",
-        "org_id": "default",
-        "manager_user_id": "line_manager_user",
-        "worker_no": "EMP-001",
-        "worker_type": "employee",
-        "work_status": "active"
-      },
-      {
-        "id": "line_manager_user",
-        "name": "Line Manager",
-        "email": "line-manager@example.com",
-        "org_id": "default",
-        "worker_no": "MGR-001",
-        "worker_type": "employee",
-        "work_status": "active"
-      },
-      {
-        "id": "hr_admin_user",
-        "name": "HR Administrator",
-        "email": "hr-admin@example.com",
-        "org_id": "default",
-        "worker_no": "HR-001",
-        "worker_type": "employee",
-        "work_status": "active"
-      },
-      {
-        "id": "restricted_user",
-        "name": "Restricted Viewer",
-        "email": "restricted@example.com",
-        "org_id": "default",
-        "worker_no": "RST-001",
-        "worker_type": "employee",
-        "work_status": "active"
-      }
-    ]
-  },
-  "users": [
-    {
-      "id": "employee_user",
-      "name": "Employee",
-      "email": "employee@example.com",
-      "role_keys": [
-        "employee"
-      ]
-    },
-    {
-      "id": "line_manager_user",
-      "name": "Line Manager",
-      "email": "line-manager@example.com",
-      "role_keys": [
-        "line_manager"
-      ]
-    },
-    {
-      "id": "hr_admin_user",
-      "name": "HR Administrator",
-      "email": "hr-admin@example.com",
-      "role_keys": [
-        "hr_admin"
-      ]
-    },
-    {
-      "id": "restricted_user",
-      "name": "Restricted Viewer",
-      "email": "restricted@example.com",
-      "role_keys": [
-        "restricted"
       ]
     }
   ],
@@ -2088,5 +1713,6 @@
         "expires_on": "2028-12-31"
       }
     }
-  ]
+  ],
+  "schema_version": "2"
 }

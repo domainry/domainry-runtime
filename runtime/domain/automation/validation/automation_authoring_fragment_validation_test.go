@@ -13,7 +13,7 @@ func TestAutomationAuthoringFragmentExamplesExecutePublishedOwnerPolicy(t *testi
 		if capability.Key == "automation.rule" {
 			continue
 		}
-		if capability.ValidationEndpoint != "POST /automation-rules/authoring-fragments/{capabilityKey}/validate" {
+		if capability.ValidationEndpoint != "POST /automation/rules/authoring-fragments/{capabilityKey}/validate" {
 			t.Fatalf("capability %s validation endpoint=%q", capability.Key, capability.ValidationEndpoint)
 		}
 		for _, example := range capability.Examples {

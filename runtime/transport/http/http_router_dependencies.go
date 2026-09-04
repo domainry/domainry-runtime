@@ -147,7 +147,7 @@ type HTTPRouterDependencies struct {
 	RuntimeInstanceID                string
 	BusinessEventBackplane           businesseventcontract.Backplane
 	RateLimiter                      ratelimit.Limiter
-	ModuleHTTPSurfaces               []modulehttp.Surface
+	ModuleHTTPAdapters               []modulehttp.Adapter
 	RuntimeAuthoringScenarioReceipts *businesssystemapplication.RuntimeAuthoringScenarioReceiptService
 }
 

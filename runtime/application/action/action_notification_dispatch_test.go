@@ -21,7 +21,7 @@ func testNotificationIntent() runtimeext.NotificationIntent {
 	value := "PT COMEX order"
 	return runtimeext.NotificationIntent{
 		EventType: "business_task.assigned", SourceEventID: "s10:order-42:v7:assigned:user-2", RecipientUserIDs: []string{"user-2"},
-		Surface: "business_workspace", SubjectObjectKey: "business_task", SubjectRecordID: "task-42", SubjectVersion: "order-version-7",
+		SubjectObjectKey: "business_task", SubjectRecordID: "task-42", SubjectVersion: "order-version-7",
 		DedupeKey: "s10:order-42:v7:assigned:user-2", OccurredAt: time.Date(2026, 8, 9, 8, 0, 0, 0, time.UTC),
 		Variables: []runtimeext.NotificationVariable{{Key: "title", StringValue: &value}},
 	}

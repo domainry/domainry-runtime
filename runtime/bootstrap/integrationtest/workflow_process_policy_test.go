@@ -71,7 +71,7 @@ func workflowPolicyTestRuntime(t *testing.T, workflow definitionmodel.WorkflowSc
 	return store, services
 }
 
-func workflowPolicyTestRuntimeWithIdentity(t *testing.T, workflow definitionmodel.WorkflowSchema) (*persistence.RuntimeStore, *RuntimeServices, *integrationTestIdentityDirectory) {
+func workflowPolicyTestRuntimeWithIdentity(t *testing.T, workflow definitionmodel.WorkflowSchema) (*persistence.RuntimeStore, *RuntimeServices, *integrationTestIdentityProjection) {
 	t.Helper()
 	if workflow.Trigger == nil {
 		workflow.Trigger = map[string]any{"type": "manual"}
@@ -87,7 +87,7 @@ func workflowPolicyTestRuntimeWithIdentity(t *testing.T, workflow definitionmode
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	identity := newIntegrationTestIdentityDirectory()
+	identity := newIntegrationTestIdentityProjection()
 	identity.upsertUser(identitysdk.User{ID: "employee_without_manager", Status: identitysdk.UserStatusActive})
 	return store, newWorkflowProcessTestService(t, store, workflow, identity), identity
 }

@@ -3,7 +3,7 @@ package policy
 import capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 
 const (
-	workflowAuthoringFragmentValidationEndpoint = "POST /tenant-admin/workflows/authoring-fragments/{capabilityKey}/validate"
+	workflowAuthoringFragmentValidationEndpoint = "POST /workflow/authoring-fragments/{capabilityKey}/validate"
 	workflowAuthoringFragmentAction             = "runtime.workflows.validate_authoring_fragment"
 )
 
@@ -150,13 +150,13 @@ func workflowComponentReferenceContracts(parameters []capabilitycontract.Capabil
 		scope := ""
 		switch parameter.Type {
 		case "object_key":
-			resolver = "/tenant-admin/platform-capabilities/references/object_key"
+			resolver = "/capabilities/references/object_key"
 		case "field_key":
-			resolver, scope = "/tenant-admin/platform-capabilities/references/field_key", "/object_key"
+			resolver, scope = "/capabilities/references/field_key", "/object_key"
 		case "action_key":
-			resolver = "/tenant-admin/platform-capabilities/references/action_key"
+			resolver = "/capabilities/references/action_key"
 		case "role_key":
-			resolver = "/tenant-admin/platform-capabilities/references/role_key"
+			resolver = "/capabilities/references/role_key"
 		}
 		if resolver != "" {
 			result = append(result, capabilitycontract.CapabilityAuthoringReference{Kind: parameter.Type, InputJSONPointer: "/" + parameter.Key, ScopeFrom: scope, ResolverEndpoint: resolver})

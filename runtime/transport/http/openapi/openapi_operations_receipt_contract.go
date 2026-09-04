@@ -2,19 +2,19 @@ package openapi
 
 func addOwnerOperationsReceiptOpenAPIContracts(paths map[string]any) {
 	methods := map[string]string{
-		"/operations/scheduler/definitions/{definitionID}/reschedule": "post",
-		"/operations/scheduler/definitions/{definitionID}/run":        "post",
-		"/operations/scheduler/runs/{runID}/retry":                    "post",
-		"/operations/scheduler/runs/{runID}/cancel":                   "post",
-		"/operations/scheduler/dead-letters/{deadLetterID}/resolve":   "post",
-		"/operations/scheduler/dead-letters/{deadLetterID}/requeue":   "post",
-		"/operations/workflow/executions/{executionID}/retry":         "post",
-		"/operations/workflow/executions/{executionID}/resolve":       "post",
-		"/operations/workflow/processes/{processID}/retry":            "post",
-		"/operations/workflow/processes/{processID}/resolve":          "post",
-		"/operations/lifecycle/cleanup/jobs/{jobID}/run":              "post",
-		"/operations/idempotency/receipts/{owner}/{receiptID}/retry":  "post",
-		"/operations/idempotency/receipts/{owner}/{receiptID}/reset":  "post",
+		"/scheduler/definitions/{definitionID}/reschedule":           "post",
+		"/scheduler/definitions/{definitionID}/run":                  "post",
+		"/scheduler/runs/{runID}/retry":                              "post",
+		"/scheduler/runs/{runID}/cancel":                             "post",
+		"/scheduler/dead-letters/{deadLetterID}/resolve":             "post",
+		"/scheduler/dead-letters/{deadLetterID}/requeue":             "post",
+		"/workflow/operations/executions/{executionID}/retry":        "post",
+		"/workflow/operations/executions/{executionID}/resolve":      "post",
+		"/workflow/operations/processes/{processID}/retry":           "post",
+		"/workflow/operations/processes/{processID}/resolve":         "post",
+		"/lifecycle/cleanup/jobs/{jobID}/run":                        "post",
+		"/operations/idempotency/receipts/{owner}/{receiptID}/retry": "post",
+		"/operations/idempotency/receipts/{owner}/{receiptID}/reset": "post",
 	}
 	for path, method := range methods {
 		pathItem, ok := paths[path].(map[string]any)

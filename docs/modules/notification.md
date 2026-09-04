@@ -8,7 +8,7 @@ Owner：通知规则、intent/event、inbox、channel delivery、worker 与通�
 
 Runtime 通过 `NotificationFactory` 和 SDK Binding 发布通知、查询/处理 inbox，并提供 recipient、业务资源授权等 callback。Module 借用 Runtime ModuleHost 的数据库、migration、workspace context 与回调；SaaS 通过 Remote Factory 调用独立服务。通知规则和 delivery 状态由 Notification owner 管理，Runtime 不应重新建立通知聚合。
 
-Notification 的模板管理、Inbox、偏好、治理与 SSE 产品 HTTP 由 Notification 实现仓的 `internal/transport/http/module` 统一持有。Module Binding 直接暴露 `modulehttp.Provider`；SaaS 组合由 `notificationmodule.NewSaaSFactory(notificationremote.NewFactory(...))` 把同一 Surface 装配到 Remote Binding，前端路径不随拓扑变化。Runtime 只负责通用 listener、认证 guard、Surface 挂载与 OpenAPI 汇总；跨 Runtime 业务资源二次鉴权的两个 action-resolution 路由和 Integration publication ledger 查询仍留在 Runtime。
+Notification 的模板管理、Inbox、偏好、治理与 SSE 产品 HTTP 由 Notification 实现仓的 `internal/transport/http/module` 统一持有。Module Binding 直接暴露 `modulehttp.Provider`；SaaS 组合由 `notificationmodule.NewSaaSFactory(notificationremote.NewFactory(...))` 把同一 Adapter 装配到 Remote Binding，前端路径不随拓扑变化。Runtime 只负责通用 listener、认证 guard、Adapter 挂载与 OpenAPI 汇总；跨 Runtime 业务资源二次鉴权的两个 action-resolution 路由和 Integration publication ledger 查询仍留在 Runtime。
 
 Module migration 必须通过 `ApplyOwnedMigrations`。SaaS publication 交接状态 `_publication_outbox` 已登记为 Runtime workspace-scoped handoff；Notification 自有表不属于 Runtime schema 清单。
 

@@ -21,16 +21,16 @@ func auditModuleRoutes(t *testing.T, runtime *bootstrap.Runtime) http.Handler {
 	t.Helper()
 	mux := http.NewServeMux()
 	found := false
-	for _, surface := range runtime.ModuleHTTPSurfaces() {
-		if surface.Owner() != "audit" {
+	for _, adapter := range runtime.ModuleHTTPAdapters() {
+		if adapter.Owner() != "audit" {
 			continue
 		}
 		found = true
-		if err := modulehttp.ValidateSurface(surface); err != nil {
+		if err := modulehttp.ValidateAdapter(adapter); err != nil {
 			t.Fatal(err)
 		}
-		for _, route := range surface.Routes() {
-			next := surface.Handler()
+		for _, route := range adapter.Routes() {
+			next := adapter.Handler()
 			mux.Handle(route.Pattern(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				principal := integrationAuditPrincipal(r.Header.Get("Authorization"))
 				ctx := identitysdk.WithRequestIdentity(r.Context(), identitysdk.RequestIdentity{Principal: principal})
@@ -39,13 +39,13 @@ func auditModuleRoutes(t *testing.T, runtime *bootstrap.Runtime) http.Handler {
 		}
 	}
 	if !found {
-		t.Fatal("Audit Module HTTP surface is missing")
+		t.Fatal("Audit Module HTTP adapter is missing")
 	}
 	mux.Handle("/", runtime.Routes())
 	return mux
 }
 
-// integrationModuleOwnerRoutes mirrors the process host's module-surface
+// integrationModuleOwnerRoutes mirrors the process host's module-adapter
 // attachment for owner HTTP tests that do not need to exercise the host's
 // Identity middleware itself. The Runtime core router intentionally remains
 // only the fallback for Runtime-owned routes.
@@ -66,16 +66,16 @@ func integrationModuleOwnerRoutes(t *testing.T, runtime *bootstrap.Runtime, owne
 	for _, owner := range owners {
 		wanted[owner] = true
 	}
-	for _, surface := range runtime.ModuleHTTPSurfaces() {
-		if surface == nil || !wanted[surface.Owner()] {
+	for _, adapter := range runtime.ModuleHTTPAdapters() {
+		if adapter == nil || !wanted[adapter.Owner()] {
 			continue
 		}
-		found[surface.Owner()] = true
-		if err := modulehttp.ValidateSurface(surface); err != nil {
+		found[adapter.Owner()] = true
+		if err := modulehttp.ValidateAdapter(adapter); err != nil {
 			t.Fatal(err)
 		}
-		for _, route := range surface.Routes() {
-			surfaceHandler := surface.Handler()
+		for _, route := range adapter.Routes() {
+			surfaceHandler := adapter.Handler()
 			next := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				identity, ok := identitysdk.RequestIdentityFromContext(r.Context())
 				if !ok {
@@ -104,7 +104,7 @@ func integrationModuleOwnerRoutes(t *testing.T, runtime *bootstrap.Runtime, owne
 	}
 	for _, owner := range owners {
 		if !found[owner] {
-			t.Fatalf("%s Module HTTP surface is missing", owner)
+			t.Fatalf("%s Module HTTP adapter is missing", owner)
 		}
 	}
 	mux.Handle("/", runtime.Routes())
@@ -118,10 +118,12 @@ func integrationModulePrincipal(authorization string) identitysdk.Principal {
 	if role == "sales_rep" || role == "automation_business_tester" {
 		recordScope = "owner"
 	}
-	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
 		ContractVersion: identitysdk.PrincipalContextContractVersion,
 		Known:           true, WorkspaceID: "workspace-primary", UserID: subject, RoleKey: role,
-	}}, accessfixture.Bundle{Key: role, Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScope(recordScope))}).Principal
+	}}, accessfixture.Bundle{Key: role, Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScope(recordScope))})
+	principal.AccessBundle.Subject.TenantID = "tenant-primary"
+	return principal.Principal
 }
 
 func integrationAuditPrincipal(authorization string) identitysdk.Principal {
@@ -135,6 +137,7 @@ func integrationAuditPrincipal(authorization string) identitysdk.Principal {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
 		ContractVersion: identitysdk.PrincipalContextContractVersion, Known: true, WorkspaceID: "workspace-primary", UserID: subject, RoleKey: role,
 	}}, accessfixture.Bundle{Key: role, Permissions: integrationIdentityRolePermissions(role), DataPolicies: accessfixture.DataPoliciesForPermissions(integrationIdentityRolePermissions(role), "all")})
+	principal.AccessBundle.Subject.TenantID = "tenant-primary"
 	return principal.Principal
 }
 

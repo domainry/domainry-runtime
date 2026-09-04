@@ -21,10 +21,10 @@ import (
 type WorkflowReferenceValidator struct {
 	schema    WorkflowSchemaProvider
 	objectMap func(context.Context) map[string]definitionmodel.ObjectSchema
-	identity  identitysdk.Directory
+	identity  identitysdk.Projection
 }
 
-func NewWorkflowReferenceValidator(schema WorkflowSchemaProvider, objectMap func(context.Context) map[string]definitionmodel.ObjectSchema, identity identitysdk.Directory) *WorkflowReferenceValidator {
+func NewWorkflowReferenceValidator(schema WorkflowSchemaProvider, objectMap func(context.Context) map[string]definitionmodel.ObjectSchema, identity identitysdk.Projection) *WorkflowReferenceValidator {
 	return &WorkflowReferenceValidator{schema: schema, objectMap: objectMap, identity: identity}
 }
 
@@ -285,12 +285,12 @@ func (s *WorkflowReferenceValidator) workflowIdentityReferenceCatalog(ctx contex
 	if s.identity == nil {
 		return users, roles
 	}
-	if values, err := s.identity.ListUsers(ctx, identitysdk.DirectoryQuery{}); err == nil {
+	if values, err := s.identity.ListUsers(ctx, identitysdk.ProjectionQuery{}); err == nil {
 		for _, user := range values {
 			users[user.ID] = true
 		}
 	}
-	if values, err := s.identity.ListRoles(ctx, identitysdk.DirectoryQuery{}); err == nil {
+	if values, err := s.identity.ListRoles(ctx, identitysdk.ProjectionQuery{}); err == nil {
 		for _, role := range values {
 			roles[role.Key] = true
 		}

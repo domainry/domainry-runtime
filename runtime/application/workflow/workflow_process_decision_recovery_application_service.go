@@ -22,7 +22,7 @@ import (
 func prepareNextApprovalNodes(ctx context.Context, records *WorkflowProcessRuntime, commit *transactionmodel.WorkflowDecisionCommit, process workflowmodel.WorkflowProcessInstance, nodeIDs []string, principal principalmodel.Principal, now string) (bool, error) {
 	assigneeNames := map[string]string{}
 	if records.dependencies.Identity != nil {
-		users, err := records.dependencies.Identity.ListUsers(ctx, identitysdk.DirectoryQuery{})
+		users, err := records.dependencies.Identity.ListUsers(ctx, identitysdk.ProjectionQuery{})
 		if err != nil {
 			users = nil
 		}

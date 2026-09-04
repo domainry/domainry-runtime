@@ -46,7 +46,7 @@ func (s *workflowNotificationProcessEdgeStub) InsertNode(ctx context.Context, wo
 }
 
 type workflowIdentityEdgeStub struct {
-	workflowDirectoryTestStub
+	workflowIdentityProjectionTestStub
 	user  identitysdk.User
 	found bool
 	err   error
@@ -56,7 +56,7 @@ func (s workflowIdentityEdgeStub) FindUser(context.Context, identitysdk.UserLook
 	return s.user, s.found, s.err
 }
 
-func (s workflowIdentityEdgeStub) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
+func (s workflowIdentityEdgeStub) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
 	if s.err != nil {
 		return nil, s.err
 	}

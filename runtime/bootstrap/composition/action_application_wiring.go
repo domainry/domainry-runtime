@@ -123,11 +123,11 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 
 func compileActionNotification(records *runtimeAssembly) func(context.Context, string, runtimeext.NotificationIntent, principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
 	return func(ctx context.Context, eventID string, intent runtimeext.NotificationIntent, principal principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
-		if records == nil || records.recordNotificationCompiler == nil || records.identityDirectory == nil {
+		if records == nil || records.recordNotificationCompiler == nil || records.identityProjection == nil {
 			return notificationmodel.NotificationEvent{}, apperror.New(apperror.KindInternal, "backend.notification.action_compiler_required", nil, nil)
 		}
 		for _, recipient := range intent.RecipientUserIDs {
-			_, found, err := records.identityDirectory.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(strings.TrimSpace(recipient))})
+			_, found, err := records.identityProjection.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(strings.TrimSpace(recipient))})
 			if err != nil {
 				return notificationmodel.NotificationEvent{}, err
 			}
@@ -140,7 +140,7 @@ func compileActionNotification(records *runtimeAssembly) func(context.Context, s
 			variables[strings.TrimSpace(variable.Key)] = variable.Value()
 		}
 		return records.recordNotificationCompiler(notificationmodel.NotificationIntent{
-			ID: eventID, WorkspaceID: principal.WorkspaceID, SourceEventID: strings.TrimSpace(intent.SourceEventID), EventType: strings.TrimSpace(intent.EventType), Surface: strings.TrimSpace(intent.Surface),
+			ID: eventID, WorkspaceID: principal.WorkspaceID, SourceEventID: strings.TrimSpace(intent.SourceEventID), EventType: strings.TrimSpace(intent.EventType),
 			RecipientUserIDs: append([]string(nil), intent.RecipientUserIDs...), SubjectType: strings.TrimSpace(intent.SubjectObjectKey), SubjectID: strings.TrimSpace(intent.SubjectRecordID), SubjectVersion: strings.TrimSpace(intent.SubjectVersion),
 			DedupeKey: strings.TrimSpace(intent.DedupeKey), GroupKey: strings.TrimSpace(intent.GroupKey), AlertState: func() string {
 				if intent.Alert {

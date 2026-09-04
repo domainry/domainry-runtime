@@ -139,7 +139,7 @@ func TestRecordMutationNotificationPersistenceFailureIsReturned(t *testing.T) {
 		Object:    definitionmodel.ObjectSchema{Key: "order"},
 		Record:    recordmodel.Record{ID: "order-1", CreatedAt: now, UpdatedAt: now, Data: map[string]any{}},
 		NotificationEvents: []notificationmodel.NotificationEvent{{
-			ID: "notification-1", Source: "record", SourceEventID: "order-1-created", EventType: "record.created", Category: "business", Severity: "info", Surface: "business_workspace", RecipientUserIDs: []string{"user"}, ActionState: "none", OccurredAt: now, Snapshot: notificationmodel.NotificationInboxSnapshot{Title: "Created", Body: "Created"}, Status: "queued", CreatedAt: now, UpdatedAt: now,
+			ID: "notification-1", Source: "record", SourceEventID: "order-1-created", EventType: "record.created", Category: "business", Severity: "info", RecipientUserIDs: []string{"user"}, ActionState: "none", OccurredAt: now, Snapshot: notificationmodel.NotificationInboxSnapshot{Title: "Created", Body: "Created"}, Status: "queued", CreatedAt: now, UpdatedAt: now,
 		}},
 	}
 	if err := store.ApplyRecordMutationTx(t.Context(), store.database(), "workspace", commit); err == nil {

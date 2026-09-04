@@ -13,13 +13,13 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 		method string
 		client string
 	}{
-		{path: "/objects/{objectKey}/records/import/preview", method: "post", client: "previewRecordImport"},
-		{path: "/objects/{objectKey}/records/import/apply", method: "post", client: "applyRecordImport"},
-		{path: "/objects/{objectKey}/records/import/jobs", method: "post", client: "enqueueRecordImport"},
-		{path: "/objects/{objectKey}/records/export", method: "post", client: "exportRecords"},
-		{path: "/record-exports/{jobID}/download", method: "get", client: "downloadRecordExport"},
-		{path: "/objects/{objectKey}/actions/{actionKey}/bulk", method: "post", client: "runBulkAction"},
-		{path: "/files", method: "post", client: "uploadFile"},
+		{path: "/records/objects/{objectKey}/records/import/preview", method: "post", client: "previewRecordImport"},
+		{path: "/records/objects/{objectKey}/records/import/apply", method: "post", client: "applyRecordImport"},
+		{path: "/records/objects/{objectKey}/records/import/jobs", method: "post", client: "enqueueRecordImport"},
+		{path: "/records/objects/{objectKey}/records/export", method: "post", client: "exportRecords"},
+		{path: "/records/exports/{jobID}/download", method: "get", client: "downloadRecordExport"},
+		{path: "/records/objects/{objectKey}/actions/{actionKey}/bulk", method: "post", client: "runBulkAction"},
+		{path: "/uploads/files", method: "post", client: "uploadFile"},
 		{path: "/uploads/{filename}", method: "get", client: "downloadUpload"},
 	} {
 		operation := openAPITestOperation(t, paths, item.path, item.method)
@@ -29,29 +29,29 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 	}
 
 	for _, path := range []string{
-		"/objects/{objectKey}/records/import/apply",
-		"/objects/{objectKey}/records/import/jobs",
-		"/objects/{objectKey}/records/export",
-		"/objects/{objectKey}/actions/{actionKey}/bulk",
+		"/records/objects/{objectKey}/records/import/apply",
+		"/records/objects/{objectKey}/records/import/jobs",
+		"/records/objects/{objectKey}/records/export",
+		"/records/objects/{objectKey}/actions/{actionKey}/bulk",
 	} {
 		if operation := openAPITestOperation(t, paths, path, "post"); !openAPITestRequiredHeader(operation, "Idempotency-Key") {
 			t.Errorf("POST %s is missing required Idempotency-Key", path)
 		}
 	}
-	if _, exists := paths["/objects/{objectKey}/records/export/jobs"]; exists {
+	if _, exists := paths["/records/objects/{objectKey}/records/export/jobs"]; exists {
 		t.Fatal("legacy record export job path is still published")
 	}
-	if _, exists := paths["/objects/{objectKey}/records/export"].(map[string]any)["get"]; exists {
+	if _, exists := paths["/records/objects/{objectKey}/records/export"].(map[string]any)["get"]; exists {
 		t.Fatal("legacy GET record export method is still published")
 	}
-	for _, path := range []string{"/objects/{objectKey}/records/import/preview", "/objects/{objectKey}/records/import/apply", "/objects/{objectKey}/records/import/jobs"} {
+	for _, path := range []string{"/records/objects/{objectKey}/records/import/preview", "/records/objects/{objectKey}/records/import/apply", "/records/objects/{objectKey}/records/import/jobs"} {
 		content := openAPITestOperation(t, paths, path, "post")["requestBody"].(map[string]any)["content"].(map[string]any)
 		if content["application/json"] == nil || content["text/csv"] == nil {
 			t.Errorf("POST %s request content=%v", path, content)
 		}
 	}
 
-	upload := openAPITestOperation(t, paths, "/files", "post")
+	upload := openAPITestOperation(t, paths, "/uploads/files", "post")
 	uploadContent := upload["requestBody"].(map[string]any)["content"].(map[string]any)
 	if uploadContent["multipart/form-data"] == nil || !openAPITestRequiredParameter(upload, "query", "object_key") || !openAPITestRequiredParameter(upload, "query", "field_key") {
 		t.Fatalf("multipart upload authorization contract=%#v", upload)
@@ -66,38 +66,36 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 func TestPersonalInboxPublishesDurableIntegrationContracts(t *testing.T) {
 	paths := Build(appschemamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
 	inbox := map[string]map[string]string{
-		"/notifications":                                              {"get": "listNotifications"},
-		"/notifications/facets":                                       {"get": "notificationFacets"},
-		"/notifications/unread-count":                                 {"get": "notificationUnreadCount"},
-		"/notifications/stream":                                       {"get": "subscribeNotificationSync"},
-		"/notifications/read-all":                                     {"post": "markAllNotificationsRead"},
-		"/notifications/saved-views":                                  {"get": "listNotificationSavedViews"},
-		"/notifications/saved-views/{viewKey}":                        {"put": "saveNotificationSavedView", "delete": "deleteNotificationSavedView"},
-		"/notifications/delegations":                                  {"get": "listNotificationDelegations"},
-		"/notifications/delegations/{delegationID}":                   {"put": "saveNotificationDelegation", "delete": "deleteNotificationDelegation"},
-		"/notifications/delegated-owners":                             {"get": "listNotificationDelegatedOwners"},
-		"/notifications/{notificationID}":                             {"get": "getNotification"},
-		"/notifications/{notificationID}/actions/{actionKey}/resolve": {"get": "resolveNotificationAction"},
-		"/notifications/{notificationID}/acknowledge":                 {"post": "acknowledgeNotificationAlert"},
-		"/notifications/{notificationID}/read":                        {"post": "setNotificationRead"},
-		"/notifications/{notificationID}/unread":                      {"post": "setNotificationRead"},
-		"/notifications/{notificationID}/archive":                     {"post": "setNotificationArchived"},
-		"/notifications/{notificationID}/restore":                     {"post": "setNotificationArchived"},
-		"/notification-preferences":                                   {"get": "notificationPreference", "put": "saveNotificationPreference"},
+		"/notification/inbox":                                              {"get": "listNotifications"},
+		"/notification/inbox/facets":                                       {"get": "notificationFacets"},
+		"/notification/inbox/unread-count":                                 {"get": "notificationUnreadCount"},
+		"/notification/inbox/stream":                                       {"get": "subscribeNotificationSync"},
+		"/notification/inbox/read-all":                                     {"post": "markAllNotificationsRead"},
+		"/notification/inbox/saved-views":                                  {"get": "listNotificationSavedViews"},
+		"/notification/inbox/saved-views/{viewKey}":                        {"put": "saveNotificationSavedView", "delete": "deleteNotificationSavedView"},
+		"/notification/inbox/delegations":                                  {"get": "listNotificationDelegations"},
+		"/notification/inbox/delegations/{delegationID}":                   {"put": "saveNotificationDelegation", "delete": "deleteNotificationDelegation"},
+		"/notification/inbox/delegated-owners":                             {"get": "listNotificationDelegatedOwners"},
+		"/notification/inbox/{notificationID}":                             {"get": "getNotification"},
+		"/notification/inbox/{notificationID}/actions/{actionKey}/resolve": {"get": "resolveNotificationAction"},
+		"/notification/inbox/{notificationID}/acknowledge":                 {"post": "acknowledgeNotificationAlert"},
+		"/notification/inbox/{notificationID}/read":                        {"post": "setNotificationRead"},
+		"/notification/inbox/{notificationID}/unread":                      {"post": "setNotificationRead"},
+		"/notification/inbox/{notificationID}/archive":                     {"post": "setNotificationArchived"},
+		"/notification/inbox/{notificationID}/restore":                     {"post": "setNotificationArchived"},
+		"/notification/inbox/preference":                                   {"get": "notificationPreference", "put": "saveNotificationPreference"},
 	}
-	for _, prefix := range []string{"/business", "/portal"} {
-		for suffix, methods := range inbox {
-			for method, client := range methods {
-				operation := openAPITestOperation(t, paths, prefix+suffix, method)
-				if operation["x-domainry-runtime-client-method"] != client {
-					t.Errorf("%s %s runtime client method=%v want=%s", method, prefix+suffix, operation["x-domainry-runtime-client-method"], client)
-				}
+	for path, methods := range inbox {
+		for method, client := range methods {
+			operation := openAPITestOperation(t, paths, path, method)
+			if operation["x-domainry-runtime-client-method"] != client {
+				t.Errorf("%s %s runtime client method=%v want=%s", method, path, operation["x-domainry-runtime-client-method"], client)
 			}
 		}
-		stream := openAPITestOperation(t, paths, prefix+"/notifications/stream", "get")
-		if !openAPITestResponseContentType(stream, "text/event-stream") || !openAPITestParameter(stream, "header", "Last-Event-ID") {
-			t.Errorf("%s Inbox stream does not publish resumable durable-refetch signal contract: %#v", prefix, stream)
-		}
+	}
+	stream := openAPITestOperation(t, paths, "/notification/inbox/stream", "get")
+	if !openAPITestResponseContentType(stream, "text/event-stream") || !openAPITestParameter(stream, "header", "Last-Event-ID") {
+		t.Errorf("Inbox stream does not publish resumable durable-refetch signal contract: %#v", stream)
 	}
 
 }

@@ -8,11 +8,16 @@ import (
 )
 
 func TestOperationalControlsRejectMutationButAllowReadAndRecovery(t *testing.T) {
-	router := &HTTPRouter{healthRegistry: newRuntimeHealthRegistry(), runtimeInstanceID: "instance-a"}
+	router := highRiskPolicyTestRouter(t)
+	router.healthRegistry, router.runtimeInstanceID = newRuntimeHealthRegistry(), "instance-a"
 	router.operationsControlState = func(_ context.Context, kind, owner string) (bool, bool, error) {
 		return kind == "maintenance" && owner == "runtime", true, nil
 	}
-	handler := router.withOperationalControls(nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	routes := http.NewServeMux()
+	routes.HandleFunc("PUT /operations/controls/{controlKind}/{owner}", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	routes.HandleFunc("POST /records/customer", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	routes.HandleFunc("GET /records/customer", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	handler := router.withOperationalControls(routes, routes)
 
 	mutation := httptest.NewRecorder()
 	handler.ServeHTTP(mutation, httptest.NewRequest(http.MethodPost, "/records/customer", nil))

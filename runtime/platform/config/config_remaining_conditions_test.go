@@ -188,11 +188,11 @@ func TestConfigUnknownProductionPolicyCondition(t *testing.T) {
 	t.Setenv("INTEGRATION_SECRET_KEY", "production-integration-secret")
 	t.Setenv("INTEGRATION_ACTIVE_KEY_ID", "data-1")
 	t.Setenv("HTTP_PUBLIC_ORIGINS", "https://app.example.com")
-	t.Setenv("HTTP_TENANT_ADMIN_ORIGINS", "https://admin.example.com")
+	t.Setenv("HTTP_MANAGEMENT_ORIGINS", "https://admin.example.com")
 	t.Setenv("HTTP_OPS_ORIGINS", "https://ops.example.com")
 	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.example.com,https://admin.example.com,https://ops.example.com")
 	t.Setenv("HTTP_PUBLIC_ADDR", "0.0.0.0:8081")
-	t.Setenv("HTTP_TENANT_ADMIN_ADDR", "127.0.0.1:8082")
+	t.Setenv("HTTP_MANAGEMENT_ADDR", "127.0.0.1:8082")
 	t.Setenv("HTTP_OPS_ADDR", "127.0.0.1:8083")
 	t.Setenv("RUNTIME_UNKNOWN_PRODUCTION_EDGE", "value")
 	if _, _, err := Load(); err == nil || !strings.Contains(err.Error(), "RUNTIME_UNKNOWN_PRODUCTION_EDGE") {

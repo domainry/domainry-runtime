@@ -165,8 +165,8 @@ func runtimeModelAPIContract() (runtimeModelAPIContractDocument, error) {
 
 func runtimeModelAPITransportOnly(key string) bool {
 	switch key {
-	case "business_event_stream", "business_notification_stream", "business_record_sync_stream",
-		"portal_notification_stream", "business_audit_event_export_download", "record_export_download", "file_download":
+	case "business_event_stream", "notification_stream", "business_record_sync_stream",
+		"business_audit_event_export_download", "record_export_download", "file_download":
 		return true
 	default:
 		return false
@@ -174,14 +174,6 @@ func runtimeModelAPITransportOnly(key string) bool {
 }
 
 func runtimeModelAPIOperationKey(key string) string {
-	for _, prefix := range []string{"business_notification_", "portal_notification_"} {
-		if strings.HasPrefix(key, prefix) {
-			return "notification_" + strings.TrimPrefix(key, prefix)
-		}
-	}
-	if key == "portal_workflow_run" {
-		return "workflow_run"
-	}
 	if key == "business_audit_event_export_prepare" {
 		return "audit_event_export"
 	}
@@ -261,7 +253,7 @@ func runtimeModelAPISchemaClosure(schemas map[string]json.RawMessage, selected m
 		if !exists {
 			continue
 		}
-		result[key] = runtimeModelAPISanitizeSchema(key, raw)
+		result[key] = append(json.RawMessage(nil), raw...)
 		var value any
 		if json.Unmarshal(raw, &value) != nil {
 			continue
@@ -273,31 +265,6 @@ func runtimeModelAPISchemaClosure(schemas map[string]json.RawMessage, selected m
 		}
 	}
 	return result
-}
-
-func runtimeModelAPISanitizeSchema(key string, raw json.RawMessage) json.RawMessage {
-	if key != "notification" {
-		return append(json.RawMessage(nil), raw...)
-	}
-	var value map[string]any
-	if json.Unmarshal(raw, &value) != nil {
-		return append(json.RawMessage(nil), raw...)
-	}
-	for _, collection := range []string{"required", "optional"} {
-		items, _ := value[collection].([]any)
-		filtered := make([]any, 0, len(items))
-		for _, item := range items {
-			if strings.TrimSpace(fmt.Sprint(item)) != "surface" {
-				filtered = append(filtered, item)
-			}
-		}
-		value[collection] = filtered
-	}
-	payload, err := json.Marshal(value)
-	if err != nil {
-		return append(json.RawMessage(nil), raw...)
-	}
-	return payload
 }
 
 func runtimeModelAPIContainsString(value any, wanted string) bool {

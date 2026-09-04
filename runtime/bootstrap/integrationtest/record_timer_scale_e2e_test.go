@@ -82,7 +82,7 @@ func TestRecordTimerHundredThousandRestartClockDriftAndMultiInstanceNoLoss(t *te
 		}
 		batch++
 	}
-	page, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 1, Filters: map[string]any{"status": "fired"}})
+	page, err := recordLegacyStore(store).ListRecords(t.Context(), "workspace-primary", timerObject, recordmodel.RecordListQuery{Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"status": "fired"}})
 	if err != nil || page.Total != total {
 		t.Fatalf("fired timers=%d err=%v want=%d", page.Total, err, total)
 	}

@@ -12,18 +12,18 @@ type OpenAPIHandler struct {
 	schema           *appschemaapplication.ApplicationSchemaQueryApplicationService
 	writeJSON        func(http.ResponseWriter, int, any)
 	productBrandName string
-	moduleSurfaces   []modulehttp.Surface
+	moduleAdapters   []modulehttp.Adapter
 }
 
 type OpenAPIDependencies struct {
 	Schema           *appschemaapplication.ApplicationSchemaQueryApplicationService
 	WriteJSON        func(http.ResponseWriter, int, any)
 	ProductBrandName string
-	ModuleSurfaces   []modulehttp.Surface
+	ModuleAdapters   []modulehttp.Adapter
 }
 
 func NewOpenAPIHandler(deps OpenAPIDependencies) *OpenAPIHandler {
-	return &OpenAPIHandler{schema: deps.Schema, writeJSON: deps.WriteJSON, productBrandName: productbrand.ResolveName(deps.ProductBrandName), moduleSurfaces: append([]modulehttp.Surface(nil), deps.ModuleSurfaces...)}
+	return &OpenAPIHandler{schema: deps.Schema, writeJSON: deps.WriteJSON, productBrandName: productbrand.ResolveName(deps.ProductBrandName), moduleAdapters: append([]modulehttp.Adapter(nil), deps.ModuleAdapters...)}
 }
 
 func (h *OpenAPIHandler) openAPISpec(w http.ResponseWriter, r *http.Request) {
@@ -31,5 +31,5 @@ func (h *OpenAPIHandler) openAPISpec(w http.ResponseWriter, r *http.Request) {
 	etag := `"` + snapshot.SchemaHash + `-openapi-` + productbrand.NameRevision(h.productBrandName) + `"`
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "public, max-age=60")
-	h.writeJSON(w, http.StatusOK, BuildWithModuleHTTPSurfaces(snapshot, h.productBrandName, h.moduleSurfaces))
+	h.writeJSON(w, http.StatusOK, BuildWithModuleHTTPAdapters(snapshot, h.productBrandName, h.moduleAdapters))
 }

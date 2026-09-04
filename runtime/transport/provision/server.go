@@ -307,7 +307,7 @@ func (s *Server) v1Review(w http.ResponseWriter, r *http.Request) {
 	if len(diagnostics) == 0 {
 		current, currentHash, found, err := s.loadCurrent()
 		if err != nil {
-			diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.current_manifest_unreadable", "/runtime/current", err.Error(), "inspect_runtime_instance"))
+			diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.current_manifest_unreadable", "/metadata/manifests/current", err.Error(), "inspect_runtime_instance"))
 		} else {
 			currentSnapshot = snapshotHash(found, currentHash)
 			initialInstall = !found
@@ -361,7 +361,7 @@ func (s *Server) v1Apply(w http.ResponseWriter, r *http.Request) {
 	if len(diagnostics) == 0 {
 		current, loadedHash, loaded, err := s.loadCurrent()
 		if err != nil {
-			diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.current_manifest_unreadable", "/runtime/current", err.Error(), "inspect_runtime_instance"))
+			diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.current_manifest_unreadable", "/metadata/manifests/current", err.Error(), "inspect_runtime_instance"))
 		} else {
 			currentHash = loadedHash
 			found = loaded
@@ -389,7 +389,7 @@ func (s *Server) v1Apply(w http.ResponseWriter, r *http.Request) {
 		resultStatus = "noop"
 	} else {
 		if err := writeManifestAtomic(s.manifestPath, manifest); err != nil {
-			s.writeV1ApplyBlocked(w, request, "runtime.manifest_write_failed", "/runtime/manifest", err.Error(), "inspect_runtime_instance_storage")
+			s.writeV1ApplyBlocked(w, request, "runtime.manifest_write_failed", "/metadata/manifests", err.Error(), "inspect_runtime_instance_storage")
 			return
 		}
 		if s.activate != nil {
@@ -399,14 +399,14 @@ func (s *Server) v1Apply(w http.ResponseWriter, r *http.Request) {
 				} else {
 					_ = os.Remove(s.manifestPath)
 				}
-				s.writeV1ApplyBlocked(w, request, "runtime.activation_failed", "/runtime/activation", err.Error(), "inspect_runtime_bootstrap")
+				s.writeV1ApplyBlocked(w, request, "runtime.activation_failed", "/provision/activation", err.Error(), "inspect_runtime_bootstrap")
 				return
 			}
 		}
 	}
 	auditRequest := manifestRequest{Manifest: manifest, Actor: valueOrDefault(stringFromMap(request, "actor"), "builder-agent"), Reason: valueOrDefault(stringFromMap(request, "reason"), s.productBrandName+" Framework Builder v1 provision apply"), ExpectedSnapshotHash: currentSnapshot}
 	if err := s.appendAudit(auditRequest, hash, resultStatus, "manifest persisted; Runtime bootstrap transaction is the database recovery boundary"); err != nil {
-		s.writeV1ApplyBlocked(w, request, "runtime.provision_audit_write_failed", "/runtime/audit", err.Error(), "inspect_runtime_instance_storage")
+		s.writeV1ApplyBlocked(w, request, "runtime.provision_audit_write_failed", "/provision/audit", err.Error(), "inspect_runtime_instance_storage")
 		return
 	}
 	receipt := s.v1Receipt(request, manifest, hash, resultStatus)
@@ -439,7 +439,7 @@ func (s *Server) v1Rollback(w http.ResponseWriter, r *http.Request) {
 			"request_hash":     request.RequestHash,
 			"receipt_hash":     request.ReceiptHash,
 			"diagnostic_count": 1,
-			"diagnostics":      []provisionDiagnostic{provisionV1Diagnostic("runtime.rollback_failed", "/runtime/manifest", err.Error(), "inspect_runtime_instance_storage")},
+			"diagnostics":      []provisionDiagnostic{provisionV1Diagnostic("runtime.rollback_failed", "/metadata/manifests", err.Error(), "inspect_runtime_instance_storage")},
 		}))
 		return
 	}

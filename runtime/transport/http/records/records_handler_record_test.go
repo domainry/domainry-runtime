@@ -3,7 +3,7 @@ package records
 import (
 	"context"
 	"errors"
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,6 +17,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
@@ -30,6 +31,7 @@ type recordsHTTPRepository struct {
 	found     bool
 	err       error
 	getCalls  int
+	listCalls int
 	lastQuery recordmodel.RecordListQuery
 }
 
@@ -75,11 +77,54 @@ func (recordsHTTPMutationExecutionStore) CompleteRecordMutationExecution(_ conte
 }
 
 func (r *recordsHTTPRepository) ListRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
+	r.listCalls++
 	r.lastQuery = query
 	if _, candidateLookup := query.Filters["id__in"]; candidateLookup && r.found && len(r.page.Items) == 0 {
+		if query.AuthorizationMode == recordmodel.RecordQueryAuthorizationDeny ||
+			(query.AuthorizationMode == recordmodel.RecordQueryAuthorizationPredicate && !recordsHTTPRecordMatchesScope(r.record, query.ScopeExpression)) {
+			return recordmodel.RecordPageResult{Page: 1, PageSize: 1}, r.err
+		}
 		return recordmodel.RecordPageResult{Items: []recordmodel.Record{r.record}, Page: 1, PageSize: 1, Total: 1}, r.err
 	}
 	return r.page, r.err
+}
+
+func recordsHTTPRecordMatchesScope(record recordmodel.Record, expression *recordmodel.RecordScopeExpression) bool {
+	if expression == nil {
+		return false
+	}
+	switch expression.Operator {
+	case "and":
+		for index := range expression.Children {
+			if !recordsHTTPRecordMatchesScope(record, &expression.Children[index]) {
+				return false
+			}
+		}
+		return true
+	case "or":
+		for index := range expression.Children {
+			if recordsHTTPRecordMatchesScope(record, &expression.Children[index]) {
+				return true
+			}
+		}
+		return false
+	case "eq":
+		if len(expression.Values) != 1 {
+			return false
+		}
+		switch expression.FieldKey {
+		case "id":
+			return record.ID == expression.Values[0]
+		case "owner_user_id":
+			return record.OwnerUserID == expression.Values[0]
+		case "owner_org_id":
+			return record.OwnerOrgID == expression.Values[0]
+		default:
+			return strings.TrimSpace(fmt.Sprint(record.Data[expression.FieldKey])) == expression.Values[0]
+		}
+	default:
+		return false
+	}
 }
 func (r *recordsHTTPRepository) GetRecord(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error) {
 	r.getCalls++
@@ -426,8 +471,8 @@ func TestBusinessProfileLifecycleHandlersReturnUpdatedRecord(t *testing.T) {
 		call                   func(http.ResponseWriter, *http.Request)
 		body                   string
 	}{
-		{name: "deactivate", endpointIdentity: "POST /objects/{objectKey}/records/{recordID}/deactivate-profile", call: handler.deactivateBusinessProfile, body: `{"inactive_status":"inactive","expected_updated_at":"version-1","reason":" review "}`},
-		{name: "reactivate", endpointIdentity: "POST /objects/{objectKey}/records/{recordID}/reactivate-profile", call: handler.reactivateBusinessProfile, body: `{"active_status":"active","expected_updated_at":"version-1","reason":" restore "}`},
+		{name: "deactivate", endpointIdentity: "POST /records/objects/{objectKey}/records/{recordID}/deactivate-profile", call: handler.deactivateBusinessProfile, body: `{"inactive_status":"inactive","expected_updated_at":"version-1","reason":" review "}`},
+		{name: "reactivate", endpointIdentity: "POST /records/objects/{objectKey}/records/{recordID}/reactivate-profile", call: handler.reactivateBusinessProfile, body: `{"active_status":"active","expected_updated_at":"version-1","reason":" restore "}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			*serviceErr = nil

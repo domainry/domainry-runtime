@@ -55,6 +55,7 @@ func TestPublishContainsOnlyRuntimeBuildClosureAndCompilesConsumer(t *testing.T)
 	source := `package consumer
 import (
 	_ "github.com/domainry/domainry-connector-sdk"
+	_ "github.com/domainry/domainry-connectors/providers/website_form/tally"
 	_ "github.com/domainry/domainry-runtime/pkg/runtimeext"
 	_ "github.com/domainry/domainry-runtime/pkg/runtimehost"
 )

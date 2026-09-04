@@ -1,167 +1,94 @@
 package operations
 
 import (
-	"context"
-	"errors"
 	"testing"
 	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
-
 	"github.com/domainry/domainry-foundation/apperror"
-	"github.com/domainry/domainry-foundation/idempotency"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
+	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-type operationsLegacyProbe struct {
-	operation string
-	owner     string
-	id        string
-	status    string
-	limit     int
-	err       error
-}
-
-func (p *operationsLegacyProbe) IdempotencyReceipts(context.Context, principalmodel.Principal, string, int) ([]idempotency.ReceiptSummary, error) {
-	p.operation = "list"
-	return []idempotency.ReceiptSummary{{ID: "receipt-1"}}, p.err
-}
-func (p *operationsLegacyProbe) RetryIdempotencyReceipt(_ context.Context, _ principalmodel.Principal, owner, id string) error {
-	p.operation, p.owner, p.id = "retry", owner, id
-	return p.err
-}
-func (p *operationsLegacyProbe) ResetIdempotencyReceipt(_ context.Context, _ principalmodel.Principal, owner, id string) error {
-	p.operation, p.owner, p.id = "reset", owner, id
-	return p.err
-}
-
-func operationsTestAdmin() principalmodel.Principal {
-	return operationsAdminPrincipal()
-}
-
-func TestOperationsDefinitionsReceiptAndReceiptListEdges(t *testing.T) {
-	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
-	service := NewOperationsApplicationService(repository, nil, nil, nil)
-	if len(service.Definitions()) == 0 {
-		t.Fatal("operations definitions are empty")
+func TestDatabaseRetirementOperationalStatusAndListQueries(t *testing.T) {
+	now := time.Date(2026, 7, 19, 13, 14, 15, 0, time.UTC)
+	stale := now.Add(-2 * operationspolicy.MaximumRetirementEvidenceAge)
+	retirement := operationsmodel.DatabaseRetirement{
+		ID: "retirement-1", State: operationsmodel.DatabaseRetirementBlocked, BlockedReason: "access observed",
+		Evidence: operationsmodel.DatabaseRetirementEvidence{
+			Owner: "record", BackupVerifiedAt: &stale, RestoreDrillAt: &stale,
+			Observation: operationsmodel.DatabaseAccessObservation{WindowEnds: now.Add(time.Minute), ReadCount: 1},
+		},
 	}
-	unauthorized := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "viewer"}}
-	if _, err := service.Receipt(t.Context(), "receipt-1", unauthorized); apperror.KindOf(err) != apperror.KindForbidden {
-		t.Fatalf("receipt authorization error = %v", err)
+	repository := &databaseRetirementRepositoryFake{items: map[string]operationsmodel.DatabaseRetirement{retirement.ID: retirement}}
+	service := NewDatabaseRetirementApplicationService(repository, nil, func() time.Time { return now }, nil)
+	unauthorized := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "viewer"}}
+	if _, err := service.OperationalStatus(t.Context(), retirement.ID, unauthorized); apperror.KindOf(err) != apperror.KindForbidden {
+		t.Fatalf("status authorization error = %v", err)
 	}
-	if _, err := service.Receipts(t.Context(), "", 10, unauthorized); apperror.KindOf(err) != apperror.KindForbidden {
-		t.Fatalf("receipts authorization error = %v", err)
+	if _, err := service.List(t.Context(), "", 10, unauthorized); apperror.KindOf(err) != apperror.KindForbidden {
+		t.Fatalf("list authorization error = %v", err)
 	}
-	workspaceAdminOnOps := operationsTestAdmin()
-	accessfixture.Set(&workspaceAdminOnOps, accessfixture.Bundle{Permissions: []string{"runtime.appschema.validate_application_definition"}})
-	if _, err := service.Receipts(t.Context(), "", 10, workspaceAdminOnOps); apperror.KindOf(err) != apperror.KindForbidden {
-		t.Fatalf("unrelated permission expanded to runtime.operations.list_operations: %v", err)
+	principal := databaseRetirementPrincipal()
+	status, err := service.OperationalStatus(t.Context(), retirement.ID, principal)
+	if err != nil || status.ObservationRemainingSeconds != 60 || len(status.Alerts) != 4 {
+		t.Fatalf("status=%#v err=%v", status, err)
 	}
-	admin := operationsTestAdmin()
-	repositoryFailure := errors.New("operations repository failed")
-	repository.getErr = repositoryFailure
-	if _, err := service.Receipt(t.Context(), "receipt-1", admin); apperror.CodeOf(err) != "backend.operations.read_failed" || !errors.Is(err, repositoryFailure) {
-		t.Fatalf("receipt repository error = %v", err)
+	items, err := service.List(t.Context(), operationsmodel.DatabaseRetirementBlocked, 10, principal)
+	if err != nil || len(items) != 1 || items[0].ID != retirement.ID {
+		t.Fatalf("items=%#v err=%v", items, err)
 	}
-	repository.getErr = nil
-	if _, err := service.Receipt(t.Context(), "missing", admin); apperror.KindOf(err) != apperror.KindNotFound {
-		t.Fatalf("receipt not-found error = %v", err)
-	}
-	receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{ID: "receipt-1", Scope: operationsmodel.OperationsScope{WorkspaceID: admin.WorkspaceID}}}
-	repository.receipts["receipt-1"] = receipt
-	got, err := service.Receipt(t.Context(), " receipt-1 ", admin)
-	if err != nil || got.Command.ID != receipt.Command.ID {
-		t.Fatalf("receipt=%#v err=%v", got, err)
-	}
-	repository.listErr = repositoryFailure
-	if _, err := service.Receipts(t.Context(), operationsmodel.OperationsStatusStarted, 0, admin); !errors.Is(err, repositoryFailure) || repository.lastLimit != 100 {
-		t.Fatalf("list error=%v limit=%d", err, repository.lastLimit)
-	}
-	repository.listErr = nil
-	items, err := service.Receipts(t.Context(), "", 201, admin)
-	if err != nil || len(items) != 1 || repository.lastLimit != 100 {
-		t.Fatalf("items=%#v limit=%d err=%v", items, repository.lastLimit, err)
+	service.now = func() time.Time { return now.Add(2 * time.Minute) }
+	status, err = service.OperationalStatus(t.Context(), retirement.ID, principal)
+	if err != nil || status.ObservationRemainingSeconds != 0 {
+		t.Fatalf("expired observation status=%#v err=%v", status, err)
 	}
 }
 
-func TestOperationsListAndGetUseIndependentExactActions(t *testing.T) {
-	service := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, nil, nil)
-	base := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}
-	listOnly := accessfixture.Attach(base, accessfixture.Bundle{Permissions: []string{"runtime.operations.list_operations"}})
-	if _, err := service.Receipts(t.Context(), "", 10, listOnly); err != nil {
-		t.Fatalf("list exact action denied: %v", err)
+func TestOperationsControlBreakGlassAndDeadLetterQuerySurfaces(t *testing.T) {
+	admin := operationsAdminPrincipal()
+	unauthorized := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: admin.WorkspaceID, UserID: "viewer"}}
+	control := operationsmodel.OperationsControl{SystemPurpose: operationsmodel.OperationsSystemPurposeRuntimeControl, Kind: operationsmodel.OperationsControlMaintenance, Owner: "runtime"}
+	controls := &operationsControlRepositoryProbe{controls: map[string]operationsmodel.OperationsControl{"control": control}}
+	controlService := NewOperationsControlApplicationService(controls, nil, nil, nil)
+	if _, err := controlService.List(t.Context(), "", 10, unauthorized); apperror.KindOf(err) != apperror.KindForbidden {
+		t.Fatalf("control authorization error = %v", err)
 	}
-	if _, err := service.Receipt(t.Context(), "missing", listOnly); apperror.KindOf(err) != apperror.KindForbidden {
-		t.Fatalf("list action reached get operation: %v", err)
+	listedControls, err := controlService.List(t.Context(), operationsmodel.OperationsControlMaintenance, 10, admin)
+	if err != nil || len(listedControls) != 1 {
+		t.Fatalf("controls=%#v err=%v", listedControls, err)
 	}
-	getOnly := accessfixture.Attach(base, accessfixture.Bundle{Permissions: []string{"runtime.operations.get_operation"}})
-	if _, err := service.Receipt(t.Context(), "missing", getOnly); apperror.KindOf(err) != apperror.KindNotFound {
-		t.Fatalf("get exact action result: %v", err)
-	}
-	if _, err := service.Receipts(t.Context(), "", 10, getOnly); apperror.KindOf(err) != apperror.KindForbidden {
-		t.Fatalf("get action reached list operations: %v", err)
-	}
-}
 
-func TestOperationsLegacyReceiptCompatibilityEdges(t *testing.T) {
-	service := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, nil, nil)
-	admin := operationsTestAdmin()
-	if _, err := service.LegacyReceipts(t.Context(), admin, "failed", 10); apperror.CodeOf(err) != idempotency.ErrorCodeReceiptUnavailable {
-		t.Fatalf("legacy list error = %v", err)
+	now := time.Date(2026, 7, 19, 14, 15, 16, 0, time.UTC)
+	operations := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, func() time.Time { return now }, nil)
+	breakGlass := &breakGlassRepositoryProbe{grants: map[string]operationsmodel.OperationsBreakGlassGrant{
+		"expired": {ID: "expired", WorkspaceID: admin.WorkspaceID, State: operationsmodel.OperationsBreakGlassActive, ExpiresAt: now},
+	}}
+	if err := operations.RegisterBreakGlass(breakGlass, &breakGlassAlertProbe{}); err != nil {
+		t.Fatal(err)
 	}
-	if err := service.RetryLegacyReceipt(t.Context(), admin, "record", "receipt-1"); apperror.CodeOf(err) != idempotency.ErrorCodeReceiptUnavailable {
-		t.Fatalf("legacy retry error = %v", err)
+	if _, err := operations.ListBreakGlass(t.Context(), 10, unauthorized); apperror.KindOf(err) != apperror.KindForbidden {
+		t.Fatalf("break-glass authorization error = %v", err)
 	}
-	if err := service.ResetLegacyReceipt(t.Context(), admin, "record", "receipt-1"); apperror.CodeOf(err) != idempotency.ErrorCodeReceiptUnavailable {
-		t.Fatalf("legacy reset error = %v", err)
+	grants, err := operations.ListBreakGlass(t.Context(), 10, admin)
+	if err != nil || len(grants) != 1 || grants[0].State != operationsmodel.OperationsBreakGlassExpired {
+		t.Fatalf("grants=%#v err=%v", grants, err)
 	}
-	legacyFailure := errors.New("legacy failed")
-	legacy := &operationsLegacyProbe{err: legacyFailure}
-	service.legacy = legacy
-	if items, err := service.LegacyReceipts(t.Context(), admin, "failed", 10); len(items) != 1 || !errors.Is(err, legacyFailure) || legacy.operation != "list" {
-		t.Fatalf("items=%#v operation=%q err=%v", items, legacy.operation, err)
-	}
-	if err := service.RetryLegacyReceipt(t.Context(), admin, "record", "receipt-1"); !errors.Is(err, legacyFailure) || legacy.operation != "retry" || legacy.owner != "record" || legacy.id != "receipt-1" {
-		t.Fatalf("operation=%q owner=%q id=%q err=%v", legacy.operation, legacy.owner, legacy.id, err)
-	}
-	if err := service.ResetLegacyReceipt(t.Context(), admin, "workflow", "receipt-2"); !errors.Is(err, legacyFailure) || legacy.operation != "reset" || legacy.owner != "workflow" || legacy.id != "receipt-2" {
-		t.Fatalf("operation=%q owner=%q id=%q err=%v", legacy.operation, legacy.owner, legacy.id, err)
-	}
-}
 
-func TestOperationsSubmitSystemValidationAndPersistenceFailures(t *testing.T) {
-	now := time.Date(2026, 7, 19, 12, 13, 14, 0, time.UTC)
-	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
-	service := NewOperationsApplicationService(repository, nil, func() time.Time { return now }, func() string { return "system" })
-	admin := operationsTestAdmin()
-	if _, _, err := service.SubmitSystem(t.Context(), OperationsSubmitRequest{Kind: "unknown"}, "key", "purpose", admin); apperror.CodeOf(err) != "backend.operations.kind_not_registered" {
-		t.Fatalf("unknown kind error = %v", err)
+	owner := &bulkDeadLetterOwnerProbe{items: map[string]OperationsDeadLetterItem{"item-1": {Owner: "probe", ID: "item-1"}}}
+	if err := operations.RegisterDeadLetterOwner("probe", owner); err != nil {
+		t.Fatal(err)
 	}
-	request := OperationsSubmitRequest{Kind: "runtime.maintenance.enable", ResourceType: "runtime", ResourceID: "runtime", Reason: "maintenance"}
-	mismatch := request
-	mismatch.ResourceType = "wrong"
-	if _, _, err := service.SubmitSystem(t.Context(), mismatch, "key", "purpose", admin); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {
-		t.Fatalf("definition error = %v", err)
+	if _, err := operations.InspectDeadLetter(t.Context(), "probe", "item-1", unauthorized); apperror.KindOf(err) != apperror.KindForbidden {
+		t.Fatalf("dead-letter authorization error = %v", err)
 	}
-	if _, _, err := service.SubmitSystem(t.Context(), request, "key", "", admin); apperror.CodeOf(err) != "backend.operations.system_scope_required" {
-		t.Fatalf("scope error = %v", err)
+	if _, err := operations.InspectDeadLetter(t.Context(), "missing", "item-1", admin); apperror.CodeOf(err) != "backend.operations.dead_letter_owner_not_registered" {
+		t.Fatalf("missing owner error = %v", err)
 	}
-	denied := admin
-	accessfixture.Set(&denied, accessfixture.Bundle{})
-	if _, _, err := service.SubmitSystem(t.Context(), request, "key", "purpose", denied); apperror.KindOf(err) != apperror.KindForbidden {
-		t.Fatalf("authorization error = %v", err)
-	}
-	repositoryFailure := errors.New("register failed")
-	repository.registerErr = repositoryFailure
-	if _, _, err := service.SubmitSystem(t.Context(), request, "key", " purpose ", admin); apperror.CodeOf(err) != "backend.operations.register_failed" || !errors.Is(err, repositoryFailure) {
-		t.Fatalf("register error = %v", err)
-	}
-	repository.registerErr = nil
-	receipt, decision, err := service.SubmitSystem(t.Context(), request, "key", " purpose ", admin)
-	if err != nil || decision != operationsmodel.OperationsSubmissionAccepted || receipt.Command.Scope.SystemPurpose != "purpose" || receipt.Command.CreatedAt != now {
-		t.Fatalf("receipt=%#v decision=%q err=%v", receipt, decision, err)
+	item, err := operations.InspectDeadLetter(t.Context(), " probe ", " item-1 ", admin)
+	if err != nil || item.ID != "item-1" {
+		t.Fatalf("item=%#v err=%v", item, err)
 	}
 }

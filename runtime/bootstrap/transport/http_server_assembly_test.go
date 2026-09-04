@@ -83,7 +83,7 @@ func TestListenerRouteGroupsRegisterOnlyTheirCompiledEndpointInventory(t *testin
 			IdentityAudience:               "domainry-runtime",
 			HTTPPublicOrigins:              []string{"https://app.example.com"},
 			HTTPOpsOrigins:                 []string{"https://ops.example.com"},
-			HTTPTenantAdminOrigins:         []string{"https://admin.example.com"},
+			HTTPManagementOrigins:          []string{"https://admin.example.com"},
 		},
 	})
 	assertStatus := func(group runtimehttp.ListenerRouteGroup, method, path string, headers map[string]string, want int) {
@@ -106,17 +106,17 @@ func TestListenerRouteGroupsRegisterOnlyTheirCompiledEndpointInventory(t *testin
 		publicOpenAPI,
 		httptest.NewRequest(http.MethodGet, "/openapi.json", nil),
 	)
-	if body := publicOpenAPI.Body.String(); !strings.Contains(body, `"/objects/{objectKey}/records"`) ||
-		!strings.Contains(body, `"/automation-rules"`) ||
+	if body := publicOpenAPI.Body.String(); !strings.Contains(body, `"/records/objects/{objectKey}/records"`) ||
+		!strings.Contains(body, `"/automation/rules"`) ||
 		strings.Contains(body, `"/identity/`) ||
 		strings.Contains(body, `"/auth/`) ||
 		strings.Contains(body, `"/operations"`) {
 		t.Fatalf("public OpenAPI leaked or omitted Surface paths: %s", body)
 	}
 	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/metrics", nil, http.StatusNotFound)
-	assertStatus(runtimehttp.ListenerRouteGroupTenantAdmin, http.MethodGet, "/metrics", nil, http.StatusUnauthorized)
+	assertStatus(runtimehttp.ListenerRouteGroupManagement, http.MethodGet, "/metrics", nil, http.StatusUnauthorized)
 	assertStatus(runtimehttp.ListenerRouteGroupOps, http.MethodGet, "/identity/users", nil, http.StatusNotFound)
-	assertStatus(runtimehttp.ListenerRouteGroupTenantAdmin, http.MethodGet, "/openapi.json", map[string]string{
+	assertStatus(runtimehttp.ListenerRouteGroupManagement, http.MethodGet, "/openapi.json", map[string]string{
 		"X-User-ID": "admin", "X-Role": "admin",
 	}, http.StatusOK)
 	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/live", map[string]string{
@@ -125,7 +125,7 @@ func TestListenerRouteGroupsRegisterOnlyTheirCompiledEndpointInventory(t *testin
 
 	for _, group := range []runtimehttp.ListenerRouteGroup{
 		runtimehttp.ListenerRouteGroupPublic,
-		runtimehttp.ListenerRouteGroupTenantAdmin,
+		runtimehttp.ListenerRouteGroupManagement,
 		runtimehttp.ListenerRouteGroupOps,
 	} {
 		if count, all := runtimehttp.ListenerRouteGroupEndpointCount(group), runtimehttp.ListenerRouteGroupEndpointCount(runtimehttp.ListenerRouteGroupAll); count == 0 || count >= all {

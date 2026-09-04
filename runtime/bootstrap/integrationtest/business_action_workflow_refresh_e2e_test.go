@@ -14,7 +14,7 @@ import (
 )
 
 func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
-	manifestPath := orderToCashSurfaceTestManifest(t)
+	manifestPath := orderToCashWorkflowTestManifest(t)
 	cfg := config.Config{
 		AppLocale:      "en-US",
 		DatabaseDriver: "sqlite",
@@ -34,13 +34,13 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 	})
 	asUser := func(userID string) map[string]string {
 		return map[string]string{
-			"Authorization": "Bearer " + integrationIdentityAccessTokenFor(userID, roleForBusinessWorkflowUser(userID)),
+			"Authorization": "Bearer " + integrationIdentityAccessTokenFor(userID, roleForParticipantWorkflowUser(userID)),
 		}
 	}
 
 	customer := runtimeFixtureRequestWithHeaders[map[string]any](
 		t, handler, "sales", http.MethodGet,
-		"/objects/customer_account/records?page=1&page_size=1", nil, asUser("sales_user"),
+		"/records/objects/customer_account/records?page=1&page_size=1", nil, asUser("sales_user"),
 	)
 	customerItems, _ := customer["items"].([]any)
 	if len(customerItems) != 1 {
@@ -53,7 +53,7 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 	}
 
 	order := runtimeFixtureRequestWithHeaders[recordmodel.Record](
-		t, handler, "sales", http.MethodPost, "/objects/sales_order/records",
+		t, handler, "sales", http.MethodPost, "/records/objects/sales_order/records",
 		map[string]any{"data": map[string]any{
 			"order_number": "SO-P7-BUSINESS", "customer": customerID, "sku": "WIDGET-1",
 			"ordered_quantity": 2, "reserved_quantity": 0, "fulfilled_quantity": 0,
@@ -68,7 +68,7 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 
 	submitted := runtimeFixtureRequestWithHeaders[map[string]any](
 		t, handler, "sales", http.MethodPost,
-		"/objects/sales_order/records/"+order.ID+"/actions/sales_order.submit",
+		"/records/objects/sales_order/records/"+order.ID+"/actions/sales_order.submit",
 		map[string]any{"data": map[string]any{"request_id": "submit-p7"}},
 		asUser("sales_user"),
 	)
@@ -77,17 +77,18 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 	// The Action mutation commits the workflow intent transactionally. The Ops
 	// worker only advances that durable intent; it does not grant Business access.
 	operationsHeaders := map[string]string{
-		"Authorization": "Bearer " + integrationIdentityAccessToken("platform_admin"),
+		"Authorization":      "Bearer " + integrationIdentityAccessToken("platform_admin"),
+		"X-Operation-Reason": "Advance the controlled workflow integration fixture",
 	}
-	var creditTasks []workflowapplication.BusinessWorkflowTaskDTO
+	var creditTasks []workflowapplication.ParticipantWorkflowTaskDTO
 	for attempt := 0; attempt < 40 && len(creditTasks) == 0; attempt++ {
 		runtimeFixtureRequestWithHeaders[workflowapplication.OpsWorkflowProcessBatchDTO](
 			t, handler, "platform_admin", http.MethodPost,
-			"/operations/workflow/executions/process?limit=25", nil, operationsHeaders,
+			"/workflow/operations/executions/process?limit=25", nil, operationsHeaders,
 		)
-		creditTasks = runtimeFixtureRequestWithHeaders[[]workflowapplication.BusinessWorkflowTaskDTO](
+		creditTasks = runtimeFixtureRequestWithHeaders[[]workflowapplication.ParticipantWorkflowTaskDTO](
 			t, handler, "credit_manager", http.MethodGet,
-			"/business/workflow/tasks?status=open&limit=20", nil, asUser("credit_user"),
+			"/workflow/tasks?status=open&limit=20", nil, asUser("credit_user"),
 		)
 		if len(creditTasks) == 0 {
 			time.Sleep(25 * time.Millisecond)
@@ -96,22 +97,22 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 	if len(creditTasks) != 1 || creditTasks[0].AssigneeUserID != "credit_user" {
 		t.Fatalf("expected credit manager task, got %#v", creditTasks)
 	}
-	runtimeFixtureRequestWithHeaders[workflowapplication.BusinessWorkflowProcessDTO](
+	runtimeFixtureRequestWithHeaders[workflowapplication.ParticipantWorkflowProcessDTO](
 		t, handler, "credit_manager", http.MethodPost,
-		"/business/workflow/tasks/"+creditTasks[0].ID+"/approve",
+		"/workflow/tasks/"+creditTasks[0].ID+"/approve",
 		map[string]any{"comment": "credit approved"}, asUser("credit_user"),
 	)
 
-	financeTasks := runtimeFixtureRequestWithHeaders[[]workflowapplication.BusinessWorkflowTaskDTO](
+	financeTasks := runtimeFixtureRequestWithHeaders[[]workflowapplication.ParticipantWorkflowTaskDTO](
 		t, handler, "finance", http.MethodGet,
-		"/business/workflow/tasks?status=open&limit=20", nil, asUser("finance_user"),
+		"/workflow/tasks?status=open&limit=20", nil, asUser("finance_user"),
 	)
 	if len(financeTasks) != 1 || financeTasks[0].AssigneeUserID != "finance_user" {
 		t.Fatalf("expected independent finance task, got %#v", financeTasks)
 	}
-	completed := runtimeFixtureRequestWithHeaders[workflowapplication.BusinessWorkflowProcessDTO](
+	completed := runtimeFixtureRequestWithHeaders[workflowapplication.ParticipantWorkflowProcessDTO](
 		t, handler, "finance", http.MethodPost,
-		"/business/workflow/tasks/"+financeTasks[0].ID+"/approve",
+		"/workflow/tasks/"+financeTasks[0].ID+"/approve",
 		map[string]any{"comment": "finance approved"}, asUser("finance_user"),
 	)
 	if completed.Status != "completed" {
@@ -119,14 +120,14 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 	}
 
 	refreshed := runtimeFixtureRequestWithHeaders[recordmodel.Record](
-		t, handler, "sales", http.MethodGet, "/objects/sales_order/records/"+order.ID, nil, asUser("sales_user"),
+		t, handler, "sales", http.MethodGet, "/records/objects/sales_order/records/"+order.ID, nil, asUser("sales_user"),
 	)
 	if refreshed.Data["status"] != "approved" {
 		t.Fatalf("refreshed Business record status=%v want=approved: %#v", refreshed.Data["status"], refreshed)
 	}
 }
 
-func orderToCashSurfaceTestManifest(t *testing.T) string {
+func orderToCashWorkflowTestManifest(t *testing.T) string {
 	t.Helper()
 	source := filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "order-to-cash.json")
 	raw, err := os.ReadFile(source)
@@ -140,12 +141,10 @@ func orderToCashSurfaceTestManifest(t *testing.T) string {
 	roles, _ := manifest["roles"].([]any)
 	manifest["roles"] = append(roles, map[string]any{
 		"key": "platform_admin", "name": "Runtime Operator",
-		"permissions": []any{"runtime.workflows.process_ops_workflow_executions"},
-	})
-	users, _ := manifest["users"].([]any)
-	manifest["users"] = append(users, map[string]any{
-		"id": "platform_admin", "name": "Runtime Operator",
-		"email": "runtime-operator@example.com", "role_keys": []any{"platform_admin"},
+		"permissions": []any{map[string]any{
+			"permission_key": "runtime.workflows.process_ops_workflow_executions",
+			"data_scope":     "all",
+		}},
 	})
 	workflows, _ := manifest["workflows"].([]any)
 	if len(workflows) != 1 {
@@ -161,14 +160,14 @@ func orderToCashSurfaceTestManifest(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	target := filepath.Join(t.TempDir(), "order-to-cash-surface-e2e.json")
+	target := filepath.Join(t.TempDir(), "order-to-cash-workflow-e2e.json")
 	if err := os.WriteFile(target, normalized, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return target
 }
 
-func roleForBusinessWorkflowUser(userID string) string {
+func roleForParticipantWorkflowUser(userID string) string {
 	switch userID {
 	case "sales_user":
 		return "sales"

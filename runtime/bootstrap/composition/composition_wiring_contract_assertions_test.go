@@ -11,7 +11,7 @@ import (
 // Keep Composition adapters checked against the owner ports they bridge. These
 // assertions make wiring drift fail at compile time during the test build.
 var (
-	_ identitysdk.Directory = compositionIdentityDirectory{}
+	_ identitysdk.Projection = compositionIdentityProjection{}
 
 	_ workflowapplication.WorkflowRegistry       = runtimeWorkflowRegistry{}
 	_ workflowapplication.WorkflowSchemaProvider = runtimeWorkflowSchemaProvider{}

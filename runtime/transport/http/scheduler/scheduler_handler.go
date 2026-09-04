@@ -31,14 +31,14 @@ type SchedulerHandler struct {
 }
 
 type schedulerService interface {
-	TenantAdminDefinitions(context.Context, principalmodel.Principal) ([]schedulerbusiness.TenantAdminSchedulerDefinitionDTO, error)
-	TenantAdminDefinition(context.Context, string, principalmodel.Principal) (schedulerbusiness.TenantAdminSchedulerDefinitionDTO, error)
-	TenantAdminDefinitionVersions(context.Context, string, principalmodel.Principal) ([]schedulerbusiness.TenantAdminSchedulerDefinitionVersionDTO, error)
-	TenantAdminAuthoringContract(context.Context, principalmodel.Principal) (schedulerbusiness.TenantAdminSchedulerAuthoringContract, error)
+	ManagementDefinitions(context.Context, principalmodel.Principal) ([]schedulerbusiness.ManagementSchedulerDefinitionDTO, error)
+	ManagementDefinition(context.Context, string, principalmodel.Principal) (schedulerbusiness.ManagementSchedulerDefinitionDTO, error)
+	ManagementDefinitionVersions(context.Context, string, principalmodel.Principal) ([]schedulerbusiness.ManagementSchedulerDefinitionVersionDTO, error)
+	ManagementAuthoringContract(context.Context, principalmodel.Principal) (schedulerbusiness.ManagementSchedulerAuthoringContract, error)
 	AuthorizeOpsRead(context.Context, principalmodel.Principal) error
 	PreviewDefinition(context.Context, map[string]any, principalmodel.Principal) (schedulerbusiness.SchedulerDefinitionPreview, error)
 	PreviewSchedule(context.Context, map[string]any, principalmodel.Principal) (schedulerbusiness.SchedulerDefinitionPreview, error)
-	SimulateTenantAdminDefinition(context.Context, string, principalmodel.Principal) (schedulerbusiness.SchedulerDefinitionSimulation, error)
+	SimulateManagementDefinition(context.Context, string, principalmodel.Principal) (schedulerbusiness.SchedulerDefinitionSimulation, error)
 }
 
 func (h *SchedulerHandler) ownerBinding() (schedulersdk.Binding, error) {
@@ -48,8 +48,8 @@ func (h *SchedulerHandler) ownerBinding() (schedulersdk.Binding, error) {
 	return h.binding, nil
 }
 
-func (h *SchedulerHandler) listTenantAdminSchedulerDefinitions(w http.ResponseWriter, r *http.Request) {
-	items, err := h.service.TenantAdminDefinitions(r.Context(), h.principal(r))
+func (h *SchedulerHandler) listManagementSchedulerDefinitions(w http.ResponseWriter, r *http.Request) {
+	items, err := h.service.ManagementDefinitions(r.Context(), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -57,8 +57,8 @@ func (h *SchedulerHandler) listTenantAdminSchedulerDefinitions(w http.ResponseWr
 	h.writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
 }
 
-func (h *SchedulerHandler) getTenantAdminSchedulerDefinition(w http.ResponseWriter, r *http.Request) {
-	item, err := h.service.TenantAdminDefinition(r.Context(), strings.TrimSpace(r.PathValue("definitionID")), h.principal(r))
+func (h *SchedulerHandler) getManagementSchedulerDefinition(w http.ResponseWriter, r *http.Request) {
+	item, err := h.service.ManagementDefinition(r.Context(), strings.TrimSpace(r.PathValue("definitionID")), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -66,8 +66,8 @@ func (h *SchedulerHandler) getTenantAdminSchedulerDefinition(w http.ResponseWrit
 	h.writeJSON(w, http.StatusOK, item)
 }
 
-func (h *SchedulerHandler) listTenantAdminSchedulerDefinitionVersions(w http.ResponseWriter, r *http.Request) {
-	items, err := h.service.TenantAdminDefinitionVersions(r.Context(), strings.TrimSpace(r.PathValue("definitionID")), h.principal(r))
+func (h *SchedulerHandler) listManagementSchedulerDefinitionVersions(w http.ResponseWriter, r *http.Request) {
+	items, err := h.service.ManagementDefinitionVersions(r.Context(), strings.TrimSpace(r.PathValue("definitionID")), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -75,8 +75,8 @@ func (h *SchedulerHandler) listTenantAdminSchedulerDefinitionVersions(w http.Res
 	h.writeJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
 }
 
-func (h *SchedulerHandler) getTenantAdminSchedulerAuthoringContract(w http.ResponseWriter, r *http.Request) {
-	contract, err := h.service.TenantAdminAuthoringContract(r.Context(), h.principal(r))
+func (h *SchedulerHandler) getManagementSchedulerAuthoringContract(w http.ResponseWriter, r *http.Request) {
+	contract, err := h.service.ManagementAuthoringContract(r.Context(), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -137,7 +137,7 @@ func (h *SchedulerHandler) previewSchedulerSchedule(w http.ResponseWriter, r *ht
 }
 
 func (h *SchedulerHandler) simulateSchedulerJob(w http.ResponseWriter, r *http.Request) {
-	result, err := h.service.SimulateTenantAdminDefinition(r.Context(), strings.TrimSpace(r.PathValue("definitionID")), h.principal(r))
+	result, err := h.service.SimulateManagementDefinition(r.Context(), strings.TrimSpace(r.PathValue("definitionID")), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return

@@ -12,26 +12,26 @@ import (
 
 func TestAuthorityUsesOriginalIdentityRequestToken(t *testing.T) {
 	ctx := identitysdk.WithRequestIdentity(t.Context(), identitysdk.RequestIdentity{Principal: identitysdk.Principal{Known: true}, AccessToken: " bearer-token "})
-	value, err := authority(ctx, " business_workspace ")
+	value, err := authority(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.AccessToken != " bearer-token " || value.Surface != "business_workspace" {
+	if value.AccessToken != " bearer-token " {
 		t.Fatalf("authority=%+v", value)
 	}
-	if _, err := authority(t.Context(), "business_workspace"); apperror.KindOf(err) != apperror.KindForbidden {
+	if _, err := authority(t.Context()); apperror.KindOf(err) != apperror.KindForbidden {
 		t.Fatalf("missing token error=%v", err)
 	}
 }
 
-func TestApplicationUserAuthorityUsesAdministrationChannel(t *testing.T) {
+func TestApplicationUserAuthorityUsesOriginalIdentityRequestToken(t *testing.T) {
 	ctx := identitysdk.WithRequestIdentity(t.Context(), identitysdk.RequestIdentity{Principal: identitysdk.Principal{Known: true}, AccessToken: "token"})
 	value, err := (&NotificationApplicationService{}).user(ctx, principalmodel.Principal{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value.Surface != "administration" {
-		t.Fatalf("surface=%q", value.Surface)
+	if value.AccessToken != "token" {
+		t.Fatalf("authority=%+v", value)
 	}
 }
 

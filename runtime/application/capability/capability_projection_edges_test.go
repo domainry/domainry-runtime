@@ -127,7 +127,7 @@ func TestCapabilityAuthoringProjectionAndServices(t *testing.T) {
 	if !reflect.DeepEqual(domains, []string{"workflow", "action", "automation"}) || !reflect.DeepEqual(projection.Domains, []string{"action", "automation", "workflow"}) {
 		t.Fatalf("unexpected projection domains: input=%v projection=%v", domains, projection.Domains)
 	}
-	if projection.Mode != "compatibility_projection" || projection.Successor != "/tenant-admin/platform-capabilities" || projection.ContractHash == "" {
+	if projection.Mode != "compatibility_projection" || projection.Successor != "/capabilities" || projection.ContractHash == "" {
 		t.Fatalf("unexpected projection: %#v", projection)
 	}
 	wantKinds := []capabilitycontract.CapabilityKind{

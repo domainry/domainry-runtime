@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const projectFrontendBundleRelativePath = "frontend/source-owned-business.tar"
+const projectFrontendBundleRelativePath = "frontend/source-owned-app.tar"
 
 type projectFrontendAssets struct {
 	files map[string][]byte
@@ -82,8 +82,8 @@ func loadProjectFrontendAssets(executablePath, expectedSHA256 string, readFile f
 		}
 		files[name] = value
 	}
-	if len(files["index.html"]) == 0 || len(files["surface-asset-manifest.json"]) == 0 {
-		return nil, fmt.Errorf("packaged frontend bundle is missing index.html or surface-asset-manifest.json")
+	if len(files["index.html"]) == 0 || len(files["asset-manifest.json"]) == 0 {
+		return nil, fmt.Errorf("packaged frontend bundle is missing index.html or asset-manifest.json")
 	}
 	return &projectFrontendAssets{files: files}, nil
 }
@@ -111,13 +111,22 @@ func (a *projectFrontendAssets) wrap(next http.Handler) http.Handler {
 			serveProjectFrontendAsset(writer, request, path, value)
 			return
 		}
-		if request.URL.Path == "/business" || strings.HasPrefix(request.URL.Path, "/business/") ||
-			request.URL.Path == "/portal" || strings.HasPrefix(request.URL.Path, "/portal/") {
+		if acceptsHTML(request.Header.Get("Accept")) {
 			serveProjectFrontendAsset(writer, request, "index.html", a.files["index.html"])
 			return
 		}
 		next.ServeHTTP(writer, request)
 	})
+}
+
+func acceptsHTML(accept string) bool {
+	for _, mediaRange := range strings.Split(accept, ",") {
+		mediaType := strings.TrimSpace(strings.SplitN(mediaRange, ";", 2)[0])
+		if strings.EqualFold(mediaType, "text/html") || strings.EqualFold(mediaType, "application/xhtml+xml") {
+			return true
+		}
+	}
+	return false
 }
 
 func serveProjectFrontendAsset(writer http.ResponseWriter, request *http.Request, name string, content []byte) {

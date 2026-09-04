@@ -214,7 +214,7 @@ func writeListenerGroupMetrics(output *strings.Builder, groups map[string]listen
 	writeMetricHeader(output, "domainry_runtime_listener_endpoints", "Compiled endpoints attached to each listener.", "gauge")
 	writeMetricHeader(output, "domainry_runtime_listener_requests_total", "Requests handled by listener and status class.", "counter")
 	writeMetricHeader(output, "domainry_runtime_listener_rejections_total", "Rejected requests by listener and status class.", "counter")
-	writeMetricHeader(output, "domainry_runtime_high_risk_operations_total", "High-risk mutation requests by Surface listener and status class.", "counter")
+	writeMetricHeader(output, "domainry_runtime_high_risk_operations_total", "High-risk mutation requests by listener and status class.", "counter")
 	for _, group := range names {
 		metric := groups[group]
 		fmt.Fprintf(output, "domainry_runtime_listener_info{listener_group=%q} 1\n", group)
@@ -243,7 +243,7 @@ func sortedMetricKeys(values map[string]int64) []string {
 func normalizeListenerGroup(group string) string {
 	group = strings.TrimSpace(group)
 	switch group {
-	case string(ListenerRouteGroupPublic), string(ListenerRouteGroupTenantAdmin), string(ListenerRouteGroupOps), string(ListenerRouteGroupAll):
+	case string(ListenerRouteGroupPublic), string(ListenerRouteGroupManagement), string(ListenerRouteGroupOps), string(ListenerRouteGroupAll):
 		return group
 	default:
 		return "unknown"

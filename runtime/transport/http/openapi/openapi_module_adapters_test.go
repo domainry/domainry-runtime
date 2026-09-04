@@ -10,31 +10,31 @@ import (
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
 
-type openAPIModuleSurface struct {
+type openAPIModuleAdapter struct {
 	owner      string
 	routes     []modulehttp.Route
 	operations map[string]map[string]any
 }
 
-func (openAPIModuleSurface) ContractVersion() string { return modulehttp.ContractVersion }
-func (s openAPIModuleSurface) Owner() string         { return s.owner }
-func (openAPIModuleSurface) Name() string            { return "test" }
-func (s openAPIModuleSurface) Routes() []modulehttp.Route {
+func (openAPIModuleAdapter) ContractVersion() string { return modulehttp.ContractVersion }
+func (s openAPIModuleAdapter) Owner() string         { return s.owner }
+func (openAPIModuleAdapter) Name() string            { return "test" }
+func (s openAPIModuleAdapter) Routes() []modulehttp.Route {
 	return append([]modulehttp.Route(nil), s.routes...)
 }
-func (openAPIModuleSurface) Handler() http.Handler { return http.NotFoundHandler() }
-func (s openAPIModuleSurface) OpenAPIOperations() map[string]map[string]any {
+func (openAPIModuleAdapter) Handler() http.Handler { return http.NotFoundHandler() }
+func (s openAPIModuleAdapter) OpenAPIOperations() map[string]map[string]any {
 	return s.operations
 }
 
-func TestOpenAPIModuleOwnershipComesFromSurfaceRoutes(t *testing.T) {
-	surface := openAPIModuleSurface{owner: "example-module", routes: []modulehttp.Route{
-		{Action: openAPITestAction("example.metrics.read", "GET /operations/monitoring/metrics", []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationAuthenticated, false, actioncontract.EffectRead, "not_applicable", nil)},
+func TestOpenAPIModuleOwnershipComesFromAdapterRoutes(t *testing.T) {
+	adapter := openAPIModuleAdapter{owner: "example-module", routes: []modulehttp.Route{
+		{Action: openAPITestAction("example.metrics.read", "GET /monitoring/metrics", []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationAuthenticated, false, actioncontract.EffectRead, "not_applicable", nil)},
 		{Action: openAPITestAction("example.jobs.get", "GET /data-exchange/jobs/{jobID}", []actioncontract.Exposure{actioncontract.ExposurePublic}, actioncontract.AuthorizationAuthenticated, false, actioncontract.EffectRead, "not_applicable", nil)},
 	}}
-	spec := BuildWithModuleHTTPSurfaces(appschemamodel.ApplicationSchemaSnapshot{}, "Domainry", []modulehttp.Surface{surface})
+	spec := BuildWithModuleHTTPAdapters(appschemamodel.ApplicationSchemaSnapshot{}, "Domainry", []modulehttp.Adapter{adapter})
 	paths := spec["paths"].(map[string]any)
-	operation := paths["/operations/monitoring/metrics"].(map[string]any)["get"].(map[string]any)
+	operation := paths["/monitoring/metrics"].(map[string]any)["get"].(map[string]any)
 	if operation["x-domainry-module-owner"] != "example-module" {
 		t.Fatalf("module owner=%v", operation["x-domainry-module-owner"])
 	}
@@ -51,15 +51,15 @@ func TestOpenAPIModuleOwnershipComesFromSurfaceRoutes(t *testing.T) {
 		t.Fatalf("module path parameters=%#v", parameters)
 	}
 
-	withoutSurfaces := Build(appschemamodel.ApplicationSchemaSnapshot{})
-	if _, hardcoded := withoutSurfaces["paths"].(map[string]any)["/operations/monitoring/metrics"]; hardcoded {
-		t.Fatal("OpenAPI must not publish a module route without its Surface")
+	withoutAdapters := Build(appschemamodel.ApplicationSchemaSnapshot{})
+	if _, hardcoded := withoutAdapters["paths"].(map[string]any)["/monitoring/metrics"]; hardcoded {
+		t.Fatal("OpenAPI must not publish a module route without its Adapter")
 	}
 }
 
 func TestOpenAPIModuleUsesOwnerOperationAndGovernanceContract(t *testing.T) {
 	pattern := "POST /example/{exampleID}"
-	surface := openAPIModuleSurface{
+	adapter := openAPIModuleAdapter{
 		owner:  "example-module",
 		routes: []modulehttp.Route{{Action: openAPITestAction("example.write", pattern, []actioncontract.Exposure{actioncontract.ExposureOps}, actioncontract.AuthorizationAuthenticated, true, actioncontract.EffectWrite, "caller_key_required", []actioncontract.ApprovalPolicy{actioncontract.ApprovalReason, actioncontract.ApprovalConfirmation})}},
 		operations: map[string]map[string]any{pattern: {
@@ -68,7 +68,7 @@ func TestOpenAPIModuleUsesOwnerOperationAndGovernanceContract(t *testing.T) {
 			"responses":  map[string]any{"204": map[string]any{"description": "Applied"}},
 		}},
 	}
-	spec := BuildWithModuleHTTPSurfaces(appschemamodel.ApplicationSchemaSnapshot{}, "Domainry", []modulehttp.Surface{surface})
+	spec := BuildWithModuleHTTPAdapters(appschemamodel.ApplicationSchemaSnapshot{}, "Domainry", []modulehttp.Adapter{adapter})
 	operation := spec["paths"].(map[string]any)["/example/{exampleID}"].(map[string]any)["post"].(map[string]any)
 	if operation["operationId"] != "applyExample" || operation["summary"] != "Owner summary" {
 		t.Fatalf("owner operation=%#v", operation)
@@ -98,7 +98,7 @@ func openAPITestAction(key, pattern string, exposures []actioncontract.Exposure,
 	method, path, _ := strings.Cut(pattern, " ")
 	separator := strings.LastIndex(key, ".")
 	action := actioncontract.ActionDefinition{
-		Key: key, Owner: "module:example", SourceKind: "module_surface", CapabilityKey: "example.product", CapabilityLabel: "Example",
+		Key: key, Owner: "module:example", SourceKind: "module_http", CapabilityKey: "example.product", CapabilityLabel: "Example",
 		OperationKey: key[separator+1:], OperationLabel: key, Label: key, Exposures: exposures, Authorization: actioncontract.Authorization{Strategy: strategy},
 		HTTP: &actioncontract.HTTPBinding{Method: method, RouteTemplate: path}, EffectClass: effect, RiskLevel: actioncontract.RiskLow,
 		ApprovalPolicies: approvals, IdempotencyDecision: idempotency, AuditClass: "mutation_audit_required", LifecycleStatus: actioncontract.LifecycleActive,
@@ -111,5 +111,5 @@ func openAPITestAction(key, pattern string, exposures []actioncontract.Exposure,
 	return action
 }
 
-var _ modulehttp.Surface = openAPIModuleSurface{}
-var _ modulehttp.OpenAPIProvider = openAPIModuleSurface{}
+var _ modulehttp.Adapter = openAPIModuleAdapter{}
+var _ modulehttp.OpenAPIProvider = openAPIModuleAdapter{}

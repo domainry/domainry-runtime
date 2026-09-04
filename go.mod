@@ -6,33 +6,34 @@ toolchain go1.26.6
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
-	github.com/domainry/domainry-agent v0.1.5
-	github.com/domainry/domainry-agent-sdk v0.1.2
-	github.com/domainry/domainry-audit v0.1.4
-	github.com/domainry/domainry-audit-sdk v0.1.1
-	github.com/domainry/domainry-connector-sdk v0.1.0-dev.13
-	github.com/domainry/domainry-data-exchange-sdk v0.3.2
-	github.com/domainry/domainry-foundation v0.1.0-dev.8
-	github.com/domainry/domainry-identity-sdk v0.1.1-dev7
-	github.com/domainry/domainry-integration v0.1.9
-	github.com/domainry/domainry-integration-sdk v0.1.2
-	github.com/domainry/domainry-lifecycle v0.1.7
-	github.com/domainry/domainry-lifecycle-sdk v0.1.6
-	github.com/domainry/domainry-metadata v0.1.4
-	github.com/domainry/domainry-metadata-sdk v0.1.1
-	github.com/domainry/domainry-monitoring v0.1.7
-	github.com/domainry/domainry-monitoring-sdk v0.1.1
-	github.com/domainry/domainry-notification v0.1.0-dev.20
-	github.com/domainry/domainry-notification-sdk v0.1.0-dev.7
-	github.com/domainry/domainry-report v0.1.4
-	github.com/domainry/domainry-report-sdk v0.1.1
-	github.com/domainry/domainry-scheduler v0.1.4
-	github.com/domainry/domainry-scheduler-sdk v0.1.1
+	github.com/domainry/domainry-agent v0.1.6-0.20260903120224-b6e270d0c075
+	github.com/domainry/domainry-agent-sdk v0.1.3-0.20260903120224-f101edee8837
+	github.com/domainry/domainry-audit v0.1.5-0.20260903120224-241c363e7112
+	github.com/domainry/domainry-audit-sdk v0.1.2-0.20260901063632-5ed7ddb48e09
+	github.com/domainry/domainry-connector-sdk v0.1.0-dev.13.0.20260902130803-e6173a093fec
+	github.com/domainry/domainry-data-exchange v0.3.6-0.20260903120224-e017fbe8200a
+	github.com/domainry/domainry-data-exchange-sdk v0.3.3-0.20260903120224-cad2b42fc9c1
+	github.com/domainry/domainry-foundation v0.1.0-dev.8.0.20260903120224-ddc3e594ee39
+	github.com/domainry/domainry-identity v0.2.0-dev7.0.20260903120225-5cd9ca879559
+	github.com/domainry/domainry-identity-sdk v0.1.1-dev7.0.20260903120225-51348ff00e2f
+	github.com/domainry/domainry-integration v0.1.10-0.20260903120225-c344dd320c4b
+	github.com/domainry/domainry-integration-sdk v0.1.3-0.20260903120225-4ba1e97ecdf8
+	github.com/domainry/domainry-lifecycle v0.1.8-0.20260903120225-d31873da34ce
+	github.com/domainry/domainry-lifecycle-sdk v0.1.7-0.20260901215652-792ec43996bc
+	github.com/domainry/domainry-metadata v0.1.5-0.20260903120225-e279abe29e37
+	github.com/domainry/domainry-metadata-sdk v0.1.2-0.20260902130803-e728f30c3b1b
+	github.com/domainry/domainry-monitoring v0.1.8-0.20260903120225-c56c95001ff1
+	github.com/domainry/domainry-monitoring-sdk v0.1.2-0.20260903120225-0f224c423051
+	github.com/domainry/domainry-notification v0.1.0-dev.20.0.20260903120225-76b318944df7
+	github.com/domainry/domainry-notification-sdk v0.1.0-dev.7.0.20260903120225-c4aa3c035b3e
+	github.com/domainry/domainry-report v0.1.5-0.20260903120226-466ff813d7f6
+	github.com/domainry/domainry-report-sdk v0.1.2-0.20260903120226-44d9129fbfee
+	github.com/domainry/domainry-scheduler v0.1.5-0.20260903120226-8d0da02f9552
+	github.com/domainry/domainry-scheduler-sdk v0.1.2-0.20260903120226-fa92ee8cd564
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/microsoft/go-mssqldb v1.10.0
 	github.com/redis/go-redis/v9 v9.22.0
-	github.com/robfig/cron/v3 v3.0.1
 	github.com/shopspring/decimal v1.4.0
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/sdk v1.44.0
@@ -40,19 +41,29 @@ require (
 	go.uber.org/zap v1.27.1
 	golang.org/x/mod v0.40.0
 	modernc.org/sqlite v1.57.0
-	vitess.io/vitess v0.23.3
 )
 
 require (
+	github.com/beevik/etree v1.6.0 // indirect
+	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
+	github.com/crewjam/saml v0.5.1 // indirect
+	github.com/domainry/domainry-connectors v0.1.0-dev.98.0.20260831143900-689396111626 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
+	github.com/jonboulle/clockwork v0.5.0 // indirect
+	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
+	github.com/robfig/cron/v3 v3.0.1 // indirect
+	github.com/russellhaering/goxmldsig v1.6.0 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
+	golang.org/x/oauth2 v0.36.0 // indirect
+	vitess.io/vitess v0.23.3 // indirect
 )
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/domainry/domainry-orm v0.1.29
+	github.com/domainry/domainry-orm v0.1.30-0.20260902130804-83199ada4809
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

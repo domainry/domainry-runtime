@@ -35,28 +35,28 @@ import (
 
 type compositionConnectorAdapterStub struct{}
 
-type actionNotificationIdentityDirectory struct {
+type actionNotificationIdentityProjection struct {
 	found bool
 	err   error
 }
 
-func (d actionNotificationIdentityDirectory) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
+func (d actionNotificationIdentityProjection) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	return identitysdk.User{ID: "recipient"}, d.found, d.err
 }
 
-func (actionNotificationIdentityDirectory) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+func (actionNotificationIdentityProjection) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
 	return identitysdk.OrganizationUnit{}, false, nil
 }
 
-func (actionNotificationIdentityDirectory) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
+func (actionNotificationIdentityProjection) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
 	return nil, nil
 }
 
-func (actionNotificationIdentityDirectory) ListRoles(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.Role, error) {
+func (actionNotificationIdentityProjection) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	return nil, nil
 }
 
-func (actionNotificationIdentityDirectory) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
+func (actionNotificationIdentityProjection) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
 	return nil, nil
 }
 
@@ -71,9 +71,9 @@ func (s *workflowRunnerStub) RunAgentWorkflow(_ context.Context, _ string, paylo
 	return s.result, s.err
 }
 
-type agentPrincipalDirectoryStub struct{ principal principalmodel.Principal }
+type agentPrincipalResolverStub struct{ principal principalmodel.Principal }
 
-func (s agentPrincipalDirectoryStub) Resolve(context.Context, identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+func (s agentPrincipalResolverStub) Resolve(context.Context, identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
 	bundle := identitysdk.AccessBundle{}
 	if s.principal.AccessBundle != nil {
 		bundle = *s.principal.AccessBundle
@@ -114,19 +114,19 @@ func TestActionNotificationCompilerValidatesDependenciesRecipientsAndProjection(
 		return notificationmodel.NotificationEvent{}, nil
 	}}
 	if _, err := compileActionNotification(assembly)(t.Context(), "event", runtimeext.NotificationIntent{}, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.notification.action_compiler_required" {
-		t.Fatalf("nil directory err=%v", err)
+		t.Fatalf("nil projection err=%v", err)
 	}
-	wantErr := errors.New("directory failed")
-	assembly.identityDirectory = actionNotificationIdentityDirectory{err: wantErr}
+	wantErr := errors.New("projection failed")
+	assembly.identityProjection = actionNotificationIdentityProjection{err: wantErr}
 	intent := runtimeext.NotificationIntent{RecipientUserIDs: []string{" recipient "}}
 	if _, err := compileActionNotification(assembly)(t.Context(), "event", intent, principalmodel.Principal{}); !errors.Is(err, wantErr) {
-		t.Fatalf("directory err=%v", err)
+		t.Fatalf("projection err=%v", err)
 	}
-	assembly.identityDirectory = actionNotificationIdentityDirectory{}
+	assembly.identityProjection = actionNotificationIdentityProjection{}
 	if _, err := compileActionNotification(assembly)(t.Context(), "event", intent, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.notification.recipient_invalid" {
 		t.Fatalf("missing recipient err=%v", err)
 	}
-	assembly.identityDirectory = actionNotificationIdentityDirectory{found: true}
+	assembly.identityProjection = actionNotificationIdentityProjection{found: true}
 	value := "Ada"
 	var compiled notificationmodel.NotificationIntent
 	assembly.recordNotificationCompiler = func(intent notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error) {
@@ -134,7 +134,7 @@ func TestActionNotificationCompilerValidatesDependenciesRecipientsAndProjection(
 		return notificationmodel.NotificationEvent{ID: intent.ID}, nil
 	}
 	intent = runtimeext.NotificationIntent{
-		EventType: " order.ready ", SourceEventID: " source ", RecipientUserIDs: []string{" recipient "}, Surface: " business_workspace ",
+		EventType: " order.ready ", SourceEventID: " source ", RecipientUserIDs: []string{" recipient "},
 		SubjectObjectKey: " order ", SubjectRecordID: " order-1 ", SubjectVersion: " v1 ", DedupeKey: " dedupe ", GroupKey: " group ", Alert: true,
 		OccurredAt: time.Date(2026, 8, 10, 1, 2, 3, 0, time.UTC), Variables: []runtimeext.NotificationVariable{{Key: " name ", StringValue: &value}},
 	}
@@ -187,7 +187,7 @@ func TestAgentWorkflowDependencyAbsentAndRetryBranches(t *testing.T) {
 	_, _ = workflowDependencies(assembly).StartAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{})
 	_, _ = workflowDependencies(assembly).StartAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{Contract: definitionmodel.WorkflowAgentTaskNodeContract{Retry: &definitionmodel.WorkflowRetryPolicy{MaxAttempts: 0}}})
 	_, _ = workflowDependencies(assembly).StartAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{Contract: definitionmodel.WorkflowAgentTaskNodeContract{Retry: &definitionmodel.WorkflowRetryPolicy{MaxAttempts: 3}}})
-	assemblyWithPrincipal := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{AgentPrincipals: agentPrincipalDirectoryStub{principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}}}})
+	assemblyWithPrincipal := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{AgentPrincipals: agentPrincipalResolverStub{principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}}}})
 	_, _ = resolveIdentityPrincipal(t.Context(), assemblyWithPrincipal.agentPrincipals, "user", "role")
 	if _, err := (runtimeInteractiveWorkflowStarter{records: &runtimeAssembly{}}).StartInteractiveAgentWorkflow(t.Context(), "workflow", nil, "run", "key", principalmodel.Principal{}); apperror.CodeOf(err) != "agent.interactive.workflow_handoff_unavailable" {
 		t.Fatalf("ownerless err=%v", err)
@@ -290,9 +290,9 @@ func TestCompositionFinalBranchContracts(t *testing.T) {
 	_ = services.SchemaForPrincipal(t.Context(), principalmodel.Principal{})
 
 	nonDefaultState := newRuntimeServicesState(t.Context(), manifestmodel.ManifestSchema{}, RuntimeServicesDependencies{
-		IdentityDirectory: compositionIdentityDirectory{},
+		IdentityProjection: compositionIdentityProjection{},
 	})
-	if nonDefaultState.identityDirectory == nil {
+	if nonDefaultState.identityProjection == nil {
 		t.Fatal("explicit runtime state dependencies were not retained")
 	}
 }

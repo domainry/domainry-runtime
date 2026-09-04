@@ -55,14 +55,6 @@
       "name": "Admin",
       "permissions": [
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "admin_console.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "runtime.appschema.validate_application_definition",
           "data_scope": "all"
         },
@@ -107,10 +99,6 @@
       "name": "Business Admin",
       "permissions": [
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "customer.read",
           "data_scope": "all"
         },
@@ -151,38 +139,9 @@
       "name": "Restricted",
       "permissions": [
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "customer.read",
           "data_scope": "owner"
         }
-      ]
-    }
-  ],
-  "menus": [
-    {
-      "key": "object_customer",
-      "label": "Customers",
-      "route": "/objects/customer",
-      "icon": "briefcase-business",
-      "parent_key": "business",
-      "sort_order": 1000,
-      "roles": [
-        "business_admin",
-        "restricted"
-      ]
-    },
-    {
-      "key": "object_opportunity",
-      "label": "Opportunities",
-      "route": "/objects/opportunity",
-      "icon": "briefcase-business",
-      "parent_key": "business",
-      "sort_order": 1010,
-      "roles": [
-        "business_admin"
       ]
     }
   ],
@@ -204,5 +163,6 @@
         "owner": "admin_user"
       }
     }
-  ]
+  ],
+  "schema_version": "2"
 }

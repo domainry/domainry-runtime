@@ -248,7 +248,7 @@ func automationNotificationExecution(id string) automationmodel.AutomationRuleEx
 func automationNotificationEvent(id, sourceID string) notificationmodel.NotificationEvent {
 	return notificationmodel.NotificationEvent{
 		ID: id, WorkspaceID: "workspace-a", Source: "automation", SourceEventID: sourceID, EventType: "automation.execution.completed",
-		Category: "automation", Severity: "info", Surface: "business_workspace", RecipientUserIDs: []string{"user-1"},
+		Category: "automation", Severity: "info", RecipientUserIDs: []string{"user-1"},
 		SubjectType: "automation_rule", SubjectID: "sync-order", OccurredAt: "2026-07-28T01:00:00Z", Status: "queued",
 		CreatedAt: "2026-07-28T01:00:00Z", UpdatedAt: "2026-07-28T01:00:00Z",
 	}

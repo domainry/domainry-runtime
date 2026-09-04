@@ -42,25 +42,25 @@ func discoveryTestHandler() *DiscoveryHandler {
 func TestDiscoveryLocalesAndResources(t *testing.T) {
 	handler := discoveryTestHandler()
 	response := httptest.NewRecorder()
-	handler.i18nLocales(response, httptest.NewRequest(http.MethodGet, "/i18n/locales", nil))
+	handler.i18nLocales(response, httptest.NewRequest(http.MethodGet, "/discovery/i18n/locales", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("locales status=%d", response.Code)
 	}
 
 	response = httptest.NewRecorder()
-	handler.i18nResources(response, httptest.NewRequest(http.MethodGet, "/i18n/resources?locale=unsupported", nil))
+	handler.i18nResources(response, httptest.NewRequest(http.MethodGet, "/discovery/i18n/resources?locale=unsupported", nil))
 	if response.Code != http.StatusBadRequest || response.Header().Get("X-Error-Code") != "localization.unsupported_locale" {
 		t.Fatalf("unsupported locale status=%d code=%q", response.Code, response.Header().Get("X-Error-Code"))
 	}
 
-	request := httptest.NewRequest(http.MethodGet, "/i18n/resources?locale=en-US", nil)
+	request := httptest.NewRequest(http.MethodGet, "/discovery/i18n/resources?locale=en-US", nil)
 	response = httptest.NewRecorder()
 	handler.i18nResources(response, request)
 	if response.Code != http.StatusOK || response.Header().Get("ETag") == "" {
 		t.Fatalf("resources status=%d etag=%q", response.Code, response.Header().Get("ETag"))
 	}
 	etag := response.Header().Get("ETag")
-	request = httptest.NewRequest(http.MethodGet, "/i18n/resources?locale=en-US", nil)
+	request = httptest.NewRequest(http.MethodGet, "/discovery/i18n/resources?locale=en-US", nil)
 	request.Header.Set("If-None-Match", "  "+etag+" ")
 	response = httptest.NewRecorder()
 	handler.i18nResources(response, request)
@@ -88,7 +88,7 @@ func TestDiscoverySchemaAndRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	response = httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/i18n/locales", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/discovery/i18n/locales", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("registered locale route status=%d", response.Code)
 	}
@@ -97,7 +97,7 @@ func TestDiscoverySchemaAndRoutes(t *testing.T) {
 func TestDiscoveryPublishedRuntimeRoutes(t *testing.T) {
 	handler := discoveryTestHandler()
 	response := httptest.NewRecorder()
-	handler.getBusinessRuntimeSchema(response, httptest.NewRequest(http.MethodGet, "/runtime-schema", nil))
+	handler.getBusinessRuntimeSchema(response, httptest.NewRequest(http.MethodGet, "/discovery/schema", nil))
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("unscoped runtime schema status=%d", response.Code)
 	}
@@ -105,11 +105,11 @@ func TestDiscoveryPublishedRuntimeRoutes(t *testing.T) {
 		return principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "user"}}
 	}
 	response = httptest.NewRecorder()
-	handler.getBusinessRuntimeSchema(response, httptest.NewRequest(http.MethodGet, "/runtime-schema", nil))
+	handler.getBusinessRuntimeSchema(response, httptest.NewRequest(http.MethodGet, "/discovery/schema", nil))
 	if response.Code != http.StatusOK || response.Header().Get("ETag") != `"schema-hash"` {
 		t.Fatalf("runtime schema status=%d etag=%q", response.Code, response.Header().Get("ETag"))
 	}
-	request := httptest.NewRequest(http.MethodGet, "/runtime-schema", nil)
+	request := httptest.NewRequest(http.MethodGet, "/discovery/schema", nil)
 	request.Header.Set("If-None-Match", ` "schema-hash" `)
 	response = httptest.NewRecorder()
 	handler.getPortalRuntimeSchema(response, request)

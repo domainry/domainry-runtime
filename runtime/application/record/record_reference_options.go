@@ -237,10 +237,10 @@ func recordReferenceDisplayName(record recordmodel.Record, displayFields []strin
 }
 
 func (s *RecordApplicationService) foundationReferenceOptions(ctx context.Context, targetObjectKey string, request RecordReferenceOptionRequest, displayFields []string) (RecordReferenceOptionPage, error) {
-	if targetObjectKey != "identity_user" || s.IdentityDirectory() == nil {
+	if targetObjectKey != "identity_user" || s.IdentityProjection() == nil {
 		return RecordReferenceOptionPage{}, apperror.New(apperror.KindUnavailable, "backend.reference.provider_unavailable", nil, map[string]string{"target_object_key": targetObjectKey})
 	}
-	users, err := s.IdentityDirectory().ListUsers(ctx, identitysdk.DirectoryQuery{})
+	users, err := s.IdentityProjection().ListUsers(ctx, identitysdk.ProjectionQuery{})
 	if err != nil {
 		return RecordReferenceOptionPage{}, apperror.New(apperror.KindInternal, "backend.reference.lookup_failed", err, map[string]string{"target_object_key": targetObjectKey})
 	}

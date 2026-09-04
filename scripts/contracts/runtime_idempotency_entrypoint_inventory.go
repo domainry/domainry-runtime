@@ -82,14 +82,14 @@ func classifyHTTP(method, path string) (string, string) {
 	if strings.Contains(path, "/webhooks/") || strings.Contains(path, "/process-due") || strings.HasSuffix(path, "/status") {
 		return "system_key_required", "provider event, resource transition, or claimed work identity"
 	}
-	if (strings.HasPrefix(path, "/business/notifications") || strings.HasPrefix(path, "/portal/notifications")) &&
+	if (strings.HasPrefix(path, "/notification/inbox") || strings.HasPrefix(path, "/notification/inbox")) &&
 		(strings.HasSuffix(path, "/read") || strings.HasSuffix(path, "/unread") || strings.HasSuffix(path, "/archive") || strings.HasSuffix(path, "/restore") || strings.HasSuffix(path, "/read-all") || method == "DELETE") {
-		return "natural_key", "workspace plus current user, Surface, notification or saved-view identity, and target mailbox state"
+		return "natural_key", "workspace plus current user, notification or saved-view identity, and target mailbox state"
 	}
 	if method == "PUT" {
 		return "natural_key", "workspace plus stable path resource"
 	}
-	if strings.HasPrefix(path, "/objects/") && strings.Contains(path, "/records/") && (method == "PATCH" || method == "DELETE") {
+	if strings.HasPrefix(path, "/records/objects/") && strings.Contains(path, "/records/") && (method == "PATCH" || method == "DELETE") {
 		return "caller_key_required", "Idempotency-Key header"
 	}
 	if method == "PATCH" || method == "DELETE" {

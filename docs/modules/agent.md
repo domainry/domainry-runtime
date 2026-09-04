@@ -1,6 +1,6 @@
 # Agent 模块
 
-状态：SDK、Module、SaaS Binding、产品 HTTP Surface 与独立 SaaS 服务入口已接入
+状态：SDK、Module、SaaS Binding、产品 HTTP Adapter 与独立 SaaS 服务入口已接入
 Owner：Agent/Skill/Task 定义、会话与 proposal、interactive/task 执行、provider run、tool-call ledger、worker/retry/reconcile
 实现/SDK：`domainry-agent` / `domainry-agent-sdk`
 
@@ -15,9 +15,9 @@ Runtime 不再拥有 `agent_dialog` Handler、Agent Application Service、Agent 
 - Record、Action、Workflow、Report 等宿主业务能力和高风险策略；
 - Runtime audit 持久化；
 - 供 Agent 调用的窄化 Host Ports 与 workflow task 完成回调；
-- Agent Binding、HTTP Surface 和宿主 middleware 的组合。
+- Agent Binding、HTTP Adapter 和宿主 middleware 的组合。
 
-项目组合根通过 `runtimehost.Options.AgentFactory` 选择 Module 或 SaaS。两种拓扑必须提供相同 SDK 能力和同一 Agent-owned HTTP Surface；Runtime 只负责挂载 Surface，不复制路径、Handler 或 OpenAPI operation。
+项目组合根通过 `runtimehost.Options.AgentFactory` 选择 Module 或 SaaS。两种拓扑必须提供相同 SDK 能力和同一 Agent-owned HTTP Adapter；Runtime 只负责挂载 Adapter，不复制路径、Handler 或 OpenAPI operation。
 
 ## 调用方向与异步边界
 
@@ -40,8 +40,8 @@ Workflow Agent 节点按以下时序执行：
 - Agent 定义校验：`domainry-agent/definition/validation.go`
 - 协议：`domainry-agent-protocol-v1`
 - 执行能力：`task.start`、`task.poll`、`task.cancel`、`interactive.run`、`dialog.state`、`execution.state`、`structured_output`、`usage`、`tool_callback`
-- Agent 产品 HTTP Surface：`/agent-dialog/*` 的 run、stream、session、proposal、task-run、task-tool、analysis、diagnostics，以及 `/operations/agent/tasks*` 的查询与 operator mutation。
-- Agent Surface 自己声明全部 route metadata 与 OpenAPI operation；Runtime 基础 OpenAPI 和 Runtime API contract 不声明 Agent 路径或 `agent_*` schema。
+- Agent 产品 HTTP Adapter：统一位于 `/agent/*`，覆盖 run、stream、session、proposal、task-run、task-tool、analysis、diagnostics 和 task operator mutation。
+- Agent Adapter 自己声明全部 route metadata 与 OpenAPI operation；Runtime 基础 OpenAPI 和 Runtime API contract 不声明 Agent 路径或 `agent_*` schema。
 - SaaS 内部协议使用固定的 definition、lifecycle 和 execution-state 路径，不暴露通用 repository operation 或 task mutation endpoint。
 
 ## 数据、事务与 worker
@@ -67,13 +67,13 @@ Agent 只能通过 `InteractiveHost`、`TaskHost`、`ProposalHost`、`AuditHost`
 - Runtime Workflow dispatch/completion：`runtime/application/workflow/workflow_process_runtime_application_service.go`、`workflow_agent_capability_completion.go`
 - Agent Module：`domainry-agent/module`
 - Agent SaaS Remote/Server：`domainry-agent/remote`、`domainry-agent/server`
-- Agent 产品 Surface：`domainry-agent/internal/transport/http/module`
+- Agent 产品 Adapter：`domainry-agent/internal/transport/http/module`
 - Agent Application：`domainry-agent/internal/application`
 
 ## 验证约束
 
-- Runtime 生产代码不得出现 Agent aggregate/repository/state-machine 实现或 `/agent-dialog`、`/operations/agent` 路由声明。
+- Runtime 生产代码不得出现 Agent aggregate/repository/state-machine 实现，也不得自行声明 `/agent/*` 路由。
 - Agent 不得 import `domainry-runtime`。
-- Runtime 的 Agent capability contract 不得再包含 Agent 产品路径或 `agent_*` schema；最终 OpenAPI 通过挂载 Agent Surface 合成。
+- Runtime 的 Agent capability contract 不得再包含 Agent 产品路径或 `agent_*` schema；最终 OpenAPI 通过挂载 Agent Adapter 合成。
 - Module/SaaS 必须执行相同 Agent contract tests，并验证 Start 幂等、fencing、terminal callback 重放和 HTTP/OpenAPI parity。
 - 切换拓扑前必须停止新 claim 并排空或冻结 running provider runs；禁止 Module 与 SaaS 同时接受同一 application/idempotency namespace。

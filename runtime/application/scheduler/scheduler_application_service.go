@@ -31,19 +31,19 @@ type PublishedDefinition struct {
 }
 
 const (
-	ActionGetOpsSchedulerState                     = schedulersdk.ActionSchedulerStateGet
-	ActionGetTenantAdminSchedulerAuthoringContract = schedulersdk.ActionSchedulerAuthoringContractGet
-	ActionListTenantAdminSchedulerDefinitions      = schedulersdk.ActionSchedulerDefinitionsList
-	ActionGetTenantAdminSchedulerDefinition        = schedulersdk.ActionSchedulerDefinitionsGet
-	ActionPreviewSchedulerJob                      = schedulersdk.ActionSchedulerDefinitionsValidate
-	ActionPreviewSchedulerSchedule                 = schedulersdk.ActionSchedulerSchedulesPreview
-	ActionSimulateSchedulerJob                     = schedulersdk.ActionSchedulerDefinitionsSimulate
-	ActionRunOpsSchedulerJob                       = schedulersdk.ActionSchedulerDefinitionsRun
-	ActionRescheduleOpsSchedulerDefinition         = schedulersdk.ActionSchedulerDefinitionsReschedule
-	ActionRetryOpsSchedulerRun                     = schedulersdk.ActionSchedulerRunsRetry
-	ActionCancelOpsSchedulerRun                    = schedulersdk.ActionSchedulerRunsCancel
-	ActionResolveOpsSchedulerDeadLetter            = schedulersdk.ActionSchedulerDeadLettersResolve
-	ActionRequeueOpsSchedulerDeadLetter            = schedulersdk.ActionSchedulerDeadLettersRequeue
+	ActionGetOpsSchedulerState                    = schedulersdk.ActionSchedulerStateGet
+	ActionGetManagementSchedulerAuthoringContract = schedulersdk.ActionSchedulerAuthoringContractGet
+	ActionListManagementSchedulerDefinitions      = schedulersdk.ActionSchedulerDefinitionsList
+	ActionGetManagementSchedulerDefinition        = schedulersdk.ActionSchedulerDefinitionsGet
+	ActionPreviewSchedulerJob                     = schedulersdk.ActionSchedulerDefinitionsValidate
+	ActionPreviewSchedulerSchedule                = schedulersdk.ActionSchedulerSchedulesPreview
+	ActionSimulateSchedulerJob                    = schedulersdk.ActionSchedulerDefinitionsSimulate
+	ActionRunOpsSchedulerJob                      = schedulersdk.ActionSchedulerDefinitionsRun
+	ActionRescheduleOpsSchedulerDefinition        = schedulersdk.ActionSchedulerDefinitionsReschedule
+	ActionRetryOpsSchedulerRun                    = schedulersdk.ActionSchedulerRunsRetry
+	ActionCancelOpsSchedulerRun                   = schedulersdk.ActionSchedulerRunsCancel
+	ActionResolveOpsSchedulerDeadLetter           = schedulersdk.ActionSchedulerDeadLettersResolve
+	ActionRequeueOpsSchedulerDeadLetter           = schedulersdk.ActionSchedulerDeadLettersRequeue
 )
 
 func (s *SchedulerApplicationService) GetDefinition(ctx context.Context, definitionID string, principal principalmodel.Principal) (PublishedDefinition, error) {

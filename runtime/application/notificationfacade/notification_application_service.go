@@ -32,12 +32,12 @@ func NewNotificationApplicationService(binding notificationsdk.Binding, authoriz
 	return &NotificationApplicationService{binding: binding, authorizeAction: authorizeAction}, nil
 }
 
-func authority(ctx context.Context, channel string) (notificationsdk.UserAuthority, error) {
+func authority(ctx context.Context) (notificationsdk.UserAuthority, error) {
 	identity, ok := identitysdk.RequestIdentityFromContext(ctx)
 	if !ok || strings.TrimSpace(identity.AccessToken) == "" {
 		return notificationsdk.UserAuthority{}, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.user_authority_required"}
 	}
-	return notificationsdk.UserAuthority{AccessToken: identity.AccessToken, Surface: strings.TrimSpace(channel)}, nil
+	return notificationsdk.UserAuthority{AccessToken: identity.AccessToken}, nil
 }
 
 func convert[To any, From any](value From) (To, error) {
@@ -79,7 +79,7 @@ func mapError(err error) error {
 }
 
 func (s *NotificationApplicationService) user(ctx context.Context, _ principalmodel.Principal) (notificationsdk.UserAuthority, error) {
-	return authority(ctx, "administration")
+	return authority(ctx)
 }
 
 func (s *NotificationApplicationService) PublishInboxIntent(ctx context.Context, value runtimemodel.NotificationIntent, scope principalmodel.SystemScope) (runtimemodel.NotificationEvent, bool, error) {

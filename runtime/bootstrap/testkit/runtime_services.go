@@ -42,7 +42,7 @@ type RuntimeServicesConfig struct {
 	WorkflowProcesses           workflowcontract.WorkflowProcessStore
 	WorkflowDefinitions         workflowcontract.WorkflowDefinitionStore
 	WorkflowDecisions           workflowcontract.WorkflowDecisionStore
-	IdentityDirectory           identitysdk.Directory
+	IdentityProjection          identitysdk.Projection
 	IdentityPrincipals          identitysdk.PrincipalResolver
 	DataExchange                dataexchange.Binding
 }

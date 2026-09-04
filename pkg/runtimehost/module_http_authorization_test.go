@@ -76,9 +76,9 @@ func TestModuleHTTPSignedRequestVerifiesExactAudienceAndGrant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	action := runtimeHostTestAction("runtime.authorization.action_usages.query", "POST /operations/authorization/action-usages/query", []actioncontract.Exposure{actioncontract.ExposureTenantAdmin}, actioncontract.AuthorizationSigned)
+	action := runtimeHostTestAction("runtime.action.permission_usages.query", "POST /action/permission-usages/query", []actioncontract.Exposure{actioncontract.ExposureManagement}, actioncontract.AuthorizationSigned)
 	action.Authorization = actioncontract.Authorization{
-		Strategy: actioncontract.AuthorizationSigned, PolicyKey: "runtime.authorization.action_usages.query", Audiences: []string{"domainry-runtime"},
+		Strategy: actioncontract.AuthorizationSigned, PolicyKey: "runtime.action.permission_usages.query", Audiences: []string{"domainry-runtime"},
 	}
 	executed := 0
 	handler, err := guard(modulehttp.Route{Action: action}, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -89,7 +89,7 @@ func TestModuleHTTPSignedRequestVerifiesExactAudienceAndGrant(t *testing.T) {
 		t.Fatal(err)
 	}
 	call := func(token string) *httptest.ResponseRecorder {
-		request := httptest.NewRequest(http.MethodPost, "/operations/authorization/action-usages/query", nil)
+		request := httptest.NewRequest(http.MethodPost, "/action/permission-usages/query", nil)
 		if token != "" {
 			request.Header.Set("Authorization", "Bearer "+token)
 		}
@@ -106,7 +106,7 @@ func TestModuleHTTPSignedRequestVerifiesExactAudienceAndGrant(t *testing.T) {
 	if response := call("valid-service-token"); response.Code != http.StatusNoContent || executed != 1 || verifier.calls != 2 {
 		t.Fatalf("valid service token status=%d executed=%d calls=%d", response.Code, executed, verifier.calls)
 	}
-	wantGrant := identitysdk.ApplicationServiceGrant{Resource: "runtime.authorization.action_usages", Action: "query"}
+	wantGrant := identitysdk.ApplicationServiceGrant{Resource: "runtime.action.permission_usages", Action: "query"}
 	if verifier.request.Audience != "domainry-runtime" || verifier.request.Grant != wantGrant {
 		t.Fatalf("verification request=%+v", verifier.request)
 	}

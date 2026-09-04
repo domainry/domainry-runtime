@@ -74,7 +74,7 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *comp
 		dependencies.BusinessEvidence = config.BusinessEvidence
 	}
 	dependencies.WorkflowDecisions = config.WorkflowDecisions
-	dependencies.IdentityDirectory = config.IdentityDirectory
+	dependencies.IdentityProjection = config.IdentityProjection
 	dependencies.AgentPrincipals = config.IdentityPrincipals
 	dependencies.DataExchange = config.DataExchange
 	services := composition.NewRuntimeServices(ctx, composition.RuntimeServicesConfig{
@@ -143,7 +143,7 @@ func compileTestkitReportNotification(intent notificationmodel.NotificationInten
 	}
 	return notificationmodel.NotificationEvent{
 		ID: intent.ID, WorkspaceID: intent.WorkspaceID, Source: "report", SourceEventID: intent.SourceEventID,
-		EventType: intent.EventType, Category: "long_task", Severity: severity, Surface: intent.Surface,
+		EventType: intent.EventType, Category: "long_task", Severity: severity,
 		RecipientUserIDs: append([]string(nil), intent.RecipientUserIDs...), SubjectType: intent.SubjectType,
 		SubjectID: intent.SubjectID, SubjectVersion: intent.SubjectVersion, DedupeKey: intent.DedupeKey,
 		OccurredAt: intent.OccurredAt, Status: "pending", CreatedAt: intent.OccurredAt, UpdatedAt: intent.OccurredAt,

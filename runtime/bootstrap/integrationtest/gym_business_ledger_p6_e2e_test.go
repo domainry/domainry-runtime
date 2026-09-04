@@ -56,7 +56,7 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 		}
 		previousHash = fmt.Sprint(record.Data["entry_hash"])
 	}
-	page, err := repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}})
+	page, err := repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 		t.Fatalf("full replay=%#v err=%v", full, err)
 	}
 	gymLedgerP6AssertBalances(t, full, map[string]string{"bonus": "20.00", "cashflow": "90.00", "principal": "70.00", "refund": "10.00"})
-	role := accessfixture.Bundle{Key: "finance", Permissions: []string{"gym_financial_ledger.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Scope: "all", Read: true}}}
+	role := accessfixture.Bundle{Key: "finance", Permissions: []string{"report.summary.get", "gym_financial_ledger.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Scope: "all", Read: true}}}
 	field := func(key string) reportmodel.ReportDatasetField {
 		return reportmodel.ReportDatasetField{SourceAlias: "ledger", FieldKey: key}
 	}
@@ -106,7 +106,7 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 	if _, err := store.DB().ExecContext(t.Context(), `UPDATE gym_financial_ledger SET source_reference = ? WHERE workspace_id = ? AND id = ?`, "tampered-source", "workspace-primary", "ledger-4"); err != nil {
 		t.Fatal(err)
 	}
-	tampered, err := repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}})
+	tampered, err := repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted})
 	if err != nil {
 		t.Fatal(err)
 	}

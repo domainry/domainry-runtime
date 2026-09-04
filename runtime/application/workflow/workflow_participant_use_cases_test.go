@@ -15,7 +15,7 @@ import (
 )
 
 func TestWorkflowSurfaceDTOsDoNotCrossLeakBusinessAndOperationsFields(t *testing.T) {
-	business, err := json.Marshal(BusinessWorkflowProcessDTO{
+	business, err := json.Marshal(ParticipantWorkflowProcessDTO{
 		ID: "process", WorkflowKey: "approval", Status: "waiting", BusinessOutcome: "approved",
 	})
 	if err != nil {
@@ -23,7 +23,7 @@ func TestWorkflowSurfaceDTOsDoNotCrossLeakBusinessAndOperationsFields(t *testing
 	}
 	for _, forbidden := range []string{"definition_snapshot", "definition_hash", "variables", "error_code", "lease_owner", "fencing_token"} {
 		if strings.Contains(string(business), forbidden) {
-			t.Fatalf("Business workflow DTO leaked %s: %s", forbidden, business)
+			t.Fatalf("Participant workflow DTO leaked %s: %s", forbidden, business)
 		}
 	}
 	operations, err := json.Marshal(OpsWorkflowExecutionDTO{
@@ -41,7 +41,7 @@ func TestWorkflowSurfaceDTOsDoNotCrossLeakBusinessAndOperationsFields(t *testing
 		t.Fatalf("Ops workflow DTO omitted technical recovery state: %s", operations)
 	}
 
-	detail, err := json.Marshal(ProjectBusinessWorkflowProcessDetail(WorkflowProcessDetail{
+	detail, err := json.Marshal(ProjectParticipantWorkflowProcessDetail(WorkflowProcessDetail{
 		Process: workflowmodel.WorkflowProcessInstance{
 			ID: "process", WorkflowKey: "approval", WorkflowName: "Approval", InitiatorID: "user", Status: "waiting",
 			DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{Nodes: []definitionmodel.WorkflowGraphNode{{
@@ -68,16 +68,16 @@ func TestWorkflowSurfaceDTOsDoNotCrossLeakBusinessAndOperationsFields(t *testing
 	}
 	for _, required := range []string{`"node_id":"approve"`, `"name":"Manager approval"`, `"action_key":"refund.execute"`, `"assignee_role_key":"manager"`, `"event":"task_created"`} {
 		if !strings.Contains(string(detail), required) {
-			t.Fatalf("Business workflow detail omitted %s: %s", required, detail)
+			t.Fatalf("Participant workflow detail omitted %s: %s", required, detail)
 		}
 	}
 	for _, forbidden := range []string{"must-not-project", `"input"`, `"output"`, `"metadata"`, `"resolver_snapshot"`} {
 		if strings.Contains(string(detail), forbidden) {
-			t.Fatalf("Business workflow detail leaked %s: %s", forbidden, detail)
+			t.Fatalf("Participant workflow detail leaked %s: %s", forbidden, detail)
 		}
 	}
 
-	projectedDetail, err := json.Marshal(ProjectBusinessWorkflowProcessDetail(WorkflowProcessDetail{
+	projectedDetail, err := json.Marshal(ProjectParticipantWorkflowProcessDetail(WorkflowProcessDetail{
 		Process: workflowmodel.WorkflowProcessInstance{
 			ID: "projected", WorkflowKey: "approval", WorkflowName: "Approval", InitiatorID: "user", Status: "running",
 			DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{Nodes: []definitionmodel.WorkflowGraphNode{{
@@ -90,7 +90,7 @@ func TestWorkflowSurfaceDTOsDoNotCrossLeakBusinessAndOperationsFields(t *testing
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(projectedDetail), `"action_key":"refund.execute"`) {
-		t.Fatalf("Business workflow detail omitted projected Action key: %s", projectedDetail)
+		t.Fatalf("Participant workflow detail omitted projected Action key: %s", projectedDetail)
 	}
 }
 
@@ -193,17 +193,17 @@ func TestWorkflowSurfaceProjectionWrappersCoverSuccessAndServiceFailures(t *test
 	service := workflowProcessQueryService(store, nil)
 	reader := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace"}}
 
-	tasks, err := service.BusinessWorkflowTasks(t.Context(), reader, "open", 10)
+	tasks, err := service.ParticipantWorkflowTasks(t.Context(), reader, "open", 10)
 	if err != nil || len(tasks) != 1 || tasks[0].ID != task.ID {
 		t.Fatalf("business tasks=%+v err=%v", tasks, err)
 	}
 	store.listTasksErr = errors.New("tasks unavailable")
-	if _, err := service.BusinessWorkflowTasks(t.Context(), reader, "open", 10); apperror.KindOf(err) != apperror.KindInternal {
+	if _, err := service.ParticipantWorkflowTasks(t.Context(), reader, "open", 10); apperror.KindOf(err) != apperror.KindInternal {
 		t.Fatalf("business task error=%v", err)
 	}
 	store.listTasksErr = nil
 
-	processes, err := service.BusinessWorkflowProcesses(t.Context(), reader, workflowmodel.WorkflowProcessFilter{})
+	processes, err := service.ParticipantWorkflowProcesses(t.Context(), reader, workflowmodel.WorkflowProcessFilter{})
 	if err != nil || len(processes) != 1 || processes[0].ID != process.ID {
 		t.Fatalf("business processes=%+v err=%v", processes, err)
 	}
@@ -212,7 +212,7 @@ func TestWorkflowSurfaceProjectionWrappersCoverSuccessAndServiceFailures(t *test
 		t.Fatalf("ops processes=%+v err=%v", opsProcesses, err)
 	}
 	store.listProcessesErr = errors.New("processes unavailable")
-	if _, err := service.BusinessWorkflowProcesses(t.Context(), reader, workflowmodel.WorkflowProcessFilter{}); apperror.KindOf(err) != apperror.KindInternal {
+	if _, err := service.ParticipantWorkflowProcesses(t.Context(), reader, workflowmodel.WorkflowProcessFilter{}); apperror.KindOf(err) != apperror.KindInternal {
 		t.Fatalf("business process error=%v", err)
 	}
 	if _, err := service.OpsWorkflowProcesses(t.Context(), reader, workflowmodel.WorkflowProcessFilter{}); apperror.KindOf(err) != apperror.KindInternal {
@@ -243,8 +243,8 @@ func TestWorkflowSurfaceProjectionWrappersCoverSuccessAndServiceFailures(t *test
 		t.Fatalf("ops execution error=%v", err)
 	}
 
-	_ = ProjectBusinessWorkflowProcess(process)
-	_ = ProjectBusinessWorkflowRun(workflowmodel.WorkflowRunResult{WorkflowKey: "approval", Execution: workflowmodel.WorkflowExecution{ProcessID: process.ID}})
+	_ = ProjectParticipantWorkflowProcess(process)
+	_ = ProjectParticipantWorkflowRun(workflowmodel.WorkflowRunResult{WorkflowKey: "approval", Execution: workflowmodel.WorkflowExecution{ProcessID: process.ID}})
 	_ = ProjectOpsWorkflowExecution(workflowmodel.WorkflowExecution{ID: "execution-1"})
 	_ = ProjectOpsWorkflowProcess(process)
 }

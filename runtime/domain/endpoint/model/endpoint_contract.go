@@ -10,9 +10,9 @@ const ContractVersion = "runtime-endpoint-contract-v1"
 type ListenerExposure string
 
 const (
-	ListenerExposurePublic      ListenerExposure = "public"
-	ListenerExposureTenantAdmin ListenerExposure = "tenant-admin"
-	ListenerExposureOps         ListenerExposure = "ops"
+	ListenerExposurePublic     ListenerExposure = "public"
+	ListenerExposureManagement ListenerExposure = "management"
+	ListenerExposureOps        ListenerExposure = "ops"
 )
 
 type EndpointEffectClass string
@@ -65,7 +65,7 @@ func (contract RuntimeEndpointContractV1) Validate() error {
 	seenExposures := map[ListenerExposure]bool{}
 	for _, exposure := range contract.ListenerExposures {
 		switch exposure {
-		case ListenerExposurePublic, ListenerExposureTenantAdmin, ListenerExposureOps:
+		case ListenerExposurePublic, ListenerExposureManagement, ListenerExposureOps:
 		default:
 			return fmt.Errorf("endpoint contract %q has invalid listener exposure %q", contract.EndpointIdentity, exposure)
 		}

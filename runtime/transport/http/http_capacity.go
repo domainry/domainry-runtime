@@ -14,7 +14,7 @@ import (
 func (s *HTTPRouter) withAdmission(routes *http.ServeMux, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		policy := routePolicyFor(routes, r)
-		if policy.path == "/events/business" {
+		if policy.path == "/business-events/stream" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -91,7 +91,7 @@ func capacityRetryRequest(routePath string) bool {
 }
 func capacityEssentialRequest(method, routePath string) bool {
 	path := strings.ToLower(routePath)
-	for _, marker := range []string{"/reports", "/export", "/preview", "/search", "/import"} {
+	for _, marker := range []string{"/report", "/export", "/preview", "/search", "/import"} {
 		if strings.Contains(path, marker) {
 			return false
 		}

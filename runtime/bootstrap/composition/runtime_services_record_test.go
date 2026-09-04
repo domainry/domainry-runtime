@@ -132,7 +132,7 @@ func (r *compositionRecordRepository) ListRecords(context.Context, string, defin
 	return r.page, nil
 }
 
-type compositionIdentityDirectory struct{}
+type compositionIdentityProjection struct{}
 
 type runtimeServicesDecisionRepository struct{}
 
@@ -385,23 +385,23 @@ func (runtimeServicesDecisionRepository) CommitWorkflowDecision(context.Context,
 	return true, nil
 }
 
-func (compositionIdentityDirectory) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
+func (compositionIdentityProjection) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	return identitysdk.User{}, false, nil
 }
 
-func (compositionIdentityDirectory) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+func (compositionIdentityProjection) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
 	return identitysdk.OrganizationUnit{}, false, nil
 }
 
-func (compositionIdentityDirectory) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
+func (compositionIdentityProjection) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
 	return nil, nil
 }
 
-func (compositionIdentityDirectory) ListRoles(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.Role, error) {
+func (compositionIdentityProjection) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	return nil, nil
 }
 
-func (compositionIdentityDirectory) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
+func (compositionIdentityProjection) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
 	return nil, nil
 }
 
@@ -457,7 +457,7 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 	automationPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "developer", Permissions: []string{"customer.update"}})
 	configuredRuntime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
 		Manifest:     manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}},
-		Dependencies: RuntimeServicesDependencies{AgentPrincipals: agentPrincipalDirectoryStub{principal: automationPrincipal}},
+		Dependencies: RuntimeServicesDependencies{AgentPrincipals: agentPrincipalResolverStub{principal: automationPrincipal}},
 	})
 	if _, err := configuredRuntime.Applications().Automations.AutomationExecutions(t.Context(), automationmodel.AutomationExecutionFilter{}, historyPrincipal); err != nil {
 		t.Fatalf("configured Automation history error=%v", err)
@@ -947,10 +947,10 @@ func TestRecordAdaptersRejectIncompleteComposition(t *testing.T) {
 }
 
 func TestRecordConsumersShareCanonicalApplicationService(t *testing.T) {
-	directory := compositionIdentityDirectory{}
+	projection := compositionIdentityProjection{}
 	service := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
 		Manifest:     manifestmodel.ManifestSchema{TemplateID: "record-composition", Version: "1", Name: "Record Composition"},
-		Dependencies: RuntimeServicesDependencies{IdentityDirectory: directory},
+		Dependencies: RuntimeServicesDependencies{IdentityProjection: projection},
 	})
 	canonical := service.recordApplicationService
 	if canonical == nil || service.RecordDomainService != canonical.RecordDomainService || service.recordMutations == nil {
@@ -970,12 +970,12 @@ func TestRecordConsumersShareCanonicalApplicationService(t *testing.T) {
 		t.Fatal("Automation composition did not tolerate absent optional repositories")
 	}
 
-	if canonical.IdentityDirectory() != directory {
-		t.Fatal("SDK identity directory was not retained by the canonical Record application port")
+	if canonical.IdentityProjection() != projection {
+		t.Fatal("SDK identity projection was not retained by the canonical Record application port")
 	}
 }
 
-func TestRecordExportSupportsOptionalIdentityDirectory(t *testing.T) {
+func TestRecordExportSupportsOptionalIdentityProjection(t *testing.T) {
 	repository := &compositionRecordRepository{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "task-1", Data: map[string]any{"assignee": "user-1"}}}}}
 	services := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
 		Manifest: manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{
@@ -984,17 +984,17 @@ func TestRecordExportSupportsOptionalIdentityDirectory(t *testing.T) {
 		Dependencies: RuntimeServicesDependencies{Records: repository},
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"task.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "task", Scope: "own", Read: true}}})
-	if _, err := services.Applications().Records.DispatchExportIdempotent(t.Context(), "task", "without-directory", recordapplication.RecordExportOptions{}, principal); err != nil {
-		t.Fatalf("export without Identity Directory error=%v", err)
+	if _, err := services.Applications().Records.DispatchExportIdempotent(t.Context(), "task", "without-projection", recordapplication.RecordExportOptions{}, principal); err != nil {
+		t.Fatalf("export without Identity Projection error=%v", err)
 	}
 	services = newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
 		Manifest: manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{
 			Key: "task", Fields: []definitionmodel.FieldSchema{{Key: "assignee", Type: "relation", Config: map[string]any{"object_key": "identity_user"}}},
 		}}},
-		Dependencies: RuntimeServicesDependencies{Records: repository, IdentityDirectory: compositionIdentityDirectory{}},
+		Dependencies: RuntimeServicesDependencies{Records: repository, IdentityProjection: compositionIdentityProjection{}},
 	})
-	if _, err := services.Applications().Records.DispatchExportIdempotent(t.Context(), "task", "with-directory", recordapplication.RecordExportOptions{}, principal); err != nil {
-		t.Fatalf("export with Identity Directory error=%v", err)
+	if _, err := services.Applications().Records.DispatchExportIdempotent(t.Context(), "task", "with-projection", recordapplication.RecordExportOptions{}, principal); err != nil {
+		t.Fatalf("export with Identity Projection error=%v", err)
 	}
 }
 

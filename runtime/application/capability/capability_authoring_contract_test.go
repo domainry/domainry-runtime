@@ -36,7 +36,7 @@ func TestRuntimeAuthoringCapabilitiesAreValidAndDeterministic(t *testing.T) {
 	if first.EndpointContractVersion != endpointmodel.ContractVersion {
 		t.Fatalf("endpoint contract version=%q want=%q", first.EndpointContractVersion, endpointmodel.ContractVersion)
 	}
-	endpointContracts := tenantAdminEndpointContracts()
+	endpointContracts := managementEndpointContracts()
 	if len(endpointContracts) == 0 {
 		t.Fatal("capability discovery must publish compiled endpoint contracts")
 	}

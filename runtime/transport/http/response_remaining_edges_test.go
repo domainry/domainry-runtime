@@ -58,7 +58,7 @@ func TestListenerOpenAPIHandlerCoversPassThroughProjectionAndFailureEdges(t *tes
 				w.WriteHeader(tc.status)
 				_, _ = w.Write([]byte(tc.body))
 			})
-			group := ListenerRouteGroupTenantAdmin
+			group := ListenerRouteGroupManagement
 			if tc.name == "unknown group" {
 				group = ListenerRouteGroup("unknown")
 			}
@@ -79,7 +79,7 @@ func TestListenerOpenAPIHandlerCoversPassThroughProjectionAndFailureEdges(t *tes
 		_, _ = w.Write([]byte(document))
 	})
 	response := httptest.NewRecorder()
-	router.listenerOpenAPIHandler(ListenerRouteGroupTenantAdmin, full).ServeHTTP(response, request)
+	router.listenerOpenAPIHandler(ListenerRouteGroupManagement, full).ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"paths":{}`) {
 		t.Fatalf("status=%d body=%q", response.Code, response.Body.String())
 	}
@@ -94,7 +94,7 @@ func TestListenerOpenAPIHandlerCoversPassThroughProjectionAndFailureEdges(t *tes
 }
 
 func TestOpenAPIProjectionAndAuthoringSemanticsRemainingEdges(t *testing.T) {
-	if err := projectOpenAPIForListenerGroup(map[string]any{}, ListenerRouteGroupTenantAdmin); err == nil {
+	if err := projectOpenAPIForListenerGroup(map[string]any{}, ListenerRouteGroupManagement); err == nil {
 		t.Fatal("missing paths accepted")
 	}
 	if err := projectOpenAPIForListenerGroup(map[string]any{"paths": map[string]any{}}, ListenerRouteGroup("unknown")); err == nil {
@@ -104,7 +104,7 @@ func TestOpenAPIProjectionAndAuthoringSemanticsRemainingEdges(t *testing.T) {
 		"/invalid": "not-a-path-item",
 		"/unknown": map[string]any{"parameters": []any{}, "get": map[string]any{}},
 	}}
-	if err := projectOpenAPIForListenerGroup(document, ListenerRouteGroupTenantAdmin); err != nil {
+	if err := projectOpenAPIForListenerGroup(document, ListenerRouteGroupManagement); err != nil {
 		t.Fatal(err)
 	}
 	if len(document["paths"].(map[string]any)) != 0 {

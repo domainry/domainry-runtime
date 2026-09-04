@@ -93,7 +93,7 @@ func (s *HTTPRouter) withRuntimeAuthoringScenarioEvidence(next http.Handler) htt
 
 func runtimeAuthoringScenarioEvidenceStreamingPath(path string) bool {
 	path = strings.TrimSuffix(strings.TrimSpace(path), "/")
-	return path == "/events/business" || strings.HasSuffix(path, "/stream")
+	return path == "/business-events/stream" || strings.HasSuffix(path, "/stream")
 }
 
 type runtimeAuthoringBufferedResponse struct {

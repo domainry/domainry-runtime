@@ -23,16 +23,16 @@ func TestSchedulerTenantAndOpsReadSurfaceRemainingEdges(t *testing.T) {
 		resource  string
 	}{
 		{"tenant definitions", nil, func(h *SchedulerHandler, w http.ResponseWriter, r *http.Request) {
-			h.listTenantAdminSchedulerDefinitions(w, r)
+			h.listManagementSchedulerDefinitions(w, r)
 		}, "tenant_definitions", ""},
 		{"tenant definition", map[string]string{"definitionID": " definition-a "}, func(h *SchedulerHandler, w http.ResponseWriter, r *http.Request) {
-			h.getTenantAdminSchedulerDefinition(w, r)
+			h.getManagementSchedulerDefinition(w, r)
 		}, "tenant_definition", "definition-a"},
 		{"tenant versions", map[string]string{"definitionID": " definition-a "}, func(h *SchedulerHandler, w http.ResponseWriter, r *http.Request) {
-			h.listTenantAdminSchedulerDefinitionVersions(w, r)
+			h.listManagementSchedulerDefinitionVersions(w, r)
 		}, "tenant_versions", "definition-a"},
 		{"authoring contract", nil, func(h *SchedulerHandler, w http.ResponseWriter, r *http.Request) {
-			h.getTenantAdminSchedulerAuthoringContract(w, r)
+			h.getManagementSchedulerAuthoringContract(w, r)
 		}, "tenant_authoring_contract", ""},
 		{"ops state", nil, func(h *SchedulerHandler, w http.ResponseWriter, r *http.Request) { h.getOpsSchedulerState(w, r) }, "ops_state", ""},
 	}

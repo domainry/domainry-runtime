@@ -53,7 +53,7 @@ type ObjectSchema struct {
 	I18n        localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
 	Fields      []FieldSchema                      `json:"fields"`
 	Validations []ValidationSchema                 `json:"validations,omitempty"`
-	// Capabilities is the source declaration for the generic record surface.
+	// Capabilities is the source declaration for the generic record API.
 	// Nil means the Runtime standard set; a non-nil value can only remove
 	// operations the object does not support. The authorization compiler turns
 	// the effective set into exact object Action/Permission pairs.
@@ -79,7 +79,7 @@ type ObjectCapabilitySet struct {
 }
 
 // StandardObjectCapabilities is the default for an ordinary mutable object.
-// Export is included because Runtime publishes a generic export surface.
+// Export is included because Runtime publishes a generic export API.
 func StandardObjectCapabilities() ObjectCapabilitySet {
 	return ObjectCapabilitySet{Create: true, Read: true, Update: true, Delete: true, Export: true}
 }
@@ -87,7 +87,7 @@ func StandardObjectCapabilities() ObjectCapabilitySet {
 // EffectiveObjectCapabilities applies source declarations and lifecycle
 // invariants in one place. Append-only objects can be created and read but can
 // never expose generic update/delete, even if malformed source data asks for
-// them. An explicit capability set may further remove any surface.
+// them. An explicit capability set may further remove any endpoint.
 func EffectiveObjectCapabilities(object ObjectSchema) ObjectCapabilitySet {
 	capabilities := StandardObjectCapabilities()
 	if object.Capabilities != nil {

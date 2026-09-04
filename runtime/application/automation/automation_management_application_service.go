@@ -50,7 +50,7 @@ func NewAutomationManagementApplicationService(dependencies AutomationManagement
 }
 
 func (s *AutomationManagementApplicationService) Capabilities(ctx context.Context, principal principalmodel.Principal) (capability.CapabilityAutomationCatalog, error) {
-	if err := automationAuthorizeEndpoint(principal, "GET /automation-rules/capabilities"); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "GET /automation/rules/capabilities"); err != nil {
 		return capability.CapabilityAutomationCatalog{}, err
 	}
 	workspaceID := automationWorkspaceID(principal)
@@ -75,7 +75,7 @@ func (s *AutomationManagementApplicationService) Capabilities(ctx context.Contex
 }
 
 func (s *AutomationManagementApplicationService) Rules(ctx context.Context, principal principalmodel.Principal) ([]automationmodel.AutomationRuleSchema, error) {
-	if err := automationAuthorizeEndpoint(principal, "GET /automation-rules"); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "GET /automation/rules"); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -87,7 +87,7 @@ func (s *AutomationManagementApplicationService) Rules(ctx context.Context, prin
 }
 
 func (s *AutomationManagementApplicationService) Rule(ctx context.Context, ruleKey string, principal principalmodel.Principal) (automationmodel.AutomationRuleSchema, error) {
-	if err := automationAuthorizeEndpoint(principal, "GET /automation-rules/{ruleKey}"); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "GET /automation/rules/{ruleKey}"); err != nil {
 		return automationmodel.AutomationRuleSchema{}, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -101,7 +101,7 @@ func (s *AutomationManagementApplicationService) Rule(ctx context.Context, ruleK
 }
 
 func (s *AutomationManagementApplicationService) ExecutionHistory(ctx context.Context, filter automationmodel.AutomationExecutionFilter, principal principalmodel.Principal) (automationprojection.AutomationExecutionHistory, error) {
-	if err := automationAuthorizeEndpoint(principal, "GET /automation-rules/executions"); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "GET /automation/rules/executions"); err != nil {
 		return automationprojection.AutomationExecutionHistory{}, err
 	}
 	workspaceID := automationWorkspaceID(principal)
@@ -133,16 +133,16 @@ func (s *AutomationManagementApplicationService) ExecutionHistory(ctx context.Co
 }
 
 func (s *AutomationManagementApplicationService) ValidateRule(ctx context.Context, rule automationmodel.AutomationRuleSchema, principal principalmodel.Principal) (automationvalidation.AutomationValidationResult, error) {
-	if err := automationAuthorizeEndpoint(principal, "POST /automation-rules/validate"); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "POST /automation/rules/validate"); err != nil {
 		return automationvalidation.AutomationValidationResult{}, err
 	}
 	return automationvalidation.AutomationValidateRuleForAuthoring(ctx, rule, s.dependencies.ValidateDefinition)
 }
 
 func (s *AutomationManagementApplicationService) SimulateRule(ctx context.Context, rule automationmodel.AutomationRuleSchema, request automationcontract.AutomationSimulationRequest, principal principalmodel.Principal) (automationprojection.AutomationSimulationResult, error) {
-	endpoint := "POST /automation-rules/{ruleKey}/simulate"
+	endpoint := "POST /automation/rules/{ruleKey}/simulate"
 	if request.Rule != nil {
-		endpoint = "POST /automation-rules/simulate"
+		endpoint = "POST /automation/rules/simulate"
 	}
 	if err := automationAuthorizeEndpoint(principal, endpoint); err != nil {
 		return automationprojection.AutomationSimulationResult{}, err

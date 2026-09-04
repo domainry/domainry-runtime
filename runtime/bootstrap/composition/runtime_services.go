@@ -132,7 +132,7 @@ type RuntimeServicesDependencies struct {
 	PrepareOutboxPayload                publicationhandoff.PayloadPreparer
 	RuntimeStatus                       deploymentrepository.DeploymentRuntimeStatusRepository
 	Notifications                       NotificationRenderer
-	IdentityDirectory                   identitysdk.Directory
+	IdentityProjection                  identitysdk.Projection
 	Worker                              workerplatform.Dependencies
 }
 

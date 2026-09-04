@@ -31,18 +31,8 @@ type Lifecycle struct {
 	RebindRevokesSessions  bool         `json:"rebind_revokes_sessions,omitempty"`
 }
 
-type DirectoryProjection struct {
-	Enabled       bool     `json:"enabled,omitempty"`
-	Label         string   `json:"label,omitempty"`
-	PluralLabel   string   `json:"plural_label,omitempty"`
-	SummaryFields []string `json:"summary_fields,omitempty"`
-	FilterFields  []string `json:"filter_fields,omitempty"`
-	StatusField   string   `json:"status_field,omitempty"`
-	ActionKeys    []string `json:"action_keys,omitempty"`
-}
-
 // Binding is the Runtime-owned metadata contract that joins
-// one domain profile object to the global Identity user directory.
+// one domain profile object to an Identity user.
 type Binding struct {
 	ContractVersion          string                  `json:"contract_version"`
 	MinReaderVersion         string                  `json:"min_reader_version"`
@@ -51,7 +41,6 @@ type Binding struct {
 	Cardinality              string                  `json:"cardinality"`
 	BusinessIdentity         BusinessIdentityBinding `json:"business_identity"`
 	BindingLifecycle         Lifecycle               `json:"binding_lifecycle,omitempty"`
-	Directory                DirectoryProjection     `json:"directory,omitempty"`
 	SummaryFields            []string                `json:"summary_fields,omitempty"`
 	ProfileTabs              []string                `json:"profile_tabs,omitempty"`
 	ProfileTabLabels         map[string]string       `json:"profile_tab_labels,omitempty"`

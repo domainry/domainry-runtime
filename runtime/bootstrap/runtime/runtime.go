@@ -46,7 +46,7 @@ type Runtime struct {
 	authorizationActions func() *actioncontract.Registry
 	moduleBindings       runtimeModuleBindingInventory
 	identityBinding      identitysdk.Binding
-	identityDirectory    identitysdk.Directory
+	identityProjection   identitysdk.Projection
 	identityPrincipals   identitysdk.PrincipalResolver
 	principalCache       identityprincipal.Cache
 	integrationMode      integrationsdk.DeploymentMode

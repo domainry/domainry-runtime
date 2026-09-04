@@ -34,17 +34,17 @@ func TestFallbackRouteCanReturnJSONBeforeAuthentication(t *testing.T) {
 
 func TestRoutePolicyUsesRegisteredPatternInsteadOfUserPathSegments(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /objects/{objectKey}/records", func(http.ResponseWriter, *http.Request) {})
-	mux.HandleFunc("POST /integrations/webhooks/{workspaceID}/{connectionKey}", func(http.ResponseWriter, *http.Request) {})
+	mux.HandleFunc("POST /records/objects/{objectKey}/records", func(http.ResponseWriter, *http.Request) {})
+	mux.HandleFunc("POST /integration/webhooks/{workspaceID}/{connectionKey}", func(http.ResponseWriter, *http.Request) {})
 	mux.HandleFunc("/{path...}", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNotFound) })
 
-	recordRequest := httptest.NewRequest(http.MethodPost, "/objects/reports/records", nil)
+	recordRequest := httptest.NewRequest(http.MethodPost, "/records/objects/report/records", nil)
 	recordPolicy := routePolicyFor(mux, recordRequest)
-	if recordPolicy.path != "/objects/{objectKey}/records" || recordPolicy.anonymous() || recordPolicy.fallback {
+	if recordPolicy.path != "/records/objects/{objectKey}/records" || recordPolicy.anonymous() || recordPolicy.fallback {
 		t.Fatalf("unexpected record route policy: %#v", recordPolicy)
 	}
 
-	webhookRequest := httptest.NewRequest(http.MethodPost, "/integrations/webhooks/workspace-a/slack", nil)
+	webhookRequest := httptest.NewRequest(http.MethodPost, "/integration/webhooks/workspace-a/slack", nil)
 	webhookPolicy := routePolicyFor(mux, webhookRequest)
 	if webhookPolicy.anonymous() || webhookPolicy.fallback {
 		t.Fatalf("unexpected webhook route policy: %#v", webhookPolicy)
@@ -106,6 +106,41 @@ func TestEveryRuntimeRouteHasACompleteCompiledEndpointContract(t *testing.T) {
 		if contract.EffectClass == "write" &&
 			(contract.IdempotencyDecision == "" || contract.AuditClass == "" || contract.HighRiskPolicy == "") {
 			t.Errorf("%s has an incomplete write contract: %+v", route, contract)
+		}
+	}
+}
+
+func TestEveryRuntimeRouteUsesItsOwnerNamespace(t *testing.T) {
+	namespaces := map[string]string{
+		"appschema":          "/metadata",
+		"automation":         "/automation",
+		"businessreferences": "/business-references",
+		"businesssystem":     "/business-system",
+		"businessevents":     "/business-events",
+		"capabilities":       "/capabilities",
+		"discovery":          "/discovery",
+		"lifecycle":          "/lifecycle",
+		"notifications":      "/notification",
+		"operations":         "/operations",
+		"publicationhandoff": "/publication-handoff",
+		"records":            "/records",
+		"scheduler":          "/scheduler",
+		"uploads":            "/uploads",
+		"workflows":          "/workflow",
+		"workspaceprovision": "/workspace",
+	}
+	for identity, contract := range runtimeEndpointContracts {
+		if contract.SourceOwner == "root" || contract.SourceOwner == "openapi" {
+			continue
+		}
+		root, found := namespaces[contract.SourceOwner]
+		if !found {
+			t.Errorf("%s has no URL namespace for owner %q", identity, contract.SourceOwner)
+			continue
+		}
+		_, path, _ := strings.Cut(identity, " ")
+		if path != root && !strings.HasPrefix(path, root+"/") {
+			t.Errorf("%s owned by %q must be rooted at %q", identity, contract.SourceOwner, root)
 		}
 	}
 }
@@ -273,17 +308,17 @@ func declaredRuntimeRoutes(t *testing.T) map[string]bool {
 }
 
 func runtimeRouteOpenAPIExclusion(_ string, path string) string {
-	for _, prefix := range []string{"/agent-dialog/", "/auth/", "/identity/", "/i18n/", "/uploads/"} {
+	for _, prefix := range []string{"/agent/", "/auth/", "/identity/", "/discovery/i18n/", "/uploads/"} {
 		if strings.HasPrefix(path, prefix) {
 			return "internal or separately governed protocol surface"
 		}
 	}
 	switch path {
-	case "/", "/health", "/metrics", "/files":
+	case "/", "/health", "/metrics", "/uploads/files":
 		return "operational or binary transport endpoint"
-	case "/integrations/events/process-due", "/integrations/events/{eventID}/status",
-		"/integrations/invocations/{invocationID}/status", "/integrations/outbox/process-due",
-		"/integrations/outbox/{messageID}/status", "/workflow-executions/process":
+	case "/integration/events/process-due", "/integration/events/{eventID}/status",
+		"/integration/invocations/{invocationID}/status", "/integration/outbox/process-due",
+		"/integration/outbox/{messageID}/status", "/workflow-executions/process":
 		return "internal worker control endpoint"
 	default:
 		return ""
@@ -291,7 +326,7 @@ func runtimeRouteOpenAPIExclusion(_ string, path string) string {
 }
 
 func isSchemaDerivedOpenAPIPath(path string) bool {
-	return strings.HasPrefix(path, "/objects/{objectKey}") || strings.Contains(path, "/actions/{actionKey}")
+	return strings.HasPrefix(path, "/records/objects/{objectKey}") || strings.Contains(path, "/actions/{actionKey}")
 }
 
 func isHTTPMethod(value string) bool {

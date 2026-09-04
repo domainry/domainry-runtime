@@ -228,9 +228,9 @@ func newWorkflowHTTPDefinitionFixture() (*WorkflowsHandler, *workflowHTTPDefinit
 
 func workflowHTTPAdminPrincipal() principalmodel.Principal {
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin-1", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{
-		"runtime.workflows.approve_business_workflow_task",
-		"runtime.workflows.reject_business_workflow_task",
-		"runtime.workflows.return_business_workflow_task",
+		"runtime.workflows.approve_workflow_task",
+		"runtime.workflows.reject_workflow_task",
+		"runtime.workflows.return_workflow_task",
 		"runtime.workflows.retry_ops_workflow_execution",
 		"runtime.workflows.resolve_ops_workflow_execution",
 		"runtime.workflows.retry_ops_workflow_process",

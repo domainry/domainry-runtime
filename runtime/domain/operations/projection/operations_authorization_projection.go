@@ -49,7 +49,7 @@ func OperationsAuthorizationActions() ([]actioncontract.ActionDefinition, error)
 			Key: operation.ActionKey, Owner: "runtime:operations", SourceKind: "runtime_operations",
 			CapabilityKey: "runtime.operations", CapabilityLabel: "Runtime operations",
 			OperationKey: operation.ActionKey[separator+1:], OperationLabel: label, Label: label,
-			Exposures:     []actioncontract.Exposure{actioncontract.ExposureTenantAdmin, actioncontract.ExposureOps},
+			Exposures:     []actioncontract.Exposure{actioncontract.ExposureManagement, actioncontract.ExposureOps},
 			Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated},
 			NonHTTP:       []actioncontract.NonHTTPBinding{{Kind: operationsActionBindingKind, InvocationKey: operation.Kind}},
 			Permission: &actioncontract.PermissionDefinition{

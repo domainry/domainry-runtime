@@ -105,7 +105,7 @@ func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRo
 	})
 	authorizationActions := deps.AuthorizationActions
 	if authorizationActions == nil {
-		contributedActions, err := modulehttp.AuthorizationActionsFromSurfaces(deps.ModuleHTTPSurfaces)
+		contributedActions, err := modulehttp.AuthorizationActionsFromAdapters(deps.ModuleHTTPAdapters)
 		if err != nil {
 			panic("assemble Runtime HTTP authorization contributions: " + err.Error())
 		}
@@ -134,7 +134,7 @@ func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRo
 		runtimeReleaseAdmission: deps.RuntimeReleaseAdmission,
 		runtimeReleaseIntegrity: deps.RuntimeReleaseIntegrity,
 		runtimeVersion:          "dev", apiContractVersion: BusinessRuntimeAPIContractVersion, apiContractHash: BusinessRuntimeAPIContractHash(),
-		moduleHTTPRoutes:                 buildModuleHTTPRouteIndex(deps.ModuleHTTPSurfaces),
+		moduleHTTPRoutes:                 buildModuleHTTPRouteIndex(deps.ModuleHTTPAdapters),
 		runtimeAuthoringScenarioReceipts: deps.RuntimeAuthoringScenarioReceipts,
 	}
 	for group, policy := range config.ListenerGroupPolicies {
@@ -204,10 +204,10 @@ type HTTPRequestMetric struct {
 type ListenerRouteGroup string
 
 const (
-	ListenerRouteGroupAll         ListenerRouteGroup = "all"
-	ListenerRouteGroupPublic      ListenerRouteGroup = "public"
-	ListenerRouteGroupTenantAdmin ListenerRouteGroup = "tenant-admin"
-	ListenerRouteGroupOps         ListenerRouteGroup = "ops"
+	ListenerRouteGroupAll        ListenerRouteGroup = "all"
+	ListenerRouteGroupPublic     ListenerRouteGroup = "public"
+	ListenerRouteGroupManagement ListenerRouteGroup = "management"
+	ListenerRouteGroupOps        ListenerRouteGroup = "ops"
 )
 
 func (s *HTTPRouter) Routes() http.Handler {
@@ -291,8 +291,8 @@ func listenerExposure(group ListenerRouteGroup) (endpointmodel.ListenerExposure,
 	switch group {
 	case ListenerRouteGroupPublic:
 		return endpointmodel.ListenerExposurePublic, true
-	case ListenerRouteGroupTenantAdmin:
-		return endpointmodel.ListenerExposureTenantAdmin, true
+	case ListenerRouteGroupManagement:
+		return endpointmodel.ListenerExposureManagement, true
 	case ListenerRouteGroupOps:
 		return endpointmodel.ListenerExposureOps, true
 	default:

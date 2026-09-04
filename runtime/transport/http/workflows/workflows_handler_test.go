@@ -12,7 +12,7 @@ import (
 
 func TestWorkflowAuthoringFragmentValidationHandler(t *testing.T) {
 	handler, _, response := newWorkflowHTTPDefinitionFixture()
-	writer, request := workflowHTTPRequest(http.MethodPost, "/tenant-admin/workflows/authoring-fragments/workflow.trigger_contract/validate", `{"type":"manual"}`, map[string]string{"capabilityKey": "workflow.trigger_contract"})
+	writer, request := workflowHTTPRequest(http.MethodPost, "/workflow/authoring-fragments/workflow.trigger_contract/validate", `{"type":"manual"}`, map[string]string{"capabilityKey": "workflow.trigger_contract"})
 	handler.validateAuthoringFragment(writer, request)
 	result, ok := response.value.(workflowmodel.WorkflowValidation)
 	if response.status != http.StatusOK || !ok || !result.Valid || result.CapabilityKey != "workflow.trigger_contract" || result.Fragment["type"] != "manual" || len(result.Issues) != 0 || response.err != nil {
@@ -20,7 +20,7 @@ func TestWorkflowAuthoringFragmentValidationHandler(t *testing.T) {
 	}
 
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/tenant-admin/workflows/authoring-fragments/workflow.trigger_contract/validate", `{"type":"unknown"}`, map[string]string{"capabilityKey": "workflow.trigger_contract"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/authoring-fragments/workflow.trigger_contract/validate", `{"type":"unknown"}`, map[string]string{"capabilityKey": "workflow.trigger_contract"})
 	handler.validateAuthoringFragment(writer, request)
 	result, ok = response.value.(workflowmodel.WorkflowValidation)
 	if response.status != http.StatusOK || !ok || result.Valid || len(result.Issues) != 1 || result.Issues[0].CapabilityKey != "workflow.trigger_contract" || result.Issues[0].Code != "backend.workflow.trigger_type_invalid" {
@@ -28,7 +28,7 @@ func TestWorkflowAuthoringFragmentValidationHandler(t *testing.T) {
 	}
 
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/tenant-admin/workflows/authoring-fragments/workflow.trigger_contract/validate", `{`, map[string]string{"capabilityKey": "workflow.trigger_contract"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/authoring-fragments/workflow.trigger_contract/validate", `{`, map[string]string{"capabilityKey": "workflow.trigger_contract"})
 	handler.validateAuthoringFragment(writer, request)
 	if response.status != http.StatusBadRequest || response.err == nil || response.value != nil {
 		t.Fatalf("invalid json status=%d value=%#v err=%v", response.status, response.value, response.err)
@@ -36,7 +36,7 @@ func TestWorkflowAuthoringFragmentValidationHandler(t *testing.T) {
 
 	resetWorkflowHTTPResponse(response)
 	handler.principal = func(*http.Request) principalmodel.Principal { return principalmodel.Principal{} }
-	writer, request = workflowHTTPRequest(http.MethodPost, "/tenant-admin/workflows/authoring-fragments/workflow.trigger_contract/validate", `{"type":"manual"}`, map[string]string{"capabilityKey": "workflow.trigger_contract"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/authoring-fragments/workflow.trigger_contract/validate", `{"type":"manual"}`, map[string]string{"capabilityKey": "workflow.trigger_contract"})
 	handler.validateAuthoringFragment(writer, request)
 	if response.err == nil || response.value != nil {
 		t.Fatalf("authorization value=%#v err=%v", response.value, response.err)
@@ -59,21 +59,21 @@ func TestWorkflowHTTPIntQuery(t *testing.T) {
 
 func TestWorkflowSimulationHTTPHandler(t *testing.T) {
 	handler, _, _, _, response := newWorkflowHTTPRuntimeFixture()
-	writer, request := workflowHTTPRequest(http.MethodPost, "/tenant-admin/workflows/order.approve/simulate", `{"payload":{"order_id":"order-1"}}`, map[string]string{"workflowKey": " order.approve "})
+	writer, request := workflowHTTPRequest(http.MethodPost, "/workflow/definitions/order.approve/simulate", `{"payload":{"order_id":"order-1"}}`, map[string]string{"workflowKey": " order.approve "})
 	handler.simulateWorkflow(writer, request)
 	if response.status != http.StatusOK || response.value == nil || response.err != nil {
 		t.Fatalf("status=%d value=%#v err=%v", response.status, response.value, response.err)
 	}
 
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/tenant-admin/workflows/order.approve/simulate", `{`, map[string]string{"workflowKey": "order.approve"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/definitions/order.approve/simulate", `{`, map[string]string{"workflowKey": "order.approve"})
 	handler.simulateWorkflow(writer, request)
 	if response.status != http.StatusBadRequest || response.err == nil || response.value != nil {
 		t.Fatalf("invalid JSON status=%d value=%#v err=%v", response.status, response.value, response.err)
 	}
 
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/tenant-admin/workflows/missing/simulate", "", map[string]string{"workflowKey": "missing"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/definitions/missing/simulate", "", map[string]string{"workflowKey": "missing"})
 	request.Body = nil
 	handler.simulateWorkflow(writer, request)
 	if response.err == nil || response.value != nil {

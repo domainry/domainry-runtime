@@ -8,7 +8,7 @@ import (
 
 func setValidProductionListenerOrigins(cfg *Config) {
 	cfg.HTTPPublicOrigins = []string{"https://app.example.com"}
-	cfg.HTTPTenantAdminOrigins = []string{"https://admin.example.com"}
+	cfg.HTTPManagementOrigins = []string{"https://admin.example.com"}
 	cfg.HTTPOpsOrigins = []string{"https://ops.example.com"}
 	cfg.CORSAllowedOrigins = []string{
 		"https://app.example.com",
@@ -16,7 +16,7 @@ func setValidProductionListenerOrigins(cfg *Config) {
 		"https://ops.example.com",
 	}
 	cfg.HTTPPublicAddr = "0.0.0.0:8081"
-	cfg.HTTPTenantAdminAddr = "127.0.0.1:8082"
+	cfg.HTTPManagementAddr = "127.0.0.1:8082"
 	cfg.HTTPOpsAddr = "127.0.0.1:8083"
 }
 
@@ -44,7 +44,7 @@ func TestValidateProductionListenerOrigins(t *testing.T) {
 			mutate: func(cfg *Config) {
 				cfg.HTTPOpsOrigins = []string{"https://admin.example.com"}
 			},
-			message: "is shared by HTTP_TENANT_ADMIN_ORIGINS and HTTP_OPS_ORIGINS",
+			message: "is shared by HTTP_MANAGEMENT_ORIGINS and HTTP_OPS_ORIGINS",
 		},
 		{
 			name: "production origins require HTTPS",
@@ -85,9 +85,9 @@ func TestValidateProductionListenerOrigins(t *testing.T) {
 
 func TestValidateProductionListeners(t *testing.T) {
 	valid := Config{
-		HTTPPublicAddr:      "0.0.0.0:8081",
-		HTTPTenantAdminAddr: "127.0.0.1:8082",
-		HTTPOpsAddr:         "10.0.0.8:8083",
+		HTTPPublicAddr:     "0.0.0.0:8081",
+		HTTPManagementAddr: "127.0.0.1:8082",
+		HTTPOpsAddr:        "10.0.0.8:8083",
 	}
 	if err := valid.validateProductionListeners(); err != nil {
 		t.Fatalf("valid Listener listeners: %v", err)
@@ -96,8 +96,8 @@ func TestValidateProductionListeners(t *testing.T) {
 		name   string
 		mutate func(*Config)
 	}{
-		{"missing listener", func(cfg *Config) { cfg.HTTPTenantAdminAddr = "" }},
-		{"shared listener", func(cfg *Config) { cfg.HTTPOpsAddr = cfg.HTTPTenantAdminAddr }},
+		{"missing listener", func(cfg *Config) { cfg.HTTPManagementAddr = "" }},
+		{"shared listener", func(cfg *Config) { cfg.HTTPOpsAddr = cfg.HTTPManagementAddr }},
 		{"public Ops listener", func(cfg *Config) { cfg.HTTPOpsAddr = "0.0.0.0:8083" }},
 		{"invalid listener", func(cfg *Config) { cfg.HTTPPublicAddr = "localhost" }},
 	}

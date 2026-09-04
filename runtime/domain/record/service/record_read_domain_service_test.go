@@ -59,21 +59,21 @@ func (r *readRepositoryProbe) GetRecord(context.Context, string, definitionmodel
 	return r.record, r.found, r.err
 }
 
-type identityDirectoryNoop struct{}
+type identityProjectionNoop struct{}
 
-func (identityDirectoryNoop) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
+func (identityProjectionNoop) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	return identitysdk.User{}, false, nil
 }
-func (identityDirectoryNoop) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+func (identityProjectionNoop) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
 	return identitysdk.OrganizationUnit{}, false, nil
 }
-func (identityDirectoryNoop) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
+func (identityProjectionNoop) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
 	return nil, nil
 }
-func (identityDirectoryNoop) ListRoles(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.Role, error) {
+func (identityProjectionNoop) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	return nil, nil
 }
-func (identityDirectoryNoop) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
+func (identityProjectionNoop) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
 	return nil, nil
 }
 

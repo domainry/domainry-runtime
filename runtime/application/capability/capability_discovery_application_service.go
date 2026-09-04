@@ -46,34 +46,34 @@ func (s *CapabilityAuthoringApplicationService) DiscoveryIndexExpanded(ctx conte
 		return capabilitycontract.CapabilityDiscoveryIndex{}, err
 	}
 	catalog := RuntimeAuthoringCatalogSummary()
-	endpointContractCount, endpointContractsHash := tenantAdminEndpointContractIndex()
+	endpointContractCount, endpointContractsHash := managementEndpointContractIndex()
 	result := capabilitycontract.CapabilityDiscoveryIndex{
 		ContractVersion: catalog.ContractVersion, EndpointContractVersion: catalog.EndpointContractVersion, RuntimeVersion: catalog.RuntimeVersion, ContractHash: catalog.ContractHash, InstanceHash: capabilitycontract.CapabilityAuthoringInstanceHash(instance),
 		EndpointContractCount: endpointContractCount, EndpointContractsHash: endpointContractsHash,
 		Domains: []capabilitycontract.CapabilityDomainSummary{},
 	}
 	if includeEndpointContracts {
-		result.EndpointContracts = tenantAdminEndpointContracts()
+		result.EndpointContracts = managementEndpointContracts()
 	}
 	for _, domain := range catalog.Domains {
 		result.Domains = append(result.Domains, capabilitycontract.CapabilityDomainSummary{
-			Key: domain.Key, CapabilityCount: domain.CapabilityCount, DetailEndpoint: "/tenant-admin/platform-capabilities/domains/" + url.PathEscape(domain.Key),
+			Key: domain.Key, CapabilityCount: domain.CapabilityCount, DetailEndpoint: "/capabilities/domains/" + url.PathEscape(domain.Key),
 		})
 	}
 	return result, nil
 }
 
-var tenantAdminEndpointContractIndexOnce sync.Once
-var tenantAdminEndpointContractCount int
-var tenantAdminEndpointContractsHash string
+var managementEndpointContractIndexOnce sync.Once
+var managementEndpointContractCount int
+var managementEndpointContractsHash string
 
-func tenantAdminEndpointContractIndex() (int, string) {
-	tenantAdminEndpointContractIndexOnce.Do(func() {
-		contracts := tenantAdminEndpointContracts()
-		tenantAdminEndpointContractCount = len(contracts)
-		tenantAdminEndpointContractsHash = capabilityEndpointContractsHash(contracts)
+func managementEndpointContractIndex() (int, string) {
+	managementEndpointContractIndexOnce.Do(func() {
+		contracts := managementEndpointContracts()
+		managementEndpointContractCount = len(contracts)
+		managementEndpointContractsHash = capabilityEndpointContractsHash(contracts)
 	})
-	return tenantAdminEndpointContractCount, tenantAdminEndpointContractsHash
+	return managementEndpointContractCount, managementEndpointContractsHash
 }
 
 func capabilityEndpointContractsHash(contracts []endpointmodel.RuntimeEndpointContractV1) string {
@@ -82,11 +82,11 @@ func capabilityEndpointContractsHash(contracts []endpointmodel.RuntimeEndpointCo
 	return hex.EncodeToString(sum[:])
 }
 
-func tenantAdminEndpointContracts() []endpointmodel.RuntimeEndpointContractV1 {
+func managementEndpointContracts() []endpointmodel.RuntimeEndpointContractV1 {
 	result := make([]endpointmodel.RuntimeEndpointContractV1, 0)
 	for _, endpointContract := range endpointmodel.EndpointContracts {
 		for _, exposure := range endpointContract.ListenerExposures {
-			if exposure == endpointmodel.ListenerExposureTenantAdmin {
+			if exposure == endpointmodel.ListenerExposureManagement {
 				result = append(result, endpointContract)
 				break
 			}
@@ -121,7 +121,7 @@ func (s *CapabilityAuthoringApplicationService) DomainCapabilities(ctx context.C
 			}
 			result.Capabilities = append(result.Capabilities, capabilitycontract.CapabilitySummary{
 				Key: definition.Key, Status: definition.Status, Lifecycle: definition.Lifecycle, Requires: definition.Requires,
-				ValidationEndpoint: definition.ValidationEndpoint, DetailEndpoint: "/tenant-admin/platform-capabilities/capabilities/" + url.PathEscape(definition.Key),
+				ValidationEndpoint: definition.ValidationEndpoint, DetailEndpoint: "/capabilities/" + url.PathEscape(definition.Key),
 			})
 		}
 		return result, nil

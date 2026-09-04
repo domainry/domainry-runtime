@@ -69,7 +69,7 @@ func (s *WorkflowApplicationService) workflowTasksWithAssigneeNames(ctx context.
 	if s.identity == nil || len(tasks) == 0 {
 		return tasks
 	}
-	users, err := s.identity.ListUsers(ctx, identitysdk.DirectoryQuery{})
+	users, err := s.identity.ListUsers(ctx, identitysdk.ProjectionQuery{})
 	if err != nil {
 		return tasks
 	}

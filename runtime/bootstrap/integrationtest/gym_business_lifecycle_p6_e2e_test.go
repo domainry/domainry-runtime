@@ -27,20 +27,20 @@ func TestGymFinancialObjectsRejectDirectMutationThroughGenericLifecyclePolicy(t 
 	service, principal := newGymLifecycleP6Environment(t)
 	handler := gymLifecycleP6Handler(service, principal)
 
-	ledger := gymLifecycleP6Request(t, handler, http.MethodPost, "/objects/gym_financial_entry/records", "ledger-create", map[string]any{"data": map[string]any{
+	ledger := gymLifecycleP6Request(t, handler, http.MethodPost, "/records/objects/gym_financial_entry/records", "ledger-create", map[string]any{"data": map[string]any{
 		"business_key": "payment-1", "amount": "100.00", "entry_kind": "payment",
 	}}, http.StatusCreated, "")
 	ledgerID := fmt.Sprint(ledger["id"])
-	gymLifecycleP6Request(t, handler, http.MethodPatch, "/objects/gym_financial_entry/records/"+ledgerID, "ledger-update", map[string]any{"data": map[string]any{"amount": "1.00"}}, http.StatusConflict, "backend.record.lifecycle_append_only")
-	gymLifecycleP6Request(t, handler, http.MethodDelete, "/objects/gym_financial_entry/records/"+ledgerID, "ledger-delete", nil, http.StatusConflict, "backend.record.lifecycle_append_only")
+	gymLifecycleP6Request(t, handler, http.MethodPatch, "/records/objects/gym_financial_entry/records/"+ledgerID, "ledger-update", map[string]any{"data": map[string]any{"amount": "1.00"}}, http.StatusConflict, "backend.record.lifecycle_append_only")
+	gymLifecycleP6Request(t, handler, http.MethodDelete, "/records/objects/gym_financial_entry/records/"+ledgerID, "ledger-delete", nil, http.StatusConflict, "backend.record.lifecycle_append_only")
 
-	settlement := gymLifecycleP6Request(t, handler, http.MethodPost, "/objects/gym_commission_lock/records", "settlement-create", map[string]any{"data": map[string]any{
+	settlement := gymLifecycleP6Request(t, handler, http.MethodPost, "/records/objects/gym_commission_lock/records", "settlement-create", map[string]any{"data": map[string]any{
 		"status": "draft", "amount": "25.00", "rule_version": "3",
 	}}, http.StatusCreated, "")
 	settlementID := fmt.Sprint(settlement["id"])
-	gymLifecycleP6Request(t, handler, http.MethodPatch, "/objects/gym_commission_lock/records/"+settlementID, "settlement-confirm", map[string]any{"data": map[string]any{"status": "confirmed"}}, http.StatusOK, "")
-	gymLifecycleP6Request(t, handler, http.MethodPatch, "/objects/gym_commission_lock/records/"+settlementID, "settlement-immutable", map[string]any{"data": map[string]any{"amount": "99.00"}}, http.StatusConflict, "backend.record.lifecycle_state_immutable")
-	gymLifecycleP6Request(t, handler, http.MethodDelete, "/objects/gym_commission_lock/records/"+settlementID, "settlement-delete", nil, http.StatusConflict, "backend.record.lifecycle_state_immutable")
+	gymLifecycleP6Request(t, handler, http.MethodPatch, "/records/objects/gym_commission_lock/records/"+settlementID, "settlement-confirm", map[string]any{"data": map[string]any{"status": "confirmed"}}, http.StatusOK, "")
+	gymLifecycleP6Request(t, handler, http.MethodPatch, "/records/objects/gym_commission_lock/records/"+settlementID, "settlement-immutable", map[string]any{"data": map[string]any{"amount": "99.00"}}, http.StatusConflict, "backend.record.lifecycle_state_immutable")
+	gymLifecycleP6Request(t, handler, http.MethodDelete, "/records/objects/gym_commission_lock/records/"+settlementID, "settlement-delete", nil, http.StatusConflict, "backend.record.lifecycle_state_immutable")
 }
 
 func newGymLifecycleP6Environment(t *testing.T) (*runtimecomposition.RuntimeServices, principalmodel.Principal) {

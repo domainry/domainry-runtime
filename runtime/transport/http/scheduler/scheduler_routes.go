@@ -7,15 +7,15 @@ import (
 )
 
 func (h *SchedulerHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /v1/scheduler-triggers:accept", h.acceptSchedulerTrigger)
-	contract, err := schedulersdk.SchedulerHTTPSurfaceContract()
+	mux.HandleFunc("POST /scheduler/triggers/accept", h.acceptSchedulerTrigger)
+	contract, err := schedulersdk.SchedulerHTTPAdapterContract()
 	if err != nil {
-		panic("compile Scheduler HTTP surface: " + err.Error())
+		panic("compile Scheduler HTTP adapter: " + err.Error())
 	}
 	handlers := map[string]http.HandlerFunc{
-		schedulersdk.ActionSchedulerDefinitionsList:       h.listTenantAdminSchedulerDefinitions,
-		schedulersdk.ActionSchedulerDefinitionsGet:        h.getTenantAdminSchedulerDefinition,
-		schedulersdk.ActionSchedulerAuthoringContractGet:  h.getTenantAdminSchedulerAuthoringContract,
+		schedulersdk.ActionSchedulerDefinitionsList:       h.listManagementSchedulerDefinitions,
+		schedulersdk.ActionSchedulerDefinitionsGet:        h.getManagementSchedulerDefinition,
+		schedulersdk.ActionSchedulerAuthoringContractGet:  h.getManagementSchedulerAuthoringContract,
 		schedulersdk.ActionSchedulerDefinitionsValidate:   h.previewSchedulerJob,
 		schedulersdk.ActionSchedulerSchedulesPreview:      h.previewSchedulerSchedule,
 		schedulersdk.ActionSchedulerDefinitionsSimulate:   h.simulateSchedulerJob,

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
@@ -14,31 +15,32 @@ import (
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
-type runtimeModuleSurface struct{ owner string }
+type runtimeModuleAdapter struct{ owner string }
 
-func (runtimeModuleSurface) ContractVersion() string { return modulehttp.ContractVersion }
-func (surface runtimeModuleSurface) Owner() string   { return surface.owner }
-func (runtimeModuleSurface) Name() string            { return "management" }
-func (surface runtimeModuleSurface) Routes() []modulehttp.Route {
+func (runtimeModuleAdapter) ContractVersion() string { return modulehttp.ContractVersion }
+func (adapter runtimeModuleAdapter) Owner() string   { return adapter.owner }
+func (runtimeModuleAdapter) Name() string            { return "management" }
+func (adapter runtimeModuleAdapter) Routes() []modulehttp.Route {
+	path := "/" + strings.ReplaceAll(adapter.owner, "_", "-")
 	return []modulehttp.Route{{Action: actioncontract.ActionDefinition{
-		Key: "test." + surface.owner + ".get", Owner: "module:" + surface.owner, SourceKind: "module_surface", CapabilityKey: "test." + surface.owner, CapabilityLabel: "Test module",
-		OperationKey: "get", OperationLabel: "Get test module", Label: "Get test module", Exposures: []actioncontract.Exposure{actioncontract.ExposureTenantAdmin},
-		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated}, HTTP: &actioncontract.HTTPBinding{Method: "GET", RouteTemplate: "/" + surface.owner},
+		Key: "test." + adapter.owner + ".get", Owner: "module:" + adapter.owner, SourceKind: "module_http", CapabilityKey: "test." + adapter.owner, CapabilityLabel: "Test module",
+		OperationKey: "get", OperationLabel: "Get test module", Label: "Get test module", Exposures: []actioncontract.Exposure{actioncontract.ExposureManagement},
+		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated}, HTTP: &actioncontract.HTTPBinding{Method: "GET", RouteTemplate: path},
 		EffectClass: actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "test_module_read", LifecycleStatus: actioncontract.LifecycleActive,
 	}}}
 }
-func (runtimeModuleSurface) Handler() http.Handler { return http.NotFoundHandler() }
+func (runtimeModuleAdapter) Handler() http.Handler { return http.NotFoundHandler() }
 
-type runtimeHTTPOnlySurfaceBinding struct{ surfaces []modulehttp.Surface }
+type runtimeHTTPOnlyAdapterBinding struct{ adapters []modulehttp.Adapter }
 
-type runtimeDataExchangeSurfaceBinding struct {
+type runtimeDataExchangeAdapterBinding struct {
 	dataexchange.Binding
-	surfaces []modulehttp.Surface
+	adapters []modulehttp.Adapter
 }
 
 type runtimeCompleteAuthorizationBinding struct {
 	actions  []actioncontract.ActionDefinition
-	surfaces []modulehttp.Surface
+	adapters []modulehttp.Adapter
 }
 
 type runtimeActionManifestBinding struct {
@@ -61,51 +63,56 @@ func (binding runtimeCompleteAuthorizationBinding) AuthorizationActions() ([]act
 	return result, nil
 }
 
-func (binding runtimeCompleteAuthorizationBinding) HTTPSurfaces() []modulehttp.Surface {
-	return append([]modulehttp.Surface(nil), binding.surfaces...)
+func (binding runtimeCompleteAuthorizationBinding) HTTPAdapters() []modulehttp.Adapter {
+	return append([]modulehttp.Adapter(nil), binding.adapters...)
 }
 
-func (binding runtimeDataExchangeSurfaceBinding) HTTPSurfaces() []modulehttp.Surface {
-	return append([]modulehttp.Surface(nil), binding.surfaces...)
+func (binding runtimeDataExchangeAdapterBinding) HTTPAdapters() []modulehttp.Adapter {
+	return append([]modulehttp.Adapter(nil), binding.adapters...)
 }
 
-func (binding runtimeHTTPOnlySurfaceBinding) HTTPSurfaces() []modulehttp.Surface {
-	return append([]modulehttp.Surface(nil), binding.surfaces...)
+func (binding runtimeHTTPOnlyAdapterBinding) HTTPAdapters() []modulehttp.Adapter {
+	return append([]modulehttp.Adapter(nil), binding.adapters...)
 }
 
-func TestRuntimeCollectsModuleOwnedHTTPSurfaces(t *testing.T) {
-	notification := runtimeModuleSurface{owner: "notification"}
-	dataExchange := runtimeModuleSurface{owner: "data_exchange"}
+func TestRuntimeCollectsModuleOwnedHTTPAdapters(t *testing.T) {
+	notification := runtimeModuleAdapter{owner: "notification"}
+	dataExchange := runtimeModuleAdapter{owner: "data_exchange"}
 	runtime := &Runtime{
 		cfg: config.Config{IdentityAudience: "domainry-runtime"},
 		moduleBindings: newRuntimeModuleBindingInventory(
-			runtimeHTTPOnlySurfaceBinding{surfaces: []modulehttp.Surface{notification}},
-			runtimeDataExchangeSurfaceBinding{surfaces: []modulehttp.Surface{dataExchange}},
+			runtimeHTTPOnlyAdapterBinding{adapters: []modulehttp.Adapter{notification}},
+			runtimeDataExchangeAdapterBinding{adapters: []modulehttp.Adapter{dataExchange}},
 		),
 	}
-	surfaces := runtime.ModuleHTTPSurfaces()
-	if len(surfaces) != 3 || surfaces[0].Owner() != "notification" || surfaces[1].Owner() != "data_exchange" || surfaces[2].Name() != "module_inventory" {
-		t.Fatalf("surfaces=%#v", surfaces)
+	adapters := runtime.ModuleHTTPAdapters()
+	if len(adapters) != 4 || adapters[0].Owner() != "notification" || adapters[1].Owner() != "data_exchange" || adapters[2].Owner() != "discovery" || adapters[3].Owner() != "action" {
+		t.Fatalf("adapters=%#v", adapters)
 	}
-	if err := modulehttp.ValidateSurface(surfaces[1]); err != nil {
-		t.Fatal(err)
+	for _, adapter := range adapters {
+		if err := modulehttp.ValidateAdapter(adapter); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if routes := surfaces[2].Routes(); len(routes) != 2 || routes[0].Action.Key != "runtime.modules.list" || routes[1].Action.Key != "runtime.authorization.action_usages.query" {
-		t.Fatalf("Runtime inventory routes=%#v", routes)
+	if routes := adapters[2].Routes(); len(routes) != 1 || routes[0].Action.Key != "runtime.discovery.modules.list" {
+		t.Fatalf("Runtime modules routes=%#v", routes)
+	}
+	if routes := adapters[3].Routes(); len(routes) != 1 || routes[0].Action.Key != "runtime.action.permission_usages.query" {
+		t.Fatalf("Runtime authorization routes=%#v", routes)
 	}
 	response := httptest.NewRecorder()
-	runtimeModuleInventorySurface{runtime: &Runtime{}}.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/operations/modules", nil))
+	runtimeDiscoveryHTTPAdapter{runtime: &Runtime{}}.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/discovery/modules", nil))
 	var inventory map[string]any
 	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" || json.Unmarshal(response.Body.Bytes(), &inventory) != nil || inventory["contract_version"] == "" {
 		t.Fatalf("inventory response status=%d headers=%v body=%s", response.Code, response.Header(), response.Body.String())
 	}
-	surfaces[0] = nil
-	if runtime.ModuleHTTPSurfaces()[0] == nil {
-		t.Fatal("caller mutated Runtime module Surface inventory")
+	adapters[0] = nil
+	if runtime.ModuleHTTPAdapters()[0] == nil {
+		t.Fatal("caller mutated Runtime module Adapter inventory")
 	}
 }
 
-func TestRuntimeModuleSurfaceQueriesLivePermissionUsagesAsOneBatch(t *testing.T) {
+func TestRuntimeModuleAdapterQueriesLivePermissionUsagesAsOneBatch(t *testing.T) {
 	registry := actioncontract.NewRegistry()
 	if err := registry.Register(runtimeModuleInventoryActions("domainry-runtime")...); err != nil {
 		t.Fatal(err)
@@ -115,7 +122,7 @@ func TestRuntimeModuleSurfaceQueriesLivePermissionUsagesAsOneBatch(t *testing.T)
 	}
 	runtime := &Runtime{cfg: config.Config{IdentityAudience: "domainry-runtime"}, authorizationActions: func() *actioncontract.Registry { return registry }}
 	query, err := actioncontract.NewPermissionUsageRequest([]actioncontract.PermissionUsageQuery{{
-		SourceOwner: "runtime:builtin", PermissionKeys: []string{"runtime.modules.list"},
+		SourceOwner: "runtime:builtin", PermissionKeys: []string{"runtime.discovery.modules.list"},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +132,7 @@ func TestRuntimeModuleSurfaceQueriesLivePermissionUsagesAsOneBatch(t *testing.T)
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	runtimeModuleInventorySurface{runtime: runtime}.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/operations/authorization/action-usages/query", bytes.NewReader(body)))
+	runtimeActionHTTPAdapter{runtime: runtime}.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/action/permission-usages/query", bytes.NewReader(body)))
 	var snapshot actioncontract.PermissionUsageSnapshot
 	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &snapshot) != nil {
 		t.Fatalf("query status=%d body=%s", response.Code, response.Body.String())
@@ -133,21 +140,21 @@ func TestRuntimeModuleSurfaceQueriesLivePermissionUsagesAsOneBatch(t *testing.T)
 	if err := snapshot.ValidateFor(query); err != nil {
 		t.Fatal(err)
 	}
-	if len(snapshot.Owners) != 1 || !snapshot.Owners[0].Available || len(snapshot.Owners[0].Usages) != 1 || snapshot.Owners[0].Usages[0].Action.Key != "runtime.modules.list" {
+	if len(snapshot.Owners) != 1 || !snapshot.Owners[0].Available || len(snapshot.Owners[0].Usages) != 1 || snapshot.Owners[0].Usages[0].Action.Key != "runtime.discovery.modules.list" {
 		t.Fatalf("query snapshot=%#v", snapshot)
 	}
 
 	invalid := httptest.NewRecorder()
-	runtimeModuleInventorySurface{runtime: runtime}.Handler().ServeHTTP(invalid, httptest.NewRequest(http.MethodPost, "/operations/authorization/action-usages/query", bytes.NewBufferString(`{"contract_version":"bad"}`)))
+	runtimeActionHTTPAdapter{runtime: runtime}.Handler().ServeHTTP(invalid, httptest.NewRequest(http.MethodPost, "/action/permission-usages/query", bytes.NewBufferString(`{"contract_version":"bad"}`)))
 	if invalid.Code != http.StatusBadRequest {
 		t.Fatalf("invalid query status=%d body=%s", invalid.Code, invalid.Body.String())
 	}
 }
 
 func TestRuntimeCollectsHTTPOnlyAndCompleteModuleActionManifests(t *testing.T) {
-	httpOnly := runtimeHTTPOnlySurfaceBinding{surfaces: []modulehttp.Surface{runtimeModuleSurface{owner: "notification"}}}
-	completeSurface := runtimeModuleSurface{owner: "agent"}
-	httpAction := completeSurface.Routes()[0].Action
+	httpOnly := runtimeHTTPOnlyAdapterBinding{adapters: []modulehttp.Adapter{runtimeModuleAdapter{owner: "notification"}}}
+	completeAdapter := runtimeModuleAdapter{owner: "agent"}
+	httpAction := completeAdapter.Routes()[0].Action
 	nonHTTPAction := actioncontract.CloneDefinition(httpAction)
 	nonHTTPAction.Key = "agent.tasks.run"
 	nonHTTPAction.CapabilityKey = "agent.tasks"
@@ -157,7 +164,7 @@ func TestRuntimeCollectsHTTPOnlyAndCompleteModuleActionManifests(t *testing.T) {
 	nonHTTPAction.HTTP = nil
 	nonHTTPAction.NonHTTP = []actioncontract.NonHTTPBinding{{Kind: "agent", InvocationKey: "agent.tasks.run"}}
 	complete := runtimeCompleteAuthorizationBinding{
-		actions: []actioncontract.ActionDefinition{httpAction, nonHTTPAction}, surfaces: []modulehttp.Surface{completeSurface},
+		actions: []actioncontract.ActionDefinition{httpAction, nonHTTPAction}, adapters: []modulehttp.Adapter{completeAdapter},
 	}
 
 	inventory := newRuntimeModuleBindingInventory(httpOnly, complete)
@@ -180,7 +187,7 @@ func TestRuntimeCollectsHTTPOnlyAndCompleteModuleActionManifests(t *testing.T) {
 
 	complete.actions[0].Label = "Drifted source manifest"
 	if _, err := newRuntimeModuleBindingInventory(complete).AuthorizationActions(); err == nil {
-		t.Fatal("Runtime accepted an HTTP Surface that drifted from the complete module manifest")
+		t.Fatal("Runtime accepted an HTTP Adapter that drifted from the complete module manifest")
 	}
 }
 
@@ -217,9 +224,9 @@ func TestRuntimeValidatesSchedulerHostFacadeFromItsSourceManifest(t *testing.T) 
 	}
 }
 
-var _ modulehttp.Surface = runtimeModuleSurface{}
-var _ modulehttp.Provider = runtimeHTTPOnlySurfaceBinding{}
-var _ modulehttp.Provider = runtimeDataExchangeSurfaceBinding{}
+var _ modulehttp.Adapter = runtimeModuleAdapter{}
+var _ modulehttp.Provider = runtimeHTTPOnlyAdapterBinding{}
+var _ modulehttp.Provider = runtimeDataExchangeAdapterBinding{}
 var _ modulehttp.Provider = runtimeCompleteAuthorizationBinding{}
 var _ actioncontract.Provider = runtimeCompleteAuthorizationBinding{}
 var _ actioncontract.Provider = runtimeActionManifestBinding{}

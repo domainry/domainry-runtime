@@ -110,12 +110,12 @@ func TestWorkflowProcessTimerNodeBoundaries(t *testing.T) {
 }
 
 func TestWorkflowRemainingProjectionSchedulingAndSimulationBranches(t *testing.T) {
-	withoutGraph := ProjectBusinessWorkflowProcessDetail(WorkflowProcessDetail{Nodes: []workflowmodel.WorkflowNodeInstance{{ID: "instance", NodeID: "node"}}})
+	withoutGraph := ProjectParticipantWorkflowProcessDetail(WorkflowProcessDetail{Nodes: []workflowmodel.WorkflowNodeInstance{{ID: "instance", NodeID: "node"}}})
 	if withoutGraph.Nodes[0].Name != "node" {
 		t.Fatalf("without graph=%+v", withoutGraph.Nodes)
 	}
 	graph := &definitionmodel.WorkflowGraphSchema{Nodes: []definitionmodel.WorkflowGraphNode{{ID: "other"}, {ID: "node", Contract: &definitionmodel.WorkflowNodeContract{}}}}
-	withFallbacks := ProjectBusinessWorkflowProcessDetail(WorkflowProcessDetail{
+	withFallbacks := ProjectParticipantWorkflowProcessDetail(WorkflowProcessDetail{
 		Process: workflowmodel.WorkflowProcessInstance{DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: graph}},
 		Nodes:   []workflowmodel.WorkflowNodeInstance{{ID: "instance", NodeID: "node"}},
 	})

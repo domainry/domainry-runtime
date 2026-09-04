@@ -16,7 +16,7 @@ func newStartedOperationsReceipt(t *testing.T) (*OperationsApplicationService, *
 	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	service := NewOperationsApplicationService(repository, nil, func() time.Time { return now }, func() string { return "transition" })
 	request := OperationsSubmitRequest{Kind: "retention.cleanup", ResourceType: "retention_policy", ResourceID: "policy-1", Reason: "cleanup"}
-	receipt, _, err := service.Submit(t.Context(), request, "key", operationsTestAdmin())
+	receipt, _, err := service.Submit(t.Context(), request, "key", operationsAdminPrincipal())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func newStartedOperationsReceipt(t *testing.T) (*OperationsApplicationService, *
 }
 
 func TestOperationsSubmitAndStartFailureBoundaries(t *testing.T) {
-	admin := operationsTestAdmin()
+	admin := operationsAdminPrincipal()
 	request := OperationsSubmitRequest{Kind: "retention.cleanup", ResourceType: "retention_policy", Reason: "cleanup"}
 	var nilService *OperationsApplicationService
 	if _, _, err := nilService.submit(t.Context(), request, "runtime.operations.run_lifecycle_cleanup_job", "key", admin.UserID, operationsmodel.OperationsScope{WorkspaceID: admin.WorkspaceID}); apperror.CodeOf(err) != "backend.operations.repository_unavailable" {

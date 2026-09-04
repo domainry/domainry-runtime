@@ -46,18 +46,10 @@ func TestBusinessProfileDeactivationFieldContract(t *testing.T) {
 		t.Fatalf("inactive restoration accepted: %v", err)
 	}
 	extension.BusinessIdentity.StatusField = ""
-	extension.Directory.StatusField = "directory_status"
-	if field, err := businessProfileDeactivationField(service, "member_profile", "cancelled"); err != nil || field != "directory_status" {
-		t.Fatalf("directory field=%q err=%v", field, err)
-	}
-	if field, err := businessProfileReactivationField(service, "member_profile", "trial"); err != nil || field != "directory_status" {
-		t.Fatalf("reactivation directory field=%q err=%v", field, err)
-	}
-	extension.Directory.StatusField = ""
 	if _, err := businessProfileReactivationField(service, "member_profile", "trial"); apperror.CodeOf(err) != "backend.identity.profile_reactivation_status_required" {
 		t.Fatalf("missing reactivation status field err=%v", err)
 	}
-	extension.Directory.StatusField = "directory_status"
+	extension.BusinessIdentity.StatusField = "member_status"
 	if _, err := businessProfileReactivationField(nil, "member_profile", "trial"); apperror.CodeOf(err) != "backend.identity.profile_binding_unavailable" {
 		t.Fatalf("missing reactivation service err=%v", err)
 	}
@@ -144,8 +136,8 @@ func TestBusinessProfileLifecycleDefinitionErrorsSkipsAndExpectedRevision(t *tes
 		return []profilebindingmodel.Binding{{ObjectKey: "profile", BusinessIdentity: binding}}
 	}
 	service := &RecordApplicationService{update: NewRecordUpdateApplicationService(dependencies), identityProfileExtensions: applicationSource}
-	deactivateContext := businessProfileAuthorizedContext(t, "POST /objects/{objectKey}/records/{recordID}/deactivate-profile")
-	reactivateContext := businessProfileAuthorizedContext(t, "POST /objects/{objectKey}/records/{recordID}/reactivate-profile")
+	deactivateContext := businessProfileAuthorizedContext(t, "POST /records/objects/{objectKey}/records/{recordID}/deactivate-profile")
+	reactivateContext := businessProfileAuthorizedContext(t, "POST /records/objects/{objectKey}/records/{recordID}/reactivate-profile")
 	if _, err := service.DeactivateBusinessProfile(deactivateContext, "profile", "profile-1", "inactive", " revision-1 ", "deactivate-key", principal); apperror.CodeOf(err) != "backend.idempotency.receipt_unavailable" {
 		t.Fatalf("deactivate err=%v", err)
 	}
@@ -161,7 +153,7 @@ func TestBusinessProfileLifecycleDefinitionErrorsSkipsAndExpectedRevision(t *tes
 }
 
 func TestBusinessProfileActionMutationContextPreservesGeneratedActionAndLimitsField(t *testing.T) {
-	ctx := businessProfileAuthorizedContext(t, "POST /objects/{objectKey}/records/{recordID}/deactivate-profile")
+	ctx := businessProfileAuthorizedContext(t, "POST /records/objects/{objectKey}/records/{recordID}/deactivate-profile")
 	ctx, err := businessProfileActionMutationContext(ctx, " member_profile ", " status ")
 	if err != nil {
 		t.Fatal(err)

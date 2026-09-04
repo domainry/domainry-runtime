@@ -22,7 +22,7 @@ type RecordRelationValidationDependencies struct {
 	Object                   func(context.Context, string) (definitionmodel.ObjectSchema, bool)
 	CanAccessRecord          func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	CanAccessPersistedRecord func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) (bool, error)
-	Identity                 identitysdk.Directory
+	Identity                 identitysdk.Projection
 }
 
 type RecordRelationValidator struct {
@@ -30,7 +30,7 @@ type RecordRelationValidator struct {
 	object                   func(context.Context, string) (definitionmodel.ObjectSchema, bool)
 	canAccessRecord          func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	canAccessPersistedRecord func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) (bool, error)
-	identity                 identitysdk.Directory
+	identity                 identitysdk.Projection
 }
 
 type recordPlannedRelationsContextKey struct{}
@@ -112,7 +112,7 @@ func (s *RecordRelationValidator) Validate(ctx context.Context, object definitio
 		recordID := strings.TrimSpace(fmt.Sprint(data[field.Key]))
 		if target == definitioncontract.IdentityUserObjectKey {
 			if s.identity == nil {
-				return recordInternalError("check identity user relation", fmt.Errorf("identity directory is not configured"))
+				return recordInternalError("check identity user relation", fmt.Errorf("identity projection is not configured"))
 			}
 			_, found, err := s.identity.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(recordID)})
 			if err != nil {
@@ -125,7 +125,7 @@ func (s *RecordRelationValidator) Validate(ctx context.Context, object definitio
 		}
 		if target == definitioncontract.IdentityOrganizationUnitObjectKey {
 			if s.identity == nil {
-				return recordInternalError("check identity organization unit relation", fmt.Errorf("identity directory is not configured"))
+				return recordInternalError("check identity organization unit relation", fmt.Errorf("identity projection is not configured"))
 			}
 			_, found, err := s.identity.FindOrganizationUnit(ctx, identitysdk.OrganizationUnitLookup{OrgID: recordID})
 			if err != nil {

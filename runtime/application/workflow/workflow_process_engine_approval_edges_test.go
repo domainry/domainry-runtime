@@ -14,15 +14,15 @@ import (
 )
 
 type workflowApprovalIdentityStub struct {
-	workflowDirectoryTestStub
-	users          map[string]identitysdk.User
-	findErr        map[string]error
-	directoryUsers []identitysdk.User
-	roles          []identitysdk.Role
-	assignments    map[string][]identitysdk.UserRoleAssignment
-	usersErr       error
-	rolesErr       error
-	assignmentErr  error
+	workflowIdentityProjectionTestStub
+	users         map[string]identitysdk.User
+	findErr       map[string]error
+	identityUsers []identitysdk.User
+	roles         []identitysdk.Role
+	assignments   map[string][]identitysdk.UserRoleAssignment
+	usersErr      error
+	rolesErr      error
+	assignmentErr error
 }
 
 func (s workflowApprovalIdentityStub) FindUser(_ context.Context, lookup identitysdk.UserLookup) (identitysdk.User, bool, error) {
@@ -33,9 +33,9 @@ func (s workflowApprovalIdentityStub) FindUser(_ context.Context, lookup identit
 	user, ok := s.users[id]
 	return user, ok, nil
 }
-func (s workflowApprovalIdentityStub) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
-	if s.usersErr != nil || len(s.directoryUsers) > 0 {
-		return s.directoryUsers, s.usersErr
+func (s workflowApprovalIdentityStub) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
+	if s.usersErr != nil || len(s.identityUsers) > 0 {
+		return s.identityUsers, s.usersErr
 	}
 	users := make([]identitysdk.User, 0, len(s.users))
 	for id, user := range s.users {
@@ -46,7 +46,7 @@ func (s workflowApprovalIdentityStub) ListUsers(context.Context, identitysdk.Dir
 	}
 	return users, nil
 }
-func (s workflowApprovalIdentityStub) ListRoles(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.Role, error) {
+func (s workflowApprovalIdentityStub) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	return s.roles, s.rolesErr
 }
 func (s workflowApprovalIdentityStub) ListUserRoleAssignments(_ context.Context, query identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
@@ -65,7 +65,7 @@ func (s workflowApprovalIdentityStub) ListUserRoleAssignments(_ context.Context,
 	}
 	return s.assignments[id], s.assignmentErr
 }
-func workflowEngineEdge(store *workflowProcessStoreEdgeStub, identity identitysdk.Directory, invoke func(context.Context, WorkflowBusinessActionInvocation) (WorkflowBusinessActionInvocationResult, error)) *WorkflowProcessEngine {
+func workflowEngineEdge(store *workflowProcessStoreEdgeStub, identity identitysdk.Projection, invoke func(context.Context, WorkflowBusinessActionInvocation) (WorkflowBusinessActionInvocationResult, error)) *WorkflowProcessEngine {
 	return NewWorkflowProcessEngine(WorkflowDependencies{Processes: store, Identity: identity, Schema: workflowSchemaProviderEdgeStub{}, InvokeAction: invoke})
 }
 
@@ -374,8 +374,8 @@ func TestWorkflowApprovalResolverTaskAndAggregationOutcomes(t *testing.T) {
 			"employee":  {ID: "employee", ManagerUserID: "manager", Status: identitysdk.UserStatusActive},
 			"manager":   {ID: "manager", Name: "Manager", Status: identitysdk.UserStatusActive},
 		},
-		directoryUsers: []identitysdk.User{{ID: "role-user", Status: identitysdk.UserStatusActive}, {ID: "disabled", Status: "disabled"}},
-		roles:          []identitysdk.Role{{ID: "role-id", Key: "approver"}}, assignments: map[string][]identitysdk.UserRoleAssignment{"role-user": {{UserID: "role-user", RoleID: "role-id"}}, "disabled": {{UserID: "disabled", RoleID: "role-id"}}},
+		identityUsers: []identitysdk.User{{ID: "role-user", Status: identitysdk.UserStatusActive}, {ID: "disabled", Status: "disabled"}},
+		roles:         []identitysdk.Role{{ID: "role-id", Key: "approver"}}, assignments: map[string][]identitysdk.UserRoleAssignment{"role-user": {{UserID: "role-user", RoleID: "role-id"}}, "disabled": {{UserID: "disabled", RoleID: "role-id"}}},
 	}
 	store := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}}
 	engine := workflowEngineEdge(store, identity, nil)
@@ -519,7 +519,7 @@ func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.
 		"roles":        {rolesErr: errors.New("roles")},
 		"missing role": {roles: []identitysdk.Role{}},
 		"users":        {roles: []identitysdk.Role{{ID: "role", Key: "approver"}}, usersErr: errors.New("users")},
-		"assignments":  {roles: []identitysdk.Role{{ID: "role", Key: "approver"}}, directoryUsers: []identitysdk.User{{ID: "user", Status: identitysdk.UserStatusActive}}, assignmentErr: errors.New("assignments")},
+		"assignments":  {roles: []identitysdk.Role{{ID: "role", Key: "approver"}}, identityUsers: []identitysdk.User{{ID: "user", Status: identitysdk.UserStatusActive}}, assignmentErr: errors.New("assignments")},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := workflowEngineEdge(store, identity, nil).usersForApprovalRole(t.Context(), "approver"); err == nil {
@@ -527,11 +527,11 @@ func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.
 			}
 		})
 	}
-	roleByID := workflowApprovalIdentityStub{roles: []identitysdk.Role{{ID: "irrelevant", Key: "irrelevant"}, {ID: "role-id", Key: "approver"}}, directoryUsers: []identitysdk.User{{ID: "matched", Status: identitysdk.UserStatusActive}, {ID: "unmatched", Status: identitysdk.UserStatusActive}}, assignments: map[string][]identitysdk.UserRoleAssignment{"matched": {{RoleID: "role-id"}}, "unmatched": {{RoleID: "other"}}}}
+	roleByID := workflowApprovalIdentityStub{roles: []identitysdk.Role{{ID: "irrelevant", Key: "irrelevant"}, {ID: "role-id", Key: "approver"}}, identityUsers: []identitysdk.User{{ID: "matched", Status: identitysdk.UserStatusActive}, {ID: "unmatched", Status: identitysdk.UserStatusActive}}, assignments: map[string][]identitysdk.UserRoleAssignment{"matched": {{RoleID: "role-id"}}, "unmatched": {{RoleID: "other"}}}}
 	if users, err := workflowEngineEdge(store, roleByID, nil).usersForApprovalRole(t.Context(), "role-id"); err != nil || len(users) != 1 {
 		t.Fatalf("role by id users=%v err=%v", users, err)
 	}
-	adminIdentity := workflowApprovalIdentityStub{roles: []identitysdk.Role{{ID: "admin-role", Key: "admin"}}, directoryUsers: []identitysdk.User{{ID: "admin", Status: identitysdk.UserStatusActive}}, assignments: map[string][]identitysdk.UserRoleAssignment{"admin": {{RoleID: "admin-role"}}}}
+	adminIdentity := workflowApprovalIdentityStub{roles: []identitysdk.Role{{ID: "admin-role", Key: "admin"}}, identityUsers: []identitysdk.User{{ID: "admin", Status: identitysdk.UserStatusActive}}, assignments: map[string][]identitysdk.UserRoleAssignment{"admin": {{RoleID: "admin-role"}}}}
 	adminNode := definitionmodel.WorkflowGraphNode{Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{EmptyAssigneePolicy: "admin"}}}
 	if users, role, err := workflowEngineEdge(store, adminIdentity, nil).resolveApprovalAssignees(t.Context(), process, adminNode, principal); err != nil || role != "admin" || len(users) != 1 {
 		t.Fatalf("admin fallback users=%v role=%s err=%v", users, role, err)

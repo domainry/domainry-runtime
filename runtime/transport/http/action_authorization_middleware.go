@@ -66,18 +66,18 @@ func matchedRouteValue(routeTemplate, requestPath, name string) string {
 func defaultObjectOperation(method, routeTemplate string) (string, bool) {
 	identity := strings.ToUpper(strings.TrimSpace(method)) + " " + strings.TrimSpace(routeTemplate)
 	switch identity {
-	case "GET /objects/{objectKey}/records",
-		"GET /objects/{objectKey}/records/{recordID}",
-		"GET /objects/{objectKey}/records/{recordID}/references",
-		"GET /objects/{objectKey}/records/{recordID}/related/{relatedObjectKey}":
+	case "GET /records/objects/{objectKey}/records",
+		"GET /records/objects/{objectKey}/records/{recordID}",
+		"GET /records/objects/{objectKey}/records/{recordID}/references",
+		"GET /records/objects/{objectKey}/records/{recordID}/related/{relatedObjectKey}":
 		return "read", true
-	case "POST /objects/{objectKey}/records":
+	case "POST /records/objects/{objectKey}/records":
 		return "create", true
-	case "PATCH /objects/{objectKey}/records/{recordID}":
+	case "PATCH /records/objects/{objectKey}/records/{recordID}":
 		return "update", true
-	case "DELETE /objects/{objectKey}/records/{recordID}":
+	case "DELETE /records/objects/{objectKey}/records/{recordID}":
 		return "delete", true
-	case "POST /objects/{objectKey}/records/export":
+	case "POST /records/objects/{objectKey}/records/export":
 		return "export", true
 	default:
 		return "", false
@@ -89,9 +89,9 @@ func authoredActionRoute(method, routeTemplate string) bool {
 		return false
 	}
 	switch strings.TrimSpace(routeTemplate) {
-	case "/objects/{objectKey}/actions/{actionKey}/run",
-		"/objects/{objectKey}/actions/{actionKey}/bulk",
-		"/objects/{objectKey}/records/{recordID}/actions/{actionKey}":
+	case "/records/objects/{objectKey}/actions/{actionKey}/run",
+		"/records/objects/{objectKey}/actions/{actionKey}/bulk",
+		"/records/objects/{objectKey}/records/{recordID}/actions/{actionKey}":
 		return true
 	default:
 		return false
@@ -103,7 +103,7 @@ func workflowRunRoute(method, routeTemplate string) bool {
 		return false
 	}
 	switch strings.TrimSpace(routeTemplate) {
-	case "/business/workflows/{workflowKey}/run", "/portal/workflows/{workflowKey}/run":
+	case "/workflow/definitions/{workflowKey}/run":
 		return true
 	default:
 		return false

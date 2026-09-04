@@ -25,7 +25,7 @@ type WorkflowDependencies struct {
 	WorkflowRegistry         WorkflowRegistry
 	WaitTimers               WorkflowWaitTimerService
 	ApprovalDeadlineTimers   WorkflowApprovalDeadlineTimerService
-	Identity                 identitysdk.Directory
+	Identity                 identitysdk.Projection
 	Principals               identitysdk.PrincipalResolver
 	Schema                   WorkflowSchemaProvider
 	RecordReader             WorkflowRecordReader

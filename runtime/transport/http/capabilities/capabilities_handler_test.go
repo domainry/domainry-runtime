@@ -34,7 +34,7 @@ func TestPlatformCapabilitiesUsesAuthenticatedPrincipal(t *testing.T) {
 		WriteServiceError: func(http.ResponseWriter, *http.Request, error) { t.Fatal("unexpected service error") },
 	})
 	response := httptest.NewRecorder()
-	handler.platformCapabilities(response, httptest.NewRequest(http.MethodGet, "/tenant-admin/platform-capabilities", nil))
+	handler.platformCapabilities(response, httptest.NewRequest(http.MethodGet, "/capabilities", nil))
 	if response.Code != http.StatusOK || captured.UserID != authenticated.UserID || !captured.Known {
 		t.Fatalf("status=%d captured principal=%#v", response.Code, captured)
 	}
@@ -53,7 +53,7 @@ func TestPlatformCapabilitiesAllowsAuthenticatedPrincipal(t *testing.T) {
 		WriteServiceError: func(http.ResponseWriter, *http.Request, error) { t.Fatal("unexpected service error") },
 	})
 	response := httptest.NewRecorder()
-	handler.platformCapabilities(response, httptest.NewRequest(http.MethodGet, "/tenant-admin/platform-capabilities", nil))
+	handler.platformCapabilities(response, httptest.NewRequest(http.MethodGet, "/capabilities", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("status=%d", response.Code)
 	}
@@ -78,10 +78,10 @@ func TestCapabilityDiscoveryRoutesLoadIndexDomainDetailAndReferences(t *testing.
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	for _, path := range []string{
-		"/tenant-admin/platform-capabilities/index",
-		"/tenant-admin/platform-capabilities/domains/schema?status=supported",
-		"/tenant-admin/platform-capabilities/capabilities/schema.object",
-		"/tenant-admin/platform-capabilities/references/field_key?scope=order",
+		"/capabilities/index",
+		"/capabilities/domains/schema?status=supported",
+		"/capabilities/schema.object",
+		"/capabilities/references/field_key?scope=order",
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
@@ -97,7 +97,7 @@ func TestCapabilityDiscoveryRoutesLoadIndexDomainDetailAndReferences(t *testing.
 		}
 	}
 	external := httptest.NewRecorder()
-	mux.ServeHTTP(external, httptest.NewRequest(http.MethodGet, "/tenant-admin/platform-capabilities/capabilities/integration.connection", nil))
+	mux.ServeHTTP(external, httptest.NewRequest(http.MethodGet, "/capabilities/integration.connection", nil))
 	if external.Code != http.StatusBadRequest {
 		t.Fatalf("external owner capability remained in Runtime discovery: status=%d body=%s", external.Code, external.Body.String())
 	}
@@ -120,8 +120,8 @@ func TestCapabilityIndexExpandsEndpointContractsOnlyOnExplicitRequest(t *testing
 		path     string
 		expanded bool
 	}{
-		{path: "/tenant-admin/platform-capabilities/index"},
-		{path: "/tenant-admin/platform-capabilities/index?include=endpoint_contracts", expanded: true},
+		{path: "/capabilities/index"},
+		{path: "/capabilities/index?include=endpoint_contracts", expanded: true},
 	} {
 		response := httptest.NewRecorder()
 		handler.capabilityIndex(response, httptest.NewRequest(http.MethodGet, test.path, nil))
@@ -159,10 +159,10 @@ func TestCapabilityDiscoveryHandlersMapAuthorizationAndHashFailures(t *testing.T
 		path string
 		call func(http.ResponseWriter, *http.Request)
 	}{
-		{path: "/tenant-admin/platform-capabilities/index", call: handler.capabilityIndex},
-		{path: "/tenant-admin/platform-capabilities/domains/schema", call: handler.capabilityDomain},
-		{path: "/tenant-admin/platform-capabilities/capabilities/schema.object", call: handler.capabilityDetail},
-		{path: "/tenant-admin/platform-capabilities/references/object_key", call: handler.capabilityReferences},
+		{path: "/capabilities/index", call: handler.capabilityIndex},
+		{path: "/capabilities/domains/schema", call: handler.capabilityDomain},
+		{path: "/capabilities/schema.object", call: handler.capabilityDetail},
+		{path: "/capabilities/references/object_key", call: handler.capabilityReferences},
 	} {
 		request := httptest.NewRequest(http.MethodGet, test.path, nil)
 		request.SetPathValue("domainKey", "schema")
@@ -178,7 +178,7 @@ func TestCapabilityDiscoveryHandlersMapAuthorizationAndHashFailures(t *testing.T
 	handler.principal = func(*http.Request) principalmodel.Principal {
 		return principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}
 	}
-	request := httptest.NewRequest(http.MethodGet, "/tenant-admin/platform-capabilities/index", nil)
+	request := httptest.NewRequest(http.MethodGet, "/capabilities/index", nil)
 	request.Header.Set("If-Match-Contract-Hash", "stale-contract")
 	response := httptest.NewRecorder()
 	handler.capabilityIndex(response, request)

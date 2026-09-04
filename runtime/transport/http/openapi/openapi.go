@@ -17,10 +17,10 @@ func Build(snapshot appschemamodel.ApplicationSchemaSnapshot) map[string]any {
 }
 
 func BuildWithProductBrand(snapshot appschemamodel.ApplicationSchemaSnapshot, productBrandName string) map[string]any {
-	return BuildWithModuleHTTPSurfaces(snapshot, productBrandName, nil)
+	return BuildWithModuleHTTPAdapters(snapshot, productBrandName, nil)
 }
 
-func BuildWithModuleHTTPSurfaces(snapshot appschemamodel.ApplicationSchemaSnapshot, productBrandName string, surfaces []modulehttp.Surface) map[string]any {
+func BuildWithModuleHTTPAdapters(snapshot appschemamodel.ApplicationSchemaSnapshot, productBrandName string, adapters []modulehttp.Adapter) map[string]any {
 	productBrandName = productbrand.ResolveName(productBrandName)
 	paths := map[string]any{}
 	components := map[string]any{
@@ -103,14 +103,14 @@ func BuildWithModuleHTTPSurfaces(snapshot appschemamodel.ApplicationSchemaSnapsh
 		path := "/operations/idempotency/receipts/{owner}/{receiptID}/" + operation
 		paths[path] = map[string]any{"post": openAPIOperation(operation+"IdempotencyReceipt", "Operations", "Safely "+operation+" an eligible idempotency receipt", openAPIAdminSecurity(), openAPIJSONResponse("Operation result", openAPIObject(nil)))}
 	}
-	paths["/tenant-admin/metadata/manifests/current"] = map[string]any{"get": openAPIOperation("getCurrentRuntimeManifest", "Provision", "Authenticated read of the installed Runtime-native manifest", openAPIAdminSecurity(), openAPIJSONResponse("Installed manifest", openAPIObject(nil)))}
-	paths["/permissions/effective"] = map[string]any{
+	paths["/metadata/manifests/current"] = map[string]any{"get": openAPIOperation("getCurrentRuntimeManifest", "Provision", "Authenticated read of the installed Runtime-native manifest", openAPIAdminSecurity(), openAPIJSONResponse("Installed manifest", openAPIObject(nil)))}
+	paths["/records/permissions/effective"] = map[string]any{
 		"get": openAPIOperation("getEffectivePermissions", "Permissions", "Effective generated-app principal permissions; optional object_key and record_id apply the same record RLS decision used by Action execution", openAPIAdminSecurity(), openAPIJSONResponse("Effective permissions", openAPIObject(nil))),
 	}
 	paths["/openapi.json"] = map[string]any{
 		"get": openAPIOperation("getOpenAPI", "OpenAPI", "Authenticated generated OpenAPI document", openAPIAdminSecurity(), openAPIJSONResponse("OpenAPI document", openAPIObject(nil))),
 	}
-	paths["/events/business"] = map[string]any{
+	paths["/business-events/stream"] = map[string]any{
 		"get": openAPIOperation(
 			"subscribeBusinessEvents", "Events", "Subscribe to tenant-scoped refresh signals; refetch durable state through authorized Runtime APIs",
 			openAPIAdminSecurity(),
@@ -131,14 +131,14 @@ func BuildWithModuleHTTPSurfaces(snapshot appschemamodel.ApplicationSchemaSnapsh
 		addActionOpenAPIPath(paths, action)
 	}
 	addPublicationHandoffOpenAPIPaths(paths)
-	paths["/v1/scheduler-triggers:accept"] = map[string]any{"post": openAPIOperation("acceptSchedulerTrigger", "Scheduler Dispatch Gateway", "Identity-authenticated execution callback for one Scheduler-owned run", openAPIProtocolAudience("scheduler_service_service"), openAPIServiceCredentialSecurity(), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Stable downstream receipt", openAPIObject(nil)))}
+	paths["/scheduler/triggers/accept"] = map[string]any{"post": openAPIOperation("acceptSchedulerTrigger", "Scheduler Dispatch Gateway", "Identity-authenticated execution callback for one Scheduler-owned run", openAPIProtocolAudience("scheduler_service_service"), openAPIServiceCredentialSecurity(), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Stable downstream receipt", openAPIObject(nil)))}
 	addOwnerOperationsReceiptOpenAPIContracts(paths)
 	applyCompiledEndpointContracts(paths)
 	annotateStaticModuleOwnerFallbacks(paths)
 	// Capability-owned OpenAPI and governance are authoritative for mounted
 	// module routes. Static Runtime contracts remain only for Runtime-owned
 	// endpoints and the temporary fallback used before a module is bound.
-	annotateModuleOwnedOpenAPIPaths(paths, surfaces)
+	annotateModuleOwnedOpenAPIPaths(paths, adapters)
 	return map[string]any{
 		"openapi": "3.1.0",
 		"info": map[string]any{
@@ -156,13 +156,13 @@ func BuildWithModuleHTTPSurfaces(snapshot appschemamodel.ApplicationSchemaSnapsh
 	}
 }
 
-func annotateModuleOwnedOpenAPIPaths(paths map[string]any, surfaces []modulehttp.Surface) {
-	for _, surface := range surfaces {
-		if surface == nil {
+func annotateModuleOwnedOpenAPIPaths(paths map[string]any, adapters []modulehttp.Adapter) {
+	for _, adapter := range adapters {
+		if adapter == nil {
 			continue
 		}
-		owner, surfaceName := strings.TrimSpace(surface.Owner()), strings.TrimSpace(surface.Name())
-		for _, route := range surface.Routes() {
+		owner, adapterName := strings.TrimSpace(adapter.Owner()), strings.TrimSpace(adapter.Name())
+		for _, route := range adapter.Routes() {
 			pattern := strings.TrimSpace(route.Pattern())
 			method, path, found := strings.Cut(pattern, " ")
 			if !found || owner == "" || !isOpenAPIHTTPMethod(method) {
@@ -175,7 +175,7 @@ func annotateModuleOwnedOpenAPIPaths(paths map[string]any, surfaces []modulehttp
 				paths[path] = pathSpec
 			}
 			operation, _ := pathSpec[method].(map[string]any)
-			if provider, ok := surface.(modulehttp.OpenAPIProvider); ok {
+			if provider, ok := adapter.(modulehttp.OpenAPIProvider); ok {
 				if owned := provider.OpenAPIOperations()[pattern]; len(owned) != 0 {
 					operation = cloneOpenAPIOperation(owned)
 					pathSpec[method] = operation
@@ -190,17 +190,17 @@ func annotateModuleOwnedOpenAPIPaths(paths map[string]any, surfaces []modulehttp
 				operation = openAPIOperation(
 					moduleHTTPOperationID(method, path),
 					moduleHTTPLabel(owner),
-					moduleHTTPLabel(owner)+" "+strings.ReplaceAll(surfaceName, "_", " "),
+					moduleHTTPLabel(owner)+" "+strings.ReplaceAll(adapterName, "_", " "),
 					arguments...,
 				)
 				pathSpec[method] = operation
 			}
-			applyModuleHTTPRouteMetadata(operation, path, owner, surfaceName, routeModuleHTTPContractVersion(surface), route)
+			applyModuleHTTPRouteMetadata(operation, path, owner, adapterName, routeModuleHTTPContractVersion(adapter), route)
 		}
 	}
 }
 
-func applyModuleHTTPRouteMetadata(operation map[string]any, path, owner, surfaceName, contractVersion string, route modulehttp.Route) {
+func applyModuleHTTPRouteMetadata(operation map[string]any, path, owner, adapterName, contractVersion string, route modulehttp.Route) {
 	ensureModuleHTTPPathParameters(operation, path)
 	exposures := make([]string, 0, len(route.Action.Exposures))
 	for _, exposure := range route.Action.Exposures {
@@ -214,7 +214,7 @@ func applyModuleHTTPRouteMetadata(operation map[string]any, path, owner, surface
 	operation["x-domainry-module-route"] = map[string]any{
 		"contract_version": contractVersion,
 		"owner":            owner,
-		"surface":          surfaceName,
+		"adapter":          adapterName,
 		"action_key":       route.Action.Key,
 		"exposures":        exposures,
 		"authorization":    string(route.Action.Authorization.Strategy),
@@ -348,11 +348,11 @@ func moduleHTTPPathParameters(path string) []string {
 	return parameters
 }
 
-func routeModuleHTTPContractVersion(surface modulehttp.Surface) string {
-	if surface == nil {
+func routeModuleHTTPContractVersion(adapter modulehttp.Adapter) string {
+	if adapter == nil {
 		return ""
 	}
-	return surface.ContractVersion()
+	return adapter.ContractVersion()
 }
 
 func moduleHTTPRouteSecurity(route modulehttp.Route) openAPISecurity {

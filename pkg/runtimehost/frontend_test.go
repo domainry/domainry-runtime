@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-func TestPackagedFrontendServesBusinessPortalAndAssetsWithoutOwningAPIRoutes(t *testing.T) {
+func TestPackagedFrontendServesHTMLNavigationAndAssetsWithoutOwningAPIRoutes(t *testing.T) {
 	root := t.TempDir()
 	binary := filepath.Join(root, "bin", "domainry-runtime")
 	if err := os.MkdirAll(filepath.Dir(binary), 0o755); err != nil {
@@ -29,9 +29,9 @@ func TestPackagedFrontendServesBusinessPortalAndAssetsWithoutOwningAPIRoutes(t *
 	var buffer bytes.Buffer
 	writer := tar.NewWriter(&buffer)
 	for name, content := range map[string]string{
-		"index.html":                  "<!doctype html><div id=\"root\"></div>",
-		"assets/application.js":       "globalThis.__domainry = true",
-		"surface-asset-manifest.json": `{"contract_version":"domainry-surface-asset-manifest-v1"}`,
+		"index.html":            "<!doctype html><div id=\"root\"></div>",
+		"assets/application.js": "globalThis.__domainry = true",
+		"asset-manifest.json":   `{"contract_version":"domainry-asset-manifest-v1"}`,
 	} {
 		value := []byte(content)
 		if err := writer.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: int64(len(value)), Typeflag: tar.TypeReg}); err != nil {
@@ -61,9 +61,11 @@ func TestPackagedFrontendServesBusinessPortalAndAssetsWithoutOwningAPIRoutes(t *
 		writer.WriteHeader(http.StatusTeapot)
 		_, _ = writer.Write([]byte("api"))
 	}))
-	for _, path := range []string{"/business", "/business/login", "/portal", "/portal/orders/one"} {
+	for _, path := range []string{"/", "/orders", "/orders/one"} {
 		response := httptest.NewRecorder()
-		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.Header.Set("Accept", "text/html,application/xhtml+xml")
+		handler.ServeHTTP(response, request)
 		if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`id="root"`)) {
 			t.Fatalf("%s response=%d %q", path, response.Code, response.Body.String())
 		}
@@ -74,19 +76,26 @@ func TestPackagedFrontendServesBusinessPortalAndAssetsWithoutOwningAPIRoutes(t *
 		t.Fatalf("asset response=%d %q", asset.Code, asset.Body.String())
 	}
 	api := httptest.NewRecorder()
-	handler.ServeHTTP(api, httptest.NewRequest(http.MethodGet, "/objects/orders/records", nil))
+	handler.ServeHTTP(api, httptest.NewRequest(http.MethodGet, "/records/objects/orders/records", nil))
 	if api.Code != http.StatusTeapot || api.Body.String() != "api" {
 		t.Fatalf("api response=%d %q", api.Code, api.Body.String())
 	}
 	prefixedAPI := httptest.NewRecorder()
-	handler.ServeHTTP(prefixedAPI, httptest.NewRequest(http.MethodGet, "/api/objects/orders/records", nil))
-	if prefixedAPI.Code != http.StatusTeapot || forwardedPath != "/objects/orders/records" {
+	handler.ServeHTTP(prefixedAPI, httptest.NewRequest(http.MethodGet, "/api/records/objects/orders/records", nil))
+	if prefixedAPI.Code != http.StatusTeapot || forwardedPath != "/records/objects/orders/records" {
 		t.Fatalf("prefixed API response=%d path=%q", prefixedAPI.Code, forwardedPath)
 	}
 	post := httptest.NewRecorder()
-	handler.ServeHTTP(post, httptest.NewRequest(http.MethodPost, "/business", nil))
+	postRequest := httptest.NewRequest(http.MethodPost, "/orders", nil)
+	postRequest.Header.Set("Accept", "text/html")
+	handler.ServeHTTP(post, postRequest)
 	if post.Code != http.StatusTeapot {
 		t.Fatalf("non-GET frontend path response=%d", post.Code)
+	}
+	jsonRequest := httptest.NewRecorder()
+	handler.ServeHTTP(jsonRequest, httptest.NewRequest(http.MethodGet, "/orders", nil))
+	if jsonRequest.Code != http.StatusTeapot {
+		t.Fatalf("non-HTML frontend path response=%d", jsonRequest.Code)
 	}
 }
 

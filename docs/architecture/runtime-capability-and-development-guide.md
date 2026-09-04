@@ -112,12 +112,12 @@ LIMIT 100
 
 | 接入者只需要选择或提供 | Runtime 自动保证 | 项目获得的灵活性 |
 | --- | --- | --- |
-| 为某个能力注入 Module Factory 或 Remote Factory | Binding/Descriptor、协议、mode、capability 和必要 surface 校验；Runtime 不复制模块私有状态 | 同一业务可以先共进程部署，再按容量和隔离需求演进为 SaaS |
-| 模块提供自己的 HTTP Surface 和 OpenAPI operations | Runtime 统一挂载认证、listener exposure、容量治理，并将模块 operations 合并进最终 OpenAPI | 模块可独立演进产品 API，而项目仍保持统一入口和治理 |
+| 为某个能力注入 Module Factory 或 Remote Factory | Binding/Descriptor、协议、mode、capability 和必要 adapter 校验；Runtime 不复制模块私有状态 | 同一业务可以先共进程部署，再按容量和隔离需求演进为 SaaS |
+| 模块提供自己的 HTTP Adapter 和 OpenAPI operations | Runtime 统一挂载认证、listener exposure、容量治理，并将模块 operations 合并进最终 OpenAPI | 模块可独立演进产品 API，而项目仍保持统一入口和治理 |
 | 提供新的 Connector ProviderSet | Runtime 注入 HTTP/MQTT/filesystem/process 等受控 Transport；process 默认拒绝并使用 executable/working-directory allowlist | 新增供应商适配不要求修改 Runtime，也不能绕过宿主传输策略 |
 | 在项目中提供 Business Handler | Runtime 只通过稳定 `runtimeext` 注册和调用，并在启动时冻结、计算 Registry hash | 项目可以自由实现领域逻辑，同时不接触 Runtime 内部 Service/Repository |
 | 选择 SQLite、PostgreSQL 或 MySQL | Runtime 和嵌入模块复用宿主方言、事务、迁移锁和唯一 `_schema_migrations`；持久化通过 domainry-orm 渲染 | 开发、单机交付和服务化环境可以选择不同数据库而不复制业务代码 |
-| 提供 source-owned frontend bundle | Runtime 校验制品 hash 和 archive 安全，承载 `/business`、`/portal`，转发 `/api`，并为静态资产设置缓存策略 | 前端页面、品牌和交互可以完全项目化，后端治理保持不变 |
+| 提供 source-owned frontend bundle | 前端宿主按项目定义的入口挂载制品；Runtime 只校验制品 hash、archive 安全并提供 `/api`，不识别业务端、管理端或门户端产品壳 | 前端页面、品牌和交互可以完全项目化，后端治理保持不变 |
 | 提供已签名的项目 Runtime 制品 | 启动时校验 binary、Project、Generated SDK、Handler/Connector Registry 和前端 hash；运行中校验 schema/registry 与 release cohort | 错版本、半升级或同库混跑的不兼容实例会在接流量前失败，而不是污染业务数据后才暴露 |
 | 提供项目配置与 i18n 扩展 | Runtime 从明确的项目扩展入口加载配置和本地化资源，不要求修改 Runtime 源码 | 同一能力可按项目调整配置、语言和展示文案 |
 
@@ -140,7 +140,7 @@ Domainry 的灵活性来自“变化点和保障点分离”：
 | --- | --- | --- |
 | 项目业务源码 | 业务对象、Action Handler、项目 Connector adapter、业务规则 | Runtime 内部事务、通用权限引擎、模块私有状态机 |
 | Runtime | Record、Action、Workflow、Automation、统一写入、宿主授权、模块组装、运行治理 | Identity 账号状态、通知投递状态、Integration 凭证、Agent 执行状态等模块事实 |
-| 外部能力模块 | 自己的领域规则、数据、migration、worker、产品 HTTP Surface | 读取 Runtime 私有仓储或复制 Runtime 业务真相 |
+| 外部能力模块 | 自己的领域规则、数据、migration、worker、产品 HTTP Adapter | 读取 Runtime 私有仓储或复制 Runtime 业务真相 |
 | Connector Provider | 某个外部供应商协议的具体实现 | Connection、Credential、Invocation 生命周期和项目业务规则 |
 
 Module 形态下，外部模块可以借用宿主数据库、事务边界、SQL 方言、迁移锁和唯一 `_schema_migrations` 台账，但数据的业务所有权仍属于模块。SaaS 形态下，模块拥有独立状态，Runtime 与模块通过幂等、Receipt、重试和对账协作，不伪装成数据库级分布式事务。
@@ -363,7 +363,7 @@ Runtime 和模块为长任务提供幂等 Receipt、Run/Event、Lease、Heartbea
 
 **Domainry 做法**
 
-项目组合通过 SDK Factory/Binding 选择 Module 或 SaaS。产品调用方依赖稳定能力合同；模块拥有自己的状态、migration、worker 和 HTTP Surface。拓扑切换不能改变 owner，也不能把本地事务语义假装延伸到远端。
+项目组合通过 SDK Factory/Binding 选择 Module 或 SaaS。产品调用方依赖稳定能力合同；模块拥有自己的状态、migration、worker 和 HTTP Adapter。拓扑切换不能改变 owner，也不能把本地事务语义假装延伸到远端。
 
 **正例**
 

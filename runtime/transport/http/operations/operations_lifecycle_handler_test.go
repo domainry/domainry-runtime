@@ -65,7 +65,7 @@ func TestRuntimeLifecycleHTTPKeepsOnlyDurableCleanupRunOrchestration(t *testing.
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	request := httptest.NewRequest(http.MethodPost, "/operations/lifecycle/cleanup/jobs/job-1/run?batch_size=25", nil)
+	request := httptest.NewRequest(http.MethodPost, "/lifecycle/cleanup/jobs/job-1/run?batch_size=25", nil)
 	request.Header.Set("Idempotency-Key", "cleanup-1")
 	request.Header.Set("X-Operation-Reason", "verified retention cleanup")
 	response := httptest.NewRecorder()
@@ -84,7 +84,7 @@ func TestRuntimeLifecycleHTTPKeepsOnlyDurableCleanupRunOrchestration(t *testing.
 	}
 
 	migrated := httptest.NewRecorder()
-	mux.ServeHTTP(migrated, httptest.NewRequest(http.MethodGet, "/operations/lifecycle/policies", nil))
+	mux.ServeHTTP(migrated, httptest.NewRequest(http.MethodGet, "/lifecycle/policies", nil))
 	if migrated.Code != http.StatusNotFound {
 		t.Fatalf("module-owned Lifecycle route remained on Runtime router: %d", migrated.Code)
 	}

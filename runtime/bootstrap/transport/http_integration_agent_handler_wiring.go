@@ -39,7 +39,7 @@ func (a agentRecordVisibilityAdapter) CanReadAgentRecord(ctx context.Context, ob
 }
 
 // AgentApplicationHostDependencies contains the host-owned application ports
-// needed to finish Agent's product Surface before authorization reconciliation.
+// needed to finish Agent's product Adapter before authorization reconciliation.
 // HTTP mounting remains a later transport step.
 type AgentApplicationHostDependencies struct {
 	Binding              agentsdk.Binding
@@ -85,15 +85,15 @@ func BindAgentApplicationHost(dependencies AgentApplicationHostDependencies) err
 		return fmt.Errorf("bind Agent application host: %w", err)
 	}
 	if err := validateAgentAuthorizationProjection(dependencies.Binding); err != nil {
-		return fmt.Errorf("validate bound Agent authorization Surface: %w", err)
+		return fmt.Errorf("validate bound Agent authorization contract: %w", err)
 	}
 	return nil
 }
 
 func agentAuthorizationProjectionComplete(binding agentsdk.Binding) (bool, error) {
-	provider, hasSurfaces := binding.(modulehttp.Provider)
+	provider, hasAdapters := binding.(modulehttp.Provider)
 	actions, hasActions := binding.(actioncontract.Provider)
-	if !hasSurfaces || !hasActions || provider == nil || actions == nil {
+	if !hasAdapters || !hasActions || provider == nil || actions == nil {
 		return false, nil
 	}
 	definitions, err := actions.AuthorizationActions()
@@ -104,10 +104,10 @@ func agentAuthorizationProjectionComplete(binding agentsdk.Binding) (bool, error
 }
 
 func validateAgentAuthorizationProjection(binding agentsdk.Binding) error {
-	provider, hasSurfaces := binding.(modulehttp.Provider)
+	provider, hasAdapters := binding.(modulehttp.Provider)
 	actions, hasActions := binding.(actioncontract.Provider)
-	if !hasSurfaces || !hasActions || provider == nil || actions == nil {
-		return fmt.Errorf("Agent Binding must provide both HTTP Surfaces and its complete Action manifest")
+	if !hasAdapters || !hasActions || provider == nil || actions == nil {
+		return fmt.Errorf("Agent Binding must provide both HTTP Adapters and its complete Action manifest")
 	}
 	definitions, err := actions.AuthorizationActions()
 	if err != nil {
@@ -128,16 +128,16 @@ func (a *httpServerAssembly) bindAgentApplicationHost() {
 	}
 	provider, ok := a.dependencies.AgentBinding.(modulehttp.Provider)
 	if !ok {
-		panic("Agent Binding accepted application host but returned no HTTP surfaces")
+		panic("Agent Binding accepted application host but returned no HTTP adapters")
 	}
-	surfaces := make([]modulehttp.Surface, 0, len(a.dependencies.ModuleHTTPSurfaces)+1)
-	for _, surface := range a.dependencies.ModuleHTTPSurfaces {
-		if surface != nil && surface.Owner() != "agent" {
-			surfaces = append(surfaces, surface)
+	adapters := make([]modulehttp.Adapter, 0, len(a.dependencies.ModuleHTTPAdapters)+1)
+	for _, adapter := range a.dependencies.ModuleHTTPAdapters {
+		if adapter != nil && adapter.Owner() != "agent" {
+			adapters = append(adapters, adapter)
 		}
 	}
-	surfaces = append(surfaces, provider.HTTPSurfaces()...)
-	a.dependencies.ModuleHTTPSurfaces = surfaces
+	adapters = append(adapters, provider.HTTPAdapters()...)
+	a.dependencies.ModuleHTTPAdapters = adapters
 }
 
 type runtimeAgentApplicationHost struct {

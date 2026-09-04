@@ -66,7 +66,7 @@ func (s integrationNotificationResourceReaderStub) ListConnections(context.Conte
 	return s.connections, s.err
 }
 
-func TestIntegrationNotificationActionsReauthorizeTenantAdminResourceAccess(t *testing.T) {
+func TestIntegrationNotificationActionsReauthorizeManagementResourceAccess(t *testing.T) {
 	failure := errors.New("resource lookup failed")
 	for _, test := range []struct {
 		name         string

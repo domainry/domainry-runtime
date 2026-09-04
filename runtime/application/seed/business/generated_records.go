@@ -12,6 +12,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	appschemaprojection "github.com/domainry/domainry-runtime/runtime/domain/appschema/projection"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
@@ -35,7 +36,11 @@ func generateManifestBusinessSeedRows(manifest manifestmodel.ManifestSchema, exp
 		}
 	}
 
-	objects := append([]definitionmodel.ObjectSchema(nil), manifest.Objects...)
+	// Manifest Objects intentionally keep dictionary-backed value domains by
+	// reference. Baseline generation needs the same effective field contract
+	// used by Record/Application Schema before it can choose and validate a
+	// deterministic select value.
+	objects := appschemaprojection.ApplicationSchemaEnrichObjectsWithFieldValueDomains(manifest.Objects, manifest.Dictionaries)
 	sort.SliceStable(objects, func(i, j int) bool { return strings.TrimSpace(objects[i].Key) < strings.TrimSpace(objects[j].Key) })
 	for _, object := range objects {
 		objectKey := strings.TrimSpace(object.Key)

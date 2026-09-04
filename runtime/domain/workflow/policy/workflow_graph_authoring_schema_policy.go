@@ -13,9 +13,9 @@ func workflowCompleteGraphAuthoringContract(capability *capabilitycontract.Capab
 		Idempotency: "naturally_idempotent", SideEffectLevel: "none", PermissionModel: workflowAuthoringFragmentAction,
 	}
 	capability.ReferenceContracts = []capabilitycontract.CapabilityAuthoringReference{
-		{Kind: "action_key", InputJSONPointer: "/nodes/*/contract/action/action_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/action_key"},
-		{Kind: "role_key", InputJSONPointer: "/nodes/*/contract/approval/resolvers/*/role_key", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/role_key"},
-		{Kind: "user_id", InputJSONPointer: "/nodes/*/contract/approval/resolvers/*/user_ids/*", ResolverEndpoint: "/tenant-admin/platform-capabilities/references/user_id"},
+		{Kind: "action_key", InputJSONPointer: "/nodes/*/contract/action/action_key", ResolverEndpoint: "/capabilities/references/action_key"},
+		{Kind: "role_key", InputJSONPointer: "/nodes/*/contract/approval/resolvers/*/role_key", ResolverEndpoint: "/capabilities/references/role_key"},
+		{Kind: "user_id", InputJSONPointer: "/nodes/*/contract/approval/resolvers/*/user_ids/*", ResolverEndpoint: "/capabilities/references/user_id"},
 	}
 	capability.Errors = append(capability.Errors,
 		capabilitycontract.CapabilityAuthoringError{Code: "backend.workflow.graph_trigger_required", FieldPath: "nodes", MessageKey: "backend.workflow.graph_trigger_required"},

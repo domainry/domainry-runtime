@@ -23,16 +23,16 @@ import (
 )
 
 type notificationSDKModuleHost struct {
-	store     *persistence.RuntimeStore
-	identity  identitysdk.Binding
-	clock     modulehost.Clock
-	workerID  string
-	catalog   modulehost.Catalog
-	directory identitysdk.Directory
-	workflow  workflowTaskLookup
-	delivery  modulehost.DeliveryGateway
-	metrics   modulehost.DeliveryMetrics
-	validator modulehost.ProviderTemplateValidator
+	store      *persistence.RuntimeStore
+	identity   identitysdk.Binding
+	clock      modulehost.Clock
+	workerID   string
+	catalog    modulehost.Catalog
+	projection identitysdk.Projection
+	workflow   workflowTaskLookup
+	delivery   modulehost.DeliveryGateway
+	metrics    modulehost.DeliveryMetrics
+	validator  modulehost.ProviderTemplateValidator
 }
 
 func notificationSDKCatalog(defaultLocale string, manifest manifestmodel.ManifestSchema, eventTypes []notificationmodel.NotificationEventType) (modulehost.Catalog, error) {
@@ -54,7 +54,6 @@ func notificationSDKCatalog(defaultLocale string, manifest manifestmodel.Manifes
 	}
 	return modulehost.Catalog{
 		DefaultLocale:    defaultLocale,
-		Surfaces:         []string{"business_workspace", "consumer_portal"},
 		ExternalChannels: notificationModuleChannels(manifest.NotificationRules), Templates: templates,
 		TemplateCapabilities: capabilities, EventTypes: events, Rules: rules,
 	}, nil
@@ -78,8 +77,8 @@ func (h notificationSDKModuleHost) Catalog() modulehost.Catalog   { return h.cat
 func (h notificationSDKModuleHost) WorkNotifier() modulehost.WorkNotifier {
 	return notificationSDKWorkNotifier{h.store.WorkerWakeups()}
 }
-func (h notificationSDKModuleHost) RecipientDirectory() modulehost.RecipientDirectory {
-	return notificationSDKRecipientDirectory{h.directory}
+func (h notificationSDKModuleHost) RecipientResolver() modulehost.RecipientResolver {
+	return notificationSDKRecipientResolver{h.projection}
 }
 func (h notificationSDKModuleHost) AudienceResolver() modulehost.AudienceResolver {
 	return notificationSDKWorkflowAudience{h.workflow}
@@ -124,13 +123,13 @@ func (n notificationSDKWorkNotifier) Notify(_ context.Context, work modulehost.W
 	}
 }
 
-type notificationSDKRecipientDirectory struct{ directory identitysdk.Directory }
+type notificationSDKRecipientResolver struct{ projection identitysdk.Projection }
 
-func (d notificationSDKRecipientDirectory) FindRecipient(ctx context.Context, workspaceID, userID string) (modulehost.Recipient, bool, error) {
-	if d.directory == nil {
+func (d notificationSDKRecipientResolver) FindRecipient(ctx context.Context, workspaceID, userID string) (modulehost.Recipient, bool, error) {
+	if d.projection == nil {
 		return modulehost.Recipient{}, false, nil
 	}
-	user, found, err := d.directory.FindUser(requestcontext.WithWorkspaceID(ctx, workspaceID), identitysdk.UserLookup{UserID: identitysdk.SubjectID(userID)})
+	user, found, err := d.projection.FindUser(requestcontext.WithWorkspaceID(ctx, workspaceID), identitysdk.UserLookup{UserID: identitysdk.SubjectID(userID)})
 	return modulehost.Recipient{ID: string(user.ID), Email: user.Email, Locale: user.Locale, Timezone: user.Timezone}, found, err
 }
 

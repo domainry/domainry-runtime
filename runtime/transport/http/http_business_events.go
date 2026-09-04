@@ -83,8 +83,8 @@ func businessEventObjectKey(r *http.Request) string {
 		return value
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) >= 2 && parts[0] == "objects" {
-		return strings.TrimSpace(parts[1])
+	if len(parts) >= 3 && parts[0] == "records" && parts[1] == "objects" {
+		return strings.TrimSpace(parts[2])
 	}
 	return ""
 }

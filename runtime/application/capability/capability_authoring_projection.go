@@ -17,7 +17,7 @@ func RuntimeAuthoringProjection(domainKeys ...string) capabilitycontract.Capabil
 	domains := append([]string(nil), domainKeys...)
 	sort.Strings(domains)
 	return capabilitycontract.CapabilityAuthoringProjection{
-		Mode: "compatibility_projection", Successor: "/tenant-admin/platform-capabilities",
+		Mode: "compatibility_projection", Successor: "/capabilities",
 		ContractVersion: contract.ContractVersion, ContractHash: contract.ContractHash, Domains: domains,
 	}
 }

@@ -14,7 +14,7 @@ import (
 // seam. Notification owns Inbox state; Runtime authorizes the resolved target
 // against the current record, workflow, report, or other resource policy.
 type NotificationInboxActionResolver interface {
-	ResolveInboxAction(context.Context, string, string, notificationmodel.NotificationInboxQuery, string, principalmodel.Principal) (notificationmodel.NotificationInboxResolvedAction, error)
+	ResolveInboxAction(context.Context, string, string, notificationmodel.NotificationInboxQuery, principalmodel.Principal) (notificationmodel.NotificationInboxResolvedAction, error)
 }
 
 func (h *NotificationsHandler) resolveInboxAction(w http.ResponseWriter, r *http.Request) {
@@ -24,20 +24,13 @@ func (h *NotificationsHandler) resolveInboxAction(w http.ResponseWriter, r *http
 	}
 	value, err := h.actionResolver.ResolveInboxAction(
 		r.Context(), strings.TrimSpace(r.PathValue("notificationID")), strings.TrimSpace(r.PathValue("actionKey")),
-		notificationInboxActionQuery(r), notificationInboxActionChannel(r), h.principal(r),
+		notificationInboxActionQuery(r), h.principal(r),
 	)
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
 	}
 	h.writeJSON(w, http.StatusOK, value)
-}
-
-func notificationInboxActionChannel(r *http.Request) string {
-	if strings.HasPrefix(r.URL.Path, "/portal/") {
-		return "consumer_portal"
-	}
-	return "business_workspace"
 }
 
 func notificationInboxActionQuery(r *http.Request) notificationmodel.NotificationInboxQuery {

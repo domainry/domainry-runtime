@@ -33,25 +33,25 @@ func TestSchedulerAPISmokeVerifiesRuntimeOperationsAndEvidence(t *testing.T) {
 	handler := application.Routes()
 	store := openRuntimePersistenceFixture(t, cfg)
 
-	preview := schedulerSmokeRequest(t, handler, http.MethodPost, "/tenant-admin/scheduler/definitions/validate", map[string]any{"data": definition.Data}, http.StatusOK)
+	preview := schedulerSmokeRequest(t, handler, http.MethodPost, "/scheduler/definitions/validate", map[string]any{"data": definition.Data}, http.StatusOK)
 	if nextRuns, ok := preview["next_runs"].([]any); !ok || len(nextRuns) != 3 {
 		t.Fatalf("expected three scheduler preview times, got %#v", preview)
 	}
 
-	simulated := schedulerSmokeRequest(t, handler, http.MethodPost, "/tenant-admin/scheduler/definitions/"+definition.ID+"/simulate", nil, http.StatusOK)
+	simulated := schedulerSmokeRequest(t, handler, http.MethodPost, "/scheduler/definitions/"+definition.ID+"/simulate", nil, http.StatusOK)
 	if strings.TrimSpace(stringValueFromJSON(simulated, "status")) != "simulated" {
 		t.Fatalf("expected simulated scheduler response, got %#v", simulated)
 	}
-	runResult := schedulerSmokeRequest(t, handler, http.MethodPost, "/operations/scheduler/definitions/"+definition.ID+"/run", nil, http.StatusOK)
+	runResult := schedulerSmokeRequest(t, handler, http.MethodPost, "/scheduler/definitions/"+definition.ID+"/run", nil, http.StatusOK)
 	if strings.TrimSpace(stringValueFromJSON(runResult, "status")) == "" {
 		t.Fatalf("expected scheduler run response status, got %#v", runResult)
 	}
-	if replay := schedulerSmokeRequest(t, handler, http.MethodPost, "/operations/scheduler/definitions/"+definition.ID+"/run", nil, http.StatusOK); replay["idempotency_replayed"] != true {
+	if replay := schedulerSmokeRequest(t, handler, http.MethodPost, "/scheduler/definitions/"+definition.ID+"/run", nil, http.StatusOK); replay["idempotency_replayed"] != true {
 		t.Fatalf("expected manual run replay, got %#v", replay)
 	}
 
 	runID := strings.TrimSpace(stringValueFromJSON(runResult, "id"))
-	observed := schedulerSmokeRequest(t, handler, http.MethodGet, "/operations/scheduler/state", nil, http.StatusOK)
+	observed := schedulerSmokeRequest(t, handler, http.MethodGet, "/scheduler/state", nil, http.StatusOK)
 	observedRun := false
 	if runs, ok := observed["runs"].([]any); ok {
 		for _, rawRun := range runs {
@@ -107,7 +107,7 @@ func schedulerSmokeRequest(t *testing.T, handler http.Handler, method string, pa
 		req.Header.Set("Content-Type", "application/json")
 	}
 	applyIntegrationIdentity(req, "platform_admin")
-	if strings.HasPrefix(path, "/operations/") {
+	if method != http.MethodGet && method != http.MethodHead {
 		req.Header.Set("X-Operation-Reason", "scheduler API smoke controlled recovery")
 		if strings.Contains(path, "/cancel") || strings.Contains(path, "/resolve") || strings.Contains(path, "/requeue") {
 			req.Header.Set("X-Operation-Confirmation", "confirmed")

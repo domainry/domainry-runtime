@@ -137,8 +137,14 @@ func TestExportPaginationAccessFilteringAndMidPageCancellation(t *testing.T) {
 		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "visible", Data: map[string]any{"name": "Visible"}}}}, nil
 	}}
 	service := recordExportEdgeService(object, repository)
-	service.dependencies.CanAccess = func(_ principalmodel.Principal, _ definitionmodel.ObjectSchema, record recordmodel.Record) bool {
-		return record.ID != "hidden"
+	service.dependencies.ProjectRecords = func(_ context.Context, _ principalmodel.Principal, _ definitionmodel.ObjectSchema, records []recordmodel.Record, _ string) ([]recordmodel.Record, error) {
+		visible := make([]recordmodel.Record, 0, len(records))
+		for _, record := range records {
+			if record.ID != "hidden" {
+				visible = append(visible, record)
+			}
+		}
+		return visible, nil
 	}
 	content, _, err := exportRecordDirectForTest(t.Context(), service, object.Key, principal, RecordExportOptions{})
 	if err != nil || pages != 2 || strings.Contains(string(content), "Hidden") || !strings.Contains(string(content), "Visible") {
@@ -150,9 +156,9 @@ func TestExportPaginationAccessFilteringAndMidPageCancellation(t *testing.T) {
 		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "first", Data: map[string]any{"name": "First"}}, {ID: "second", Data: map[string]any{"name": "Second"}}}}, nil
 	}}
 	cancelService := recordExportEdgeService(object, cancelRepository)
-	cancelService.dependencies.CanAccess = func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool {
+	cancelService.dependencies.ProjectRecords = func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, []recordmodel.Record, string) ([]recordmodel.Record, error) {
 		cancel()
-		return true
+		return nil, context.Canceled
 	}
 	if _, _, err := exportRecordDirectForTest(ctx, cancelService, object.Key, principal, RecordExportOptions{}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("mid-page cancellation err=%v", err)
@@ -208,7 +214,7 @@ func TestExportRelationLabelFallbackEdges(t *testing.T) {
 	}
 }
 
-func TestExportRelationLabelCapsLookupAndIdentityDirectoryFallbacks(t *testing.T) {
+func TestExportRelationLabelCapsLookupAndIdentityProjectionFallbacks(t *testing.T) {
 	field := definitionmodel.FieldSchema{Key: "customer_id", Type: "relation", Config: map[string]any{"object_key": "customer"}}
 	records := make([]recordmodel.Record, 201)
 	for index := range records {
@@ -229,15 +235,15 @@ func TestExportRelationLabelCapsLookupAndIdentityDirectoryFallbacks(t *testing.T
 	if len(labels) != 0 {
 		t.Fatalf("unauthorized labels=%#v", labels)
 	}
-	service.dependencies.ListDirectoryUsers = func(context.Context) ([]identitysdk.User, error) {
-		return nil, errors.New("directory unavailable")
+	service.dependencies.ListIdentityUsers = func(context.Context) ([]identitysdk.User, error) {
+		return nil, errors.New("projection unavailable")
 	}
 	service.identityLabels(t.Context(), map[string]bool{"user-2": true}, principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user-1"}}, labels)
 	service.identityLabels(t.Context(), map[string]bool{"user-1": true}, principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user-1"}}, labels)
 	if len(labels) != 0 {
-		t.Fatalf("failed directory labels=%#v", labels)
+		t.Fatalf("failed projection labels=%#v", labels)
 	}
-	service.dependencies.ListDirectoryUsers = func(context.Context) ([]identitysdk.User, error) {
+	service.dependencies.ListIdentityUsers = func(context.Context) ([]identitysdk.User, error) {
 		return []identitysdk.User{{ID: "user-1", Name: " "}, {ID: "user-2", Name: "Other"}}, nil
 	}
 	service.identityLabels(t.Context(), map[string]bool{"user-1": true, "user-2": true}, principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user-1"}}, labels)
@@ -248,7 +254,7 @@ func TestExportRelationLabelCapsLookupAndIdentityDirectoryFallbacks(t *testing.T
 	siblingReader := accessfixture.Attach(principalmodel.Principal{}, recordFullAccessBundle("identity.users.get"))
 	service.identityLabels(t.Context(), map[string]bool{"user-2": true}, siblingReader, siblingLabels)
 	if len(siblingLabels) != 0 {
-		t.Fatalf("sibling Action resolved directory labels=%#v", siblingLabels)
+		t.Fatalf("sibling Action resolved projection labels=%#v", siblingLabels)
 	}
 	adminLabels := map[string]string{}
 	directoryReader := accessfixture.Attach(principalmodel.Principal{}, recordFullAccessBundle(identityUsersListAction))

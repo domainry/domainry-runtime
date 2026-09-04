@@ -13,20 +13,20 @@ ambient environment variables.
 - A module contributes inbound product HTTP only through
   `modulehttp.Provider`. Runtime validates exposure, authentication,
   permissions and route collisions before mounting it.
-- A SaaS Binding may contribute the same source-owned product HTTP Surface as
-  Module mode when the Surface is the module's deployment-neutral adapter over
+- A SaaS Binding may contribute the same source-owned product HTTP Adapter as
+  Module mode when the Adapter is the module's deployment-neutral adapter over
   its remote protocol. Runtime still only validates and mounts it; the SaaS
   protocol endpoints themselves are never exposed as product HTTP.
 - Runtime orchestration and host-owned HTTP endpoints stay in Runtime even when
   they call a module Binding. Remote SDK `/v1` service protocols are not product HTTP and
   are never mounted into the Runtime listener.
-- The active result is available from `GET /operations/modules` using the
+- The active result is available from `GET /discovery/modules` using the
   `domainry-module-inventory-v1` contract. Plane validates this handshake; it
   does not infer active capabilities from environment configuration.
 
 ## Current ownership
 
-| Module | Module HTTP Surface | Runtime-owned HTTP that remains | Persistence |
+| Module | Module HTTP Adapter | Runtime-owned HTTP that remains | Persistence |
 | --- | --- | --- | --- |
 | Identity | Authentication, browser session and Identity management | Project provisioning orchestration | Borrowed pool; Identity-owned schema |
 | Notification | None yet | Inbox product projections, SSE, publication orchestration and delivery governance | Borrowed pool; Notification-owned schema |
@@ -41,8 +41,8 @@ ambient environment variables.
 | Report | None | Query, export, notification and download orchestration | Borrowed pool; Report-owned schema |
 
 “None” is explicit ownership, not missing integration. If a module later owns
-an independent inbound product protocol, the Binding may add a Surface without
+an independent inbound product protocol, the Binding may add a Adapter without
 changing Runtime composition. Product-use-case ownership determines the
-Surface owner: a source-owned handler may request current Runtime facts or
+Adapter owner: a source-owned handler may request current Runtime facts or
 business effects through narrow Host Ports, but it may not import Runtime
 services or participate in a cross-owner transaction.

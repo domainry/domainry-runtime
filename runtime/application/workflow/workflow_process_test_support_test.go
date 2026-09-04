@@ -41,8 +41,8 @@ func (r *workflowRegistryStub) Count() int { return len(r.items) }
 
 func workflowAdminPrincipal() principalmodel.Principal {
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{
-		"runtime.workflows.approve_business_workflow_task",
-		"runtime.workflows.reject_business_workflow_task",
-		"runtime.workflows.return_business_workflow_task",
+		"runtime.workflows.approve_workflow_task",
+		"runtime.workflows.reject_workflow_task",
+		"runtime.workflows.return_workflow_task",
 	}})
 }

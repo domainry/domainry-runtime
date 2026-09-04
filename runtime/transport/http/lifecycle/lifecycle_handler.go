@@ -1,5 +1,5 @@
 // Package lifecycle owns the one Runtime-orchestrated Lifecycle endpoint.
-// Product governance HTTP is contributed by the Lifecycle module Surface.
+// Product governance HTTP is contributed by the Lifecycle module Adapter.
 package lifecycle
 
 import (

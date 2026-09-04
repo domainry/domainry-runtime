@@ -33,7 +33,7 @@ func TestWorkflowPermissionProjectionRedactsInternalFields(t *testing.T) {
 	if process.DefinitionVersionID != "" || process.DefinitionHash != "" || process.ErrorCode != "" {
 		t.Fatalf("process internals remain: %#v", process)
 	}
-	assertBusinessWorkflow(t, process.DefinitionSnapshot)
+	assertParticipantWorkflow(t, process.DefinitionSnapshot)
 
 	task := WorkflowTaskForPrincipal(workflowmodel.WorkflowTask{ResolverSnapshot: []definitionmodel.WorkflowAssigneeResolver{{Type: "role"}}, CandidateSource: "policy", NodeDefinitionVersion: 2, Title: "visible"}, false)
 	if task.ResolverSnapshot != nil || task.CandidateSource != "" || task.NodeDefinitionVersion != 0 || task.Title != "visible" {
@@ -79,7 +79,7 @@ func TestWorkflowNodeBusinessSummariesCoverNodeAndResolverKinds(t *testing.T) {
 func TestWorkflowBusinessDefinitionNilGraphAndExplicitEmptyImpact(t *testing.T) {
 	workflow := definitionmodel.WorkflowSchema{Name: "No graph"}
 	if got := WorkflowBusinessDefinition(workflow, nil); got.Graph != nil || got.Name != "No graph" {
-		t.Fatalf("nil graph business workflow = %#v", got)
+		t.Fatalf("nil graph participant workflow = %#v", got)
 	}
 	name, nameKey, impact, impactKey := workflowActionBusinessDescription("empty", []definitionmodel.ActionSchema{{Key: "other"}, {Key: "empty", Label: "Empty"}})
 	if name != "Empty" || nameKey != "" || impact != "" || impactKey != "workflow.action.recordUpdateImpact" {
@@ -114,7 +114,7 @@ func permissionProjectionResolvers() []definitionmodel.WorkflowAssigneeResolver 
 	return []definitionmodel.WorkflowAssigneeResolver{{Type: "users"}, {Type: "role"}, {Type: "manager_of"}, {Type: "record_field"}, {Type: "custom"}}
 }
 
-func assertBusinessWorkflow(t *testing.T, workflow definitionmodel.WorkflowSchema) {
+func assertParticipantWorkflow(t *testing.T, workflow definitionmodel.WorkflowSchema) {
 	t.Helper()
 	if workflow.DefinitionVersionID != "" || workflow.PublishedVersion != 0 || workflow.Trigger != nil || workflow.TriggerContract != nil || workflow.RunAs != "" || workflow.Retry != nil || workflow.TimeoutSeconds != 0 || workflow.AuditEvent != "" {
 		t.Fatalf("workflow internals remain: %#v", workflow)

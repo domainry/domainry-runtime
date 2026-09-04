@@ -193,8 +193,8 @@ func moduleOpenAPIOperationVisible(rawOperation any, group ListenerRouteGroup) b
 	switch group {
 	case ListenerRouteGroupPublic:
 		want = "public"
-	case ListenerRouteGroupTenantAdmin:
-		want = "tenant_admin"
+	case ListenerRouteGroupManagement:
+		want = "management"
 	case ListenerRouteGroupOps:
 		want = "ops"
 	default:

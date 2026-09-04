@@ -163,8 +163,8 @@ func providerSpecs() ([]providerSpec, error) {
 				{key: "workflow.authoring", name: "Workflow authoring", description: "Author and validate one complete workflow definition with its embedded graph, nodes, resolvers, and edges.", chains: []string{"record_or_action_to_workflow_process"}, scopes: []string{"workflow.definition"}, validationContracts: []modulecapability.ValidationScopeContract{{
 					Kind: "workflow.definition", Description: "Validate one complete project workflow definition.", Coverage: modulecapability.ValidationCoverageAllCandidates, CandidateCollections: []string{"workflows"}, ReferencedCollections: []string{"actions", "objects"},
 				}}, projections: workflows},
-				{key: "workflow.business", name: "Business workflow", description: "Start and inspect principal-visible workflow processes and tasks.", chains: []string{"workflow_task_to_identity_assignee"}, selectEndpoints: ownerAndPath("workflows", func(path string) bool { return strings.HasPrefix(path, "/business/workflow") })},
-				{key: "workflow.management", name: "Workflow management", description: "Validate, publish, simulate, inspect, and operate workflow definitions and executions.", chains: []string{"record_or_action_to_workflow_process", "workflow_timer_to_scheduler_clock"}, selectEndpoints: ownerAndPath("workflows", func(path string) bool { return !strings.HasPrefix(path, "/business/workflow") })},
+				{key: "workflow.participant", name: "Participant workflow", description: "Start and inspect principal-visible workflow processes and tasks.", chains: []string{"workflow_task_to_identity_assignee"}, selectEndpoints: ownerAndPath("workflows", func(path string) bool { return strings.HasPrefix(path, "/workflow") })},
+				{key: "workflow.management", name: "Workflow management", description: "Validate, publish, simulate, inspect, and operate workflow definitions and executions.", chains: []string{"record_or_action_to_workflow_process", "workflow_timer_to_scheduler_clock"}, selectEndpoints: ownerAndPath("workflows", func(path string) bool { return !strings.HasPrefix(path, "/workflow") })},
 			}, validator: validateWorkflowCandidate,
 		},
 		{
@@ -194,7 +194,7 @@ func providerSpecs() ([]providerSpec, error) {
 			categories: []categorySpec{{key: "realtime.events", name: "Realtime refresh stream", description: "Subscribe to resumable business refresh and resync signals.", chains: []string{"business_mutation_to_realtime_refresh_to_authorized_refetch"}, selectEndpoints: owner("businessevents")}},
 		},
 		{
-			key: "uploads", sourceOwner: "uploads", name: "Uploads", description: "Authorized file upload, content access, and scan-status contracts for business workflows.",
+			key: "uploads", sourceOwner: "uploads", name: "Uploads", description: "Authorized file upload, content access, and scan-status contracts for participant workflows.",
 			scenarios: scenarios(
 				[]string{"A PRD needs users to attach files to business records or requires virus-scan status before use"},
 				[]string{"The requirement is asynchronous bulk import/export or durable report artifact generation"},
@@ -232,9 +232,9 @@ func providerSpecs() ([]providerSpec, error) {
 		{
 			key: "profile_binding", sourceOwner: "profilebinding", name: "Business profile binding", description: "Bind an Identity principal to a Runtime business-profile object and its lifecycle semantics.",
 			scenarios: scenarios(
-				[]string{"A PRD extends authenticated users with business profile fields, claim mappings, profile directories, or profile activation state"},
+				[]string{"A PRD extends authenticated users with business profile fields, claim mappings, profile listings, or profile activation state"},
 				[]string{"The requirement only stores a business person without login or only configures authentication roles"},
-				[]string{"employee profile extension", "identity relation field", "business profile claim", "profile directory"},
+				[]string{"employee profile extension", "identity relation field", "business profile claim", "profile listing"},
 				[]string{"principal.profile_binding"}, []string{"identity", "records", "runtime_schema"}, nil,
 				[]string{"identity_principal_to_business_profile_binding"}, []string{"principal.profile_binding"},
 				"Give each signed-in employee a one-to-one staff profile with business claims", "Profile binding owns the bridge between Identity and the Runtime business object",
@@ -381,7 +381,7 @@ func runtimeOperationExtension(contract endpointmodel.RuntimeEndpointContractV1)
 		Owner: endpointOwner(contract), Authorization: authorization, Effect: modulecapability.EffectClass(contract.EffectClass),
 		Idempotency: modulecapability.Idempotency{Mode: contract.IdempotencyDecision},
 	}
-	if contract.EndpointIdentity == http.MethodGet+" /events/business" {
+	if contract.EndpointIdentity == http.MethodGet+" /business-events/stream" {
 		value.Transport = &modulecapability.Transport{Mode: "sse", ResumeSemantics: "Last-Event-ID is an opaque bounded cursor; a resync event requires authorized state refetch", DeliveryOrdering: "tenant_scoped_refresh_order"}
 	}
 	return value, nil

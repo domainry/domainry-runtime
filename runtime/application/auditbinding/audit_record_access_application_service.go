@@ -11,7 +11,7 @@ import (
 )
 
 // AuditRecordAccessApplicationService is Runtime's narrow cross-owner adapter
-// for Audit. Audit owns surface/query policy; Runtime owns record authorization
+// for Audit. Audit owns query policy; Runtime owns record authorization
 // and field-level projection.
 type AuditRecordAccessApplicationService struct {
 	records *recordapplication.RecordApplicationService

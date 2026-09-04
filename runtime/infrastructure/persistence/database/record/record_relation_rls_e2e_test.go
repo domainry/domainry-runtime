@@ -176,7 +176,6 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 		Repository:     repository,
 		Objects:        func() map[string]definitionmodel.ObjectSchema { return objectMap },
 		NormalizeQuery: policy.NormalizeListQuery,
-		CanAccess:      policy.CanAccessRecord,
 		ListRecords:    reader.ListRecords,
 	})
 	csv := dispatchDirectRecordExport(t, exporter, "ledger", memberPrincipal)

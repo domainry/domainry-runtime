@@ -133,7 +133,7 @@ func TestOpenSequentialApprovalTaskNotificationBoundaries(t *testing.T) {
 			t.Fatal("incomplete dependencies accepted")
 		}
 	}
-	for _, identity := range []identitysdk.Directory{
+	for _, identity := range []identitysdk.Projection{
 		workflowIdentityEdgeStub{err: errors.New("identity")}, workflowIdentityEdgeStub{}, workflowIdentityEdgeStub{found: true, user: identitysdk.User{Locale: "zh-CN"}},
 	} {
 		engine := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store, Identity: identity, TaskNotificationCommit: committer, CompileNotification: workflowNotificationCompiler}).ProcessEngine()

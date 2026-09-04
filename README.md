@@ -18,6 +18,6 @@ with the current capability inventory under [`docs/modules`](docs/modules/README
 
 Metadata is a source-owned embedded module. Runtime opens it once at startup,
 binds the resulting `domainry-metadata-sdk.Binding`, mounts its declared HTTP
-Surface, and consumes only the SDK definition, localization, dictionary and
+Adapter, and consumes only the SDK definition, localization, dictionary and
 projection ports. Metadata migrations, tables, definition reads, localization
 exports and dictionary endpoints are not implemented by Runtime.

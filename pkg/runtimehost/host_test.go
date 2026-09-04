@@ -188,8 +188,8 @@ func serverTestConfig() config.Config {
 	return config.Config{
 		Port: ":0", ManifestPath: "runtime-manifest.json", TelemetryExportTimeout: time.Second,
 		IdentityAudience: "domainry-runtime", InitialTenantRequestID: "initial-tenant", InitialTenantCode: "primary",
-		InitialTenantName: "Primary", InitialTenantAdminLoginID: "admin@example.test", InitialTenantAdminName: "Admin",
-		InitialTenantAdminPassword: "BootstrapAdmin1!", InitialTenantStoreConfiguration: "{}",
+		InitialTenantName: "Primary", InitialManagementLoginID: "admin@example.test", InitialManagementName: "Admin",
+		InitialManagementPassword: "BootstrapAdmin1!", InitialTenantStoreConfiguration: "{}",
 		HTTPReadHeaderTimeout: time.Second, HTTPReadTimeout: time.Second, HTTPWriteTimeout: time.Second,
 		HTTPIdleTimeout: time.Second, HTTPShutdownTimeout: time.Second, HTTPMaxHeaderBytes: 1024,
 	}
@@ -622,7 +622,7 @@ func writeRuntimeHostCatalogFixture(t *testing.T, path string, size, keyCount in
 func TestRunWithDependenciesStartsThreeIsolatedSurfaceListeners(t *testing.T) {
 	cfg := serverTestConfig()
 	cfg.HTTPPublicAddr = "127.0.0.1:18081"
-	cfg.HTTPTenantAdminAddr = "127.0.0.1:18082"
+	cfg.HTTPManagementAddr = "127.0.0.1:18082"
 	cfg.HTTPOpsAddr = "127.0.0.1:18083"
 	runtime := &serverRuntimeFake{}
 	deps := serverTestDependencies(t, cfg, runtime)

@@ -51,7 +51,7 @@ func TestRecordCreateAPIRequiresCallerKeyAndReplaysOneDurableRecord(t *testing.T
 	if conflict.Code != http.StatusConflict || !bytes.Contains(conflict.Body.Bytes(), []byte("backend.idempotency.key_reused")) {
 		t.Fatalf("conflict response=%d %s", conflict.Code, conflict.Body.String())
 	}
-	page := runtimeFixtureRequest[map[string]any](t, handler, "kitchen_lead", http.MethodGet, "/objects/kitchen_order/records?page=1&page_size=100", nil)
+	page := runtimeFixtureRequest[map[string]any](t, handler, "kitchen_lead", http.MethodGet, "/records/objects/kitchen_order/records?page=1&page_size=100", nil)
 	items, _ := page["items"].([]any)
 	createdCount := 0
 	for _, item := range items {
@@ -83,7 +83,7 @@ func TestRecordImportAPIReplaysOperationAndDoesNotDuplicateRows(t *testing.T) {
 	if conflict.Code != http.StatusConflict || !bytes.Contains(conflict.Body.Bytes(), []byte("backend.idempotency.key_reused")) {
 		t.Fatalf("import conflict=%d %s", conflict.Code, conflict.Body.String())
 	}
-	page := runtimeFixtureRequest[map[string]any](t, handler, "kitchen_lead", http.MethodGet, "/objects/kitchen_order/records?page=1&page_size=100", nil)
+	page := runtimeFixtureRequest[map[string]any](t, handler, "kitchen_lead", http.MethodGet, "/records/objects/kitchen_order/records?page=1&page_size=100", nil)
 	items, _ := page["items"].([]any)
 	counts := map[string]int{}
 	for _, item := range items {
@@ -144,7 +144,7 @@ func recordCreateRequest(t *testing.T, handler http.Handler, key string, body an
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodPost, "/objects/kitchen_order/records", bytes.NewReader(raw))
+	request := httptest.NewRequest(http.MethodPost, "/records/objects/kitchen_order/records", bytes.NewReader(raw))
 	request.Header.Set("Content-Type", "application/json")
 	applyIntegrationIdentity(request, "kitchen_lead")
 	if key != "" {
@@ -161,7 +161,7 @@ func recordUpdateRequest(t *testing.T, handler http.Handler, recordID, key strin
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodPatch, "/objects/kitchen_order/records/"+recordID, bytes.NewReader(raw))
+	request := httptest.NewRequest(http.MethodPatch, "/records/objects/kitchen_order/records/"+recordID, bytes.NewReader(raw))
 	request.Header.Set("Content-Type", "application/json")
 	applyIntegrationIdentity(request, "kitchen_lead")
 	if key != "" {
@@ -174,7 +174,7 @@ func recordUpdateRequest(t *testing.T, handler http.Handler, recordID, key strin
 
 func recordImportRequest(t *testing.T, handler http.Handler, key, csv string) *httptest.ResponseRecorder {
 	t.Helper()
-	return recordCreatePathRequest(t, handler, "/objects/kitchen_order/records/import/apply", key, map[string]any{"csv": csv})
+	return recordCreatePathRequest(t, handler, "/records/objects/kitchen_order/records/import/apply", key, map[string]any{"csv": csv})
 }
 
 func recordCreatePathRequest(t *testing.T, handler http.Handler, path, key string, body any) *httptest.ResponseRecorder {

@@ -22,7 +22,7 @@ func (s *RecordUpdateApplicationService) now() time.Time {
 // changedRelationData limits update-time relation checks to references that the
 // mutation actually changed. Existing references were validated when they were
 // written; resolving all of them again is both unnecessary and can deadlock a
-// transaction-bound directory reader on single-connection databases.
+// transaction-bound projection reader on single-connection databases.
 func changedRelationData(object definitionmodel.ObjectSchema, beforeData, nextData map[string]any) map[string]any {
 	changed := map[string]any{}
 	for _, field := range object.Fields {

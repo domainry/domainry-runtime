@@ -5,7 +5,7 @@ import capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/c
 func ChangePlanCurrentStateSnapshotAuthoringCapability() capabilitycontract.CapabilityAuthoringDefinition {
 	return capabilitycontract.CapabilityAuthoringDefinition{
 		Key: "maintenance.current_state_snapshot", Status: "supported", Lifecycle: "read_only_discovery",
-		Permissions: []string{"runtime.businesssystem.business_system_snapshot"}, ConfigurationRoutes: []string{"GET /domain-system-snapshot"},
+		Permissions: []string{"runtime.businesssystem.business_system_snapshot"}, ConfigurationRoutes: []string{"GET /business-system/snapshot"},
 		InputSchema:  changePlanEmptyInputSchema(),
 		OutputSchema: changePlanSnapshotOutputSchema(), OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "snapshot_hash", JSONPointer: "/snapshot_hash", Type: "snapshot_hash", VisibleTo: "subsequent_capability_calls"}},
 		Execution: &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"runtime.metadata", "metadata.schema_snapshot", "identity.governance", "workflow.definition", "integration.connector"}, Transaction: "read_only_snapshot", Idempotency: "naturally_idempotent_at_snapshot_hash", SideEffectLevel: "none", PermissionModel: "runtime.businesssystem.business_system_snapshot"},
@@ -18,7 +18,7 @@ func ChangePlanReferenceImpactAuthoringCapability() capabilitycontract.Capabilit
 	return capabilitycontract.CapabilityAuthoringDefinition{
 		Key: "maintenance.reference_impact", Status: "supported", Lifecycle: "read_only_impact_analysis",
 		Parameters:  []capabilitycontract.CapabilityAuthoringParameter{{Key: "resource_type", Type: "string", Required: true}, {Key: "resource_key", Type: "string", Required: true}},
-		Permissions: []string{"runtime.businessreferences.business_reference_impact"}, ConfigurationRoutes: []string{"GET /domain-reference-graph", "GET /domain-references/{resourceType}/{resourceKey}"},
+		Permissions: []string{"runtime.businessreferences.business_reference_impact"}, ConfigurationRoutes: []string{"GET /business-references/graph", "GET /business-references/{resourceType}/{resourceKey}"},
 		InputSchema:  changePlanReferenceImpactInputSchema(),
 		OutputSchema: changePlanReferenceImpactOutputSchema(), OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "reference_graph_hash", JSONPointer: "/graph_hash", Type: "reference_graph_hash", VisibleTo: "subsequent_capability_calls"}},
 		Execution: &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"changeplan.reference_graph"}, Transaction: "read_only_graph_projection", Idempotency: "naturally_idempotent_at_graph_hash", SideEffectLevel: "none", PermissionModel: "runtime.businessreferences.business_reference_impact"},

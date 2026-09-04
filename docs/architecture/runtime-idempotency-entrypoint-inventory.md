@@ -5,18 +5,18 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (54)
+## HTTP mutation routes (53)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
-| `appschema` | `POST /tenant-admin/metadata/definitions/{resourceType}/{resourceKey}/validate` | `not_applicable` | none | `runtime/transport/http/appschema/appschema_routes.go` |
-| `automation` | `POST /automation-rules/authoring-fragments/{capabilityKey}/validate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
-| `automation` | `POST /automation-rules/simulate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
-| `automation` | `POST /automation-rules/validate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
-| `automation` | `POST /automation-rules/{ruleKey}/simulate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
-| `businesssystem` | `POST /domain-system-delivery-verification` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/businesssystem/businesssystem_routes.go` |
-| `businesssystem` | `POST /domain-system-validation` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/businesssystem/businesssystem_routes.go` |
-| `lifecycle` | `POST /operations/lifecycle/cleanup/jobs/{jobID}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
+| `appschema` | `POST /metadata/definitions/{resourceType}/{resourceKey}/validate` | `not_applicable` | none | `runtime/transport/http/appschema/appschema_routes.go` |
+| `automation` | `POST /automation/rules/authoring-fragments/{capabilityKey}/validate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
+| `automation` | `POST /automation/rules/simulate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
+| `automation` | `POST /automation/rules/validate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
+| `automation` | `POST /automation/rules/{ruleKey}/simulate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
+| `businesssystem` | `POST /business-system/delivery-verification` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/businesssystem/businesssystem_routes.go` |
+| `businesssystem` | `POST /business-system/validation` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/businesssystem/businesssystem_routes.go` |
+| `lifecycle` | `POST /lifecycle/cleanup/jobs/{jobID}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
 | `operations` | `POST /operations` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
 | `operations` | `POST /operations/break-glass` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
 | `operations` | `POST /operations/break-glass/{grantID}/disable` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
@@ -32,37 +32,36 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `operations` | `POST /operations/idempotency/receipts/{owner}/{receiptID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
 | `operations` | `POST /operations/leases/{owner}/{resourceID}/force-release` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
 | `operations` | `PUT /operations/controls/{controlKind}/{owner}` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/operations/operations_routes.go` |
-| `records` | `DELETE /objects/{objectKey}/records/{recordID}` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `records` | `PATCH /objects/{objectKey}/records/{recordID}` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /objects/{objectKey}/actions/{actionKey}/bulk` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /objects/{objectKey}/actions/{actionKey}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /objects/{objectKey}/records` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /objects/{objectKey}/records/export` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /objects/{objectKey}/records/import/apply` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /objects/{objectKey}/records/import/jobs` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /objects/{objectKey}/records/import/preview` | `not_applicable` | none | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /objects/{objectKey}/records/{recordID}/actions/{actionKey}` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /objects/{objectKey}/records/{recordID}/deactivate-profile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `records` | `POST /objects/{objectKey}/records/{recordID}/reactivate-profile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
-| `scheduler` | `POST /v1/scheduler-triggers:accept` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
-| `uploads` | `POST /files` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/uploads/uploads_routes.go` |
-| `workflows` | `POST /business/workflow/processes/{processID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /business/workflow/processes/{processID}/withdraw` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /business/workflow/tasks/{taskID}/approve` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /business/workflow/tasks/{taskID}/reject` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /business/workflow/tasks/{taskID}/return` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /business/workflows/{workflowKey}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /operations/workflow/executions/process` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /operations/workflow/executions/{executionID}/resolve` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /operations/workflow/executions/{executionID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /operations/workflow/processes/{processID}/resolve` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /operations/workflow/processes/{processID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /portal/workflows/{workflowKey}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /tenant-admin/workflows/authoring-fragments/{capabilityKey}/validate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /tenant-admin/workflows/{workflowKey}/simulate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /tenant-admin/workflows/{workflowKey}/validate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workspaceprovision` | `POST /tenant-admin/workspaces/provision` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
-| `workspaceprovision` | `POST /tenant-admin/workspaces/{workspaceID}/roles/reconcile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
+| `records` | `DELETE /records/objects/{objectKey}/records/{recordID}` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `records` | `PATCH /records/objects/{objectKey}/records/{recordID}` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `records` | `POST /records/objects/{objectKey}/actions/{actionKey}/bulk` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `records` | `POST /records/objects/{objectKey}/actions/{actionKey}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `records` | `POST /records/objects/{objectKey}/records` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `records` | `POST /records/objects/{objectKey}/records/export` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `records` | `POST /records/objects/{objectKey}/records/import/apply` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `records` | `POST /records/objects/{objectKey}/records/import/jobs` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `records` | `POST /records/objects/{objectKey}/records/import/preview` | `not_applicable` | none | `runtime/transport/http/records/records_routes.go` |
+| `records` | `POST /records/objects/{objectKey}/records/{recordID}/actions/{actionKey}` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `records` | `POST /records/objects/{objectKey}/records/{recordID}/deactivate-profile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `records` | `POST /records/objects/{objectKey}/records/{recordID}/reactivate-profile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
+| `scheduler` | `POST /scheduler/triggers/accept` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/scheduler/scheduler_routes.go` |
+| `uploads` | `POST /uploads/files` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/uploads/uploads_routes.go` |
+| `workflows` | `POST /workflow/authoring-fragments/{capabilityKey}/validate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/definitions/{workflowKey}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/definitions/{workflowKey}/simulate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/definitions/{workflowKey}/validate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/operations/executions/process` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/operations/executions/{executionID}/resolve` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/operations/executions/{executionID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/operations/processes/{processID}/resolve` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/operations/processes/{processID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/processes/{processID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/processes/{processID}/withdraw` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/tasks/{taskID}/approve` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/tasks/{taskID}/reject` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workflows` | `POST /workflow/tasks/{taskID}/return` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
+| `workspaceprovision` | `POST /workspace/provision` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
+| `workspaceprovision` | `POST /workspace/{workspaceID}/roles/reconcile` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 
 ## Application mutation commands (123)
 
@@ -179,10 +178,10 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workflow` | `ProcessScheduledWorkflowWindowPage` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_record_execution_application_service.go` |
 | `workflow` | `ProcessWorkflowContinuation` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_application_service.go` |
 | `workflow` | `ProcessWorkflowExecutions` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_application_service.go` |
-| `workflow` | `ResolveOpsWorkflowProcessFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_surface_use_cases.go` |
+| `workflow` | `ResolveOpsWorkflowProcessFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_participant_use_cases.go` |
 | `workflow` | `ResolveWorkflowExecution` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_execution_application_service.go` |
 | `workflow` | `ResolveWorkflowProcessFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_process_application_service.go` |
-| `workflow` | `RetryOpsWorkflowProcessWithKey` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_surface_use_cases.go` |
+| `workflow` | `RetryOpsWorkflowProcessWithKey` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_participant_use_cases.go` |
 | `workflow` | `RetryWorkflowExecution` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_execution_application_service.go` |
 | `workflow` | `RetryWorkflowExecutionWithKey` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_execution_application_service.go` |
 | `workflow` | `RetryWorkflowProcess` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_process_application_service.go` |

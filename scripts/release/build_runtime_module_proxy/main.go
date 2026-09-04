@@ -300,7 +300,7 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		{path: "github.com/domainry/domainry-metadata", rootEnvironment: "DOMAINRY_METADATA_REPO_ROOT", label: "Metadata", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-identity", rootEnvironment: "DOMAINRY_IDENTITY_REPO_ROOT", label: "Identity", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-integration-sdk", rootEnvironment: "DOMAINRY_INTEGRATION_SDK_REPO_ROOT", label: "Integration SDK", patterns: []string{"./..."}},
-		{path: "github.com/domainry/domainry-connectors", rootEnvironment: "DOMAINRY_CONNECTORS_REPO_ROOT", label: "Connectors", patterns: []string{"./catalog"}},
+		{path: "github.com/domainry/domainry-connectors", rootEnvironment: "DOMAINRY_CONNECTORS_REPO_ROOT", label: "Connectors", patterns: []string{"./catalog", "./providers/..."}},
 		{path: "github.com/domainry/domainry-integration", rootEnvironment: "DOMAINRY_INTEGRATION_REPO_ROOT", label: "Integration", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-lifecycle-sdk", rootEnvironment: "DOMAINRY_LIFECYCLE_SDK_REPO_ROOT", label: "Lifecycle SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-lifecycle", rootEnvironment: "DOMAINRY_LIFECYCLE_REPO_ROOT", label: "Lifecycle", patterns: []string{"./..."}},

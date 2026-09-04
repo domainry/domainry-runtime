@@ -90,7 +90,7 @@ func TestCreatePlanningDoesNotSelfDeadlockSharedSingleConnectionSQLitePool(t *te
 		}},
 		dependencies: BusinessHandlerExecutionDependencies{
 			PlanCreateMutation: func(ctx context.Context, _ string, _ map[string]any, _ string, _ principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
-				// Models Identity Directory relation validation using the same DB pool
+				// Models Identity Projection relation validation using the same DB pool
 				// but outside Runtime's Action transaction composition.
 				var id string
 				if err := db.QueryRowContext(ctx, "SELECT id FROM _identity_users WHERE id = ?", "identity-user-1").Scan(&id); err != nil {

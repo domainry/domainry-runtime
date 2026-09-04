@@ -10,7 +10,7 @@ import (
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
 
-// SQLDatabase is the transaction/connection-neutral DDL surface used by the
+// SQLDatabase is the transaction/connection-neutral DDL contract used by the
 // schema assembler. A Runtime migration can provide its advisory-lock-owning
 // *sql.Conn while ordinary bootstrap paths can provide *sql.DB.
 type SQLDatabase interface {

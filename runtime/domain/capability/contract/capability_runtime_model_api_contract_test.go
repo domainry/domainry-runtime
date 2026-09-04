@@ -51,7 +51,7 @@ func TestRuntimeModelAPIRecordExportHidesAutomaticDeliveryMechanics(t *testing.T
 	}
 }
 
-func TestRuntimeModelAPINormalizesFrontendSurfacesAndClosesSelectedSchemas(t *testing.T) {
+func TestRuntimeModelAPIClosesSelectedNotificationSchemas(t *testing.T) {
 	payload, err := RuntimeModelAPIContractProjection("notification_list")
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +77,7 @@ func TestRuntimeModelAPINormalizesFrontendSurfacesAndClosesSelectedSchemas(t *te
 }
 
 func TestRuntimeModelAPIProjectionRejectsUnselectedTransportOperations(t *testing.T) {
-	for _, key := range []string{"record_export_download", "business_notification_stream", "missing"} {
+	for _, key := range []string{"record_export_download", "notification_stream", "missing"} {
 		if _, err := RuntimeModelAPIContractProjection(key); err == nil {
 			t.Errorf("transport or unknown operation %q was accepted", key)
 		}

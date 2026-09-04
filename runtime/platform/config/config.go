@@ -27,7 +27,7 @@ type Config struct {
 	HTTPBindHost                            string
 	Port                                    string
 	HTTPPublicAddr                          string
-	HTTPTenantAdminAddr                     string
+	HTTPManagementAddr                      string
 	HTTPOpsAddr                             string
 	HTTPOpsAllowPublicBindBreakGlass        bool
 	HTTPOpsPublicBindBreakGlassReason       string
@@ -39,13 +39,13 @@ type Config struct {
 	HTTPMaxJSONBodyBytes                    int
 	HTTPMaxHeaderBytes                      int
 	HTTPPublicMaxJSONBodyBytes              int
-	HTTPTenantAdminMaxJSONBodyBytes         int
+	HTTPManagementMaxJSONBodyBytes          int
 	HTTPOpsMaxJSONBodyBytes                 int
 	HTTPPublicRequestTimeout                time.Duration
-	HTTPTenantAdminRequestTimeout           time.Duration
+	HTTPManagementRequestTimeout            time.Duration
 	HTTPOpsRequestTimeout                   time.Duration
 	HTTPPublicRateLimitPerMinute            int
-	HTTPTenantAdminRateLimitPerMinute       int
+	HTTPManagementRateLimitPerMinute        int
 	HTTPOpsRateLimitPerMinute               int
 	RateLimitBackend                        string
 	RateLimitRedisURL                       string
@@ -129,9 +129,9 @@ type Config struct {
 	InitialTenantRequestID          string
 	InitialTenantCode               string
 	InitialTenantName               string
-	InitialTenantAdminLoginID       string
-	InitialTenantAdminName          string
-	InitialTenantAdminPassword      string
+	InitialManagementLoginID        string
+	InitialManagementName           string
+	InitialManagementPassword       string
 	InitialTenantStoreConfiguration string
 	// AllowEmptyAuthoringManifest is set only by the trusted configuring
 	// Provision lifecycle. It is not loaded from environment configuration.
@@ -139,7 +139,7 @@ type Config struct {
 	UploadDir                      string
 	CORSAllowedOrigins             []string
 	HTTPPublicOrigins              []string
-	HTTPTenantAdminOrigins         []string
+	HTTPManagementOrigins          []string
 	HTTPOpsOrigins                 []string
 	RuntimeAllowDevIdentityHeaders bool
 	AuditExportTokenKey            string
@@ -186,7 +186,7 @@ func FromEnv() Config {
 		HTTPBindHost:                            strings.TrimSpace(os.Getenv("HTTP_BIND_HOST")),
 		Port:                                    env("PORT", "8081"),
 		HTTPPublicAddr:                          strings.TrimSpace(os.Getenv("HTTP_PUBLIC_ADDR")),
-		HTTPTenantAdminAddr:                     strings.TrimSpace(os.Getenv("HTTP_TENANT_ADMIN_ADDR")),
+		HTTPManagementAddr:                      strings.TrimSpace(os.Getenv("HTTP_MANAGEMENT_ADDR")),
 		HTTPOpsAddr:                             strings.TrimSpace(os.Getenv("HTTP_OPS_ADDR")),
 		HTTPOpsAllowPublicBindBreakGlass:        boolEnv("HTTP_OPS_ALLOW_PUBLIC_BIND_BREAK_GLASS", false),
 		HTTPOpsPublicBindBreakGlassReason:       strings.TrimSpace(os.Getenv("HTTP_OPS_PUBLIC_BIND_BREAK_GLASS_REASON")),
@@ -198,13 +198,13 @@ func FromEnv() Config {
 		HTTPMaxJSONBodyBytes:                    intEnv("HTTP_MAX_JSON_BODY_BYTES", 2<<20),
 		HTTPMaxHeaderBytes:                      intEnv("HTTP_MAX_HEADER_BYTES", 1<<20),
 		HTTPPublicMaxJSONBodyBytes:              intEnv("HTTP_PUBLIC_MAX_JSON_BODY_BYTES", 2<<20),
-		HTTPTenantAdminMaxJSONBodyBytes:         intEnv("HTTP_TENANT_ADMIN_MAX_JSON_BODY_BYTES", 2<<20),
+		HTTPManagementMaxJSONBodyBytes:          intEnv("HTTP_MANAGEMENT_MAX_JSON_BODY_BYTES", 2<<20),
 		HTTPOpsMaxJSONBodyBytes:                 intEnv("HTTP_OPS_MAX_JSON_BODY_BYTES", 1<<20),
 		HTTPPublicRequestTimeout:                durationEnv("HTTP_PUBLIC_REQUEST_TIMEOUT", 30*time.Second),
-		HTTPTenantAdminRequestTimeout:           durationEnv("HTTP_TENANT_ADMIN_REQUEST_TIMEOUT", 30*time.Second),
+		HTTPManagementRequestTimeout:            durationEnv("HTTP_MANAGEMENT_REQUEST_TIMEOUT", 30*time.Second),
 		HTTPOpsRequestTimeout:                   durationEnv("HTTP_OPS_REQUEST_TIMEOUT", 15*time.Second),
 		HTTPPublicRateLimitPerMinute:            intEnv("HTTP_PUBLIC_RATE_LIMIT_PER_MINUTE", 6000),
-		HTTPTenantAdminRateLimitPerMinute:       intEnv("HTTP_TENANT_ADMIN_RATE_LIMIT_PER_MINUTE", 3000),
+		HTTPManagementRateLimitPerMinute:        intEnv("HTTP_MANAGEMENT_RATE_LIMIT_PER_MINUTE", 3000),
 		HTTPOpsRateLimitPerMinute:               intEnv("HTTP_OPS_RATE_LIMIT_PER_MINUTE", 1200),
 		RateLimitBackend:                        env("RATE_LIMIT_BACKEND", "database"),
 		RateLimitRedisURL:                       strings.TrimSpace(os.Getenv("RATE_LIMIT_REDIS_URL")),
@@ -286,14 +286,14 @@ func FromEnv() Config {
 		InitialTenantRequestID:                  env("INITIAL_TENANT_REQUEST_ID", "initial-tenant"),
 		InitialTenantCode:                       strings.TrimSpace(os.Getenv("INITIAL_TENANT_CODE")),
 		InitialTenantName:                       strings.TrimSpace(os.Getenv("INITIAL_TENANT_NAME")),
-		InitialTenantAdminLoginID:               strings.TrimSpace(os.Getenv("INITIAL_TENANT_ADMIN_LOGIN_ID")),
-		InitialTenantAdminName:                  strings.TrimSpace(os.Getenv("INITIAL_TENANT_ADMIN_NAME")),
-		InitialTenantAdminPassword:              strings.TrimSpace(os.Getenv("INITIAL_TENANT_ADMIN_PASSWORD")),
+		InitialManagementLoginID:                strings.TrimSpace(os.Getenv("INITIAL_MANAGEMENT_LOGIN_ID")),
+		InitialManagementName:                   strings.TrimSpace(os.Getenv("INITIAL_MANAGEMENT_NAME")),
+		InitialManagementPassword:               strings.TrimSpace(os.Getenv("INITIAL_MANAGEMENT_PASSWORD")),
 		InitialTenantStoreConfiguration:         env("INITIAL_TENANT_STORE_CONFIGURATION", "{}"),
 		UploadDir:                               env("UPLOAD_DIR", "../data/uploads"),
 		CORSAllowedOrigins:                      csvEnv("CORS_ALLOWED_ORIGINS", []string{"*"}),
 		HTTPPublicOrigins:                       csvEnv("HTTP_PUBLIC_ORIGINS", nil),
-		HTTPTenantAdminOrigins:                  csvEnv("HTTP_TENANT_ADMIN_ORIGINS", nil),
+		HTTPManagementOrigins:                   csvEnv("HTTP_MANAGEMENT_ORIGINS", nil),
 		HTTPOpsOrigins:                          csvEnv("HTTP_OPS_ORIGINS", nil),
 		RuntimeAllowDevIdentityHeaders:          boolEnv("RUNTIME_ALLOW_DEV_IDENTITY_HEADERS", false),
 		AuditExportTokenKey:                     env("AUDIT_EXPORT_TOKEN_KEY", DevAuditExportTokenKey),
@@ -441,7 +441,7 @@ func (c Config) validateProductionListeners() error {
 		addr string
 	}{
 		{"HTTP_PUBLIC_ADDR", c.HTTPPublicAddr},
-		{"HTTP_TENANT_ADMIN_ADDR", c.HTTPTenantAdminAddr},
+		{"HTTP_MANAGEMENT_ADDR", c.HTTPManagementAddr},
 		{"HTTP_OPS_ADDR", c.HTTPOpsAddr},
 	}
 	seen := map[string]string{}
@@ -480,7 +480,7 @@ func (c Config) validateProductionListenerOrigins() error {
 		origins []string
 	}{
 		{"HTTP_PUBLIC_ORIGINS", c.HTTPPublicOrigins},
-		{"HTTP_TENANT_ADMIN_ORIGINS", c.HTTPTenantAdminOrigins},
+		{"HTTP_MANAGEMENT_ORIGINS", c.HTTPManagementOrigins},
 		{"HTTP_OPS_ORIGINS", c.HTTPOpsOrigins},
 	}
 	cors := map[string]bool{}

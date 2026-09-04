@@ -80,7 +80,7 @@ func runExactDecimalPersistenceFixture(t *testing.T, cfg config.Config) []byte {
 			t.Fatal(err)
 		}
 	}
-	page, err := records.ListRecords(t.Context(), "workspace-a", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, Sort: []recordmodel.RecordSortRule{{Field: "amount", Direction: "asc"}}})
+	page, err := records.ListRecords(t.Context(), "workspace-a", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: "amount", Direction: "asc"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

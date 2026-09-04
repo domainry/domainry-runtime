@@ -69,7 +69,13 @@ func uploadAccessPrincipal(permissions ...string) principalmodel.Principal {
 				Key: "upload-test-" + resource + "-" + action, Resource: identitysdk.ResourceType(resource), Action: identitysdk.Action(action), Effect: identitysdk.EffectAllow,
 				Predicate: identitysdk.Predicate{Fact: "id", Operator: identitysdk.OperatorExists, Value: true},
 			})
+			return
 		}
+		dataPolicies = append(dataPolicies, identitysdk.DataPolicy{
+			Key:      "upload-test-" + strings.ReplaceAll(resource, ".", "-") + "-" + action,
+			Resource: identitysdk.ResourceType(resource), Action: identitysdk.Action(action), Effect: identitysdk.EffectAllow,
+			DataScopes: []identitysdk.DataScope{identitysdk.DataScopeAll},
+		})
 	}
 	for _, permission := range permissions {
 		permission = strings.TrimSpace(permission)

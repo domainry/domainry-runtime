@@ -21,7 +21,7 @@ func TestRuntimeAuthoringScenarioReceiptRejectsTamperingAndStaleBinding(t *testi
 	receipt, err := service.Issue(RuntimeAuthoringScenarioStepObservation{
 		BuilderTaskID: "task", SnapshotHash: binding.SnapshotHash, CoverageHash: binding.CoverageHash,
 		ScenarioID: "order.lifecycle", Categories: []string{"success", "success"}, Label: "create",
-		Method: "post", Path: "/objects/order/records", ExpectedStatus: []int{201, 201}, ActualStatus: 201,
+		Method: "post", Path: "/records/objects/order/records", ExpectedStatus: []int{201, 201}, ActualStatus: 201,
 		RequestHash: strings.Repeat("c", 64), ResponseHash: strings.Repeat("d", 64), IdempotencyKey: "create-1",
 	})
 	if err != nil {
@@ -61,7 +61,7 @@ func TestRuntimeAuthoringEvidenceSessionIssuesPlanBoundStepTokens(t *testing.T) 
 	plan := changeplanmodel.RuntimeAuthoringEvidencePlan{
 		Scenarios: []changeplanmodel.RuntimeAuthoringEvidenceScenarioPlan{{
 			ScenarioID: "order.lifecycle", Categories: append([]string(nil), changeplanmodel.RuntimeAuthoringRequiredScenarioCategories...),
-			Steps: []changeplanmodel.RuntimeAuthoringEvidenceStepPlan{{StepID: "create", Label: "create order", Method: "post", Path: "/objects/order/records", ExpectedStatus: []int{201}}},
+			Steps: []changeplanmodel.RuntimeAuthoringEvidenceStepPlan{{StepID: "create", Label: "create order", Method: "post", Path: "/records/objects/order/records", ExpectedStatus: []int{201}}},
 		}},
 	}
 	session, err := service.IssueEvidenceSession("task", binding, coverage, plan)
@@ -122,7 +122,7 @@ func TestRuntimeAuthoringDeliveryTrustsOnlyRuntimeIssuedStepReceipts(t *testing.
 	plan := changeplanmodel.RuntimeAuthoringEvidencePlan{
 		Scenarios: []changeplanmodel.RuntimeAuthoringEvidenceScenarioPlan{{
 			ScenarioID: "order.lifecycle", Categories: append([]string(nil), changeplanmodel.RuntimeAuthoringRequiredScenarioCategories...),
-			Steps: []changeplanmodel.RuntimeAuthoringEvidenceStepPlan{{StepID: "registered-step", Label: "registered step", Method: "GET", Path: "/objects/order/records/order-1", ExpectedStatus: []int{200}}},
+			Steps: []changeplanmodel.RuntimeAuthoringEvidenceStepPlan{{StepID: "registered-step", Label: "registered step", Method: "GET", Path: "/records/objects/order/records/order-1", ExpectedStatus: []int{200}}},
 		}},
 	}
 	ctx := operationscontract.WithBuilderTaskID(t.Context(), "task")
@@ -146,15 +146,15 @@ func TestRuntimeAuthoringDeliveryTrustsOnlyRuntimeIssuedStepReceipts(t *testing.
 	}
 	stateHash := strings.Repeat("2", 64)
 	steps := []changeplanmodel.RuntimeAuthoringScenarioStepEvidence{
-		{RuntimeReceipt: issue("success", "/objects/order/records/order-1", 200, strings.Repeat("3", 64), "", "", false), ActualStatus: 500, Passed: false},
-		{RuntimeReceipt: issue("denied", "/objects/order/records/order-1", 403, strings.Repeat("4", 64), "", "", false)},
-		{RuntimeReceipt: issue("precondition", "/objects/order/records/order-1/actions/complete", 422, strings.Repeat("5", 64), "", "", false)},
-		{RuntimeReceipt: issue("before", "/objects/order/records/order-1", 200, stateHash, "before_state", "", false)},
-		{RuntimeReceipt: issue("after", "/objects/order/records/order-1", 200, stateHash, "after_state", "", false)},
-		{RuntimeReceipt: issue("replay-one", "/objects/order/records", 200, strings.Repeat("6", 64), "", "create-1", false)},
-		{RuntimeReceipt: issue("replay-two", "/objects/order/records", 200, strings.Repeat("6", 64), "", "create-1", true)},
-		{RuntimeReceipt: issue("audit", "/business/audit-events", 200, strings.Repeat("7", 64), "", "", false)},
-		{RuntimeReceipt: issue("event", "/business/events", 200, strings.Repeat("8", 64), "", "", false)},
+		{RuntimeReceipt: issue("success", "/records/objects/order/records/order-1", 200, strings.Repeat("3", 64), "", "", false), ActualStatus: 500, Passed: false},
+		{RuntimeReceipt: issue("denied", "/records/objects/order/records/order-1", 403, strings.Repeat("4", 64), "", "", false)},
+		{RuntimeReceipt: issue("precondition", "/records/objects/order/records/order-1/actions/complete", 422, strings.Repeat("5", 64), "", "", false)},
+		{RuntimeReceipt: issue("before", "/records/objects/order/records/order-1", 200, stateHash, "before_state", "", false)},
+		{RuntimeReceipt: issue("after", "/records/objects/order/records/order-1", 200, stateHash, "after_state", "", false)},
+		{RuntimeReceipt: issue("replay-one", "/records/objects/order/records", 200, strings.Repeat("6", 64), "", "create-1", false)},
+		{RuntimeReceipt: issue("replay-two", "/records/objects/order/records", 200, strings.Repeat("6", 64), "", "create-1", true)},
+		{RuntimeReceipt: issue("audit", "/audit/events", 200, strings.Repeat("7", 64), "", "", false)},
+		{RuntimeReceipt: issue("event", "/business-events/stream", 200, strings.Repeat("8", 64), "", "", false)},
 		{RuntimeReceipt: issue("outbox", "/operations/outbox", 200, strings.Repeat("9", 64), "", "", false)},
 	}
 	submission := changeplanmodel.RuntimeAuthoringDeliverySubmission{Coverage: coverage, Receipts: []string{}}

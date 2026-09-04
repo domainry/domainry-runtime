@@ -93,24 +93,24 @@ func (*fakeSchedulerService) Start(context.Context, schedulersdk.WorkerConfig) <
 }
 func (*fakeSchedulerService) Close(context.Context) error { return nil }
 
-func (f *fakeSchedulerService) TenantAdminDefinitions(_ context.Context, principal principalmodel.Principal) ([]schedulerapplication.TenantAdminSchedulerDefinitionDTO, error) {
+func (f *fakeSchedulerService) ManagementDefinitions(_ context.Context, principal principalmodel.Principal) ([]schedulerapplication.ManagementSchedulerDefinitionDTO, error) {
 	f.call = schedulerServiceCall{operation: "tenant_definitions", principal: principal}
-	return []schedulerapplication.TenantAdminSchedulerDefinitionDTO{{Key: "definition-a"}}, f.err
+	return []schedulerapplication.ManagementSchedulerDefinitionDTO{{Key: "definition-a"}}, f.err
 }
 
-func (f *fakeSchedulerService) TenantAdminDefinition(_ context.Context, resource string, principal principalmodel.Principal) (schedulerapplication.TenantAdminSchedulerDefinitionDTO, error) {
+func (f *fakeSchedulerService) ManagementDefinition(_ context.Context, resource string, principal principalmodel.Principal) (schedulerapplication.ManagementSchedulerDefinitionDTO, error) {
 	f.call = schedulerServiceCall{operation: "tenant_definition", resource: resource, principal: principal}
-	return schedulerapplication.TenantAdminSchedulerDefinitionDTO{Key: resource}, f.err
+	return schedulerapplication.ManagementSchedulerDefinitionDTO{Key: resource}, f.err
 }
 
-func (f *fakeSchedulerService) TenantAdminDefinitionVersions(_ context.Context, resource string, principal principalmodel.Principal) ([]schedulerapplication.TenantAdminSchedulerDefinitionVersionDTO, error) {
+func (f *fakeSchedulerService) ManagementDefinitionVersions(_ context.Context, resource string, principal principalmodel.Principal) ([]schedulerapplication.ManagementSchedulerDefinitionVersionDTO, error) {
 	f.call = schedulerServiceCall{operation: "tenant_versions", resource: resource, principal: principal}
-	return []schedulerapplication.TenantAdminSchedulerDefinitionVersionDTO{{VersionID: "version-a"}}, f.err
+	return []schedulerapplication.ManagementSchedulerDefinitionVersionDTO{{VersionID: "version-a"}}, f.err
 }
 
-func (f *fakeSchedulerService) TenantAdminAuthoringContract(_ context.Context, principal principalmodel.Principal) (schedulerapplication.TenantAdminSchedulerAuthoringContract, error) {
+func (f *fakeSchedulerService) ManagementAuthoringContract(_ context.Context, principal principalmodel.Principal) (schedulerapplication.ManagementSchedulerAuthoringContract, error) {
 	f.call = schedulerServiceCall{operation: "tenant_authoring_contract", principal: principal}
-	return schedulerapplication.TenantAdminSchedulerAuthoringContract{ResourceType: "scheduler"}, f.err
+	return schedulerapplication.ManagementSchedulerAuthoringContract{ResourceType: "scheduler"}, f.err
 }
 
 func (f *fakeSchedulerService) AuthorizeOpsRead(_ context.Context, principal principalmodel.Principal) error {
@@ -128,7 +128,7 @@ func (f *fakeSchedulerService) PreviewSchedule(_ context.Context, data map[strin
 	return f.preview, f.err
 }
 
-func (f *fakeSchedulerService) SimulateTenantAdminDefinition(_ context.Context, resource string, principal principalmodel.Principal) (schedulerapplication.SchedulerDefinitionSimulation, error) {
+func (f *fakeSchedulerService) SimulateManagementDefinition(_ context.Context, resource string, principal principalmodel.Principal) (schedulerapplication.SchedulerDefinitionSimulation, error) {
 	f.call = schedulerServiceCall{operation: "tenant_simulate", resource: resource, principal: principal}
 	return f.result, f.err
 }
@@ -264,14 +264,14 @@ func TestSchedulerRoutesEnforceMethodsAndApplySurfaceMiddleware(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	paths := []string{
-		"/tenant-admin/scheduler/definitions/validate",
-		"/tenant-admin/scheduler/schedules/preview",
-		"/tenant-admin/scheduler/definitions/id/simulate",
-		"/operations/scheduler/definitions/id/run",
-		"/operations/scheduler/definitions/id/reschedule",
-		"/operations/scheduler/runs/id/retry",
-		"/operations/scheduler/runs/id/cancel",
-		"/operations/scheduler/dead-letters/id/resolve",
+		"/scheduler/definitions/validate",
+		"/scheduler/schedules/preview",
+		"/scheduler/definitions/id/simulate",
+		"/scheduler/definitions/id/run",
+		"/scheduler/definitions/id/reschedule",
+		"/scheduler/runs/id/retry",
+		"/scheduler/runs/id/cancel",
+		"/scheduler/dead-letters/id/resolve",
 	}
 	for _, path := range paths {
 		writer := httptest.NewRecorder()
@@ -284,7 +284,7 @@ func TestSchedulerRoutesEnforceMethodsAndApplySurfaceMiddleware(t *testing.T) {
 		t.Fatalf("authenticated calls=%d", authenticatedCalls)
 	}
 	wrongMethod := httptest.NewRecorder()
-	mux.ServeHTTP(wrongMethod, httptest.NewRequest(http.MethodGet, "/operations/scheduler/definitions/id/run", nil))
+	mux.ServeHTTP(wrongMethod, httptest.NewRequest(http.MethodGet, "/scheduler/definitions/id/run", nil))
 	if wrongMethod.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("wrong method status=%d", wrongMethod.Code)
 	}

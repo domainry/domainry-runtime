@@ -27,7 +27,7 @@ func (runtime *Runtime) ModuleInventory() (moduleinfo.Inventory, error) {
 		modules = append(modules, moduleinfo.Descriptor{
 			Key: key, Mode: moduleinfo.DeploymentMode(mode),
 			Capabilities: append([]string(nil), capabilities...),
-			HTTPSurfaces: moduleHTTPSurfaceInventory(binding),
+			HTTPAdapters: moduleHTTPAdapterInventory(binding),
 			Persistence:  persistence,
 		})
 	}
@@ -108,22 +108,22 @@ func (runtime *Runtime) ModuleInventory() (moduleinfo.Inventory, error) {
 	return moduleinfo.NewInventory(modules)
 }
 
-func moduleHTTPSurfaceInventory(binding any) []moduleinfo.HTTPSurface {
+func moduleHTTPAdapterInventory(binding any) []moduleinfo.HTTPAdapter {
 	provider, ok := binding.(modulehttp.Provider)
 	if !ok || provider == nil {
 		return nil
 	}
-	result := make([]moduleinfo.HTTPSurface, 0, len(provider.HTTPSurfaces()))
-	for _, surface := range provider.HTTPSurfaces() {
-		if surface == nil {
+	result := make([]moduleinfo.HTTPAdapter, 0, len(provider.HTTPAdapters()))
+	for _, adapter := range provider.HTTPAdapters() {
+		if adapter == nil {
 			continue
 		}
-		routes := make([]string, 0, len(surface.Routes()))
-		for _, route := range surface.Routes() {
+		routes := make([]string, 0, len(adapter.Routes()))
+		for _, route := range adapter.Routes() {
 			routes = append(routes, route.Pattern())
 		}
 		sort.Strings(routes)
-		result = append(result, moduleinfo.HTTPSurface{Name: surface.Name(), Routes: routes})
+		result = append(result, moduleinfo.HTTPAdapter{Name: adapter.Name(), Routes: routes})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result

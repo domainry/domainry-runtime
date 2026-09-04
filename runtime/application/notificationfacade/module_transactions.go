@@ -26,13 +26,13 @@ func (SaaSCompiler) CompileInboxIntent(value runtimemodel.NotificationIntent, sc
 	if _, err := principalmodel.NewSystemCommandScope(scope); err != nil {
 		return runtimemodel.NotificationEvent{}, err
 	}
-	if strings.TrimSpace(value.ID) == "" || strings.TrimSpace(value.WorkspaceID) == "" || strings.TrimSpace(value.SourceEventID) == "" || strings.TrimSpace(value.EventType) == "" || strings.TrimSpace(value.Surface) == "" || strings.TrimSpace(value.OccurredAt) == "" {
+	if strings.TrimSpace(value.ID) == "" || strings.TrimSpace(value.WorkspaceID) == "" || strings.TrimSpace(value.SourceEventID) == "" || strings.TrimSpace(value.EventType) == "" || strings.TrimSpace(value.OccurredAt) == "" {
 		return runtimemodel.NotificationEvent{}, fmt.Errorf("Notification SaaS publication intent is missing a required identity field")
 	}
 	intent := value
 	return runtimemodel.NotificationEvent{
 		ID: value.ID, WorkspaceID: value.WorkspaceID, SourceEventID: value.SourceEventID,
-		EventType: value.EventType, Severity: value.Severity, Surface: value.Surface,
+		EventType: value.EventType, Severity: value.Severity,
 		RecipientUserIDs:     append([]string(nil), value.RecipientUserIDs...),
 		AudienceResolverKeys: append([]string(nil), value.AudienceResolverKeys...),
 		SubjectType:          value.SubjectType, SubjectID: value.SubjectID, SubjectVersion: value.SubjectVersion,

@@ -19,13 +19,13 @@ func addWorkspaceProvisioningOpenAPIPaths(paths map[string]any) {
 		"application_projection_ids": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}},
 		"replayed":                   map[string]any{"type": "boolean"},
 	})
-	paths["/tenant-admin/workspaces/provision"] = map[string]any{
+	paths["/workspace/provision"] = map[string]any{
 		"post": openAPIOperation(
 			"provisionWorkspace", "Workspace Administration", "Atomically provision a tenant workspace, administrator identity, configuration, and application projections",
 			openAPIAdminSecurity(), openAPIJSONRequest(request), openAPIJSONResponse("Workspace provisioning result", result),
 		),
 	}
-	paths["/tenant-admin/workspaces/{workspaceID}/roles/reconcile"] = map[string]any{
+	paths["/workspace/{workspaceID}/roles/reconcile"] = map[string]any{
 		"post": openAPIOperation(
 			"reconcileWorkspaceRoles", "Workspace Administration", "Reconcile application-declared tenant login roles inside one host transaction",
 			openAPIAdminSecurity(), openAPIPathParameter("workspaceID", "Managed workspace ID"),

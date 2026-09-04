@@ -19,7 +19,7 @@ import (
 )
 
 // OperationsIdempotencyReceiptControl retains the existing owner-specific
-// recovery surface while it migrates onto the unified operation ledger.
+// recovery API while it migrates onto the unified operation ledger.
 type OperationsIdempotencyReceiptControl interface {
 	IdempotencyReceipts(context.Context, principalmodel.Principal, string, int) ([]idempotency.ReceiptSummary, error)
 	RetryIdempotencyReceipt(context.Context, principalmodel.Principal, string, string) error

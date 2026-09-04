@@ -26,8 +26,8 @@ func workflowProcessFilterFromRequest(r *http.Request) workflowmodel.WorkflowPro
 	}
 }
 
-func (h *WorkflowsHandler) listBusinessWorkflowTasks(w http.ResponseWriter, r *http.Request) {
-	tasks, err := h.processes.BusinessWorkflowTasks(
+func (h *WorkflowsHandler) listParticipantWorkflowTasks(w http.ResponseWriter, r *http.Request) {
+	tasks, err := h.processes.ParticipantWorkflowTasks(
 		r.Context(), h.principal(r), r.URL.Query().Get("status"), intQuery(r.URL.Query().Get("limit")),
 	)
 	if err != nil {
@@ -48,8 +48,8 @@ func (h *WorkflowsHandler) listBusinessTeamWorkflowTasks(w http.ResponseWriter, 
 	h.writeJSON(w, http.StatusOK, tasks)
 }
 
-func (h *WorkflowsHandler) listBusinessWorkflowProcesses(w http.ResponseWriter, r *http.Request) {
-	processes, err := h.processes.BusinessWorkflowProcesses(r.Context(), h.principal(r), workflowProcessFilterFromRequest(r))
+func (h *WorkflowsHandler) listParticipantWorkflowProcesses(w http.ResponseWriter, r *http.Request) {
+	processes, err := h.processes.ParticipantWorkflowProcesses(r.Context(), h.principal(r), workflowProcessFilterFromRequest(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
@@ -57,7 +57,7 @@ func (h *WorkflowsHandler) listBusinessWorkflowProcesses(w http.ResponseWriter, 
 	h.writeJSON(w, http.StatusOK, processes)
 }
 
-func (h *WorkflowsHandler) getBusinessWorkflowProcess(w http.ResponseWriter, r *http.Request) {
+func (h *WorkflowsHandler) getParticipantWorkflowProcess(w http.ResponseWriter, r *http.Request) {
 	detail, err := h.processes.WorkflowProcess(
 		r.Context(), strings.TrimSpace(r.PathValue("processID")), h.principal(r),
 	)
@@ -65,7 +65,7 @@ func (h *WorkflowsHandler) getBusinessWorkflowProcess(w http.ResponseWriter, r *
 		h.writeServiceError(w, r, err)
 		return
 	}
-	h.writeJSON(w, http.StatusOK, workflowapplication.ProjectBusinessWorkflowProcessDetail(detail))
+	h.writeJSON(w, http.StatusOK, workflowapplication.ProjectParticipantWorkflowProcessDetail(detail))
 }
 
 func (h *WorkflowsHandler) listOpsWorkflowExecutions(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +98,7 @@ func (h *WorkflowsHandler) getOpsWorkflowProcess(w http.ResponseWriter, r *http.
 	h.writeJSON(w, http.StatusOK, detail)
 }
 
-func (h *WorkflowsHandler) decideBusinessWorkflowTask(w http.ResponseWriter, r *http.Request, decision string) {
+func (h *WorkflowsHandler) decideParticipantWorkflowTask(w http.ResponseWriter, r *http.Request, decision string) {
 	key, ok := h.requireIdempotencyKey(w, r)
 	if !ok {
 		return
@@ -114,22 +114,22 @@ func (h *WorkflowsHandler) decideBusinessWorkflowTask(w http.ResponseWriter, r *
 		h.writeServiceError(w, r, err)
 		return
 	}
-	h.writeJSON(w, http.StatusOK, workflowapplication.ProjectBusinessWorkflowProcess(process))
+	h.writeJSON(w, http.StatusOK, workflowapplication.ProjectParticipantWorkflowProcess(process))
 }
 
-func (h *WorkflowsHandler) approveBusinessWorkflowTask(w http.ResponseWriter, r *http.Request) {
-	h.decideBusinessWorkflowTask(w, r, "approved")
+func (h *WorkflowsHandler) approveParticipantWorkflowTask(w http.ResponseWriter, r *http.Request) {
+	h.decideParticipantWorkflowTask(w, r, "approved")
 }
 
-func (h *WorkflowsHandler) rejectBusinessWorkflowTask(w http.ResponseWriter, r *http.Request) {
-	h.decideBusinessWorkflowTask(w, r, "rejected")
+func (h *WorkflowsHandler) rejectParticipantWorkflowTask(w http.ResponseWriter, r *http.Request) {
+	h.decideParticipantWorkflowTask(w, r, "rejected")
 }
 
-func (h *WorkflowsHandler) returnBusinessWorkflowTask(w http.ResponseWriter, r *http.Request) {
-	h.decideBusinessWorkflowTask(w, r, "returned")
+func (h *WorkflowsHandler) returnParticipantWorkflowTask(w http.ResponseWriter, r *http.Request) {
+	h.decideParticipantWorkflowTask(w, r, "returned")
 }
 
-func (h *WorkflowsHandler) withdrawBusinessWorkflowProcess(w http.ResponseWriter, r *http.Request) {
+func (h *WorkflowsHandler) withdrawParticipantWorkflowProcess(w http.ResponseWriter, r *http.Request) {
 	key, ok := h.requireIdempotencyKey(w, r)
 	if !ok {
 		return
@@ -141,10 +141,10 @@ func (h *WorkflowsHandler) withdrawBusinessWorkflowProcess(w http.ResponseWriter
 		h.writeServiceError(w, r, err)
 		return
 	}
-	h.writeJSON(w, http.StatusOK, workflowapplication.ProjectBusinessWorkflowProcess(process))
+	h.writeJSON(w, http.StatusOK, workflowapplication.ProjectParticipantWorkflowProcess(process))
 }
 
-func (h *WorkflowsHandler) retryBusinessWorkflowProcess(w http.ResponseWriter, r *http.Request) {
+func (h *WorkflowsHandler) retryParticipantWorkflowProcess(w http.ResponseWriter, r *http.Request) {
 	key, ok := h.requireIdempotencyKey(w, r)
 	if !ok {
 		return
@@ -156,10 +156,10 @@ func (h *WorkflowsHandler) retryBusinessWorkflowProcess(w http.ResponseWriter, r
 		h.writeServiceError(w, r, err)
 		return
 	}
-	h.writeJSON(w, http.StatusOK, workflowapplication.ProjectBusinessWorkflowProcess(process))
+	h.writeJSON(w, http.StatusOK, workflowapplication.ProjectParticipantWorkflowProcess(process))
 }
 
-func (h *WorkflowsHandler) runBusinessWorkflow(w http.ResponseWriter, r *http.Request) {
+func (h *WorkflowsHandler) runParticipantWorkflow(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.requireIdempotencyKey(w, r); !ok {
 		return
 	}
@@ -174,7 +174,7 @@ func (h *WorkflowsHandler) runBusinessWorkflow(w http.ResponseWriter, r *http.Re
 		h.writeServiceError(w, r, err)
 		return
 	}
-	h.writeJSON(w, http.StatusOK, workflowapplication.ProjectBusinessWorkflowRun(result))
+	h.writeJSON(w, http.StatusOK, workflowapplication.ProjectParticipantWorkflowRun(result))
 }
 
 func (h *WorkflowsHandler) processOpsWorkflowExecutions(w http.ResponseWriter, r *http.Request) {

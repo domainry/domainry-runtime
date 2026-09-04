@@ -81,7 +81,6 @@ func TestApplyMetadataCandidateMutationRejectsEveryMalformedBoundary(t *testing.
 		{"identity role", candidateMutation("create", "role", "operator", "", `{"key":"operator"}`), "unsupported candidate resource type"},
 		{"preference", candidateMutation("create", "preference", "x", "", `{}`), "unsupported candidate resource type"},
 		{"rule set", candidateMutation("create", "rule_set", "x", "", `{}`), "unsupported candidate resource type"},
-		{"surface", candidateMutation("create", "surface", "x", "", `{}`), "unsupported candidate resource type"},
 		{"component", candidateMutation("create", "component", "x", "", `{}`), "unsupported candidate resource type"},
 		{"scheduler module", candidateMutation("create", "scheduler", "x", "", `{}`), "unsupported candidate resource type"},
 		{"report module", candidateMutation("create", "report", "x", "", `{}`), "unsupported candidate resource type"},

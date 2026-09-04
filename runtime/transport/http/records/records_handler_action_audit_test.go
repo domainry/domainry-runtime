@@ -196,7 +196,7 @@ func TestRecordsActionHandlersProjectInputsAndReplayHeaders(t *testing.T) {
 
 	for name, call := range map[string]func(*httptest.ResponseRecorder){
 		"list": func(w *httptest.ResponseRecorder) {
-			handler.listActions(w, recordsRequest("GET", "/objects/customer/actions", "", map[string]string{"objectKey": " customer "}))
+			handler.listActions(w, recordsRequest("GET", "/records/objects/customer/actions", "", map[string]string{"objectKey": " customer "}))
 		},
 		"bulk": func(w *httptest.ResponseRecorder) {
 			r := recordsRequest("POST", "/bulk", `{"record_ids":["one"]}`, map[string]string{"objectKey": " customer ", "actionKey": " customer.approve "})
@@ -308,7 +308,7 @@ func TestEffectivePermissionsAppliesRecordRLSOnceForEveryRecordAction(t *testing
 				Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user"}}}}, Actions: actions,
 			}}, nil)
 			w := httptest.NewRecorder()
-			handler.effectivePermissions(w, recordsRequest("GET", "/permissions/effective?object_key=customer&record_id=customer-1", "", nil))
+			handler.effectivePermissions(w, recordsRequest("GET", "/records/permissions/effective?object_key=customer&record_id=customer-1", "", nil))
 			if w.Code != http.StatusOK || *serviceErr != nil {
 				t.Fatalf("status=%d err=%v body=%s", w.Code, *serviceErr, w.Body.String())
 			}
@@ -316,8 +316,8 @@ func TestEffectivePermissionsAppliesRecordRLSOnceForEveryRecordAction(t *testing
 			if err := json.Unmarshal(w.Body.Bytes(), &snapshot); err != nil {
 				t.Fatal(err)
 			}
-			if len(snapshot.Actions) != 3 || repository.getCalls != 1 {
-				t.Fatalf("actions=%+v record lookups=%d", snapshot.Actions, repository.getCalls)
+			if len(snapshot.Actions) != 3 || repository.getCalls != 0 || repository.listCalls != 2 {
+				t.Fatalf("actions=%+v unscoped_gets=%d scoped_queries=%d", snapshot.Actions, repository.getCalls, repository.listCalls)
 			}
 			for _, permission := range snapshot.Actions {
 				if permission.Kind == "object_create" {
@@ -341,7 +341,7 @@ func TestEffectivePermissionsRequiresCompleteRecordContext(t *testing.T) {
 	handler, serviceErr := recordsHandlerForTest(recordsHTTPPrincipal())
 	handler.permissions = appschemaapplication.NewApplicationSchemaQueryApplicationService(recordsSchemaProvider{}, nil)
 	w := httptest.NewRecorder()
-	handler.effectivePermissions(w, recordsRequest("GET", "/permissions/effective?object_key=customer", "", nil))
+	handler.effectivePermissions(w, recordsRequest("GET", "/records/permissions/effective?object_key=customer", "", nil))
 	if w.Code != http.StatusBadRequest || *serviceErr == nil || (*serviceErr).Error() != "backend.permissions.record_context_required" {
 		t.Fatalf("status=%d err=%v", w.Code, *serviceErr)
 	}
@@ -376,7 +376,7 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 			{Key: "customer.create", ObjectKey: "customer", Kind: "object_create"},
 		})
 		w := httptest.NewRecorder()
-		handler.effectivePermissions(w, recordsRequest("GET", "/permissions/effective?object_key=customer&record_id=one", "", nil))
+		handler.effectivePermissions(w, recordsRequest("GET", "/records/permissions/effective?object_key=customer&record_id=one", "", nil))
 		if w.Code != http.StatusOK || *serviceErr != nil {
 			t.Fatalf("status=%d err=%v body=%s", w.Code, *serviceErr, w.Body.String())
 		}
@@ -390,7 +390,7 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 		handler, serviceErr := recordsHandlerForTest(principal)
 		handler.permissions = permissionService(principal, []definitionmodel.ActionSchema{recordAction})
 		w := httptest.NewRecorder()
-		handler.effectivePermissions(w, recordsRequest("GET", "/permissions/effective?object_key=customer&record_id=one", "", nil))
+		handler.effectivePermissions(w, recordsRequest("GET", "/records/permissions/effective?object_key=customer&record_id=one", "", nil))
 		if w.Code != 599 || apperror.CodeOf(*serviceErr) != "backend.permissions.record_service_unavailable" {
 			t.Fatalf("status=%d err=%v", w.Code, *serviceErr)
 		}
@@ -409,7 +409,7 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 		})
 		handler.UseQueries(recordsHTTPApplication(&recordsHTTPRepository{err: errors.New("lookup unavailable")}))
 		w := httptest.NewRecorder()
-		handler.effectivePermissions(w, recordsRequest("GET", "/permissions/effective?object_key=customer&record_id=one", "", nil))
+		handler.effectivePermissions(w, recordsRequest("GET", "/records/permissions/effective?object_key=customer&record_id=one", "", nil))
 		if w.Code != 599 || apperror.CodeOf(*serviceErr) != "backend.permissions.record_lookup_failed" {
 			t.Fatalf("status=%d err=%v", w.Code, *serviceErr)
 		}
@@ -435,7 +435,7 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 			found:  true,
 		}))
 		w := httptest.NewRecorder()
-		handler.effectivePermissions(w, recordsRequest("GET", "/permissions/effective?object_key=customer&record_id=one", "", nil))
+		handler.effectivePermissions(w, recordsRequest("GET", "/records/permissions/effective?object_key=customer&record_id=one", "", nil))
 		if w.Code != http.StatusOK || *serviceErr != nil {
 			t.Fatalf("status=%d err=%v body=%s", w.Code, *serviceErr, w.Body.String())
 		}
@@ -460,14 +460,14 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 }
 
 func TestRuntimeOpsEffectivePermissionsKeepOnlyExactGrants(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.operations.list_operations", "integration.retry"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{"runtime.operations.list_operations", "integration.events.replay"}})
 	result := runtimeOpsExactFeaturePermissions(recordcontract.RecordFeaturePermissionSnapshot{Functions: []recordcontract.RecordFeatureFunctionPermission{
 		{Key: "runtime.appschema.validate_application_definition", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "allowed"}},
-		{Key: "integration.audit.view", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "inherited"}},
+		{Key: "integration.invocations.list", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "inherited"}},
 		{Key: "runtime.operations.list_operations", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "allowed"}},
-		{Key: "integration.retry", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "allowed"}},
+		{Key: "integration.events.replay", Decision: recordcontract.RecordFeaturePermissionDecision{Allowed: true, Reason: "allowed"}},
 	}}, principal)
-	if len(result.Functions) != 2 || result.Functions[0].Key != "runtime.operations.list_operations" || result.Functions[1].Key != "integration.retry" {
+	if len(result.Functions) != 2 || result.Functions[0].Key != "runtime.operations.list_operations" || result.Functions[1].Key != "integration.events.replay" {
 		t.Fatalf("Runtime Ops exact permissions = %+v", result.Functions)
 	}
 	for _, permission := range result.Functions {

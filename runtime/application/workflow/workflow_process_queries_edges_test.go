@@ -162,7 +162,7 @@ func (s *workflowProcessStoreEdgeStub) ListEvents(context.Context, string, strin
 	return s.events, s.listEventsErr
 }
 
-func workflowProcessQueryService(store *workflowProcessStoreEdgeStub, identity identitysdk.Directory) *WorkflowApplicationService {
+func workflowProcessQueryService(store *workflowProcessStoreEdgeStub, identity identitysdk.Projection) *WorkflowApplicationService {
 	return NewWorkflowApplicationService(WorkflowDependencies{
 		Processes: store, Identity: identity, Schema: workflowSchemaProviderEdgeStub{},
 		Audit: func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any) {

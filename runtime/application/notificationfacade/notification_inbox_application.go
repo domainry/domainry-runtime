@@ -10,22 +10,22 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-func inboxAuthority(ctx context.Context, channel string) (notificationsdk.UserAuthority, error) {
-	return authority(ctx, channel)
+func inboxAuthority(ctx context.Context) (notificationsdk.UserAuthority, error) {
+	return authority(ctx)
 }
-func (s *NotificationApplicationService) GetMyNotificationPreference(ctx context.Context, channel string, _ principalmodel.Principal) (runtimemodel.NotificationRecipientPreference, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) GetMyNotificationPreference(ctx context.Context, _ principalmodel.Principal) (runtimemodel.NotificationRecipientPreference, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return runtimemodel.NotificationRecipientPreference{}, err
 	}
-	v, err := s.binding.Inbox().GetPreference(ctx, a, channel)
+	v, err := s.binding.Inbox().GetPreference(ctx, a)
 	if err != nil {
 		return runtimemodel.NotificationRecipientPreference{}, mapError(err)
 	}
 	return convert[runtimemodel.NotificationRecipientPreference](v)
 }
-func (s *NotificationApplicationService) SaveMyNotificationPreference(ctx context.Context, value runtimemodel.NotificationRecipientPreference, channel string, _ principalmodel.Principal) (runtimemodel.NotificationRecipientPreference, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) SaveMyNotificationPreference(ctx context.Context, value runtimemodel.NotificationRecipientPreference, _ principalmodel.Principal) (runtimemodel.NotificationRecipientPreference, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return runtimemodel.NotificationRecipientPreference{}, err
 	}
@@ -33,14 +33,14 @@ func (s *NotificationApplicationService) SaveMyNotificationPreference(ctx contex
 	if err != nil {
 		return runtimemodel.NotificationRecipientPreference{}, err
 	}
-	v, err := s.binding.Inbox().SavePreference(ctx, a, channel, in)
+	v, err := s.binding.Inbox().SavePreference(ctx, a, in)
 	if err != nil {
 		return runtimemodel.NotificationRecipientPreference{}, mapError(err)
 	}
 	return convert[runtimemodel.NotificationRecipientPreference](v)
 }
-func (s *NotificationApplicationService) ListInbox(ctx context.Context, query runtimemodel.NotificationInboxQuery, cursor string, channel string, _ principalmodel.Principal) (runtimemodel.NotificationInboxPage, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) ListInbox(ctx context.Context, query runtimemodel.NotificationInboxQuery, cursor string, _ principalmodel.Principal) (runtimemodel.NotificationInboxPage, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return runtimemodel.NotificationInboxPage{}, err
 	}
@@ -54,8 +54,8 @@ func (s *NotificationApplicationService) ListInbox(ctx context.Context, query ru
 	}
 	return convert[runtimemodel.NotificationInboxPage](v)
 }
-func (s *NotificationApplicationService) GetInboxItem(ctx context.Context, id string, query runtimemodel.NotificationInboxQuery, channel string, _ principalmodel.Principal) (runtimemodel.NotificationInboxItem, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) GetInboxItem(ctx context.Context, id string, query runtimemodel.NotificationInboxQuery, _ principalmodel.Principal) (runtimemodel.NotificationInboxItem, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return runtimemodel.NotificationInboxItem{}, err
 	}
@@ -69,8 +69,8 @@ func (s *NotificationApplicationService) GetInboxItem(ctx context.Context, id st
 	}
 	return convert[runtimemodel.NotificationInboxItem](v)
 }
-func (s *NotificationApplicationService) InboxFacets(ctx context.Context, query runtimemodel.NotificationInboxQuery, channel string, _ principalmodel.Principal) (runtimemodel.NotificationInboxFacets, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) InboxFacets(ctx context.Context, query runtimemodel.NotificationInboxQuery, _ principalmodel.Principal) (runtimemodel.NotificationInboxFacets, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return runtimemodel.NotificationInboxFacets{}, err
 	}
@@ -84,8 +84,8 @@ func (s *NotificationApplicationService) InboxFacets(ctx context.Context, query 
 	}
 	return convert[runtimemodel.NotificationInboxFacets](v)
 }
-func (s *NotificationApplicationService) SetInboxRead(ctx context.Context, id string, value bool, channel string, _ principalmodel.Principal) (runtimemodel.NotificationInboxItem, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) SetInboxRead(ctx context.Context, id string, value bool, _ principalmodel.Principal) (runtimemodel.NotificationInboxItem, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return runtimemodel.NotificationInboxItem{}, err
 	}
@@ -95,8 +95,8 @@ func (s *NotificationApplicationService) SetInboxRead(ctx context.Context, id st
 	}
 	return convert[runtimemodel.NotificationInboxItem](v)
 }
-func (s *NotificationApplicationService) SetInboxArchived(ctx context.Context, id string, value bool, channel string, _ principalmodel.Principal) (runtimemodel.NotificationInboxItem, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) SetInboxArchived(ctx context.Context, id string, value bool, _ principalmodel.Principal) (runtimemodel.NotificationInboxItem, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return runtimemodel.NotificationInboxItem{}, err
 	}
@@ -106,8 +106,8 @@ func (s *NotificationApplicationService) SetInboxArchived(ctx context.Context, i
 	}
 	return convert[runtimemodel.NotificationInboxItem](v)
 }
-func (s *NotificationApplicationService) AcknowledgeInboxAlert(ctx context.Context, id string, channel string, _ principalmodel.Principal) (runtimemodel.NotificationInboxItem, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) AcknowledgeInboxAlert(ctx context.Context, id string, _ principalmodel.Principal) (runtimemodel.NotificationInboxItem, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return runtimemodel.NotificationInboxItem{}, err
 	}
@@ -117,8 +117,8 @@ func (s *NotificationApplicationService) AcknowledgeInboxAlert(ctx context.Conte
 	}
 	return convert[runtimemodel.NotificationInboxItem](v)
 }
-func (s *NotificationApplicationService) MarkAllInboxRead(ctx context.Context, query runtimemodel.NotificationInboxQuery, channel string, _ principalmodel.Principal) (int, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) MarkAllInboxRead(ctx context.Context, query runtimemodel.NotificationInboxQuery, _ principalmodel.Principal) (int, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -129,8 +129,8 @@ func (s *NotificationApplicationService) MarkAllInboxRead(ctx context.Context, q
 	v, err := s.binding.Inbox().MarkAllRead(ctx, a, in)
 	return v, mapError(err)
 }
-func (s *NotificationApplicationService) ResolveInboxAction(ctx context.Context, id, key string, query runtimemodel.NotificationInboxQuery, channel string, principal principalmodel.Principal) (runtimemodel.NotificationInboxResolvedAction, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) ResolveInboxAction(ctx context.Context, id, key string, query runtimemodel.NotificationInboxQuery, principal principalmodel.Principal) (runtimemodel.NotificationInboxResolvedAction, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return runtimemodel.NotificationInboxResolvedAction{}, err
 	}
@@ -154,19 +154,19 @@ func (s *NotificationApplicationService) ResolveInboxAction(ctx context.Context,
 	}
 	return out, nil
 }
-func (s *NotificationApplicationService) ListMyInboxDelegations(ctx context.Context, channel string, _ principalmodel.Principal) ([]runtimemodel.NotificationInboxDelegation, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) ListMyInboxDelegations(ctx context.Context, _ principalmodel.Principal) ([]runtimemodel.NotificationInboxDelegation, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return nil, err
 	}
-	v, err := s.binding.Inbox().ListDelegations(ctx, a, channel)
+	v, err := s.binding.Inbox().ListDelegations(ctx, a)
 	if err != nil {
 		return nil, mapError(err)
 	}
 	return convert[[]runtimemodel.NotificationInboxDelegation](v)
 }
-func (s *NotificationApplicationService) SaveMyInboxDelegation(ctx context.Context, value runtimemodel.NotificationInboxDelegation, channel string, _ principalmodel.Principal) (runtimemodel.NotificationInboxDelegation, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) SaveMyInboxDelegation(ctx context.Context, value runtimemodel.NotificationInboxDelegation, _ principalmodel.Principal) (runtimemodel.NotificationInboxDelegation, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return runtimemodel.NotificationInboxDelegation{}, err
 	}
@@ -180,34 +180,34 @@ func (s *NotificationApplicationService) SaveMyInboxDelegation(ctx context.Conte
 	}
 	return convert[runtimemodel.NotificationInboxDelegation](v)
 }
-func (s *NotificationApplicationService) DeleteMyInboxDelegation(ctx context.Context, id string, channel string, _ principalmodel.Principal) error {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) DeleteMyInboxDelegation(ctx context.Context, id string, _ principalmodel.Principal) error {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return err
 	}
 	return mapError(s.binding.Inbox().DeleteDelegation(ctx, a, id))
 }
-func (s *NotificationApplicationService) ListMyDelegatedInboxOwners(ctx context.Context, channel string, _ principalmodel.Principal) ([]string, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) ListMyDelegatedInboxOwners(ctx context.Context, _ principalmodel.Principal) ([]string, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return nil, err
 	}
-	v, err := s.binding.Inbox().ListDelegatedOwnerIDs(ctx, a, channel)
+	v, err := s.binding.Inbox().ListDelegatedOwnerIDs(ctx, a)
 	return v, mapError(err)
 }
-func (s *NotificationApplicationService) ListInboxSavedViews(ctx context.Context, channel string, _ principalmodel.Principal) ([]runtimemodel.NotificationInboxSavedView, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) ListInboxSavedViews(ctx context.Context, _ principalmodel.Principal) ([]runtimemodel.NotificationInboxSavedView, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return nil, err
 	}
-	v, err := s.binding.Inbox().ListSavedViews(ctx, a, channel)
+	v, err := s.binding.Inbox().ListSavedViews(ctx, a)
 	if err != nil {
 		return nil, mapError(err)
 	}
 	return convert[[]runtimemodel.NotificationInboxSavedView](v)
 }
-func (s *NotificationApplicationService) SaveInboxSavedView(ctx context.Context, value runtimemodel.NotificationInboxSavedView, channel string, _ principalmodel.Principal) (runtimemodel.NotificationInboxSavedView, error) {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) SaveInboxSavedView(ctx context.Context, value runtimemodel.NotificationInboxSavedView, _ principalmodel.Principal) (runtimemodel.NotificationInboxSavedView, error) {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return runtimemodel.NotificationInboxSavedView{}, err
 	}
@@ -221,8 +221,8 @@ func (s *NotificationApplicationService) SaveInboxSavedView(ctx context.Context,
 	}
 	return convert[runtimemodel.NotificationInboxSavedView](v)
 }
-func (s *NotificationApplicationService) DeleteInboxSavedView(ctx context.Context, key string, channel string, _ principalmodel.Principal) error {
-	a, err := inboxAuthority(ctx, channel)
+func (s *NotificationApplicationService) DeleteInboxSavedView(ctx context.Context, key string, _ principalmodel.Principal) error {
+	a, err := inboxAuthority(ctx)
 	if err != nil {
 		return err
 	}

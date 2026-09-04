@@ -27,7 +27,7 @@ func (r *relationRepositoryProbe) GetRecord(context.Context, string, definitionm
 }
 
 type identityLookupProbe struct {
-	identityDirectoryNoop
+	identityProjectionNoop
 	found                 bool
 	err                   error
 	organizationUnitFound bool
@@ -123,7 +123,7 @@ func TestRelationValidatorPrefersPersistedScopeEvaluatorAndPropagatesErrors(t *t
 	}
 }
 
-func TestRelationValidatorValidatesTargetAndIdentityDirectory(t *testing.T) {
+func TestRelationValidatorValidatesTargetAndIdentityProjection(t *testing.T) {
 	order := definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "customer_id", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "customer"}}}}
 	validator := NewRecordRelationValidator(RecordRelationValidationDependencies{
 		Repository: &relationRepositoryProbe{},
@@ -170,12 +170,12 @@ func TestRelationValidatorWrapsRepositoryAndIdentityErrors(t *testing.T) {
 	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check relation field"})
 
 	profile := definitionmodel.ObjectSchema{Key: "employee_profile", Fields: []definitionmodel.FieldSchema{{Key: "identity_user", Type: "relation", Config: map[string]any{"target": "identity_user"}}}}
-	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{err: errors.New("directory unavailable")}})
+	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{err: errors.New("projection unavailable")}})
 	err = validator.Validate(t.Context(), profile, map[string]any{"identity_user": "user-1"}, principalmodel.Principal{})
 	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check identity user relation"})
 
 	transfer := definitionmodel.ObjectSchema{Key: "transfer", Fields: []definitionmodel.FieldSchema{{Key: "organization_unit", Type: "relation", Config: map[string]any{"target": "identity_organization_unit"}}}}
-	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{organizationUnitErr: errors.New("directory unavailable")}})
+	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{organizationUnitErr: errors.New("projection unavailable")}})
 	err = validator.Validate(t.Context(), transfer, map[string]any{"organization_unit": "organization-unit-1"}, principalmodel.Principal{})
 	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check identity organization unit relation"})
 }

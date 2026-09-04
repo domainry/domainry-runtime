@@ -211,11 +211,11 @@ func TestRecordApplicationDependencyClosuresUseCanonicalOwners(t *testing.T) {
 	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Manifest: manifestmodel.ManifestSchema{
 		Objects:                   []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}},
 		IdentityProfileExtensions: []profilebindingmodel.Binding{{ObjectKey: "customer", IdentityRelationField: "owner"}},
-	}, Dependencies: RuntimeServicesDependencies{AgentPrincipals: agentPrincipalDirectoryStub{principal: dynamicPrincipal}}})
+	}, Dependencies: RuntimeServicesDependencies{AgentPrincipals: agentPrincipalResolverStub{principal: dynamicPrincipal}}})
 	dependencies := buildRecordApplicationDependencies(runtime)
 	principal := dependencies.ResolveBatchPrincipal(t.Context(), "persisted-user", "persisted-role")
 	if !principal.Known || principal.AuthorizationRevision != dynamicPrincipal.AuthorizationRevision || principal.RoleKey != dynamicPrincipal.RoleKey {
-		t.Fatalf("batch principal did not use persisted Identity directory: %#v", principal)
+		t.Fatalf("batch principal did not use persisted Identity projection: %#v", principal)
 	}
 	if objects := dependencies.SchemaMap(); objects["customer"].Key != "customer" {
 		t.Fatalf("dependency schema map=%#v", objects)
@@ -271,12 +271,12 @@ func TestRecordDomainWiringInvokesSchemaWorkflowAndPipelinePorts(t *testing.T) {
 	}
 }
 
-func TestWorkflowSchemaWiringHandlesOptionalIdentityDirectory(t *testing.T) {
+func TestWorkflowSchemaWiringHandlesOptionalIdentityProjection(t *testing.T) {
 	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Manifest: manifestmodel.ManifestSchema{
 		Objects:                []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}},
 		Actions:                []definitionmodel.ActionSchema{{Key: "customer.activate", ObjectKey: "customer", Kind: "record"}},
 		AgentServicePrincipals: []agentsdk.AgentServicePrincipalBinding{{Key: "review-service", Enabled: true}},
-	}, Dependencies: RuntimeServicesDependencies{IdentityDirectory: compositionIdentityDirectory{}}})
+	}, Dependencies: RuntimeServicesDependencies{IdentityProjection: compositionIdentityProjection{}}})
 	provider := runtimeWorkflowSchemaProvider{records: runtime}
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -285,7 +285,7 @@ func TestWorkflowSchemaWiringHandlesOptionalIdentityDirectory(t *testing.T) {
 	}
 	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{
 		Permissions:  []string{"customer.read", "customer.activate"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true}},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}},
 	})
 	if snapshot := provider.WorkflowSchemaSnapshot(t.Context(), admin); len(snapshot.Actions) != 1 {
 		t.Fatalf("workflow snapshot=%#v", snapshot)

@@ -133,7 +133,7 @@ func (handler sourceOwnedIntegrationFixtureHandler) Invoke(ctx context.Context, 
 		eventType := handler.descriptor.NotificationEventTypes[0]
 		sourceEventID := eventType + ":" + identity.ObjectKey + ":" + identity.RecordID + ":v1:admin"
 		if _, err := runtimeext.StageNotification(ctx, execution, runtimeext.NotificationIntent{
-			EventType: eventType, SourceEventID: sourceEventID, RecipientUserIDs: []string{"admin"}, Surface: "business_workspace",
+			EventType: eventType, SourceEventID: sourceEventID, RecipientUserIDs: []string{"admin"},
 			SubjectObjectKey: identity.ObjectKey, SubjectRecordID: identity.RecordID, SubjectVersion: subjectVersion, DedupeKey: sourceEventID, GroupKey: "project_action:" + identity.ObjectKey + ":" + identity.RecordID, Alert: true, OccurredAt: time.Now().UTC(),
 		}); err != nil {
 			return nil, err

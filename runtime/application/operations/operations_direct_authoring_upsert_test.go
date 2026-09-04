@@ -18,7 +18,7 @@ func TestExecuteDirectAuthoringUpsertPersistsReplayAndChecksHashOnlyForOwnerExec
 	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "authoring-upsert" })
 	service.UseDirectAuthoringProjection(func(context.Context, string, principalmodel.Principal) (capabilitycontract.CapabilityAuthoringSuccessProjection, error) {
-		return capabilitycontract.CapabilityAuthoringSuccessProjection{SnapshotHash: "snapshot-1", AvailableSuccessors: []capabilitycontract.CapabilityAuthoringSuccessorSummary{{Key: "identity.role_permission", Domain: "identity", Status: "supported", DetailEndpoint: "/tenant-admin/platform-capabilities/capabilities/identity.role_permission"}}}, nil
+		return capabilitycontract.CapabilityAuthoringSuccessProjection{SnapshotHash: "snapshot-1", AvailableSuccessors: []capabilitycontract.CapabilityAuthoringSuccessorSummary{{Key: "identity.role_permission", Domain: "identity", Status: "supported", DetailEndpoint: "/capabilities/identity.role_permission"}}}, nil
 	})
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "builder"}}
 	ctx := operationscontract.WithBuilderTaskID(t.Context(), "task-1")

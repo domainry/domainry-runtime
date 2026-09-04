@@ -6,7 +6,7 @@ import (
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
-// TransactionExecutor is the adapter-private SQL surface shared by Record
+// TransactionExecutor is the adapter-private SQL contract shared by Record
 // persistence and the Runtime Action transaction owner. It deliberately omits
 // transaction lifecycle methods so Domain/Application code cannot commit it.
 type TransactionExecutor = database.ActionExecutionExecutor

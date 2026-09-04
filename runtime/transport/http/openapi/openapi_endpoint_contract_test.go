@@ -47,7 +47,7 @@ func TestOpenAPIOperationsPublishEndpointPolicy(t *testing.T) {
 			}
 			for _, exposure := range exposures {
 				switch endpointmodel.ListenerExposure(exposure) {
-				case endpointmodel.ListenerExposurePublic, endpointmodel.ListenerExposureTenantAdmin, endpointmodel.ListenerExposureOps:
+				case endpointmodel.ListenerExposurePublic, endpointmodel.ListenerExposureManagement, endpointmodel.ListenerExposureOps:
 				default:
 					t.Fatalf("%s %s has unknown listener exposure %q", method, path, exposure)
 				}

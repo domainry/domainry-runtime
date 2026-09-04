@@ -29,36 +29,36 @@ import (
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 )
 
-// integrationTestIdentityDirectory models the external Identity directory at
+// integrationTestIdentityProjection models the external Identity projection at
 // the Runtime boundary. Workflow tests must not recreate Plane's retired
 // Identity owner or persist Identity state in the Runtime database.
-type integrationTestIdentityDirectory struct {
+type integrationTestIdentityProjection struct {
 	users             map[string]identitysdk.User
 	organizationUnits map[string]identitysdk.OrganizationUnit
 }
 
-func newIntegrationTestIdentityDirectory() *integrationTestIdentityDirectory {
-	return &integrationTestIdentityDirectory{
+func newIntegrationTestIdentityProjection() *integrationTestIdentityProjection {
+	return &integrationTestIdentityProjection{
 		users:             map[string]identitysdk.User{},
 		organizationUnits: map[string]identitysdk.OrganizationUnit{},
 	}
 }
 
-func (d *integrationTestIdentityDirectory) upsertUser(user identitysdk.User) {
+func (d *integrationTestIdentityProjection) upsertUser(user identitysdk.User) {
 	d.users[user.ID] = user
 }
 
-func (d *integrationTestIdentityDirectory) FindUser(_ context.Context, lookup identitysdk.UserLookup) (identitysdk.User, bool, error) {
+func (d *integrationTestIdentityProjection) FindUser(_ context.Context, lookup identitysdk.UserLookup) (identitysdk.User, bool, error) {
 	user, found := d.users[string(lookup.UserID)]
 	return user, found, nil
 }
 
-func (d *integrationTestIdentityDirectory) FindOrganizationUnit(_ context.Context, lookup identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+func (d *integrationTestIdentityProjection) FindOrganizationUnit(_ context.Context, lookup identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
 	organizationUnit, found := d.organizationUnits[lookup.OrgID]
 	return organizationUnit, found, nil
 }
 
-func (d *integrationTestIdentityDirectory) ListUsers(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.User, error) {
+func (d *integrationTestIdentityProjection) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
 	values := make([]identitysdk.User, 0, len(d.users))
 	for _, user := range d.users {
 		values = append(values, user)
@@ -67,11 +67,11 @@ func (d *integrationTestIdentityDirectory) ListUsers(context.Context, identitysd
 	return values, nil
 }
 
-func (d *integrationTestIdentityDirectory) ListRoles(context.Context, identitysdk.DirectoryQuery) ([]identitysdk.Role, error) {
+func (d *integrationTestIdentityProjection) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	return nil, nil
 }
 
-func (d *integrationTestIdentityDirectory) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
+func (d *integrationTestIdentityProjection) ListUserRoleAssignments(context.Context, identitysdk.UserRoleAssignmentQuery) ([]identitysdk.UserRoleAssignment, error) {
 	return nil, nil
 }
 
@@ -130,10 +130,10 @@ func listWorkflowProcesses(t *testing.T, store *persistence.RuntimeStore, status
 	return workflowProcessStore(store).ListProcesses(t.Context(), "workspace-primary", workflowmodel.WorkflowProcessFilter{Status: status, ObjectKey: objectKey, RecordID: recordID, Limit: limit})
 }
 
-func mustUpsertIdentityUser(t *testing.T, directory *integrationTestIdentityDirectory, user identitysdk.User) {
+func mustUpsertIdentityUser(t *testing.T, projection *integrationTestIdentityProjection, user identitysdk.User) {
 	t.Helper()
 	if strings.TrimSpace(user.Status) == "" {
 		user.Status = identitysdk.UserStatusActive
 	}
-	directory.upsertUser(user)
+	projection.upsertUser(user)
 }

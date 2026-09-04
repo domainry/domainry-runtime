@@ -162,13 +162,12 @@ func openAPIAgentRoutingSchema() map[string]any {
 
 func openAPIAgentEntrypointAssignmentSchema() map[string]any {
 	return map[string]any{"type": "object", "additionalProperties": false,
-		"required": []string{"contract_version", "key", "agent_key", "surface", "required_permissions", "route_patterns", "context_contract", "routing_contract", "enabled"},
+		"required": []string{"contract_version", "key", "agent_key", "required_permissions", "route_patterns", "context_contract", "routing_contract", "enabled"},
 		"properties": map[string]any{
 			"contract_version": map[string]any{"type": "string", "enum": []string{agentsdk.AgentEntrypointContractVersion}},
 			"key":              map[string]any{"type": "string"}, "agent_key": map[string]any{"type": "string"},
-			"surface":             map[string]any{"type": "string", "enum": []string{"business_workspace", "admin_console", "consumer_portal"}},
-			"default_for_surface": map[string]any{"type": "boolean"}, "required_permissions": openAPIArray(map[string]any{"type": "string"}),
-			"route_patterns": openAPIArray(map[string]any{"type": "string"}), "allowed_task_keys": openAPIArray(map[string]any{"type": "string"}),
+			"required_permissions": openAPIArray(map[string]any{"type": "string"}),
+			"route_patterns":       openAPIArray(map[string]any{"type": "string"}), "allowed_task_keys": openAPIArray(map[string]any{"type": "string"}),
 			"allowed_workflow_keys": openAPIArray(map[string]any{"type": "string"}), "context_contract": openAPIRef("GlobalAgentContextContract"),
 			"routing_contract": openAPIRef("AgentRoutingContract"), "enabled": map[string]any{"type": "boolean"},
 		},

@@ -135,7 +135,7 @@ func beginReportSnapshot(t *testing.T, snapshots reportsdkpersistence.SnapshotRe
 func reportNotificationEvent(id, sourceID string) notificationmodel.NotificationEvent {
 	return notificationmodel.NotificationEvent{
 		ID: id, WorkspaceID: "workspace-a", Source: "report", SourceEventID: sourceID, EventType: "report.snapshot.completed",
-		Category: "long_task", Severity: "info", Surface: "business_workspace", RecipientUserIDs: []string{"user-1"},
+		Category: "long_task", Severity: "info", RecipientUserIDs: []string{"user-1"},
 		SubjectType: "report", SubjectID: "revenue", OccurredAt: "2026-07-28T01:00:00Z", Status: "queued",
 		CreatedAt: "2026-07-28T01:00:00Z", UpdatedAt: "2026-07-28T01:00:00Z",
 	}

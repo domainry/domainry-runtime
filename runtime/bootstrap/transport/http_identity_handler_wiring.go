@@ -12,18 +12,18 @@ import (
 
 func (a *httpServerAssembly) wireIdentityReferences(constructionContext context.Context) {
 	records := a.dependencies.Records
-	if directory := a.dependencies.IdentityBinding.Directory(); directory != nil {
-		records.Applications().AuthoringCapabilities.UseIdentityReferenceSource(constructionContext, identitySDKCapabilityReferenceSource(directory))
+	if projection := a.dependencies.IdentityBinding.Projection(); projection != nil {
+		records.Applications().AuthoringCapabilities.UseIdentityReferenceSource(constructionContext, identitySDKCapabilityReferenceSource(projection))
 	}
 }
 
-func identitySDKCapabilityReferenceSource(directory identitysdk.Directory) func(context.Context, principalmodel.Principal) (capabilityapplication.CapabilityIdentityReferences, error) {
+func identitySDKCapabilityReferenceSource(projection identitysdk.Projection) func(context.Context, principalmodel.Principal) (capabilityapplication.CapabilityIdentityReferences, error) {
 	return func(ctx context.Context, _ principalmodel.Principal) (capabilityapplication.CapabilityIdentityReferences, error) {
-		users, err := directory.ListUsers(ctx, identitysdk.DirectoryQuery{})
+		users, err := projection.ListUsers(ctx, identitysdk.ProjectionQuery{})
 		if err != nil {
 			return capabilityapplication.CapabilityIdentityReferences{}, err
 		}
-		roles, err := directory.ListRoles(ctx, identitysdk.DirectoryQuery{})
+		roles, err := projection.ListRoles(ctx, identitysdk.ProjectionQuery{})
 		if err != nil {
 			return capabilityapplication.CapabilityIdentityReferences{}, err
 		}

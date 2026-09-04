@@ -70,7 +70,7 @@ type HTTPServerDependencies struct {
 	ReleaseAdmission         runtimehttp.RuntimeReleaseAdmissionProvider
 	ReleaseIntegrity         runtimehttp.RuntimeReleaseIntegrityProvider
 	BusinessEventBackplane   businesseventcontract.Backplane
-	ModuleHTTPSurfaces       []modulehttp.Surface
+	ModuleHTTPAdapters       []modulehttp.Adapter
 	NotificationInboxActions notificationhttp.NotificationInboxActionResolver
 }
 
@@ -115,9 +115,9 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	if err != nil {
 		panic("assemble Identity SDK HTTP middleware: " + err.Error())
 	}
-	identityDirectory := dependencies.IdentityBinding.Directory()
+	identityProjection := dependencies.IdentityBinding.Projection()
 	identityPrincipals := dependencies.IdentityBinding.Principals()
-	if identityDirectory == nil || identityPrincipals == nil {
+	if identityProjection == nil || identityPrincipals == nil {
 		panic("transport.AssembleRuntimeHTTPServer requires a complete Identity SDK Binding")
 	}
 	var integrationAuthentication runtimehttp.IntegrationAuthenticationPrincipalProvider
@@ -135,10 +135,10 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 				RateLimitPerMinute: dependencies.Config.HTTPPublicRateLimitPerMinute, AuditClass: "public_listener",
 				AllowedOrigins: append([]string(nil), dependencies.Config.HTTPPublicOrigins...),
 			},
-			runtimehttp.ListenerRouteGroupTenantAdmin: {
-				MaxJSONBodyBytes: int64(dependencies.Config.HTTPTenantAdminMaxJSONBodyBytes), RequestTimeout: dependencies.Config.HTTPTenantAdminRequestTimeout,
-				RateLimitPerMinute: dependencies.Config.HTTPTenantAdminRateLimitPerMinute, AuditClass: "tenant_governance",
-				AllowedOrigins: append([]string(nil), dependencies.Config.HTTPTenantAdminOrigins...),
+			runtimehttp.ListenerRouteGroupManagement: {
+				MaxJSONBodyBytes: int64(dependencies.Config.HTTPManagementMaxJSONBodyBytes), RequestTimeout: dependencies.Config.HTTPManagementRequestTimeout,
+				RateLimitPerMinute: dependencies.Config.HTTPManagementRateLimitPerMinute, AuditClass: "tenant_governance",
+				AllowedOrigins: append([]string(nil), dependencies.Config.HTTPManagementOrigins...),
 			},
 			runtimehttp.ListenerRouteGroupOps: {
 				MaxJSONBodyBytes: int64(dependencies.Config.HTTPOpsMaxJSONBodyBytes), RequestTimeout: dependencies.Config.HTTPOpsRequestTimeout,
@@ -175,7 +175,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		RuntimeReleaseAdmission:          dependencies.ReleaseAdmission,
 		RuntimeReleaseIntegrity:          dependencies.ReleaseIntegrity,
 		BusinessEventBackplane:           backplane,
-		ModuleHTTPSurfaces:               dependencies.ModuleHTTPSurfaces,
+		ModuleHTTPAdapters:               dependencies.ModuleHTTPAdapters,
 		RuntimeAuthoringScenarioReceipts: scenarioReceipts,
 	})
 	assembly := &httpServerAssembly{

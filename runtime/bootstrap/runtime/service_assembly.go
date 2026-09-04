@@ -91,7 +91,7 @@ type runtimeExtensionRegistries struct {
 	reportBinding                reportsdk.Binding
 }
 
-func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityDirectory identitysdk.Directory, identityPrincipals identitysdk.PrincipalResolver, auditApplication *auditapplication.AuditApplicationService, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
+func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityProjection identitysdk.Projection, identityPrincipals identitysdk.PrincipalResolver, auditApplication *auditapplication.AuditApplicationService, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
 	businessHandlers := runtimeext.NewBusinessHandlerRegistry()
 	connectorProviders := connector.NewRegistry()
 	var notificationCompiler func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
@@ -347,7 +347,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			},
 			RuntimeStatus:              deploymentpersistence.NewRuntimeStatusStore(store),
 			Notifications:              notifications,
-			IdentityDirectory:          identityDirectory,
+			IdentityProjection:         identityProjection,
 			IntegrationOwnerDelivery:   integrationOwnerDelivery,
 			IntegrationOwnerCatalog:    integrationOwnerCatalog,
 			IntegrationOwnerManagement: integrationOwnerManagement,

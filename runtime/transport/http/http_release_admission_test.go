@@ -22,7 +22,7 @@ func (s runtimeReleaseIntegrityStub) RegistryReadiness(context.Context) error  {
 func TestRuntimeReleaseAdmissionRejectsBusinessTrafficButKeepsProbes(t *testing.T) {
 	router := NewHTTPRouter(HTTPRouterConfig{}, HTTPRouterDependencies{RuntimeReleaseAdmission: func() error { return errors.New("cohort lease lost") }})
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	for _, path := range []string{"/objects/customer/records", "/openapi.json", "/"} {
+	for _, path := range []string{"/records/objects/customer/records", "/openapi.json", "/"} {
 		response := httptest.NewRecorder()
 		router.withAdmission(nil, next).ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
 		if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "runtime.release_cohort_unavailable") {

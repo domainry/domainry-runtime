@@ -7,49 +7,15 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"golang.org/x/mod/modfile"
 )
 
 func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testing.T) {
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve current file")
-	}
-	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
-	identitySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-identity-sdk")
-	identityModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-identity")
-	auditSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-audit-sdk")
-	auditModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-audit")
-	notificationSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-notification-sdk")
-	notificationModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-notification")
-	monitoringSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-monitoring-sdk")
-	monitoringModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-monitoring")
-	schedulerSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-scheduler-sdk")
-	schedulerModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-scheduler")
-	dataExchangeSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-data-exchange-sdk")
-	dataExchangeModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-data-exchange")
-	agentSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-agent-sdk")
-	agentModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-agent")
-	reportSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-report-sdk")
-	reportModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-report")
-	metadataSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-metadata-sdk")
-	metadataModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-metadata")
-	integrationSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-integration-sdk")
-	integrationModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-integration")
-	lifecycleSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-lifecycle-sdk")
-	lifecycleModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-lifecycle")
-	foundationRoot := siblingModuleRoot(t, repositoryRoot, "domainry-foundation")
-	ormRoot := siblingModuleRoot(t, repositoryRoot, "domainry-orm")
+	repositoryRoot := externalProjectRepositoryRoot(t)
 	externalRoot := t.TempDir()
-	goMod := []byte("module example.com/domainry-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity v0.0.0\n\tgithub.com/domainry/domainry-notification v0.0.0\n\tgithub.com/domainry/domainry-monitoring v0.0.0\n\tgithub.com/domainry/domainry-scheduler v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-foundation => " + foundationRoot + "\nreplace github.com/domainry/domainry-orm => " + ormRoot + "\nreplace github.com/domainry/domainry-audit-sdk => " + auditSDKRoot + "\nreplace github.com/domainry/domainry-audit => " + auditModuleRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-identity => " + identityModuleRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-notification => " + notificationModuleRoot + "\nreplace github.com/domainry/domainry-monitoring-sdk => " + monitoringSDKRoot + "\nreplace github.com/domainry/domainry-monitoring => " + monitoringModuleRoot + "\nreplace github.com/domainry/domainry-scheduler-sdk => " + schedulerSDKRoot + "\nreplace github.com/domainry/domainry-scheduler => " + schedulerModuleRoot + "\n")
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-data-exchange-sdk => "+dataExchangeSDKRoot+"\nreplace github.com/domainry/domainry-data-exchange => "+dataExchangeModuleRoot+"\n")...)
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-agent-sdk => "+agentSDKRoot+"\nreplace github.com/domainry/domainry-agent => "+agentModuleRoot+"\n")...)
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-report-sdk => "+reportSDKRoot+"\nreplace github.com/domainry/domainry-report => "+reportModuleRoot+"\n")...)
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-metadata-sdk => "+metadataSDKRoot+"\nreplace github.com/domainry/domainry-metadata => "+metadataModuleRoot+"\n")...)
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-integration-sdk => "+integrationSDKRoot+"\nreplace github.com/domainry/domainry-integration => "+integrationModuleRoot+"\n")...)
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-lifecycle-sdk => "+lifecycleSDKRoot+"\nreplace github.com/domainry/domainry-lifecycle => "+lifecycleModuleRoot+"\n")...)
-	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), goMod, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writePinnedExternalProjectGoMod(t, repositoryRoot, externalRoot, "example.com/domainry-project")
+
 	compositionDir := filepath.Join(externalRoot, "generated", "composition")
 	if err := os.MkdirAll(compositionDir, 0o700); err != nil {
 		t.Fatal(err)
@@ -61,8 +27,10 @@ import (
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	identitymodule "github.com/domainry/domainry-identity/module"
-	notificationmodule "github.com/domainry/domainry-notification/module"
+	integrationmodule "github.com/domainry/domainry-integration/module"
 	monitoringmodule "github.com/domainry/domainry-monitoring/module"
+	notificationmodule "github.com/domainry/domainry-notification/module"
+	reportmodule "github.com/domainry/domainry-report/module"
 	schedulermodule "github.com/domainry/domainry-scheduler/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimehost"
@@ -78,6 +46,8 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 			ConnectorContractSHA256: connector.ContractSHA256,
 		},
 		IdentityFactory: identitymodule.NewFactory(identitymodule.OptionsFromEnvironment()),
+		IntegrationFactory: integrationmodule.NewFactory(integrationmodule.OptionsFromEnvironment()),
+		ReportFactory: reportmodule.NewFactory(),
 		NotificationFactory: notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()),
 		MonitoringFactory: monitoringmodule.NewFactory(monitoringmodule.OptionsFromEnvironment()),
 		SchedulerFactory: schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()),
@@ -90,48 +60,14 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		t.Fatal(err)
 	}
 	writeExternalProjectMain(t, externalRoot, "example.com/domainry-project/generated/composition")
-	compileExternalProject(t, externalRoot, "external Module project")
+	compileExternalProject(t, repositoryRoot, externalRoot, "external Module project")
 }
 
 func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) {
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve current file")
-	}
-	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
-	identitySDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-identity-sdk")
-	auditSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-audit-sdk")
-	auditModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-audit")
-	notificationSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-notification-sdk")
-	notificationModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-notification")
-	monitoringSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-monitoring-sdk")
-	schedulerSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-scheduler-sdk")
-	schedulerModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-scheduler")
-	dataExchangeSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-data-exchange-sdk")
-	dataExchangeModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-data-exchange")
-	agentSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-agent-sdk")
-	agentModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-agent")
-	reportSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-report-sdk")
-	reportModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-report")
-	metadataSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-metadata-sdk")
-	metadataModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-metadata")
-	integrationSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-integration-sdk")
-	integrationModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-integration")
-	lifecycleSDKRoot := siblingModuleRoot(t, repositoryRoot, "domainry-lifecycle-sdk")
-	lifecycleModuleRoot := siblingModuleRoot(t, repositoryRoot, "domainry-lifecycle")
-	foundationRoot := siblingModuleRoot(t, repositoryRoot, "domainry-foundation")
-	ormRoot := siblingModuleRoot(t, repositoryRoot, "domainry-orm")
+	repositoryRoot := externalProjectRepositoryRoot(t)
 	externalRoot := t.TempDir()
-	goMod := []byte("module example.com/domainry-saas-project\n\ngo 1.26.0\n\nrequire (\n\tgithub.com/domainry/domainry-runtime v0.0.0\n\tgithub.com/domainry/domainry-identity-sdk v0.0.0\n\tgithub.com/domainry/domainry-notification v0.0.0\n\tgithub.com/domainry/domainry-notification-sdk v0.0.0\n\tgithub.com/domainry/domainry-monitoring-sdk v0.0.0\n\tgithub.com/domainry/domainry-scheduler v0.0.0\n)\n\nreplace github.com/domainry/domainry-runtime => " + repositoryRoot + "\nreplace github.com/domainry/domainry-foundation => " + foundationRoot + "\nreplace github.com/domainry/domainry-orm => " + ormRoot + "\nreplace github.com/domainry/domainry-audit-sdk => " + auditSDKRoot + "\nreplace github.com/domainry/domainry-audit => " + auditModuleRoot + "\nreplace github.com/domainry/domainry-identity-sdk => " + identitySDKRoot + "\nreplace github.com/domainry/domainry-notification-sdk => " + notificationSDKRoot + "\nreplace github.com/domainry/domainry-notification => " + notificationModuleRoot + "\nreplace github.com/domainry/domainry-monitoring-sdk => " + monitoringSDKRoot + "\nreplace github.com/domainry/domainry-scheduler-sdk => " + schedulerSDKRoot + "\nreplace github.com/domainry/domainry-scheduler => " + schedulerModuleRoot + "\n")
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-data-exchange-sdk => "+dataExchangeSDKRoot+"\nreplace github.com/domainry/domainry-data-exchange => "+dataExchangeModuleRoot+"\n")...)
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-agent-sdk => "+agentSDKRoot+"\nreplace github.com/domainry/domainry-agent => "+agentModuleRoot+"\n")...)
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-report-sdk => "+reportSDKRoot+"\nreplace github.com/domainry/domainry-report => "+reportModuleRoot+"\n")...)
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-metadata-sdk => "+metadataSDKRoot+"\nreplace github.com/domainry/domainry-metadata => "+metadataModuleRoot+"\n")...)
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-integration-sdk => "+integrationSDKRoot+"\nreplace github.com/domainry/domainry-integration => "+integrationModuleRoot+"\n")...)
-	goMod = append(goMod, []byte("replace github.com/domainry/domainry-lifecycle-sdk => "+lifecycleSDKRoot+"\nreplace github.com/domainry/domainry-lifecycle => "+lifecycleModuleRoot+"\n")...)
-	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), goMod, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writePinnedExternalProjectGoMod(t, repositoryRoot, externalRoot, "example.com/domainry-saas-project")
+
 	compositionDir := filepath.Join(externalRoot, "generated", "composition")
 	if err := os.MkdirAll(compositionDir, 0o700); err != nil {
 		t.Fatal(err)
@@ -143,9 +79,12 @@ import (
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangeremote "github.com/domainry/domainry-data-exchange/remote"
 	identityremote "github.com/domainry/domainry-identity-sdk/remote"
-	notificationmodule "github.com/domainry/domainry-notification/module"
-	notificationremote "github.com/domainry/domainry-notification-sdk/remote"
+	integrationremote "github.com/domainry/domainry-integration-sdk/remote"
+	integrationmodule "github.com/domainry/domainry-integration/module"
 	monitoringremote "github.com/domainry/domainry-monitoring-sdk/remote"
+	notificationremote "github.com/domainry/domainry-notification-sdk/remote"
+	notificationmodule "github.com/domainry/domainry-notification/module"
+	reportmodule "github.com/domainry/domainry-report/module"
 	schedulerremote "github.com/domainry/domainry-scheduler/remote"
 	schedulerhttp "github.com/domainry/domainry-scheduler-sdk/saashost/httptransport"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -162,6 +101,8 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 			ConnectorContractSHA256: connector.ContractSHA256,
 		},
 		IdentityFactory: identityremote.NewFactory(identityremote.ConfigFromEnvironment()),
+		IntegrationFactory: integrationmodule.NewSaaSFactory(integrationremote.NewFactory(integrationremote.Options{})),
+		ReportFactory: reportmodule.NewFactory(),
 		NotificationFactory: notificationmodule.NewSaaSFactory(notificationremote.NewFactory(notificationremote.ConfigFromEnvironment())),
 		MonitoringFactory: monitoringremote.NewFactory(monitoringremote.ConfigFromEnvironment()),
 		SchedulerFactory: schedulerremote.NewHTTPFactory(schedulerhttp.ConfigFromEnvironment()),
@@ -169,13 +110,76 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		AgentFactory: agentremote.NewFactory(agentremote.OptionsFromEnvironment()),
 	}
 }
-
 `)
 	if err := os.WriteFile(filepath.Join(compositionDir, "extensions.gen.go"), compositionSource, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	writeExternalProjectMain(t, externalRoot, "example.com/domainry-saas-project/generated/composition")
-	compileExternalProject(t, externalRoot, "external SaaS project")
+	compileExternalProject(t, repositoryRoot, externalRoot, "external supported-SaaS project")
+}
+
+func externalProjectRepositoryRoot(t *testing.T) string {
+	t.Helper()
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve current file")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
+}
+
+func writePinnedExternalProjectGoMod(t *testing.T, repositoryRoot, externalRoot, modulePath string) {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(repositoryRoot, "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned, err := modfile.Parse(filepath.Join(repositoryRoot, "go.mod"), raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated := new(modfile.File)
+	if err := generated.AddModuleStmt(modulePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := generated.AddGoStmt("1.26.0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := generated.AddRequire("github.com/domainry/domainry-runtime", "v0.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	for _, requirement := range pinned.Require {
+		if requirement.Indirect || requirement.Mod.Path == "github.com/domainry/domainry-runtime" || !strings.HasPrefix(requirement.Mod.Path, "github.com/domainry/") {
+			continue
+		}
+		if err := generated.AddRequire(requirement.Mod.Path, requirement.Mod.Version); err != nil {
+			t.Fatal(err)
+		}
+		workspacePath := filepath.Join(filepath.Dir(repositoryRoot), strings.TrimPrefix(requirement.Mod.Path, "github.com/domainry/"))
+		if info, statErr := os.Stat(workspacePath); statErr == nil && info.IsDir() {
+			if err := generated.AddReplace(requirement.Mod.Path, "", workspacePath, ""); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := generated.AddReplace("github.com/domainry/domainry-runtime", "", repositoryRoot, ""); err != nil {
+		t.Fatal(err)
+	}
+	formatted, err := generated.Format()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(externalRoot, "go.mod"), formatted, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Seed the consumer with the Runtime-reviewed checksums so readonly mode
+	// proves the pinned graph without asking the Go command to rewrite it.
+	sums, err := os.ReadFile(filepath.Join(repositoryRoot, "go.sum"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(externalRoot, "go.sum"), sums, 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func writeExternalProjectMain(t *testing.T, externalRoot, compositionImport string) {
@@ -190,36 +194,52 @@ func writeExternalProjectMain(t *testing.T, externalRoot, compositionImport stri
 	}
 }
 
-func siblingModuleRoot(t *testing.T, repositoryRoot, name string) string {
+func compileExternalProject(t *testing.T, repositoryRoot, externalRoot, label string) {
 	t.Helper()
-	candidate := filepath.Clean(filepath.Join(repositoryRoot, "..", name))
-	if _, err := os.Stat(filepath.Join(candidate, "go.mod")); err == nil {
-		return candidate
-	}
-	data, err := os.ReadFile(filepath.Join(repositoryRoot, ".git"))
-	if err != nil {
-		t.Fatalf("resolve canonical repository for %s: %v", name, err)
-	}
-	gitdir := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(data)), "gitdir:"))
-	marker := string(filepath.Separator) + ".git" + string(filepath.Separator)
-	index := strings.Index(gitdir, marker)
-	if index < 0 {
-		t.Fatalf("resolve canonical git directory from %q", gitdir)
-	}
-	canonical := gitdir[:index]
-	candidate = filepath.Join(filepath.Dir(canonical), name)
-	if _, err := os.Stat(filepath.Join(candidate, "go.mod")); err != nil {
-		t.Fatalf("resolve sibling module %s: %v", name, err)
-	}
-	return candidate
+	runExternalGoCommand(t, externalRoot, label+" dependency normalization", "mod", "tidy")
+	assertExternalProjectUsesPinnedDomainryModules(t, repositoryRoot, externalRoot, label)
+	runExternalGoCommand(t, externalRoot, label+" compile", "test", "-mod=readonly", "./...")
 }
 
-func compileExternalProject(t *testing.T, externalRoot, label string) {
+func assertExternalProjectUsesPinnedDomainryModules(t *testing.T, repositoryRoot, externalRoot, label string) {
 	t.Helper()
-	command := exec.Command("go", "test", "-mod=mod", "./...")
+	raw, err := os.ReadFile(filepath.Join(repositoryRoot, "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned, err := modfile.Parse(filepath.Join(repositoryRoot, "go.mod"), raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{}
+	for _, requirement := range pinned.Require {
+		if requirement.Mod.Path != "github.com/domainry/domainry-runtime" && strings.HasPrefix(requirement.Mod.Path, "github.com/domainry/") {
+			want[requirement.Mod.Path] = requirement.Mod.Version
+		}
+	}
+	output := runExternalGoCommand(t, externalRoot, label+" selected module graph", "list", "-mod=readonly", "-m", "-f={{.Path}}={{.Version}}", "all")
+	selected := map[string]string{}
+	for _, line := range strings.Split(string(output), "\n") {
+		path, version, found := strings.Cut(strings.TrimSpace(line), "=")
+		if found {
+			selected[path] = version
+		}
+	}
+	for path, version := range want {
+		if selected[path] != version {
+			t.Errorf("%s selected %s@%s, Runtime pins %s", label, path, selected[path], version)
+		}
+	}
+}
+
+func runExternalGoCommand(t *testing.T, externalRoot, label string, arguments ...string) []byte {
+	t.Helper()
+	command := exec.Command("go", arguments...)
 	command.Dir = externalRoot
 	command.Env = append(os.Environ(), "GOWORK=off")
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("%s cannot compile runtimehost composition: %v\n%s", label, err, output)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%s failed: %v\n%s", label, err, output)
 	}
+	return output
 }

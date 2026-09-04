@@ -624,10 +624,7 @@
       "object_key": "candidate_offer",
       "label": "Submit Offer",
       "kind": "record_operation",
-      "audit_event": "candidate_offer_submitted",
-      "idempotency_keys": [
-        "request_id"
-      ]
+      "audit_event": "candidate_offer_submitted"
     },
     {
       "key": "candidate_offer.approve",
@@ -648,40 +645,28 @@
       "object_key": "candidate_offer",
       "label": "Accept Offer",
       "kind": "record_operation",
-      "audit_event": "candidate_offer_accepted",
-      "idempotency_keys": [
-        "acceptance_token"
-      ]
+      "audit_event": "candidate_offer_accepted"
     },
     {
       "key": "benefit_enrollment.retry_and_reconcile",
       "object_key": "benefit_enrollment",
       "label": "Retry Benefit Provider",
       "kind": "record_operation",
-      "audit_event": "benefit_provider_reconciled",
-      "idempotency_keys": [
-        "retry_token"
-      ]
+      "audit_event": "benefit_provider_reconciled"
     },
     {
       "key": "employee_lifecycle.transfer",
       "object_key": "employee_lifecycle",
       "label": "Transfer Employee",
       "kind": "record_operation",
-      "audit_event": "employee_transferred",
-      "idempotency_keys": [
-        "transfer_token"
-      ]
+      "audit_event": "employee_transferred"
     },
     {
       "key": "termination_case.submit",
       "object_key": "termination_case",
       "label": "Submit Termination",
       "kind": "record_operation",
-      "audit_event": "termination_submitted",
-      "idempotency_keys": [
-        "request_id"
-      ]
+      "audit_event": "termination_submitted"
     },
     {
       "key": "termination_case.approve_due",
@@ -1166,10 +1151,6 @@
       "name": "Admin",
       "permissions": [
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "runtime.appschema.validate_application_definition",
           "data_scope": "all"
         }
@@ -1189,10 +1170,6 @@
         },
         {
           "permission_key": "benefit_enrollment.create",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "business.access",
           "data_scope": "all"
         },
         {
@@ -1262,10 +1239,6 @@
       "name": "Hiring Manager",
       "permissions": [
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "candidate_offer.read",
           "data_scope": "all"
         },
@@ -1278,7 +1251,7 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.approve_business_workflow_task",
+          "permission_key": "runtime.workflows.approve_workflow_task",
           "data_scope": "all"
         },
         {
@@ -1294,11 +1267,11 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.reject_business_workflow_task",
+          "permission_key": "runtime.workflows.reject_workflow_task",
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.return_business_workflow_task",
+          "permission_key": "runtime.workflows.return_workflow_task",
           "data_scope": "all"
         }
       ],
@@ -1342,10 +1315,6 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "candidate_offer.read",
           "data_scope": "all"
         },
@@ -1367,18 +1336,6 @@
         },
         {
           "permission_key": "employee_lifecycle_ledger.read",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "identity.audit.view",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "identity.users.read",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "identity.users.write",
           "data_scope": "all"
         },
         {
@@ -1410,7 +1367,7 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.approve_business_workflow_task",
+          "permission_key": "runtime.workflows.approve_workflow_task",
           "data_scope": "all"
         },
         {
@@ -1426,11 +1383,11 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.reject_business_workflow_task",
+          "permission_key": "runtime.workflows.reject_workflow_task",
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.return_business_workflow_task",
+          "permission_key": "runtime.workflows.return_workflow_task",
           "data_scope": "all"
         },
         {
@@ -1472,10 +1429,6 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "employee_lifecycle.read",
           "data_scope": "all"
         },
@@ -1496,7 +1449,7 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.approve_business_workflow_task",
+          "permission_key": "runtime.workflows.approve_workflow_task",
           "data_scope": "all"
         },
         {
@@ -1512,11 +1465,11 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.reject_business_workflow_task",
+          "permission_key": "runtime.workflows.reject_workflow_task",
           "data_scope": "all"
         },
         {
-          "permission_key": "runtime.workflows.return_business_workflow_task",
+          "permission_key": "runtime.workflows.return_workflow_task",
           "data_scope": "all"
         },
         {
@@ -1539,10 +1492,6 @@
         },
         {
           "permission_key": "asset_assignment.update",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "business.access",
           "data_scope": "all"
         },
         {
@@ -1572,10 +1521,6 @@
           "data_scope": "owner"
         },
         {
-          "permission_key": "business.access",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "employee_lifecycle.read",
           "data_scope": "owner"
         },
@@ -1592,114 +1537,6 @@
           "write": false,
           "export": false
         }
-      ]
-    }
-  ],
-  "identity_bootstrap": {
-    "version": "1",
-    "organization_units": [
-      {
-        "id": "default",
-        "code": "default",
-        "name": "Default",
-        "node_type": "company"
-      }
-    ],
-    "users": [
-      {
-        "id": "manager_a_user",
-        "name": "Manager A",
-        "email": "manager-a@example.com",
-        "org_id": "default",
-        "worker_no": "manager_a_user",
-        "worker_type": "employee",
-        "work_status": "active"
-      },
-      {
-        "id": "hire_user",
-        "name": "New Hire",
-        "email": "new-hire@example.com",
-        "org_id": "default",
-        "manager_user_id": "manager_a_user",
-        "worker_no": "hire_user",
-        "worker_type": "employee",
-        "work_status": "active"
-      },
-      {
-        "id": "seed_employee_user",
-        "name": "Seed Employee",
-        "email": "seed-employee@example.com",
-        "org_id": "default",
-        "manager_user_id": "manager_a_user",
-        "worker_no": "seed_employee_user",
-        "worker_type": "employee",
-        "work_status": "active"
-      }
-    ]
-  },
-  "users": [
-    {
-      "id": "recruiter_user",
-      "name": "Recruiter",
-      "email": "recruiter@example.com",
-      "role_keys": [
-        "recruiter"
-      ]
-    },
-    {
-      "id": "manager_a_user",
-      "name": "Manager A",
-      "email": "manager-a@example.com",
-      "role_keys": [
-        "hiring_manager"
-      ]
-    },
-    {
-      "id": "manager_b_user",
-      "name": "Manager B",
-      "email": "manager-b@example.com",
-      "role_keys": [
-        "hiring_manager"
-      ]
-    },
-    {
-      "id": "hr_admin_user",
-      "name": "HR Admin",
-      "email": "hr-admin@example.com",
-      "role_keys": [
-        "hr_admin"
-      ]
-    },
-    {
-      "id": "it_admin_user",
-      "name": "IT Admin",
-      "email": "it-admin@example.com",
-      "role_keys": [
-        "it_admin"
-      ]
-    },
-    {
-      "id": "facilities_user",
-      "name": "Facilities",
-      "email": "facilities@example.com",
-      "role_keys": [
-        "facilities"
-      ]
-    },
-    {
-      "id": "hire_user",
-      "name": "New Hire",
-      "email": "new-hire@example.com",
-      "role_keys": [
-        "employee"
-      ]
-    },
-    {
-      "id": "seed_employee_user",
-      "name": "Seed Employee",
-      "email": "seed-employee@example.com",
-      "role_keys": [
-        "employee"
       ]
     }
   ],
@@ -1834,5 +1671,6 @@
         "owner": "hr_admin_user"
       }
     }
-  ]
+  ],
+  "schema_version": "2"
 }

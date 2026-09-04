@@ -18,7 +18,7 @@ type RecordValidationDependencies struct {
 	Object             func(context.Context, string) (definitionmodel.ObjectSchema, bool)
 	CanAccess          func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	CanAccessPersisted func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) (bool, error)
-	Identity           identitysdk.Directory
+	Identity           identitysdk.Projection
 }
 
 // RecordValidationDomainService validates record mutations.

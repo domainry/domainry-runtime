@@ -36,7 +36,7 @@ func TestRuntimeHTTPDoesNotDeclareAgentProductRoutes(t *testing.T) {
 		if readErr != nil {
 			return readErr
 		}
-		for _, route := range []string{"/agent-dialog", "/operations/agent"} {
+		for _, route := range []string{"/agent", "/agent"} {
 			if strings.Contains(string(body), route) {
 				t.Errorf("Runtime HTTP source %s redeclares Agent-owned route %q", path, route)
 			}

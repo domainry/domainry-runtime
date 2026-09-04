@@ -8,7 +8,7 @@ import (
 
 func AddPresentationReferences(builder *changeplanprojection.ChangePlanReferenceGraphBuilder, snapshot ReferenceSchema) {
 	// Source-owned frontend references come from registered frontend capability
-	// evidence. Legacy Surface/UIBlueprint payloads are intentionally ignored:
+	// evidence. Frontend layout payloads are intentionally ignored:
 	// they describe an obsolete schema-driven renderer rather than deployed
 	// source code.
 	for _, agent := range snapshot.Agents {

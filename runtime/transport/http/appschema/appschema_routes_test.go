@@ -15,14 +15,14 @@ func TestRuntimeOnlyRegistersRuntimeOwnedMetadataRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/tenant-admin/metadata/definitions/object/account/validate", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/metadata/definitions/object/account/validate", nil))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("Runtime authoring validation status=%d", response.Code)
 	}
 	for _, route := range []struct{ method, path string }{
-		{http.MethodGet, "/tenant-admin/metadata/definitions/object"},
-		{http.MethodGet, "/tenant-admin/metadata/localized-texts"},
-		{http.MethodGet, "/dictionaries/status/items"},
+		{http.MethodGet, "/metadata/definitions/object"},
+		{http.MethodGet, "/metadata/localized-texts"},
+		{http.MethodGet, "/metadata/dictionaries/status/items"},
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(route.method, route.path, nil))
@@ -38,7 +38,7 @@ func TestRegisterRoutesWithoutProvisionHandler(t *testing.T) {
 
 	handler.RegisterRoutes(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/tenant-admin/metadata/manifests/validate", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/metadata/manifests/validate", nil))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("unexpected provision route status=%d", response.Code)
 	}
@@ -49,9 +49,9 @@ func TestRegisterRoutesWithProvisionHandler(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	for _, path := range []string{
-		"/tenant-admin/metadata/manifests/validate",
-		"/tenant-admin/metadata/manifests/review",
-		"/tenant-admin/metadata/manifests/apply",
+		"/metadata/manifests/validate",
+		"/metadata/manifests/review",
+		"/metadata/manifests/apply",
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, nil))
@@ -60,7 +60,7 @@ func TestRegisterRoutesWithProvisionHandler(t *testing.T) {
 		}
 	}
 	current := httptest.NewRecorder()
-	mux.ServeHTTP(current, httptest.NewRequest(http.MethodGet, "/tenant-admin/metadata/manifests/current", nil))
+	mux.ServeHTTP(current, httptest.NewRequest(http.MethodGet, "/metadata/manifests/current", nil))
 	if current.Code != http.StatusServiceUnavailable {
 		t.Fatalf("current projection route status=%d", current.Code)
 	}

@@ -31,7 +31,7 @@ func TestAssembleRuntimeServicesReportsWorkflowFailures(t *testing.T) {
 
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := assembleRuntimeServices(cancelled, cfg, manifest, nil, store, runtimeIdentityDirectoryStub{}, nil, nil, worker.Dependencies{}); err == nil {
+	if _, err := assembleRuntimeServices(cancelled, cfg, manifest, nil, store, runtimeIdentityProjectionStub{}, nil, nil, worker.Dependencies{}); err == nil {
 		t.Fatal("cancelled workflow initialization must fail assembly")
 	}
 }
@@ -82,7 +82,7 @@ func TestSynchronizeRuntimeSeedsRejectsClosedStore(t *testing.T) {
 	}
 }
 
-func TestSynchronizeRuntimeSeedsDoesNotRequireIdentityDirectory(t *testing.T) {
+func TestSynchronizeRuntimeSeedsDoesNotRequireIdentityProjection(t *testing.T) {
 	cfg := bootstrapTestConfig(t)
 	manifest, err := prepareRuntimeManifest(t.Context(), cfg)
 	if err != nil {

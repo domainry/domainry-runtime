@@ -42,7 +42,7 @@ func (r applicationContextRepository) ListRecords(ctx context.Context, _ string,
 
 type applicationContextPolicy struct{ object definitionmodel.ObjectSchema }
 
-type applicationLifecycleDirectory struct{ identityDirectoryNoop }
+type applicationLifecycleIdentityProjection struct{ identityProjectionNoop }
 
 func (p applicationContextPolicy) ObjectForAction(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 	return p.object, nil
@@ -94,9 +94,9 @@ func TestRecordDomainServicePropagatesRequestContext(t *testing.T) {
 
 func TestRecordDomainServiceRetainsConstructorDependencies(t *testing.T) {
 	repository := &applicationContextRepository{}
-	directory := applicationLifecycleDirectory{}
-	service := NewRecordDomainService(RecordDomainServiceDependencies{Repository: repository, IdentityDirectory: directory})
-	if service.Repository() != repository || service.IdentityDirectory() != directory {
+	projection := applicationLifecycleIdentityProjection{}
+	service := NewRecordDomainService(RecordDomainServiceDependencies{Repository: repository, IdentityProjection: projection})
+	if service.Repository() != repository || service.IdentityProjection() != projection {
 		t.Fatal("constructor did not retain owner dependencies")
 	}
 }

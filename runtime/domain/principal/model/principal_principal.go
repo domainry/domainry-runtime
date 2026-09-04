@@ -79,7 +79,7 @@ func (principal Principal) HasExactPermission(permission string) bool {
 }
 
 // HasAllPermissions requires every declared SDK function grant. An empty
-// permission set is not authorization: authored surfaces must opt into a
+// permission set is not authorization: authored endpoints must opt into a
 // stable permission key explicitly.
 func (principal Principal) HasAllPermissions(permissions []string) bool {
 	if principal.AccessBundle != nil {

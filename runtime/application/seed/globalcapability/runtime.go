@@ -116,7 +116,7 @@ func generatedGlobalDictionaries() []appschemamodel.DictionarySchema {
 		{
 			Key:         "audit_event_category",
 			Name:        "Audit event category",
-			Description: "Default categories shown by audit and operations surfaces.",
+			Description: "Default categories shown by audit and operations views.",
 			Source:      "platform",
 			Items: []appschemamodel.DictionaryItemSchema{
 				{Key: "access", Value: "access", Label: "Access", SortOrder: 10, Status: "active"},

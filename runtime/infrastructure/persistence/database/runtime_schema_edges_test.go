@@ -36,6 +36,11 @@ func TestRuntimeSchemaHelpersAndDatabaseSelection(t *testing.T) {
 	if len(versions) != 11 || versions[0] != "001_connector_runtime_lifecycle" || versions[10] != "013_agent_schema_owner" {
 		t.Fatalf("versions=%#v", versions)
 	}
+	for _, version := range versions {
+		if strings.Contains(version, "directory") || strings.Contains(version, "surface") {
+			t.Fatalf("runtime schema version retains retired Identity vocabulary: %q", version)
+		}
+	}
 	store := runtimeSchemaStore(t, &databaseSQLState{})
 	if store.schemaDatabase() != store.db {
 		t.Fatal("primary database not selected")

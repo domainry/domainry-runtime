@@ -220,20 +220,20 @@ func (f recordBatchHTTPFixture) call(method, path, body string, headers map[stri
 
 func TestLegacyRecordExportRoutesAreAbsent(t *testing.T) {
 	fixture := newRecordBatchHTTPFixture(t)
-	if response := fixture.call(http.MethodGet, "/objects/customer/records/export", "", nil); response.Code != http.StatusNotFound {
+	if response := fixture.call(http.MethodGet, "/records/objects/customer/records/export", "", nil); response.Code != http.StatusNotFound {
 		t.Fatalf("legacy GET export status=%d body=%s", response.Code, response.Body.String())
 	}
-	if response := fixture.call(http.MethodPost, "/objects/customer/records/export/jobs", "", map[string]string{"Idempotency-Key": "legacy-export-job"}); response.Code != http.StatusNotFound {
+	if response := fixture.call(http.MethodPost, "/records/objects/customer/records/export/jobs", "", map[string]string{"Idempotency-Key": "legacy-export-job"}); response.Code != http.StatusNotFound {
 		t.Fatalf("legacy export job status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 
 func TestRecordExportHTTPAutoDispatchAndOwnedDownload(t *testing.T) {
 	fixture := newRecordBatchHTTPFixture(t)
-	if response := fixture.call(http.MethodPost, "/objects/customer/records/export", "", nil); response.Code != http.StatusBadRequest {
+	if response := fixture.call(http.MethodPost, "/records/objects/customer/records/export", "", nil); response.Code != http.StatusBadRequest {
 		t.Fatalf("missing key status=%d body=%s", response.Code, response.Body.String())
 	}
-	direct := fixture.call(http.MethodPost, "/objects/customer/records/export", "", map[string]string{"Idempotency-Key": "direct-export"})
+	direct := fixture.call(http.MethodPost, "/records/objects/customer/records/export", "", map[string]string{"Idempotency-Key": "direct-export"})
 	if direct.Code != http.StatusOK || direct.Header().Get("X-Export-Delivery") != recordapplication.RecordExportDeliveryDirect || !strings.Contains(direct.Header().Get("Content-Type"), "text/csv") {
 		t.Fatalf("direct status=%d headers=%v body=%s", direct.Code, direct.Header(), direct.Body.String())
 	}
@@ -244,7 +244,7 @@ func TestRecordExportHTTPAutoDispatchAndOwnedDownload(t *testing.T) {
 	}}
 	fixture.exchange.artifact = dataexchange.Artifact{ID: "artifact", Filename: "customer export.csv", ContentType: "text/csv", Size: 5}
 	fixture.exchange.content = "value"
-	download := fixture.call(http.MethodGet, "/record-exports/"+jobID+"/download", "", nil)
+	download := fixture.call(http.MethodGet, "/records/exports/"+jobID+"/download", "", nil)
 	if download.Code != http.StatusOK || download.Body.String() != "value" || !strings.Contains(download.Header().Get("Content-Disposition"), "customer export.csv") {
 		t.Fatalf("download status=%d headers=%v body=%q", download.Code, download.Header(), download.Body.String())
 	}
@@ -252,19 +252,19 @@ func TestRecordExportHTTPAutoDispatchAndOwnedDownload(t *testing.T) {
 
 func TestRecordBatchJobHTTPImportSubmissionAndDownloadState(t *testing.T) {
 	fixture := newRecordBatchHTTPFixture(t)
-	if response := fixture.call(http.MethodPost, "/objects/customer/records/import/jobs", `{`, nil); response.Code != http.StatusBadRequest {
+	if response := fixture.call(http.MethodPost, "/records/objects/customer/records/import/jobs", `{`, nil); response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid json status=%d body=%s", response.Code, response.Body.String())
 	}
-	if response := fixture.call(http.MethodPost, "/objects/customer/records/import/jobs", `{"csv":""}`, nil); response.Code != http.StatusBadRequest {
+	if response := fixture.call(http.MethodPost, "/records/objects/customer/records/import/jobs", `{"csv":""}`, nil); response.Code != http.StatusBadRequest {
 		t.Fatalf("empty csv status=%d body=%s", response.Code, response.Body.String())
 	}
-	if response := fixture.call(http.MethodPost, "/objects/customer/records/import/jobs", "Name\nAcme\n", map[string]string{"Content-Type": "text/csv"}); response.Code != http.StatusBadRequest {
+	if response := fixture.call(http.MethodPost, "/records/objects/customer/records/import/jobs", "Name\nAcme\n", map[string]string{"Content-Type": "text/csv"}); response.Code != http.StatusBadRequest {
 		t.Fatalf("missing key status=%d body=%s", response.Code, response.Body.String())
 	}
-	if response := fixture.call(http.MethodPost, "/objects/customer/records/import/jobs", "Name\n\"unterminated", map[string]string{"Content-Type": "text/csv", "Idempotency-Key": "invalid-import"}); response.Code != http.StatusBadRequest {
+	if response := fixture.call(http.MethodPost, "/records/objects/customer/records/import/jobs", "Name\n\"unterminated", map[string]string{"Content-Type": "text/csv", "Idempotency-Key": "invalid-import"}); response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid csv status=%d body=%s", response.Code, response.Body.String())
 	}
-	created := fixture.call(http.MethodPost, "/objects/customer/records/import/jobs", "Name\nAcme\n", map[string]string{"Content-Type": "text/csv", "Idempotency-Key": "import-http-1"})
+	created := fixture.call(http.MethodPost, "/records/objects/customer/records/import/jobs", "Name\nAcme\n", map[string]string{"Content-Type": "text/csv", "Idempotency-Key": "import-http-1"})
 	var job recordmodel.RecordBatchJob
 	if created.Code != http.StatusAccepted || json.Unmarshal(created.Body.Bytes(), &job) != nil || job.Kind != "import" {
 		t.Fatalf("import status=%d job=%+v body=%s", created.Code, job, created.Body.String())

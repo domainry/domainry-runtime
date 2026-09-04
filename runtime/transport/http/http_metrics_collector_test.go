@@ -22,7 +22,7 @@ func TestMemoryHTTPMetricsCollectorIsConcurrentAndBoundsSeries(t *testing.T) {
 			if index%2 == 0 {
 				status = 500
 			}
-			collector.Observe("GET", "/objects/{objectKey}/records", status, 10*time.Millisecond)
+			collector.Observe("GET", "/records/objects/{objectKey}/records", status, 10*time.Millisecond)
 		}(index)
 	}
 	group.Wait()
@@ -36,7 +36,7 @@ func TestMemoryHTTPMetricsCollectorIsConcurrentAndBoundsSeries(t *testing.T) {
 	if summary["series_count"] != 2 || summary["dropped_series_count"] != 1 {
 		t.Fatalf("series bound not enforced: %+v", summary)
 	}
-	if snapshot := collector.Snapshot(); len(snapshot) != 2 || snapshot[0].Route != "/objects/{objectKey}/records" || len(snapshot[0].DurationBuckets) != len(httpDurationBuckets) {
+	if snapshot := collector.Snapshot(); len(snapshot) != 2 || snapshot[0].Route != "/records/objects/{objectKey}/records" || len(snapshot[0].DurationBuckets) != len(httpDurationBuckets) {
 		t.Fatalf("unexpected snapshot: %+v", snapshot)
 	}
 	if summary["in_flight"] != 0 || summary["series_budget"] != 2 {

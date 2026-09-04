@@ -100,7 +100,7 @@ func NewWithExtensions(ctx context.Context, cfg config.Config, businessHandlers 
 
 // NewProjectWithIdentity assembles Runtime against one already-opened SDK
 // Binding. The generated project host owns Module/SaaS selection, Identity
-// lifecycle, and optional Identity HTTP surfaces.
+// lifecycle, and optional Identity HTTP adapters.
 func NewProjectWithIdentity(ctx context.Context, cfg config.Config, businessHandlers *runtimeext.BusinessHandlerRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, dataExchangeFactory dataexchangesdk.Factory, integrationFactory integrationsdk.Factory) *Runtime {
 	return newWithExtensionsUsingStore(ctx, cfg, businessHandlers, connectorProviders, releaseIdentity, binding, notificationFactory, dataExchangeFactory, integrationFactory, nil, artifactEvidence)
 }
@@ -226,9 +226,9 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(auditBinding.Descriptor().Validate())
 	runtimeAuditRepository := runtimeauditmodule.NewAuditStore(auditBinding)
 	runtimeAudit := auditapplication.NewAuditApplicationService(runtimeAuditRepository)
-	identityDirectory := identityBinding.Directory()
+	identityProjection := identityBinding.Projection()
 	identityPrincipals := identityBinding.Principals()
-	if identityDirectory == nil || identityPrincipals == nil {
+	if identityProjection == nil || identityPrincipals == nil {
 		mustCompleteRuntimeStartup(errors.New("Identity Binding returned incomplete Runtime ports"))
 	}
 	identityDataExchangeKey, identityDataExchangeImport, identityDataExchangeExport := identityDataExchangeProviders(identityBinding)
@@ -282,7 +282,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		if moduleFactory, ok := notificationFactory.(modulehost.Factory); ok {
 			host := notificationSDKModuleHost{
 				store: store, identity: identityBinding, clock: workerDependencies.Clock, workerID: workerDependencies.WorkerID.String(), catalog: catalog,
-				directory: identityDirectory, workflow: workflowNotificationTasks.GetTask, delivery: sdkDeliveryGateway,
+				projection: identityProjection, workflow: workflowNotificationTasks.GetTask, delivery: sdkDeliveryGateway,
 				metrics: notificationSDKDeliveryMetrics{operations: integrationOwner.Operations, clock: workerDependencies.Clock}, validator: modulehost.DefaultProviderTemplateValidator{},
 			}
 			notificationBinding, err = moduleFactory.OpenModule(ctx, application, host)
@@ -365,7 +365,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	agentBinding, err = openManifestAgentBinding(ctx, cfg.RuntimeInstanceID, store, agentFactory, manifest)
 	mustCompleteRuntimeStartup(err)
 	mustCompleteRuntimeStartup(synchronizeAgentDefinitions(ctx, agentBinding, &manifest))
-	serviceAssembly, err := assembleRuntimeServices(ctx, cfg, manifest, templateRenderer, store, identityDirectory, identityPrincipals, runtimeAudit, workerDependencies, runtimeExtensionRegistries{
+	serviceAssembly, err := assembleRuntimeServices(ctx, cfg, manifest, templateRenderer, store, identityProjection, identityPrincipals, runtimeAudit, workerDependencies, runtimeExtensionRegistries{
 		businessHandlers: businessHandlers, connectorProviders: connectorProviders,
 		notificationCompiler:         startupCallbacks.CompileNotification,
 		taskNotificationCommitter:    workflowpersistence.NewWorkflowTaskNotificationStore(store),
@@ -400,18 +400,18 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		records.Applications().Records, recordRepository, records.Schema, []byte(cfg.AuditExportTokenKey),
 	)))
 	auditHTTP, ok := auditBinding.(modulehttp.Provider)
-	if !ok || !auditBinding.Descriptor().Capabilities.HTTPSurface {
-		mustCompleteRuntimeStartup(errors.New("Audit Binding does not declare its product HTTP surface capability"))
+	if !ok || !auditBinding.Descriptor().Capabilities.HTTPAdapter {
+		mustCompleteRuntimeStartup(errors.New("Audit Binding does not declare its product HTTP adapter capability"))
 	}
-	auditSurfaces := auditHTTP.HTTPSurfaces()
-	if len(auditSurfaces) != 1 {
-		mustCompleteRuntimeStartup(errors.New("Audit Binding must return exactly one product HTTP surface"))
+	auditAdapters := auditHTTP.HTTPAdapters()
+	if len(auditAdapters) != 1 {
+		mustCompleteRuntimeStartup(errors.New("Audit Binding must return exactly one product HTTP adapter"))
 	}
-	auditSurface := auditSurfaces[0]
-	if auditSurface == nil || auditSurface.Owner() != "audit" || auditSurface.Name() != "product" {
-		mustCompleteRuntimeStartup(errors.New("Audit Binding returned an unexpected product HTTP surface"))
+	auditAdapter := auditAdapters[0]
+	if auditAdapter == nil || auditAdapter.Owner() != "audit" || auditAdapter.Name() != "product" {
+		mustCompleteRuntimeStartup(errors.New("Audit Binding returned an unexpected product HTTP adapter"))
 	}
-	mustCompleteRuntimeStartup(modulehttp.ValidateSurface(auditSurface))
+	mustCompleteRuntimeStartup(modulehttp.ValidateAdapter(auditAdapter))
 	reportHostBinder, ok := reportBinding.(reportsdk.ApplicationHostBinder)
 	if !ok {
 		mustCompleteRuntimeStartup(errors.New("Report Binding does not accept application host capabilities"))
@@ -516,7 +516,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		authorizationActions: authorizationRegistrySnapshot.Load,
 		moduleBindings:       moduleBindings,
 		identityBinding:      identityBinding,
-		identityDirectory:    identityDirectory,
+		identityProjection:   identityProjection,
 		identityPrincipals:   identityPrincipals,
 		principalCache:       principalCache,
 		integrationMode:      integrationOwner.Binding.Descriptor().Mode,

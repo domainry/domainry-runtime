@@ -54,7 +54,7 @@ func TestEveryPublishedPlatformReferenceKindUsesSnapshotBoundResolver(t *testing
 	for _, domain := range RuntimeAuthoringCapabilities().Domains {
 		for _, definition := range domain.Capabilities {
 			for _, reference := range definition.ReferenceContracts {
-				if !strings.Contains(reference.ResolverEndpoint, "/tenant-admin/platform-capabilities/references/") || checked[reference.Kind] {
+				if !strings.Contains(reference.ResolverEndpoint, "/capabilities/references/") || checked[reference.Kind] {
 					continue
 				}
 				scope := ""

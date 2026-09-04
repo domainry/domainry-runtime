@@ -124,7 +124,7 @@ func businessSystemHandlerForTest(t *testing.T, principal principalmodel.Princip
 
 func businessSystemRequest(t *testing.T) *http.Request {
 	t.Helper()
-	request := httptest.NewRequest(http.MethodGet, "/domain-system-snapshot", nil)
+	request := httptest.NewRequest(http.MethodGet, "/business-system/snapshot", nil)
 	return request.WithContext(requestcontext.WithWorkspaceID(request.Context(), principalmodel.InstallationWorkspaceID))
 }
 
@@ -173,7 +173,7 @@ func TestRuntimeAuthoringValidationDrivesTrustedLifecycleCallbacks(t *testing.T)
 		},
 	})
 	body := []byte(`{"coverage":{"requirements":[{"requirement_id":"order-management","capability_keys":["schema.object"],"resources":[{"resource_type":"object","resource_key":"order"}],"scenario_ids":["order.create.success"]}]}}`)
-	request := httptest.NewRequest(http.MethodPost, "/domain-system-validation", bytes.NewReader(body))
+	request := httptest.NewRequest(http.MethodPost, "/business-system/validation", bytes.NewReader(body))
 	ctx := operationscontract.WithBuilderTaskID(request.Context(), "task-1")
 	response := httptest.NewRecorder()
 	handler.validateRuntimeAuthoring(response, request.WithContext(ctx))

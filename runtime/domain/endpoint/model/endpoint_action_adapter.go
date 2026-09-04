@@ -22,7 +22,7 @@ func AuthorizationActionDefinition(contract RuntimeEndpointContractV1) (actionco
 	operationKey := contract.ActionKey[strings.LastIndex(contract.ActionKey, ".")+1:]
 	operationLabel := strings.TrimSpace(contract.ApplicationUseCase)
 	definition := actioncontract.ActionDefinition{
-		Key: contract.ActionKey, Owner: owner, SourceKind: "builtin_surface",
+		Key: contract.ActionKey, Owner: owner, SourceKind: "builtin_http",
 		CapabilityKey: "runtime." + strings.TrimSpace(contract.SourceOwner), CapabilityLabel: strings.TrimSpace(contract.SourceOwner),
 		OperationKey: operationKey, OperationLabel: operationLabel, Label: operationLabel,
 		Authorization: actioncontract.Authorization{},
@@ -35,8 +35,8 @@ func AuthorizationActionDefinition(contract RuntimeEndpointContractV1) (actionco
 		switch exposure {
 		case ListenerExposurePublic:
 			definition.Exposures = append(definition.Exposures, actioncontract.ExposurePublic)
-		case ListenerExposureTenantAdmin:
-			definition.Exposures = append(definition.Exposures, actioncontract.ExposureTenantAdmin)
+		case ListenerExposureManagement:
+			definition.Exposures = append(definition.Exposures, actioncontract.ExposureManagement)
 		case ListenerExposureOps:
 			definition.Exposures = append(definition.Exposures, actioncontract.ExposureOps)
 		}
@@ -118,8 +118,8 @@ func sameEndpointExposures(actual []actioncontract.Exposure, expected []Listener
 		switch exposure {
 		case ListenerExposurePublic:
 			want[actioncontract.ExposurePublic] = true
-		case ListenerExposureTenantAdmin:
-			want[actioncontract.ExposureTenantAdmin] = true
+		case ListenerExposureManagement:
+			want[actioncontract.ExposureManagement] = true
 		case ListenerExposureOps:
 			want[actioncontract.ExposureOps] = true
 		default:

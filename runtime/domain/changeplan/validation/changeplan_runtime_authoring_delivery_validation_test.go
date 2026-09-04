@@ -19,7 +19,7 @@ func TestRuntimeAuthoringDeliveryRequiresBoundCompleteScenarioEvidence(t *testin
 	step := func(label, path string, actual int, responseHash string) changeplanmodel.RuntimeAuthoringScenarioStepEvidence {
 		return changeplanmodel.RuntimeAuthoringScenarioStepEvidence{Label: label, Method: "GET", Path: path, ExpectedStatus: []int{actual}, ActualStatus: actual, RequestHash: strings.Repeat("a", 64), ResponseHash: responseHash, Passed: true}
 	}
-	replayOne, replayTwo := step("replay-one", "/objects/order/records", 200, strings.Repeat("b", 64)), step("replay-two", "/objects/order/records", 200, strings.Repeat("b", 64))
+	replayOne, replayTwo := step("replay-one", "/records/objects/order/records", 200, strings.Repeat("b", 64)), step("replay-two", "/records/objects/order/records", 200, strings.Repeat("b", 64))
 	replayOne.IdempotencyKey, replayTwo.IdempotencyKey = "order-create-1", "order-create-1"
 	replayTwo.IdempotencyReplayed = true
 	evidence := changeplanmodel.RuntimeAuthoringDeliveryEvidence{
@@ -28,9 +28,9 @@ func TestRuntimeAuthoringDeliveryRequiresBoundCompleteScenarioEvidence(t *testin
 			Version: changeplanmodel.RuntimeAuthoringScenarioEvidenceVersion, ScenarioID: "order-lifecycle", Passed: true,
 			Categories: append([]string(nil), changeplanmodel.RuntimeAuthoringRequiredScenarioCategories...), BeforeStateHash: "state", AfterStateHash: "state",
 			Steps: []changeplanmodel.RuntimeAuthoringScenarioStepEvidence{
-				step("success", "/objects/order/records/order-1", 200, strings.Repeat("c", 64)),
-				step("denied", "/objects/order/records/order-1", 403, strings.Repeat("d", 64)),
-				step("precondition", "/objects/order/records/order-1/actions/complete", 422, strings.Repeat("e", 64)),
+				step("success", "/records/objects/order/records/order-1", 200, strings.Repeat("c", 64)),
+				step("denied", "/records/objects/order/records/order-1", 403, strings.Repeat("d", 64)),
+				step("precondition", "/records/objects/order/records/order-1/actions/complete", 422, strings.Repeat("e", 64)),
 				replayOne, replayTwo,
 				step("audit", "/audit-events", 200, strings.Repeat("f", 64)),
 				step("event", "/events", 200, strings.Repeat("1", 64)),

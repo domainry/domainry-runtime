@@ -15,7 +15,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-const Route = "/events/business"
+const Route = "/business-events/stream"
 
 var filterValuePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 

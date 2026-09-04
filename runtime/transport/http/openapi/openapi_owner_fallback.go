@@ -4,7 +4,7 @@ import "strings"
 
 // annotateStaticModuleOwnerFallbacks makes the ownership of static client
 // discovery paths explicit when Build is called without mounted module
-// surfaces. Once a module is mounted, its route and OpenAPI contracts remain
+// adapters. Once a module is mounted, its route and OpenAPI contracts remain
 // authoritative and annotateModuleOwnedOpenAPIPaths adds the stronger live
 // ownership evidence.
 func annotateStaticModuleOwnerFallbacks(paths map[string]any) {
@@ -26,10 +26,7 @@ func annotateStaticModuleOwnerFallbacks(paths map[string]any) {
 
 func staticModuleOwner(path string) string {
 	switch {
-	case path == "/notifications" || strings.HasPrefix(path, "/notifications/") ||
-		path == "/business/notifications" || strings.HasPrefix(path, "/business/notifications/") ||
-		path == "/portal/notifications" || strings.HasPrefix(path, "/portal/notifications/") ||
-		path == "/business/notification-preferences" || path == "/portal/notification-preferences":
+	case path == "/notification" || strings.HasPrefix(path, "/notification/"):
 		return "notification"
 	default:
 		return ""

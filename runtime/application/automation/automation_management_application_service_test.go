@@ -106,7 +106,7 @@ func TestManagementServiceOwnsSortedRulesCapabilitiesAndHistory(t *testing.T) {
 		AuthoringProjection: func() capability.CapabilityAuthoringProjection {
 			return capability.CapabilityAuthoringProjection{
 				Mode:            "compatibility_projection",
-				Successor:       "/tenant-admin/platform-capabilities",
+				Successor:       "/capabilities",
 				ContractVersion: capability.RuntimeAuthoringContractVersion,
 				Domains:         []string{"automation"},
 			}

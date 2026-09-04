@@ -90,7 +90,7 @@ func TestCancelWorkflowProcessAuthorizationLookupReplayStateTaskAndSyncOutcomes(
 	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", other); apperror.CodeOf(err) != "backend.workflow.process_cancel_denied" {
 		t.Fatalf("denied=%v", err)
 	}
-	operator := workflowPrincipalWithPermissions(other, "runtime.workflows.retry_business_workflow_process")
+	operator := workflowPrincipalWithPermissions(other, "runtime.workflows.retry_workflow_process")
 	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", operator); apperror.CodeOf(err) != "backend.workflow.process_cancel_denied" {
 		t.Fatalf("unrelated action must not bypass initiator ownership: %v", err)
 	}

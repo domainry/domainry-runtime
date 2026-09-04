@@ -49,6 +49,9 @@ func newIntegrationIdentityFactory() identitysdk.Factory {
 func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 	crmManagerPermissions := []string{
 		"business.access", "admin_console.access", "integration.entrypoint.invoke",
+		"report.summary.get",
+		"notification.inbox.list", "notification.inbox.item.get",
+		"notification.inbox.item.mark_read", "notification.inbox.item.acknowledge",
 		"customer.read", "customer.create", "customer.update", "customer.export",
 		"contact.read", "contact.create", "contact.update",
 		"lead.read", "lead.create", "lead.update",
@@ -63,7 +66,7 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 	}
 	return []runtimetestkit.IdentityFixtureRole{
 		integrationIdentityRole("admin", "Administrator", []string{
-			"business.access", "admin_console.access", "customer.read", "customer.create", "opportunity.read", "lead.read", "audit.business.read",
+			"business.access", "admin_console.access", "report.summary.get", "customer.read", "customer.create", "opportunity.read", "lead.read", "audit.business.read",
 		}, true),
 		integrationIdentityRole("business_admin", "Business administrator", []string{
 			"business.access", "customer.read", "customer.create", "customer.update", "customer.export", "opportunity.read", "opportunity.create", "opportunity.update",
@@ -85,13 +88,13 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 			"scheduler.definitions.run", "scheduler.state.get",
 		}, true),
 		integrationIdentityRole("kitchen_lead", "Kitchen lead", []string{
-			"business.access", "kitchen_order.read", "kitchen_order.create", "kitchen_order.update", "kitchen_order.import", "kitchen_order.start_cooking", "kitchen_order.ready_alert.execute",
+			"business.access", "report.summary.get", "kitchen_order.read", "kitchen_order.create", "kitchen_order.update", "kitchen_order.import", "kitchen_order.start_cooking", "kitchen_order.ready_alert.execute",
 		}, true),
 		integrationIdentityRole("inventory_manager", "Inventory manager", []string{
-			"business.access", "stock_item.read", "stock_item.create", "stock_item.update", "purchase_request.read", "purchase_request.create", "purchase_request.update", "stock_item.create_purchase_request", "stock_item.low_stock_watch.execute",
+			"business.access", "report.summary.get", "stock_item.read", "stock_item.create", "stock_item.update", "purchase_request.read", "purchase_request.create", "purchase_request.update", "stock_item.create_purchase_request", "stock_item.low_stock_watch.execute",
 		}, true),
 		integrationIdentityRole("hr_admin", "HR administrator", []string{
-			"business.access", "runtime.workflows.approve_business_workflow_task", "runtime.workflows.reject_business_workflow_task", "runtime.workflows.return_business_workflow_task", "leave_request.read", "leave_request.create", "leave_request.update",
+			"business.access", "report.summary.get", "runtime.workflows.approve_workflow_task", "runtime.workflows.reject_workflow_task", "runtime.workflows.return_workflow_task", "leave_request.read", "leave_request.create", "leave_request.update",
 			"leave_balance.read", "leave_balance.update", "leave_balance_ledger.read", "leave_balance_ledger.create", "hr_position.read",
 			"employee_profile.read", "employee_profile.create", "employee_profile.update",
 			"leave_request.submit", "leave_request.withdraw", "leave_request.cancel", "leave_request.return_for_revision", "leave_request.approve", "leave_request.reject",
@@ -106,7 +109,7 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 			{Resource: "contract", Field: "value", Read: true, Masked: true},
 		}),
 		integrationIdentityRole("finance_reviewer", "Finance reviewer", []string{
-			"business.access", "customer.read", "opportunity.read", "contract.read", "payment.read", "payment.update", "payment.export", "payment.mark_collected", "payment.record_overdue_escalation",
+			"business.access", "report.summary.get", "customer.read", "opportunity.read", "contract.read", "payment.read", "payment.update", "payment.export", "payment.mark_collected", "payment.record_overdue_escalation",
 		}, true),
 		integrationIdentityRole("restricted", "Restricted user", []string{"business.access", "customer.read"}, true),
 		integrationOwnedIdentityRole("automation_business_tester", "Automation business tester", []string{
@@ -119,10 +122,10 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 			"business.access", "workflow.sales_order.credit_discount_approval.run", "customer_account.read", "sales_order.read", "sales_order.create", "sales_order.update", "inventory_stock.read", "inventory_stock.update", "order_cash_ledger.read", "order_cash_ledger.create", "sales_order.initialize_risk", "sales_order.submit",
 		}, true),
 		integrationIdentityRole("credit_manager", "Credit manager", []string{
-			"business.access", "runtime.workflows.approve_business_workflow_task", "runtime.workflows.reject_business_workflow_task", "runtime.workflows.return_business_workflow_task", "customer_account.read", "sales_order.read", "sales_order.update", "inventory_stock.read", "inventory_stock.update", "order_cash_ledger.create", "sales_order.approve_and_reserve", "sales_order.reject",
+			"business.access", "runtime.workflows.approve_workflow_task", "runtime.workflows.reject_workflow_task", "runtime.workflows.return_workflow_task", "customer_account.read", "sales_order.read", "sales_order.update", "inventory_stock.read", "inventory_stock.update", "order_cash_ledger.create", "sales_order.approve_and_reserve", "sales_order.reject",
 		}, true),
 		integrationIdentityRole("finance", "Finance", []string{
-			"business.access", "runtime.workflows.approve_business_workflow_task", "runtime.workflows.reject_business_workflow_task", "runtime.workflows.return_business_workflow_task", "identity.audit.view", "sales_order.read", "sales_order.update", "shipment.read", "inventory_stock.read", "inventory_stock.update", "invoice.read", "invoice.update", "payment.read", "payment.create", "payment.update", "return_request.read", "return_request.update", "order_cash_ledger.read", "order_cash_ledger.create",
+			"business.access", "runtime.workflows.approve_workflow_task", "runtime.workflows.reject_workflow_task", "runtime.workflows.return_workflow_task", "identity.audit.view", "sales_order.read", "sales_order.update", "shipment.read", "inventory_stock.read", "inventory_stock.update", "invoice.read", "invoice.update", "payment.read", "payment.create", "payment.update", "return_request.read", "return_request.update", "order_cash_ledger.read", "order_cash_ledger.create",
 			"sales_order.approve_and_reserve", "sales_order.reject",
 		}, true),
 	}
@@ -130,9 +133,9 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 
 func integrationWorkflowTaskDecisionPermissions() []string {
 	return []string{
-		"runtime.workflows.approve_business_workflow_task",
-		"runtime.workflows.reject_business_workflow_task",
-		"runtime.workflows.return_business_workflow_task",
+		"runtime.workflows.approve_workflow_task",
+		"runtime.workflows.reject_workflow_task",
+		"runtime.workflows.return_workflow_task",
 	}
 }
 
@@ -158,8 +161,12 @@ func newIntegrationIdentityBinding(t *testing.T, cfg config.Config) identitysdk.
 	if applicationKey == "" {
 		applicationKey = "domainry-runtime"
 	}
+	tenantID := strings.TrimSpace(cfg.NotificationTenantID)
+	if tenantID == "" {
+		tenantID = "tenant-primary"
+	}
 	binding, err := newIntegrationIdentityFactory().Open(t.Context(), identitysdk.ApplicationRef{
-		WorkspaceID: identitysdk.WorkspaceID(workspaceID), ApplicationKey: identitysdk.ApplicationKey(applicationKey),
+		TenantID: identitysdk.TenantID(tenantID), WorkspaceID: identitysdk.WorkspaceID(workspaceID), ApplicationKey: identitysdk.ApplicationKey(applicationKey),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -226,13 +233,13 @@ func integrationIdentityUser(role string) string {
 	case "automation_history_reviewer":
 		return "automation_history_reviewer_user"
 	case "sales", "credit_manager", "finance":
-		return roleForBusinessWorkflowRole(role)
+		return roleForParticipantWorkflowRole(role)
 	default:
 		return "runtime_fixture_user"
 	}
 }
 
-func roleForBusinessWorkflowRole(role string) string {
+func roleForParticipantWorkflowRole(role string) string {
 	switch role {
 	case "sales":
 		return "sales_user"

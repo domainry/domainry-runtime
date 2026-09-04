@@ -150,7 +150,6 @@ func (state *validationState) validateGovernance() {
 		for field, value := range map[string]string{
 			"audit_object":    control.AuditObject,
 			"download_object": control.DownloadObject,
-			"export_action":   control.ExportAction,
 			"reason":          control.Reason,
 		} {
 			if strings.TrimSpace(value) == "" {

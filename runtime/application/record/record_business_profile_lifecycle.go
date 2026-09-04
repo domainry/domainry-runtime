@@ -89,9 +89,6 @@ func businessProfileDeactivationField(s *RecordApplicationService, objectKey, in
 			continue
 		}
 		statusField := strings.TrimSpace(extension.BusinessIdentity.StatusField)
-		if statusField == "" {
-			statusField = strings.TrimSpace(extension.Directory.StatusField)
-		}
 		if statusField == "" || inactiveStatus == "" {
 			return "", apperror.New(apperror.KindBadRequest, "backend.identity.profile_deactivation_status_required", nil, nil)
 		}
@@ -115,9 +112,6 @@ func businessProfileReactivationField(s *RecordApplicationService, objectKey, ac
 			continue
 		}
 		statusField := strings.TrimSpace(extension.BusinessIdentity.StatusField)
-		if statusField == "" {
-			statusField = strings.TrimSpace(extension.Directory.StatusField)
-		}
 		if statusField == "" || activeStatus == "" {
 			return "", apperror.New(apperror.KindBadRequest, "backend.identity.profile_reactivation_status_required", nil, nil)
 		}

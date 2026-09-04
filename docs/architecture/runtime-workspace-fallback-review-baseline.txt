@@ -2,7 +2,7 @@
 # TestRuntimeWorkspaceFallbackReviewBaseline. Remove entries when the matching
 # fallback is removed; add or change an entry only after explicit adjudication.
 runtime/application/agenthost/agent_task_dispatch_application_service.go|a1aa32c92cd2c2fa
-runtime/application/notificationfacade/module_transactions.go|db522ef059310a8f
+runtime/application/notificationfacade/module_transactions.go|a53412ab9d129a2d
 runtime/application/publicationhandoff/publication_handoff_application_service.go|3a264f3250c4d24e
 runtime/application/publicationhandoff/publication_handoff_application_service.go|b2e5ab60c1900c7a
 runtime/application/record/record_subject_lifecycle_application_service.go|9bc2b99f1b0726ee
@@ -10,6 +10,8 @@ runtime/application/seed/business/records.go|b2e5ab60c1900c7a
 runtime/application/seed/globalcapability/runtime.go|c9934cedd7524bf6
 runtime/application/workflow/workflow_agent_capability_completion.go|a0f007c7d608a730
 runtime/application/workflow/workflow_principal_resolver_application_service.go|a7621539cdd54a6e
+runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
+runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
 runtime/infrastructure/persistence/database/appschema/manifest_store.go|4abfd612c230c5f8
 runtime/infrastructure/persistence/database/automation/sql_values.go|e3a854a480b5fcda
 runtime/infrastructure/persistence/database/datamigration/copy.go|50c2e571441e2111

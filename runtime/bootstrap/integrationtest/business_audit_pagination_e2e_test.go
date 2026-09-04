@@ -61,7 +61,7 @@ func TestRuntimeBusinessAuditPaginationTraversesStableSQLitePagesOverHTTP(t *tes
 	last := requestRuntimeBusinessAuditPage(t, server, token, second.NextCursor)
 	assertRuntimeBusinessAuditPage(t, last, []string{"pagination-001"}, false, false)
 
-	request, err := http.NewRequest(http.MethodGet, server.URL+"/business/audit-events?event=pos.checkout.completed&page_size=2&cursor=not-a-cursor", nil)
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/audit/events?event=pos.checkout.completed&page_size=2&cursor=not-a-cursor", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func requestRuntimeBusinessAuditPage(t *testing.T, server *httptest.Server, toke
 	if cursor != "" {
 		values.Set("cursor", cursor)
 	}
-	request, err := http.NewRequest(http.MethodGet, server.URL+"/business/audit-events?"+values.Encode(), nil)
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/audit/events?"+values.Encode(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

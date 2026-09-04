@@ -127,7 +127,7 @@ func TestManifestGovernanceValidationEdges(t *testing.T) {
 		ReportExportControls: []reportmodel.ReportExportControlSchema{
 			{Key: "", ReportKey: "", SourceObjects: nil},
 			{Key: "same", ReportKey: "missing", SourceObjects: []string{"missing"}, SensitiveFieldPolicyKeys: []string{"missing"}},
-			{Key: "same", ReportKey: "known", SourceObjects: []string{"customer"}, SensitiveFieldPolicyKeys: []string{"same"}, AuditObject: "audit", DownloadObject: "download", ExportAction: "export", MaxRows: 1, Reason: "reason"},
+			{Key: "same", ReportKey: "known", SourceObjects: []string{"customer"}, SensitiveFieldPolicyKeys: []string{"same"}, AuditObject: "audit", DownloadObject: "download", MaxRows: 1, Reason: "reason"},
 		},
 	}
 	state := newValidationState(manifest, nil)
@@ -149,7 +149,7 @@ func TestManifestReportExportRecordMappingIsClosedAndObjectTyped(t *testing.T) {
 	}}
 	control := reportmodel.ReportExportControlSchema{
 		Key: "orders-export", ReportKey: "orders", SourceObjects: []string{"orders"}, AuditObject: audit.Key, DownloadObject: download.Key,
-		ExportAction: "report_export_audit.prepare_export", MaxRows: 100, Reason: "governed export",
+		MaxRows: 100, Reason: "governed export",
 		AllowedQueryKeys: []string{"current"}, AllowedTags: []string{"reviewed"},
 		RecordMapping: reportmodel.ReportExportRecordMappingSchema{
 			AuditReportKeyField: "report_key", AuditRequesterField: "requested_by", AuditStatusField: "status",

@@ -196,7 +196,7 @@ func TestOperationsSearchReceiptFilterCoversAuthorizationValidEnumsAndOpenRanges
 	if _, err := service.SearchReceipts(t.Context(), operationsmodel.OperationsReceiptFilter{}, denied); err == nil {
 		t.Fatal("unauthorized search accepted")
 	}
-	principal := operationsTestAdmin()
+	principal := operationsAdminPrincipal()
 	for _, status := range []operationsmodel.OperationsStatus{
 		operationsmodel.OperationsStatusCreated,
 		operationsmodel.OperationsStatusStarted,

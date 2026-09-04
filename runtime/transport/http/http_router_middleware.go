@@ -365,7 +365,7 @@ func anonymousAuthPath(path string) bool {
 	if path == "" {
 		return false
 	}
-	if path == "/" || path == "/live" || path == "/ready" || path == "/startup" || path == "/v1/notification-deliveries:accept" || path == "/v1/scheduler-triggers:accept" || strings.HasPrefix(path, "/i18n/") {
+	if path == "/" || path == "/live" || path == "/ready" || path == "/startup" || path == "/notification/deliveries/accept" || path == "/scheduler/triggers/accept" || strings.HasPrefix(path, "/discovery/i18n/") {
 		return true
 	}
 	return false

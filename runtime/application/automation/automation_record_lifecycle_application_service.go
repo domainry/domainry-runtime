@@ -165,7 +165,7 @@ func (s *AutomationApplicationService) terminalResultNotification(rule automatio
 	}
 	sourceID := "automation:" + trace.ExecutionID + ":" + status
 	intent := notificationmodel.NotificationIntent{
-		WorkspaceID: principal.WorkspaceID, SourceEventID: sourceID, EventType: "automation.execution." + status, Surface: "business_workspace",
+		WorkspaceID: principal.WorkspaceID, SourceEventID: sourceID, EventType: "automation.execution." + status,
 		RecipientUserIDs: []string{principal.UserID}, SubjectType: "automation_rule", SubjectID: rule.Key, DedupeKey: sourceID,
 		OccurredAt: time.Now().UTC().Format(time.RFC3339Nano), Variables: map[string]any{"rule_key": rule.Key, "object_key": rule.ObjectKey, "execution_id": trace.ExecutionID, "status": trace.Status, "error_code": trace.ErrorCode},
 	}

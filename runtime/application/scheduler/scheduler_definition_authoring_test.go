@@ -35,7 +35,7 @@ func TestSchedulerDefinitionReadsPublishedMetadataAndVersions(t *testing.T) {
 		definition: PublishedDefinition{Key: "daily", Data: map[string]any{"key": "daily", "target_type": "workflow", "target_key": "scheduled:daily"}},
 		versions:   []SchedulerDefinitionVersion{{VersionID: "v1", Event: "metadata_version", Data: map[string]any{"key": "daily"}}},
 	})
-	principal := schedulerTestPrincipal(ActionGetTenantAdminSchedulerDefinition)
+	principal := schedulerTestPrincipal(ActionGetManagementSchedulerDefinition)
 	loaded, err := service.GetDefinition(t.Context(), "daily", principal)
 	if err != nil || loaded.Key != "daily" {
 		t.Fatalf("loaded=%+v err=%v", loaded, err)

@@ -12,7 +12,7 @@ import (
 
 func TestRecordDomainServiceDelegatesOwnerOperations(t *testing.T) {
 	var absent *RecordDomainService
-	if absent.Repository() != nil || absent.IdentityDirectory() != nil {
+	if absent.Repository() != nil || absent.IdentityProjection() != nil {
 		t.Fatal("nil service exposed dependencies")
 	}
 

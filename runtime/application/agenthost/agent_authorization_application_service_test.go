@@ -16,12 +16,12 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-type agentPrincipalDirectoryStub struct {
+type agentPrincipalResolverStub struct {
 	principals map[string]principalmodel.Principal
 	err        error
 }
 
-func (s agentPrincipalDirectoryStub) Resolve(_ context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+func (s agentPrincipalResolverStub) Resolve(_ context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
 	if s.err != nil {
 		return identitysdk.PrincipalResolution{}, s.err
 	}
@@ -79,14 +79,14 @@ type agentRecordVisibilityStub struct {
 	err    error
 }
 
-type sequencedAgentPrincipalDirectory struct {
-	base      *agentPrincipalDirectoryStub
+type sequencedAgentPrincipalResolver struct {
+	base      *agentPrincipalResolverStub
 	roleCalls int
 	second    principalmodel.Principal
 	secondErr error
 }
 
-func (s *sequencedAgentPrincipalDirectory) Resolve(ctx context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+func (s *sequencedAgentPrincipalResolver) Resolve(ctx context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
 	s.roleCalls++
 	if s.roleCalls == 2 {
 		return agentPrincipalResolution(s.second), s.secondErr
@@ -180,7 +180,7 @@ func TestAgentExecutionIdentityFailsClosedOnRevocationAndRotation(t *testing.T) 
 		t.Fatalf("missing resolver error = %v", err)
 	}
 	failure := errors.New("directory offline")
-	service.principals = agentPrincipalDirectoryStub{err: failure}
+	service.principals = agentPrincipalResolverStub{err: failure}
 	if _, _, err := service.ResolveExecutionIdentity(t.Context(), AgentExecutionIdentityRequest{Initiator: initiator, Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}}); !errors.Is(err, failure) {
 		t.Fatalf("directory failure = %v", err)
 	}
@@ -602,7 +602,7 @@ func TestAgentInteractiveAuthorizationDetectsMidRequestIdentityAndSchemaChanges(
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, initiator, schema, directory := agentAuthorizationFixture()
-			sequence := &sequencedAgentPrincipalDirectory{base: directory, second: test.second, secondErr: test.err}
+			sequence := &sequencedAgentPrincipalResolver{base: directory, second: test.second, secondErr: test.err}
 			service := NewAgentAuthorizationApplicationService(AgentAuthorizationDependencies{Principals: sequence, Schema: schema, Records: agentRecordVisibilityStub{denied: map[string]bool{}}})
 			stored := agentsdk.GlobalContext{EntrypointKey: "assistant.global", AgentKey: "customer_agent", RouteKey: "workspace.customer", ObjectKey: "customer"}
 			_, err := service.AuthorizeInteractive(t.Context(), stored, initiator)
@@ -632,7 +632,7 @@ func TestAgentInteractiveAuthorizationDetectsMidRequestIdentityAndSchemaChanges(
 	}
 }
 
-func agentAuthorizationFixture() (*AgentAuthorizationApplicationService, principalmodel.Principal, *agentSchemaProviderStub, *agentPrincipalDirectoryStub) {
+func agentAuthorizationFixture() (*AgentAuthorizationApplicationService, principalmodel.Principal, *agentSchemaProviderStub, *agentPrincipalResolverStub) {
 	operatorRole := accessfixture.Bundle{Key: "operator", Permissions: []string{"customer.read", "customer.update"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "owner", Read: true, Write: true}}}
 	serviceRole := accessfixture.Bundle{Key: "agent_service", Permissions: []string{"customer.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "owner", Read: true}}}
 	initiator := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace-1", AuthorizationRevision: "operator-rev-1"}, RequestID: "request-1"}, operatorRole)
@@ -640,7 +640,7 @@ func agentAuthorizationFixture() (*AgentAuthorizationApplicationService, princip
 	fresh := initiator
 	fresh.AuthorizationRevision = "operator-rev-2"
 	servicePrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "agent_customer", WorkspaceID: "workspace-1", AuthorizationRevision: "service-rev-2"}}, serviceRole)
-	directory := &agentPrincipalDirectoryStub{principals: map[string]principalmodel.Principal{"operator:operator": fresh, "agent_customer:agent_service": servicePrincipal}}
+	directory := &agentPrincipalResolverStub{principals: map[string]principalmodel.Principal{"operator:operator": fresh, "agent_customer:agent_service": servicePrincipal}}
 	task := agentsdk.AgentTaskDefinition{ContractVersion: agentsdk.AgentTaskContractVersion, Key: "customer.review", Version: "1.0.0", AgentKey: "customer_agent", AllowedObjects: []string{"customer"}, AllowedActions: []string{"customer.update"}, AllowedOutcomes: []string{"success", "manual_review", "error"}, SideEffectMode: agentsdk.AgentTaskSideEffectActionAllowed, Enabled: true}
 	entrypoint := agentsdk.AgentEntrypointAssignment{ContractVersion: agentsdk.AgentEntrypointContractVersion, Key: "assistant.global", AgentKey: "customer_agent", RequiredPermissions: []string{"customer.read"}, RoutePatterns: []string{"workspace.*"}, AllowedTaskKeys: []string{"customer.review"}, AllowedWorkflowKeys: []string{"customer.flow"}, Enabled: true, ContextContract: agentsdk.GlobalAgentContextContract{ContractVersion: agentsdk.GlobalAgentContextContractVersion, MaxSelectedRecord: 20, MaxContextBytes: 65536}, RoutingContract: agentsdk.AgentRoutingContract{ContractVersion: agentsdk.AgentRoutingContractVersion, AllowedRouteTypes: []string{agentsdk.AgentRouteTask, agentsdk.AgentRouteWorkflow}}}
 	full := appschemamodel.ApplicationSchemaSnapshot{

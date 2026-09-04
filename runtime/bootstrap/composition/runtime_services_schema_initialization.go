@@ -13,7 +13,7 @@ func initializeSchemaAndRecordFoundation(s *runtimeAssembly, deps RuntimeService
 	s.RecordQueryPolicyDomainService = newRecordQueryPolicyService(s)
 	queryPolicy := recordQueryPolicyAdapter{service: s.RecordQueryPolicyDomainService}
 	s.recordStateMachineEffects = newRecordStateMachineEffects()
-	s.RecordValidationDomainService = newRecordValidationService(s, deps.Records, queryPolicy, deps.IdentityDirectory)
+	s.RecordValidationDomainService = newRecordValidationService(s, deps.Records, queryPolicy, deps.IdentityProjection)
 	s.PipelineApplicationService = newPipelineApplicationService(s, deps.Records, queryPolicy)
 	s.ActionPreconditionApplicationService = newActionPreconditionService(s.PipelineApplicationService)
 	return queryPolicy

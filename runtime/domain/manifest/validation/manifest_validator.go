@@ -188,7 +188,6 @@ func (state *validationState) validateIdentityProfileExtensions() {
 		}
 		state.validateBusinessIdentityBinding(path+".business_identity", extension)
 		state.validateIdentityProfileBindingLifecycle(path+".binding_lifecycle", extension)
-		state.validateIdentityProfileDirectory(path+".directory", extension)
 		bindingKey := strings.TrimSpace(extension.BusinessIdentity.Key)
 		if bindingKey != "" && seenBindingKeys[bindingKey] {
 			state.add(path+".business_identity.key", "duplicate business identity binding %q", bindingKey)
@@ -232,40 +231,6 @@ func (state *validationState) validateIdentityProfileExtensions() {
 				state.add(fmt.Sprintf("%s.required_permissions[%d]", path, permissionIndex), "must be a unique non-empty Identity Catalog permission")
 			}
 			seenPermissions[permission] = true
-		}
-	}
-}
-
-func (state *validationState) validateIdentityProfileDirectory(path string, extension profilebindingmodel.Binding) {
-	directory := extension.Directory
-	if !directory.Enabled {
-		if strings.TrimSpace(directory.Label) != "" || strings.TrimSpace(directory.PluralLabel) != "" || len(directory.SummaryFields) > 0 || len(directory.FilterFields) > 0 || strings.TrimSpace(directory.StatusField) != "" || len(directory.ActionKeys) > 0 {
-			state.add(path+".enabled", "must be true when directory metadata is declared")
-		}
-		return
-	}
-	if strings.TrimSpace(directory.Label) == "" {
-		state.add(path+".label", "is required when directory is enabled")
-	}
-	if strings.TrimSpace(directory.PluralLabel) == "" {
-		state.add(path+".plural_label", "is required when directory is enabled")
-	}
-	if len(directory.SummaryFields) == 0 {
-		state.add(path+".summary_fields", "must declare at least one field when directory is enabled")
-	}
-	validateRuntimeProfileFieldRefs(state, path+".summary_fields", extension.ObjectKey, directory.SummaryFields)
-	validateRuntimeProfileFieldRefs(state, path+".filter_fields", extension.ObjectKey, directory.FilterFields)
-	statusField := strings.TrimSpace(directory.StatusField)
-	if statusField != "" && state.fields[extension.ObjectKey][statusField].Key == "" {
-		state.add(path+".status_field", "references unknown profile field %q", statusField)
-	}
-	for _, actionKey := range directory.ActionKeys {
-		actionKey = strings.TrimSpace(actionKey)
-		action, ok := state.actions[actionKey]
-		if !ok {
-			state.add(path+".action_keys", "references unknown action %q", actionKey)
-		} else if strings.TrimSpace(action.ObjectKey) != strings.TrimSpace(extension.ObjectKey) {
-			state.add(path+".action_keys", "action %q targets object %q, not %q", actionKey, action.ObjectKey, extension.ObjectKey)
 		}
 	}
 }

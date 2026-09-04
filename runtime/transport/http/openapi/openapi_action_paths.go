@@ -12,12 +12,12 @@ func addActionOpenAPIPath(paths map[string]any, action definitionmodel.ActionSch
 		return
 	}
 	if openAPIObjectActionKind(action.Kind) {
-		paths["/objects/"+objectKey+"/actions/"+actionKey+"/run"] = map[string]any{"post": openAPIOperation("execute"+openAPIOperationName(objectKey)+openAPIOperationName(actionKey), "Actions", "Execute "+valueOrDefault(action.Label, actionKey), openAPIAdminSecurity(), openAPIJSONRequest(openAPIRef("ObjectActionRequest")), openAPIJSONResponse("Object action result", openAPIRef("ObjectActionResult")))}
+		paths["/records/objects/"+objectKey+"/actions/"+actionKey+"/run"] = map[string]any{"post": openAPIOperation("execute"+openAPIOperationName(objectKey)+openAPIOperationName(actionKey), "Actions", "Execute "+valueOrDefault(action.Label, actionKey), openAPIAdminSecurity(), openAPIJSONRequest(openAPIRef("ObjectActionRequest")), openAPIJSONResponse("Object action result", openAPIRef("ObjectActionResult")))}
 	}
 	if !openAPIObjectOnlyActionKind(action.Kind) {
-		paths["/objects/"+objectKey+"/records/{recordID}/actions/"+actionKey] = map[string]any{"post": openAPIOperation("execute"+openAPIOperationName(objectKey)+openAPIOperationName(actionKey), "Actions", "Execute "+valueOrDefault(action.Label, actionKey), openAPIAdminSecurity(), openAPIPathParameter("recordID", "Record ID"), openAPIJSONRequest(openAPIRef("ActionRequest")), openAPIJSONResponse("Action result", openAPIRef("ActionResult")))}
+		paths["/records/objects/"+objectKey+"/records/{recordID}/actions/"+actionKey] = map[string]any{"post": openAPIOperation("execute"+openAPIOperationName(objectKey)+openAPIOperationName(actionKey), "Actions", "Execute "+valueOrDefault(action.Label, actionKey), openAPIAdminSecurity(), openAPIPathParameter("recordID", "Record ID"), openAPIJSONRequest(openAPIRef("ActionRequest")), openAPIJSONResponse("Action result", openAPIRef("ActionResult")))}
 	}
-	paths["/objects/"+objectKey+"/actions/"+actionKey+"/bulk"] = map[string]any{"post": openAPIOperation("executeBulk"+openAPIOperationName(objectKey)+openAPIOperationName(actionKey), "Actions", "Execute "+valueOrDefault(action.Label, actionKey)+" for multiple records", openAPIAdminSecurity(), openAPIJSONRequest(openAPIRef("BulkActionRequest")), openAPIJSONResponse("Bulk action result", openAPIObject(nil)))}
+	paths["/records/objects/"+objectKey+"/actions/"+actionKey+"/bulk"] = map[string]any{"post": openAPIOperation("executeBulk"+openAPIOperationName(objectKey)+openAPIOperationName(actionKey), "Actions", "Execute "+valueOrDefault(action.Label, actionKey)+" for multiple records", openAPIAdminSecurity(), openAPIJSONRequest(openAPIRef("BulkActionRequest")), openAPIJSONResponse("Bulk action result", openAPIObject(nil)))}
 }
 
 func openAPIObjectActionKind(kind string) bool {

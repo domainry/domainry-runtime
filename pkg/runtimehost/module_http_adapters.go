@@ -11,10 +11,10 @@ import (
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
 
-// moduleSurfaceRouter is the single process-host router for module-owned HTTP.
+// moduleAdapterRouter is the single process-host router for module-owned HTTP.
 // Bind constructs a complete immutable mux before swapping it into service, so
 // tenant activation and module replacement never expose a partial route set.
-type moduleSurfaceRouter struct {
+type moduleAdapterRouter struct {
 	mu       sync.RWMutex
 	group    runtimehttp.ListenerRouteGroup
 	fallback http.Handler
@@ -22,19 +22,19 @@ type moduleSurfaceRouter struct {
 	guard    moduleRouteGuard
 }
 
-func newModuleSurfaceRouter(group runtimehttp.ListenerRouteGroup, fallback http.Handler) *moduleSurfaceRouter {
+func newModuleAdapterRouter(group runtimehttp.ListenerRouteGroup, fallback http.Handler) *moduleAdapterRouter {
 	if fallback == nil {
 		fallback = http.NotFoundHandler()
 	}
-	return &moduleSurfaceRouter{group: group, fallback: fallback, handler: fallback}
+	return &moduleAdapterRouter{group: group, fallback: fallback, handler: fallback}
 }
 
-func (router *moduleSurfaceRouter) Bind(surfaces []modulehttp.Surface, guards ...moduleRouteGuard) error {
+func (router *moduleAdapterRouter) Bind(adapters []modulehttp.Adapter, guards ...moduleRouteGuard) error {
 	guard := router.guard
 	if len(guards) > 0 {
 		guard = guards[0]
 	}
-	handler, err := mountModuleHTTPSurfaces(router.group, surfaces, router.fallback, guard)
+	handler, err := mountModuleHTTPAdapters(router.group, adapters, router.fallback, guard)
 	if err != nil {
 		return err
 	}
@@ -45,18 +45,18 @@ func (router *moduleSurfaceRouter) Bind(surfaces []modulehttp.Surface, guards ..
 	return nil
 }
 
-func (router *moduleSurfaceRouter) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+func (router *moduleAdapterRouter) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	router.mu.RLock()
 	handler := router.handler
 	router.mu.RUnlock()
 	handler.ServeHTTP(writer, request)
 }
 
-func mountModuleHTTPSurfaces(group runtimehttp.ListenerRouteGroup, surfaces []modulehttp.Surface, fallback http.Handler, guards ...moduleRouteGuard) (http.Handler, error) {
+func mountModuleHTTPAdapters(group runtimehttp.ListenerRouteGroup, adapters []modulehttp.Adapter, fallback http.Handler, guards ...moduleRouteGuard) (http.Handler, error) {
 	if fallback == nil {
 		fallback = http.NotFoundHandler()
 	}
-	if len(surfaces) == 0 {
+	if len(adapters) == 0 {
 		return fallback, nil
 	}
 	mux := http.NewServeMux()
@@ -65,12 +65,12 @@ func mountModuleHTTPSurfaces(group runtimehttp.ListenerRouteGroup, surfaces []mo
 		guard = guards[0]
 	}
 	seen := map[string]string{}
-	for _, surface := range surfaces {
-		if err := modulehttp.ValidateSurface(surface); err != nil {
+	for _, adapter := range adapters {
+		if err := modulehttp.ValidateAdapter(adapter); err != nil {
 			return nil, err
 		}
-		identity := strings.TrimSpace(surface.Owner()) + "/" + strings.TrimSpace(surface.Name())
-		for _, route := range surface.Routes() {
+		identity := strings.TrimSpace(adapter.Owner()) + "/" + strings.TrimSpace(adapter.Name())
+		for _, route := range adapter.Routes() {
 			if !moduleRouteVisible(group, route.Action.Exposures) {
 				continue
 			}
@@ -78,7 +78,7 @@ func mountModuleHTTPSurfaces(group runtimehttp.ListenerRouteGroup, surfaces []mo
 			if owner, duplicate := seen[pattern]; duplicate {
 				return nil, fmt.Errorf("module HTTP route %q is owned by both %q and %q", pattern, owner, identity)
 			}
-			handler := surface.Handler()
+			handler := adapter.Handler()
 			if route.Action.Authorization.Strategy != actioncontract.AuthorizationAnonymous {
 				if guard == nil {
 					return nil, fmt.Errorf("module HTTP route %q requires a host authorization guard", pattern)
@@ -105,8 +105,8 @@ func moduleRouteVisible(group runtimehttp.ListenerRouteGroup, exposures []module
 	switch group {
 	case runtimehttp.ListenerRouteGroupPublic:
 		want = modulehttp.ExposurePublic
-	case runtimehttp.ListenerRouteGroupTenantAdmin:
-		want = modulehttp.ExposureTenantAdmin
+	case runtimehttp.ListenerRouteGroupManagement:
+		want = modulehttp.ExposureManagement
 	case runtimehttp.ListenerRouteGroupOps:
 		want = modulehttp.ExposureOps
 	default:

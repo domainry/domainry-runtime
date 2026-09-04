@@ -24,7 +24,7 @@ func TestWriteServiceErrorMapsWrappedContextErrors(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			response := httptest.NewRecorder()
-			request := httptest.NewRequest(http.MethodGet, "/objects/account/records", nil)
+			request := httptest.NewRequest(http.MethodGet, "/records/objects/account/records", nil)
 			wrapped := &apperror.AppError{Kind: apperror.KindInternal, Code: "backend.internal", Err: tc.err}
 			writeServiceError(response, request, wrapped)
 			if response.Code != tc.status {

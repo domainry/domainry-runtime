@@ -77,7 +77,7 @@ func TestRuntimeStartupFailsWhenWorkerInitializationFails(t *testing.T) {
 func TestRuntimeWorkerNilAndOptionalOwnerEdges(t *testing.T) {
 	var runtime *Runtime
 	if RoutesForListenerGroup(nil, runtimehttp.ListenerRouteGroupAll) == nil || RoutesForListenerGroup(&Runtime{}, runtimehttp.ListenerRouteGroupAll) == nil {
-		t.Fatal("nil HTTP surface fallback missing")
+		t.Fatal("nil HTTP adapter fallback missing")
 	}
 	runtime.startSchedulerWorker(t.Context())
 	runtime.startNotificationChannelWorker(t.Context())

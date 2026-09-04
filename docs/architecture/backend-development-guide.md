@@ -267,7 +267,7 @@ domain/<owner>/
 | `snapshot` | 大型 owner 的物化快照 claim、刷新与 fencing 生命周期 | contract/model |
 | `repository` | owner 持有的持久化 port | model/contract |
 | `runtime` | executor、worker、dispatcher、engine | model/contract/policy |
-| `projection` | snapshot、view、permission/i18n/read model | model/contract/policy |
+| `projection` | snapshot、view、permission/discovery/i18n/read model | model/contract/policy |
 | `policy` | 权限、状态机、业务策略 | model/contract |
 | `contract` | 跨包稳定 port 和 capability contract | model/leaf contract |
 | `testdata` | fixture/golden data | 无生产 Go package |
@@ -531,8 +531,8 @@ func NewOrderApplicationService(db *sql.DB) *OrderApplicationService {
 
 Audit 已从 Runtime/Identity 的本地业务 owner 中剥离，公共业务能力由两个源码仓库负责：
 
-- `domainry-audit-sdk/contract`：稳定事件、查询、Surface、导出及事务 port。
-- `domainry-audit-sdk/application`：泛型宿主 Application Service，统一事件构造、脱敏、权限回调、查询、Surface 投影和导出编排。
+- `domainry-audit-sdk/contract`：稳定事件、查询、Adapter、导出及事务 port。
+- `domainry-audit-sdk/application`：泛型宿主 Application Service，统一事件构造、脱敏、权限回调、查询、Adapter 投影和导出编排。
 - `domainry-audit`：模块内部 Domain/Application/Persistence 及 source-owned migrations。
 
 宿主只允许保留适配代码：
@@ -556,7 +556,7 @@ Runtime、Identity **MUST NOT** 再声明自己的 `domain/audit`、`application
 1. Runtime/Identity 不存在本地 `domain/audit` 和 `application/audit`。
 2. 不存在旧 standalone host、模块私有 migration ledger 和旧表生产引用。
 3. SDK、Audit、Identity 全量测试通过；Runtime 的 Audit focused tests 和 Audit architecture gates 通过。
-4. 宿主 adapter 不包含 Audit 权限、Surface、导出或持久化业务规则。
+4. 宿主 adapter 不包含 Audit 权限、Adapter、导出或持久化业务规则。
 ## R4. Application 与 Bootstrap 目录
 
 Application **MUST** 只负责业务用例编排：

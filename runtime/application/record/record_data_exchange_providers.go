@@ -226,7 +226,7 @@ func (p dataExchangeExportProvider) CompleteExport(ctx context.Context, completi
 	}
 	return notify(ctx, notificationmodel.NotificationIntent{
 		ID: "notification_record_export_" + hex.EncodeToString(identity[:12]), WorkspaceID: completion.Scope.WorkspaceID,
-		SourceEventID: sourceEventID, EventType: "record.export.completed", Surface: "business_workspace",
+		SourceEventID: sourceEventID, EventType: "record.export.completed",
 		RecipientUserIDs: []string{completion.Scope.ActorID}, SubjectType: "record_export", SubjectID: completion.JobID,
 		SubjectVersion: completion.Artifact.SHA256, DedupeKey: sourceEventID, ActionState: notificationmodel.NotificationActionOpen,
 		ExpiresAt: expiresAt, OccurredAt: now().UTC().Format(time.RFC3339Nano),

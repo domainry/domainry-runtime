@@ -151,8 +151,11 @@ type principalValue interface {
 }
 
 // Attach converts a declarative test fixture into the exact SDK AccessBundle
-// consumed by production code. It cannot create a Plane-owned authorization
-// fallback.
+// consumed by production code. A compact Permissions list represents complete
+// all-scope test grants unless DataPolicies explicitly supplies narrower or
+// denial-only policy. This mirrors compiler expansion without restoring a
+// production authorization fallback or duplicating permission keys at call
+// sites.
 func Attach(principal principalmodel.Principal, spec Bundle) principalmodel.Principal {
 	principal.RoleKey = strings.TrimSpace(spec.Key)
 	principal.Permissions = append([]string(nil), spec.Permissions...)
@@ -203,6 +206,14 @@ func Attach(principal principalmodel.Principal, spec Bundle) principalmodel.Prin
 			continue
 		}
 		addGrant(identitysdk.ResourceType(strings.TrimSpace(grant.ResourceKey)), identitysdk.Action(strings.TrimSpace(grant.ActionKey)))
+	}
+	for index, grant := range grants {
+		if dataPolicyDeclaredForGrant(spec.DataPolicies, grant) {
+			continue
+		}
+		policy := dataPolicy(grant.Resource, grant.Action, identitysdk.DataScopeAll, false, nil)
+		policy.Key += fmt.Sprintf(".default.%d", index)
+		bundle.DataPolicies = append(bundle.DataPolicies, policy)
 	}
 	for permissionIndex, permission := range spec.DataPolicies {
 		actions := dataPolicyActions(permission, grants)
@@ -468,6 +479,19 @@ func dataPolicyActions(permission DataPolicyFixture, grants []identitysdk.Functi
 		}
 	}
 	return actions
+}
+
+func dataPolicyDeclaredForGrant(policies []DataPolicyFixture, grant identitysdk.FunctionGrant) bool {
+	for _, policy := range policies {
+		if strings.TrimSpace(policy.ObjectKey) != strings.TrimSpace(string(grant.Resource)) {
+			continue
+		}
+		action := strings.TrimSpace(policy.Action)
+		if action == "" || action == strings.TrimSpace(string(grant.Action)) {
+			return true
+		}
+	}
+	return false
 }
 
 func fixtureReadAction(action identitysdk.Action) bool {

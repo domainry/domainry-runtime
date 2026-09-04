@@ -19,7 +19,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 	if dataExchangeProviders == nil && deps.DataExchange != nil {
 		dataExchangeProviders = recordapplication.NewDataExchangeProviders(nil)
 	}
-	identityDirectory := deps.IdentityDirectory
+	identityProjection := deps.IdentityProjection
 	connectorRegistry := newRuntimeConnectorCatalog(manifest.Integrations)
 	auditApplicationService := deps.AuditApplication
 	if auditApplicationService == nil {
@@ -68,7 +68,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		connectorRegistry:                   connectorRegistry,
 		verifyFileClean:                     deps.VerifyFileClean,
 		prepareOutboxPayload:                deps.PrepareOutboxPayload,
-		identityDirectory:                   identityDirectory,
+		identityProjection:                  identityProjection,
 		auditApplicationService:             auditApplicationService,
 		auditExportTokenKey:                 append([]byte(nil), deps.AuditExportTokenKey...),
 		workerDependencies:                  workerplatform.NormalizeDependencies(deps.Worker),

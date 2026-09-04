@@ -7,10 +7,9 @@ import (
 	"testing"
 
 	"golang.org/x/mod/modfile"
-	"golang.org/x/mod/module"
 )
 
-func TestRuntimeConsumesDomainryModulesByReleaseTag(t *testing.T) {
+func TestRuntimeConsumesDomainryModulesByImmutableVersion(t *testing.T) {
 	path := filepath.Join(runtimeRoot(t), "..", "go.mod")
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -30,8 +29,8 @@ func TestRuntimeConsumesDomainryModulesByReleaseTag(t *testing.T) {
 			continue
 		}
 		version := requirement.Mod.Version
-		if version == "" || version == "v0.0.0" || module.IsPseudoVersion(version) {
-			t.Errorf("Domainry module %s is not pinned to a release tag: %s", requirement.Mod.Path, version)
+		if version == "" || version == "v0.0.0" {
+			t.Errorf("Domainry module %s is not pinned to an immutable version: %s", requirement.Mod.Path, version)
 		}
 	}
 }

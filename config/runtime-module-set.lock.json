@@ -1,0 +1,116 @@
+{
+  "contract_version": "domainry-runtime-module-set-v1",
+  "set_sha256": "4927cfa5a2b5d7596ecce431ecd7755d8b80f13c89f47f634bb3cc1467b180a0",
+  "modules": [
+    {
+      "key": "agent",
+      "implementation": "github.com/domainry/domainry-agent",
+      "implementation_version": "v0.1.6-0.20260903120224-b6e270d0c075",
+      "implementation_sum": "h1:nc7B4TZjaEW4k7YbSO4GfjWwmLeobfe8CpqGqTJqfYE=",
+      "sdk": "github.com/domainry/domainry-agent-sdk",
+      "sdk_version": "v0.1.3-0.20260903120224-f101edee8837",
+      "sdk_sum": "h1:QkiRTdkqS0SCLn0TUOPICIIHSGUNXlGrkKPIyRcWvEU=",
+      "capability_contract_sha256": "9be1e3973a416a42293cfb83e070f7f6723c2a561af8cd3d75c25200922e056f"
+    },
+    {
+      "key": "audit",
+      "implementation": "github.com/domainry/domainry-audit",
+      "implementation_version": "v0.1.5-0.20260903120224-241c363e7112",
+      "implementation_sum": "h1:qY0RtgCfcxIEWC2qEJXKz6I9BjP09x+92SxDm7pXb8w=",
+      "sdk": "github.com/domainry/domainry-audit-sdk",
+      "sdk_version": "v0.1.2-0.20260901063632-5ed7ddb48e09",
+      "sdk_sum": "h1:pZQKTdQqVxVpsPHBwgoUm73pwsjDIA5wnqO3ZmpicSE=",
+      "capability_contract_sha256": "34ce384258fb314cae68ad62c9fafb99f300f59f151685efbe716010f51a4d7a"
+    },
+    {
+      "key": "data_exchange",
+      "implementation": "github.com/domainry/domainry-data-exchange",
+      "implementation_version": "v0.3.6-0.20260903120224-e017fbe8200a",
+      "implementation_sum": "h1:IZKDrI6tp0QtOtSxVBvJbtCHuV2iqU0/vXlA+wOBgWU=",
+      "sdk": "github.com/domainry/domainry-data-exchange-sdk",
+      "sdk_version": "v0.3.3-0.20260903120224-cad2b42fc9c1",
+      "sdk_sum": "h1:i+o0a3+JFEN9f/xCreL86ydSpTTx+HQ6WrBOzqj5I4o=",
+      "capability_contract_sha256": "7d4ca15db3451284c9ae4431d7401775d81cb62037e84f04e35d1032a1729f3a"
+    },
+    {
+      "key": "identity",
+      "implementation": "github.com/domainry/domainry-identity",
+      "implementation_version": "v0.2.0-dev7.0.20260903120225-5cd9ca879559",
+      "implementation_sum": "h1:IsBbaa/N4Y0Ok4/T0SObtcyqM2HeDXH+wPGIaUx/60I=",
+      "sdk": "github.com/domainry/domainry-identity-sdk",
+      "sdk_version": "v0.1.1-dev7.0.20260903120225-51348ff00e2f",
+      "sdk_sum": "h1:BUHZaBRmTPPamwsrtP2b4w2m8ncn+Yqi0+2yFm/etAM=",
+      "capability_contract_sha256": "cb02b067a8d6d6e09a670ba5c5d19c478726d60a2c9f3dbd01b9170b77452107"
+    },
+    {
+      "key": "integration",
+      "implementation": "github.com/domainry/domainry-integration",
+      "implementation_version": "v0.1.10-0.20260903120225-c344dd320c4b",
+      "implementation_sum": "h1:iCde4iyk4poqgBm8McQf45qSxUvm/0EDksle9Xjrpi4=",
+      "sdk": "github.com/domainry/domainry-integration-sdk",
+      "sdk_version": "v0.1.3-0.20260903120225-4ba1e97ecdf8",
+      "sdk_sum": "h1:J5IdBk/Uaedh4LtAkJtCwPKDNL502mT0YNiViWipzFI=",
+      "capability_contract_sha256": "6eea544c931f380b3ee92ef24c24081f40a4c8e8b8857a10dc7752bbeaa55e88"
+    },
+    {
+      "key": "lifecycle",
+      "implementation": "github.com/domainry/domainry-lifecycle",
+      "implementation_version": "v0.1.8-0.20260903120225-d31873da34ce",
+      "implementation_sum": "h1:3nXSXbnBswXeqlZksroFaW8h1mLSEKI1SxF1B+3tez0=",
+      "sdk": "github.com/domainry/domainry-lifecycle-sdk",
+      "sdk_version": "v0.1.7-0.20260901215652-792ec43996bc",
+      "sdk_sum": "h1:UN4MrDcY8TTfRsl48GI+6/h+7MmN3O7Qi+m0mK8lz60=",
+      "capability_contract_sha256": "89045365528115646b5f2f4702dd09fa8fd90a55bae977622514668619ea2cdf"
+    },
+    {
+      "key": "metadata",
+      "implementation": "github.com/domainry/domainry-metadata",
+      "implementation_version": "v0.1.5-0.20260903120225-e279abe29e37",
+      "implementation_sum": "h1:bERhgwY0Gc/8XvBSmp+D2WhVmUX9PGaXBUjuOF1uVQg=",
+      "sdk": "github.com/domainry/domainry-metadata-sdk",
+      "sdk_version": "v0.1.2-0.20260902130803-e728f30c3b1b",
+      "sdk_sum": "h1:wJkm7scY8krJKRHf0McNu2wSw3SN5JfawzwnUsEaLDE=",
+      "capability_contract_sha256": "5271645db66a9ec6bd2f8ea83acfa97c32335604a513181e9042c135e418ebc8"
+    },
+    {
+      "key": "monitoring",
+      "implementation": "github.com/domainry/domainry-monitoring",
+      "implementation_version": "v0.1.8-0.20260903120225-c56c95001ff1",
+      "implementation_sum": "h1:lduzSKGfPWgxVrBJcQtO5RKO/AwRbb9s9KI/9AeLzsY=",
+      "sdk": "github.com/domainry/domainry-monitoring-sdk",
+      "sdk_version": "v0.1.2-0.20260903120225-0f224c423051",
+      "sdk_sum": "h1:Nt6AAC/0GtAu1JXzpsMDwgJJjX9JBPaXDNzJBaPCD4k=",
+      "capability_contract_sha256": "ae0621d2d564ff3c12d467483389ceb2dab184e5eaf0a4aced7efd25d067a939"
+    },
+    {
+      "key": "notification",
+      "implementation": "github.com/domainry/domainry-notification",
+      "implementation_version": "v0.1.0-dev.20.0.20260903120225-76b318944df7",
+      "implementation_sum": "h1:BEWwWYl49QKShFWF5N6l24pMgQpeatHzG4+IOOqobLA=",
+      "sdk": "github.com/domainry/domainry-notification-sdk",
+      "sdk_version": "v0.1.0-dev.7.0.20260903120225-c4aa3c035b3e",
+      "sdk_sum": "h1:DGl+e8PBhGGeMXy5udO65T//HVILL/8LDOp3oF4Qnn4=",
+      "capability_contract_sha256": "28f2630b637c62f8c9eaf060f0c785c58ca4214a73b4a407eca9b8505b1a2007"
+    },
+    {
+      "key": "report",
+      "implementation": "github.com/domainry/domainry-report",
+      "implementation_version": "v0.1.5-0.20260903120226-466ff813d7f6",
+      "implementation_sum": "h1:Ow0kSrdUPF1l2/GplOYSalEuaJ5jnqTVnnHD5zpqP/c=",
+      "sdk": "github.com/domainry/domainry-report-sdk",
+      "sdk_version": "v0.1.2-0.20260903120226-44d9129fbfee",
+      "sdk_sum": "h1:klTe0gPvj/yj4NQsGRAKER9YmZuzyuKuNTx3i5KqDzg=",
+      "capability_contract_sha256": "49fdd714e3afe75ee783890a402d59aab9b0232ad3beac722c15f551ad5462e6"
+    },
+    {
+      "key": "scheduler",
+      "implementation": "github.com/domainry/domainry-scheduler",
+      "implementation_version": "v0.1.5-0.20260903120226-8d0da02f9552",
+      "implementation_sum": "h1:Fnlys4O3ZI2hqNhybuTtyQRsPoBNUkaKDan3tpqcX5o=",
+      "sdk": "github.com/domainry/domainry-scheduler-sdk",
+      "sdk_version": "v0.1.2-0.20260903120226-fa92ee8cd564",
+      "sdk_sum": "h1:2HYt5KD79JXCmYv8aGMY1FwizqW9cT6vt4V/8ZjDoYM=",
+      "capability_contract_sha256": "93e23b24a4435f14fd2d977c77f13f94ff578385092754e503fdf88fe510dbb6"
+    }
+  ]
+}

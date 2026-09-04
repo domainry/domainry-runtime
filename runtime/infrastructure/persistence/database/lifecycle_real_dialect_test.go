@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
@@ -96,11 +97,19 @@ func TestLifecyclePersistenceAcrossRealDialects(t *testing.T) {
 				lifecyclesdk.ActionLifecyclePoliciesPublish: {},
 				lifecyclesdk.ActionLifecyclePoliciesList:    {},
 			}}
+			bundle := &identitysdk.AccessBundle{Subject: identitysdk.Subject{WorkspaceID: identitysdk.WorkspaceID(identity), SubjectID: "dialect-test"}}
+			for permission := range principal.Permissions {
+				separator := strings.LastIndex(permission, ".")
+				resource, action := permission[:separator], permission[separator+1:]
+				bundle.FunctionGrants = append(bundle.FunctionGrants, identitysdk.FunctionGrant{Resource: identitysdk.ResourceType(resource), Action: identitysdk.Action(action), Effect: identitysdk.EffectAllow})
+				bundle.DataPolicies = append(bundle.DataPolicies, identitysdk.DataPolicy{Key: "dialect-" + permission, Resource: identitysdk.ResourceType(resource), Action: identitysdk.Action(action), Effect: identitysdk.EffectAllow, DataScopes: []identitysdk.DataScope{identitysdk.DataScopeAll}})
+			}
+			requestContext := identitysdk.WithRequestIdentity(t.Context(), identitysdk.RequestIdentity{Principal: identitysdk.Principal{Known: true, WorkspaceID: identity, UserID: "dialect-test", AccessBundle: bundle}})
 			policy := lifecyclemodel.PolicyVersion{Policy: lifecyclemodel.RetentionPolicy{Key: identity, Version: "1", Owner: "record", Class: lifecyclemodel.RetentionClassProduct, DefaultRetention: 24 * time.Hour, MinimumRetention: time.Hour, BackupBehavior: lifecyclemodel.BackupBehaviorStandard, EraseBehavior: lifecyclemodel.EraseBehaviorDelete}}
-			if _, err := binding.Governance().PublishPolicy(t.Context(), policy, principal); err != nil {
+			if _, err := binding.Governance().PublishPolicy(requestContext, policy, principal); err != nil {
 				t.Fatal(err)
 			}
-			policies, err := binding.Governance().ListPolicies(t.Context(), principal)
+			policies, err := binding.Governance().ListPolicies(requestContext, principal)
 			if err != nil || len(policies) != 1 || policies[0].Policy.Key != identity {
 				t.Fatalf("policies=%#v err=%v", policies, err)
 			}

@@ -26,7 +26,7 @@ func TestRuntimeAuthoringScenarioEvidenceMiddlewareAcceptsOnePlanBoundToken(t *t
 	plan := changeplanmodel.RuntimeAuthoringEvidencePlan{
 		Scenarios: []changeplanmodel.RuntimeAuthoringEvidenceScenarioPlan{{
 			ScenarioID: "order.lifecycle", Categories: append([]string(nil), changeplanmodel.RuntimeAuthoringRequiredScenarioCategories...),
-			Steps: []changeplanmodel.RuntimeAuthoringEvidenceStepPlan{{StepID: "create", Label: "create", Method: http.MethodPost, Path: "/objects/order/records?mode=authoring", ExpectedStatus: []int{http.StatusCreated}}},
+			Steps: []changeplanmodel.RuntimeAuthoringEvidenceStepPlan{{StepID: "create", Label: "create", Method: http.MethodPost, Path: "/records/objects/order/records?mode=authoring", ExpectedStatus: []int{http.StatusCreated}}},
 		}},
 	}
 	session, err := receipts.IssueEvidenceSession("task", binding, coverage, plan)
@@ -39,7 +39,7 @@ func TestRuntimeAuthoringScenarioEvidenceMiddlewareAcceptsOnePlanBoundToken(t *t
 		called++
 		w.WriteHeader(http.StatusCreated)
 	}))
-	request := httptest.NewRequest(http.MethodPost, "/objects/order/records?mode=authoring", strings.NewReader(`{"name":"Order"}`))
+	request := httptest.NewRequest(http.MethodPost, "/records/objects/order/records?mode=authoring", strings.NewReader(`{"name":"Order"}`))
 	request = request.WithContext(operationscontract.WithBuilderTaskID(request.Context(), "task"))
 	request.Header.Set(RuntimeAuthoringEvidenceStepTokenHeader, session.Steps[0].Token)
 	response := httptest.NewRecorder()
@@ -49,7 +49,7 @@ func TestRuntimeAuthoringScenarioEvidenceMiddlewareAcceptsOnePlanBoundToken(t *t
 		t.Fatalf("status=%d called=%d receipt=%#v err=%v body=%s", response.Code, called, issued, verifyErr, response.Body.String())
 	}
 
-	request = httptest.NewRequest(http.MethodPost, "/objects/order/records?mode=other", nil)
+	request = httptest.NewRequest(http.MethodPost, "/records/objects/order/records?mode=other", nil)
 	request = request.WithContext(operationscontract.WithBuilderTaskID(request.Context(), "task"))
 	request.Header.Set(RuntimeAuthoringEvidenceStepTokenHeader, session.Steps[0].Token)
 	response = httptest.NewRecorder()
@@ -68,7 +68,7 @@ func TestRuntimeAuthoringScenarioEvidenceMiddlewareFailsClosedBeforeExecution(t 
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	request := httptest.NewRequest(http.MethodGet, "/objects/order/records", nil)
+	request := httptest.NewRequest(http.MethodGet, "/records/objects/order/records", nil)
 	request.Header.Set(RuntimeAuthoringEvidenceStepTokenHeader, "invalid")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -76,7 +76,7 @@ func TestRuntimeAuthoringScenarioEvidenceMiddlewareFailsClosedBeforeExecution(t 
 		t.Fatalf("taskless status=%d called=%v", response.Code, called)
 	}
 
-	request = httptest.NewRequest(http.MethodGet, "/objects/order/records", nil)
+	request = httptest.NewRequest(http.MethodGet, "/records/objects/order/records", nil)
 	request = request.WithContext(operationscontract.WithBuilderTaskID(request.Context(), "task"))
 	request.Header.Set(RuntimeAuthoringEvidenceStepTokenHeader, "invalid")
 	response = httptest.NewRecorder()
@@ -107,7 +107,7 @@ func TestRuntimeAuthoringScenarioEvidenceMiddlewareRejectsStreamingAndOversizedR
 	binding := changeplanmodel.RuntimeAuthoringEvidenceBinding{SnapshotHash: strings.Repeat("a", 64), CoverageHash: hex.EncodeToString(coverageSum[:])}
 	plan := changeplanmodel.RuntimeAuthoringEvidencePlan{Scenarios: []changeplanmodel.RuntimeAuthoringEvidenceScenarioPlan{{
 		ScenarioID: "order.lifecycle", Categories: []string{"success"},
-		Steps: []changeplanmodel.RuntimeAuthoringEvidenceStepPlan{{StepID: "create", Label: "create", Method: http.MethodPost, Path: "/objects/order/records", ExpectedStatus: []int{http.StatusNoContent}}},
+		Steps: []changeplanmodel.RuntimeAuthoringEvidenceStepPlan{{StepID: "create", Label: "create", Method: http.MethodPost, Path: "/records/objects/order/records", ExpectedStatus: []int{http.StatusNoContent}}},
 	}}}
 	session, err := receipts.IssueEvidenceSession("task", binding, coverage, plan)
 	if err == nil {
@@ -126,13 +126,13 @@ func TestRuntimeAuthoringScenarioEvidenceMiddlewareRejectsStreamingAndOversizedR
 	}
 
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, newRequest("/business/records/stream", nil, "present"))
+	handler.ServeHTTP(response, newRequest("/records/stream", nil, "present"))
 	if response.Code != http.StatusBadRequest || called {
 		t.Fatalf("stream status=%d called=%v", response.Code, called)
 	}
 
 	response = httptest.NewRecorder()
-	handler.ServeHTTP(response, newRequest("/objects/order/records", []byte("12345"), session.Steps[0].Token))
+	handler.ServeHTTP(response, newRequest("/records/objects/order/records", []byte("12345"), session.Steps[0].Token))
 	if response.Code != http.StatusRequestEntityTooLarge || called {
 		t.Fatalf("oversized status=%d called=%v", response.Code, called)
 	}

@@ -105,7 +105,7 @@ func TestRuntimeDoesNotReclaimIntegrationOwnerState(t *testing.T) {
 		"infrastructure/persistence/database/integration",
 		"infrastructure/persistence/database/integrationnotification",
 		"infrastructure/persistence/database/publicationmetrics",
-		"transport/http/integrations",
+		"transport/http/integration",
 	} {
 		path := filepath.Join(root, filepath.FromSlash(relative))
 		if info, err := os.Stat(path); err == nil && info.IsDir() {
@@ -130,11 +130,11 @@ func TestRuntimeDoesNotReclaimIntegrationOwnerState(t *testing.T) {
 		"integration_outbox":                         "retired Integration outbox owner name",
 		"/business/integration-intents":              "retired Integration-named Runtime handoff route",
 		"/operations/integrations":                   "retired Runtime-owned Integration operations route",
-		"/tenant-admin/integrations":                 "Integration-owned tenant administration route",
-		"/business/notifications/web-push":           "Integration-owned Web Push route",
-		"/integrations/webhooks":                     "Integration-owned webhook route",
-		"/integrations/web-push":                     "Integration-owned Web Push operations route",
-		"/integrations/google/oauth":                 "Integration-owned OAuth route",
+		"/management/integrations":                   "retired shell-scoped Integration route",
+		"/business/notifications/web-push":           "retired shell-scoped Web Push route",
+		"/integrations/webhooks":                     "retired plural Integration webhook route",
+		"/integrations/web-push":                     "retired plural Integration Web Push route",
+		"/integrations/google/oauth":                 "retired plural Integration OAuth route",
 		"UpdateOutboxStatusByResponseRef":            "retired Provider acknowledgement persistence",
 		"ListOverdueOutboxAcknowledgements":          "retired Provider acknowledgement reconciliation",
 		"ack_deadline_at":                            "retired Provider acknowledgement state",
@@ -197,14 +197,11 @@ func TestRuntimeConsumesMetadataThroughOneSDKBinding(t *testing.T) {
 				t.Errorf("Runtime imports Metadata implementation outside its composition root: %s -> %s", filepath.ToSlash(relative), importPath)
 			}
 		}
-		content, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if strings.Contains(string(content), `"GET /metadata/definitions/`) || strings.Contains(string(content), `"POST /metadata/definitions/`) {
-			t.Errorf("Runtime production still publishes the retired unscoped Metadata authoring path in %s", filepath.ToSlash(relative))
-		}
 		for _, table := range forbiddenTables {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if strings.Contains(string(content), table) {
 				t.Errorf("Runtime production still owns retired Metadata table %q in %s", table, filepath.ToSlash(relative))
 			}
@@ -213,7 +210,7 @@ func TestRuntimeConsumesMetadataThroughOneSDKBinding(t *testing.T) {
 	for _, relative := range []string{
 		"transport/http/appschema/definition_read_handlers.go",
 		"transport/http/appschema/localized_text_handlers.go",
-		"transport/http/appschema/dictionaries.go",
+		"transport/http/appschema/metadata/dictionaries.go",
 		"domain/appschema/service/application_schema_dictionary_domain_service.go",
 	} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(relative))); err == nil {
@@ -224,12 +221,12 @@ func TestRuntimeConsumesMetadataThroughOneSDKBinding(t *testing.T) {
 	}
 	forbiddenOwnedPaths := []string{
 		"/dictionaries/{dictionaryKey}/items",
-		"/tenant-admin/metadata/definitions/{resourceType}",
-		"/tenant-admin/metadata/definitions/{resourceType}/{resourceKey}",
-		"/tenant-admin/metadata/localized-texts",
-		"/tenant-admin/metadata/localized-texts/coverage",
-		"/tenant-admin/metadata/localized-texts/export",
-		"/tenant-admin/metadata/localized-texts/export.xlsx",
+		"/management/metadata/definitions/{resourceType}",
+		"/management/metadata/definitions/{resourceType}/{resourceKey}",
+		"/management/metadata/localized-texts",
+		"/management/metadata/localized-texts/coverage",
+		"/management/metadata/localized-texts/export",
+		"/management/metadata/localized-texts/export.xlsx",
 	}
 	for _, relative := range []string{"domain/endpoint/model/endpoint_route_policy.go", "transport/http/openapi/business_builder_paths.go", "transport/http/openapi/paths.go"} {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))

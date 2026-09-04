@@ -1,0 +1,65 @@
+name: Runtime composition
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 18 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-composition-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: ./scripts/ci/verify_runtime_composition.sh pr
+
+  main-nightly-heavy:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: runtime
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: runtime
+          MYSQL_DATABASE: runtime
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pruntime"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      RUNTIME_POSTGRES_TEST_DSN: postgres://postgres:runtime@127.0.0.1:5432/postgres?sslmode=disable
+      RUNTIME_MYSQL_TEST_DSN: root:runtime@tcp(127.0.0.1:3306)/runtime?parseTime=true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: ./scripts/ci/verify_runtime_composition.sh heavy

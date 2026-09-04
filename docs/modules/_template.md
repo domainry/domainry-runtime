@@ -23,7 +23,7 @@ SDK 仓库：
 - Factory：
 - ModuleHost：
 - 数据表与 migration owner：
-- HTTP Surface：
+- HTTP Adapter：
 - worker 生命周期：
 
 ## SaaS 形态

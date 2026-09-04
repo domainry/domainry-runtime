@@ -25,7 +25,7 @@ func workflowTerminalFixture(mode string, next *definitionmodel.WorkflowGraphNod
 	return process, task
 }
 
-func workflowTerminalRuntime(store *workflowProcessStoreEdgeStub, decisions *workflowStateDecisionEdgeStub, workers *workflowExecutionWorkerStub, identity identitysdk.Directory) *WorkflowProcessRuntime {
+func workflowTerminalRuntime(store *workflowProcessStoreEdgeStub, decisions *workflowStateDecisionEdgeStub, workers *workflowExecutionWorkerStub, identity identitysdk.Projection) *WorkflowProcessRuntime {
 	dependencies := WorkflowDependencies{Processes: store, Identity: identity, Schema: workflowSchemaProviderEdgeStub{}}
 	if decisions != nil {
 		dependencies.Decisions = decisions
@@ -123,7 +123,7 @@ func TestDecideTerminalWorkflowTaskValidationAndLookupOutcomes(t *testing.T) {
 func TestDecideTerminalWorkflowTaskCommitPaths(t *testing.T) {
 	principal := workflowAdminPrincipal()
 	request := workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved", Comment: " ok ", IdempotencyKey: "key"}
-	makeRuntime := func(process workflowmodel.WorkflowProcessInstance, task workflowmodel.WorkflowTask, tasks []workflowmodel.WorkflowTask, decisions *workflowStateDecisionEdgeStub, workers *workflowExecutionWorkerStub, identity identitysdk.Directory) (*WorkflowProcessRuntime, *workflowProcessStoreEdgeStub) {
+	makeRuntime := func(process workflowmodel.WorkflowProcessInstance, task workflowmodel.WorkflowTask, tasks []workflowmodel.WorkflowTask, decisions *workflowStateDecisionEdgeStub, workers *workflowExecutionWorkerStub, identity identitysdk.Projection) (*WorkflowProcessRuntime, *workflowProcessStoreEdgeStub) {
 		store := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{"process": {{NodeID: "approval", Status: "waiting"}}}}, getTaskValue: task, getTaskFound: true, tasks: tasks}
 		return workflowTerminalRuntime(store, decisions, workers, identity), store
 	}

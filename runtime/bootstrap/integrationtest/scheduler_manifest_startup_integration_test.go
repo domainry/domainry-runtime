@@ -38,8 +38,9 @@ func TestManifestSchedulerDefinitionManualCapabilityStartupRestartAndExactlyOnce
 	manifest["roles"] = append(roles, map[string]any{
 		"key": "scheduler_operator", "name": "Scheduler Operator",
 		"permissions": []any{
-			"admin_console.access", "scheduler.definitions.list",
-			"scheduler.definitions.run", "scheduler.state.get",
+			map[string]any{"permission_key": "scheduler.definitions.list", "data_scope": "all"},
+			map[string]any{"permission_key": "scheduler.definitions.run", "data_scope": "all"},
+			map[string]any{"permission_key": "scheduler.state.get", "data_scope": "all"},
 		},
 	})
 	encoded, err := json.Marshal(manifest)
@@ -59,12 +60,12 @@ func TestManifestSchedulerDefinitionManualCapabilityStartupRestartAndExactlyOnce
 	store := openRuntimePersistenceFixture(t, cfg)
 	defer store.Close()
 
-	definitionPage := schedulerOperatorRequest(t, runtime.Routes(), http.MethodGet, "/tenant-admin/scheduler/definitions", "", http.StatusOK)
+	definitionPage := schedulerOperatorRequest(t, runtime.Routes(), http.MethodGet, "/scheduler/definitions", "", http.StatusOK)
 	if items, _ := definitionPage["items"].([]any); len(items) != 1 {
 		t.Fatalf("published manifest scheduler definitions=%#v", definitionPage)
 	}
-	first := schedulerOperatorRequest(t, runtime.Routes(), http.MethodPost, "/operations/scheduler/definitions/business_config_activation_job/run", "manual-activation", http.StatusOK)
-	replay := schedulerOperatorRequest(t, runtime.Routes(), http.MethodPost, "/operations/scheduler/definitions/business_config_activation_job/run", "manual-activation", http.StatusOK)
+	first := schedulerOperatorRequest(t, runtime.Routes(), http.MethodPost, "/scheduler/definitions/business_config_activation_job/run", "manual-activation", http.StatusOK)
+	replay := schedulerOperatorRequest(t, runtime.Routes(), http.MethodPost, "/scheduler/definitions/business_config_activation_job/run", "manual-activation", http.StatusOK)
 	if first["status"] == "" || replay["idempotency_replayed"] != true {
 		t.Fatalf("manual first=%#v replay=%#v", first, replay)
 	}
@@ -72,7 +73,7 @@ func TestManifestSchedulerDefinitionManualCapabilityStartupRestartAndExactlyOnce
 
 	bootstrap.StartWorkers(t.Context(), runtime)
 	waitForSchedulerPersistence(t, store.DB(), "business_config_activation_job", 1)
-	state := schedulerOperatorRequest(t, runtime.Routes(), http.MethodGet, "/operations/scheduler/state", "", http.StatusOK)
+	state := schedulerOperatorRequest(t, runtime.Routes(), http.MethodGet, "/scheduler/state", "", http.StatusOK)
 	if state["provisioned"] != true {
 		t.Fatalf("scheduler state=%#v", state)
 	}

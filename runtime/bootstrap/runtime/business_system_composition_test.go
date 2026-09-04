@@ -42,7 +42,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 		Permissions: []string{
 			changeplanapplication.ActionBusinessReferenceGraph, "customer.read", "customer.update",
 			"scheduler.definitions.list", "runtime.workflows.list_ops_workflow_executions", "runtime.workflows.list_ops_workflow_processes",
-			"integration.audit.view",
+			"integration.invocations.list",
 		},
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}},
 	}

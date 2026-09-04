@@ -106,7 +106,7 @@ func (s *WorkflowApplicationService) queueWorkflowTaskReminder(ctx context.Conte
 	now := s.worker.Clock.Now().Format(time.RFC3339Nano)
 	event, err := compiler(notificationmodel.NotificationIntent{
 		ID: "notification_" + task.ID + "_reminded", WorkspaceID: process.WorkspaceID, SourceEventID: task.ID + ":reminded:" + task.UpdatedAt,
-		EventType: "workflow.task.reminded", Surface: "business_workspace", RecipientUserIDs: []string{task.AssigneeUserID},
+		EventType: "workflow.task.reminded", RecipientUserIDs: []string{task.AssigneeUserID},
 		SubjectType: "workflow_task", SubjectID: task.ID, SubjectVersion: task.UpdatedAt, GroupKey: workflowTaskNotificationGroupKey(task.ID),
 		OccurredAt: now, ExpiresAt: task.DueAt, Variables: map[string]any{"task_title": task.Title, "workflow_name": process.WorkflowName, "decision": task.Decision},
 	})

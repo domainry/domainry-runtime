@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -46,6 +47,33 @@ func TestBuildManifestBusinessSeedRowsGeneratesCoherentRelationshipGraph(t *test
 	order := generatedSeedTestData(t, rows[1])
 	if order["customer"] != "$record:runtime_baseline_customer" || order["status"] != "draft" || order["order_number"] != "SO-001" || order["amount"] != float64(1000) {
 		t.Fatalf("order=%#v", order)
+	}
+}
+
+func TestBuildManifestBusinessSeedRowsResolvesDictionaryBackedSelects(t *testing.T) {
+	manifest := manifestmodel.ManifestSchema{
+		Objects: []definitionmodel.ObjectSchema{{
+			Key: "account", Fields: []definitionmodel.FieldSchema{{
+				Key: "industry", Type: "select", Required: true, Config: map[string]any{"dictionary_key": "industry_sector"},
+			}},
+		}},
+		Dictionaries: []appschemamodel.DictionarySchema{{
+			Key: "industry_sector", Items: []appschemamodel.DictionaryItemSchema{
+				{Key: "technology", Value: "technology", Label: "Technology", SortOrder: 2},
+				{Key: "finance", Value: "finance", Label: "Finance", SortOrder: 1},
+			},
+		}},
+	}
+	rows, err := BuildManifestBusinessSeedRows(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows=%#v", rows)
+	}
+	data := generatedSeedTestData(t, rows[0])
+	if data["industry"] != "finance" {
+		t.Fatalf("dictionary-backed select=%#v", data)
 	}
 }
 

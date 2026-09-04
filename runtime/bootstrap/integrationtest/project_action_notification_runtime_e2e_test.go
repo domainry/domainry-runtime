@@ -27,7 +27,7 @@ func TestProjectActionNotificationDispatchRealRuntimeReplayConcurrencyLifecycleA
 	bootstrap.StartWorkers(t.Context(), runtime)
 	handler := notificationModuleRoutes(t, runtime)
 	leadID := firstRuntimeFixtureRecordID(t, handler, "sales_manager", "lead")
-	path := "/objects/lead/records/" + leadID + "/actions/lead.qualify"
+	path := "/records/objects/lead/records/" + leadID + "/actions/lead.qualify"
 
 	type result struct {
 		status int
@@ -78,29 +78,29 @@ func TestProjectActionNotificationDispatchRealRuntimeReplayConcurrencyLifecycleA
 	if status != http.StatusForbidden {
 		t.Fatalf("denied Action status=%d body=%s", status, body)
 	}
-	status, body = projectNotificationRequest(handler, "runtime_fixture_user", "sales_manager", http.MethodPost, "/objects/lead/records/"+leadID+"/actions/lead.convert", "notification-invalid", map[string]any{"data": map[string]any{}})
+	status, body = projectNotificationRequest(handler, "runtime_fixture_user", "sales_manager", http.MethodPost, "/records/objects/lead/records/"+leadID+"/actions/lead.convert", "notification-invalid", map[string]any{"data": map[string]any{}})
 	if status != http.StatusBadRequest || !bytes.Contains([]byte(body), []byte("backend.notification.template_variable_required")) {
 		t.Fatalf("invalid Action status=%d body=%s", status, body)
 	}
-	lead := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/objects/lead/records/"+leadID, nil)
+	lead := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/records/objects/lead/records/"+leadID, nil)
 	data, _ := lead["data"].(map[string]any)
 	if data["status"] != "qualified" || item["subject_version"] != lead["updated_at"] {
 		t.Fatalf("invalid notification partially committed record=%#v", lead)
 	}
 	notificationID := item["id"].(string)
-	status, body = projectNotificationRequest(handler, "admin", "sales_manager", http.MethodGet, "/business/notifications/"+notificationID+"/actions/lead.open/resolve", "", nil)
+	status, body = projectNotificationRequest(handler, "admin", "sales_manager", http.MethodGet, "/notification/inbox/"+notificationID+"/actions/lead.open/resolve", "", nil)
 	if status != http.StatusOK || !bytes.Contains([]byte(body), []byte(`"route_key":"lead.detail"`)) || !bytes.Contains([]byte(body), []byte(`"object_key":"lead"`)) {
 		t.Fatalf("safe action status=%d body=%s", status, body)
 	}
-	status, body = projectNotificationRequest(handler, "admin", "sales_manager", http.MethodPost, "/business/notifications/"+notificationID+"/read", "notification-read", nil)
+	status, body = projectNotificationRequest(handler, "admin", "sales_manager", http.MethodPost, "/notification/inbox/"+notificationID+"/read", "notification-read", nil)
 	if status != http.StatusOK || !bytes.Contains([]byte(body), []byte(`"read_at":"`)) {
 		t.Fatalf("read status=%d body=%s", status, body)
 	}
-	status, body = projectNotificationRequest(handler, "admin", "sales_manager", http.MethodPost, "/business/notifications/"+notificationID+"/acknowledge", "notification-handled", nil)
+	status, body = projectNotificationRequest(handler, "admin", "sales_manager", http.MethodPost, "/notification/inbox/"+notificationID+"/acknowledge", "notification-handled", nil)
 	if status != http.StatusOK || !bytes.Contains([]byte(body), []byte(`"alert_state":"acknowledged"`)) {
 		t.Fatalf("handled status=%d body=%s", status, body)
 	}
-	audits := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, "admin", http.MethodGet, "/business/audit-events?event=notification.intent.dispatch&object_key=lead&record_id="+leadID, nil, map[string]string{"Authorization": "Bearer " + integrationIdentityAccessToken("admin")})
+	audits := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, "admin", http.MethodGet, "/audit/events?event=notification.intent.dispatch&object_key=lead&record_id="+leadID, nil, map[string]string{"Authorization": "Bearer " + integrationIdentityAccessToken("admin")})
 	if items, _ := audits["items"].([]any); len(items) != 1 {
 		t.Fatalf("notification audit=%#v", audits)
 	}
@@ -118,22 +118,18 @@ func TestProjectActionNotificationDispatchRealRuntimeReplayConcurrencyLifecycleA
 func notificationModuleRoutes(t *testing.T, runtime *bootstrap.Runtime) http.Handler {
 	t.Helper()
 	mux := http.NewServeMux()
-	for _, surface := range runtime.ModuleHTTPSurfaces() {
-		if surface.Owner() != "notification" && surface.Owner() != "audit" {
+	for _, adapter := range runtime.ModuleHTTPAdapters() {
+		if adapter.Owner() != "notification" && adapter.Owner() != "audit" {
 			continue
 		}
-		if err := modulehttp.ValidateSurface(surface); err != nil {
+		if err := modulehttp.ValidateAdapter(adapter); err != nil {
 			t.Fatal(err)
 		}
-		for _, route := range surface.Routes() {
-			next := surface.Handler()
-			owner := surface.Owner()
+		for _, route := range adapter.Routes() {
+			next := adapter.Handler()
 			mux.Handle(route.Pattern(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-				principal := identitysdk.Principal{Known: true}
-				if owner == "audit" {
-					principal = integrationAuditPrincipal(r.Header.Get("Authorization"))
-				}
+				principal := integrationModulePrincipal(r.Header.Get("Authorization"))
 				ctx := identitysdk.WithRequestIdentity(r.Context(), identitysdk.RequestIdentity{Principal: principal, AccessToken: token})
 				next.ServeHTTP(w, r.WithContext(ctx))
 			}))
@@ -155,13 +151,13 @@ func projectNotificationManifest(t *testing.T, directory string) string {
 		t.Fatal(err)
 	}
 	manifest["notification_event_types"] = []any{map[string]any{
-		"key": "lead.qualified", "source": "project_action", "category": "task", "default_severity": "info", "surfaces": []any{"business_workspace"}, "mandatory_in_app": true,
+		"key": "lead.qualified", "source": "project_action", "category": "task", "default_severity": "info", "mandatory_in_app": true,
 		"template_key": "lead.qualified", "default_locale": "en-US", "locales": map[string]any{"en-US": map[string]any{"title": "Lead qualified", "body": "Open qualified lead", "action_labels": map[string]any{"lead.open": "Open"}}},
-		"actions": []any{map[string]any{"key": "lead.open", "kind": "route", "resource_type": "project_record", "surface_routes": map[string]any{"business_workspace": "lead.detail"}}}, "version": 1, "status": "published",
+		"actions": []any{map[string]any{"key": "lead.open", "kind": "route", "resource_type": "project_record", "route_key": "lead.detail"}}, "version": 1, "status": "published",
 	}, map[string]any{
-		"key": "lead.invalid", "source": "project_action", "category": "task", "default_severity": "info", "surfaces": []any{"business_workspace"}, "mandatory_in_app": true,
+		"key": "lead.invalid", "source": "project_action", "category": "task", "default_severity": "info", "mandatory_in_app": true,
 		"template_key": "lead.invalid", "default_locale": "en-US", "variables": []any{map[string]any{"key": "required_name", "type": "text", "required": true}}, "locales": map[string]any{"en-US": map[string]any{"title": "Hello {{required_name}}", "body": "Invalid path", "action_labels": map[string]any{"lead.open": "Open"}}},
-		"actions": []any{map[string]any{"key": "lead.open", "kind": "route", "resource_type": "project_record", "surface_routes": map[string]any{"business_workspace": "lead.detail"}}}, "version": 1, "status": "published",
+		"actions": []any{map[string]any{"key": "lead.open", "kind": "route", "resource_type": "project_record", "route_key": "lead.detail"}}, "version": 1, "status": "published",
 	}}
 	manifest["notification_rules"] = []any{
 		map[string]any{"event_type_key": "lead.qualified", "enabled": true, "mandatory_in_app": true, "minimum_severity": "info", "channels": []any{map[string]any{"channel": "in_app", "mandatory": true}}},
@@ -199,7 +195,7 @@ func projectNotificationRequest(handler http.Handler, userID, role, method, path
 
 func projectNotificationList(t *testing.T, handler http.Handler, userID string) []map[string]any {
 	t.Helper()
-	status, body := projectNotificationRequest(handler, userID, "sales_manager", http.MethodGet, "/business/notifications?scope=mine&mailbox=inbox&limit=20", "", nil)
+	status, body := projectNotificationRequest(handler, userID, "sales_manager", http.MethodGet, "/notification/inbox?scope=mine&mailbox=inbox&limit=20", "", nil)
 	if status != http.StatusOK {
 		t.Fatalf("list notifications status=%d body=%s", status, body)
 	}

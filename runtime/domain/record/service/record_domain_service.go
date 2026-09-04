@@ -11,10 +11,10 @@ import (
 )
 
 type RecordDomainServiceDependencies struct {
-	Repository        recordrepository.RecordRepository
-	Reader            *RecordReadDomainService
-	References        *RecordReferenceDomainService
-	IdentityDirectory identitysdk.Directory
+	Repository         recordrepository.RecordRepository
+	Reader             *RecordReadDomainService
+	References         *RecordReferenceDomainService
+	IdentityProjection identitysdk.Projection
 }
 
 // RecordDomainService is the canonical Record owner boundary. Cross-domain
@@ -22,16 +22,16 @@ type RecordDomainServiceDependencies struct {
 // this service instead of a process-level service aggregate.
 // RecordDomainService owns record lifecycle behavior.
 type RecordDomainService struct {
-	repository        recordrepository.RecordRepository
-	reader            *RecordReadDomainService
-	references        *RecordReferenceDomainService
-	identityDirectory identitysdk.Directory
+	repository         recordrepository.RecordRepository
+	reader             *RecordReadDomainService
+	references         *RecordReferenceDomainService
+	identityProjection identitysdk.Projection
 }
 
 func NewRecordDomainService(dependencies RecordDomainServiceDependencies) *RecordDomainService {
 	return &RecordDomainService{
 		repository: dependencies.Repository, reader: dependencies.Reader, references: dependencies.References,
-		identityDirectory: dependencies.IdentityDirectory,
+		identityProjection: dependencies.IdentityProjection,
 	}
 }
 
@@ -42,11 +42,11 @@ func (s *RecordDomainService) Repository() recordrepository.RecordRepository {
 	return s.repository
 }
 
-func (s *RecordDomainService) IdentityDirectory() identitysdk.Directory {
+func (s *RecordDomainService) IdentityProjection() identitysdk.Projection {
 	if s == nil {
 		return nil
 	}
-	return s.identityDirectory
+	return s.identityProjection
 }
 
 func (s *RecordDomainService) ListRecords(ctx context.Context, objectKey string, query recordmodel.RecordListQuery, principal principalmodel.Principal) (recordmodel.RecordPageResult, error) {

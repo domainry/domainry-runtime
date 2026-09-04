@@ -87,7 +87,7 @@ func TestContextualFieldPolicyEndToEndKeepsReadExportReportAuditAndWriteAligned(
 
 	objectMap := map[string]definitionmodel.ObjectSchema{"member": member, "package": pack, "coach": coach}
 	exporter := recordapplication.NewRecordExportApplicationService(recordapplication.RecordExportDependencies{
-		Repository: repository, Objects: func() map[string]definitionmodel.ObjectSchema { return objectMap }, NormalizeQuery: policy.NormalizeListQuery, CanAccess: policy.CanAccessRecord,
+		Repository: repository, Objects: func() map[string]definitionmodel.ObjectSchema { return objectMap }, NormalizeQuery: policy.NormalizeListQuery,
 		ProjectRecords: func(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, records []recordmodel.Record, action string) ([]recordmodel.Record, error) {
 			projected, _, projectErr := fieldPolicy.ApplyReadPage(ctx, principal, object, records, action)
 			return projected, projectErr
