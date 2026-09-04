@@ -29,15 +29,14 @@ import (
 type AutomationRuleExecutor func(context.Context, automationmodel.AutomationRuleSchema, string, map[string]any, map[string]any, map[string]any, *recordmodel.Record, principalmodel.Principal) (automationprojection.AutomationRuleTrace, error)
 
 type AutomationManagementDependencies struct {
-	Rules               automationcontract.AutomationRuleRegistry
-	Executions          automationrepository.AutomationExecutionRepository
-	ListInvocations     func(context.Context, string, automationmodel.AutomationExecutionFilter) ([]integrationsdk.Invocation, error)
-	ListOutbox          func(context.Context, string) ([]publicationmodel.Message, error)
-	ListConnections     func(context.Context, string) ([]integrationsdk.Connection, error)
-	Connectors          func(context.Context, principalmodel.Principal) []connectormodel.ConnectorSchema
-	AuthoringProjection func() capability.CapabilityAuthoringProjection
-	ValidateDefinition  func(context.Context, automationmodel.AutomationRuleSchema) error
-	ExecuteRule         AutomationRuleExecutor
+	Rules              automationcontract.AutomationRuleRegistry
+	Executions         automationrepository.AutomationExecutionRepository
+	ListInvocations    func(context.Context, string, automationmodel.AutomationExecutionFilter) ([]integrationsdk.Invocation, error)
+	ListOutbox         func(context.Context, string) ([]publicationmodel.Message, error)
+	ListConnections    func(context.Context, string) ([]integrationsdk.Connection, error)
+	Connectors         func(context.Context, principalmodel.Principal) []connectormodel.ConnectorSchema
+	ValidateDefinition func(context.Context, automationmodel.AutomationRuleSchema) error
+	ExecuteRule        AutomationRuleExecutor
 }
 
 // AutomationManagementApplicationService coordinates automation administration across Automation, Integration and Capability owners.
@@ -49,8 +48,8 @@ func NewAutomationManagementApplicationService(dependencies AutomationManagement
 	return &AutomationManagementApplicationService{dependencies: dependencies}
 }
 
-func (s *AutomationManagementApplicationService) Capabilities(ctx context.Context, principal principalmodel.Principal) (capability.CapabilityAutomationCatalog, error) {
-	if err := automationAuthorizeEndpoint(principal, "GET /automation/rules/capabilities"); err != nil {
+func (s *AutomationManagementApplicationService) ExecutionCatalog(ctx context.Context, principal principalmodel.Principal) (capability.CapabilityAutomationCatalog, error) {
+	if err := automationAuthorizeEndpoint(principal, "GET /automation/execution-catalog"); err != nil {
 		return capability.CapabilityAutomationCatalog{}, err
 	}
 	workspaceID := automationWorkspaceID(principal)
@@ -62,11 +61,7 @@ func (s *AutomationManagementApplicationService) Capabilities(ctx context.Contex
 			return capability.CapabilityAutomationCatalog{}, err
 		}
 	}
-	catalog := capability.RuntimeAutomationCapabilities()
-	if s.dependencies.AuthoringProjection != nil {
-		projection := s.dependencies.AuthoringProjection()
-		catalog.AuthoringProjection = &projection
-	}
+	catalog := capability.RuntimeAutomationExecutionCatalog()
 	if s.dependencies.Connectors != nil {
 		catalog.Connectors = s.dependencies.Connectors(ctx, principal)
 	}
@@ -101,7 +96,7 @@ func (s *AutomationManagementApplicationService) Rule(ctx context.Context, ruleK
 }
 
 func (s *AutomationManagementApplicationService) ExecutionHistory(ctx context.Context, filter automationmodel.AutomationExecutionFilter, principal principalmodel.Principal) (automationprojection.AutomationExecutionHistory, error) {
-	if err := automationAuthorizeEndpoint(principal, "GET /automation/rules/executions"); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "GET /automation/executions"); err != nil {
 		return automationprojection.AutomationExecutionHistory{}, err
 	}
 	workspaceID := automationWorkspaceID(principal)
@@ -133,7 +128,7 @@ func (s *AutomationManagementApplicationService) ExecutionHistory(ctx context.Co
 }
 
 func (s *AutomationManagementApplicationService) ValidateRule(ctx context.Context, rule automationmodel.AutomationRuleSchema, principal principalmodel.Principal) (automationvalidation.AutomationValidationResult, error) {
-	if err := automationAuthorizeEndpoint(principal, "POST /automation/rules/validate"); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "POST /automation/validate"); err != nil {
 		return automationvalidation.AutomationValidationResult{}, err
 	}
 	return automationvalidation.AutomationValidateRuleForAuthoring(ctx, rule, s.dependencies.ValidateDefinition)
@@ -142,7 +137,7 @@ func (s *AutomationManagementApplicationService) ValidateRule(ctx context.Contex
 func (s *AutomationManagementApplicationService) SimulateRule(ctx context.Context, rule automationmodel.AutomationRuleSchema, request automationcontract.AutomationSimulationRequest, principal principalmodel.Principal) (automationprojection.AutomationSimulationResult, error) {
 	endpoint := "POST /automation/rules/{ruleKey}/simulate"
 	if request.Rule != nil {
-		endpoint = "POST /automation/rules/simulate"
+		endpoint = "POST /automation/simulate"
 	}
 	if err := automationAuthorizeEndpoint(principal, endpoint); err != nil {
 		return automationprojection.AutomationSimulationResult{}, err

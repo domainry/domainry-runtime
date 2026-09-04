@@ -21,7 +21,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-func TestOperationsCommandHTTPReceiptReplayConflictAndStatus(t *testing.T) {
+func TestOperationsHTTPExposesReceiptsButNotUnownedCommandSubmission(t *testing.T) {
 	runtimeStore, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "operations-http.db")})
 	if err != nil {
 		t.Fatal(err)
@@ -31,7 +31,7 @@ func TestOperationsCommandHTTPReceiptReplayConflictAndStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{
-		"scheduler.definitions.run",
+		operationscontract.ActionEnableAutomationRule,
 		operationscontract.ActionListOperations,
 		operationscontract.ActionGetOperation,
 		operationscontract.ActionEnableMaintenance,
@@ -72,22 +72,24 @@ func TestOperationsCommandHTTPReceiptReplayConflictAndStatus(t *testing.T) {
 	})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
-	body := map[string]any{"kind": "scheduler.job.run", "resource_type": "scheduler_definition", "resource_id": "daily-report", "reason": "release", "payload": map[string]any{"mode": "manual"}}
-
-	first := operationsRequest(t, mux, http.MethodPost, "/operations", "operation-key", body, http.StatusAccepted)
-	operationID := first["command"].(map[string]any)["id"].(string)
+	rejected := httptest.NewRecorder()
+	mux.ServeHTTP(rejected, httptest.NewRequest(http.MethodPost, "/operations", nil))
+	if rejected.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST /operations status=%d, want method not allowed", rejected.Code)
+	}
+	created, _, err := service.Submit(t.Context(), operationsapplication.OperationsSubmitRequest{
+		Kind: "automation.rule.enable", ResourceType: "automation_rule", ResourceID: "daily-report", Reason: "release", Payload: map[string]any{"mode": "manual"},
+	}, "operation-key", principal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	operationID := created.Command.ID
 	if operationID != "operation_http-1" {
 		t.Fatalf("operation id=%s", operationID)
 	}
-	if actionKey := first["command"].(map[string]any)["action_key"]; actionKey != "scheduler.definitions.run" {
+	if actionKey := created.Command.ActionKey; actionKey != operationscontract.ActionEnableAutomationRule {
 		t.Fatalf("server-derived action_key=%v", actionKey)
 	}
-	replayed := operationsRequest(t, mux, http.MethodPost, "/operations", "operation-key", body, http.StatusOK)
-	if replayed["command"].(map[string]any)["id"] != operationID {
-		t.Fatalf("replay=%#v", replayed)
-	}
-	body["payload"] = map[string]any{"mode": "full"}
-	operationsRequest(t, mux, http.MethodPost, "/operations", "operation-key", body, http.StatusConflict)
 	receipt := operationsRequest(t, mux, http.MethodGet, "/operations/"+operationID, "", nil, http.StatusOK)
 	if receipt["status_url"] != "/operations/"+operationID {
 		t.Fatalf("receipt=%#v", receipt)

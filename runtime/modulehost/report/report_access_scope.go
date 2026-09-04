@@ -26,7 +26,9 @@ func ReportAccessScopeHash(principal principalmodel.Principal) (string, error) {
 		ActiveBusinessProfile *profilebindingmodel.Reference
 		BusinessClaims        map[string]profilebindingmodel.ClaimValue
 		AuthorizationRevision string
-	}{principal.WorkspaceID, principal.UserID, principal.OrgID, principal.OrgScopeIDs, principal.ReportingScopeUserIDs, principal.RoleKey, principal.BusinessProfiles, principal.ActiveBusinessProfile, principal.BusinessClaims, principal.AuthorizationRevision}
+		SystemScopeKind       principalmodel.SystemScopeKind
+		SystemCapabilities    []string
+	}{principal.WorkspaceID, principal.UserID, principal.OrgID, principal.OrgScopeIDs, principal.ReportingScopeUserIDs, principal.RoleKey, principal.BusinessProfiles, principal.ActiveBusinessProfile, principal.BusinessClaims, principal.AuthorizationRevision, principal.SystemScope.Kind, principal.SystemCapabilities}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
@@ -38,6 +40,7 @@ func ReportAccessScopeHash(principal principalmodel.Principal) (string, error) {
 func canonicalReportAccessPrincipal(principal principalmodel.Principal) principalmodel.Principal {
 	principal.OrgScopeIDs = canonicalReportAccessSlice(append([]string(nil), principal.OrgScopeIDs...))
 	principal.ReportingScopeUserIDs = canonicalReportAccessSlice(append([]string(nil), principal.ReportingScopeUserIDs...))
+	principal.SystemCapabilities = canonicalReportAccessSlice(append([]string(nil), principal.SystemCapabilities...))
 	principal.BusinessProfiles = canonicalReportAccessSlice(append([]profilebindingmodel.Reference(nil), principal.BusinessProfiles...))
 	if principal.ActiveBusinessProfile != nil {
 		active := *principal.ActiveBusinessProfile

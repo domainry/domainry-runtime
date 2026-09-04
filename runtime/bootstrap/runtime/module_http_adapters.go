@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
-	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
+	hostsurfacemodel "github.com/domainry/domainry-runtime/runtime/domain/hostsurface/model"
 )
 
 // ModuleHTTPAdapters returns routes owned by in-process module Bindings.
@@ -56,9 +55,10 @@ func (inventory runtimeModuleBindingInventory) HTTPAdapters() []modulehttp.Adapt
 
 // AuthorizationActions collects one complete authorization
 // contribution per module. Existing HTTP-only modules use Route.Action as
-// their source manifest. Modules with RPC/job/agent Actions implement
-// action.Provider; their HTTP Adapters must then be exact projections of that
-// complete manifest.
+// their source manifest. HTTP Actions are admitted only when the module mounts
+// a source-owned Adapter; an unmounted service endpoint is not a Runtime
+// authorization surface. Non-HTTP module Actions remain available to Runtime
+// orchestration.
 func (inventory runtimeModuleBindingInventory) AuthorizationActions() ([]actioncontract.ActionDefinition, error) {
 	definitions := []actioncontract.ActionDefinition{}
 	for _, binding := range inventory.bindings {
@@ -87,8 +87,6 @@ func (inventory runtimeModuleBindingInventory) AuthorizationActions() ([]actionc
 				if err := modulehttp.ValidateAuthorizationProjection(provided, httpProvider); err != nil {
 					return nil, fmt.Errorf("validate module authorization projection: %w", err)
 				}
-			} else if err := validateRuntimeHostedModuleFacade(provided); err != nil {
-				return nil, fmt.Errorf("validate Runtime-hosted module authorization projection: %w", err)
 			}
 		} else {
 			provided, err = modulehttp.AuthorizationActions(httpProvider)
@@ -101,63 +99,13 @@ func (inventory runtimeModuleBindingInventory) AuthorizationActions() ([]actionc
 			if err != nil {
 				return nil, fmt.Errorf("normalize module authorization Action %d: %w", index, err)
 			}
+			if definition.HTTP != nil && !hasHTTPAdapters {
+				continue
+			}
 			definitions = append(definitions, definition)
 		}
 	}
 	return definitions, nil
-}
-
-func validateRuntimeHostedModuleFacade(definitions []actioncontract.ActionDefinition) error {
-	owners := map[string]bool{}
-	patterns := make(map[string]endpointmodel.RuntimeEndpointContractV1)
-	httpActions := 0
-	for _, definition := range definitions {
-		normalized, err := actioncontract.NormalizeDefinition(definition)
-		if err != nil {
-			return err
-		}
-		if normalized.HTTP == nil {
-			continue
-		}
-		httpActions++
-		if normalized.SourceKind != "host_facade" || !strings.HasPrefix(normalized.Owner, "module:") {
-			return fmt.Errorf("module HTTP Action %q has no mounted Adapter and is not an explicit host facade", normalized.Key)
-		}
-		owners[strings.TrimPrefix(normalized.Owner, "module:")] = true
-	}
-	if httpActions == 0 {
-		return nil
-	}
-	if len(owners) != 1 {
-		return fmt.Errorf("Runtime-hosted module facade must have exactly one source owner")
-	}
-	owner := ""
-	for value := range owners {
-		owner = value
-	}
-	for pattern, contract := range endpointmodel.EndpointContracts {
-		if strings.TrimSpace(contract.SourceOwner) == owner && strings.HasPrefix(strings.TrimSpace(contract.PermissionPolicyRef), "static_permission:") {
-			patterns[strings.TrimSpace(pattern)] = contract
-		}
-	}
-	for _, definition := range definitions {
-		if definition.HTTP == nil {
-			continue
-		}
-		pattern := strings.TrimSpace(definition.HTTP.Method) + " " + strings.TrimSpace(definition.HTTP.RouteTemplate)
-		contract, found := patterns[pattern]
-		if !found {
-			return fmt.Errorf("module host-facade Action %q has no Runtime handler contract for %q", definition.Key, pattern)
-		}
-		if err := endpointmodel.ValidateHostFacadeAction(contract, definition); err != nil {
-			return fmt.Errorf("validate module host-facade Action %q: %w", definition.Key, err)
-		}
-		delete(patterns, pattern)
-	}
-	if len(patterns) != 0 {
-		return fmt.Errorf("Runtime source %q has protected handler contracts absent from its module Action manifest", owner)
-	}
-	return nil
 }
 
 type runtimeDiscoveryHTTPAdapter struct{ runtime *Runtime }
@@ -187,24 +135,11 @@ func runtimeModuleInventoryActions(identityAudience string) []actioncontract.Act
 }
 
 func runtimeModuleInventoryAction() actioncontract.ActionDefinition {
-	return actioncontract.ActionDefinition{
-		Key: "runtime.discovery.modules.list", Owner: "runtime:builtin", SourceKind: "builtin_http", CapabilityKey: "runtime.discovery.modules", CapabilityLabel: "Runtime modules",
-		OperationKey: "list", OperationLabel: "List Runtime modules", Label: "List Runtime modules", Exposures: []actioncontract.Exposure{actioncontract.ExposureOps},
-		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated},
-		HTTP:          &actioncontract.HTTPBinding{Method: "GET", RouteTemplate: "/discovery/modules"},
-		Permission:    &actioncontract.PermissionDefinition{Key: "runtime.discovery.modules.list", Owner: "runtime:builtin", ResourceKey: "runtime.discovery.modules", OperationKey: "list", Label: "List Runtime modules", Category: "Runtime", LifecycleStatus: actioncontract.LifecycleActive},
-		EffectClass:   actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "runtime_module_inventory_read", LifecycleStatus: actioncontract.LifecycleActive,
-	}
+	return hostsurfacemodel.ModuleInventoryAction()
 }
 
 func runtimePermissionUsageQueryAction(identityAudience string) actioncontract.ActionDefinition {
-	return actioncontract.ActionDefinition{
-		Key: "runtime.action.permission_usages.query", Owner: "runtime:builtin", SourceKind: "builtin_http", CapabilityKey: "runtime.action.permission_usages", CapabilityLabel: "Action permission usages",
-		OperationKey: "action_usages.query", OperationLabel: "Query Action usages", Label: "Query live Action usages", Exposures: []actioncontract.Exposure{actioncontract.ExposureManagement, actioncontract.ExposureOps},
-		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationSigned, PolicyKey: "runtime.action.permission_usages.query", Audiences: []string{strings.TrimSpace(identityAudience)}},
-		HTTP:          &actioncontract.HTTPBinding{Method: http.MethodPost, RouteTemplate: "/action/permission-usages/query"},
-		EffectClass:   actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "runtime_action_usage_read", LifecycleStatus: actioncontract.LifecycleActive,
-	}
+	return hostsurfacemodel.PermissionUsageQueryAction(identityAudience)
 }
 
 func (s runtimeDiscoveryHTTPAdapter) Handler() http.Handler {

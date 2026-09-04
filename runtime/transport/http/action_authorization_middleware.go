@@ -66,18 +66,18 @@ func matchedRouteValue(routeTemplate, requestPath, name string) string {
 func defaultObjectOperation(method, routeTemplate string) (string, bool) {
 	identity := strings.ToUpper(strings.TrimSpace(method)) + " " + strings.TrimSpace(routeTemplate)
 	switch identity {
-	case "GET /records/objects/{objectKey}/records",
-		"GET /records/objects/{objectKey}/records/{recordID}",
-		"GET /records/objects/{objectKey}/records/{recordID}/references",
-		"GET /records/objects/{objectKey}/records/{recordID}/related/{relatedObjectKey}":
+	case "GET /records/{objectKey}",
+		"GET /records/{objectKey}/items/{recordID}",
+		"GET /records/{objectKey}/items/{recordID}/references",
+		"GET /records/{objectKey}/items/{recordID}/related/{relatedObjectKey}":
 		return "read", true
-	case "POST /records/objects/{objectKey}/records":
+	case "POST /records/{objectKey}":
 		return "create", true
-	case "PATCH /records/objects/{objectKey}/records/{recordID}":
+	case "PATCH /records/{objectKey}/items/{recordID}":
 		return "update", true
-	case "DELETE /records/objects/{objectKey}/records/{recordID}":
+	case "DELETE /records/{objectKey}/items/{recordID}":
 		return "delete", true
-	case "POST /records/objects/{objectKey}/records/export":
+	case "POST /records/{objectKey}/export":
 		return "export", true
 	default:
 		return "", false
@@ -89,9 +89,9 @@ func authoredActionRoute(method, routeTemplate string) bool {
 		return false
 	}
 	switch strings.TrimSpace(routeTemplate) {
-	case "/records/objects/{objectKey}/actions/{actionKey}/run",
-		"/records/objects/{objectKey}/actions/{actionKey}/bulk",
-		"/records/objects/{objectKey}/records/{recordID}/actions/{actionKey}":
+	case "/records/{objectKey}/actions/{actionKey}",
+		"/records/{objectKey}/actions/{actionKey}/bulk",
+		"/records/{objectKey}/items/{recordID}/actions/{actionKey}":
 		return true
 	default:
 		return false

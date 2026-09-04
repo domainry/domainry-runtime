@@ -150,7 +150,6 @@ func TestManifestReportExportRecordMappingIsClosedAndObjectTyped(t *testing.T) {
 	control := reportmodel.ReportExportControlSchema{
 		Key: "orders-export", ReportKey: "orders", SourceObjects: []string{"orders"}, AuditObject: audit.Key, DownloadObject: download.Key,
 		MaxRows: 100, Reason: "governed export",
-		AllowedQueryKeys: []string{"current"}, AllowedTags: []string{"reviewed"},
 		RecordMapping: reportmodel.ReportExportRecordMappingSchema{
 			AuditReportKeyField: "report_key", AuditRequesterField: "requested_by", AuditStatusField: "status",
 			AuditPreparedStatuses: []string{"requested", "prepared"}, AuditPreparedStatus: "prepared", AuditDownloadedStatus: "downloaded", AuditDeniedStatus: "denied", AuditExpiredStatus: "expired",
@@ -158,12 +157,7 @@ func TestManifestReportExportRecordMappingIsClosedAndObjectTyped(t *testing.T) {
 			DownloadAuditField: "audit_id", DownloadFilenameField: "file_name", DownloadContentHashField: "content_hash", DownloadExpiresAtField: "expires_at",
 		},
 	}
-	manifest := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "orders"}, audit, download}, Reports: []reportmodel.ReportSchema{{
-		Key: "orders", Dataset: reportmodel.ReportDatasetSchema{
-			QueryPredicates: []reportmodel.ReportDatasetPredicate{{Key: "current"}},
-			TagPredicates:   []reportmodel.ReportDatasetPredicate{{Key: "reviewed"}},
-		},
-	}}, ReportExportControls: []reportmodel.ReportExportControlSchema{control}}
+	manifest := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "orders"}, audit, download}, Reports: []reportmodel.ReportSchema{testObjectSQLReport("orders", "orders")}, ReportExportControls: []reportmodel.ReportExportControlSchema{control}}
 	state := newValidationState(manifest, nil)
 	state.validateGovernance()
 	if len(state.errs) != 0 {
@@ -176,13 +170,6 @@ func TestManifestReportExportRecordMappingIsClosedAndObjectTyped(t *testing.T) {
 		t.Fatalf("unknown requester mapping accepted: %v", state.errs)
 	}
 	manifest.ReportExportControls[0].RecordMapping.AuditRequesterField = "requested_by"
-	manifest.ReportExportControls[0].AllowedQueryKeys = []string{"current", "current", "unknown"}
-	manifest.ReportExportControls[0].AllowedTags = []string{"unknown"}
-	state = newValidationState(manifest, nil)
-	state.validateGovernance()
-	if !strings.Contains(state.errs.Error(), "allowed_query_keys[1]") || !strings.Contains(state.errs.Error(), "allowed_query_keys[2]") || !strings.Contains(state.errs.Error(), "allowed_tags[0]") {
-		t.Fatalf("undeclared or duplicate predicate allowlist accepted: %v", state.errs)
-	}
 }
 
 func TestManifestSmallValidationAndReviewHelpers(t *testing.T) {
@@ -230,7 +217,11 @@ func TestManifestSeedValidationEdges(t *testing.T) {
 			{ObjectKey: "seeded", Data: map[string]any{"__seed_key": "seeded-one", "relation": "$record:target-wrong", "status": "closed", "unknown": true}},
 			{ObjectKey: "runtime", Data: map[string]any{"__seed_key": "target-wrong"}},
 		},
-		Reports: []reportmodel.ReportSchema{{Key: "report", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "unseeded", Alias: "unseeded"}}, EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{ObjectKey: "seeded", MinimumRecords: 1, RequiredNonEmptyFields: []string{"required"}}}}},
+		Reports: []reportmodel.ReportSchema{func() reportmodel.ReportSchema {
+			report := testObjectSQLReport("report", "unseeded")
+			report.EvidenceRequirements = []reportmodel.ReportEvidenceRequirement{{ObjectKey: "seeded", MinimumRecords: 1, RequiredNonEmptyFields: []string{"required"}}}
+			return report
+		}()},
 		Actions: []definitionmodel.ActionSchema{{Key: "action", ObjectKey: "unseeded"}},
 	}
 	state := newValidationState(manifest, nil)
@@ -305,8 +296,8 @@ func TestManifestWorkflowAndReportValidationEdges(t *testing.T) {
 			{Key: "same", TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "after_update", ObjectKey: "source", ObjectKeys: []string{"missing"}}, Graph: graph},
 		},
 		Reports: []reportmodel.ReportSchema{
-			{Key: "", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "missing", Alias: "missing"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "missing", Field: reportmodel.ReportDatasetField{SourceAlias: "other", FieldKey: "missing"}}}}, RequiredPermissions: []string{"missing.read"}, EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{ObjectKey: "other", MinimumRecords: 0, RequiredNonEmptyFields: []string{"missing"}}}},
-			{Key: "same", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "source", Alias: "source"}, Joins: []reportmodel.ReportDatasetJoin{{ObjectKey: "snapshot", Alias: "snapshot", SourceType: "snapshot"}}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "missing", Field: reportmodel.ReportDatasetField{SourceAlias: "source", FieldKey: "missing"}}, {Key: "field", Field: reportmodel.ReportDatasetField{SourceAlias: "snapshot", FieldKey: "field"}}}}, RequiredPermissions: []string{"source.read"}, EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{ObjectKey: "source", MinimumRecords: 1, RequiredNonEmptyFields: []string{"known"}}}},
+			{Key: "", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "SELECT other.missing AS missing FROM missing other LIMIT 10", SourceObjects: []string{"missing"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "missing", Type: "text", Kind: "dimension"}}}, RequiredPermissions: []string{"missing.read"}, EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{ObjectKey: "other", MinimumRecords: 0, RequiredNonEmptyFields: []string{"missing"}}}},
+			{Key: "same", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "SELECT source.missing AS missing, snapshot.field AS field FROM source source JOIN snapshot snapshot ON source.id = snapshot.id LIMIT 10", SourceObjects: []string{"source", "snapshot"}, JoinCardinalities: []reportmodel.ReportObjectSQLCardinality{{Alias: "snapshot", Cardinality: "many_to_one"}}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "missing", Type: "text", Kind: "dimension"}, {Key: "field", Type: "text", Kind: "dimension"}}}, RequiredPermissions: []string{"source.read"}, EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{ObjectKey: "source", MinimumRecords: 1, RequiredNonEmptyFields: []string{"known"}}}},
 			{Key: "same"},
 		},
 	}
@@ -482,7 +473,11 @@ func TestManifestWorkflowConditionOutcomes(t *testing.T) {
 			{Key: "empty-graph", Graph: &definitionmodel.WorkflowGraphSchema{Version: 2}},
 			{Key: "valid", Graph: validGraph(definitionmodel.WorkflowGraphNode{Type: "action", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "action", Input: map[string]any{"present": true, "optional": true, "with-field-default": true, "with-action-default": true}}}}, definitionmodel.WorkflowGraphNode{Type: "cc", Contract: &definitionmodel.WorkflowNodeContract{CC: &definitionmodel.WorkflowCCNodeContract{NotificationActionKey: "notification"}}})},
 		},
-		Reports: []reportmodel.ReportSchema{{Key: "allowed", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "object", Alias: "object"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "field", Field: reportmodel.ReportDatasetField{SourceAlias: "object", FieldKey: "field"}}}}, RequiredPermissions: []string{"object.read"}}},
+		Reports: []reportmodel.ReportSchema{func() reportmodel.ReportSchema {
+			report := testObjectSQLReport("allowed", "object")
+			report.RequiredPermissions = []string{"object.read"}
+			return report
+		}()},
 	}, nil)
 	state.validateWorkflows()
 	state.validateReports()

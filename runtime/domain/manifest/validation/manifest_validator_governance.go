@@ -90,56 +90,12 @@ func (state *validationState) validateGovernance() {
 		} else if !manifestHasReport(state, reportKey) {
 			state.add(path+".report_key", "unknown report %q", reportKey)
 		}
-		var report reportmodel.ReportSchema
-		for _, candidate := range state.manifest.Reports {
-			if strings.TrimSpace(candidate.Key) == reportKey {
-				report = candidate
-				break
-			}
-		}
-		queryKeys, tagKeys := map[string]bool{}, map[string]bool{}
-		for _, predicate := range report.Dataset.QueryPredicates {
-			queryKeys[strings.TrimSpace(predicate.Key)] = true
-		}
-		for _, predicate := range report.Dataset.TagPredicates {
-			tagKeys[strings.TrimSpace(predicate.Key)] = true
-		}
-		validatePredicateAllowlist := func(field string, values []string, declared map[string]bool) {
-			seen := map[string]bool{}
-			for valueIndex, value := range values {
-				value = strings.TrimSpace(value)
-				if value == "" || seen[value] || !declared[value] {
-					state.add(fmt.Sprintf("%s.%s[%d]", path, field, valueIndex), "must name one unique predicate declared by report %q", reportKey)
-				}
-				seen[value] = true
-			}
-		}
-		validatePredicateAllowlist("allowed_query_keys", control.AllowedQueryKeys, queryKeys)
-		validatePredicateAllowlist("allowed_tags", control.AllowedTags, tagKeys)
 		if len(control.SourceObjects) == 0 {
 			state.add(path+".source_objects", "at least one governed source object is required")
 		}
 		for sourceIndex, objectKey := range control.SourceObjects {
 			if state.objects[strings.TrimSpace(objectKey)].Key == "" {
 				state.add(fmt.Sprintf("%s.source_objects[%d]", path, sourceIndex), "unknown object %q", objectKey)
-			}
-		}
-		for _, report := range state.manifest.Reports {
-			if strings.TrimSpace(report.Key) != reportKey || report.ExportScope == nil || report.ExportScope.Tags == nil {
-				continue
-			}
-			tagObjects := []string{strings.TrimSpace(report.ExportScope.Tags.Join.ObjectKey)}
-			if report.ExportScope.Tags.FamilyJoin != nil {
-				tagObjects = append(tagObjects, strings.TrimSpace(report.ExportScope.Tags.FamilyJoin.ObjectKey))
-			}
-			for _, tagObject := range tagObjects {
-				found := false
-				for _, source := range control.SourceObjects {
-					found = found || strings.TrimSpace(source) == tagObject
-				}
-				if !found {
-					state.add(path+".source_objects", "backend.report.export_control_invalid: tag scope source %q is required", tagObject)
-				}
 			}
 		}
 		for policyIndex, policyKey := range control.SensitiveFieldPolicyKeys {

@@ -7,9 +7,8 @@ func initializeWorkflowAutomationAndGovernance(s *runtimeAssembly, deps RuntimeS
 	// before the workflow application takes its dependency snapshot.
 	s.recordTimerService = recordtimerapplication.NewRecordTimerApplicationServiceWithWorker(s, newRecordTimerTargetRuntimeAdapter(s), s.recordRepo, s.workerDependencies)
 	s.workflowApplicationService = assembleWorkflowApplication(s)
-	schedulerRuntime := newScheduledWorkflowRuntimeAdapter(s)
-	s.schedulerService = newSchedulerApplicationService(schedulerRuntime, s.workerDependencies)
-	s.schedulerService.UseDefinitionSource(schedulerApplicationDefinitionSource{definitions: s.metadataDefinitions, authored: s.schedulerDefinitions})
+	s.targetExecutionService = newTargetExecutionApplicationService(newScheduledWorkflowRuntimeAdapter(s), s.workerDependencies)
+	s.schedulerDefinitionSource = schedulerDefinitionSourceAdapter{definitions: s.metadataDefinitions, authored: s.schedulerDefinitions}
 	s.authoringCapabilities = newCapabilityAuthoringApplicationService(s)
 	s.businessReferences = assembleChangePlanReferenceApplication(s, businessReferenceRuntimeAdapter{records: s, workflows: s.workflowApplicationService}, s.businessEvidenceRepo)
 	s.applicationSchemaService = assembleApplicationSchema(s)

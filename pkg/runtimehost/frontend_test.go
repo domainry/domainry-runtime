@@ -76,13 +76,13 @@ func TestPackagedFrontendServesHTMLNavigationAndAssetsWithoutOwningAPIRoutes(t *
 		t.Fatalf("asset response=%d %q", asset.Code, asset.Body.String())
 	}
 	api := httptest.NewRecorder()
-	handler.ServeHTTP(api, httptest.NewRequest(http.MethodGet, "/records/objects/orders/records", nil))
+	handler.ServeHTTP(api, httptest.NewRequest(http.MethodGet, "/records/orders", nil))
 	if api.Code != http.StatusTeapot || api.Body.String() != "api" {
 		t.Fatalf("api response=%d %q", api.Code, api.Body.String())
 	}
 	prefixedAPI := httptest.NewRecorder()
-	handler.ServeHTTP(prefixedAPI, httptest.NewRequest(http.MethodGet, "/api/records/objects/orders/records", nil))
-	if prefixedAPI.Code != http.StatusTeapot || forwardedPath != "/records/objects/orders/records" {
+	handler.ServeHTTP(prefixedAPI, httptest.NewRequest(http.MethodGet, "/api/records/orders", nil))
+	if prefixedAPI.Code != http.StatusTeapot || forwardedPath != "/records/orders" {
 		t.Fatalf("prefixed API response=%d path=%q", prefixedAPI.Code, forwardedPath)
 	}
 	post := httptest.NewRecorder()

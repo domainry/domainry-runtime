@@ -15,7 +15,6 @@ import (
 
 type OperationsService interface {
 	Definitions() []operationsmodel.OperationsDefinition
-	Submit(context.Context, operationsapplication.OperationsSubmitRequest, string, principalmodel.Principal) (operationsmodel.OperationsReceipt, operationsmodel.OperationsSubmissionDecision, error)
 	Receipt(context.Context, string, principalmodel.Principal) (operationsmodel.OperationsReceipt, error)
 	Receipts(context.Context, operationsmodel.OperationsStatus, int, principalmodel.Principal) ([]operationsmodel.OperationsReceipt, error)
 	SearchReceipts(context.Context, operationsmodel.OperationsReceiptFilter, principalmodel.Principal) (operationsmodel.OperationsReceiptPage, error)

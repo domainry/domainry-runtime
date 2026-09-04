@@ -23,6 +23,7 @@ import (
 type RecordsHandler struct {
 	queries            *recordapplication.RecordApplicationService
 	actions            *actionapplication.ActionApplicationService
+	assurance          *actionapplication.ActionAssuranceApplicationService
 	audit              *auditapplication.AuditApplicationService
 	permissions        *appschemaapplication.ApplicationSchemaQueryApplicationService
 	principal          func(*http.Request) principalmodel.Principal
@@ -37,6 +38,7 @@ type RecordsHandler struct {
 type RecordsDependencies struct {
 	Queries           *recordapplication.RecordApplicationService
 	Actions           *actionapplication.ActionApplicationService
+	Assurance         *actionapplication.ActionAssuranceApplicationService
 	Audit             *auditapplication.AuditApplicationService
 	Permissions       *appschemaapplication.ApplicationSchemaQueryApplicationService
 	Principal         func(*http.Request) principalmodel.Principal
@@ -48,7 +50,7 @@ type RecordsDependencies struct {
 
 func NewRecordsHandler(deps RecordsDependencies) *RecordsHandler {
 	return &RecordsHandler{
-		queries: deps.Queries, actions: deps.Actions, audit: deps.Audit, permissions: deps.Permissions, principal: deps.Principal,
+		queries: deps.Queries, actions: deps.Actions, assurance: deps.Assurance, audit: deps.Audit, permissions: deps.Permissions, principal: deps.Principal,
 		writeJSON: deps.WriteJSON, writeError: deps.WriteError, writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON,
 		streamPollInterval: 500 * time.Millisecond, streamHeartbeat: 15 * time.Second,
 	}

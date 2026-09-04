@@ -15,7 +15,9 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-const Route = "/business-events/stream"
+// Route exposes ephemeral tenant-scoped cache invalidation signals. It is not
+// a durable business-event ledger; clients must refetch authoritative state.
+const Route = "/realtime/refresh-events"
 
 var filterValuePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 

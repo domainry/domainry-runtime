@@ -61,7 +61,7 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 		"customer.mark_risk", "lead.qualify", "lead.convert", "opportunity.advance_stage", "opportunity.mark_won", "opportunity.mark_lost",
 		"activity.assign_to_me", "activity.start", "activity.complete", "activity.escalate_overdue", "contract.approve", "contract.sign",
 		"payment.mark_collected",
-		"runtime.automation.list_automation_rules", "runtime.automation.get_automation_rule", "runtime.automation.automation_capabilities",
+		"runtime.automation.list_automation_rules", "runtime.automation.get_automation_rule", "runtime.automation.get_execution_catalog",
 		"runtime.automation.validate_automation_rule", "runtime.automation.simulate_rule_candidate", "runtime.automation.simulate_rule",
 	}
 	return []runtimetestkit.IdentityFixtureRole{
@@ -74,18 +74,10 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 		integrationIdentityRole("sales_manager", "Sales manager", crmManagerPermissions, true),
 		integrationIdentityRole("platform_admin", "Runtime operator", []string{
 			"admin_console.access", "runtime.workflows.process_ops_workflow_executions",
-			"scheduler.state.get", "scheduler.authoring_contract.get",
-			"scheduler.definitions.list", "scheduler.definitions.get",
-			"scheduler.definitions.validate", "scheduler.schedules.preview", "scheduler.definitions.simulate",
-			"scheduler.definitions.run", "scheduler.definitions.reschedule",
-			"scheduler.runs.retry", "scheduler.runs.cancel",
-			"scheduler.dead_letters.resolve", "scheduler.dead_letters.requeue",
 			"lead.activate_due_candidates", "lead.create_daily_review_tasks", "lead.fail_due_candidates", "lead.read", "lead.update",
 		}, true),
 		integrationIdentityRole("scheduler_operator", "Scheduler operator", []string{
 			"admin_console.access", "scheduler_probe.read",
-			"scheduler.definitions.list",
-			"scheduler.definitions.run", "scheduler.state.get",
 		}, true),
 		integrationIdentityRole("kitchen_lead", "Kitchen lead", []string{
 			"business.access", "report.summary.get", "kitchen_order.read", "kitchen_order.create", "kitchen_order.update", "kitchen_order.import", "kitchen_order.start_cooking", "kitchen_order.ready_alert.execute",

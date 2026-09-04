@@ -36,7 +36,7 @@ func TestProvisionReviewCoversInvalidUnreadableIdempotentAndChangedCurrent(t *te
 	target := filepath.Join(t.TempDir(), "manifest.json")
 	server := NewServer(target, "dev", testContractIdentity(), nil).Routes()
 
-	invalid := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/review", map[string]any{"manifest": map[string]any{}})
+	invalid := provisionRequest(t, server, http.MethodPost, "/provision/manifests/review", map[string]any{"manifest": map[string]any{}})
 	if invalid.Code != http.StatusUnprocessableEntity || !bytes.Contains(invalid.Body.Bytes(), []byte(`"code":"manifest_validation_failed"`)) {
 		t.Fatalf("invalid status=%d body=%s", invalid.Code, invalid.Body.String())
 	}
@@ -44,7 +44,7 @@ func TestProvisionReviewCoversInvalidUnreadableIdempotentAndChangedCurrent(t *te
 		t.Fatal(err)
 	}
 	manifest := provisionTestManifest(t)
-	unreadable := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/review", map[string]any{"manifest": manifest})
+	unreadable := provisionRequest(t, server, http.MethodPost, "/provision/manifests/review", map[string]any{"manifest": manifest})
 	if unreadable.Code != http.StatusInternalServerError || !bytes.Contains(unreadable.Body.Bytes(), []byte(`"code":"current_manifest_unreadable"`)) {
 		t.Fatalf("unreadable status=%d body=%s", unreadable.Code, unreadable.Body.String())
 	}
@@ -54,12 +54,12 @@ func TestProvisionReviewCoversInvalidUnreadableIdempotentAndChangedCurrent(t *te
 	if err := writeManifestAtomic(target, manifest); err != nil {
 		t.Fatal(err)
 	}
-	idempotent := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/review", map[string]any{"manifest": manifest})
+	idempotent := provisionRequest(t, server, http.MethodPost, "/provision/manifests/review", map[string]any{"manifest": manifest})
 	if payload := provisionResponseMap(t, idempotent); idempotent.Code != http.StatusOK || payload["idempotent"] != true || payload["initial_install"] != false {
 		t.Fatalf("status=%d payload=%#v", idempotent.Code, payload)
 	}
 	changed := manifestVariant(t, func(value *manifestmodel.ManifestSchema) { value.Name = value.Name + " Updated" })
-	reviewed := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/review", map[string]any{"manifest": changed})
+	reviewed := provisionRequest(t, server, http.MethodPost, "/provision/manifests/review", map[string]any{"manifest": changed})
 	if payload := provisionResponseMap(t, reviewed); reviewed.Code != http.StatusOK || payload["idempotent"] != false || payload["initial_install"] != false {
 		t.Fatalf("status=%d payload=%#v", reviewed.Code, payload)
 	}
@@ -112,7 +112,7 @@ func TestProvisionApplyCoversEvidenceValidationCurrentAndActivationFailures(t *t
 				activate = test.setup(t, target)
 			}
 			server := NewServer(target, "dev", testContractIdentity(), activate).Routes()
-			response := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/apply", test.payload)
+			response := provisionRequest(t, server, http.MethodPost, "/provision/manifests/apply", test.payload)
 			if response.Code != test.status || !strings.Contains(response.Body.String(), `"code":"`+test.code+`"`) {
 				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 			}
@@ -137,7 +137,7 @@ func TestProvisionApplyRejectsTemplateConflictAndAcceptsSourceControlledUpdate(t
 				t.Fatal(err)
 			}
 			server := NewServer(target, "dev", testContractIdentity(), nil).Routes()
-			response := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/apply", map[string]any{
+			response := provisionRequest(t, server, http.MethodPost, "/provision/manifests/apply", map[string]any{
 				"manifest": next, "reviewed_manifest_hash": next.ManifestHash, "expected_snapshot_hash": current.ManifestHash, "actor": "builder", "reason": "test",
 			})
 			if name == "template" {
@@ -157,7 +157,7 @@ func TestProvisionApplyRejectsTemplateConflictAndAcceptsSourceControlledUpdate(t
 		t.Fatal(err)
 	}
 	server := NewServer(target, "dev", testContractIdentity(), nil).Routes()
-	response := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/apply", map[string]any{
+	response := provisionRequest(t, server, http.MethodPost, "/provision/manifests/apply", map[string]any{
 		"manifest": current, "reviewed_manifest_hash": current.ManifestHash, "expected_snapshot_hash": emptySnapshotHash, "actor": "builder", "reason": "test",
 	})
 	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `"code":"provision_audit_write_failed"`) {
@@ -168,14 +168,14 @@ func TestProvisionApplyRejectsTemplateConflictAndAcceptsSourceControlledUpdate(t
 func TestProvisionCurrentCoversEmptyAndUnreadableState(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "manifest.json")
 	server := NewServer(target, "dev", testContractIdentity(), nil).Routes()
-	empty := provisionRequest(t, server, http.MethodGet, "/metadata/manifests/current", nil)
+	empty := provisionRequest(t, server, http.MethodGet, "/provision/manifests/current", nil)
 	if payload := provisionResponseMap(t, empty); empty.Code != http.StatusOK || payload["status"] != "empty" || payload["snapshot_hash"] != emptySnapshotHash {
 		t.Fatalf("status=%d payload=%#v", empty.Code, payload)
 	}
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	unreadable := provisionRequest(t, server, http.MethodGet, "/metadata/manifests/current", nil)
+	unreadable := provisionRequest(t, server, http.MethodGet, "/provision/manifests/current", nil)
 	if unreadable.Code != http.StatusInternalServerError || !strings.Contains(unreadable.Body.String(), `"code":"current_manifest_unreadable"`) {
 		t.Fatalf("status=%d body=%s", unreadable.Code, unreadable.Body.String())
 	}

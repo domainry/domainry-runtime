@@ -12,7 +12,7 @@ func ApplicationSchemaObjectAuthoringCapability() capabilitycontract.CapabilityA
 			{Key: "write_policy", Type: "string", Enum: []string{"direct_crud", "action_only"}},
 		},
 		Permissions: []string{"runtime.appschema.validate_application_definition"}, AuditEvents: []string{"metadata_definition_upserted"},
-		ValidationEndpoint: "POST /metadata/definitions/object/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("object"),
+		ValidationEndpoint: "POST /application-schema/definitions/object/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("object"),
 		ResourceOperations:       metadataResourceOperations("object"),
 		ResourceKeyPathParameter: "resourceKey",
 		InputSchema:              metadataAuthoringRequestSchema(payload, false), OutputSchema: metadataAuthoringOutputSchema(payload),

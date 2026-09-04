@@ -162,21 +162,11 @@
       "required_permissions": [
         "stock_item.read"
       ],
-      "dataset": {
-        "source": {
-          "object_key": "stock_item",
-          "alias": "stock_item"
-        },
-        "joins": [
-          {
-            "alias": "purchase_request",
-            "object_key": "purchase_request",
-            "type": "left",
-            "left_alias": "stock_item",
-            "left_field": "id",
-            "right_field": "stock_item",
-            "cardinality": "one_to_many"
-          }
+      "object_sql_v1": {
+        "sql": "SELECT stock_item.id AS id FROM stock_item stock_item ORDER BY stock_item.id LIMIT 100",
+        "source_objects": ["stock_item"],
+        "result_schema": [
+          {"key": "id", "type": "text", "kind": "dimension"}
         ]
       }
     }

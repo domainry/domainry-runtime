@@ -58,7 +58,8 @@ func TestDirectAuthoringSuccessProjectionRemainingContractShapes(t *testing.T) {
 
 func TestCapabilityCatalogAndReferenceRemainingConditions(t *testing.T) {
 	materializeAuthoringCapabilityPermissions(nil)
-	service, admin := capabilityDiscoveryEdgeService()
+	service := NewCapabilityAuthoringApplicationService(nil)
+	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{})
 	if _, err := service.ReferenceValues(t.Context(), admin, "scheduler_target_key", ""); err == nil {
 		t.Fatal("empty scheduler scope accepted")
 	}

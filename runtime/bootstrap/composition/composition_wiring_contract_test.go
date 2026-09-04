@@ -181,8 +181,8 @@ func TestWorkflowDependencyWiringCoversCancellationLookupAndMissingOwner(t *test
 
 func TestRuntimeFacadeNilContracts(t *testing.T) {
 	var services *RuntimeServices
-	if services.Applications().Scheduler == nil {
-		t.Fatal("nil facade must expose stateless Scheduler validation")
+	if services.Applications().TargetExecutions == nil {
+		t.Fatal("nil facade must expose stateless target execution validation")
 	}
 	if schema := services.Schema(); len(schema.Objects) != 0 {
 		t.Fatalf("nil facade schema=%#v", schema)
@@ -192,7 +192,7 @@ func TestRuntimeFacadeNilContracts(t *testing.T) {
 	}
 
 	partial := &RuntimeServices{}
-	if partial.Applications().Scheduler != nil || len(partial.Schema().Objects) != 0 || len(partial.SchemaForPrincipal(t.Context(), principalmodel.Principal{}).Objects) != 0 {
+	if partial.Applications().TargetExecutions != nil || len(partial.Schema().Objects) != 0 || len(partial.SchemaForPrincipal(t.Context(), principalmodel.Principal{}).Objects) != 0 {
 		t.Fatal("partial facade must preserve its empty immutable state")
 	}
 }

@@ -6,30 +6,30 @@ toolchain go1.26.6
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
-	github.com/domainry/domainry-agent v0.1.6-0.20260903120224-b6e270d0c075
-	github.com/domainry/domainry-agent-sdk v0.1.3-0.20260903120224-f101edee8837
-	github.com/domainry/domainry-audit v0.1.5-0.20260903120224-241c363e7112
-	github.com/domainry/domainry-audit-sdk v0.1.2-0.20260901063632-5ed7ddb48e09
+	github.com/domainry/domainry-agent v0.1.6-0.20260904010610-30d9e6a50ab3
+	github.com/domainry/domainry-agent-sdk v0.1.3-0.20260904010610-c61d233cc9ff
+	github.com/domainry/domainry-audit v0.1.5-0.20260904010610-79a34965746e
+	github.com/domainry/domainry-audit-sdk v0.1.2-0.20260904010610-b7008071fa4d
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.13.0.20260902130803-e6173a093fec
-	github.com/domainry/domainry-data-exchange v0.3.6-0.20260903120224-e017fbe8200a
-	github.com/domainry/domainry-data-exchange-sdk v0.3.3-0.20260903120224-cad2b42fc9c1
-	github.com/domainry/domainry-foundation v0.1.0-dev.8.0.20260903120224-ddc3e594ee39
-	github.com/domainry/domainry-identity v0.2.0-dev7.0.20260903120225-5cd9ca879559
-	github.com/domainry/domainry-identity-sdk v0.1.1-dev7.0.20260903120225-51348ff00e2f
-	github.com/domainry/domainry-integration v0.1.10-0.20260903120225-c344dd320c4b
-	github.com/domainry/domainry-integration-sdk v0.1.3-0.20260903120225-4ba1e97ecdf8
-	github.com/domainry/domainry-lifecycle v0.1.8-0.20260903120225-d31873da34ce
+	github.com/domainry/domainry-data-exchange v0.3.6-0.20260904010610-ce3abe8b2885
+	github.com/domainry/domainry-data-exchange-sdk v0.3.3-0.20260904010610-cfcc53d2e9cd
+	github.com/domainry/domainry-foundation v0.1.0-dev.8.0.20260904010610-f4b742c6fa16
+	github.com/domainry/domainry-identity v0.2.0-dev7.0.20260904010611-c7317f867c21
+	github.com/domainry/domainry-identity-sdk v0.1.1-dev7.0.20260904010610-8946a58b37ad
+	github.com/domainry/domainry-integration v0.1.10-0.20260904010611-8a9fba82117f
+	github.com/domainry/domainry-integration-sdk v0.1.3-0.20260904010611-99bf81c47fca
+	github.com/domainry/domainry-lifecycle v0.1.8-0.20260904010611-ed2b8f456518
 	github.com/domainry/domainry-lifecycle-sdk v0.1.7-0.20260901215652-792ec43996bc
-	github.com/domainry/domainry-metadata v0.1.5-0.20260903120225-e279abe29e37
+	github.com/domainry/domainry-metadata v0.1.5-0.20260904010611-1df2a6b07416
 	github.com/domainry/domainry-metadata-sdk v0.1.2-0.20260902130803-e728f30c3b1b
-	github.com/domainry/domainry-monitoring v0.1.8-0.20260903120225-c56c95001ff1
-	github.com/domainry/domainry-monitoring-sdk v0.1.2-0.20260903120225-0f224c423051
-	github.com/domainry/domainry-notification v0.1.0-dev.20.0.20260903120225-76b318944df7
-	github.com/domainry/domainry-notification-sdk v0.1.0-dev.7.0.20260903120225-c4aa3c035b3e
-	github.com/domainry/domainry-report v0.1.5-0.20260903120226-466ff813d7f6
-	github.com/domainry/domainry-report-sdk v0.1.2-0.20260903120226-44d9129fbfee
-	github.com/domainry/domainry-scheduler v0.1.5-0.20260903120226-8d0da02f9552
-	github.com/domainry/domainry-scheduler-sdk v0.1.2-0.20260903120226-fa92ee8cd564
+	github.com/domainry/domainry-monitoring v0.1.8-0.20260904010611-bdc4fee340c6
+	github.com/domainry/domainry-monitoring-sdk v0.1.2-0.20260904010611-309335047015
+	github.com/domainry/domainry-notification v0.1.0-dev.20.0.20260904010611-299a18ab7ddb
+	github.com/domainry/domainry-notification-sdk v0.1.0-dev.7.0.20260904010611-c9ba7a80ad1a
+	github.com/domainry/domainry-report v0.1.5-0.20260904010612-10a5dfbb7a51
+	github.com/domainry/domainry-report-sdk v0.1.2-0.20260904010612-3ae156de9f45
+	github.com/domainry/domainry-scheduler v0.1.5-0.20260904010612-80b339a1e2e2
+	github.com/domainry/domainry-scheduler-sdk v0.1.2-0.20260904010612-70a08bbc3268
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/microsoft/go-mssqldb v1.10.0

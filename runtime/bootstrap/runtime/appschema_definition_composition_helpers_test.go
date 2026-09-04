@@ -59,7 +59,7 @@ func TestApplicationDefinitionCompositionReusesOwnerValidationForSystemDraftCand
 	}{
 		{"action", "order.submit", "order", "backend.action.kind_invalid", definitionmodel.ActionSchema{Key: "order.submit", ObjectKey: "order", Kind: "legacy_step_action", AuditEvent: "order.submitted"}},
 		{"connector", "finance", "", "backend.integration.connector.operation_execution_mode_invalid", connectormodel.ConnectorSchema{Key: "finance", Providers: []connectormodel.ConnectorProviderSchema{{Key: "finance"}}, Operations: []connectormodel.ConnectorOperationSchema{{Key: "push", Method: "POST", ExecutionMode: "later", SideEffect: "write"}}}},
-		{"report", "order_summary", "", "backend.report.source_object_not_found", reportmodel.ReportSchema{Key: "order_summary", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "missing", Alias: "missing"}}}},
+		{"report", "order_summary", "", "backend.report.source_object_not_found", reportmodel.ReportSchema{Key: "order_summary", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "SELECT source.id AS id FROM missing source LIMIT 1", SourceObjects: []string{"missing"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}}}},
 	}
 	for _, tc := range cases {
 		request := metadataCompositionRequest(t, tc.objectKey, tc.value)
@@ -110,7 +110,6 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 			Key: "admin",
 			Permissions: []string{
 				"runtime.appschema.validate_application_definition",
-				"scheduler.definitions.list", "scheduler.definitions.run",
 				"runtime.workflows.list_ops_workflow_executions", "runtime.workflows.list_ops_workflow_processes", "runtime.workflows.get_ops_workflow_process",
 				"integration.invocations.list", "integration.events.replay",
 			},

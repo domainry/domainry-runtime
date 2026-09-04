@@ -46,7 +46,7 @@ func TestOpenAPIProjectionExcludesCrossListenerOperations(t *testing.T) {
 	if _, exists := publicPaths["/scheduler/state"]; exists {
 		t.Fatal("public OpenAPI contains scheduler Ops state")
 	}
-	if _, exists := publicPaths["/records/objects/{objectKey}/records"]; !exists {
+	if _, exists := publicPaths["/records/{objectKey}"]; !exists {
 		t.Fatal("public OpenAPI lost Business record API")
 	}
 	if len(publicPaths) >= fullPathCount {
@@ -61,7 +61,7 @@ func TestOpenAPIProjectionExcludesCrossListenerOperations(t *testing.T) {
 	if _, exists := opsPaths["/operations"]; !exists {
 		t.Fatal("Ops OpenAPI does not contain /operations")
 	}
-	if item, exists := opsPaths["/records/objects/{objectKey}/records"]; exists {
+	if item, exists := opsPaths["/records/{objectKey}"]; exists {
 		if _, hasGET := item.(map[string]any)["get"]; hasGET {
 			t.Fatal("Ops OpenAPI contains Business record list")
 		}

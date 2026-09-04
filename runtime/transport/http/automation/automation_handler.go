@@ -1,15 +1,14 @@
 package automation
 
 import (
-	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-
 	"net/http"
 	"strconv"
 	"strings"
 
+	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type AutomationHandler struct {
@@ -18,7 +17,6 @@ type AutomationHandler struct {
 	writeJSON         func(http.ResponseWriter, int, any)
 	writeServiceError func(http.ResponseWriter, *http.Request, error)
 	decodeJSON        func(http.ResponseWriter, *http.Request, any) bool
-	legacyHeaders     func(http.ResponseWriter)
 }
 
 type AutomationDependencies struct {
@@ -27,14 +25,12 @@ type AutomationDependencies struct {
 	WriteJSON         func(http.ResponseWriter, int, any)
 	WriteServiceError func(http.ResponseWriter, *http.Request, error)
 	DecodeJSON        func(http.ResponseWriter, *http.Request, any) bool
-	LegacyHeaders     func(http.ResponseWriter)
 }
 
 func NewAutomationHandler(deps AutomationDependencies) *AutomationHandler {
 	return &AutomationHandler{
 		commands: deps.Commands, principal: deps.Principal, writeJSON: deps.WriteJSON,
 		writeServiceError: deps.WriteServiceError, decodeJSON: deps.DecodeJSON,
-		legacyHeaders: deps.LegacyHeaders,
 	}
 }
 
@@ -62,13 +58,12 @@ func (h *AutomationHandler) listAutomationRules(w http.ResponseWriter, r *http.R
 	h.writeJSON(w, http.StatusOK, map[string]any{"items": rules, "count": len(rules)})
 }
 
-func (h *AutomationHandler) automationCapabilities(w http.ResponseWriter, r *http.Request) {
-	catalog, err := h.commands.AutomationCapabilities(r.Context(), h.principal(r))
+func (h *AutomationHandler) automationExecutionCatalog(w http.ResponseWriter, r *http.Request) {
+	catalog, err := h.commands.AutomationExecutionCatalog(r.Context(), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
 	}
-	h.legacyHeaders(w)
 	h.writeJSON(w, http.StatusOK, catalog)
 }
 

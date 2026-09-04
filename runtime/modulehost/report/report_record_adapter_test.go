@@ -121,6 +121,9 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	if err := adapter.AuthorizeReportObjectSQLField(t.Context(), readDeniedPrincipal, object, "name"); apperror.CodeOf(err) != "backend.report.object_sql_field_denied" {
 		t.Fatalf("object SQL unreadable field err=%v", err)
 	}
+	if err := adapter.AuthorizeReportObjectSQLField(t.Context(), readDeniedPrincipal, object, "id"); err != nil {
+		t.Fatalf("object SQL stable system field must follow object read authorization: %v", err)
+	}
 	if err := adapter.AuthorizeReportObjectSQLField(t.Context(), principal, object, "retired"); apperror.CodeOf(err) != "backend.report.object_sql_field_not_found" {
 		t.Fatalf("object SQL disabled field err=%v", err)
 	}
@@ -194,34 +197,5 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	repository.updateErr = errors.New("update failed")
 	if err := adapter.TransitionReportExportAuditStatus(t.Context(), "workspace-a", "customer", "audit-1", "status", "prepared", "denied"); !errors.Is(err, repository.updateErr) {
 		t.Fatalf("update error=%v", err)
-	}
-}
-
-func TestReportRecordAdapterRejectsDatasetPushdownForCLS(t *testing.T) {
-	adapter := &ReportRecordAdapter{}
-	object := definitionmodel.ObjectSchema{Key: "entry", Fields: []definitionmodel.FieldSchema{{Key: "amount", Type: "currency"}}}
-	plain := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "entry", FieldKey: "amount", Read: true}}})
-	if !adapter.CanPushdownReportDataset(t.Context(), plain, []definitionmodel.ObjectSchema{object}) {
-		t.Fatal("unrestricted fields should permit dataset pushdown")
-	}
-	denied := plain
-	accessfixture.Set(&denied, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "entry", FieldKey: "amount", Read: false}}})
-	if adapter.CanPushdownReportDataset(t.Context(), denied, []definitionmodel.ObjectSchema{object}) {
-		t.Fatal("unreadable field must force projected fallback")
-	}
-	masked := plain
-	accessfixture.Set(&masked, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "entry", FieldKey: "amount", Read: true, Masked: true}}})
-	if adapter.CanPushdownReportDataset(t.Context(), masked, []definitionmodel.ObjectSchema{object}) {
-		t.Fatal("masked field must force projected fallback")
-	}
-	contextual := plain
-	accessfixture.Set(&contextual, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "entry", FieldKey: "amount", Read: true, Policies: []accessfixture.FieldRuleFixture{{Key: "owner-only", Actions: []string{"read"}, Effect: "allow"}}}}})
-	if adapter.CanPushdownReportDataset(t.Context(), contextual, []definitionmodel.ObjectSchema{object}) {
-		t.Fatal("contextual field policy must force projected fallback")
-	}
-	unrelated := plain
-	accessfixture.Set(&unrelated, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "other", FieldKey: "amount", Policies: []accessfixture.FieldRuleFixture{{Key: "other"}}}, {ObjectKey: "entry", FieldKey: "amount", Read: true}}})
-	if !adapter.CanPushdownReportDataset(t.Context(), unrelated, []definitionmodel.ObjectSchema{object}) {
-		t.Fatal("unrelated or empty field policies should not disable pushdown")
 	}
 }

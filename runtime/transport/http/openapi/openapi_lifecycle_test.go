@@ -8,7 +8,7 @@ import (
 
 func TestRuntimeOpenAPIHardcodesOnlyLifecycleCleanupOrchestration(t *testing.T) {
 	paths := Build(appschemamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
-	operation := paths["/lifecycle/cleanup/jobs/{jobID}/run"].(map[string]any)["post"].(map[string]any)
+	operation := paths["/operations/lifecycle/cleanup/jobs/{jobID}/run"].(map[string]any)["post"].(map[string]any)
 	if security, _ := operation["security"].([]map[string]any); len(security) == 0 {
 		t.Fatal("Runtime Lifecycle cleanup orchestration is public")
 	}

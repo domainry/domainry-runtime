@@ -44,3 +44,30 @@ func TestReportAccessScopeHashCanonicalizesSetOrderingWithoutWeakeningFacts(t *t
 		t.Fatalf("organization scope change hash=%s err=%v", organizationHash, err)
 	}
 }
+
+func TestReportSubjectRoundTripPreservesTrustedProcessAuthority(t *testing.T) {
+	principal := principalmodel.NewSystemPrincipal(
+		"runtime-target-executor",
+		principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "scheduled report snapshot"),
+		"report.snapshots.refresh",
+		"opportunity.read",
+	)
+	principal.WorkspaceID = "workspace-primary"
+	hash, err := ReportAccessScopeHash(principal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subject := reportSubjectFromPrincipal(principal, hash)
+	if !subject.TrustedProcess || !subject.HasAllPermissions([]string{"report.snapshots.refresh", "opportunity.read"}) {
+		t.Fatalf("subject=%#v", subject)
+	}
+	roundTrip := RuntimePrincipalFromReportSubject(subject)
+	if !roundTrip.SystemScope.Valid() || !roundTrip.HasPermission("opportunity.read") || roundTrip.HasPermission("opportunity.export") {
+		t.Fatalf("round-trip principal=%#v", roundTrip)
+	}
+	changed := principal.WithExactSystemCapabilities("opportunity.export")
+	changedHash, err := ReportAccessScopeHash(changed)
+	if err != nil || changedHash == hash {
+		t.Fatalf("capability change hash=%s err=%v", changedHash, err)
+	}
+}

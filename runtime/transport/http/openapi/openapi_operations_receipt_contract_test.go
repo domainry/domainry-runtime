@@ -10,9 +10,8 @@ func TestHighRiskOwnerRoutesPublishIdempotencyAndReceiptHeaders(t *testing.T) {
 	document := Build(appschemamodel.ApplicationSchemaSnapshot{})
 	paths := document["paths"].(map[string]any)
 	for _, item := range []struct{ path, method string }{
-		{path: "/scheduler/runs/{runID}/retry", method: "post"},
-		{path: "/workflow/operations/processes/{processID}/retry", method: "post"},
-		{path: "/lifecycle/cleanup/jobs/{jobID}/run", method: "post"},
+		{path: "/workflow/recovery/processes/{processID}/retry", method: "post"},
+		{path: "/operations/lifecycle/cleanup/jobs/{jobID}/run", method: "post"},
 		{path: "/operations/idempotency/receipts/{owner}/{receiptID}/retry", method: "post"},
 	} {
 		operation := paths[item.path].(map[string]any)[item.method].(map[string]any)

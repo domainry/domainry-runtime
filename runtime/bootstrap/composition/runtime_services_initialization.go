@@ -34,7 +34,6 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		recordRepo:                          deps.Records,
 		dataExchange:                        deps.DataExchange,
 		dataExchangeProviders:               dataExchangeProviders,
-		reportDatasetRows:                   deps.ReportDatasetRows,
 		reportObjectSQL:                     deps.ReportObjectSQL,
 		reportSnapshotSources:               deps.ReportSnapshotSources,
 		auditRepo:                           deps.Audit,

@@ -660,57 +660,11 @@
         "maximum_lag_seconds": 86400,
         "consistency_retries": 3
       },
-      "dataset": {
-        "source": {
-          "object_key": "sales_order",
-          "alias": "order"
-        },
-        "joins": [
-          {
-            "alias": "shipment",
-            "object_key": "shipment",
-            "type": "left",
-            "left_alias": "order",
-            "left_field": "id",
-            "right_field": "sales_order",
-            "cardinality": "one_to_many"
-          },
-          {
-            "alias": "invoice",
-            "object_key": "invoice",
-            "type": "left",
-            "left_alias": "order",
-            "left_field": "id",
-            "right_field": "sales_order",
-            "cardinality": "one_to_many"
-          },
-          {
-            "alias": "payment",
-            "object_key": "payment",
-            "type": "left",
-            "left_alias": "invoice",
-            "left_field": "id",
-            "right_field": "invoice",
-            "cardinality": "one_to_many"
-          },
-          {
-            "alias": "return",
-            "object_key": "return_request",
-            "type": "left",
-            "left_alias": "order",
-            "left_field": "id",
-            "right_field": "sales_order",
-            "cardinality": "one_to_many"
-          },
-          {
-            "alias": "ledger",
-            "object_key": "order_cash_ledger",
-            "type": "left",
-            "left_alias": "order",
-            "left_field": "id",
-            "right_field": "entity_id",
-            "cardinality": "one_to_many"
-          }
+      "object_sql_v1": {
+        "sql": "SELECT sales_order.id AS id FROM sales_order sales_order ORDER BY sales_order.id LIMIT 100",
+        "source_objects": ["sales_order"],
+        "result_schema": [
+          {"key": "id", "type": "text", "kind": "dimension"}
         ]
       },
       "required_permissions": [
@@ -720,40 +674,13 @@
     {
       "key": "order_cash_reconciliation",
       "name": "Order Cash Reconciliation",
-      "dataset": {
-        "source": {
-          "object_key": "order_cash_ledger",
-          "alias": "ledger"
-        },
-        "dimensions": [
-          {
-            "key": "event",
-            "field": {
-              "source_alias": "ledger",
-              "field_key": "event"
-            }
-          }
-        ],
-        "measures": [
-          {
-            "key": "entries",
-            "operation": "count",
-            "source_alias": "ledger"
-          },
-          {
-            "key": "ledger_amount",
-            "operation": "sum",
-            "field": {
-              "source_alias": "ledger",
-              "field_key": "amount"
-            }
-          }
-        ],
-        "sort": [
-          {
-            "key": "event",
-            "direction": "asc"
-          }
+      "object_sql_v1": {
+        "sql": "SELECT ledger.event AS event, COUNT(ledger.id) AS entries, SUM(ledger.amount) AS ledger_amount FROM order_cash_ledger ledger GROUP BY ledger.event ORDER BY ledger.event LIMIT 100",
+        "source_objects": ["order_cash_ledger"],
+        "result_schema": [
+          {"key": "event", "type": "text", "kind": "dimension"},
+          {"key": "entries", "type": "integer", "kind": "measure"},
+          {"key": "ledger_amount", "type": "number", "kind": "measure"}
         ]
       },
       "required_permissions": [

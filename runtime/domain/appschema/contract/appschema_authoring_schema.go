@@ -189,12 +189,13 @@ func metadataAuthoringExecution(resource string) *capabilitycontract.CapabilityA
 }
 
 func metadataConfigurationRoutes(resourceType string) []string {
-	base := "/metadata/definitions/" + resourceType + "/{resourceKey}"
+	readBase := "/metadata/definitions/" + resourceType + "/{resourceKey}"
+	validationBase := "/application-schema/definitions/" + resourceType + "/{resourceKey}"
 	return []string{
-		"GET " + base,
-		"POST " + base + "/validate",
-		"GET /business-system/snapshot",
-		"GET /business-references/graph",
+		"GET " + readBase,
+		"POST " + validationBase + "/validate",
+		"GET /authoring/snapshot",
+		"GET /references",
 	}
 }
 
@@ -226,11 +227,11 @@ func VersionedApplicationDefinitionExecution(resource string) *capabilitycontrac
 }
 
 func metadataObjectReference(pointer string) capabilitycontract.CapabilityAuthoringReference {
-	return capabilitycontract.CapabilityAuthoringReference{Kind: "object_key", InputJSONPointer: pointer, ResolverEndpoint: "GET /capabilities/references/object_key"}
+	return capabilitycontract.CapabilityAuthoringReference{Kind: "object_key", InputJSONPointer: pointer, ResolverEndpoint: "GET /discovery/references/object_key"}
 }
 
 func metadataRelationTargetReference(pointer string) capabilitycontract.CapabilityAuthoringReference {
-	return capabilitycontract.CapabilityAuthoringReference{Kind: "relation_target_object_key", InputJSONPointer: pointer, ResolverEndpoint: "GET /capabilities/references/relation_target_object_key"}
+	return capabilitycontract.CapabilityAuthoringReference{Kind: "relation_target_object_key", InputJSONPointer: pointer, ResolverEndpoint: "GET /discovery/references/relation_target_object_key"}
 }
 
 func metadataStringSchema(description string) capabilitycontract.CapabilityAuthoringSchema {

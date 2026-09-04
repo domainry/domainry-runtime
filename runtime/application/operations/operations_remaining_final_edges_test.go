@@ -155,11 +155,11 @@ func TestOperationsOwnerExecutionFinalDefinitionAndReceiptEdges(t *testing.T) {
 	if _, err := service.ExecuteOwnerOperation(t.Context(), OperationsOwnerExecutionRequest{Kind: "unknown", ResourceType: "unknown"}, principal, func(context.Context) (any, error) { return nil, nil }); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {
 		t.Fatalf("unknown owner operation error = %v", err)
 	}
-	if _, err := service.ExecuteOwnerOperation(t.Context(), OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "wrong"}, principal, func(context.Context) (any, error) { return nil, nil }); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {
+	if _, err := service.ExecuteOwnerOperation(t.Context(), OperationsOwnerExecutionRequest{Kind: "workflow.execution.retry", ResourceType: "wrong"}, principal, func(context.Context) (any, error) { return nil, nil }); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {
 		t.Fatalf("resource mismatch error = %v", err)
 	}
 
-	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "scheduler_run", ResourceID: "run", Reason: "test", Key: "empty-result"}
+	request := OperationsOwnerExecutionRequest{Kind: "workflow.execution.retry", ResourceType: "workflow_execution", ResourceID: "execution", Reason: "test", Key: "empty-result"}
 	ledger := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	service = NewOperationsApplicationService(ledger, nil, nil, func() string { return "owner-result" })
 	if _, err := service.ExecuteOwnerOperation(t.Context(), request, principal, func(context.Context) (any, error) { return nil, nil }); err != nil {

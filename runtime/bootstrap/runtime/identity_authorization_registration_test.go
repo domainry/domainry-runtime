@@ -231,14 +231,14 @@ func TestRuntimeWorkflowSurfaceSeparatesSelfRoutesFromExactManagementActions(t *
 	exactRoutes := []string{
 		"GET /workflow/team-tasks",
 		"POST /workflow/processes/{processID}/retry",
-		"GET /workflow/operations/executions",
-		"POST /workflow/operations/executions/process",
-		"POST /workflow/operations/executions/{executionID}/retry",
-		"POST /workflow/operations/executions/{executionID}/resolve",
-		"GET /workflow/operations/processes",
-		"GET /workflow/operations/processes/{processID}",
-		"POST /workflow/operations/processes/{processID}/retry",
-		"POST /workflow/operations/processes/{processID}/resolve",
+		"GET /workflow/recovery/executions",
+		"POST /workflow/recovery/executions/process",
+		"POST /workflow/recovery/executions/{executionID}/retry",
+		"POST /workflow/recovery/executions/{executionID}/resolve",
+		"GET /workflow/recovery/processes",
+		"GET /workflow/recovery/processes/{processID}",
+		"POST /workflow/recovery/processes/{processID}/retry",
+		"POST /workflow/recovery/processes/{processID}/resolve",
 		"POST /workflow/authoring-fragments/{capabilityKey}/validate",
 		"POST /workflow/definitions/{workflowKey}/validate",
 		"POST /workflow/definitions/{workflowKey}/simulate",
@@ -272,7 +272,7 @@ func TestRuntimeMetadataObjectRecordCountUsesSameKeyPermission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	definition, ok := registry.ResolveHTTP(http.MethodGet, "/metadata/objects/{objectKey}/record-count")
+	definition, ok := registry.ResolveHTTP(http.MethodGet, "/application-schema/objects/{objectKey}/record-count")
 	if !ok || definition.Key != "runtime.appschema.metadata_object_record_count" || definition.Owner != "runtime:appschema" {
 		t.Fatalf("record-count Action=%+v ok=%t", definition, ok)
 	}

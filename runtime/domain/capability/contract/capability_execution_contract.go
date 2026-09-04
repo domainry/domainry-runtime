@@ -10,10 +10,9 @@ type CapabilityExecution struct {
 }
 
 type CapabilityExecutionCatalog struct {
-	RuntimeVersion         string                         `json:"runtime_version"`
-	AutomationInstructions []CapabilityExecution          `json:"automation_instructions"`
-	WorkflowNodes          []CapabilityExecution          `json:"workflow_nodes"`
-	AuthoringProjection    *CapabilityAuthoringProjection `json:"authoring_projection,omitempty"`
+	RuntimeVersion         string                `json:"runtime_version"`
+	AutomationInstructions []CapabilityExecution `json:"automation_instructions"`
+	WorkflowNodes          []CapabilityExecution `json:"workflow_nodes"`
 }
 
 // RuntimeExecutionCapabilities returns the static execution contract shared by

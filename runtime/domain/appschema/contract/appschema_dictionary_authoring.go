@@ -12,7 +12,7 @@ func ApplicationSchemaDictionaryAuthoringCapabilities() []capabilitycontract.Cap
 			{Key: "items", Type: "array", ItemSchema: "dictionary_item"}, {Key: "config", Type: "object"},
 		},
 		Permissions: []string{"runtime.appschema.validate_application_definition"}, AuditEvents: []string{"metadata_definition_upserted", "metadata_definition_deleted"},
-		ValidationEndpoint: "POST /metadata/definitions/dictionary/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("dictionary"), ResourceOperations: metadataResourceOperations("dictionary"),
+		ValidationEndpoint: "POST /application-schema/definitions/dictionary/{resourceKey}/validate", ConfigurationRoutes: metadataConfigurationRoutes("dictionary"), ResourceOperations: metadataResourceOperations("dictionary"),
 		ResourceKeyPathParameter: "resourceKey",
 		InputSchema:              metadataAuthoringRequestSchema(payload, false), OutputSchema: metadataAuthoringOutputSchema(payload),
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "dictionary_key", JSONPointer: "/definition/resource_key", Type: "dictionary_key", VisibleTo: "subsequent_capability_calls"}, {Name: "schema_hash", JSONPointer: "/definition/schema_hash", Type: "schema_hash", VisibleTo: "subsequent_capability_calls"}},

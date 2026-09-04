@@ -134,9 +134,9 @@ func initializeIntegrationAndBusinessSystem(ctx context.Context, s *runtimeAssem
 	s.actionService = assembleActionApplication(s, s, queryPolicy, s.applicationSchemaService, deps.BusinessHandlers, func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, metadata map[string]any) {
 		s.auditApplicationService.AppendWithMetadata(ctx, event, objectKey, recordID, principal, summary, nil, nil, metadata)
 	})
-	s.runtimeStatusService = deployment.NewDeploymentRuntimeStatusApplicationServiceWithWorker(s, s.schedulerService, deps.RuntimeStatus, deps.Records, s.auditApplicationService, deps.WorkflowWorker, nil, s.workerDependencies)
+	s.runtimeStatusService = deployment.NewDeploymentRuntimeStatusApplicationServiceWithWorker(s, s.schedulerDefinitionSource, deps.RuntimeStatus, deps.Records, s.auditApplicationService, deps.WorkflowWorker, nil, s.workerDependencies)
 	s.workflowProcesses = assembleWorkflowProcessEngine(s)
 	integrationsService := publicationHandoffApplication(s)
 	s.publicationHandoffService = integrationsService
-	s.businessSystemService = assembleBusinessSystemApplication(s.schemaService, s.metadataDefinitions, s.workflowApplicationService, s.automationApplicationService, integrationsService, s.recordApplicationService, s.schedulerService, s.runtimeStatusService, s.businessEvidenceRepo)
+	s.businessSystemService = assembleBusinessSystemApplication(s.schemaService, s.metadataDefinitions, s.workflowApplicationService, s.automationApplicationService, integrationsService, s.recordApplicationService, s.schedulerDefinitionSource, s.runtimeStatusService, s.businessEvidenceRepo)
 }

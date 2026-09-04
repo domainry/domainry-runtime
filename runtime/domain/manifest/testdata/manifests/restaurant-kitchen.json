@@ -134,11 +134,12 @@
       "required_permissions": [
         "kitchen_order.read"
       ],
-      "dataset": {
-        "source": {
-          "object_key": "kitchen_order",
-          "alias": "kitchen_order"
-        }
+      "object_sql_v1": {
+        "sql": "SELECT kitchen_order.id AS id FROM kitchen_order kitchen_order ORDER BY kitchen_order.id LIMIT 100",
+        "source_objects": ["kitchen_order"],
+        "result_schema": [
+          {"key": "id", "type": "text", "kind": "dimension"}
+        ]
       }
     }
   ],

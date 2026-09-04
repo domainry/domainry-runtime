@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 )
 
 func AddAutomationReferences(builder *changeplanprojection.ChangePlanReferenceGraphBuilder, snapshot ReferenceSchema) {
@@ -68,60 +70,22 @@ func addAutomationConditionReferences(builder *changeplanprojection.ChangePlanRe
 }
 
 func AddReportIntegrationReferences(builder *changeplanprojection.ChangePlanReferenceGraphBuilder, snapshot ReferenceSchema) {
+	objects := make(map[string]definitionmodel.ObjectSchema, len(snapshot.Objects))
+	for _, object := range snapshot.Objects {
+		objects[object.Key] = object
+	}
 	for _, report := range snapshot.Reports {
 		builder.Node("report", report.Key, "", report.Name, "")
-		for index, objectKey := range reportmodel.ReportDatasetObjectKeys(report.Dataset) {
-			builder.Edge("report", report.Key, "object", objectKey, "reads_object", fmt.Sprintf("dataset.sources[%d]", index))
+		for index, objectKey := range reportmodel.ReportObjectSQLObjectKeys(report.ObjectSQLV1) {
+			builder.Edge("report", report.Key, "object", objectKey, "reads_object", fmt.Sprintf("object_sql_v1.source_objects[%d]", index))
 		}
-		aliases := reportmodel.ReportDatasetAliasObjects(report.Dataset)
-		for index, join := range report.Dataset.Joins {
-			path := fmt.Sprintf("dataset.joins[%d]", index)
-			for equalityIndex, equality := range join.Equalities() {
-				equalityPath := fmt.Sprintf("%s.field_equalities[%d]", path, equalityIndex)
-				if len(join.FieldEqualities) == 0 {
-					equalityPath = path
+		if report.ObjectSQLV1 != nil {
+			if plan, err := reportcontract.CompileReportObjectSQL(*report.ObjectSQLV1, objects); err == nil {
+				for sourceIndex, source := range plan.Sources {
+					for fieldIndex, fieldKey := range source.Fields {
+						builder.Edge("report", report.Key, "field", source.ObjectKey+"."+fieldKey, "reads_field", fmt.Sprintf("object_sql_v1.sources[%d].fields[%d]", sourceIndex, fieldIndex))
+					}
 				}
-				addReportFieldReference(builder, report.Key, aliases, reportmodel.ReportDatasetField{SourceAlias: join.LeftAlias, FieldKey: equality.LeftField}, "joins_on_field", equalityPath+".left_field")
-				addReportFieldReference(builder, report.Key, aliases, reportmodel.ReportDatasetField{SourceAlias: join.Alias, FieldKey: equality.RightField}, "joins_on_field", equalityPath+".right_field")
-			}
-		}
-		for index, filter := range report.Dataset.Filters {
-			addReportFieldReference(builder, report.Key, aliases, filter.Field, "filters_field", fmt.Sprintf("dataset.filters[%d].field", index))
-		}
-		for _, group := range []struct {
-			name       string
-			predicates []reportmodel.ReportDatasetPredicate
-		}{{"query_predicates", report.Dataset.QueryPredicates}, {"tag_predicates", report.Dataset.TagPredicates}} {
-			for index, predicate := range group.predicates {
-				for filterIndex, filter := range predicate.Filters {
-					addReportFieldReference(builder, report.Key, aliases, filter.Field, "filters_field", fmt.Sprintf("dataset.%s[%d].filters[%d].field", group.name, index, filterIndex))
-				}
-			}
-		}
-		for index, dimension := range report.Dataset.Dimensions {
-			addReportFieldReference(builder, report.Key, aliases, dimension.Field, "groups_by_field", fmt.Sprintf("dataset.dimensions[%d].field", index))
-		}
-		for index, measure := range report.Dataset.Measures {
-			path := fmt.Sprintf("dataset.measures[%d]", index)
-			if measure.Field != nil {
-				addReportFieldReference(builder, report.Key, aliases, *measure.Field, "measures_field", path+".field")
-			}
-			if measure.StartField != nil {
-				addReportFieldReference(builder, report.Key, aliases, *measure.StartField, "measures_start_field", path+".start_field")
-			}
-			if measure.EndField != nil {
-				addReportFieldReference(builder, report.Key, aliases, *measure.EndField, "measures_end_field", path+".end_field")
-			}
-		}
-		if report.Dataset.Privacy != nil {
-			addReportFieldReference(builder, report.Key, aliases, report.Dataset.Privacy.EntityField, "privacy_entity_field", "dataset.privacy.entity_field")
-		}
-		for index, analysis := range report.Dataset.Analyses {
-			path := fmt.Sprintf("dataset.analyses[%d]", index)
-			addReportFieldReference(builder, report.Key, aliases, analysis.EntityField, "analyzes_entity_field", path+".entity_field")
-			addReportFieldReference(builder, report.Key, aliases, analysis.TimeField, "analyzes_time_field", path+".time_field")
-			if analysis.EventField != nil {
-				addReportFieldReference(builder, report.Key, aliases, *analysis.EventField, "analyzes_event_field", path+".event_field")
 			}
 		}
 		for index, permission := range report.RequiredPermissions {
@@ -139,15 +103,6 @@ func AddReportIntegrationReferences(builder *changeplanprojection.ChangePlanRefe
 			}
 		}
 	}
-}
-
-func addReportFieldReference(builder *changeplanprojection.ChangePlanReferenceGraphBuilder, reportKey string, aliases map[string]string, field reportmodel.ReportDatasetField, relationship, path string) {
-	objectKey := strings.TrimSpace(aliases[strings.TrimSpace(field.SourceAlias)])
-	fieldKey := strings.TrimSpace(field.FieldKey)
-	if objectKey == "" || fieldKey == "" {
-		return
-	}
-	builder.Edge("report", reportKey, "field", objectKey+"."+fieldKey, relationship, path)
 }
 
 func (s *ChangePlanReferenceApplicationService) addSchedulerReferences(ctx context.Context, builder *changeplanprojection.ChangePlanReferenceGraphBuilder, principal principalmodel.Principal) error {

@@ -1,6 +1,7 @@
 package capability
 
 import (
+	"strings"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -19,6 +20,9 @@ func TestDirectAuthoringSuccessProjectionUsesLiveInstanceAndReverseDependencies(
 	}
 	foundField := false
 	for _, successor := range projection.AvailableSuccessors {
+		if successor.DetailService != "plane" || !strings.HasPrefix(successor.DetailEndpoint, "/capabilities/authoring-contracts/") {
+			t.Fatalf("successor does not point to Plane: %#v", successor)
+		}
 		if successor.Key == "schema.field" {
 			foundField = successor.Domain == "schema" && successor.Status == "supported" && successor.DetailEndpoint != "" && successor.ValidationEndpoint != ""
 		}

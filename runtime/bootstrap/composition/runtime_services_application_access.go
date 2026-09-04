@@ -3,7 +3,6 @@ package composition
 import (
 	"context"
 
-	workerplatform "github.com/domainry/domainry-foundation/worker"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
@@ -14,10 +13,10 @@ import (
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	deployment "github.com/domainry/domainry-runtime/runtime/application/deployment"
+	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
-	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -39,7 +38,7 @@ type RuntimeApplications struct {
 	AuthoringCapabilities *capabilityapplication.CapabilityAuthoringApplicationService
 	BusinessReferences    *changeplanapplication.ChangePlanReferenceApplicationService
 	Reports               reportsdk.ApplicationBinding
-	Scheduler             *schedulerapplication.SchedulerApplicationService
+	TargetExecutions      *dispatchapplication.TargetExecutionApplicationService
 	RecordTimers          *recordtimerapplication.RecordTimerApplicationService
 }
 
@@ -47,12 +46,12 @@ type RuntimeApplications struct {
 // composition access point.
 func (s *runtimeAssembly) Applications() RuntimeApplications {
 	if s == nil {
-		scheduler := newSchedulerApplicationService(nil, workerplatform.Dependencies{})
-		return RuntimeApplications{Scheduler: scheduler, RecordTimers: recordtimerapplication.NewRecordTimerApplicationService(nil, nil, nil)}
+		targetExecutions := dispatchapplication.NewTargetExecutionApplicationService(nil)
+		return RuntimeApplications{TargetExecutions: targetExecutions, RecordTimers: recordtimerapplication.NewRecordTimerApplicationService(nil, nil, nil)}
 	}
-	scheduler := s.schedulerService
-	if scheduler == nil {
-		scheduler = newSchedulerApplicationService(nil, workerplatform.Dependencies{})
+	targetExecutions := s.targetExecutionService
+	if targetExecutions == nil {
+		targetExecutions = dispatchapplication.NewTargetExecutionApplicationService(nil)
 	}
 	recordTimers := s.recordTimerService
 	if recordTimers == nil {
@@ -74,17 +73,27 @@ func (s *runtimeAssembly) Applications() RuntimeApplications {
 		AuthoringCapabilities: s.authoringCapabilities,
 		BusinessReferences:    s.businessReferences,
 		Reports:               s.reportApplication,
-		Scheduler:             scheduler,
+		TargetExecutions:      targetExecutions,
 		RecordTimers:          recordTimers,
 	}
 }
 
 func (s *RuntimeServices) Applications() RuntimeApplications {
 	if s == nil {
-		scheduler := newSchedulerApplicationService(nil, workerplatform.Dependencies{})
-		return RuntimeApplications{Scheduler: scheduler, RecordTimers: recordtimerapplication.NewRecordTimerApplicationService(nil, nil, nil)}
+		targetExecutions := dispatchapplication.NewTargetExecutionApplicationService(nil)
+		return RuntimeApplications{TargetExecutions: targetExecutions, RecordTimers: recordtimerapplication.NewRecordTimerApplicationService(nil, nil, nil)}
 	}
 	return s.applications
+}
+
+// SchedulerDefinitionSource exposes only the host-supplied definition
+// projection used to reconcile the external Scheduler owner. It is not a
+// Runtime application service or scheduling entrypoint.
+func (s *RuntimeServices) SchedulerDefinitionSource() SchedulerDefinitionSource {
+	if s == nil {
+		return schedulerDefinitionSourceAdapter{}
+	}
+	return s.schedulerDefinitionSource
 }
 
 func (s *RuntimeServices) Schema() appschemamodel.ApplicationSchemaSnapshot {

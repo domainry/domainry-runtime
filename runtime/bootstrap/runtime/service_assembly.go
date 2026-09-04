@@ -242,7 +242,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	fileScanKey := sha256.Sum256([]byte("domainry-file-scan-receipt-v1:" + cfg.IntegrationSecretKey))
 	fileScans := uploadapplication.NewFileScanReceiptVerifier(lifecycleFileArtifacts, fileScanKey[:])
 	recordSubjectLifecycle := recordapplication.NewRecordSubjectLifecycleApplicationService(records, manifest.Objects, lifecycleArtifacts, manifest.IdentityProfileExtensions)
-	reportDatasetStore := reportpersistence.NewReportDatasetStore(store)
+	reportSQLStore := reportpersistence.NewReportSQLStore(store)
 	var agentTaskRunner agentsdk.TaskRunner
 	if agentBinding != nil {
 		agentTaskRunner = agentBinding.TaskRunner()
@@ -273,9 +273,8 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			ActionProjectRevision:               projectRevision,
 			ActionMetadataRevision:              metadataRevision,
 			Records:                             records,
-			ReportDatasetRows:                   reportDatasetStore,
-			ReportObjectSQL:                     reportDatasetStore,
-			ReportSnapshotSources:               reportDatasetStore,
+			ReportObjectSQL:                     reportSQLStore,
+			ReportSnapshotSources:               reportSQLStore,
 			RecordExecutions:                    records,
 			DataExchange:                        dataExchangeBinding,
 			DataExchangeProviders:               dataExchangeProviders,

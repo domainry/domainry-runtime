@@ -7,14 +7,13 @@ func UseHandlers(router *HTTPRouter, handlers HTTPRouterHandlers) *HTTPRouter {
 	router.openAPIHTTP = handlers.OpenAPI
 	router.workflowHTTP = handlers.Workflows
 	router.automationHTTP = handlers.Automation
-	router.schedulerHTTP = handlers.Scheduler
+	router.dispatchHTTP = handlers.Dispatch
 	router.businessReferenceHTTP = handlers.BusinessReferences
 	router.publicationHandoffHTTP = nil
 	if handlers.PublicationHandoff != nil {
 		router.publicationHandoffHTTP = handlers.PublicationHandoff
 	}
 	router.businessSystemHTTP = handlers.BusinessSystem
-	router.capabilityHTTP = handlers.Capabilities
 	router.applicationSchemaHTTP = handlers.ApplicationSchema
 	router.notificationHTTP = nil
 	if handlers.Notifications != nil {

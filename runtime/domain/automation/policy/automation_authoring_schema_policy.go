@@ -12,10 +12,10 @@ func automationCompleteRuleAuthoringContract(capability *capabilitycontract.Capa
 	capability.OutputVariables = automationFragmentValidationOutputVariables()
 	capability.Execution = appschemacontract.VersionedApplicationDefinitionExecution("automation.rule")
 	capability.ReferenceContracts = []capabilitycontract.CapabilityAuthoringReference{
-		{Kind: "object_key", InputJSONPointer: "/object_key", ResolverEndpoint: "/capabilities/references/object_key"},
-		{Kind: "field_key", InputJSONPointer: "/trigger/changed_fields/*", ScopeFrom: "/object_key", ResolverEndpoint: "/capabilities/references/field_key"},
-		{Kind: "action_key", InputJSONPointer: "/instructions/*/config/action_key", ScopeFrom: "/object_key", ResolverEndpoint: "/capabilities/references/action_key"},
-		{Kind: "workflow_key", InputJSONPointer: "/instructions/*/config/workflow_key", ResolverEndpoint: "/capabilities/references/workflow_key"},
+		{Kind: "object_key", InputJSONPointer: "/object_key", ResolverEndpoint: "/discovery/references/object_key"},
+		{Kind: "field_key", InputJSONPointer: "/trigger/changed_fields/*", ScopeFrom: "/object_key", ResolverEndpoint: "/discovery/references/field_key"},
+		{Kind: "action_key", InputJSONPointer: "/instructions/*/config/action_key", ScopeFrom: "/object_key", ResolverEndpoint: "/discovery/references/action_key"},
+		{Kind: "workflow_key", InputJSONPointer: "/instructions/*/config/workflow_key", ResolverEndpoint: "/discovery/references/workflow_key"},
 	}
 	capability.Errors = append(capability.Errors,
 		capabilitycontract.CapabilityAuthoringError{Code: "backend.automation.identity_required", FieldPath: "key", MessageKey: "backend.automation.identity_required"},
@@ -114,7 +114,7 @@ func automationInstructionBaseParameters(instructionType string) []capabilitycon
 func automationTriggerSchema(root bool) *capabilitycontract.CapabilityAuthoringSchema {
 	closed := false
 	stringItem := capabilitycontract.CapabilityAuthoringSchema{Type: "string"}
-	catalog := capabilitycontract.RuntimeAutomationCapabilities()
+	catalog := capabilitycontract.RuntimeAutomationExecutionCatalog()
 	schema := &capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"phase", "operation"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 		"phase": {Type: "string", Enum: automationStringEnums(catalog.Phases)}, "operation": {Type: "string", Enum: automationStringEnums(catalog.Operations)},
 		"changed_fields": {Type: "array", Items: &stringItem}, "from_state": {Type: "string"}, "to_state": {Type: "string"}, "source": {Type: "string"},

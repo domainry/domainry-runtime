@@ -1,12 +1,9 @@
 package transport
 
 import (
-	"context"
 	"crypto/sha256"
-	"fmt"
 	"strings"
 
-	identitysdk "github.com/domainry/domainry-identity-sdk"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
@@ -15,9 +12,8 @@ import (
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 	automationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/automation"
-	capabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/capabilities"
+	dispatchhttp "github.com/domainry/domainry-runtime/runtime/transport/http/dispatch"
 	recordhttp "github.com/domainry/domainry-runtime/runtime/transport/http/records"
-	schedulerhttp "github.com/domainry/domainry-runtime/runtime/transport/http/scheduler"
 	uploadhttp "github.com/domainry/domainry-runtime/runtime/transport/http/uploads"
 	workflowhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workflows"
 )
@@ -27,7 +23,8 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 	queries := a.recordQueries
 	a.handlers.Records = recordhttp.NewRecordsHandler(recordhttp.RecordsDependencies{
 		Queries: queries, Actions: records.Applications().Actions,
-		Audit: records.Applications().Audit, Permissions: records.Applications().Schema,
+		Assurance: a.actionAssuranceApplication(records.Applications().Actions),
+		Audit:     records.Applications().Audit, Permissions: records.Applications().Schema,
 		Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 		WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
 	})
@@ -67,25 +64,12 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 	a.handlers.Automation = automationhttp.NewAutomationHandler(automationhttp.AutomationDependencies{
 		Commands: records.Applications().Automations, Principal: a.callbacks.Principal,
 		WriteJSON: a.callbacks.WriteJSON, WriteServiceError: a.callbacks.WriteServiceError,
-		DecodeJSON: a.callbacks.DecodeJSON, LegacyHeaders: capabilityhttp.WriteLegacyProjectionHeaders,
+		DecodeJSON: a.callbacks.DecodeJSON,
 	})
-	a.handlers.Scheduler = schedulerhttp.NewSchedulerHandler(schedulerhttp.SchedulerDependencies{
-		Service: records.Applications().Scheduler, Operations: a.operations, Principal: a.callbacks.Principal,
-		WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
-		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
-		Authenticated: a.identityHTTP.AuthenticatedFunc,
-		Binding:       a.dependencies.SchedulerBinding,
-		Dispatcher:    composition.NewSchedulerCallbackDispatcher(records.Applications().Scheduler, records.Applications().PublicationHandoff, composition.IntegrationConnectionRequirements(a.dependencies.Manifest.Integrations.Connections)),
+	a.handlers.Dispatch = dispatchhttp.NewExecutionHandler(dispatchhttp.TargetExecutionDependencies{
+		WriteJSON:     a.callbacks.WriteJSON,
+		Executor:      composition.NewTargetExecutionDispatcher(records.Applications().TargetExecutions, records.Applications().PublicationHandoff, composition.IntegrationConnectionRequirements(a.dependencies.Manifest.Integrations.Connections)),
 		RuntimeID:     a.dependencies.RuntimeInstanceID,
-		AuthenticateService: func(ctx context.Context, credential string) error {
-			if a.dependencies.IdentityBinding == nil || a.dependencies.IdentityBinding.Tokens() == nil || strings.TrimSpace(credential) == "" {
-				return fmt.Errorf("Scheduler service credential is unavailable")
-			}
-			verified, err := a.dependencies.IdentityBinding.Tokens().Verify(ctx, identitysdk.VerifyTokenRequest{AccessToken: credential, Audience: identitysdk.ApplicationKey(a.dependencies.Config.IdentityAudience)})
-			if err != nil || strings.TrimSpace(string(verified.SubjectID)) == "" || string(verified.Audience) != a.dependencies.Config.IdentityAudience {
-				return fmt.Errorf("Scheduler service credential is invalid")
-			}
-			return nil
-		},
+		SigningSecret: []byte(a.dependencies.Config.IntegrationSecretKey),
 	})
 }

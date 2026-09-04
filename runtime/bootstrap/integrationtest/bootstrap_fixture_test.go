@@ -93,7 +93,7 @@ func TestRuntimeBootstrapsBusinessManifestFixtures(t *testing.T) {
 			}
 			runtimeFixtureRequest[map[string]any](t, handler, tc.role, http.MethodGet, "/report/"+tc.reportKey+"/summary", nil)
 
-			page := runtimeFixtureRequest[map[string]any](t, handler, tc.role, http.MethodGet, "/records/objects/"+tc.objectKey+"/records?page=1&page_size=10", nil)
+			page := runtimeFixtureRequest[map[string]any](t, handler, tc.role, http.MethodGet, "/records/"+tc.objectKey+"?page=1&page_size=10", nil)
 			total, ok := page["total"].(float64)
 			if !ok || total < 1 {
 				t.Fatalf("expected seeded records for %s, got %#v", tc.objectKey, page)
@@ -265,8 +265,8 @@ func TestRuntimeRestrictedRoleScopesMasksAndForbidsRecords(t *testing.T) {
 	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
-	manager := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/records/objects/contract/records?page=1&page_size=50", nil)
-	restricted := runtimeFixtureRequest[map[string]any](t, handler, "sales_rep", http.MethodGet, "/records/objects/contract/records?page=1&page_size=50", nil)
+	manager := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/records/contract?page=1&page_size=50", nil)
+	restricted := runtimeFixtureRequest[map[string]any](t, handler, "sales_rep", http.MethodGet, "/records/contract?page=1&page_size=50", nil)
 	if manager["total"] != float64(2) || restricted["total"] != float64(1) {
 		t.Fatalf("record scope difference missing: manager=%#v restricted=%#v", manager, restricted)
 	}
@@ -276,7 +276,7 @@ func TestRuntimeRestrictedRoleScopesMasksAndForbidsRecords(t *testing.T) {
 	if data["value"] != "****0.00" {
 		t.Fatalf("restricted contract value was not masked: %#v", data)
 	}
-	runtimeFixtureRequestStatus(t, handler, "sales_rep", http.MethodDelete, "/records/objects/contract/records/"+record["id"].(string), nil, http.StatusForbidden)
+	runtimeFixtureRequestStatus(t, handler, "sales_rep", http.MethodDelete, "/records/contract/items/"+record["id"].(string), nil, http.StatusForbidden)
 }
 
 func TestRuntimeCRMTransitionStateActionsApplyConfiguredTarget(t *testing.T) {
@@ -291,41 +291,41 @@ func TestRuntimeCRMTransitionStateActionsApplyConfiguredTarget(t *testing.T) {
 	handler := application.Routes()
 
 	leadID := firstRuntimeFixtureRecordID(t, handler, "sales_manager", "lead")
-	runtimeFixtureRequestStatus(t, handler, "sales_manager", http.MethodPost, "/records/objects/lead/records/"+leadID+"/actions/lead.convert", map[string]any{"data": map[string]any{}}, http.StatusBadRequest)
-	leadResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/objects/lead/records/"+leadID+"/actions/lead.qualify", map[string]any{"data": map[string]any{}})
+	runtimeFixtureRequestStatus(t, handler, "sales_manager", http.MethodPost, "/records/lead/items/"+leadID+"/actions/lead.convert", map[string]any{"data": map[string]any{}}, http.StatusBadRequest)
+	leadResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/lead/items/"+leadID+"/actions/lead.qualify", map[string]any{"data": map[string]any{}})
 	assertRuntimeFixtureRecordField(t, leadResult, "status", "qualified")
-	leadConvertResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/objects/lead/records/"+leadID+"/actions/lead.convert", map[string]any{"data": map[string]any{}})
+	leadConvertResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/lead/items/"+leadID+"/actions/lead.convert", map[string]any{"data": map[string]any{}})
 	assertRuntimeFixtureRecordField(t, leadConvertResult, "status", "converted")
 
 	lostOpportunityID := runtimeFixtureRecordIDByField(t, handler, "sales_manager", "opportunity", "stage", "negotiation")
-	lostOpportunityResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/objects/opportunity/records/"+lostOpportunityID+"/actions/opportunity.mark_lost", map[string]any{"data": map[string]any{}})
+	lostOpportunityResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/opportunity/items/"+lostOpportunityID+"/actions/opportunity.mark_lost", map[string]any{"data": map[string]any{}})
 	assertRuntimeFixtureRecordField(t, lostOpportunityResult, "stage", "lost")
 
 	opportunityID := runtimeFixtureRecordIDByField(t, handler, "sales_manager", "opportunity", "stage", "proposal")
-	opportunityResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/objects/opportunity/records/"+opportunityID+"/actions/opportunity.advance_stage", map[string]any{"data": map[string]any{"stage": "negotiation"}})
+	opportunityResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/opportunity/items/"+opportunityID+"/actions/opportunity.advance_stage", map[string]any{"data": map[string]any{"stage": "negotiation"}})
 	assertRuntimeFixtureRecordField(t, opportunityResult, "stage", "negotiation")
-	wonOpportunityResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/objects/opportunity/records/"+opportunityID+"/actions/opportunity.mark_won", map[string]any{"data": map[string]any{}})
+	wonOpportunityResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/opportunity/items/"+opportunityID+"/actions/opportunity.mark_won", map[string]any{"data": map[string]any{}})
 	assertRuntimeFixtureRecordField(t, wonOpportunityResult, "stage", "won")
 
 	activityID := firstRuntimeFixtureRecordID(t, handler, "sales_manager", "activity")
-	assignedActivity := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/objects/activity/records/"+activityID+"/actions/activity.assign_to_me", map[string]any{"data": map[string]any{}})
+	assignedActivity := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/activity/items/"+activityID+"/actions/activity.assign_to_me", map[string]any{"data": map[string]any{}})
 	assertRuntimeFixtureRecordField(t, assignedActivity, "owner", "runtime_fixture_user")
-	startedActivity := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/objects/activity/records/"+activityID+"/actions/activity.start", map[string]any{"data": map[string]any{}})
+	startedActivity := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/activity/items/"+activityID+"/actions/activity.start", map[string]any{"data": map[string]any{}})
 	assertRuntimeFixtureRecordField(t, startedActivity, "status", "in_progress")
-	overdueActivity := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/objects/activity/records/"+activityID+"/actions/activity.escalate_overdue", map[string]any{"data": map[string]any{}})
+	overdueActivity := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/activity/items/"+activityID+"/actions/activity.escalate_overdue", map[string]any{"data": map[string]any{}})
 	assertRuntimeFixtureRecordField(t, overdueActivity, "status", "overdue")
-	completedActivity := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/objects/activity/records/"+activityID+"/actions/activity.complete", map[string]any{"data": map[string]any{}})
+	completedActivity := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/activity/items/"+activityID+"/actions/activity.complete", map[string]any{"data": map[string]any{}})
 	assertRuntimeFixtureRecordField(t, completedActivity, "status", "completed")
 
 	paymentID := firstRuntimeFixtureRecordID(t, handler, "finance_reviewer", "payment")
-	paymentResult := runtimeFixtureRequest[map[string]any](t, handler, "finance_reviewer", http.MethodPost, "/records/objects/payment/records/"+paymentID+"/actions/payment.mark_collected", map[string]any{"data": map[string]any{}})
+	paymentResult := runtimeFixtureRequest[map[string]any](t, handler, "finance_reviewer", http.MethodPost, "/records/payment/items/"+paymentID+"/actions/payment.mark_collected", map[string]any{"data": map[string]any{}})
 	assertRuntimeFixtureRecordField(t, paymentResult, "status", "collected")
 
 	contractID := runtimeFixtureRecordIDByField(t, handler, "sales_manager", "contract", "status", "draft")
-	runtimeFixtureRequestStatus(t, handler, "sales_manager", http.MethodPost, "/records/objects/contract/records/"+contractID+"/actions/contract.sign", map[string]any{"data": map[string]any{}}, http.StatusBadRequest)
-	approveResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/objects/contract/records/"+contractID+"/actions/contract.approve", map[string]any{"data": map[string]any{}})
+	runtimeFixtureRequestStatus(t, handler, "sales_manager", http.MethodPost, "/records/contract/items/"+contractID+"/actions/contract.sign", map[string]any{"data": map[string]any{}}, http.StatusBadRequest)
+	approveResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/contract/items/"+contractID+"/actions/contract.approve", map[string]any{"data": map[string]any{}})
 	assertRuntimeFixtureRecordField(t, approveResult, "status", "approved")
-	signResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/objects/contract/records/"+contractID+"/actions/contract.sign", map[string]any{"data": map[string]any{}})
+	signResult := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/records/contract/items/"+contractID+"/actions/contract.sign", map[string]any{"data": map[string]any{}})
 	assertRuntimeFixtureRecordField(t, signResult, "status", "signed")
 }
 
@@ -345,7 +345,9 @@ func TestRuntimeCRMOverdueWorkflowOnlyProcessesOverduePayments(t *testing.T) {
 		"schedule_expression": "daily", "timezone": "UTC", "max_attempts": 3, "retry_backoff": "fixed", "retry_delay_seconds": 60, "retry_max_delay_seconds": 3600, "timeout_seconds": 300, "next_run_at": "2026-01-01T00:00:00Z",
 	})
 
-	result := runtimeFixtureRequest[map[string]any](t, handler, "platform_admin", http.MethodPost, "/workflow/operations/executions/process?limit=25", nil)
+	result := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, "platform_admin", http.MethodPost, "/workflow/recovery/executions/process?limit=25", nil, map[string]string{
+		"X-Operation-Reason": "Advance the controlled overdue workflow fixture",
+	})
 	if processed, _ := result["processed"].(float64); processed != 1 {
 		t.Fatalf("expected only one overdue workflow execution, got %#v", result)
 	}
@@ -410,7 +412,7 @@ func TestRuntimeBackendRecordUpdateVersionConflict(t *testing.T) {
 	defer application.CloseContext(t.Context())
 	handler := application.Routes()
 
-	page := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/records/objects/customer/records?page=1&page_size=1", nil)
+	page := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/records/customer?page=1&page_size=1", nil)
 	items, ok := page["items"].([]any)
 	if !ok || len(items) == 0 {
 		t.Fatalf("expected seeded customer record, got %#v", page)
@@ -434,7 +436,7 @@ func TestRuntimeBackendRecordUpdateVersionConflict(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal stale patch: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPatch, "/records/objects/customer/records/"+recordID, bytes.NewReader(stalePatch))
+	req := httptest.NewRequest(http.MethodPatch, "/records/customer/items/"+recordID, bytes.NewReader(stalePatch))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Idempotency-Key", "runtime-fixture-stale-update")
 	applyIntegrationIdentity(req, "sales_manager")
@@ -562,7 +564,7 @@ func runtimeFixtureRequestStatus(t *testing.T, handler http.Handler, role string
 
 func firstRuntimeFixtureRecordID(t *testing.T, handler http.Handler, role string, objectKey string) string {
 	t.Helper()
-	page := runtimeFixtureRequest[map[string]any](t, handler, role, http.MethodGet, "/records/objects/"+objectKey+"/records?page=1&page_size=1", nil)
+	page := runtimeFixtureRequest[map[string]any](t, handler, role, http.MethodGet, "/records/"+objectKey+"?page=1&page_size=1", nil)
 	items, ok := page["items"].([]any)
 	if !ok || len(items) == 0 {
 		t.Fatalf("expected seeded %s record, got %#v", objectKey, page)
@@ -580,7 +582,7 @@ func firstRuntimeFixtureRecordID(t *testing.T, handler http.Handler, role string
 
 func runtimeFixtureRecordIDByField(t *testing.T, handler http.Handler, role string, objectKey string, field string, expected any) string {
 	t.Helper()
-	page := runtimeFixtureRequest[map[string]any](t, handler, role, http.MethodGet, "/records/objects/"+objectKey+"/records?page=1&page_size=50", nil)
+	page := runtimeFixtureRequest[map[string]any](t, handler, role, http.MethodGet, "/records/"+objectKey+"?page=1&page_size=50", nil)
 	items, ok := page["items"].([]any)
 	if !ok {
 		t.Fatalf("expected seeded %s records, got %#v", objectKey, page)

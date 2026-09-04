@@ -5,51 +5,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/domainry/domainry-foundation/apperror"
-	"github.com/domainry/domainry-foundation/idempotency"
-	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 )
-
-type operationsSubmitRequest struct {
-	Kind         string `json:"kind"`
-	ResourceType string `json:"resource_type"`
-	ResourceID   string `json:"resource_id"`
-	Reason       string `json:"reason"`
-	Reference    string `json:"reference"`
-	Payload      any    `json:"payload"`
-}
 
 func (h *OperationsHandler) operationCatalog(w http.ResponseWriter, _ *http.Request) {
 	definitions := h.service.Definitions()
 	h.writeJSON(w, http.StatusOK, map[string]any{"items": definitions, "count": len(definitions)})
-}
-
-func (h *OperationsHandler) submitOperation(w http.ResponseWriter, r *http.Request) {
-	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	if key == "" {
-		h.writeServiceError(w, r, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, nil))
-		return
-	}
-	var body operationsSubmitRequest
-	if h.decodeJSON == nil || !h.decodeJSON(w, r, &body) {
-		return
-	}
-	receipt, decision, err := h.service.Submit(r.Context(), operationsapplication.OperationsSubmitRequest{
-		Kind: body.Kind, ResourceType: body.ResourceType, ResourceID: body.ResourceID,
-		Reason: body.Reason, Reference: body.Reference, Payload: body.Payload,
-	}, key, h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	w.Header().Set("Location", receipt.StatusURL)
-	status := http.StatusAccepted
-	if decision == operationsmodel.OperationsSubmissionReplay {
-		status = http.StatusOK
-		w.Header().Set("Idempotency-Replayed", "true")
-	}
-	h.writeJSON(w, status, receipt)
 }
 
 func (h *OperationsHandler) getOperation(w http.ResponseWriter, r *http.Request) {

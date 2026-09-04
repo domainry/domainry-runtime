@@ -61,8 +61,7 @@ func (r *automationExecutionRepositoryStub) InsertExecution(_ context.Context, _
 type automationMetadataStub struct{ err error }
 
 type automationHandlerCapture struct {
-	serviceErr  error
-	legacyCalls int
+	serviceErr error
 }
 
 type automationHandlerFixture struct {
@@ -76,7 +75,7 @@ type automationHandlerFixture struct {
 }
 
 var automationHTTPPermissions = []string{
-	"runtime.automation.automation_capabilities",
+	"runtime.automation.get_execution_catalog",
 	"runtime.automation.list_automation_rules",
 	"runtime.automation.get_automation_rule",
 	"runtime.automation.list_automation_executions",
@@ -122,10 +121,6 @@ func newAutomationHandlerFixture() *automationHandlerFixture {
 			}
 			return true
 		},
-		LegacyHeaders: func(w http.ResponseWriter) {
-			capture.legacyCalls++
-			w.Header().Set("X-Legacy-Projection", "true")
-		},
 	})
 	return fixture
 }
@@ -158,25 +153,25 @@ func TestAutomationAuthoringFragmentValidationRoute(t *testing.T) {
 	fixture.handler.RegisterRoutes(mux)
 
 	valid := httptest.NewRecorder()
-	mux.ServeHTTP(valid, httptest.NewRequest(http.MethodPost, "/automation/rules/authoring-fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"any"}`)))
+	mux.ServeHTTP(valid, httptest.NewRequest(http.MethodPost, "/automation/fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"any"}`)))
 	if valid.Code != http.StatusOK || !strings.Contains(valid.Body.String(), `"valid":true`) || !strings.Contains(valid.Body.String(), `"capability_key":"automation.condition_group"`) {
 		t.Fatalf("valid status=%d body=%s", valid.Code, valid.Body.String())
 	}
 
 	invalid := httptest.NewRecorder()
-	mux.ServeHTTP(invalid, httptest.NewRequest(http.MethodPost, "/automation/rules/authoring-fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"none"}`)))
+	mux.ServeHTTP(invalid, httptest.NewRequest(http.MethodPost, "/automation/fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"none"}`)))
 	if invalid.Code != http.StatusOK || !strings.Contains(invalid.Body.String(), `"valid":false`) || !strings.Contains(invalid.Body.String(), `backend.automation.condition_mode_invalid`) {
 		t.Fatalf("invalid status=%d body=%s", invalid.Code, invalid.Body.String())
 	}
 
 	badJSON := httptest.NewRecorder()
-	mux.ServeHTTP(badJSON, httptest.NewRequest(http.MethodPost, "/automation/rules/authoring-fragments/automation.condition_group/validate", strings.NewReader(`{`)))
+	mux.ServeHTTP(badJSON, httptest.NewRequest(http.MethodPost, "/automation/fragments/automation.condition_group/validate", strings.NewReader(`{`)))
 	if badJSON.Code != http.StatusBadRequest {
 		t.Fatalf("bad JSON status=%d", badJSON.Code)
 	}
 	accessfixture.Set(fixture.principal, accessfixture.Bundle{})
 	denied := httptest.NewRecorder()
-	mux.ServeHTTP(denied, httptest.NewRequest(http.MethodPost, "/automation/rules/authoring-fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"any"}`)))
+	mux.ServeHTTP(denied, httptest.NewRequest(http.MethodPost, "/automation/fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"any"}`)))
 	if denied.Code != http.StatusUnprocessableEntity || fixture.capture.serviceErr == nil {
 		t.Fatalf("denied status=%d error=%v", denied.Code, fixture.capture.serviceErr)
 	}
@@ -190,14 +185,14 @@ func TestAutomationHandlersListCapabilitiesHistoryAndGet(t *testing.T) {
 		t.Fatalf("rules status=%d body=%s", rules.Code, rules.Body.String())
 	}
 
-	capabilities := httptest.NewRecorder()
-	fixture.handler.automationCapabilities(capabilities, automationRequest(http.MethodGet, "/automation/rules/capabilities", "", ""))
-	if capabilities.Code != http.StatusOK || fixture.capture.legacyCalls != 1 || capabilities.Header().Get("X-Legacy-Projection") != "true" {
-		t.Fatalf("capabilities status=%d legacy=%d headers=%v", capabilities.Code, fixture.capture.legacyCalls, capabilities.Header())
+	catalog := httptest.NewRecorder()
+	fixture.handler.automationExecutionCatalog(catalog, automationRequest(http.MethodGet, "/automation/execution-catalog", "", ""))
+	if catalog.Code != http.StatusOK {
+		t.Fatalf("execution catalog status=%d body=%s", catalog.Code, catalog.Body.String())
 	}
 
 	history := httptest.NewRecorder()
-	fixture.handler.listAutomationExecutions(history, automationRequest(http.MethodGet, "/automation/rules/executions?rule_key=welcome&object_key=customer&record_id=record-1&phase=before&status=succeeded&connector_key=crm&from=2026-01-01&to=2026-02-01&limit=25", "", ""))
+	fixture.handler.listAutomationExecutions(history, automationRequest(http.MethodGet, "/automation/executions?rule_key=welcome&object_key=customer&record_id=record-1&phase=before&status=succeeded&connector_key=crm&from=2026-01-01&to=2026-02-01&limit=25", "", ""))
 	filter := fixture.executions.filter
 	if history.Code != http.StatusOK || filter.RuleKey != "welcome" || filter.ObjectKey != "customer" || filter.RecordID != "record-1" || filter.Phase != "before" || filter.Status != "succeeded" || filter.ConnectorKey != "crm" || filter.From != "2026-01-01" || filter.To != "2026-02-01" || filter.Limit != 25 {
 		t.Fatalf("history status=%d filter=%#v body=%s", history.Code, filter, history.Body.String())
@@ -221,9 +216,9 @@ func TestAutomationHandlersMapHistoryRulesAndCapabilityErrors(t *testing.T) {
 	fixture := newAutomationHandlerFixture()
 	accessfixture.Set(fixture.principal, accessfixture.Bundle{})
 	for name, handle := range map[string]func(http.ResponseWriter, *http.Request){
-		"rules":        fixture.handler.listAutomationRules,
-		"capabilities": fixture.handler.automationCapabilities,
-		"history":      fixture.handler.listAutomationExecutions,
+		"rules":             fixture.handler.listAutomationRules,
+		"execution catalog": fixture.handler.automationExecutionCatalog,
+		"history":           fixture.handler.listAutomationExecutions,
 	} {
 		t.Run(name, func(t *testing.T) {
 			fixture.capture.serviceErr = nil

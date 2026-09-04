@@ -93,10 +93,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /", s.identity)
 	mux.HandleFunc("GET /health", s.health)
 	mux.HandleFunc("GET /openapi.json", s.openapi)
-	mux.HandleFunc("POST /metadata/manifests/validate", s.validate)
-	mux.HandleFunc("POST /metadata/manifests/review", s.review)
-	mux.HandleFunc("POST /metadata/manifests/apply", s.apply)
-	mux.HandleFunc("GET /metadata/manifests/current", s.current)
+	mux.HandleFunc("POST /provision/manifests/validate", s.validate)
+	mux.HandleFunc("POST /provision/manifests/review", s.review)
+	mux.HandleFunc("POST /provision/manifests/apply", s.apply)
+	mux.HandleFunc("GET /provision/manifests/current", s.current)
 	mux.HandleFunc("POST /provision/review", s.v1Review)
 	mux.HandleFunc("POST /provision/apply", s.v1Apply)
 	mux.HandleFunc("POST /provision/rollback", s.v1Rollback)
@@ -128,14 +128,14 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) openapi(w http.ResponseWriter, _ *http.Request) {
 	paths := map[string]any{}
-	for _, path := range []string{"/metadata/manifests/validate", "/metadata/manifests/review", "/metadata/manifests/apply"} {
+	for _, path := range []string{"/provision/manifests/validate", "/provision/manifests/review", "/provision/manifests/apply"} {
 		paths[path] = map[string]any{"post": map[string]any{"security": []any{}, "description": "Temporarily unauthenticated builder Provision endpoint"}}
 	}
 	for _, path := range []string{"/provision/review", "/provision/apply", "/provision/rollback", "/provision/configuring", "/provision/abandon"} {
 		paths[path] = map[string]any{"post": map[string]any{"security": []any{}, "description": s.productBrandName + " Framework Builder v1 Project Runtime Provision endpoint"}}
 	}
 	paths["/provision/lifecycle"] = map[string]any{"get": map[string]any{"security": []any{}, "description": "Runtime direct-authoring lifecycle status"}}
-	paths["/metadata/manifests/current"] = map[string]any{"get": map[string]any{"security": []any{}, "description": "Temporarily unauthenticated builder Provision endpoint"}}
+	paths["/provision/manifests/current"] = map[string]any{"get": map[string]any{"security": []any{}, "description": "Temporarily unauthenticated builder Provision endpoint"}}
 	s.writeJSON(w, http.StatusOK, map[string]any{
 		"openapi": "3.1.0",
 		"info":    map[string]any{"title": s.productBrandName + " domain Runtime Provision API", "version": s.runtimeVersion},
@@ -307,7 +307,7 @@ func (s *Server) v1Review(w http.ResponseWriter, r *http.Request) {
 	if len(diagnostics) == 0 {
 		current, currentHash, found, err := s.loadCurrent()
 		if err != nil {
-			diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.current_manifest_unreadable", "/metadata/manifests/current", err.Error(), "inspect_runtime_instance"))
+			diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.current_manifest_unreadable", "/provision/manifests/current", err.Error(), "inspect_runtime_instance"))
 		} else {
 			currentSnapshot = snapshotHash(found, currentHash)
 			initialInstall = !found
@@ -361,7 +361,7 @@ func (s *Server) v1Apply(w http.ResponseWriter, r *http.Request) {
 	if len(diagnostics) == 0 {
 		current, loadedHash, loaded, err := s.loadCurrent()
 		if err != nil {
-			diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.current_manifest_unreadable", "/metadata/manifests/current", err.Error(), "inspect_runtime_instance"))
+			diagnostics = append(diagnostics, provisionV1Diagnostic("runtime.current_manifest_unreadable", "/provision/manifests/current", err.Error(), "inspect_runtime_instance"))
 		} else {
 			currentHash = loadedHash
 			found = loaded
@@ -389,7 +389,7 @@ func (s *Server) v1Apply(w http.ResponseWriter, r *http.Request) {
 		resultStatus = "noop"
 	} else {
 		if err := writeManifestAtomic(s.manifestPath, manifest); err != nil {
-			s.writeV1ApplyBlocked(w, request, "runtime.manifest_write_failed", "/metadata/manifests", err.Error(), "inspect_runtime_instance_storage")
+			s.writeV1ApplyBlocked(w, request, "runtime.manifest_write_failed", "/provision/manifests", err.Error(), "inspect_runtime_instance_storage")
 			return
 		}
 		if s.activate != nil {
@@ -439,7 +439,7 @@ func (s *Server) v1Rollback(w http.ResponseWriter, r *http.Request) {
 			"request_hash":     request.RequestHash,
 			"receipt_hash":     request.ReceiptHash,
 			"diagnostic_count": 1,
-			"diagnostics":      []provisionDiagnostic{provisionV1Diagnostic("runtime.rollback_failed", "/metadata/manifests", err.Error(), "inspect_runtime_instance_storage")},
+			"diagnostics":      []provisionDiagnostic{provisionV1Diagnostic("runtime.rollback_failed", "/provision/manifests", err.Error(), "inspect_runtime_instance_storage")},
 		}))
 		return
 	}

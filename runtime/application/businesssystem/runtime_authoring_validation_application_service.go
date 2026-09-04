@@ -52,6 +52,7 @@ type RuntimeAuthoringRepairFacts struct {
 	ResourceType      string   `json:"resource_type,omitempty"`
 	ResourceKey       string   `json:"resource_key,omitempty"`
 	CapabilityKey     string   `json:"capability_key,omitempty"`
+	ReferenceService  string   `json:"reference_service,omitempty"`
 	ReferenceEndpoint string   `json:"reference_endpoint,omitempty"`
 }
 
@@ -225,10 +226,10 @@ func runtimeAuthoringApplyCoverageValidation(report *RuntimeAuthoringValidationR
 		}
 	}
 	for _, resource := range report.Coverage.SourcelessResources {
-		report.Diagnostics = append(report.Diagnostics, RuntimeAuthoringValidationDiagnostic{Code: "backend.runtime.resource_source_missing", Owner: "businesssystem", CapabilityKey: "maintenance.current_state_snapshot", ResourcePath: "resources." + resource.ResourceType + "." + resource.ResourceKey, Message: "resource has no authoritative source", Repair: &RuntimeAuthoringRepairFacts{Operation: "declare_resource_source", JSONPointer: "/resource_sources", ResourceType: resource.ResourceType, ResourceKey: resource.ResourceKey, ReferenceEndpoint: "/business-system/snapshot?projection=resource"}})
+		report.Diagnostics = append(report.Diagnostics, RuntimeAuthoringValidationDiagnostic{Code: "backend.runtime.resource_source_missing", Owner: "businesssystem", CapabilityKey: "maintenance.current_state_snapshot", ResourcePath: "resources." + resource.ResourceType + "." + resource.ResourceKey, Message: "resource has no authoritative source", Repair: &RuntimeAuthoringRepairFacts{Operation: "declare_resource_source", JSONPointer: "/resource_sources", ResourceType: resource.ResourceType, ResourceKey: resource.ResourceKey, ReferenceService: "runtime", ReferenceEndpoint: "/authoring/snapshot?projection=resource"}})
 	}
 	for _, resource := range report.Coverage.UnreachableResources {
-		report.Diagnostics = append(report.Diagnostics, RuntimeAuthoringValidationDiagnostic{Code: "backend.runtime.resource_unreachable", Owner: "businesssystem", CapabilityKey: "maintenance.current_state_snapshot", ResourcePath: "resources." + resource.ResourceType + "." + resource.ResourceKey, Message: "resource is not reachable from a requirement", Repair: &RuntimeAuthoringRepairFacts{Operation: "link_resource_to_requirement", JSONPointer: "/coverage/requirements", ResourceType: resource.ResourceType, ResourceKey: resource.ResourceKey, ReferenceEndpoint: "/business-system/snapshot?projection=resource"}})
+		report.Diagnostics = append(report.Diagnostics, RuntimeAuthoringValidationDiagnostic{Code: "backend.runtime.resource_unreachable", Owner: "businesssystem", CapabilityKey: "maintenance.current_state_snapshot", ResourcePath: "resources." + resource.ResourceType + "." + resource.ResourceKey, Message: "resource is not reachable from a requirement", Repair: &RuntimeAuthoringRepairFacts{Operation: "link_resource_to_requirement", JSONPointer: "/coverage/requirements", ResourceType: resource.ResourceType, ResourceKey: resource.ResourceKey, ReferenceService: "runtime", ReferenceEndpoint: "/authoring/snapshot?projection=resource"}})
 	}
 }
 
@@ -250,11 +251,11 @@ func runtimeAuthoringCoverageRepair(issue string, entryIndex int) *RuntimeAuthor
 	case "capability_required":
 		repair.JSONPointer += "/capability_keys"
 		repair.Operation, repair.Expected = "add", []string{"registered_capability_key"}
-		repair.ReferenceEndpoint = "/capabilities/index"
+		repair.ReferenceService, repair.ReferenceEndpoint = "plane", "/capabilities"
 	case "resource_required":
 		repair.JSONPointer += "/resources"
 		repair.Operation, repair.Expected = "add", []string{"snapshot_resource_reference"}
-		repair.ReferenceEndpoint = "/business-system/snapshot?projection=index"
+		repair.ReferenceService, repair.ReferenceEndpoint = "runtime", "/authoring/snapshot?projection=index"
 	case "scenario_required":
 		repair.JSONPointer += "/scenario_ids"
 		repair.Operation, repair.Expected = "add", []string{"non_empty_scenario_id"}
@@ -265,7 +266,7 @@ func runtimeAuthoringCoverageRepair(issue string, entryIndex int) *RuntimeAuthor
 		if value, found := strings.CutPrefix(issue, "capability_not_found:"); found {
 			repair.JSONPointer += "/capability_keys"
 			repair.Expected, repair.Actual, repair.CapabilityKey = []string{"registered_capability_key"}, value, value
-			repair.ReferenceEndpoint = "/capabilities/" + value
+			repair.ReferenceService, repair.ReferenceEndpoint = "plane", "/capabilities/authoring-contracts/"+value
 		} else if value, found := strings.CutPrefix(issue, "resource_not_found:"); found {
 			parts := strings.SplitN(value, ":", 2)
 			repair.JSONPointer += "/resources"
@@ -273,7 +274,7 @@ func runtimeAuthoringCoverageRepair(issue string, entryIndex int) *RuntimeAuthor
 			if len(parts) == 2 {
 				repair.ResourceType, repair.ResourceKey = parts[0], parts[1]
 			}
-			repair.ReferenceEndpoint = "/business-system/snapshot?projection=resource"
+			repair.ReferenceService, repair.ReferenceEndpoint = "runtime", "/authoring/snapshot?projection=resource"
 		}
 	}
 	return repair
@@ -306,7 +307,7 @@ func runtimeAuthoringDefinitionDiagnostic(err error) RuntimeAuthoringValidationD
 	}
 	path := strings.TrimSuffix(strings.ReplaceAll("definitions."+resourceType+"."+resourceKey, "..", "."), ".")
 	message := valueOrDefault(strings.TrimSpace(params["diagnostic"]), "current Runtime definition graph is invalid")
-	return RuntimeAuthoringValidationDiagnostic{Code: "backend.runtime.global_definition_invalid", Owner: owner, CapabilityKey: capability, ResourcePath: path, Message: message, Repair: &RuntimeAuthoringRepairFacts{Operation: "replace", JSONPointer: "/definitions/" + resourceType + "/" + resourceKey, ResourceType: resourceType, ResourceKey: resourceKey, ReferenceEndpoint: "/business-system/snapshot?projection=resource"}}
+	return RuntimeAuthoringValidationDiagnostic{Code: "backend.runtime.global_definition_invalid", Owner: owner, CapabilityKey: capability, ResourcePath: path, Message: message, Repair: &RuntimeAuthoringRepairFacts{Operation: "replace", JSONPointer: "/definitions/" + resourceType + "/" + resourceKey, ResourceType: resourceType, ResourceKey: resourceKey, ReferenceService: "runtime", ReferenceEndpoint: "/authoring/snapshot?projection=resource"}}
 }
 
 var runtimeAuthoringRequiredConfigurationCategories = []string{
@@ -333,7 +334,7 @@ func runtimeAuthoringConfigurationCoverage(snapshot changeplanprojection.Busines
 			CapabilityKey: "maintenance.current_state_snapshot",
 			ResourcePath:  key,
 			Message:       "current Runtime configuration category is not visible: " + category,
-			Repair:        &RuntimeAuthoringRepairFacts{Operation: "refresh_snapshot", JSONPointer: "/resource_visibility/" + category, Expected: []string{"visible"}, Actual: snapshot.ResourceVisibility[category], ReferenceEndpoint: "/business-system/snapshot?projection=index"},
+			Repair:        &RuntimeAuthoringRepairFacts{Operation: "refresh_snapshot", JSONPointer: "/resource_visibility/" + category, Expected: []string{"visible"}, Actual: snapshot.ResourceVisibility[category], ReferenceService: "runtime", ReferenceEndpoint: "/authoring/snapshot?projection=index"},
 		})
 	}
 	return checks
@@ -403,7 +404,7 @@ func runtimeAuthoringValidationDiagnostic(path, message string) RuntimeAuthoring
 	case strings.HasPrefix(path, "reports"):
 		owner, capability = "report", "report.definition"
 	}
-	return RuntimeAuthoringValidationDiagnostic{Code: "backend.runtime.global_manifest_invalid", Owner: owner, CapabilityKey: capability, ResourcePath: path, Message: message, Repair: &RuntimeAuthoringRepairFacts{Operation: "replace", JSONPointer: "/" + strings.ReplaceAll(path, ".", "/"), ReferenceEndpoint: "/business-system/snapshot?projection=resource"}}
+	return RuntimeAuthoringValidationDiagnostic{Code: "backend.runtime.global_manifest_invalid", Owner: owner, CapabilityKey: capability, ResourcePath: path, Message: message, Repair: &RuntimeAuthoringRepairFacts{Operation: "replace", JSONPointer: "/" + strings.ReplaceAll(path, ".", "/"), ReferenceService: "runtime", ReferenceEndpoint: "/authoring/snapshot?projection=resource"}}
 }
 
 func runtimeAuthoringValidationHash(manifest manifestmodel.ManifestSchema) string {

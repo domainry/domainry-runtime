@@ -6,10 +6,6 @@ import (
 	"reflect"
 	"testing"
 
-	identitysdk "github.com/domainry/domainry-identity-sdk"
-	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
-
-	"github.com/domainry/domainry-foundation/apperror"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -116,58 +112,5 @@ func TestMaterializeAuthoringCapabilityPermissions(t *testing.T) {
 	}
 	if got := resolveAuthoringCapabilityPermissions(&contract, "unknown", locations, resolved, map[string]bool{}); got != nil {
 		t.Fatalf("unknown capability permissions=%v", got)
-	}
-}
-
-func TestCapabilityAuthoringProjectionAndServices(t *testing.T) {
-	t.Parallel()
-
-	domains := []string{"workflow", "action", "automation"}
-	projection := RuntimeAuthoringProjection(domains...)
-	if !reflect.DeepEqual(domains, []string{"workflow", "action", "automation"}) || !reflect.DeepEqual(projection.Domains, []string{"action", "automation", "workflow"}) {
-		t.Fatalf("unexpected projection domains: input=%v projection=%v", domains, projection.Domains)
-	}
-	if projection.Mode != "compatibility_projection" || projection.Successor != "/capabilities" || projection.ContractHash == "" {
-		t.Fatalf("unexpected projection: %#v", projection)
-	}
-	wantKinds := []capabilitycontract.CapabilityKind{
-		capabilitycontract.CapabilityPromotion, capabilitycontract.CapabilityPricing,
-		capabilitycontract.CapabilityLoyalty, capabilitycontract.CapabilityInventory, capabilitycontract.CapabilityApproval, capabilitycontract.CapabilityStateMachine,
-	}
-	if got := CapabilityLegacyObjectKinds(); !reflect.DeepEqual(got, wantKinds) {
-		t.Fatalf("legacy object kinds=%v want=%v", got, wantKinds)
-	}
-
-	service := NewCapabilityAuthoringApplicationService(nil)
-	for name, call := range map[string]func(principalmodel.Principal) error{
-		"execution": func(principal principalmodel.Principal) error {
-			_, err := service.ExecutionCapabilities(t.Context(), principal)
-			return err
-		},
-		"metadata": func(principal principalmodel.Principal) error {
-			_, err := service.ApplicationSchemaProjection(t.Context(), principal)
-			return err
-		},
-	} {
-		if err := call(principalmodel.Principal{}); apperror.CodeOf(err) != "auth.permission_denied" {
-			t.Errorf("%s unknown principal error=%v", name, err)
-		}
-		if err := call(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}); err != nil {
-			t.Errorf("%s authenticated principal error=%v", name, err)
-		}
-	}
-	admin := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{})
-	execution, err := service.ExecutionCapabilities(t.Context(), admin)
-	if err != nil || execution.AuthoringProjection == nil || !reflect.DeepEqual(execution.AuthoringProjection.Domains, []string{"action", "automation", "workflow"}) {
-		t.Fatalf("execution projection=%#v err=%v", execution.AuthoringProjection, err)
-	}
-	metadata, err := service.ApplicationSchemaProjection(t.Context(), admin)
-	if err != nil || len(metadata.AuthoringCapabilities) == 0 || !reflect.DeepEqual(metadata.Capabilities, wantKinds) || !reflect.DeepEqual(metadata.AuthoringProjection.Domains, []string{"schema"}) {
-		t.Fatalf("metadata projection=%#v err=%v", metadata, err)
-	}
-	for _, capability := range metadata.AuthoringCapabilities {
-		if len(capability.Key) < len("schema.") || capability.Key[:len("schema.")] != "schema." {
-			t.Fatalf("metadata projection leaked non-schema capability %q", capability.Key)
-		}
 	}
 }

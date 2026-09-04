@@ -85,15 +85,15 @@ func TestObjectActionPathsAndConnectorProjectionCannotPublishOwnerRoute(t *testi
 	}
 
 	addActionOpenAPIPath(paths, definitionmodel.ActionSchema{ObjectKey: "object", Key: "create", Kind: "object_create"})
-	if paths["/records/objects/object/actions/create/run"] == nil || paths["/records/objects/object/records/{recordID}/actions/create"] != nil {
+	if paths["/records/object/actions/create"] == nil || paths["/records/object/items/{recordID}/actions/create"] != nil {
 		t.Fatalf("object-only paths=%v", paths)
 	}
 	addActionOpenAPIPath(paths, definitionmodel.ActionSchema{ObjectKey: "object", Key: "bulk", Kind: "bulk_operation"})
-	if paths["/records/objects/object/actions/bulk/run"] == nil || paths["/records/objects/object/records/{recordID}/actions/bulk"] == nil {
+	if paths["/records/object/actions/bulk"] == nil || paths["/records/object/items/{recordID}/actions/bulk"] == nil {
 		t.Fatalf("bulk paths=%v", paths)
 	}
 	addActionOpenAPIPath(paths, definitionmodel.ActionSchema{ObjectKey: "object", Key: "record", Kind: "record_operation"})
-	if paths["/records/objects/object/actions/record/run"] != nil || paths["/records/objects/object/records/{recordID}/actions/record"] == nil {
+	if paths["/records/object/actions/record"] != nil || paths["/records/object/items/{recordID}/actions/record"] == nil {
 		t.Fatalf("record paths=%v", paths)
 	}
 
@@ -212,14 +212,14 @@ func TestOpenAPIDefaultTitleUsesProductBrand(t *testing.T) {
 
 func TestOwnerReceiptContractsIgnoreMalformedEntries(t *testing.T) {
 	paths := map[string]any{
-		"/scheduler/definitions/{definitionID}/run": "not-a-path-item",
-		"/scheduler/runs/{runID}/retry":             map[string]any{"post": "not-an-operation"},
-		"/scheduler/runs/{runID}/cancel": map[string]any{"post": map[string]any{
+		"/workflow/recovery/executions/{executionID}/retry": "not-a-path-item",
+		"/workflow/recovery/processes/{processID}/retry":    map[string]any{"post": "not-an-operation"},
+		"/workflow/recovery/processes/{processID}/resolve": map[string]any{"post": map[string]any{
 			"responses": map[string]any{"default": map[string]any{}, "200": "not-a-response"},
 		}},
 	}
 	addOwnerOperationsReceiptOpenAPIContracts(paths)
-	operation := paths["/scheduler/runs/{runID}/cancel"].(map[string]any)["post"].(map[string]any)
+	operation := paths["/workflow/recovery/processes/{processID}/resolve"].(map[string]any)["post"].(map[string]any)
 	parameters := operation["parameters"].([]map[string]any)
 	if len(parameters) != 3 {
 		t.Fatalf("parameters=%v", parameters)

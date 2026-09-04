@@ -104,16 +104,15 @@ func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesC
 		return composition.RuntimeServicesDependencies{}, nil
 	}
 	records := recordpersistence.NewRecordStore(config.Store)
-	reportDataset := reportpersistence.NewReportDatasetStore(config.Store)
+	reportSQL := reportpersistence.NewReportSQLStore(config.Store)
 	reportBinding, err := openTestkitReportBinding(ctx, config.Store)
 	if err != nil {
 		panic("open Report test module: " + err.Error())
 	}
 	return composition.RuntimeServicesDependencies{
 		Records: records, RecordExecutions: records,
-		ReportDatasetRows:                   reportDataset,
-		ReportObjectSQL:                     reportDataset,
-		ReportSnapshotSources:               reportDataset,
+		ReportObjectSQL:                     reportSQL,
+		ReportSnapshotSources:               reportSQL,
 		ReportSnapshotNotificationCommitter: reportnotification.NewReportSnapshotNotificationCommitter(config.Store, reportBinding.Snapshots()),
 		ReportNotificationCompiler:          compileTestkitReportNotification,
 		Audit:                               auditpersistence.NewAuditStoreFromRuntimeStore(ctx, config.Store),

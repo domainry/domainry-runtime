@@ -9,6 +9,7 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -16,12 +17,12 @@ import (
 func TestExecuteOwnerOperationPersistsTerminalReceiptAndNeverRepeatsOwner(t *testing.T) {
 	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "owner-operation" })
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}, accessfixture.Bundle{Permissions: []string{"scheduler.runs.retry"}})
-	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "scheduler_run", ResourceID: "run-1", Reason: "recover failed run", Key: "retry-1", Payload: map[string]any{"attempt": 2}}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}, accessfixture.Bundle{Permissions: []string{operationscontract.ActionEnableAutomationRule}})
+	request := OperationsOwnerExecutionRequest{Kind: "automation.rule.enable", ResourceType: "automation_rule", ResourceID: "rule-1", Reason: "enable validated rule", Key: "enable-1", Payload: map[string]any{"revision": 2}}
 	calls := 0
 	execute := func(context.Context) (any, error) {
 		calls++
-		return map[string]any{"run_id": "run-1", "status": "pending"}, nil
+		return map[string]any{"rule_id": "rule-1", "status": "enabled"}, nil
 	}
 	first, err := service.ExecuteOwnerOperation(t.Context(), request, principal, execute)
 	if err != nil || first.Receipt.Command.Status != operationsmodel.OperationsStatusSucceeded || first.Replayed || calls != 1 {
@@ -32,19 +33,19 @@ func TestExecuteOwnerOperationPersistsTerminalReceiptAndNeverRepeatsOwner(t *tes
 		t.Fatalf("replay=%+v calls=%d err=%v", replay, calls, err)
 	}
 	value, ok := replay.Value.(map[string]any)
-	if !ok || value["run_id"] != "run-1" {
+	if !ok || value["rule_id"] != "rule-1" {
 		t.Fatalf("replayed owner result=%#v", replay.Value)
 	}
 }
 
-func TestExecuteSchedulerJobRunAcceptsPublicCapabilityAndReplaysExactlyOnce(t *testing.T) {
+func TestExecuteWorkflowRetryAcceptsRuntimeCapabilityAndReplaysExactlyOnce(t *testing.T) {
 	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
-	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "scheduler-manual-run" })
+	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "workflow-retry" })
 	request := OperationsOwnerExecutionRequest{
-		Kind: "scheduler.job.run", ResourceType: "scheduler_definition", ResourceID: "activation-job",
-		Reason: "operator requested activation", Key: "manual-run-1",
+		Kind: "workflow.execution.retry", ResourceType: "workflow_execution", ResourceID: "execution-1",
+		Reason: "operator requested retry", Key: "retry-1",
 	}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}, accessfixture.Bundle{Permissions: []string{"scheduler.definitions.run"}})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}, accessfixture.Bundle{Permissions: []string{"runtime.workflows.retry_ops_workflow_execution"}})
 	calls := 0
 	execute := func(context.Context) (any, error) {
 		calls++
@@ -60,10 +61,10 @@ func TestExecuteSchedulerJobRunAcceptsPublicCapabilityAndReplaysExactlyOnce(t *t
 	}
 }
 
-func TestExecuteSchedulerJobRunRejectsPrincipalWithoutOwnerPermission(t *testing.T) {
+func TestExecuteWorkflowRetryRejectsPrincipalWithoutOwnerPermission(t *testing.T) {
 	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
-	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "scheduler-denied" })
-	request := OperationsOwnerExecutionRequest{Kind: "scheduler.job.run", ResourceType: "scheduler_definition", ResourceID: "activation-job", Reason: "operator requested activation", Key: "manual-run-1"}
+	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "workflow-denied" })
+	request := OperationsOwnerExecutionRequest{Kind: "workflow.execution.retry", ResourceType: "workflow_execution", ResourceID: "execution-1", Reason: "operator requested retry", Key: "retry-1"}
 	calls := 0
 	_, err := service.ExecuteOwnerOperation(t.Context(), request, principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "viewer"}}, func(context.Context) (any, error) {
 		calls++
@@ -77,8 +78,8 @@ func TestExecuteSchedulerJobRunRejectsPrincipalWithoutOwnerPermission(t *testing
 func TestExecuteOwnerOperationRecordsFailureWithoutBlindReplay(t *testing.T) {
 	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "failed-owner-operation" })
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}, accessfixture.Bundle{Permissions: []string{"runtime.operations.retry_integration_event"}})
-	request := OperationsOwnerExecutionRequest{Kind: "integration.event.retry", ResourceType: "integration_event", ResourceID: "event-1", Reason: "provider recovered", Key: "retry-1"}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}, accessfixture.Bundle{Permissions: []string{operationscontract.ActionRetryRuntimePublication}})
+	request := OperationsOwnerExecutionRequest{Kind: "runtime.publication.retry", ResourceType: "runtime_publication_outbox", ResourceID: "message-1", Reason: "provider recovered", Key: "retry-1"}
 	calls := 0
 	execute := func(context.Context) (any, error) {
 		calls++

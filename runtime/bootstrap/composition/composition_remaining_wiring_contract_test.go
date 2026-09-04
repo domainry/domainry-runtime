@@ -436,7 +436,7 @@ func TestActionAssuranceValidatorRemainingBranches(t *testing.T) {
 		Key: actionKey, ObjectKey: objectKey,
 		AssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{definitionmodel.ActionAssuranceOTP}},
 	}
-	if _, err := validator(t.Context(), invocation); err == nil || auditEvents[len(auditEvents)-1] != "action_assurance_denied" {
+	if _, err := validator(t.Context(), invocation); apperror.CodeOf(err) != "backend.action.assurance_required" || auditEvents[len(auditEvents)-1] != "action_assurance_denied" {
 		t.Fatalf("missing assurance store err=%v events=%v", err, auditEvents)
 	}
 

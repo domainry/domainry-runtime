@@ -83,7 +83,7 @@ func (s *HTTPRouter) health(w http.ResponseWriter, r *http.Request) {
 	payload["template_id"], payload["manifest_hash"] = s.manifestTemplateID, s.manifestHash
 	payload["authoring_contract_version"], payload["authoring_contract_hash"] = authoring.ContractVersion, authoring.ContractHash
 	payload["readiness_report_version"], payload["release_identity"] = "runtime.readiness.v1", s.releaseIdentity
-	payload["capability_readiness_urls"] = []string{"/capabilities", "/integration/catalog", "/operations/catalog"}
+	payload["runtime_catalog_urls"] = []string{"/automation/execution-catalog", "/integration/catalog", "/operations/catalog"}
 	payload["api"], payload["capacity"] = s.httpMetricsSummary(), s.capacityController.Snapshot()
 	writeJSON(w, http.StatusOK, payload)
 }

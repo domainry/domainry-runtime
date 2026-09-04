@@ -73,7 +73,7 @@ func (p automationFacadeWorkflowProbe) RunAutomationWorkflow(context.Context, st
 }
 
 var automationFacadePermissions = []string{
-	"runtime.automation.automation_capabilities",
+	"runtime.automation.get_execution_catalog",
 	"runtime.automation.list_automation_rules",
 	"runtime.automation.get_automation_rule",
 	"runtime.automation.list_automation_executions",
@@ -115,7 +115,7 @@ func TestAutomationFacadeConstructorQueriesAndValidationDelegation(t *testing.T)
 	if err != nil || rule.Key != "a" {
 		t.Fatalf("rule=%#v err=%v", rule, err)
 	}
-	catalog, err := service.AutomationCapabilities(t.Context(), principal)
+	catalog, err := service.AutomationExecutionCatalog(t.Context(), principal)
 	if err != nil || len(catalog.Connectors) != 1 || len(catalog.Connections) != 0 {
 		t.Fatalf("catalog=%#v err=%v", catalog, err)
 	}

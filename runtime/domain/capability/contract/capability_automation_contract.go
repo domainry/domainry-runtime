@@ -17,7 +17,6 @@ type CapabilityAutomationCatalog struct {
 	Capabilities            []CapabilityAutomationInstruction `json:"capabilities"`
 	Connectors              []connectormodel.ConnectorSchema  `json:"connectors"`
 	Connections             []integrationsdk.Connection       `json:"connections"`
-	AuthoringProjection     *CapabilityAuthoringProjection    `json:"authoring_projection,omitempty"`
 }
 
 type CapabilityAutomationInstruction struct {
@@ -27,7 +26,7 @@ type CapabilityAutomationInstruction struct {
 	SupportedContexts []string `json:"supported_contexts"`
 }
 
-func RuntimeAutomationCapabilities() CapabilityAutomationCatalog {
+func RuntimeAutomationExecutionCatalog() CapabilityAutomationCatalog {
 	return CapabilityAutomationCatalog{
 		Phases: []string{"after", "before"}, Operations: []string{"create", "delete", "transition", "update"}, ExecutionModes: []string{"async", "sync"}, RunAsModes: []string{"initiator"}, ResultNotificationModes: []string{"none", "failures", "all"},
 		InstructionTypes: []string{"assert", "derive_fields", "emit_event", "invoke_business_action", "start_workflow"}, BeforeInstructionTypes: []string{"assert", "derive_fields"}, AfterInstructionTypes: []string{"emit_event", "invoke_business_action", "start_workflow"},

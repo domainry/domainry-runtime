@@ -47,11 +47,24 @@ func TestRuntimeProductionDoesNotReintroduceSchedulerOwnedLifecycle(t *testing.T
 	}
 }
 
-func TestSchedulerApplicationDoesNotOwnRecordTimersOrRuntimeDomainPolicy(t *testing.T) {
-	if _, err := os.Stat(filepath.Join("..", "..", "domain", "scheduler")); !os.IsNotExist(err) {
-		t.Fatalf("Runtime domain/scheduler must stay absent after policy moved to the Scheduler SDK: %v", err)
+func TestRuntimeHasNoSchedulerDomainApplicationOrModuleHost(t *testing.T) {
+	for _, relative := range []string{filepath.Join("domain", "scheduler"), filepath.Join("application", "scheduler"), filepath.Join("modulehost", "scheduler")} {
+		root := filepath.Join("..", "..", relative)
+		entries, err := os.ReadDir(root)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range entries {
+			if filepath.Ext(entry.Name()) == ".go" {
+				t.Errorf("Runtime %s must stay absent; found %s", relative, entry.Name())
+			}
+		}
 	}
-	root := filepath.Join("..", "..", "application", "scheduler")
+
+	root := filepath.Join("..", "..", "application", "dispatch")
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -63,9 +76,9 @@ func TestSchedulerApplicationDoesNotOwnRecordTimersOrRuntimeDomainPolicy(t *test
 		if readErr != nil {
 			return readErr
 		}
-		for _, forbidden := range []string{"RecordTimer", "record_timer", "runtime/domain/scheduler", "report_export", "ScheduledDispatchRecordMutation", "RecordInternalMutation"} {
+		for _, forbidden := range []string{"domainry-scheduler", "runtime/application/scheduler", "runtime/modulehost/scheduler", "definition_key", "run_id"} {
 			if strings.Contains(string(source), forbidden) {
-				t.Errorf("Scheduler application source %s contains foreign owner coupling %q", path, forbidden)
+				t.Errorf("Runtime target-execution source %s contains Scheduler coupling %q", path, forbidden)
 			}
 		}
 		return nil

@@ -8,7 +8,27 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
+	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
+
+func TestResolveInstallationConfigAlignsNotificationWithIdentityPrincipalScope(t *testing.T) {
+	installation := workspaceprovision.Installation{
+		TenantRegistryID: "tenant-registry-primary",
+		WorkspaceID:      "workspace-primary",
+	}
+	resolved, err := resolveInstallationConfig(config.Config{}, installation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.IdentityWorkspaceID != installation.WorkspaceID || resolved.NotificationWorkspaceID != installation.WorkspaceID || resolved.NotificationTenantID != installation.WorkspaceID {
+		t.Fatalf("resolved application scope=%+v", resolved)
+	}
+
+	_, err = resolveInstallationConfig(config.Config{NotificationTenantID: installation.TenantRegistryID}, installation)
+	if err == nil || !strings.Contains(err.Error(), "NOTIFICATION_TENANT_ID") {
+		t.Fatalf("expected stale tenant-registry notification scope to be rejected, got %v", err)
+	}
+}
 
 func TestProjectTenantManagerKeepsTenantBindingsClosedUntilAtomicInitialization(t *testing.T) {
 	cfg := serverTestConfig()

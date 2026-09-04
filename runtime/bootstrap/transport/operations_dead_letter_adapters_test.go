@@ -14,7 +14,6 @@ import (
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 type deadLetterDeliveryRepository struct {
@@ -93,9 +92,9 @@ func TestPublicationHandoffDeadLetterOwnerInspectRetryResolveAndProjectionFallba
 }
 
 func TestDeadLetterAdapterHelpersAndNilRegistration(t *testing.T) {
-	registerOperationsDeadLetterOwners(nil, nil, nil, nil, nil)
+	registerOperationsDeadLetterOwners(nil, nil, nil, nil)
 	service := operationsapplication.NewOperationsApplicationService(nil, nil, nil, nil)
-	registerOperationsDeadLetterOwners(service, nil, nil, nil, nil)
+	registerOperationsDeadLetterOwners(service, nil, nil, nil)
 	if valueOr(" value ", "fallback") != "value" || valueOr(" ", "fallback") != "fallback" {
 		t.Fatal("value fallback mismatch")
 	}
@@ -153,52 +152,5 @@ func TestWorkflowDeadLetterOwnerAllActionsAndFailures(t *testing.T) {
 	service.resolveErr, service.inspectErr = nil, errors.New("inspect failed")
 	if _, err := owner.Act(t.Context(), "execution", operationsapplication.OperationsDeadLetterAck, "", "", principal); !errors.Is(err, service.inspectErr) {
 		t.Fatalf("final inspect error=%v", err)
-	}
-}
-
-type schedulerDeadLetterServiceStub struct {
-	deadLetter schedulersdk.DeadLetter
-	inspectErr error
-	resolveErr error
-	requeueErr error
-}
-
-func (s *schedulerDeadLetterServiceStub) DeadLetter(context.Context, string) (schedulersdk.DeadLetter, error) {
-	return s.deadLetter, s.inspectErr
-}
-func (s *schedulerDeadLetterServiceStub) ResolveDeadLetter(context.Context, string, string) (schedulersdk.DeadLetter, error) {
-	return schedulersdk.DeadLetter{}, s.resolveErr
-}
-func (s *schedulerDeadLetterServiceStub) RequeueDeadLetter(context.Context, string, string) (schedulersdk.Run, error) {
-	return schedulersdk.Run{}, s.requeueErr
-}
-
-func TestSchedulerDeadLetterOwnerAllActionsAndFailures(t *testing.T) {
-	service := &schedulerDeadLetterServiceStub{deadLetter: schedulersdk.DeadLetter{RunID: "run", DefinitionKey: "definition", Status: "dead_letter", Reason: "failed"}}
-	owner := schedulerDeadLetterOwner{service: service}
-	principal := deadLetterPrincipal()
-	item, err := owner.Inspect(t.Context(), "dead", principal)
-	if err != nil || item.BusinessKey != "definition" || item.CorrelationID != "run" {
-		t.Fatalf("item=%#v err=%v", item, err)
-	}
-	for _, action := range []string{operationsapplication.OperationsDeadLetterResolve, operationsapplication.OperationsDeadLetterRetry, operationsapplication.OperationsDeadLetterAck} {
-		if _, err := owner.Act(t.Context(), "dead", action, "reason", "key", principal); err != nil {
-			t.Fatalf("action=%s err=%v", action, err)
-		}
-	}
-	if _, err := owner.Act(t.Context(), "dead", "invalid", "", "", principal); apperror.CodeOf(err) != "backend.operations.dead_letter_action_unsupported" {
-		t.Fatalf("unsupported error=%v", err)
-	}
-	service.resolveErr = errors.New("resolve failed")
-	if _, err := owner.Act(t.Context(), "dead", operationsapplication.OperationsDeadLetterResolve, "", "", principal); !errors.Is(err, service.resolveErr) {
-		t.Fatalf("resolve error=%v", err)
-	}
-	service.resolveErr, service.requeueErr = nil, errors.New("requeue failed")
-	if _, err := owner.Act(t.Context(), "dead", operationsapplication.OperationsDeadLetterRetry, "", "", principal); !errors.Is(err, service.requeueErr) {
-		t.Fatalf("requeue error=%v", err)
-	}
-	service.requeueErr, service.inspectErr = nil, errors.New("inspect failed")
-	if _, err := owner.Act(t.Context(), "dead", operationsapplication.OperationsDeadLetterAck, "", "", principal); !errors.Is(err, service.inspectErr) {
-		t.Fatalf("inspect error=%v", err)
 	}
 }

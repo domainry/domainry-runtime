@@ -15,7 +15,7 @@ import (
 	recordprojection "github.com/domainry/domainry-runtime/runtime/domain/record/projection"
 )
 
-// metadataObjectRecordCountAction is owned by runtime:appschema and is the
+// metadataObjectRecordCountAction is owned by runtime:metadata and is the
 // exact Action/Permission for the Runtime-hosted record-count use case.
 const metadataObjectRecordCountAction = "runtime.appschema.metadata_object_record_count"
 

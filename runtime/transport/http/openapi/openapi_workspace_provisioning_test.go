@@ -11,11 +11,11 @@ import (
 func TestWorkspaceProvisioningOpenAPIIncludesProjectionReceiptsWithoutFailureControl(t *testing.T) {
 	spec := Build(appschemamodel.ApplicationSchemaSnapshot{})
 	paths := spec["paths"].(map[string]any)
-	provision, ok := paths["/workspace/provision"].(map[string]any)
+	provision, ok := paths["/workspaces"].(map[string]any)
 	if !ok || provision["post"] == nil {
 		t.Fatal("workspace provisioning operation is missing")
 	}
-	reconcile, ok := paths["/workspace/{workspaceID}/roles/reconcile"].(map[string]any)
+	reconcile, ok := paths["/workspaces/{workspaceID}/role-reconciliations"].(map[string]any)
 	if !ok || reconcile["post"] == nil {
 		t.Fatal("workspace role reconciliation operation is missing")
 	}

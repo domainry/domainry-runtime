@@ -16,10 +16,8 @@ func TestSnapshotReportPermissionAndObjectVisibilityIntersection(t *testing.T) {
 	orderLine := definitionmodel.ObjectSchema{Key: "order_line"}
 	report := func(key string, permissions []string) reportmodel.ReportSchema {
 		return reportmodel.ReportSchema{
-			Key: key,
-			Dataset: reportmodel.ReportDatasetSchema{
-				Source: reportmodel.ReportDatasetSource{ObjectKey: orderLine.Key, Alias: orderLine.Key},
-			},
+			Key:                 key,
+			ObjectSQLV1:         &reportmodel.ReportObjectSQLSchema{SQL: "SELECT source.id AS id FROM order_line source LIMIT 1", SourceObjects: []string{orderLine.Key}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}},
 			RequiredPermissions: permissions,
 		}
 	}

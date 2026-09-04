@@ -29,7 +29,7 @@ func TestAutomationCompositionRepositoriesForwardToManagement(t *testing.T) {
 		},
 	})
 	principal := automationFacadePrincipal()
-	if catalog, err := service.AutomationCapabilities(t.Context(), principal); err != nil || len(catalog.Connections) != 0 || len(catalog.Connectors) != 1 {
+	if catalog, err := service.AutomationExecutionCatalog(t.Context(), principal); err != nil || len(catalog.Connections) != 0 || len(catalog.Connectors) != 1 {
 		t.Fatalf("catalog=%+v err=%v", catalog, err)
 	}
 	if history, err := service.AutomationExecutions(t.Context(), automationmodel.AutomationExecutionFilter{}, principal); err != nil || history.Count != 0 {

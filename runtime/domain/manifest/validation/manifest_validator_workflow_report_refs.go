@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	reportsdkcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
@@ -221,73 +220,29 @@ func (state *validationState) validateReports() {
 			state.add(path+".key", "duplicate report key %q", key)
 		}
 		seen[key] = true
-		datasetDefined := reportmodel.ReportDatasetDefined(report.Dataset)
-		if report.ObjectSQLV1 != nil {
-			if datasetDefined {
-				state.add(path+".object_sql_v1", "backend.report.execution_definition_conflict")
-				continue
-			}
-			if report.Materialization != nil || report.ExportScope != nil {
-				state.add(path+".object_sql_v1", "backend.report.object_sql_p0_feature_forbidden")
-			}
-			if _, err := reportcontract.CompileReportObjectSQL(*report.ObjectSQLV1, state.objects); err != nil {
-				if planErr, ok := err.(*reportmodel.ReportObjectSQLPlanError); ok {
-					state.add(path+"."+planErr.Path, "%s", planErr.Code)
-				} else {
-					state.add(path+".object_sql_v1", "backend.report.object_sql_invalid")
-				}
-			}
+		if report.ObjectSQLV1 == nil {
+			state.add(path+".object_sql_v1", "backend.report.execution_definition_missing")
 			continue
 		}
-		if !datasetDefined {
-			state.add(path+".dataset", "backend.report.execution_definition_missing")
-			continue
+		if _, err := reportcontract.CompileReportObjectSQL(*report.ObjectSQLV1, state.objects); err != nil {
+			if planErr, ok := err.(*reportmodel.ReportObjectSQLPlanError); ok {
+				state.add(path+"."+planErr.Path, "%s", planErr.Code)
+			} else {
+				state.add(path+".object_sql_v1", "backend.report.object_sql_invalid")
+			}
 		}
-		if _, err := reportsdkcontract.BuildReportDatasetPlan(report); err != nil {
-			state.addReportPlanError(path, err)
-		}
-		for _, objectKey := range reportmodel.ReportDatasetObjectKeys(report.Dataset) {
+		sourceObjects := map[string]bool{}
+		for sourceIndex, objectKey := range reportmodel.ReportObjectSQLObjectKeys(report.ObjectSQLV1) {
+			objectKey = strings.TrimSpace(objectKey)
+			sourceObjects[objectKey] = true
 			if state.objects[objectKey].Key == "" {
-				state.add(path+".dataset", "unknown object %q", objectKey)
-			}
-		}
-		aliases := reportmodel.ReportDatasetAliasObjects(report.Dataset)
-		if strings.TrimSpace(report.Dataset.Source.Alias) == "" || strings.TrimSpace(report.Dataset.Source.ObjectKey) == "" {
-			state.add(path+".dataset.source", "object_key and alias are required")
-		}
-		for joinIndex, join := range report.Dataset.Joins {
-			joinPath := fmt.Sprintf("%s.dataset.joins[%d]", path, joinIndex)
-			leftObject := aliases[strings.TrimSpace(join.LeftAlias)]
-			if leftObject == "" {
-				state.add(joinPath+".left_alias", "unknown source alias %q", join.LeftAlias)
-			}
-			for equalityIndex, equality := range join.Equalities() {
-				equalityPath := fmt.Sprintf("%s.field_equalities[%d]", joinPath, equalityIndex)
-				if len(join.FieldEqualities) == 0 {
-					equalityPath = joinPath
-				}
-				if leftObject != "" && strings.TrimSpace(equality.LeftField) != "id" && state.fields[leftObject][strings.TrimSpace(equality.LeftField)].Key == "" {
-					state.add(equalityPath+".left_field", "unknown field %q.%s", leftObject, equality.LeftField)
-				}
-				if strings.TrimSpace(equality.RightField) != "id" && state.fields[strings.TrimSpace(join.ObjectKey)][strings.TrimSpace(equality.RightField)].Key == "" {
-					state.add(equalityPath+".right_field", "unknown field %q.%s", join.ObjectKey, equality.RightField)
-				}
-			}
-		}
-		references := reportDatasetFieldReferences(report.Dataset)
-		for fieldIndex, reference := range references {
-			fieldPath := fmt.Sprintf("%s.dataset.references[%d]", path, fieldIndex)
-			objectKey, fieldKey := aliases[strings.TrimSpace(reference.SourceAlias)], strings.TrimSpace(reference.FieldKey)
-			if objectKey == "" {
-				state.add(fieldPath+".source_alias", "unknown source alias %q", reference.SourceAlias)
-			} else if fieldKey != "id" && state.fields[objectKey][fieldKey].Key == "" {
-				state.add(fieldPath+".field_key", "unknown field %q.%s", objectKey, fieldKey)
+				state.add(fmt.Sprintf("%s.object_sql_v1.source_objects[%d]", path, sourceIndex), "unknown object %q", objectKey)
 			}
 		}
 		for evidenceIndex, requirement := range report.EvidenceRequirements {
 			evidencePath := fmt.Sprintf("%s.evidence_requirements[%d]", path, evidenceIndex)
 			objectKey := strings.TrimSpace(requirement.ObjectKey)
-			if !reportDatasetContainsObject(report.Dataset, objectKey) {
+			if !sourceObjects[objectKey] {
 				state.add(evidencePath+".object_key", "object %q is not a Report source", objectKey)
 			}
 			if requirement.MinimumRecords < 1 {
@@ -299,62 +254,7 @@ func (state *validationState) validateReports() {
 				}
 			}
 		}
-		for _, diagnostic := range reportcontract.ReportDatasetIndexDiagnostics(report, state.objects) {
-			state.add(path+"."+diagnostic.Path, "%s: %s %s.%s recommended_index=%s", diagnostic.Code, diagnostic.Usage, diagnostic.ObjectKey, diagnostic.FieldKey, strings.Join(diagnostic.Fields, ","))
-		}
-		state.validateReportExportScope(path, report)
 	}
-}
-
-func (state *validationState) addReportPlanError(path string, err error) {
-	if planErr, ok := err.(*reportmodel.ReportDatasetPlanError); ok {
-		state.add(path+"."+planErr.Path, "%s", planErr.Code)
-		return
-	}
-	state.add(path+".dataset", "backend.report.plan_invalid: %v", err)
-}
-
-func reportDatasetFieldReferences(dataset reportmodel.ReportDatasetSchema) []reportmodel.ReportDatasetField {
-	result := make([]reportmodel.ReportDatasetField, 0, len(dataset.Filters)+len(dataset.Dimensions)+len(dataset.Measures)*3)
-	for _, filter := range dataset.Filters {
-		result = append(result, filter.Field)
-	}
-	for _, predicates := range [][]reportmodel.ReportDatasetPredicate{dataset.QueryPredicates, dataset.TagPredicates} {
-		for _, predicate := range predicates {
-			for _, filter := range predicate.Filters {
-				result = append(result, filter.Field)
-			}
-		}
-	}
-	for _, dimension := range dataset.Dimensions {
-		result = append(result, dimension.Field)
-	}
-	for _, measure := range dataset.Measures {
-		for _, field := range []*reportmodel.ReportDatasetField{measure.Field, measure.StartField, measure.EndField} {
-			if field != nil {
-				result = append(result, *field)
-			}
-		}
-	}
-	if dataset.Privacy != nil {
-		result = append(result, dataset.Privacy.EntityField)
-	}
-	for _, analysis := range dataset.Analyses {
-		result = append(result, analysis.EntityField, analysis.TimeField)
-		if analysis.EventField != nil {
-			result = append(result, *analysis.EventField)
-		}
-	}
-	return result
-}
-
-func reportDatasetContainsObject(dataset reportmodel.ReportDatasetSchema, expected string) bool {
-	for _, objectKey := range reportmodel.ReportDatasetObjectKeys(dataset) {
-		if strings.TrimSpace(objectKey) == strings.TrimSpace(expected) {
-			return true
-		}
-	}
-	return false
 }
 
 func workflowObjectKeys(workflow definitionmodel.WorkflowSchema) []string {

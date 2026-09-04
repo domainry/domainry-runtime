@@ -42,7 +42,7 @@ func TestApplicationSchemaObjectRecordCountRequiresItsExactRuntimeAction(t *test
 		Objects: []definitionmodel.ObjectSchema{{Key: "customer"}},
 	}}}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}
-	accessfixture.Set(&principal, accessfixture.Bundle{Permissions: []string{"runtime.appschema.metadata_migration_plan"}})
+	accessfixture.Set(&principal, accessfixture.Bundle{Permissions: []string{"runtime.metadata.migration_plan.get"}})
 	if _, err := service.ApplicationSchemaObjectRecordCount(t.Context(), "customer", principal); apperror.CodeOf(err) != "auth.permission_denied" {
 		t.Fatalf("sibling Action error=%v", err)
 	}

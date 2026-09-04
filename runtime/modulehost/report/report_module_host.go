@@ -7,7 +7,6 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	reportsdk "github.com/domainry/domainry-report-sdk"
-	reportsdkcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	reportquery "github.com/domainry/domainry-report-sdk/query"
@@ -21,8 +20,6 @@ import (
 
 type ReportModuleQueryHostDependencies struct {
 	Access          reportcontract.ReportRecordAccess
-	Records         reportcontract.ReportRecordReader
-	DatasetRows     reportcontract.ReportDatasetRowReader
 	ObjectSQL       reportcontract.ReportObjectSQLExecutor
 	SnapshotSources reportcontract.ReportSnapshotSourceVersionReader
 	ResolveSubject  func(context.Context, reportmodel.ReportAuthority) (principalmodel.Principal, error)
@@ -53,84 +50,6 @@ func (h *ReportModuleQueryHost) ResolveReportSubject(ctx context.Context, author
 		return reportmodel.ReportSubject{}, stableReportHostError(err)
 	}
 	return reportSubjectFromPrincipal(principal, accessHash), nil
-}
-
-func (h *ReportModuleQueryHost) ReadReportDataset(ctx context.Context, request reportmodel.ReportDatasetReadRequest) (reportmodel.ReportDatasetReadResult, error) {
-	if h == nil || h.dependencies.Access == nil || h.dependencies.Records == nil {
-		return reportmodel.ReportDatasetReadResult{}, stableReportHostError(nil)
-	}
-	principal := RuntimePrincipalFromReportSubject(request.Subject)
-	objects := make(map[string]definitionmodel.ObjectSchema, len(request.Plan.AliasObjects))
-	for _, alias := range reportDatasetAliasOrder(request.Report.Dataset) {
-		object, err := h.dependencies.Access.ReportObjectForAction(ctx, principal, request.Plan.AliasObjects[alias], "read")
-		if err != nil {
-			return reportmodel.ReportDatasetReadResult{}, stableReportHostError(err)
-		}
-		objects[alias] = object
-	}
-	rows := []reportDatasetRow{}
-	var records map[string][]recordmodel.Record
-	if h.dependencies.DatasetRows != nil && reportDatasetPushdownAllowed(ctx, h.dependencies.Access, principal, objects) {
-		queries := make(map[string]recordmodel.RecordListQuery, len(objects))
-		for _, alias := range reportDatasetAliasOrder(request.Report.Dataset) {
-			query := reportAliasReadQuery(request.Report.Dataset, alias)
-			query.Page, query.PageSize = 1, reportDatasetPageSize
-			query = h.dependencies.Access.NormalizeReportListQuery(ctx, objects[alias], query, principal)
-			queries[alias] = reportIncludeAuthorizationProjection(query)
-		}
-		readRows, err := h.dependencies.DatasetRows.ReadReportDatasetRows(ctx, reportcontract.ReportDatasetRowReadRequest{WorkspaceID: principal.WorkspaceID, Plan: request.Plan, Objects: objects, Queries: queries})
-		if err != nil {
-			return reportmodel.ReportDatasetReadResult{}, stableReportHostError(&apperror.AppError{Kind: apperror.KindInternal, Code: "backend.report.query_failed", Err: err})
-		}
-		rows = make([]reportDatasetRow, 0, len(readRows))
-		for _, readRow := range readRows {
-			row := reportDatasetRow{}
-			for alias, record := range readRow.Records {
-				recordCopy := record
-				row[alias] = &recordCopy
-			}
-			rows = append(rows, row)
-		}
-	} else {
-		records = make(map[string][]recordmodel.Record, len(objects))
-		for _, alias := range reportDatasetAliasOrder(request.Report.Dataset) {
-			items, err := h.readReportAliasRecords(ctx, principal, objects[alias], request.Report.Dataset, alias)
-			if err != nil {
-				return reportmodel.ReportDatasetReadResult{}, stableReportHostError(err)
-			}
-			records[alias] = items
-		}
-	}
-	projectedObjects, err := reportcontract.ReportEngineObjects(objects)
-	if err != nil {
-		return reportmodel.ReportDatasetReadResult{}, stableReportHostError(&apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.execution_invalid", Err: err})
-	}
-	result := reportmodel.ReportDatasetReadResult{Rows: make([]reportmodel.ReportDatasetSourceRow, 0, len(rows)), Objects: make(map[string]reportmodel.ReportSourceObject, len(projectedObjects))}
-	for alias, object := range projectedObjects {
-		result.Objects[alias] = portableReportObject(object)
-	}
-	for _, row := range rows {
-		portable := make(reportmodel.ReportDatasetSourceRow, len(row))
-		for alias, record := range row {
-			if record == nil {
-				portable[alias] = nil
-				continue
-			}
-			portable[alias] = &reportmodel.ReportSourceRecord{ID: record.ID, Data: record.Data, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
-		}
-		result.Rows = append(result.Rows, portable)
-	}
-	if records != nil {
-		result.Records = make(map[string][]reportmodel.ReportSourceRecord, len(records))
-		for alias, values := range records {
-			portable := make([]reportmodel.ReportSourceRecord, len(values))
-			for index, record := range values {
-				portable[index] = reportmodel.ReportSourceRecord{ID: record.ID, Data: record.Data, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
-			}
-			result.Records[alias] = portable
-		}
-	}
-	return result, nil
 }
 
 func (h *ReportModuleQueryHost) ResolveReportObjectSQLSources(ctx context.Context, report reportmodel.ReportSchema, subject reportmodel.ReportSubject) (map[string]reportmodel.ReportSourceObject, error) {
@@ -213,7 +132,7 @@ func (h *ReportModuleQueryHost) ExecuteReportObjectSQL(ctx context.Context, requ
 		if err != nil {
 			return reportmodel.ReportObjectSQLExecutionResult{}, stableReportHostError(err)
 		}
-		query := recordmodel.RecordListQuery{Page: 1, PageSize: reportDatasetPageSize, SelectFields: append([]string(nil), source.Fields...)}
+		query := recordmodel.RecordListQuery{Page: 1, PageSize: reportQueryPageSize, SelectFields: append([]string(nil), source.Fields...)}
 		query = h.dependencies.Access.NormalizeReportListQuery(ctx, object, query, principal)
 		objects[source.Alias], queries[source.Alias] = object, reportIncludeAuthorizationProjection(query)
 	}
@@ -244,89 +163,40 @@ func (h *ReportModuleQueryHost) ReadReportSourceVersion(ctx context.Context, rep
 	return result, nil
 }
 
-func (h *ReportModuleQueryHost) readReportAliasRecords(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, dataset reportmodel.ReportDatasetSchema, alias string) ([]recordmodel.Record, error) {
-	items := []recordmodel.Record{}
-	for pageNumber := 1; ; pageNumber++ {
-		query := reportAliasReadQuery(dataset, alias)
-		query.Page, query.PageSize = pageNumber, reportDatasetPageSize
-		query = h.dependencies.Access.NormalizeReportListQuery(ctx, object, query, principal)
-		query = reportIncludeAuthorizationProjection(query)
-		page, err := h.dependencies.Records.ListReportRecords(ctx, principal.WorkspaceID, object, query)
-		if err != nil {
-			return nil, &apperror.AppError{Kind: apperror.KindInternal, Code: "backend.internal_error", Err: err}
-		}
-		if query.ScopeExpression == nil {
-			authorized := page.Items[:0]
-			for _, item := range page.Items {
-				if h.dependencies.Access.CanAccessReportRecord(ctx, principal, object, item) {
-					authorized = append(authorized, item)
-				}
-			}
-			page.Items = authorized
-		}
-		if projector, ok := h.dependencies.Access.(reportcontract.ReportRecordFieldProjector); ok {
-			page.Items, err = projector.ProjectReportRecordFields(ctx, principal, object, page.Items)
-			if err != nil {
-				return nil, &apperror.AppError{Kind: apperror.KindInternal, Code: "backend.internal_error", Err: err}
-			}
-		}
-		items = append(items, page.Items...)
-		if !page.HasNext {
-			return items, nil
-		}
-	}
-}
-
 func (h *ReportModuleQueryHost) reportSourceVersionRequest(ctx context.Context, report reportmodel.ReportSchema, principal principalmodel.Principal) (reportcontract.ReportSnapshotSourceVersionRequest, error) {
 	request := reportcontract.ReportSnapshotSourceVersionRequest{WorkspaceID: principal.WorkspaceID}
-	if report.ObjectSQLV1 != nil {
-		objectsByKey := make(map[string]definitionmodel.ObjectSchema, len(report.ObjectSQLV1.SourceObjects))
-		for _, rawKey := range report.ObjectSQLV1.SourceObjects {
-			key := strings.TrimSpace(rawKey)
-			object, err := h.dependencies.Access.ReportObjectForAction(ctx, principal, key, "read")
-			if err != nil {
-				return request, err
-			}
-			objectsByKey[key] = object
-		}
-		plan, err := reportcontract.CompileReportObjectSQL(*report.ObjectSQLV1, objectsByKey)
-		if err != nil {
-			return request, reportObjectSQLHostError(err)
-		}
-		authorizer, ok := h.dependencies.Access.(reportcontract.ReportObjectSQLFieldAuthorizer)
-		if !ok {
-			return request, &apperror.AppError{Kind: apperror.KindInternal, Code: "backend.report.object_sql_field_authorization_unavailable"}
-		}
-		request.Objects = make(map[string]definitionmodel.ObjectSchema, len(plan.Sources))
-		request.Queries = make(map[string]recordmodel.RecordListQuery, len(plan.Sources))
-		for _, source := range plan.Sources {
-			object := objectsByKey[source.ObjectKey]
-			for _, field := range source.Fields {
-				if err := authorizer.AuthorizeReportObjectSQLField(ctx, principal, object, field); err != nil {
-					return request, err
-				}
-			}
-			query := recordmodel.RecordListQuery{Page: 1, PageSize: reportDatasetPageSize, SelectFields: append([]string(nil), source.Fields...)}
-			query = h.dependencies.Access.NormalizeReportListQuery(ctx, object, query, principal)
-			request.Objects[source.Alias], request.Queries[source.Alias] = object, reportIncludeAuthorizationProjection(query)
-		}
-		return request, nil
+	if report.ObjectSQLV1 == nil {
+		return request, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.object_sql_required"}
 	}
-	plan, err := reportsdkcontract.BuildReportDatasetPlan(report)
-	if err != nil {
-		return request, err
-	}
-	request.Objects = make(map[string]definitionmodel.ObjectSchema, len(plan.AliasObjects))
-	request.Queries = make(map[string]recordmodel.RecordListQuery, len(plan.AliasObjects))
-	for _, alias := range reportDatasetAliasOrder(report.Dataset) {
-		object, err := h.dependencies.Access.ReportObjectForAction(ctx, principal, plan.AliasObjects[alias], "read")
+	objectsByKey := make(map[string]definitionmodel.ObjectSchema, len(report.ObjectSQLV1.SourceObjects))
+	for _, rawKey := range report.ObjectSQLV1.SourceObjects {
+		key := strings.TrimSpace(rawKey)
+		object, err := h.dependencies.Access.ReportObjectForAction(ctx, principal, key, "read")
 		if err != nil {
 			return request, err
 		}
-		query := reportAliasReadQuery(report.Dataset, alias)
-		query.Page, query.PageSize = 1, reportDatasetPageSize
-		request.Objects[alias] = object
-		request.Queries[alias] = h.dependencies.Access.NormalizeReportListQuery(ctx, object, query, principal)
+		objectsByKey[key] = object
+	}
+	plan, err := reportcontract.CompileReportObjectSQL(*report.ObjectSQLV1, objectsByKey)
+	if err != nil {
+		return request, reportObjectSQLHostError(err)
+	}
+	authorizer, ok := h.dependencies.Access.(reportcontract.ReportObjectSQLFieldAuthorizer)
+	if !ok {
+		return request, &apperror.AppError{Kind: apperror.KindInternal, Code: "backend.report.object_sql_field_authorization_unavailable"}
+	}
+	request.Objects = make(map[string]definitionmodel.ObjectSchema, len(plan.Sources))
+	request.Queries = make(map[string]recordmodel.RecordListQuery, len(plan.Sources))
+	for _, source := range plan.Sources {
+		object := objectsByKey[source.ObjectKey]
+		for _, field := range source.Fields {
+			if err := authorizer.AuthorizeReportObjectSQLField(ctx, principal, object, field); err != nil {
+				return request, err
+			}
+		}
+		query := recordmodel.RecordListQuery{Page: 1, PageSize: reportQueryPageSize, SelectFields: append([]string(nil), source.Fields...)}
+		query = h.dependencies.Access.NormalizeReportListQuery(ctx, object, query, principal)
+		request.Objects[source.Alias], request.Queries[source.Alias] = object, reportIncludeAuthorizationProjection(query)
 	}
 	return request, nil
 }
@@ -355,7 +225,11 @@ func reportObjectSQLHostError(err error) error {
 }
 
 func reportSubjectFromPrincipal(principal principalmodel.Principal, accessHash string) reportmodel.ReportSubject {
-	subject := reportmodel.ReportSubject{Principal: principal.Principal, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, CausationID: principal.CausationID, AccessScopeHash: accessHash}
+	subject := reportmodel.ReportSubject{
+		Principal: principal.Principal, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID,
+		CausationID: principal.CausationID, AccessScopeHash: accessHash,
+		TrustedProcess: principal.SystemScope.Valid(), ProcessCapabilities: append([]string(nil), principal.SystemCapabilities...),
+	}
 	for _, profile := range principal.BusinessProfiles {
 		subject.BusinessProfiles = append(subject.BusinessProfiles, portableBusinessProfile(profile))
 	}
@@ -369,6 +243,10 @@ func reportSubjectFromPrincipal(principal principalmodel.Principal, accessHash s
 
 func RuntimePrincipalFromReportSubject(subject reportmodel.ReportSubject) principalmodel.Principal {
 	principal := principalmodel.Principal{Principal: subject.Principal, RequestID: subject.RequestID, CorrelationID: subject.CorrelationID, CausationID: subject.CausationID}
+	if subject.TrustedProcess {
+		principal.SystemScope = principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "embedded report execution")
+		principal.SystemCapabilities = append([]string(nil), subject.ProcessCapabilities...)
+	}
 	for _, profile := range subject.BusinessProfiles {
 		principal.BusinessProfiles = append(principal.BusinessProfiles, runtimeBusinessProfile(profile))
 	}
@@ -453,7 +331,6 @@ func stableReportHostError(err error) error {
 func StableReportHostError(err error) error { return stableReportHostError(err) }
 
 var _ reportmodulehost.SubjectResolver = (*ReportModuleQueryHost)(nil)
-var _ reportmodulehost.DatasetReader = (*ReportModuleQueryHost)(nil)
 var _ reportmodulehost.ObjectSQLExecutor = (*ReportModuleQueryHost)(nil)
 var _ reportmodulehost.SourceVersionReader = (*ReportModuleQueryHost)(nil)
 var _ reportmodulehost.ExecutionAudit = (*ReportModuleQueryHost)(nil)

@@ -6,10 +6,8 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
-	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
-	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -39,13 +37,10 @@ func assembleAutomationApplication(records *runtimeAssembly) *automationapplicat
 		InvokeAction: func(ctx context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
 			return records.actionService.Invoke(ctx, actionmodel.ActionSourceAutomation, invocation)
 		},
-		Workflows:     records.Applications().Workflows,
-		CanAccess:     records.RecordQueryPolicyDomainService.CanAccessRecord,
-		MutationScope: records.RecordQueryPolicyDomainService.MutationScopeExpression,
-		ValidateRule:  metadata.ValidateAutomationRuleDefinition,
-		AuthoringProjection: func() capabilitycontract.CapabilityAuthoringProjection {
-			return capabilityapplication.RuntimeAuthoringProjection("automation")
-		},
+		Workflows:             records.Applications().Workflows,
+		CanAccess:             records.RecordQueryPolicyDomainService.CanAccessRecord,
+		MutationScope:         records.RecordQueryPolicyDomainService.MutationScopeExpression,
+		ValidateRule:          metadata.ValidateAutomationRuleDefinition,
 		Worker:                records.workerDependencies,
 		NotificationCompiler:  records.automationNotificationCompiler,
 		NotificationCommitter: records.automationNotificationCommitter,

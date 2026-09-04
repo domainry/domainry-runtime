@@ -65,7 +65,6 @@ type AutomationApplicationDependencies struct {
 	CanAccess             func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool
 	MutationScope         func(principalmodel.Principal, definitionmodel.ObjectSchema, string) (*recordmodel.RecordScopeExpression, error)
 	ValidateRule          func(context.Context, automationmodel.AutomationRuleSchema) error
-	AuthoringProjection   func() capability.CapabilityAuthoringProjection
 	Worker                workerplatform.Dependencies
 	NotificationCompiler  func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	NotificationCommitter AutomationExecutionNotificationCommitter
@@ -78,7 +77,7 @@ type AutomationExecutionNotificationCommitter interface {
 
 // AutomationApplicationService coordinates Automation use cases with explicit
 // cross-owner Runtime ports and Metadata persistence seams. Automation rules,
-// history, capabilities, validation, simulation and dispatch policy remain in
+// history, execution catalog, validation, simulation and dispatch policy remain in
 // domain/automation.
 type AutomationApplicationService struct {
 	rules               automationcontract.AutomationRuleRegistry
@@ -140,9 +139,8 @@ func NewAutomationApplicationService(dependencies AutomationApplicationDependenc
 		Connectors: func(ctx context.Context, principal principalmodel.Principal) []connectormodel.ConnectorSchema {
 			return service.schema(ctx, principal).Integrations.Connectors
 		},
-		AuthoringProjection: dependencies.AuthoringProjection,
-		ValidateDefinition:  service.validateRule,
-		ExecuteRule:         service.executeRule,
+		ValidateDefinition: service.validateRule,
+		ExecuteRule:        service.executeRule,
 	})
 	return service
 }
@@ -259,8 +257,8 @@ func (s *AutomationApplicationService) executeRuleWithPersistence(execCtx contex
 	})
 }
 
-func (s *AutomationApplicationService) AutomationCapabilities(ctx context.Context, principal principalmodel.Principal) (capability.CapabilityAutomationCatalog, error) {
-	return s.management.Capabilities(ctx, principal)
+func (s *AutomationApplicationService) AutomationExecutionCatalog(ctx context.Context, principal principalmodel.Principal) (capability.CapabilityAutomationCatalog, error) {
+	return s.management.ExecutionCatalog(ctx, principal)
 }
 
 func (s *AutomationApplicationService) AutomationRules(ctx context.Context, principal principalmodel.Principal) ([]automationmodel.AutomationRuleSchema, error) {
@@ -282,7 +280,7 @@ func (s *AutomationApplicationService) ValidateAutomationRule(ctx context.Contex
 // ValidateAutomationAuthoringFragment validates one Automation leaf payload
 // without creating or persisting a complete rule.
 func (s *AutomationApplicationService) ValidateAutomationAuthoringFragment(_ context.Context, capabilityKey string, fragment map[string]any, principal principalmodel.Principal) (automationvalidation.AutomationFragmentValidationResult, error) {
-	if err := automationAuthorizeEndpoint(principal, "POST /automation/rules/authoring-fragments/{capabilityKey}/validate"); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "POST /automation/fragments/{capabilityKey}/validate"); err != nil {
 		return automationvalidation.AutomationFragmentValidationResult{}, err
 	}
 	capabilityKey = strings.TrimSpace(capabilityKey)

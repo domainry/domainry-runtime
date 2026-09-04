@@ -39,14 +39,14 @@ import (
 // Construction-only repositories, indexes, and owner services remain on the
 // private runtimeAssembly and are captured only by their explicit ports.
 type RuntimeServices struct {
-	applications RuntimeApplications
-	schema       runtimeSchemaReader
-	reportModule ReportModuleApplicationPorts
+	applications              RuntimeApplications
+	schema                    runtimeSchemaReader
+	reportModule              ReportModuleApplicationPorts
+	schedulerDefinitionSource SchedulerDefinitionSource
 }
 
 type ReportModuleApplicationPorts struct {
 	Subjects       reportmodulehost.SubjectResolver
-	Datasets       reportmodulehost.DatasetReader
 	ObjectSQL      reportmodulehost.ObjectSQLExecutor
 	SourceVersions reportmodulehost.SourceVersionReader
 	Audit          reportmodulehost.ExecutionAudit
@@ -89,7 +89,6 @@ type RuntimeServicesDependencies struct {
 	ActionProjectRevision               string
 	ActionMetadataRevision              string
 	Records                             recordrepository.RecordRepository
-	ReportDatasetRows                   reportcontract.ReportDatasetRowReader
 	ReportObjectSQL                     reportcontract.ReportObjectSQLExecutor
 	ReportSnapshotSources               reportcontract.ReportSnapshotSourceVersionReader
 	RecordExecutions                    recordcontract.RecordMutationExecutionStore
@@ -148,8 +147,9 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *Runt
 	assembly := newRuntimeServicesAssembly(ctx, config)
 	return &RuntimeServices{
 		applications: assembly.Applications(), schema: assembly.RecordSchemaSnapshotProvider,
+		schedulerDefinitionSource: assembly.schedulerDefinitionSource,
 		reportModule: ReportModuleApplicationPorts{
-			Subjects: assembly.reportModuleQueryHost, Datasets: assembly.reportModuleQueryHost,
+			Subjects:  assembly.reportModuleQueryHost,
 			ObjectSQL: assembly.reportModuleQueryHost, SourceVersions: assembly.reportModuleQueryHost, Audit: assembly.reportModuleQueryHost,
 			Authorization: assembly.reportModuleQueryHost,
 			Terminals:     assembly.reportModuleSnapshotHost,

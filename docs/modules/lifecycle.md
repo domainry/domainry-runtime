@@ -8,7 +8,7 @@ Owner：retention policy、legal hold、cleanup job、subject request、archive 
 
 Lifecycle 的 Domain、Application、persistence、迁移、worker tick 和 17 个产品 HTTP 路由均归 `domainry-lifecycle`。Runtime 只提供宿主数据库、ORM renderer、事务、migration registrar、身份中间件、listener 与通用 HTTP governance，并通过 SDK `Governance`、`System`、`LocalWorkers` 调用业务能力；Runtime 不再取得 Lifecycle repository 或 transaction escape hatch。
 
-Lifecycle Module 通过 `modulehttp.Adapter` 提交 policy、legal hold、cleanup 创建/预览、metrics、archive、subject request、external erasure 与 deletion replay 路由及其 OpenAPI。Runtime 校验并挂载 Adapter。唯一仍由 Runtime 拥有的 Lifecycle HTTP 是 `POST /lifecycle/cleanup/jobs/{jobID}/run`，因为它必须先经过 Runtime Operations durable receipt，再调用 Lifecycle 执行一个 fenced batch。
+Lifecycle Module 通过 `modulehttp.Adapter` 提交 policy、legal hold、cleanup 创建/预览、metrics、archive、subject request、external erasure 与 deletion replay 路由及其 OpenAPI。Runtime 校验并挂载 Adapter。Runtime Operations 只在自己的命名空间提供 `POST /operations/lifecycle/cleanup/jobs/{jobID}/run`，先写入 durable receipt，再调用 Lifecycle 执行一个 fenced batch；该入口不归 Lifecycle HTTP surface 所有。
 
 Lifecycle 在模块打开时自行向宿主 ledger 提交 `_lifecycle_*` 迁移；`EnsureRuntimeSchema` 不再预建或重复登记这些表。Module 不得创建私有 migration ledger，DDL/DML 使用 `domainry-orm`。
 

@@ -36,7 +36,7 @@ func TestCrossWorkspaceAggregateIsExplicitAndTenantReportsRemainIsolated(t *test
 		t.Fatal(err)
 	}
 	request := reportcontract.ReportObjectSQLExecutionRequest{WorkspaceID: "a", Plan: plan, Objects: map[string]definitionmodel.ObjectSchema{"s": object}, Queries: map[string]recordmodel.RecordListQuery{"s": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, SelectFields: plan.Sources[0].Fields}}}
-	executor := NewReportDatasetStore(store)
+	executor := NewReportSQLStore(store)
 	tenant, err := executor.ExecuteReportObjectSQL(t.Context(), request)
 	if err != nil || len(tenant.Rows) != 1 || tenant.Rows[0]["workspace_id"] != "a" {
 		t.Fatalf("tenant=%#v err=%v", tenant.Rows, err)

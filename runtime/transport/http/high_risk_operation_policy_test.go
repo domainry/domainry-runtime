@@ -33,7 +33,7 @@ func TestHighRiskOperationPolicyIsEnforcedFromResolvedActionManifest(t *testing.
 	mux.HandleFunc("POST /scheduler/runs/{runID}/cancel", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("POST /operations/break-glass", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("POST /operations/break-glass-grants", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	handler := highRiskPolicyTestRouter(t).withHighRiskOperationPolicy(mux, mux)
@@ -49,8 +49,8 @@ func TestHighRiskOperationPolicyIsEnforcedFromResolvedActionManifest(t *testing.
 		{name: "reason supplied", path: "/scheduler/definitions/job-1/run", reason: "incident-42 manual run", wantStatus: http.StatusNoContent},
 		{name: "confirmation missing", path: "/scheduler/runs/run-1/cancel", reason: "incident-42 stuck lease", wantStatus: http.StatusBadRequest},
 		{name: "confirmation supplied", path: "/scheduler/runs/run-1/cancel", reason: "incident-42 stuck lease", confirmation: operationConfirmedValue, wantStatus: http.StatusNoContent},
-		{name: "break glass requires distinct confirmation", path: "/operations/break-glass", reason: "incident-42 emergency recovery", confirmation: operationConfirmedValue, wantStatus: http.StatusBadRequest},
-		{name: "break glass supplied", path: "/operations/break-glass", reason: "incident-42 emergency recovery", confirmation: operationBreakGlassValue, wantStatus: http.StatusNoContent},
+		{name: "break glass requires distinct confirmation", path: "/operations/break-glass-grants", reason: "incident-42 emergency recovery", confirmation: operationConfirmedValue, wantStatus: http.StatusBadRequest},
+		{name: "break glass supplied", path: "/operations/break-glass-grants", reason: "incident-42 emergency recovery", confirmation: operationBreakGlassValue, wantStatus: http.StatusNoContent},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

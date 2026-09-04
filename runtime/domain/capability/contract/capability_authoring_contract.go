@@ -17,7 +17,7 @@ const (
 	RuntimeAuthoringContractVersion = "runtime-authoring-v1"
 	// RuntimeAuthoringContractHash identifies the published, canonical authoring catalog.
 	// The Application catalog test fails whenever catalog content changes without updating it.
-	RuntimeAuthoringContractHash = "e4129af61a0efc24bcee79143d14bcff7c0af1c5d4b4bf78718dd5568b9662d5"
+	RuntimeAuthoringContractHash = "d6ebe80011aa5e0772fc6cbf1bdf325191cf80b63e6cb02855540b47ac97e301"
 )
 
 type CapabilityRuntimeAuthoringContract struct {
@@ -115,9 +115,9 @@ func DirectAuthoringSuccessSchema() *CapabilityAuthoringSchema {
 			"snapshot_hash": {Type: "string", MinLength: capabilityAuthoringIntPointer(1)},
 			"available_successors": {
 				Type: "array", Items: &CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed,
-					Required: []string{"key", "domain", "status", "detail_endpoint"},
+					Required: []string{"key", "domain", "status", "detail_service", "detail_endpoint"},
 					Properties: map[string]CapabilityAuthoringSchema{
-						"key": {Type: "string"}, "domain": {Type: "string"}, "status": {Type: "string"},
+						"key": {Type: "string"}, "domain": {Type: "string"}, "status": {Type: "string"}, "detail_service": {Type: "string", Enum: []any{"plane"}},
 						"detail_endpoint": {Type: "string"}, "validation_endpoint": {Type: "string"},
 					},
 				},

@@ -309,10 +309,7 @@ func reportVisibleForPrincipal(report reportmodel.ReportSchema, principal princi
 		}
 		return true
 	}
-	objectKeys := reportmodel.ReportDatasetObjectKeys(report.Dataset)
-	if report.ObjectSQLV1 != nil {
-		objectKeys = reportmodel.ReportObjectSQLObjectKeys(report.ObjectSQLV1)
-	}
+	objectKeys := reportmodel.ReportObjectSQLObjectKeys(report.ObjectSQLV1)
 	for _, objectKey := range objectKeys {
 		if visibleObjects[objectKey] {
 			return true

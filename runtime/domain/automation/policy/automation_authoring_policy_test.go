@@ -16,7 +16,7 @@ func TestAutomationAuthoringDomainIsOwnerOwnedAndUsesRuntimeEnums(t *testing.T) 
 	if domain.Key != "automation" || len(domain.Capabilities) != 8 {
 		t.Fatalf("domain=%#v", domain)
 	}
-	catalog := capabilitycontract.RuntimeAutomationCapabilities()
+	catalog := capabilitycontract.RuntimeAutomationExecutionCatalog()
 	instructionTypes := []string{}
 	for _, capability := range domain.Capabilities {
 		if strings.HasPrefix(capability.Key, "automation.instruction.") {

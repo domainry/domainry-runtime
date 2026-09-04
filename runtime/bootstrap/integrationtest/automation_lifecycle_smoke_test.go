@@ -25,7 +25,7 @@ func TestCRMAutomationRuleLifecycleThroughPublicAPI(t *testing.T) {
 	if rules.Count < 1 || len(rules.Items) == 0 {
 		t.Fatalf("expected seeded lifecycle automation rule, got %#v", rules)
 	}
-	validation := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/automation/rules/validate", rules.Items[0])
+	validation := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodPost, "/automation/validate", rules.Items[0])
 	if valid, _ := validation["valid"].(bool); !valid {
 		t.Fatalf("expected draft validation to succeed, got %#v", validation)
 	}
@@ -38,7 +38,7 @@ func TestCRMAutomationRuleLifecycleThroughPublicAPI(t *testing.T) {
 			FieldPath string `json:"field_path"`
 			ErrorCode string `json:"error_code"`
 		} `json:"errors"`
-	}](t, handler, "sales_manager", http.MethodPost, "/automation/rules/validate", invalidRule)
+	}](t, handler, "sales_manager", http.MethodPost, "/automation/validate", invalidRule)
 	if invalidValidation.Valid || len(invalidValidation.Errors) != 1 || invalidValidation.Errors[0].Section != "trigger" || invalidValidation.Errors[0].FieldPath != "trigger.operation" || invalidValidation.Errors[0].ErrorCode != "backend.automation.operation_invalid" {
 		t.Fatalf("expected typed trigger validation issue, got %#v", invalidValidation)
 	}

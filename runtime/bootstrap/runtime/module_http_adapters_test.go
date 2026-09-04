@@ -191,7 +191,7 @@ func TestRuntimeCollectsHTTPOnlyAndCompleteModuleActionManifests(t *testing.T) {
 	}
 }
 
-func TestRuntimeValidatesSchedulerHostFacadeFromItsSourceManifest(t *testing.T) {
+func TestRuntimeDoesNotImportUnmountedSchedulerHTTPActions(t *testing.T) {
 	actions, err := schedulersdk.SchedulerAuthorizationActions()
 	if err != nil {
 		t.Fatal(err)
@@ -200,27 +200,8 @@ func TestRuntimeValidatesSchedulerHostFacadeFromItsSourceManifest(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(collected) != 13 {
-		t.Fatalf("Scheduler actions=%d, want 13", len(collected))
-	}
-	for _, definition := range collected {
-		if definition.Owner != schedulersdk.SchedulerAuthorizationOwner || definition.SourceKind != "host_facade" || definition.Permission == nil || definition.Permission.Key != definition.Key || definition.Permission.Owner != definition.Owner {
-			t.Fatalf("Scheduler host-facade Action is not source-owned and same-key: %+v", definition)
-		}
-	}
-
-	missing := append([]actioncontract.ActionDefinition(nil), actions[:len(actions)-1]...)
-	if _, err := newRuntimeModuleBindingInventory(runtimeActionManifestBinding{actions: missing}).AuthorizationActions(); err == nil {
-		t.Fatal("Runtime accepted a Scheduler host facade with a missing handler Action")
-	}
-
-	drifted := make([]actioncontract.ActionDefinition, len(actions))
-	for index := range actions {
-		drifted[index] = actioncontract.CloneDefinition(actions[index])
-	}
-	drifted[0].RiskLevel = actioncontract.RiskHigh
-	if _, err := newRuntimeModuleBindingInventory(runtimeActionManifestBinding{actions: drifted}).AuthorizationActions(); err == nil {
-		t.Fatal("Runtime accepted Scheduler governance that drifted from its hosted handler")
+	if len(collected) != 0 {
+		t.Fatalf("Runtime imported %d unmounted Scheduler HTTP actions", len(collected))
 	}
 }
 

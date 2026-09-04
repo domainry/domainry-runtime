@@ -36,7 +36,7 @@ func businessReferenceAdmin() principalmodel.Principal {
 
 func TestBusinessReferenceGraphAndImpact(t *testing.T) {
 	handler := businessReferenceTestHandler(businessReferenceAdmin())
-	request := httptest.NewRequest(http.MethodGet, "/business-references/graph", nil)
+	request := httptest.NewRequest(http.MethodGet, "/references", nil)
 	if graph, err := handler.Graph(request); err != nil || graph.Version == "" {
 		t.Fatalf("graph=%#v err=%v", graph, err)
 	}
@@ -48,11 +48,11 @@ func TestBusinessReferenceGraphAndImpact(t *testing.T) {
 	}
 
 	response = httptest.NewRecorder()
-	handler.businessReferenceImpact(response, httptest.NewRequest(http.MethodGet, "/business-references//", nil))
+	handler.businessReferenceImpact(response, httptest.NewRequest(http.MethodGet, "/references///impact", nil))
 	if response.Code != http.StatusBadRequest || response.Header().Get("X-Error-Code") != "backend.reference.identity_required" {
 		t.Fatalf("missing identity status=%d code=%q", response.Code, response.Header().Get("X-Error-Code"))
 	}
-	request = httptest.NewRequest(http.MethodGet, "/business-references/object/", nil)
+	request = httptest.NewRequest(http.MethodGet, "/references/object//impact", nil)
 	request.SetPathValue("resourceType", "object")
 	response = httptest.NewRecorder()
 	handler.businessReferenceImpact(response, request)
@@ -60,7 +60,7 @@ func TestBusinessReferenceGraphAndImpact(t *testing.T) {
 		t.Fatalf("missing resource key status=%d", response.Code)
 	}
 
-	request = httptest.NewRequest(http.MethodGet, "/business-references/object/customer", nil)
+	request = httptest.NewRequest(http.MethodGet, "/references/object/customer/impact", nil)
 	request.SetPathValue("resourceType", "object")
 	request.SetPathValue("resourceKey", "customer")
 	response = httptest.NewRecorder()
@@ -73,12 +73,12 @@ func TestBusinessReferenceGraphAndImpact(t *testing.T) {
 func TestBusinessReferenceErrorsAndRoutes(t *testing.T) {
 	handler := businessReferenceTestHandler(principalmodel.Principal{})
 	response := httptest.NewRecorder()
-	handler.businessReferenceGraph(response, httptest.NewRequest(http.MethodGet, "/business-references/graph", nil))
+	handler.businessReferenceGraph(response, httptest.NewRequest(http.MethodGet, "/references", nil))
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("graph error status=%d", response.Code)
 	}
 	response = httptest.NewRecorder()
-	handler.businessReferenceImpact(response, httptest.NewRequest(http.MethodGet, "/business-references/object/customer", nil))
+	handler.businessReferenceImpact(response, httptest.NewRequest(http.MethodGet, "/references/object/customer/impact", nil))
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("impact error status=%d", response.Code)
 	}
@@ -86,7 +86,7 @@ func TestBusinessReferenceErrorsAndRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	businessReferenceTestHandler(businessReferenceAdmin()).RegisterRoutes(mux)
 	response = httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/business-references/graph", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/references", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("registered graph route status=%d", response.Code)
 	}

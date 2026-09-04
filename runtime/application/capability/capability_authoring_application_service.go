@@ -3,6 +3,7 @@ package capability
 import (
 	"context"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
@@ -12,6 +13,13 @@ import (
 type CapabilityAuthoringApplicationService struct {
 	schema             func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema
 	identityReferences func(context.Context, principalmodel.Principal) (CapabilityIdentityReferences, error)
+}
+
+func capabilityAuthorizePrincipal(principal principalmodel.Principal) error {
+	if principal.Known {
+		return nil
+	}
+	return &apperror.AppError{Kind: apperror.KindForbidden, Code: "auth.permission_denied"}
 }
 
 type CapabilityIdentityReferences struct {
@@ -25,9 +33,9 @@ func NewCapabilityAuthoringApplicationService(schema func(context.Context, princ
 	return &CapabilityAuthoringApplicationService{schema: schema}
 }
 
-// UseIdentityReferenceSource binds Identity-owned live references at
-// the composition root. Capability discovery remains an aggregator and does
-// not read the Identity repository directly.
+// UseIdentityReferenceSource binds Identity-owned live references at the
+// composition root. Runtime resolves instance values only; Plane aggregates
+// the immutable capability contracts.
 func (s *CapabilityAuthoringApplicationService) UseIdentityReferenceSource(_ context.Context, source func(context.Context, principalmodel.Principal) (CapabilityIdentityReferences, error)) {
 	if s != nil {
 		s.identityReferences = source

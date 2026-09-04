@@ -162,6 +162,14 @@ func actionAssuranceValidator(records *runtimeAssembly, assurance *actionservice
 			audit(ctx, "action_assurance_succeeded", invocation.ObjectKey, invocation.RecordID, invocation.Principal, "Action assurance verified", map[string]any{"action_key": action.Key, "methods": definitionmodel.ActionAssuranceNormalLogin})
 			return map[string]string{"methods": definitionmodel.ActionAssuranceNormalLogin}, nil
 		}
+		if strings.TrimSpace(invocation.AssuranceToken) == "" {
+			appErr := apperror.New(apperror.KindForbidden, "backend.action.assurance_required", nil, map[string]string{
+				"action_key": action.Key, "object_key": invocation.ObjectKey, "record_id": invocation.RecordID,
+				"required_methods": strings.Join(action.AssurancePolicy.RequiredMethods, ","),
+			})
+			audit(ctx, "action_assurance_denied", invocation.ObjectKey, invocation.RecordID, invocation.Principal, "Action assurance required", map[string]any{"action_key": action.Key, "required_methods": action.AssurancePolicy.RequiredMethods, "error_code": apperror.CodeOf(appErr)})
+			return nil, appErr
+		}
 		evidence, err := assurance.ValidateAndConsume(ctx, action, invocation.Principal.WorkspaceID, invocation.Principal.UserID, invocation.ObjectKey, invocation.RecordID, invocation.Input, invocation.AssuranceToken)
 		if err != nil {
 			appErr := apperror.FromError(apperror.KindForbidden, err)

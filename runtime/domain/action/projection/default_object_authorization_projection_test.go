@@ -21,7 +21,7 @@ func TestDefaultObjectAuthorizationActionsOwnExactPermissions(t *testing.T) {
 		if definition.Permission == nil || definition.Permission.Key != definition.Key || definition.Permission.ResourceKey+"."+definition.Permission.OperationKey != definition.Key {
 			t.Fatalf("definition is not exact: %+v", definition)
 		}
-		if definition.HTTP == nil || strings.Contains(definition.HTTP.DisplayRouteTemplate, "{objectKey}") || !strings.Contains(definition.HTTP.DisplayRouteTemplate, "/records/objects/sales.order/") {
+		if definition.HTTP == nil || strings.Contains(definition.HTTP.DisplayRouteTemplate, "{objectKey}") || !strings.HasPrefix(definition.HTTP.DisplayRouteTemplate, "/records/sales.order") {
 			t.Fatalf("definition has no concrete object route: %+v", definition)
 		}
 		if err := registry.Register(definition); err != nil {
@@ -35,7 +35,7 @@ func TestDefaultObjectAuthorizationActionsOwnExactPermissions(t *testing.T) {
 	if !found || resolved.EffectClass != actioncontract.EffectRead {
 		t.Fatalf("resolved=%+v found=%v", resolved, found)
 	}
-	if resolved, found := registry.ResolveHTTP("GET", "/records/objects/sales.order/records/export"); !found || resolved.Key != "sales.order.export" {
+	if resolved, found := registry.ResolveHTTP("GET", "/records/sales.order/export"); !found || resolved.Key != "sales.order.export" {
 		t.Fatalf("concrete HTTP projection resolved=%+v found=%v", resolved, found)
 	}
 }

@@ -36,9 +36,6 @@ type runtimeReportApplicationHost struct {
 func (h runtimeReportApplicationHost) ReportSubjects() reportmodulehost.SubjectResolver {
 	return h.ports.Subjects
 }
-func (h runtimeReportApplicationHost) ReportDatasets() reportmodulehost.DatasetReader {
-	return h.ports.Datasets
-}
 func (h runtimeReportApplicationHost) ReportObjectSQL() reportmodulehost.ObjectSQLExecutor {
 	return h.ports.ObjectSQL
 }

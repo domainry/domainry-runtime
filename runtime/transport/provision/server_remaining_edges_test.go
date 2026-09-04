@@ -74,14 +74,14 @@ func TestClassicProvisionRemainingDecodeEvidenceBlockerAndNoopEdges(t *testing.T
 	manifest := provisionTestManifest(t)
 	target := filepath.Join(t.TempDir(), "manifest.json")
 	server := NewServer(target, "dev", testContractIdentity(), nil).Routes()
-	for _, path := range []string{"/metadata/manifests/review", "/metadata/manifests/apply"} {
+	for _, path := range []string{"/provision/manifests/review", "/provision/manifests/apply"} {
 		response := httptest.NewRecorder()
 		server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{`)))
 		if response.Code != http.StatusBadRequest {
 			t.Fatalf("%s malformed status=%d body=%s", path, response.Code, response.Body.String())
 		}
 	}
-	missingReason := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/apply", map[string]any{"manifest": manifest, "actor": "builder", "reason": " "})
+	missingReason := provisionRequest(t, server, http.MethodPost, "/provision/manifests/apply", map[string]any{"manifest": manifest, "actor": "builder", "reason": " "})
 	if missingReason.Code != http.StatusBadRequest || !strings.Contains(missingReason.Body.String(), "provision_evidence_required") {
 		t.Fatalf("missing reason status=%d body=%s", missingReason.Code, missingReason.Body.String())
 	}
@@ -90,11 +90,11 @@ func TestClassicProvisionRemainingDecodeEvidenceBlockerAndNoopEdges(t *testing.T
 		t.Fatal(err)
 	}
 	destructive := destructiveProvisionManifest(t)
-	review := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/review", map[string]any{"manifest": destructive})
+	review := provisionRequest(t, server, http.MethodPost, "/provision/manifests/review", map[string]any{"manifest": destructive})
 	if review.Code != http.StatusOK || !strings.Contains(review.Body.String(), `"apply_allowed":false`) {
 		t.Fatalf("destructive review status=%d body=%s", review.Code, review.Body.String())
 	}
-	blocked := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/apply", map[string]any{
+	blocked := provisionRequest(t, server, http.MethodPost, "/provision/manifests/apply", map[string]any{
 		"manifest": destructive, "reviewed_manifest_hash": destructive.ManifestHash, "expected_snapshot_hash": manifest.ManifestHash,
 		"actor": "builder", "reason": "remove object",
 	})
@@ -106,7 +106,7 @@ func TestClassicProvisionRemainingDecodeEvidenceBlockerAndNoopEdges(t *testing.T
 	t.Cleanup(func() { provisionCreateTemp = originalCreateTemp })
 	provisionCreateTemp = func(string, string) (provisionFile, error) { return nil, errors.New("create failed") }
 	writeFailedServer := NewServer(filepath.Join(t.TempDir(), "manifest.json"), "dev", testContractIdentity(), nil).Routes()
-	writeFailed := provisionRequest(t, writeFailedServer, http.MethodPost, "/metadata/manifests/apply", map[string]any{
+	writeFailed := provisionRequest(t, writeFailedServer, http.MethodPost, "/provision/manifests/apply", map[string]any{
 		"manifest": manifest, "reviewed_manifest_hash": manifest.ManifestHash, "expected_snapshot_hash": emptySnapshotHash,
 		"actor": "builder", "reason": "initial install",
 	})
@@ -118,7 +118,7 @@ func TestClassicProvisionRemainingDecodeEvidenceBlockerAndNoopEdges(t *testing.T
 	if err := os.MkdirAll(filepath.Join(filepath.Dir(target), "provision-audit.jsonl"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	noop := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/apply", map[string]any{
+	noop := provisionRequest(t, server, http.MethodPost, "/provision/manifests/apply", map[string]any{
 		"manifest": manifest, "reviewed_manifest_hash": manifest.ManifestHash, "expected_snapshot_hash": manifest.ManifestHash,
 		"actor": "builder", "reason": "replay",
 	})

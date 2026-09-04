@@ -25,10 +25,10 @@ func (a businessReferenceRuntimeAdapter) WorkflowProcesses(ctx context.Context, 
 }
 
 func (a businessReferenceRuntimeAdapter) PublishedSchedulerDefinitions(ctx context.Context, principal principalmodel.Principal) ([]recordmodel.Record, error) {
-	if a.records == nil || a.records.schedulerService == nil {
+	if a.records == nil {
 		return []recordmodel.Record{}, nil
 	}
-	definitions, err := a.records.schedulerService.PublishedDefinitions(ctx, principal)
+	definitions, err := a.records.schedulerDefinitionSource.ListSchedulerDefinitions(ctx)
 	return schedulerPublishedDefinitionRecords(definitions), err
 }
 

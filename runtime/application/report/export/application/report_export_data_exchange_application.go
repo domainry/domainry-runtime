@@ -66,7 +66,7 @@ func (s *ReportExportApplicationService) prepareReportExportPayloadResolved(ctx 
 		return reportexport.ExportPayload{}, err
 	}
 	report, control = resolved.Definition.Report, resolved.Definition.Control
-	normalizedScope, maskedDimensions := resolved.Scope, resolved.MaskedDimensions
+	normalizedScope := resolved.Scope
 	executionRequest.ReportKey, executionRequest.Scope = report.Key, normalizedScope
 	reportHash, _ := reportcontract.CanonicalJSONSHA256(report)
 	sourceHash := reportHash
@@ -95,7 +95,7 @@ func (s *ReportExportApplicationService) prepareReportExportPayloadResolved(ctx 
 		if err != nil {
 			return reportexport.ExportPayload{}, err
 		}
-		csvContent, encodeErr := reportexport.EncodePreflightCSV(rows, normalizedScope.FieldProjection, maskedDimensions)
+		csvContent, encodeErr := reportexport.EncodePreflightCSV(rows, normalizedScope.FieldProjection, nil)
 		if encodeErr != nil {
 			return reportexport.ExportPayload{}, encodeErr
 		}
@@ -116,7 +116,7 @@ func reportExportControlIncludesObject(control reportmodel.ReportExportControlSc
 
 func reportExportResultHash(rows []reportmodel.ReportResultRow) (string, error) {
 	return reportcontract.CanonicalJSONSHA256(map[string]any{
-		"rows": rows, "analyses": []reportmodel.ReportAnalysisResult(nil), "source_row_count": -1, "snapshot": nil,
+		"rows": rows, "source_row_count": -1, "snapshot": nil,
 	})
 }
 

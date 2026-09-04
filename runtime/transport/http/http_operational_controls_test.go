@@ -43,7 +43,7 @@ func TestOperationalControlsFailClosedWhenDurableStateUnavailable(t *testing.T) 
 	}
 	handler := router.withOperationalControls(nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, "/records/customer/1", nil))
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, "/records/customer/items/1", nil))
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}

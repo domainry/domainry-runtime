@@ -40,7 +40,7 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 
 	customer := runtimeFixtureRequestWithHeaders[map[string]any](
 		t, handler, "sales", http.MethodGet,
-		"/records/objects/customer_account/records?page=1&page_size=1", nil, asUser("sales_user"),
+		"/records/customer_account?page=1&page_size=1", nil, asUser("sales_user"),
 	)
 	customerItems, _ := customer["items"].([]any)
 	if len(customerItems) != 1 {
@@ -53,7 +53,7 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 	}
 
 	order := runtimeFixtureRequestWithHeaders[recordmodel.Record](
-		t, handler, "sales", http.MethodPost, "/records/objects/sales_order/records",
+		t, handler, "sales", http.MethodPost, "/records/sales_order",
 		map[string]any{"data": map[string]any{
 			"order_number": "SO-P7-BUSINESS", "customer": customerID, "sku": "WIDGET-1",
 			"ordered_quantity": 2, "reserved_quantity": 0, "fulfilled_quantity": 0,
@@ -68,7 +68,7 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 
 	submitted := runtimeFixtureRequestWithHeaders[map[string]any](
 		t, handler, "sales", http.MethodPost,
-		"/records/objects/sales_order/records/"+order.ID+"/actions/sales_order.submit",
+		"/records/sales_order/items/"+order.ID+"/actions/sales_order.submit",
 		map[string]any{"data": map[string]any{"request_id": "submit-p7"}},
 		asUser("sales_user"),
 	)
@@ -84,7 +84,7 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 	for attempt := 0; attempt < 40 && len(creditTasks) == 0; attempt++ {
 		runtimeFixtureRequestWithHeaders[workflowapplication.OpsWorkflowProcessBatchDTO](
 			t, handler, "platform_admin", http.MethodPost,
-			"/workflow/operations/executions/process?limit=25", nil, operationsHeaders,
+			"/workflow/recovery/executions/process?limit=25", nil, operationsHeaders,
 		)
 		creditTasks = runtimeFixtureRequestWithHeaders[[]workflowapplication.ParticipantWorkflowTaskDTO](
 			t, handler, "credit_manager", http.MethodGet,
@@ -120,7 +120,7 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 	}
 
 	refreshed := runtimeFixtureRequestWithHeaders[recordmodel.Record](
-		t, handler, "sales", http.MethodGet, "/records/objects/sales_order/records/"+order.ID, nil, asUser("sales_user"),
+		t, handler, "sales", http.MethodGet, "/records/sales_order/items/"+order.ID, nil, asUser("sales_user"),
 	)
 	if refreshed.Data["status"] != "approved" {
 		t.Fatalf("refreshed Business record status=%v want=approved: %#v", refreshed.Data["status"], refreshed)

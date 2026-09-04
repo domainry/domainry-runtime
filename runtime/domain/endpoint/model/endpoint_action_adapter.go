@@ -47,7 +47,8 @@ func AuthorizationActionDefinition(contract RuntimeEndpointContractV1) (actionco
 		definition.Authorization = actioncontract.Authorization{Strategy: actioncontract.AuthorizationAnonymous}
 	case strings.HasPrefix(policy, "integration_entrypoint_policy:"), len(contract.ProtocolAudiences) != 0:
 		definition.Authorization = actioncontract.Authorization{
-			Strategy: actioncontract.AuthorizationSigned, PolicyKey: policy,
+			Strategy:  actioncontract.AuthorizationSigned,
+			PolicyKey: strings.TrimSpace(strings.TrimPrefix(policy, "integration_entrypoint_policy:")),
 			Audiences: append([]string(nil), contract.ProtocolAudiences...),
 		}
 	case strings.HasPrefix(policy, "owner_handler_policy:"):

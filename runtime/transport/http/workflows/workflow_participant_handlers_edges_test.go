@@ -27,10 +27,10 @@ func TestWorkflowSurfaceReadHandlersAndErrors(t *testing.T) {
 		{name: "business team tasks", target: "/workflow/team-tasks?status=open&limit=10", call: handler.listBusinessTeamWorkflowTasks, fail: func() { processes.err = errWorkflowHTTPTest }},
 		{name: "business processes", target: "/workflow/processes?status=waiting,running&limit=10", call: handler.listParticipantWorkflowProcesses, fail: func() { processes.err = errWorkflowHTTPTest }},
 		{name: "business process", target: "/workflow/processes/process-1", paths: map[string]string{"processID": " process-1 "}, call: handler.getParticipantWorkflowProcess, fail: func() { processes.err = errWorkflowHTTPTest }},
-		{name: "ops executions", target: "/workflow/operations/executions?limit=10", call: handler.listOpsWorkflowExecutions, fail: func() { workers.err = errWorkflowHTTPTest }},
-		{name: "ops processes", target: "/workflow/operations/processes?status=waiting&limit=10", call: handler.listOpsWorkflowProcesses, fail: func() { processes.err = errWorkflowHTTPTest }},
-		{name: "ops process", target: "/workflow/operations/processes/process-1", paths: map[string]string{"processID": " process-1 "}, call: handler.getOpsWorkflowProcess, fail: func() { processes.err = errWorkflowHTTPTest }},
-		{name: "process executions", target: "/workflow/operations/executions/process?limit=10", call: handler.processOpsWorkflowExecutions, fail: func() { workers.err = errWorkflowHTTPTest }},
+		{name: "ops executions", target: "/workflow/recovery/executions?limit=10", call: handler.listOpsWorkflowExecutions, fail: func() { workers.err = errWorkflowHTTPTest }},
+		{name: "ops processes", target: "/workflow/recovery/processes?status=waiting&limit=10", call: handler.listOpsWorkflowProcesses, fail: func() { processes.err = errWorkflowHTTPTest }},
+		{name: "ops process", target: "/workflow/recovery/processes/process-1", paths: map[string]string{"processID": " process-1 "}, call: handler.getOpsWorkflowProcess, fail: func() { processes.err = errWorkflowHTTPTest }},
+		{name: "process executions", target: "/workflow/recovery/executions/process?limit=10", call: handler.processOpsWorkflowExecutions, fail: func() { workers.err = errWorkflowHTTPTest }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -200,7 +200,7 @@ func workflowHTTPReplayOperationsService() *operationsapplication.OperationsAppl
 func TestOpsWorkflowCommandEdges(t *testing.T) {
 	handler, _, workers, _, response := newWorkflowHTTPRuntimeFixture()
 	workers.executions["execution-1"] = workflowmodel.WorkflowExecution{ID: "execution-1", WorkspaceID: "workspace-1", WorkflowKey: "order.approve", Status: "failed", Result: map[string]any{}}
-	writer, request := workflowHTTPRequest(http.MethodPost, "/workflow/operations/executions/execution-1/retry", "", map[string]string{"executionID": " execution-1 "})
+	writer, request := workflowHTTPRequest(http.MethodPost, "/workflow/recovery/executions/execution-1/retry", "", map[string]string{"executionID": " execution-1 "})
 	request.Header.Set("Idempotency-Key", "retry-1")
 	handler.retryOpsWorkflowExecution(writer, request)
 	if response.status != http.StatusOK || response.err != nil {
@@ -209,7 +209,7 @@ func TestOpsWorkflowCommandEdges(t *testing.T) {
 
 	handler.operations = workflowHTTPReplayOperationsService()
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/executions/execution-1/retry", "", map[string]string{"executionID": "execution-1"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/executions/execution-1/retry", "", map[string]string{"executionID": "execution-1"})
 	request.Header.Set("Idempotency-Key", "retry-replay")
 	handler.retryOpsWorkflowExecution(writer, request)
 	if response.status != http.StatusInternalServerError {
@@ -218,7 +218,7 @@ func TestOpsWorkflowCommandEdges(t *testing.T) {
 
 	handler, _, workers, _, response = newWorkflowHTTPRuntimeFixture()
 	workers.executions["execution-1"] = workflowmodel.WorkflowExecution{ID: "execution-1", WorkspaceID: "workspace-1", WorkflowKey: "order.approve", Status: "dead_letter", Result: map[string]any{}}
-	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/executions/execution-1/resolve", `{"reason":"verified"}`, map[string]string{"executionID": " execution-1 "})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/executions/execution-1/resolve", `{"reason":"verified"}`, map[string]string{"executionID": " execution-1 "})
 	request.Header.Set("Idempotency-Key", "resolve-1")
 	handler.resolveOpsWorkflowExecution(writer, request)
 	if response.status != http.StatusOK || response.err != nil {
@@ -227,7 +227,7 @@ func TestOpsWorkflowCommandEdges(t *testing.T) {
 
 	handler.operations = workflowHTTPReplayOperationsService()
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/executions/execution-1/resolve", "", map[string]string{"executionID": "execution-1"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/executions/execution-1/resolve", "", map[string]string{"executionID": "execution-1"})
 	request.Header.Set("Idempotency-Key", "resolve-replay")
 	handler.resolveOpsWorkflowExecution(writer, request)
 	if response.status != http.StatusInternalServerError {
@@ -246,7 +246,7 @@ func TestOpsWorkflowCommandEdges(t *testing.T) {
 		{name: "resolve", body: `{"note":"fixed"}`, call: handler.resolveOpsWorkflowProcess},
 	} {
 		resetWorkflowHTTPResponse(response)
-		writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/processes/process-1/"+command.name, command.body, map[string]string{"processID": "process-1"})
+		writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/processes/process-1/"+command.name, command.body, map[string]string{"processID": "process-1"})
 		request.Header.Set("Idempotency-Key", command.name+"-replay")
 		command.call(writer, request)
 		if response.status != http.StatusInternalServerError {
@@ -283,7 +283,7 @@ func TestWorkflowSurfaceRemainingFailureEdges(t *testing.T) {
 	}
 
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/executions/execution-1/retry", "", map[string]string{"executionID": "execution-1"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/executions/execution-1/retry", "", map[string]string{"executionID": "execution-1"})
 	handler.retryOpsWorkflowExecution(writer, request)
 	if response.status != http.StatusBadRequest {
 		t.Fatalf("retry missing key status=%d", response.status)
@@ -291,7 +291,7 @@ func TestWorkflowSurfaceRemainingFailureEdges(t *testing.T) {
 
 	workers.err = errWorkflowHTTPTest
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/executions/execution-1/retry", "", map[string]string{"executionID": "execution-1"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/executions/execution-1/retry", "", map[string]string{"executionID": "execution-1"})
 	request.Header.Set("Idempotency-Key", "retry-error")
 	handler.retryOpsWorkflowExecution(writer, request)
 	if response.err == nil {
@@ -300,14 +300,14 @@ func TestWorkflowSurfaceRemainingFailureEdges(t *testing.T) {
 
 	workers.err = nil
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/executions/execution-1/resolve", "", map[string]string{"executionID": "execution-1"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/executions/execution-1/resolve", "", map[string]string{"executionID": "execution-1"})
 	handler.resolveOpsWorkflowExecution(writer, request)
 	if response.status != http.StatusBadRequest {
 		t.Fatalf("resolve missing key status=%d", response.status)
 	}
 
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/executions/execution-1/resolve", `{`, map[string]string{"executionID": "execution-1"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/executions/execution-1/resolve", `{`, map[string]string{"executionID": "execution-1"})
 	request.Header.Set("Idempotency-Key", "resolve-invalid")
 	handler.resolveOpsWorkflowExecution(writer, request)
 	if response.status != http.StatusBadRequest || response.err == nil {
@@ -316,7 +316,7 @@ func TestWorkflowSurfaceRemainingFailureEdges(t *testing.T) {
 
 	workers.err = errWorkflowHTTPTest
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/executions/execution-1/resolve", "", map[string]string{"executionID": "execution-1"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/executions/execution-1/resolve", "", map[string]string{"executionID": "execution-1"})
 	request.Body = nil
 	request.Header.Set("Idempotency-Key", "resolve-error")
 	handler.resolveOpsWorkflowExecution(writer, request)
@@ -325,14 +325,14 @@ func TestWorkflowSurfaceRemainingFailureEdges(t *testing.T) {
 	}
 
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/processes/process-1/retry", "", map[string]string{"processID": "process-1"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/processes/process-1/retry", "", map[string]string{"processID": "process-1"})
 	handler.retryOpsWorkflowProcess(writer, request)
 	if response.status != http.StatusBadRequest {
 		t.Fatalf("process retry missing key status=%d", response.status)
 	}
 
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/processes/process-1/resolve", `{`, map[string]string{"processID": "process-1"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/processes/process-1/resolve", `{`, map[string]string{"processID": "process-1"})
 	request.Header.Set("Idempotency-Key", "process-resolve-invalid")
 	handler.resolveOpsWorkflowProcess(writer, request)
 	if response.status != http.StatusBadRequest || response.err == nil {
@@ -342,7 +342,7 @@ func TestWorkflowSurfaceRemainingFailureEdges(t *testing.T) {
 	handler, processes, _, _, response = newWorkflowHTTPRuntimeFixture()
 	seedWorkflowHTTPProcess(processes, "failed")
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/processes/process-1/retry", "", map[string]string{"processID": "process-1"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/processes/process-1/retry", "", map[string]string{"processID": "process-1"})
 	request.Header.Set("Idempotency-Key", "process-retry")
 	handler.retryOpsWorkflowProcess(writer, request)
 	if response.err == nil {
@@ -351,7 +351,7 @@ func TestWorkflowSurfaceRemainingFailureEdges(t *testing.T) {
 
 	processes.err = errWorkflowHTTPTest
 	resetWorkflowHTTPResponse(response)
-	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/operations/processes/process-1/resolve", `{"note":"fixed"}`, map[string]string{"processID": "process-1"})
+	writer, request = workflowHTTPRequest(http.MethodPost, "/workflow/recovery/processes/process-1/resolve", `{"note":"fixed"}`, map[string]string{"processID": "process-1"})
 	request.Header.Set("Idempotency-Key", "process-resolve-error")
 	handler.resolveOpsWorkflowProcess(writer, request)
 	if response.err == nil {

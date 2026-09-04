@@ -12,7 +12,7 @@ import (
 
 func TestAuthoringErrorResponsePreservesMachineReadableContract(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/metadata/definitions/connector/example/validate", nil)
+	request := httptest.NewRequest(http.MethodPost, "/application-schema/definitions/connector/example/validate", nil)
 	writeErrorWithParams(recorder, request, http.StatusBadRequest, "backend.integration.connector.operation_method_invalid", map[string]string{"field": "operations[0].method", "actual": "FETCH"})
 	var response map[string]any
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {

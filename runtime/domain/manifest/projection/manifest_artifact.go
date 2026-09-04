@@ -71,7 +71,7 @@ func writeWorkflowsActionsReports(out *strings.Builder, manifest manifestmodel.M
 		writeLine(out, fmt.Sprintf("| Workflow | `%s` %s | %s | `%s` |", workflow.Key, workflow.Name, codeList(manifestWorkflowObjectKeys(workflow)), workflow.RunAs))
 	}
 	for _, report := range manifest.Reports {
-		writeLine(out, fmt.Sprintf("| Report | `%s` %s | %s | %s |", report.Key, report.Name, codeList(reportmodel.ReportDatasetObjectKeys(report.Dataset)), codeList(report.RequiredPermissions)))
+		writeLine(out, fmt.Sprintf("| Report | `%s` %s | %s | %s |", report.Key, report.Name, codeList(reportmodel.ReportObjectSQLObjectKeys(report.ObjectSQLV1)), codeList(report.RequiredPermissions)))
 	}
 	writeLine(out, "")
 }

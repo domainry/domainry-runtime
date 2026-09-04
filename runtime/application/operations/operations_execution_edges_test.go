@@ -33,7 +33,7 @@ func operationsAdminPrincipal() principalmodel.Principal {
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{
 		"runtime.operations.list_operations",
 		"runtime.operations.get_operation",
-		"scheduler.runs.retry",
+		"runtime.workflows.retry_ops_workflow_execution",
 		"runtime.operations.run_lifecycle_cleanup_job",
 		"runtime.operations.enable_maintenance",
 		"runtime.operations.disable_maintenance",
@@ -185,7 +185,7 @@ func TestExecuteOwnerOperationRejectsRunningReplayWithoutRepeatingOwner(t *testi
 	repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	service := NewOperationsApplicationService(repository, nil, nil, func() string { return "running-owner" })
 	principal := operationsAdminPrincipal()
-	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "scheduler_run", ResourceID: "run-1", Reason: "recover", Key: "retry", Payload: map[string]any{"attempt": 2}}
+	request := OperationsOwnerExecutionRequest{Kind: "workflow.execution.retry", ResourceType: "workflow_execution", ResourceID: "execution-1", Reason: "recover", Key: "retry", Payload: map[string]any{"attempt": 2}}
 	receipt, _, err := service.Submit(t.Context(), OperationsSubmitRequest{Kind: request.Kind, ResourceType: request.ResourceType, ResourceID: request.ResourceID, Reason: request.Reason, Payload: request.Payload}, request.Key, principal)
 	if err != nil {
 		t.Fatal(err)
@@ -206,7 +206,7 @@ func TestExecuteOwnerOperationValidationMarshalAndPersistenceFailures(t *testing
 	if _, err := service.ExecuteOwnerOperation(t.Context(), OperationsOwnerExecutionRequest{Kind: "backup.restore", ResourceType: "scheduler_run"}, principal, func(context.Context) (any, error) { return nil, nil }); apperror.CodeOf(err) != "backend.operations.definition_mismatch" {
 		t.Fatalf("definition err=%v", err)
 	}
-	request := OperationsOwnerExecutionRequest{Kind: "scheduler.run.retry", ResourceType: "scheduler_run", ResourceID: "run-1", Reason: "recover", Key: "retry"}
+	request := OperationsOwnerExecutionRequest{Kind: "workflow.execution.retry", ResourceType: "workflow_execution", ResourceID: "execution-1", Reason: "recover", Key: "retry"}
 	if _, err := service.ExecuteOwnerOperation(t.Context(), request, principalmodel.Principal{}, func(context.Context) (any, error) { return nil, nil }); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization err=%v", err)
 	}

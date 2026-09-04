@@ -51,7 +51,7 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 	insert("workspace-a", objects["payment"], "p2", map[string]any{"sale_id": "s2", "owner_id": "user-2", "kind": "card", "amount": "15.15"})
 	insert("workspace-a", objects["payment"], "p3", map[string]any{"sale_id": "s2", "owner_id": "user-1", "kind": "cash", "amount": "5.05"})
 
-	executor := NewReportDatasetStore(store)
+	executor := NewReportSQLStore(store)
 	executeWithParameters := func(schema reportmodel.ReportObjectSQLSchema, queries map[string]recordmodel.RecordListQuery, parameters map[string]any) []map[string]string {
 		t.Helper()
 		plan, err := reportcontract.CompileReportObjectSQL(schema, objects)
@@ -193,7 +193,7 @@ func TestReportObjectSQLExecutesInexactNumberAndExactPercentAggregatesWithRows(t
 		t.Fatalf("exact percent result schema=%#v", plan.ResultSchema[2])
 	}
 	query := recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, SelectFields: append([]string(nil), plan.Sources[0].Fields...)}
-	result, err := NewReportDatasetStore(store).ExecuteReportObjectSQL(t.Context(), reportcontract.ReportObjectSQLExecutionRequest{
+	result, err := NewReportSQLStore(store).ExecuteReportObjectSQL(t.Context(), reportcontract.ReportObjectSQLExecutionRequest{
 		WorkspaceID: "workspace-a", Plan: plan, Objects: map[string]definitionmodel.ObjectSchema{"b": object}, Queries: map[string]recordmodel.RecordListQuery{"b": query}, Parameters: map[string]any{"status": "posted"}, Timeout: 2 * time.Second,
 	})
 	if err != nil {

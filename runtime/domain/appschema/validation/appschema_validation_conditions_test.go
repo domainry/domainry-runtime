@@ -68,23 +68,23 @@ func TestReportValidationConditionOutcomes(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{object}}
 	report := reportmodel.ReportSchema{
-		Key: "r", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "missing", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: ""}}}}, RequiredPermissions: []string{"customer.read"},
+		Key: "r", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "SELECT customer.missing AS missing FROM customer customer ORDER BY customer.missing LIMIT 10", SourceObjects: []string{"customer"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "missing", Type: "text", Kind: "dimension"}}}, RequiredPermissions: []string{"customer.read"},
 	}
 	issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, report)
-	if !hasMetadataIssue(issues, "backend.report.field_reference_invalid") {
+	if !hasMetadataIssue(issues, "backend.report.field_not_found") {
 		t.Fatalf("field issues=%#v", issues)
 	}
 }
 
 func TestReportAndRollbackRuntimeFinalConditionOutcomes(t *testing.T) {
-	whitespaceSource := reportmodel.ReportSchema{Key: "r", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: " ", Alias: "source"}}}
-	if issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), appschemamodel.ApplicationSchemaSnapshot{}, whitespaceSource); !hasMetadataIssue(issues, "backend.report.dataset_source_invalid") {
+	whitespaceSource := reportmodel.ReportSchema{Key: "r", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "SELECT source.id AS id FROM source source LIMIT 1", SourceObjects: []string{" "}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}}}
+	if issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), appschemamodel.ApplicationSchemaSnapshot{}, whitespaceSource); !hasMetadataIssue(issues, "backend.report.object_sql_source_invalid") {
 		t.Fatalf("whitespace source issues=%#v", issues)
 	}
 	validator := reportDefinitionValidator{
 		issues: []appschemamodel.ApplicationDefinitionValidationIssue{},
 	}
-	validator.validateAudienceFieldPermission("dataset.dimensions[0]", "customer", "secret", "export")
+	validator.validateAudienceFieldPermission("object_sql_v1.sql", "customer", "secret", "export")
 	if len(validator.issues) != 0 {
 		t.Fatalf("definition validation must defer SDK field policy to execution: %#v", validator.issues)
 	}

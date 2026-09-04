@@ -13,6 +13,7 @@ import (
 	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	automationpolicy "github.com/domainry/domainry-runtime/runtime/domain/automation/policy"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	profilebindingcontract "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/contract"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 )
@@ -26,7 +27,10 @@ func TestBindingsConformAndAreDeterministic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := []string{"automation", "discovery", "maintenance", "profile_binding", "publication", "realtime", "records", "runtime_schema", "uploads", "workflow"}
+	expected := []string{
+		"action_registry", "automation", "business_references", "business_system", "discovery", "notification_bridge", "profile_binding", "publication", "realtime", "records",
+		"runtime_core", "runtime_dispatch", "runtime_openapi", "runtime_operations", "runtime_schema", "uploads", "workflow", "workspace_provision",
+	}
 	actual := make([]string, 0, len(first))
 	firstDigests := map[string]string{}
 	for _, binding := range first {
@@ -50,6 +54,30 @@ func TestBindingsConformAndAreDeterministic(t *testing.T) {
 		}
 		if firstDigests[summary.Identity.Key] != summary.Identity.ContractSHA256 {
 			t.Fatalf("provider %s digest is nondeterministic: %s != %s", summary.Identity.Key, firstDigests[summary.Identity.Key], summary.Identity.ContractSHA256)
+		}
+	}
+}
+
+func TestProviderSpecsOwnEveryRuntimeEndpointExactlyOnce(t *testing.T) {
+	specs, err := providerSpecs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for identity, contract := range endpointmodel.EndpointContracts {
+		owners := []string{}
+		for _, spec := range specs {
+			for _, category := range spec.categories {
+				if category.selectEndpoints == nil || !category.selectEndpoints(contract) {
+					continue
+				}
+				if spec.sourceOwner != contract.SourceOwner {
+					t.Errorf("%s selected by provider %s owner=%s, endpoint owner=%s", identity, spec.key, spec.sourceOwner, contract.SourceOwner)
+				}
+				owners = append(owners, spec.key+"/"+category.key)
+			}
+		}
+		if len(owners) != 1 {
+			t.Errorf("%s has %d Runtime capability owners: %v", identity, len(owners), owners)
 		}
 	}
 }

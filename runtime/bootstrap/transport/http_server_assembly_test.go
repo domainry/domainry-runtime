@@ -106,7 +106,7 @@ func TestListenerRouteGroupsRegisterOnlyTheirCompiledEndpointInventory(t *testin
 		publicOpenAPI,
 		httptest.NewRequest(http.MethodGet, "/openapi.json", nil),
 	)
-	if body := publicOpenAPI.Body.String(); !strings.Contains(body, `"/records/objects/{objectKey}/records"`) ||
+	if body := publicOpenAPI.Body.String(); !strings.Contains(body, `"/records/{objectKey}"`) ||
 		!strings.Contains(body, `"/automation/rules"`) ||
 		strings.Contains(body, `"/identity/`) ||
 		strings.Contains(body, `"/auth/`) ||

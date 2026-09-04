@@ -2,17 +2,11 @@ package openapi
 
 func addOwnerOperationsReceiptOpenAPIContracts(paths map[string]any) {
 	methods := map[string]string{
-		"/scheduler/definitions/{definitionID}/reschedule":           "post",
-		"/scheduler/definitions/{definitionID}/run":                  "post",
-		"/scheduler/runs/{runID}/retry":                              "post",
-		"/scheduler/runs/{runID}/cancel":                             "post",
-		"/scheduler/dead-letters/{deadLetterID}/resolve":             "post",
-		"/scheduler/dead-letters/{deadLetterID}/requeue":             "post",
-		"/workflow/operations/executions/{executionID}/retry":        "post",
-		"/workflow/operations/executions/{executionID}/resolve":      "post",
-		"/workflow/operations/processes/{processID}/retry":           "post",
-		"/workflow/operations/processes/{processID}/resolve":         "post",
-		"/lifecycle/cleanup/jobs/{jobID}/run":                        "post",
+		"/workflow/recovery/executions/{executionID}/retry":          "post",
+		"/workflow/recovery/executions/{executionID}/resolve":        "post",
+		"/workflow/recovery/processes/{processID}/retry":             "post",
+		"/workflow/recovery/processes/{processID}/resolve":           "post",
+		"/operations/lifecycle/cleanup/jobs/{jobID}/run":             "post",
 		"/operations/idempotency/receipts/{owner}/{receiptID}/retry": "post",
 		"/operations/idempotency/receipts/{owner}/{receiptID}/reset": "post",
 	}

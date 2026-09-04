@@ -34,12 +34,12 @@ func reportPrincipal() principalmodel.Principal {
 	return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator-1", WorkspaceID: "workspace-a"}}, bundle)
 }
 
-type reportExportDatasetAccessStub struct {
+type reportExportAccessStub struct {
 	object  definitionmodel.ObjectSchema
 	objects map[string]definitionmodel.ObjectSchema
 }
 
-func (s reportExportDatasetAccessStub) ReportObjectForAction(_ context.Context, _ principalmodel.Principal, objectKey, _ string) (definitionmodel.ObjectSchema, error) {
+func (s reportExportAccessStub) ReportObjectForAction(_ context.Context, _ principalmodel.Principal, objectKey, _ string) (definitionmodel.ObjectSchema, error) {
 	if s.objects != nil {
 		return s.objects[objectKey], nil
 	}
@@ -49,22 +49,22 @@ func (s reportExportDatasetAccessStub) ReportObjectForAction(_ context.Context, 
 	return definitionmodel.ObjectSchema{Key: objectKey}, nil
 }
 
-func (reportExportDatasetAccessStub) NormalizeReportListQuery(_ context.Context, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, _ principalmodel.Principal) recordmodel.RecordListQuery {
+func (reportExportAccessStub) NormalizeReportListQuery(_ context.Context, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, _ principalmodel.Principal) recordmodel.RecordListQuery {
 	return query
 }
 
-func (reportExportDatasetAccessStub) CanAccessReportRecord(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool {
+func (reportExportAccessStub) CanAccessReportRecord(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool {
 	return true
 }
 
-func (reportExportDatasetAccessStub) AuthorizeReportExportField(_ context.Context, principal principalmodel.Principal, objectKey, fieldKey string) (bool, error) {
+func (reportExportAccessStub) AuthorizeReportExportField(_ context.Context, principal principalmodel.Principal, objectKey, fieldKey string) (bool, error) {
 	if !recordpolicy.RecordCanExportFieldForPrincipal(principal, objectKey, fieldKey) {
 		return false, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.report.export_field_denied"}
 	}
 	return recordpolicy.RecordFieldExportMaskedForPrincipal(principal, objectKey, fieldKey), nil
 }
 
-func (reportExportDatasetAccessStub) AuthorizeReportObjectSQLField(_ context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, fieldKey string) error {
+func (reportExportAccessStub) AuthorizeReportObjectSQLField(_ context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, fieldKey string) error {
 	if !recordpolicy.RecordCanReadFieldForPrincipal(principal, object.Key, fieldKey) {
 		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.report.object_sql_field_denied"}
 	}

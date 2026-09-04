@@ -55,7 +55,9 @@ func TestChangePlanRichReferenceSchemaCoversGenericResourceRelationships(t *test
 				{Type: "enqueue_outbox", ConnectorKey: "erp", Operation: "enqueue"},
 			},
 		}},
-		Reports:      []reportmodel.ReportSchema{{Key: "orders", Name: "Orders", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "order", Alias: "order"}, Joins: []reportmodel.ReportDatasetJoin{{ObjectKey: "missing", Alias: "missing"}}}, RequiredPermissions: []string{"order.read"}}},
+		Reports: []reportmodel.ReportSchema{{Key: "orders", Name: "Orders", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{
+			SQL: "SELECT orders.status AS status FROM `order` orders ORDER BY orders.status LIMIT 100", SourceObjects: []string{"order", "missing"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "status", Type: "text", Kind: "dimension"}},
+		}, RequiredPermissions: []string{"order.read"}}},
 		Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "erp", Name: "", Source: "builtin", Operations: []connectormodel.ConnectorOperationSchema{{Key: "send", Name: "", CompensationOperation: "cancel"}, {Key: "cancel", Name: "Cancel"}}}}},
 		Agents:       []agentsdk.AgentSchema{{Key: "sales_agent", Name: "Sales", Config: map[string]any{"report_keys": []any{"orders", "pipeline"}}}},
 	}
@@ -86,9 +88,12 @@ func TestChangePlanReferenceHelpersCoverEmptyEdges(t *testing.T) {
 
 func TestChangePlanReferenceGraphTracksBusinessProfileReportJoinAndTimerFieldsExactly(t *testing.T) {
 	snapshot := ReferenceSchema{
+		Objects:         []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "account_id", Type: "relation"}, {Key: "status", Type: "text"}}}, {Key: "account"}},
 		ProfileBindings: []profilebindingmodel.Binding{{ObjectKey: "operator_profile", IdentityRelationField: "identity_user_id", BusinessIdentity: profilebindingmodel.BusinessIdentityBinding{Key: "operator", Claims: []profilebindingmodel.ClaimBinding{{ClaimKey: "territory_id", FieldKey: "territory_id"}}}, SummaryFields: []string{"display_name"}}},
-		Reports:         []reportmodel.ReportSchema{{Key: "orders", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "order", Alias: "orders"}, Joins: []reportmodel.ReportDatasetJoin{{ObjectKey: "account", Alias: "accounts", LeftAlias: "orders", LeftField: "account_id", RightField: "id"}}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "status", Field: reportmodel.ReportDatasetField{SourceAlias: "orders", FieldKey: "status"}}}}}},
-		Workflows:       []definitionmodel.WorkflowSchema{{Key: "order.follow_up", TriggerContract: &definitionmodel.WorkflowTriggerContract{ObjectKey: "order"}, Graph: &definitionmodel.WorkflowGraphSchema{Nodes: []definitionmodel.WorkflowGraphNode{{ID: "wait", Contract: &definitionmodel.WorkflowNodeContract{Timer: &definitionmodel.WorkflowTimerNodeContract{TimerKey: "order.follow_up.wait", SourceField: "due_at", BusinessCalendarKey: "default"}}}}}}},
+		Reports: []reportmodel.ReportSchema{{Key: "orders", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{
+			SQL: "SELECT orders.status AS status FROM `order` orders JOIN account accounts ON orders.account_id = accounts.id ORDER BY orders.status LIMIT 100", SourceObjects: []string{"order", "account"}, JoinCardinalities: []reportmodel.ReportObjectSQLCardinality{{Alias: "accounts", Cardinality: "many_to_one"}}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "status", Type: "text", Kind: "dimension"}},
+		}}},
+		Workflows: []definitionmodel.WorkflowSchema{{Key: "order.follow_up", TriggerContract: &definitionmodel.WorkflowTriggerContract{ObjectKey: "order"}, Graph: &definitionmodel.WorkflowGraphSchema{Nodes: []definitionmodel.WorkflowGraphNode{{ID: "wait", Contract: &definitionmodel.WorkflowNodeContract{Timer: &definitionmodel.WorkflowTimerNodeContract{TimerKey: "order.follow_up.wait", SourceField: "due_at", BusinessCalendarKey: "default"}}}}}}},
 	}
 	builder := NewReferenceGraphBuilder()
 	AddIdentityProfileReferences(builder, snapshot)
@@ -96,9 +101,9 @@ func TestChangePlanReferenceGraphTracksBusinessProfileReportJoinAndTimerFieldsEx
 	AddWorkflowReferences(builder, snapshot)
 	graph := builder.Graph()
 	want := map[string]bool{
-		"report:orders->field:order.account_id:joins_on_field":                                           false,
-		"report:orders->field:account.id:joins_on_field":                                                 false,
-		"report:orders->field:order.status:groups_by_field":                                              false,
+		"report:orders->field:order.account_id:reads_field":                                              false,
+		"report:orders->field:account.id:reads_field":                                                    false,
+		"report:orders->field:order.status:reads_field":                                                  false,
 		"timer:order.follow_up.wait->field:order.due_at:reads_schedule_field":                            false,
 		"identity_profile_binding:operator_profile->field:operator_profile.territory_id:publishes_claim": false,
 	}

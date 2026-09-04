@@ -70,9 +70,8 @@ type dataExchangeCursor struct {
 }
 
 type preparedDataExchangeExport struct {
-	control          reportmodel.ReportExportControlSchema
-	normalizedScope  reportmodel.ReportExportScopeRequest
-	maskedDimensions map[string]bool
+	control         reportmodel.ReportExportControlSchema
+	normalizedScope reportmodel.ReportExportScopeRequest
 }
 
 func NewDataExchangeProvider(dependencies DataExchangeDependencies) *DataExchangeProvider {
@@ -165,7 +164,7 @@ func (p *DataExchangeProvider) prepare(ctx context.Context, payload ExportPayloa
 			return preparedDataExchangeExport{}, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_source_changed"}
 		}
 	}
-	return preparedDataExchangeExport{control: control, normalizedScope: resolved.Scope, maskedDimensions: resolved.MaskedDimensions}, nil
+	return preparedDataExchangeExport{control: control, normalizedScope: resolved.Scope}, nil
 }
 
 func (p *DataExchangeProvider) PlanExport(ctx context.Context, request dataexchange.ExportPlanRequest) (dataexchange.ExportPlan, error) {
@@ -257,9 +256,6 @@ func (p *DataExchangeProvider) ReadExportPage(ctx context.Context, request datae
 			value, found := source.Dimensions[key]
 			if !found {
 				value = source.Measures[key]
-			}
-			if prepared.maskedDimensions[key] && value != "" {
-				value = "******"
 			}
 			row = append(row, value)
 		}

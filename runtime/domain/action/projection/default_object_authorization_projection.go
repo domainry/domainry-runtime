@@ -27,11 +27,11 @@ func DefaultActionsForObject(object definitionmodel.ObjectSchema, owner string) 
 		effect                  actioncontract.EffectClass
 		risk                    actioncontract.RiskLevel
 	}{
-		{key: "create", label: "Create", method: "POST", route: "/records/objects/{objectKey}/records", idempotency: "caller_key_required", effect: actioncontract.EffectWrite, risk: actioncontract.RiskMedium},
-		{key: "read", label: "Read", method: "GET", route: "/records/objects/{objectKey}/records", idempotency: "not_applicable", effect: actioncontract.EffectRead, risk: actioncontract.RiskLow},
-		{key: "update", label: "Update", method: "PATCH", route: "/records/objects/{objectKey}/records/{recordID}", idempotency: "optimistic_concurrency", effect: actioncontract.EffectWrite, risk: actioncontract.RiskMedium},
-		{key: "delete", label: "Delete", method: "DELETE", route: "/records/objects/{objectKey}/records/{recordID}", idempotency: "optimistic_concurrency", effect: actioncontract.EffectWrite, risk: actioncontract.RiskHigh},
-		{key: "export", label: "Export", method: "GET", route: "/records/objects/{objectKey}/records/export", idempotency: "not_applicable", effect: actioncontract.EffectRead, risk: actioncontract.RiskMedium},
+		{key: "create", label: "Create", method: "POST", route: "/records/{objectKey}", idempotency: "caller_key_required", effect: actioncontract.EffectWrite, risk: actioncontract.RiskMedium},
+		{key: "read", label: "Read", method: "GET", route: "/records/{objectKey}", idempotency: "not_applicable", effect: actioncontract.EffectRead, risk: actioncontract.RiskLow},
+		{key: "update", label: "Update", method: "PATCH", route: "/records/{objectKey}/items/{recordID}", idempotency: "optimistic_concurrency", effect: actioncontract.EffectWrite, risk: actioncontract.RiskMedium},
+		{key: "delete", label: "Delete", method: "DELETE", route: "/records/{objectKey}/items/{recordID}", idempotency: "optimistic_concurrency", effect: actioncontract.EffectWrite, risk: actioncontract.RiskHigh},
+		{key: "export", label: "Export", method: "GET", route: "/records/{objectKey}/export", idempotency: "not_applicable", effect: actioncontract.EffectRead, risk: actioncontract.RiskMedium},
 	}
 	capabilities := definitionmodel.EffectiveObjectCapabilities(object)
 	enabled := map[string]bool{

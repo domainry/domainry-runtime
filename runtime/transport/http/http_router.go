@@ -47,11 +47,10 @@ type HTTPRouter struct {
 	lifecycleHTTP                    httpRouteRegistrar
 	workflowHTTP                     httpRouteRegistrar
 	automationHTTP                   httpRouteRegistrar
-	schedulerHTTP                    httpRouteRegistrar
+	dispatchHTTP                     httpRouteRegistrar
 	businessReferenceHTTP            httpRouteRegistrar
 	publicationHandoffHTTP           httpRouteRegistrar
 	businessSystemHTTP               httpRouteRegistrar
-	capabilityHTTP                   httpRouteRegistrar
 	applicationSchemaHTTP            httpRouteRegistrar
 	notificationHTTP                 httpRouteRegistrar
 	authorizationActions             func() *actioncontract.Registry
@@ -220,7 +219,6 @@ func (s *HTTPRouter) Routes() http.Handler {
 	s.openAPIHTTP.RegisterRoutes(mux)
 	runOptionalRouteRegistrar(s.businessEventHTTP != nil, func() { s.businessEventHTTP.RegisterRoutes(mux) })
 	s.applicationSchemaHTTP.RegisterRoutes(mux)
-	s.capabilityHTTP.RegisterRoutes(mux)
 	s.businessSystemHTTP.RegisterRoutes(mux)
 	s.businessReferenceHTTP.RegisterRoutes(mux)
 	runOptionalRouteRegistrar(s.publicationHandoffHTTP != nil, func() { s.publicationHandoffHTTP.RegisterRoutes(mux) })
@@ -229,7 +227,7 @@ func (s *HTTPRouter) Routes() http.Handler {
 	s.recordHTTP.RegisterRoutes(mux)
 	s.workflowHTTP.RegisterRoutes(mux)
 	s.automationHTTP.RegisterRoutes(mux)
-	s.schedulerHTTP.RegisterRoutes(mux)
+	s.dispatchHTTP.RegisterRoutes(mux)
 	s.operationsHTTP.RegisterRoutes(mux)
 	runOptionalRouteRegistrar(s.lifecycleHTTP != nil, func() { s.lifecycleHTTP.RegisterRoutes(mux) })
 	runOptionalRouteRegistrar(s.workspaceProvisionHTTP != nil, func() { s.workspaceProvisionHTTP.RegisterRoutes(mux) })

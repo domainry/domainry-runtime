@@ -39,7 +39,7 @@ func TestUploadRequestLimitPrefixAndWriterFailures(t *testing.T) {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
 	handler := uploadTestHandler(t, principal)
 	response := httptest.NewRecorder()
-	handler.uploadFile(response, multipartUploadRequest(t, "/uploads/files?object_key=document&field_key=file_url", "huge.bin", bytes.Repeat([]byte{'x'}, maxUploadRequestBytes+1)))
+	handler.uploadFile(response, multipartUploadRequest(t, "/uploads?object_key=document&field_key=file_url", "huge.bin", bytes.Repeat([]byte{'x'}, maxUploadRequestBytes+1)))
 	if response.Code != http.StatusRequestEntityTooLarge || response.Header().Get("X-Error-Code") != "backend.upload.file_too_large" {
 		t.Fatalf("request limit status=%d code=%q", response.Code, response.Header().Get("X-Error-Code"))
 	}
@@ -50,7 +50,7 @@ func TestUploadRequestLimitPrefixAndWriterFailures(t *testing.T) {
 	}
 	handler.readPrefix = func(io.Reader) ([]byte, error) { return nil, prefixErr }
 	response = httptest.NewRecorder()
-	handler.uploadFile(response, multipartUploadRequest(t, "/uploads/files?object_key=document&field_key=file_url", "file.txt", []byte("content")))
+	handler.uploadFile(response, multipartUploadRequest(t, "/uploads?object_key=document&field_key=file_url", "file.txt", []byte("content")))
 	if response.Code != http.StatusBadRequest || response.Header().Get("X-Error-Code") != "backend.upload.read_failed" {
 		t.Fatalf("prefix handler status=%d code=%q", response.Code, response.Header().Get("X-Error-Code"))
 	}
@@ -76,7 +76,7 @@ func TestUploadStorageFailureMappingAtEveryFilesystemStage(t *testing.T) {
 	request := func(t *testing.T, handler *UploadsHandler) *httptest.ResponseRecorder {
 		t.Helper()
 		response := httptest.NewRecorder()
-		handler.uploadFile(response, multipartUploadRequest(t, "/uploads/files?object_key=document&field_key=file_url", "file.txt", []byte("content")))
+		handler.uploadFile(response, multipartUploadRequest(t, "/uploads?object_key=document&field_key=file_url", "file.txt", []byte("content")))
 		return response
 	}
 	assertError := func(t *testing.T, response *httptest.ResponseRecorder, status int, code string) {

@@ -162,13 +162,13 @@ func runtimeAuthoringDeliveryEdgeFixtureScenario() changeplanmodel.RuntimeAuthor
 	step := func(label, path string, status int) changeplanmodel.RuntimeAuthoringScenarioStepEvidence {
 		return changeplanmodel.RuntimeAuthoringScenarioStepEvidence{Label: label, Path: path, ExpectedStatus: []int{status}, ActualStatus: status, RequestHash: hash("a"), ResponseHash: hash("b"), Passed: true}
 	}
-	replayOne, replayTwo := step("replay-one", "/records/objects/assets", 200), step("replay-two", "/records/objects/assets", 200)
+	replayOne, replayTwo := step("replay-one", "/records/assets", 200), step("replay-two", "/objects/assets", 200)
 	replayOne.IdempotencyKey, replayTwo.IdempotencyKey, replayTwo.IdempotencyReplayed = "key", "key", true
 	return changeplanmodel.RuntimeAuthoringScenarioEvidence{
 		Version: changeplanmodel.RuntimeAuthoringScenarioEvidenceVersion, ScenarioID: "asset.lifecycle", Passed: true,
 		Categories: append([]string(nil), changeplanmodel.RuntimeAuthoringRequiredScenarioCategories...), BeforeStateHash: "state", AfterStateHash: "state",
 		Steps: []changeplanmodel.RuntimeAuthoringScenarioStepEvidence{
-			step("success", "/records/objects/assets/asset-1", 201), step("denied", "/records/objects/assets/asset-1", 404), step("precondition", "/records/objects/assets/asset-1/actions/update", 409),
+			step("success", "/records/assets/items/asset-1", 201), step("denied", "/records/assets/items/asset-1", 404), step("precondition", "/records/assets/items/asset-1/actions/update", 409),
 			replayOne, replayTwo, step("audit", "/audit-events", 200), step("event", "/events", 200), step("outbox", "/outbox", 200),
 		},
 	}

@@ -4,7 +4,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
-	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
+	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 )
 
@@ -21,5 +21,5 @@ var (
 	_ changeplanapplication.ReferenceRuntime = businessReferenceRuntimePortAdapter{}
 	_ BusinessReferenceRuntimeProvider       = businessReferenceRuntimeAdapter{}
 
-	_ schedulerapplication.ScheduledWorkflowRuntime = scheduledWorkflowRuntimeAdapter{}
+	_ dispatchapplication.WorkflowTargetRuntime = scheduledWorkflowRuntimeAdapter{}
 )

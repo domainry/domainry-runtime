@@ -126,8 +126,14 @@ func (manager *projectTenantManager) bindInitializedIdentity(ctx context.Context
 
 func resolveInstallationConfig(cfg config.Config, installation workspaceprovision.Installation) (config.Config, error) {
 	expected := map[string]string{
-		"IDENTITY_WORKSPACE_ID":     installation.WorkspaceID,
-		"NOTIFICATION_TENANT_ID":    installation.TenantRegistryID,
+		"IDENTITY_WORKSPACE_ID": installation.WorkspaceID,
+		// Embedded Identity currently issues browser access bundles with both
+		// tenant_id and workspace_id set to the initialized workspace ID. The
+		// embedded Notification binding validates both fields against its
+		// application scope, so it must use the same principal scope. The
+		// tenant registry ID remains the Runtime provisioning identity; it is
+		// not the tenant claim exposed by embedded Identity sessions.
+		"NOTIFICATION_TENANT_ID":    installation.WorkspaceID,
 		"NOTIFICATION_WORKSPACE_ID": installation.WorkspaceID,
 	}
 	configured := map[string]string{
@@ -141,7 +147,7 @@ func resolveInstallationConfig(cfg config.Config, installation workspaceprovisio
 		}
 	}
 	cfg.IdentityWorkspaceID = installation.WorkspaceID
-	cfg.NotificationTenantID, cfg.NotificationWorkspaceID = installation.TenantRegistryID, installation.WorkspaceID
+	cfg.NotificationTenantID, cfg.NotificationWorkspaceID = installation.WorkspaceID, installation.WorkspaceID
 	return cfg, nil
 }
 

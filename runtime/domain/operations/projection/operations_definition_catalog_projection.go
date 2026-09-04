@@ -1,33 +1,18 @@
 package projection
 
 import (
-	agentsdk "github.com/domainry/domainry-agent-sdk"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
-	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 var operationsDefinitionCatalog = []operationsmodel.OperationsDefinition{
-	operationsDefinition("scheduler.job.run", "scheduler", "scheduler_definition", false, schedulersdk.ActionSchedulerDefinitionsRun, "published definition exists and target readiness passes"),
-	operationsDefinition("scheduler.definition.reschedule", "scheduler", "scheduler_definition", false, schedulersdk.ActionSchedulerDefinitionsReschedule, "published definition exists and next_run_at is valid"),
-	operationsDefinition("scheduler.run.retry", "scheduler", "scheduler_run", false, schedulersdk.ActionSchedulerRunsRetry, "run is failed, retryable, and below max attempts"),
-	operationsDefinition("scheduler.run.cancel", "scheduler", "scheduler_run", false, schedulersdk.ActionSchedulerRunsCancel, "run is cancellable and caller observes current status"),
-	operationsDefinition("scheduler.dead_letter.resolve", "scheduler", "scheduler_dead_letter", false, schedulersdk.ActionSchedulerDeadLettersResolve, "dead letter is unresolved and resolution note is present"),
-	operationsDefinition("scheduler.dead_letter.requeue", "scheduler", "scheduler_dead_letter", false, schedulersdk.ActionSchedulerDeadLettersRequeue, "dead letter is unresolved and its target is currently dispatchable"),
 	operationsDefinition("workflow.process.retry", "workflow", "workflow_process", false, "runtime.workflows.retry_ops_workflow_process", "process is failed or configuration_error and failed node exists"),
 	operationsDefinition("workflow.process.resolve", "workflow", "workflow_process", false, "runtime.workflows.resolve_ops_workflow_process", "process is failed and resolution note is present"),
 	operationsDefinition("workflow.execution.retry", "workflow", "workflow_execution", false, "runtime.workflows.retry_ops_workflow_execution", "execution is failed or dead_letter and attempt budget remains"),
 	operationsDefinition("workflow.execution.resolve", "workflow", "workflow_execution", false, "runtime.workflows.resolve_ops_workflow_execution", "execution is dead_letter"),
-	operationsDefinition("agent.task.retry", "agent", "agent_task_run", false, agentsdk.ActionAgentTasksRetry, "task is failed, cancelled, or dead_letter"),
-	operationsDefinition("agent.task.cancel", "agent", "agent_task_run", false, agentsdk.ActionAgentTasksCancel, "task is pending, running, retry_scheduled, or waiting_approval"),
-	operationsDefinition("agent.task.resolve", "agent", "agent_task_run", false, agentsdk.ActionAgentTasksResolve, "task is terminal and requires manual reconciliation"),
-	operationsDefinition("agent.task.reconcile", "agent", "agent_task_run", false, agentsdk.ActionAgentTasksReconcile, "task has uncertain provider evidence and an external run id"),
 	operationsDefinition("automation.rule.enable", "automation", "automation_rule", false, operationscontract.ActionEnableAutomationRule, "rule definition is valid"),
 	operationsDefinition("automation.rule.disable", "automation", "automation_rule", false, operationscontract.ActionDisableAutomationRule, "rule exists"),
-	operationsDefinition("integration.event.retry", "integration", "integration_event", false, operationscontract.ActionRetryIntegrationEvent, "event is retryable and current connector configuration is ready"),
-	operationsDefinition("integration.event.replay", "integration", "integration_event", false, operationscontract.ActionReplayIntegrationEvent, "event workspace, connector, configuration, and secret readiness are rechecked"),
 	operationsDefinition("runtime.publication.retry", "runtime", "runtime_publication_outbox", false, operationscontract.ActionRetryRuntimePublication, "Runtime publication handoff is failed and the owner result is not uncertain"),
-	operationsDefinition("integration.invocation.reconcile", "integration", "integration_invocation", true, operationscontract.ActionReconcileIntegrationInvocation, "invocation is stale and provider evidence can be queried"),
 	operationsSystemDefinition("backup.create", "persistence", "database", true, operationscontract.ActionCreateBackup, "target is immutable, encryption key is ready, and capacity budget permits"),
 	operationsSystemDefinition("backup.restore", "persistence", "database", true, operationscontract.ActionRestoreBackup, "maintenance, drain, verified backup, change plan, and restore target are present"),
 	operationsDefinition("retention.cleanup", "lifecycle", "retention_policy", true, operationscontract.ActionRunLifecycleCleanupJob, "dry-run, legal hold, reference, retention window, and batch limit checks pass"),

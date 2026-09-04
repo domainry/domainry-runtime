@@ -83,26 +83,6 @@ func TestFirstDefinitionIssueErrorPreservesField(t *testing.T) {
 	}
 }
 
-func TestReportValidationRejectsOneToManyMeasureAmplification(t *testing.T) {
-	snapshot := appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
-		{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "paid_amount", Type: "currency"}}},
-		{Key: "order_line", Fields: []definitionmodel.FieldSchema{{Key: "order_id", Type: "relation"}, {Key: "amount", Type: "currency"}}},
-	}}
-	report := reportmodel.ReportSchema{Key: "unsafe", Dataset: reportmodel.ReportDatasetSchema{
-		Source:   reportmodel.ReportDatasetSource{ObjectKey: "order", Alias: "orders"},
-		Joins:    []reportmodel.ReportDatasetJoin{{ObjectKey: "order_line", Alias: "lines", Type: "inner", LeftAlias: "orders", LeftField: "id", RightField: "order_id", Cardinality: "one_to_many"}},
-		Measures: []reportmodel.ReportDatasetMeasure{{Key: "paid", Operation: "sum", Field: &reportmodel.ReportDatasetField{SourceAlias: "orders", FieldKey: "paid_amount"}}},
-	}}
-	issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, report)
-	found := false
-	for _, issue := range issues {
-		found = found || issue.ErrorCode == "backend.report.join_measure_amplification"
-	}
-	if !found {
-		t.Fatalf("issues=%#v", issues)
-	}
-}
-
 func TestReportValidationPublishesObjectSQLAndRejectsUnsafeSelection(t *testing.T) {
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{
 		Objects: []definitionmodel.ObjectSchema{{Key: "sale", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "select"}, {Key: "amount", Type: "currency", Config: map[string]any{"precision": 19, "scale": 2}}}}},
@@ -121,54 +101,11 @@ func TestReportValidationPublishesObjectSQLAndRejectsUnsafeSelection(t *testing.
 	}
 }
 
-func TestReportValidationBlocksUnindexedDatasetAccessPath(t *testing.T) {
-	snapshot := appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{{Key: "event", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "select"}}}}}
-	report := reportmodel.ReportSchema{Key: "event.summary", Dataset: reportmodel.ReportDatasetSchema{
-		Source:  reportmodel.ReportDatasetSource{ObjectKey: "event", Alias: "events"},
-		Filters: []reportmodel.ReportDatasetFilter{{Field: reportmodel.ReportDatasetField{SourceAlias: "events", FieldKey: "status"}, Operator: "eq", Value: "open"}},
-	}}
-	issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, report)
-	if len(issues) != 1 || issues[0].ErrorCode != "backend.report.required_index_missing" || issues[0].FieldPath != "dataset.filters[0].field" || issues[0].Params["recommended_index"] != "workspace_id,status" {
-		t.Fatalf("issues=%#v", issues)
-	}
-	snapshot.Objects[0].Fields[0].Config = map[string]any{"indexed": true}
-	if issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, report); len(issues) != 0 {
-		t.Fatalf("indexed report rejected: %#v", issues)
-	}
-}
-
-func TestReportValidationAcceptsClosedExportScopeAndRejectsUnsafeFragments(t *testing.T) {
-	snapshot := appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
-		{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "order_no", Type: "text"}}},
-		{Key: "tag_assignment", Fields: []definitionmodel.FieldSchema{{Key: "target_id", Type: "text"}, {Key: "tag_definition_id", Type: "text"}, {Key: "active", Type: "boolean"}}},
-		{Key: "tag_definition", Fields: []definitionmodel.FieldSchema{{Key: "stable_key", Type: "text"}}},
-	}}
-	report := reportmodel.ReportSchema{Key: "orders", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "order", Alias: "orders"}}, ExportScope: &reportmodel.ReportExportScopeSchema{
-		Query: &reportmodel.ReportExportQueryScopeSchema{Mode: "any", Predicates: []reportmodel.ReportExportQueryPredicate{{Field: reportmodel.ReportDatasetField{SourceAlias: "orders", FieldKey: "order_no"}, Operator: "contains"}}},
-		Tags: &reportmodel.ReportExportTagScopeSchema{
-			Join:        reportmodel.ReportDatasetJoin{Alias: "export_tags", ObjectKey: "tag_assignment", Type: "inner", LeftAlias: "orders", LeftField: "id", RightField: "target_id", Cardinality: "one_to_many"},
-			FamilyJoin:  &reportmodel.ReportDatasetJoin{Alias: "export_tag_definitions", ObjectKey: "tag_definition", Type: "inner", LeftAlias: "export_tags", LeftField: "tag_definition_id", RightField: "id", Cardinality: "many_to_one"},
-			TargetField: reportmodel.ReportDatasetField{SourceAlias: "orders", FieldKey: "id"}, TagField: reportmodel.ReportDatasetField{SourceAlias: "export_tag_definitions", FieldKey: "stable_key"}, AllowedMatchModes: []string{"any", "all"}, DefaultMatchMode: "all",
-			FixedFilters: []reportmodel.ReportDatasetFilter{{Field: reportmodel.ReportDatasetField{SourceAlias: "export_tags", FieldKey: "active"}, Operator: "eq", Value: true}},
-		},
-	}}
-	if issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, report); len(issues) != 0 {
-		t.Fatalf("valid export scope issues=%#v", issues)
-	}
-	report.ExportScope.Query.Predicates[0].Operator = "sql"
-	report.ExportScope.Tags.Join.Type = "cross"
-	report.ExportScope.Tags.FixedFilters[0].Operator = "expression"
-	issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, report)
-	if !hasMetadataIssue(issues, "backend.report.export_query_definition_invalid") || !hasMetadataIssue(issues, "backend.report.export_tag_definition_invalid") {
-		t.Fatalf("unsafe export scope issues=%#v", issues)
-	}
-}
-
 func reportValidationFixture() (appschemamodel.ApplicationSchemaSnapshot, reportmodel.ReportSchema) {
 	return appschemamodel.ApplicationSchemaSnapshot{
 			Objects: []definitionmodel.ObjectSchema{{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}},
 		}, reportmodel.ReportSchema{
-			Key: "customer.summary", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "name", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: "name"}}}},
+			Key: "customer.summary", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "SELECT customer.name AS name FROM customer customer ORDER BY customer.name LIMIT 100", SourceObjects: []string{"customer"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "name", Type: "text", Kind: "dimension"}}},
 			EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{ObjectKey: "customer", MinimumRecords: 1, RequiredNonEmptyFields: []string{"name"}}},
 		}
 }

@@ -12,15 +12,15 @@ func workflowDefinitionAuthoringCapability(nodeTypes []string) capabilitycontrac
 		ValidationEndpoint: "POST /workflow/definitions/{workflowKey}/validate",
 		ConfigurationRoutes: []string{
 			"GET /metadata/definitions/workflow/{workflowKey}", "POST /workflow/definitions/{workflowKey}/validate", "POST /workflow/definitions/{workflowKey}/simulate",
-			"GET /business-system/snapshot", "GET /business-references/graph",
+			"GET /authoring/snapshot", "GET /references",
 		},
 		ResourceKeyPathParameter: "workflowKey", InputSchema: workflowDefinitionInputSchema(nodeTypes),
 		OutputSchema:    workflowValidationOutputSchema(),
 		OutputVariables: []capabilitycontract.CapabilityAuthoringOutput{{Name: "valid", JSONPointer: "/valid", Type: "boolean", VisibleTo: "subsequent_capability_calls"}},
 		ReferenceContracts: []capabilitycontract.CapabilityAuthoringReference{
-			{Kind: "object_key", InputJSONPointer: "/payload/trigger_contract/object_key", ResolverEndpoint: "GET /capabilities/references/object_key"},
-			{Kind: "field_key", InputJSONPointer: "/payload/trigger_contract/field_key", ScopeFrom: "/payload/trigger_contract/object_key", ResolverEndpoint: "GET /capabilities/references/field_key"},
-			{Kind: "action_key", InputJSONPointer: "/payload/graph/nodes/*/contract/action/action_key", ResolverEndpoint: "GET /capabilities/references/action_key"},
+			{Kind: "object_key", InputJSONPointer: "/payload/trigger_contract/object_key", ResolverEndpoint: "GET /discovery/references/object_key"},
+			{Kind: "field_key", InputJSONPointer: "/payload/trigger_contract/field_key", ScopeFrom: "/payload/trigger_contract/object_key", ResolverEndpoint: "GET /discovery/references/field_key"},
+			{Kind: "action_key", InputJSONPointer: "/payload/graph/nodes/*/contract/action/action_key", ResolverEndpoint: "GET /discovery/references/action_key"},
 		},
 		Execution: &capabilitycontract.CapabilityAuthoringExecution{ReadSet: []string{"metadata.published_snapshot", "action.definition", "identity.role", "schema.object"}, Transaction: "read_only_candidate_validation", Idempotency: "naturally_idempotent_at_candidate_hash", SideEffectLevel: "none", PermissionModel: "runtime.workflows.validate_workflow_definition", ChangeControl: "source_controlled_json"},
 		Errors: []capabilitycontract.CapabilityAuthoringError{

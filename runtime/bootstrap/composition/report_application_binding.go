@@ -29,8 +29,8 @@ func (s *RuntimeServices) BindReportApplication(binding reportsdk.Binding) error
 		return err
 	}
 	s.applications.Reports = application
-	if s.applications.Scheduler != nil {
-		s.applications.Scheduler.UseReportSnapshotRuntime(reportSDKSnapshotRuntime{commands: application.SnapshotCommands()})
+	if s.applications.TargetExecutions != nil {
+		s.applications.TargetExecutions.UseReportSnapshotRuntime(reportSDKSnapshotRuntime{commands: application.SnapshotCommands()})
 	}
 	return nil
 }

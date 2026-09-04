@@ -76,7 +76,7 @@ func TestRuntimeAPIContractUsesOneServerSelectedRecordExportRoute(t *testing.T) 
 		t.Fatal(err)
 	}
 	route := document.Routes["record_export"]
-	if route.Method != "POST" || route.Path != "/records/objects/{objectKey}/records/export" || route.DeliveryPolicy != "server_selected" || !route.RequiresIdempotencyKey || route.Responses["200"] != "file" || route.Responses["202"] != "record_batch_job" {
+	if route.Method != "POST" || route.Path != "/records/{objectKey}/export" || route.DeliveryPolicy != "server_selected" || !route.RequiresIdempotencyKey || route.Responses["200"] != "file" || route.Responses["202"] != "record_batch_job" {
 		t.Fatalf("record export route=%+v", route)
 	}
 	if _, exists := document.Routes["record_export_job_create"]; exists {
@@ -120,7 +120,7 @@ func TestRuntimeAPIContractPublishesActionInvocationScope(t *testing.T) {
 	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
 		t.Fatal(err)
 	}
-	if route := document.Routes["action_catalog"]; route.Method != "GET" || route.Path != "/records/objects/{objectKey}/actions" {
+	if route := document.Routes["action_catalog"]; route.Method != "GET" || route.Path != "/records/{objectKey}/actions" {
 		t.Fatalf("unexpected Action catalog route: %+v", route)
 	}
 	scope := document.Schemas["action_definition"].InvocationScopeByKind
@@ -362,7 +362,7 @@ func TestRuntimeAPIContractKeepsOnlyRuntimePublicationHandoff(t *testing.T) {
 	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
 		t.Fatal(err)
 	}
-	if route := document.Routes["publication_handoff_result"]; route.Path != "/publication-handoff/messages/{messageID}" {
+	if route := document.Routes["publication_handoff_result"]; route.Path != "/publication-handoffs/{messageID}" {
 		t.Fatalf("publication handoff route=%+v", route)
 	}
 	for key, route := range document.Routes {

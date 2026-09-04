@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestRuntimeOnlyRegistersRuntimeOwnedMetadataRoutes(t *testing.T) {
+func TestRuntimeOnlyRegistersRuntimeOwnedApplicationSchemaRoutes(t *testing.T) {
 	handler := NewApplicationSchemaHandler(ApplicationSchemaDependencies{
 		Authenticated: func(http.HandlerFunc) http.HandlerFunc {
 			return func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
@@ -15,7 +15,7 @@ func TestRuntimeOnlyRegistersRuntimeOwnedMetadataRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/metadata/definitions/object/account/validate", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/application-schema/definitions/object/account/validate", nil))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("Runtime authoring validation status=%d", response.Code)
 	}
@@ -38,20 +38,20 @@ func TestRegisterRoutesWithoutProvisionHandler(t *testing.T) {
 
 	handler.RegisterRoutes(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/metadata/manifests/validate", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/provision/manifests/validate", nil))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("unexpected provision route status=%d", response.Code)
 	}
 }
 
-func TestRegisterRoutesWithProvisionHandler(t *testing.T) {
-	handler := &ApplicationSchemaHandler{authenticated: func(handle http.HandlerFunc) http.HandlerFunc { return handle }, provisionRequired: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }}
+func TestApplicationSchemaDoesNotOwnProvisionRoutes(t *testing.T) {
+	handler := &ApplicationSchemaHandler{authenticated: func(handle http.HandlerFunc) http.HandlerFunc { return handle }}
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	for _, path := range []string{
-		"/metadata/manifests/validate",
-		"/metadata/manifests/review",
-		"/metadata/manifests/apply",
+		"/provision/manifests/validate",
+		"/provision/manifests/review",
+		"/provision/manifests/apply",
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, nil))
@@ -60,12 +60,12 @@ func TestRegisterRoutesWithProvisionHandler(t *testing.T) {
 		}
 	}
 	current := httptest.NewRecorder()
-	mux.ServeHTTP(current, httptest.NewRequest(http.MethodGet, "/metadata/manifests/current", nil))
-	if current.Code != http.StatusServiceUnavailable {
-		t.Fatalf("current projection route status=%d", current.Code)
+	mux.ServeHTTP(current, httptest.NewRequest(http.MethodGet, "/provision/manifests/current", nil))
+	if current.Code != http.StatusNotFound {
+		t.Fatalf("Application Schema still owns Provision current route: status=%d", current.Code)
 	}
 	legacy := httptest.NewRecorder()
-	mux.ServeHTTP(legacy, httptest.NewRequest(http.MethodPost, "/metadata/manifests/validate", nil))
+	mux.ServeHTTP(legacy, httptest.NewRequest(http.MethodPost, "/provision/manifests/validate", nil))
 	if legacy.Code != http.StatusNotFound {
 		t.Fatalf("legacy provision route status=%d", legacy.Code)
 	}

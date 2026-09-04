@@ -56,24 +56,24 @@ func addRecordBatchOpenAPIPaths(paths map[string]any) {
 	exportDispatch := recordExportDispatchOpenAPIResponses(openAPIRuntimeClient(openAPIOperation(
 		"dispatchObjectRecordExport", "Objects", "Export records; Runtime automatically returns a direct file or creates a background download", openAPIAdminSecurity(), objectKey, idempotencyKey,
 	), "exportRecords"))
-	paths["/records/objects/{objectKey}/records/export"] = map[string]any{"post": exportDispatch}
-	paths["/records/exports/{jobID}/download"] = map[string]any{"get": openAPIRuntimeClient(openAPIOperation(
+	paths["/records/{objectKey}/export"] = map[string]any{"post": exportDispatch}
+	paths["/records/exports/jobs/{jobID}"] = map[string]any{"get": openAPIRuntimeClient(openAPIOperation(
 		"downloadObjectRecordExport", "Objects", "Download a completed record export owned by the current user", openAPIAdminSecurity(), openAPIPathParameter("jobID", "Export job ID"),
 		openAPIResponse("Export artifact", "text/csv", map[string]any{"type": "string", "format": "binary"}),
 	), "downloadRecordExport")}
-	paths["/records/objects/{objectKey}/records/import/preview"] = map[string]any{"post": openAPIRuntimeClient(openAPIOperation(
+	paths["/records/{objectKey}/import/preview"] = map[string]any{"post": openAPIRuntimeClient(openAPIOperation(
 		"previewObjectRecordImport", "Objects", "Preview and validate object record CSV without mutation", openAPIAdminSecurity(), objectKey, recordCSVRequestBody(),
 		openAPIJSONResponse("Import preview", recordImportPreviewOpenAPISchema()),
 	), "previewRecordImport")}
-	paths["/records/objects/{objectKey}/records/import/apply"] = map[string]any{"post": openAPIRuntimeClient(openAPIOperation(
+	paths["/records/{objectKey}/import/apply"] = map[string]any{"post": openAPIRuntimeClient(openAPIOperation(
 		"applyObjectRecordImport", "Objects", "Idempotently apply a validated bounded CSV import", openAPIAdminSecurity(), objectKey, idempotencyKey, recordCSVRequestBody(),
 		openAPIJSONResponse("Import result", openAPIRequiredObject([]string{"object_key", "created", "skipped", "preview"}, map[string]any{"object_key": map[string]any{"type": "string"}, "created": map[string]any{"type": "integer"}, "skipped": map[string]any{"type": "integer"}, "preview": recordImportPreviewOpenAPISchema()})),
 	), "applyRecordImport")}
-	paths["/records/objects/{objectKey}/records/import/jobs"] = map[string]any{"post": openAPIRuntimeClient(openAPIOperation(
+	paths["/records/{objectKey}/import/jobs"] = map[string]any{"post": openAPIRuntimeClient(openAPIOperation(
 		"enqueueObjectRecordImport", "Objects", "Submit a durable bounded asynchronous CSV import to Data Exchange", openAPIAdminSecurity(), objectKey, idempotencyKey, recordCSVRequestBody(),
 		openAPIJSONResponse("Queued Data Exchange job", recordBatchJobOpenAPISchema()),
 	), "enqueueRecordImport")}
-	paths["/records/objects/{objectKey}/actions/{actionKey}/bulk"] = map[string]any{"post": openAPIRuntimeClient(openAPIOperation(
+	paths["/records/{objectKey}/actions/{actionKey}/bulk"] = map[string]any{"post": openAPIRuntimeClient(openAPIOperation(
 		"executeBulkObjectAction", "Actions", "Idempotently execute one action for an explicit bounded record set", openAPIAdminSecurity(), objectKey, openAPIPathParameter("actionKey", "Action key"), idempotencyKey,
 		openAPIJSONRequest(openAPIRef("BulkActionRequest")), openAPIJSONResponse("Bulk action result", openAPIObject(nil)),
 	), "runBulkAction")}

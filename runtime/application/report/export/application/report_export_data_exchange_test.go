@@ -40,7 +40,7 @@ func (*reportOwnerExportsStub) Prepare(context.Context, reportmodel.ReportExport
 
 func (s *reportOwnerExportsStub) ResolveExecution(_ context.Context, request reportmodel.ReportExportExecutionRequest, authority reportmodel.ReportAuthority) (reportmodel.ReportExportExecution, error) {
 	s.resolveCalls++
-	return reportmodel.ReportExportExecution{Definition: s.definition, Scope: request.Scope, MaskedDimensions: map[string]bool{}}, nil
+	return reportmodel.ReportExportExecution{Definition: s.definition, Scope: request.Scope}, nil
 }
 
 func (s *reportOwnerExportsStub) ReadPage(context.Context, reportmodel.ReportExportExecutionRequest, reportmodel.ReportAuthority) (reportmodel.ReportSummary, error) {

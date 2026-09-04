@@ -15,6 +15,7 @@ import (
 	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	dataexchangemodulehost "github.com/domainry/domainry-data-exchange-sdk/modulehost"
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
@@ -212,6 +213,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	integrationTriggers := &runtimeIntegrationTriggerRelay{}
 	integrationOwner, err := openRuntimeIntegration(ctx, integrationsdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}, integrationFactory, runtimeIntegrationModuleHost{store: store, providers: connectorProviders, triggers: integrationTriggers})
 	mustCompleteRuntimeStartup(err)
+	mustCompleteRuntimeStartup(bindIdentitySecurityChallengeDelivery(identityBinding, integrationOwner.Operations))
 	ownerProjectedManifest, validationErr := addIntegrationOwnerValidationCatalog(ctx, seedManifest, integrationOwner.Catalog)
 	mustCompleteRuntimeStartup(validationErr)
 	if !cfg.SkipManifestValidation && !(cfg.AllowEmptyAuthoringManifest && runtimeManifestHasNoBusinessObjects(seedManifest)) {
@@ -432,7 +434,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	var schedulerBinding schedulersdk.Binding
 	if schedulerFactory != nil {
 		application := schedulersdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}
-		host := composition.NewSchedulerSDKModuleHost(records.Applications().Scheduler, records.Applications().PublicationHandoff, composition.IntegrationConnectionRequirements(manifest.Integrations.Connections), store, workerDependencies.WorkerID.String(), manifest.SchedulerDefinitions)
+		host := composition.NewSchedulerSDKModuleHost(records.SchedulerDefinitionSource(), records.Applications().TargetExecutions, records.Applications().PublicationHandoff, composition.IntegrationConnectionRequirements(manifest.Integrations.Connections), store, workerDependencies.WorkerID.String(), manifest.SchedulerDefinitions)
 		if moduleFactory, ok := schedulerFactory.(schedulermodulehost.Factory); ok {
 			schedulerBinding, err = moduleFactory.OpenModule(ctx, application, host)
 		} else if saasFactory, ok := schedulerFactory.(schedulersaashost.Factory); ok {
@@ -454,6 +456,15 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	)
 	authorizationModuleActions, err := moduleBindings.AuthorizationActions()
 	mustCompleteRuntimeStartup(err)
+	if identityActions, embedded := identityBinding.(actioncontract.Provider); embedded {
+		identityAuthorizationActions, actionsErr := identityActions.AuthorizationActions()
+		mustCompleteRuntimeStartup(actionsErr)
+		authorizationModuleActions = append(authorizationModuleActions, identityAuthorizationActions...)
+	} else if identityHTTP, embedded := identityBinding.(modulehttp.Provider); embedded {
+		identityAuthorizationActions, actionsErr := modulehttp.AuthorizationActions(identityHTTP)
+		mustCompleteRuntimeStartup(actionsErr)
+		authorizationModuleActions = append(authorizationModuleActions, identityAuthorizationActions...)
+	}
 	authorizationRegistry, err := reconcileRuntimeIdentityAuthorization(ctx, identityBinding, records.Schema(), authorizationModuleActions, nil, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs)
 	mustCompleteRuntimeStartup(err)
 	authorizationRegistrySnapshot := &runtimeAuthorizationRegistrySnapshot{}
@@ -461,7 +472,8 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if binder, embedded := identityBinding.(identitysdk.PermissionUsageProviderBinder); embedded {
 		mustCompleteRuntimeStartup(binder.BindPermissionUsageProvider(authorizationRegistrySnapshot))
 	}
-	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience))
+	publishedRuntimeRoles := runtimeProjectRolesWithBootstrapAdministrator(manifest.Roles, authorizationRegistry.PermissionDefinitions())
+	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, records.Schema().Objects, publishedRuntimeRoles, cfg.IdentityWorkspaceID, cfg.IdentityAudience))
 	startupCallbacks.records = records
 	notificationWakeup := func(message publicationmodel.Message) {
 		records.Applications().PublicationHandoff.Wake(ctx, publicationhandoff.Locator{WorkspaceID: message.WorkspaceID, MessageID: message.ID})
@@ -494,6 +506,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		preparation := appschemaapplication.ApplicationSchemaReloadPreparation{
 			Commit: func() { authorizationRegistrySnapshot.Store(candidateRegistry) },
 		}
+		candidatePublishedRoles := runtimeProjectRolesWithBootstrapAdministrator(manifest.Roles, candidateRegistry.PermissionDefinitions())
 		if identityBinding != nil {
 			application := identitysdk.ApplicationRef{
 				WorkspaceID: identitysdk.WorkspaceID(strings.TrimSpace(cfg.IdentityWorkspaceID)), ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(cfg.IdentityAudience)),
@@ -501,8 +514,21 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 			preparation.Abort = func(abortCtx context.Context) error {
 				rollbackCtx, rollbackCancel := context.WithTimeout(context.WithoutCancel(abortCtx), 10*time.Second)
 				defer rollbackCancel()
-				return reconcileRuntimePermissionRegistries(rollbackCtx, identityBinding.Permissions(), application, candidateRegistry, previousRegistry)
+				if err := reconcileRuntimePermissionRegistries(rollbackCtx, identityBinding.Permissions(), application, candidateRegistry, previousRegistry); err != nil {
+					return err
+				}
+				previousPublishedRoles := runtimeProjectRolesWithBootstrapAdministrator(manifest.Roles, previousRegistry.PermissionDefinitions())
+				return publishRuntimeProjectRoles(rollbackCtx, identityBinding, records.Schema().Objects, previousPublishedRoles, cfg.IdentityWorkspaceID, cfg.IdentityAudience)
 			}
+		}
+		if err := publishRuntimeProjectRoles(publishCtx, identityBinding, snapshot.Objects, candidatePublishedRoles, cfg.IdentityWorkspaceID, cfg.IdentityAudience); err != nil {
+			rollbackErr := reconcileRuntimePermissionRegistries(publishCtx, identityBinding.Permissions(), identitysdk.ApplicationRef{
+				WorkspaceID: identitysdk.WorkspaceID(strings.TrimSpace(cfg.IdentityWorkspaceID)), ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(cfg.IdentityAudience)),
+			}, candidateRegistry, previousRegistry)
+			if rollbackErr != nil {
+				return appschemaapplication.ApplicationSchemaReloadPreparation{}, errors.Join(fmt.Errorf("publish Runtime project roles and objects to Identity: %w", err), fmt.Errorf("rollback Runtime permissions after project catalog failure: %w", rollbackErr))
+			}
+			return appschemaapplication.ApplicationSchemaReloadPreparation{}, fmt.Errorf("publish Runtime project roles and objects to Identity: %w", err)
 		}
 		return preparation, nil
 	})

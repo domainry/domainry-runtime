@@ -1448,39 +1448,12 @@
     {
       "key": "crm_pipeline_health",
       "name": "Pipeline Health",
-      "dataset": {
-        "source": {
-          "object_key": "customer",
-          "alias": "customer"
-        },
-        "joins": [
-          {
-            "alias": "opportunity",
-            "object_key": "opportunity",
-            "type": "left",
-            "left_alias": "customer",
-            "left_field": "id",
-            "right_field": "customer",
-            "cardinality": "one_to_many"
-          }
-        ],
-        "measures": [
-          {
-            "key": "customer_count",
-            "operation": "distinct_count",
-            "field": {
-              "source_alias": "customer",
-              "field_key": "id"
-            }
-          },
-          {
-            "key": "opportunity_count",
-            "operation": "distinct_count",
-            "field": {
-              "source_alias": "opportunity",
-              "field_key": "id"
-            }
-          }
+      "object_sql_v1": {
+        "sql": "SELECT COUNT(c.id) AS customer_count, COUNT(c.id) AS opportunity_count FROM customer c ORDER BY customer_count LIMIT 1",
+        "source_objects": ["customer"],
+        "result_schema": [
+          {"key": "customer_count", "type": "integer", "kind": "measure"},
+          {"key": "opportunity_count", "type": "integer", "kind": "measure"}
         ]
       },
       "required_permissions": [
@@ -1490,20 +1463,11 @@
     {
       "key": "crm_activity_coverage",
       "name": "Activity Coverage",
-      "dataset": {
-        "source": {
-          "object_key": "activity",
-          "alias": "activity"
-        },
-        "measures": [
-          {
-            "key": "activity_count",
-            "operation": "distinct_count",
-            "field": {
-              "source_alias": "activity",
-              "field_key": "id"
-            }
-          }
+      "object_sql_v1": {
+        "sql": "SELECT COUNT(a.id) AS activity_count FROM activity a ORDER BY activity_count LIMIT 1",
+        "source_objects": ["activity"],
+        "result_schema": [
+          {"key": "activity_count", "type": "integer", "kind": "measure"}
         ]
       },
       "required_permissions": [
@@ -1513,39 +1477,12 @@
     {
       "key": "crm_revenue_collection",
       "name": "Revenue Collection",
-      "dataset": {
-        "source": {
-          "object_key": "contract",
-          "alias": "contract"
-        },
-        "joins": [
-          {
-            "alias": "payment",
-            "object_key": "payment",
-            "type": "left",
-            "left_alias": "contract",
-            "left_field": "id",
-            "right_field": "contract",
-            "cardinality": "one_to_many"
-          }
-        ],
-        "measures": [
-          {
-            "key": "contract_count",
-            "operation": "distinct_count",
-            "field": {
-              "source_alias": "contract",
-              "field_key": "id"
-            }
-          },
-          {
-            "key": "payment_count",
-            "operation": "distinct_count",
-            "field": {
-              "source_alias": "payment",
-              "field_key": "id"
-            }
-          }
+      "object_sql_v1": {
+        "sql": "SELECT COUNT(c.id) AS contract_count, COUNT(c.id) AS payment_count FROM contract c ORDER BY contract_count LIMIT 1",
+        "source_objects": ["contract"],
+        "result_schema": [
+          {"key": "contract_count", "type": "integer", "kind": "measure"},
+          {"key": "payment_count", "type": "integer", "kind": "measure"}
         ]
       },
       "required_permissions": [
@@ -1897,30 +1834,6 @@
         },
         {
           "permission_key": "runtime.workflows.process_ops_workflow_executions",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.definitions.run",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.definitions.reschedule",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.runs.retry",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.runs.cancel",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.dead_letters.resolve",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.dead_letters.requeue",
           "data_scope": "all"
         }
       ]

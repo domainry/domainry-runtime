@@ -28,7 +28,7 @@ func TestInitialManifestProvisionIsUnauthenticatedAndIdempotent(t *testing.T) {
 		return nil
 	}).Routes()
 
-	review := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/review", map[string]any{"manifest": manifest})
+	review := provisionRequest(t, server, http.MethodPost, "/provision/manifests/review", map[string]any{"manifest": manifest})
 	if review.Code != http.StatusOK {
 		t.Fatalf("review status %d: %s", review.Code, review.Body.String())
 	}
@@ -42,7 +42,7 @@ func TestInitialManifestProvisionIsUnauthenticatedAndIdempotent(t *testing.T) {
 		"manifest": manifest, "reviewed_manifest_hash": hash, "expected_snapshot_hash": emptySnapshotHash,
 		"actor": "builder-agent", "reason": "initial build",
 	}
-	applied := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/apply", applyPayload)
+	applied := provisionRequest(t, server, http.MethodPost, "/provision/manifests/apply", applyPayload)
 	if applied.Code != http.StatusCreated {
 		t.Fatalf("apply status %d: %s", applied.Code, applied.Body.String())
 	}
@@ -60,7 +60,7 @@ func TestInitialManifestProvisionIsUnauthenticatedAndIdempotent(t *testing.T) {
 	if _, err := os.Stat(target); err != nil {
 		t.Fatalf("provisioned manifest missing: %v", err)
 	}
-	current := provisionRequest(t, server, http.MethodGet, "/metadata/manifests/current", nil)
+	current := provisionRequest(t, server, http.MethodGet, "/provision/manifests/current", nil)
 	if current.Code != http.StatusOK {
 		t.Fatalf("current status %d: %s", current.Code, current.Body.String())
 	}
@@ -87,7 +87,7 @@ func TestInitialManifestProvisionIsUnauthenticatedAndIdempotent(t *testing.T) {
 	}
 
 	applyPayload["expected_snapshot_hash"] = hash
-	replayed := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/apply", applyPayload)
+	replayed := provisionRequest(t, server, http.MethodPost, "/provision/manifests/apply", applyPayload)
 	if replayed.Code != http.StatusOK {
 		t.Fatalf("replay status %d: %s", replayed.Code, replayed.Body.String())
 	}
@@ -112,7 +112,7 @@ func TestManifestProvisionRejectsStaleSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	response := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/apply", map[string]any{
+	response := provisionRequest(t, server, http.MethodPost, "/provision/manifests/apply", map[string]any{
 		"manifest": manifest, "reviewed_manifest_hash": hash, "expected_snapshot_hash": "stale",
 		"actor": "builder-agent", "reason": "initial build",
 	})
@@ -161,13 +161,13 @@ func TestProvisionBootstrapRoutesExposeContractAndValidation(t *testing.T) {
 	if openapiPayload.OpenAPI != "3.1.0" || openapiPayload.Info.Title != "Acme domain Runtime Provision API" || openapiPayload.Info.Version != "1.2.3" || len(openapiPayload.Paths) != 10 {
 		t.Fatalf("openapi payload=%#v", openapiPayload)
 	}
-	for _, path := range []string{"/metadata/manifests/validate", "/metadata/manifests/current", "/provision/review", "/provision/apply", "/provision/rollback", "/provision/configuring", "/provision/lifecycle", "/provision/abandon"} {
+	for _, path := range []string{"/provision/manifests/validate", "/provision/manifests/current", "/provision/review", "/provision/apply", "/provision/rollback", "/provision/configuring", "/provision/lifecycle", "/provision/abandon"} {
 		if _, ok := openapiPayload.Paths[path]; !ok {
 			t.Fatalf("openapi path %q missing: %#v", path, openapiPayload.Paths)
 		}
 	}
 
-	validated := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/validate", map[string]any{"manifest": manifest})
+	validated := provisionRequest(t, server, http.MethodPost, "/provision/manifests/validate", map[string]any{"manifest": manifest})
 	if validated.Code != http.StatusOK {
 		t.Fatalf("validate status=%d body=%s", validated.Code, validated.Body.String())
 	}
@@ -178,11 +178,11 @@ func TestProvisionBootstrapRoutesExposeContractAndValidation(t *testing.T) {
 	}
 
 	malformed := httptest.NewRecorder()
-	server.ServeHTTP(malformed, httptest.NewRequest(http.MethodPost, "/metadata/manifests/validate", bytes.NewBufferString(`{"manifest":`)))
+	server.ServeHTTP(malformed, httptest.NewRequest(http.MethodPost, "/provision/manifests/validate", bytes.NewBufferString(`{"manifest":`)))
 	if malformed.Code != http.StatusBadRequest || !bytes.Contains(malformed.Body.Bytes(), []byte(`"code":"invalid_json"`)) {
 		t.Fatalf("malformed status=%d body=%s", malformed.Code, malformed.Body.String())
 	}
-	invalid := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/validate", map[string]any{"manifest": map[string]any{}})
+	invalid := provisionRequest(t, server, http.MethodPost, "/provision/manifests/validate", map[string]any{"manifest": map[string]any{}})
 	if invalid.Code != http.StatusUnprocessableEntity || !bytes.Contains(invalid.Body.Bytes(), []byte(`"code":"manifest_validation_failed"`)) {
 		t.Fatalf("invalid status=%d body=%s", invalid.Code, invalid.Body.String())
 	}
@@ -222,7 +222,7 @@ func TestInitialProvisionCarriesIdentityProfileExtensionIntoActivation(t *testin
 		}
 		return nil
 	}).Routes()
-	review := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/review", map[string]any{"manifest": manifest})
+	review := provisionRequest(t, server, http.MethodPost, "/provision/manifests/review", map[string]any{"manifest": manifest})
 	if review.Code != http.StatusOK {
 		t.Fatalf("Profile Provision review status=%d body=%s", review.Code, review.Body.String())
 	}
@@ -231,7 +231,7 @@ func TestInitialProvisionCarriesIdentityProfileExtensionIntoActivation(t *testin
 		CurrentSnapshotHash string `json:"current_snapshot_hash"`
 	}
 	decodeProvisionResponse(t, review, &reviewed)
-	apply := provisionRequest(t, server, http.MethodPost, "/metadata/manifests/apply", map[string]any{
+	apply := provisionRequest(t, server, http.MethodPost, "/provision/manifests/apply", map[string]any{
 		"manifest": manifest, "reviewed_manifest_hash": reviewed.ManifestHash, "expected_snapshot_hash": reviewed.CurrentSnapshotHash,
 		"actor": "builder-agent", "reason": "install Profile Extension",
 	})

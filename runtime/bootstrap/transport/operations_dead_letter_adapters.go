@@ -5,7 +5,6 @@ import (
 	"fmt"
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"strings"
-	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
@@ -14,10 +13,9 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
-func registerOperationsDeadLetterOwners(service *operationsapplication.OperationsApplicationService, publications runtimePublicationDeadLetterService, workflows *workflowapplication.WorkflowApplicationService, scheduler schedulerDeadLetterService, recordTimers recordTimerDeadLetterService) {
+func registerOperationsDeadLetterOwners(service *operationsapplication.OperationsApplicationService, publications runtimePublicationDeadLetterService, workflows *workflowapplication.WorkflowApplicationService, recordTimers recordTimerDeadLetterService) {
 	if service == nil {
 		return
 	}
@@ -26,9 +24,6 @@ func registerOperationsDeadLetterOwners(service *operationsapplication.Operation
 	}
 	if workflows != nil {
 		_ = service.RegisterDeadLetterOwner("workflow_execution", workflowDeadLetterOwner{service: workflows})
-	}
-	if scheduler != nil {
-		_ = service.RegisterDeadLetterOwner("scheduler", schedulerDeadLetterOwner{service: scheduler})
 	}
 	if recordTimers != nil {
 		_ = service.RegisterDeadLetterOwner("record_timer", recordTimerDeadLetterOwner{service: recordTimers})
@@ -144,39 +139,6 @@ func (o workflowDeadLetterOwner) Act(ctx context.Context, id, action, reason, ke
 		}
 	case operationsapplication.OperationsDeadLetterResolve, operationsapplication.OperationsDeadLetterAck:
 		if _, err := o.service.ResolveWorkflowExecution(ctx, id, reason, principal); err != nil {
-			return operationsapplication.OperationsDeadLetterItem{}, err
-		}
-	default:
-		return operationsapplication.OperationsDeadLetterItem{}, deadLetterActionUnsupported()
-	}
-	return o.Inspect(ctx, id, principal)
-}
-
-type schedulerDeadLetterOwner struct {
-	service schedulerDeadLetterService
-}
-
-type schedulerDeadLetterService interface {
-	DeadLetter(context.Context, string) (schedulersdk.DeadLetter, error)
-	ResolveDeadLetter(context.Context, string, string) (schedulersdk.DeadLetter, error)
-	RequeueDeadLetter(context.Context, string, string) (schedulersdk.Run, error)
-}
-
-func (o schedulerDeadLetterOwner) Inspect(ctx context.Context, id string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
-	record, err := o.service.DeadLetter(ctx, id)
-	if err != nil {
-		return operationsapplication.OperationsDeadLetterItem{}, err
-	}
-	return operationsapplication.OperationsDeadLetterItem{Owner: "scheduler", ID: record.RunID, ResourceType: "scheduler_dead_letter", Status: record.Status, FailureCode: record.Reason, CorrelationID: record.RunID, BusinessKey: record.DefinitionKey, EvidenceRef: "scheduler_dead_letter:" + record.RunID, AllowedActions: []string{"resolve", "retry", "ack"}, Details: map[string]any{"reason": record.Reason}, UpdatedAt: record.FailedAt.UTC().Format(time.RFC3339Nano)}, nil
-}
-func (o schedulerDeadLetterOwner) Act(ctx context.Context, id, action, reason, key string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
-	switch action {
-	case operationsapplication.OperationsDeadLetterRetry:
-		if _, err := o.service.RequeueDeadLetter(ctx, id, reason); err != nil {
-			return operationsapplication.OperationsDeadLetterItem{}, err
-		}
-	case operationsapplication.OperationsDeadLetterResolve, operationsapplication.OperationsDeadLetterAck:
-		if _, err := o.service.ResolveDeadLetter(ctx, id, reason); err != nil {
 			return operationsapplication.OperationsDeadLetterItem{}, err
 		}
 	default:

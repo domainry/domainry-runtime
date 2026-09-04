@@ -10,11 +10,7 @@ import (
 
 func (v *reportDefinitionValidator) validateExecutionDefinition() {
 	if v.report.ObjectSQLV1 == nil {
-		v.validateDatasetReferences()
 		return
-	}
-	if v.report.Materialization != nil || v.report.ExportScope != nil {
-		v.issue("backend.report.object_sql_p0_feature_forbidden", "object_sql_v1", nil)
 	}
 	plan, err := reportcontract.CompileReportObjectSQL(*v.report.ObjectSQLV1, v.objects)
 	if err != nil {

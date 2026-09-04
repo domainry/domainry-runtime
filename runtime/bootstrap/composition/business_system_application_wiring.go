@@ -10,7 +10,6 @@ import (
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
-	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
@@ -25,7 +24,7 @@ func assembleBusinessSystemApplication(
 	automations *automationapplication.AutomationApplicationService,
 	publications *publicationhandoff.PublicationHandoffApplicationService,
 	records *recordapplication.RecordApplicationService,
-	scheduler *schedulerapplication.SchedulerApplicationService,
+	scheduler SchedulerDefinitionSource,
 	runtimeStatus *deploymentapplication.DeploymentRuntimeStatusApplicationService,
 	evidence changeplanrepository.ChangePlanEvidenceRepository,
 ) *businesssystemapplication.BusinessSystemApplicationService {
@@ -42,8 +41,8 @@ func assembleBusinessSystemApplication(
 				return []integrationsdk.Connection{}, nil
 			},
 			PublicationHandoff: publications.ListPublicationMessages,
-			SchedulerDefinitions: func(ctx context.Context, principal principalmodel.Principal) ([]recordmodel.Record, error) {
-				definitions, err := scheduler.PublishedDefinitions(ctx, principal)
+			SchedulerDefinitions: func(ctx context.Context, _ principalmodel.Principal) ([]recordmodel.Record, error) {
+				definitions, err := scheduler.ListSchedulerDefinitions(ctx)
 				return schedulerPublishedDefinitionRecords(definitions), err
 			},
 			SchemaForPrincipal: schema.ForPrincipal, ListRecords: records.ListRecords, IdempotencyStatus: runtimeStatus.IdempotencyOperationalStatus,

@@ -41,13 +41,13 @@ func TestAutomationManagementAuthorizationContextAndDependencyFailures(t *testin
 	denied = accessfixture.With(denied, accessfixture.Bundle{})
 	registry := managementRuleRegistry{rules: []automationmodel.AutomationRuleSchema{{Key: "rule"}}}
 	service := NewAutomationManagementApplicationService(AutomationManagementDependencies{Rules: registry})
-	if catalog, err := service.Capabilities(t.Context(), principal); err != nil || len(catalog.Connections) != 0 || len(catalog.Connectors) != 0 {
+	if catalog, err := service.ExecutionCatalog(t.Context(), principal); err != nil || len(catalog.Connections) != 0 || len(catalog.Connectors) != 0 {
 		t.Fatalf("empty catalog=%+v err=%v", catalog, err)
 	}
 	if history, err := service.ExecutionHistory(t.Context(), automationmodel.AutomationExecutionFilter{}, principal); err != nil || history.Count != 0 {
 		t.Fatalf("empty history=%+v err=%v", history, err)
 	}
-	if _, err := service.Capabilities(t.Context(), denied); apperror.CodeOf(err) != "auth.permission_denied" {
+	if _, err := service.ExecutionCatalog(t.Context(), denied); apperror.CodeOf(err) != "auth.permission_denied" {
 		t.Fatalf("capabilities denied err=%v", err)
 	}
 	if _, err := service.Rules(t.Context(), denied); apperror.CodeOf(err) != "auth.permission_denied" {
@@ -97,7 +97,7 @@ func TestAutomationManagementAuthorizationContextAndDependencyFailures(t *testin
 	service = NewAutomationManagementApplicationService(AutomationManagementDependencies{Rules: registry, ListConnections: func(context.Context, string) ([]integrationsdk.Connection, error) {
 		return nil, errAutomationFacadeProbe
 	}})
-	if _, err := service.Capabilities(t.Context(), principal); !errors.Is(err, errAutomationFacadeProbe) {
+	if _, err := service.ExecutionCatalog(t.Context(), principal); !errors.Is(err, errAutomationFacadeProbe) {
 		t.Fatalf("connections err=%v", err)
 	}
 	for _, test := range []struct {

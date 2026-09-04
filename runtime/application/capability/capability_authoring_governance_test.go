@@ -61,7 +61,7 @@ func TestRuntimeAuthoringCapabilitiesDoNotPublishActionStepDSL(t *testing.T) {
 		}
 	}
 	sort.Strings(automationInstructions)
-	want := append([]string(nil), RuntimeAutomationCapabilities().InstructionTypes...)
+	want := append([]string(nil), RuntimeAutomationExecutionCatalog().InstructionTypes...)
 	sort.Strings(want)
 	if !reflect.DeepEqual(automationInstructions, want) {
 		t.Fatalf("automation instruction contract drifted: got=%v want=%v", automationInstructions, want)

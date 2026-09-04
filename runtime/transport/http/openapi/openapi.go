@@ -40,11 +40,22 @@ func BuildWithModuleHTTPAdapters(snapshot appschemamodel.ApplicationSchemaSnapsh
 				"in":   "header",
 				"name": "X-Domainry-Service-Credential",
 			},
+			"SchedulerSignature": map[string]any{
+				"type": "apiKey",
+				"in":   "header",
+				"name": "X-Signature",
+			},
 		},
 		"schemas": openAPISchemas(snapshot),
 	}
+	paths["/"] = map[string]any{
+		"get": openAPIOperation("apiInfo", "Runtime", "Runtime service and API contract identity", openAPIProtocolAudience("anonymous"), openAPIPublicSecurity(), openAPIJSONResponse("Runtime service identity", openAPIObject(nil))),
+	}
 	paths["/health"] = map[string]any{
 		"get": openAPIOperation("getHealth", "Health", "Controlled Runtime diagnostic snapshot", openAPIAdminSecurity(), openAPIJSONResponse("Health payload", openAPIObject(nil))),
+	}
+	paths["/metrics"] = map[string]any{
+		"get": openAPIOperation("getMetrics", "Health", "Controlled Runtime process metrics", openAPIAdminSecurity(), openAPIJSONResponse("Runtime process metrics", openAPIObject(nil))),
 	}
 	for path, operation := range map[string]string{"/live": "getLiveness", "/ready": "getReadiness", "/startup": "getStartup"} {
 		paths[path] = map[string]any{
@@ -55,8 +66,7 @@ func BuildWithModuleHTTPAdapters(snapshot appschemamodel.ApplicationSchemaSnapsh
 		"get": openAPIOperation("listIdempotencyReceipts", "Operations", "List sanitized idempotency receipts", openAPIAdminSecurity(), openAPIJSONResponse("Receipt list", openAPIObject(nil))),
 	}
 	paths["/operations"] = map[string]any{
-		"get":  openAPIOperation("listRuntimeOperations", "Operations", "List workspace-scoped durable operation receipts", openAPIAdminSecurity(), openAPIJSONResponse("Operation receipts", openAPIObject(nil))),
-		"post": openAPIOperation("submitRuntimeOperation", "Operations", "Register an authorized durable operation command", openAPIAdminSecurity(), openAPIJSONRequest(openAPIRequiredObject([]string{"kind", "permission", "resource_type", "reason"}, map[string]any{"kind": map[string]any{"type": "string"}, "permission": map[string]any{"type": "string"}, "resource_type": map[string]any{"type": "string"}, "resource_id": map[string]any{"type": "string"}, "reason": map[string]any{"type": "string"}, "reference": map[string]any{"type": "string"}, "payload": openAPIObject(nil)})), openAPIJSONResponse("Durable operation receipt", openAPIObject(nil))),
+		"get": openAPIOperation("listRuntimeOperations", "Operations", "List workspace-scoped durable operation receipts", openAPIAdminSecurity(), openAPIJSONResponse("Operation receipts", openAPIObject(nil))),
 	}
 	paths["/operations/{operationID}"] = map[string]any{
 		"get": openAPIOperation("getRuntimeOperation", "Operations", "Get a workspace-scoped durable operation receipt", openAPIAdminSecurity(), openAPIPathParameter("operationID", "Operation ID"), openAPIJSONResponse("Durable operation receipt", openAPIObject(nil))),
@@ -79,10 +89,10 @@ func BuildWithModuleHTTPAdapters(snapshot appschemamodel.ApplicationSchemaSnapsh
 	paths["/operations/dead-letters/{owner}/{deadLetterID}/{action}"] = map[string]any{
 		"post": openAPIOperation("actOnRuntimeDeadLetter", "Operations", "Resolve, retry, or acknowledge through the registered owner and return a durable receipt", openAPIAdminSecurity(), openAPIPathParameter("owner", "Registered dead-letter owner"), openAPIPathParameter("deadLetterID", "Owner dead-letter identity"), openAPIPathParameter("action", "resolve, retry, or ack"), openAPIJSONRequest(openAPIRequiredObject([]string{"reason"}, map[string]any{"reason": map[string]any{"type": "string"}, "reference": map[string]any{"type": "string"}})), openAPIJSONResponse("Owner result and durable operation receipt", openAPIObject(nil))),
 	}
-	paths["/operations/bulk/dead-letters/dry-run"] = map[string]any{
+	paths["/operations/dead-letters/bulk/dry-run"] = map[string]any{
 		"post": openAPIOperation("dryRunBulkDeadLetters", "Operations", "Resolve a bounded explicit-ID filter into per-item eligibility and a short-lived confirmation token", openAPIAdminSecurity(), openAPIJSONRequest(openAPIRequiredObject([]string{"owner", "action", "filter", "limit", "reason"}, map[string]any{"owner": map[string]any{"type": "string"}, "action": map[string]any{"type": "string", "enum": []string{"resolve", "retry", "ack"}}, "filter": openAPIObject(map[string]any{"ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "status": map[string]any{"type": "string"}}), "limit": map[string]any{"type": "integer", "maximum": 100}, "reason": map[string]any{"type": "string"}, "reference": map[string]any{"type": "string"}})), openAPIJSONResponse("Bounded bulk dry-run plan", openAPIObject(nil))),
 	}
-	paths["/operations/bulk/dead-letters/apply"] = map[string]any{
+	paths["/operations/dead-letters/bulk/apply"] = map[string]any{
 		"post": openAPIOperation("applyBulkDeadLetters", "Operations", "Apply the exact unexpired dry-run candidate set and return every item outcome", openAPIAdminSecurity(), openAPIJSONRequest(openAPIRequiredObject([]string{"dry_run_operation_id", "confirmation_token", "confirm", "reason"}, map[string]any{"dry_run_operation_id": map[string]any{"type": "string"}, "confirmation_token": map[string]any{"type": "string"}, "confirm": map[string]any{"type": "boolean"}, "reason": map[string]any{"type": "string"}, "reference": map[string]any{"type": "string"}})), openAPIJSONResponse("Per-item bulk result and durable receipt", openAPIObject(nil))),
 	}
 	paths["/operations/diagnostics/snapshots"] = map[string]any{
@@ -91,11 +101,11 @@ func BuildWithModuleHTTPAdapters(snapshot appschemamodel.ApplicationSchemaSnapsh
 	paths["/operations/runbooks/{category}"] = map[string]any{
 		"get": openAPIOperation("getRuntimeOperationsRunbook", "Operations", "Resolve a stable Operations error code to machine-readable next actions", openAPIAdminSecurity(), openAPIPathParameter("category", "Runbook category"), openAPIJSONResponse("Runbook link", openAPIObject(nil))),
 	}
-	paths["/operations/break-glass"] = map[string]any{
+	paths["/operations/break-glass-grants"] = map[string]any{
 		"get":  openAPIOperation("listRuntimeBreakGlass", "Operations", "List workspace-isolated time-limited break-glass grants", openAPIAdminSecurity(), openAPIJSONResponse("Break-glass grants", openAPIObject(nil))),
 		"post": openAPIOperation("enableRuntimeBreakGlass", "Operations", "Enable a maximum one-hour grant with two independent approvers, durable audit and alert target", openAPIAdminSecurity(), openAPIJSONRequest(openAPIRequiredObject([]string{"duration_seconds", "approver_ids", "reason", "incident_ref", "alert_target"}, map[string]any{"duration_seconds": map[string]any{"type": "integer", "maximum": 3600}, "approver_ids": map[string]any{"type": "array", "minItems": 2, "items": map[string]any{"type": "string"}}, "reason": map[string]any{"type": "string"}, "incident_ref": map[string]any{"type": "string"}, "alert_target": map[string]any{"type": "string"}})), openAPIJSONResponse("Break-glass grant and durable receipt", openAPIObject(nil))),
 	}
-	paths["/operations/break-glass/{grantID}/disable"] = map[string]any{
+	paths["/operations/break-glass-grants/{grantID}/revoke"] = map[string]any{
 		"post": openAPIOperation("disableRuntimeBreakGlass", "Operations", "Revision-fenced revocation with audit alert", openAPIAdminSecurity(), openAPIPathParameter("grantID", "Break-glass grant ID"), openAPIJSONRequest(openAPIRequiredObject([]string{"expected_revision", "reason", "incident_ref"}, map[string]any{"expected_revision": map[string]any{"type": "integer", "format": "int64"}, "reason": map[string]any{"type": "string"}, "incident_ref": map[string]any{"type": "string"}})), openAPIJSONResponse("Revoked grant and durable receipt", openAPIObject(nil))),
 	}
 	addOperationsControlOpenAPIPaths(paths)
@@ -103,14 +113,13 @@ func BuildWithModuleHTTPAdapters(snapshot appschemamodel.ApplicationSchemaSnapsh
 		path := "/operations/idempotency/receipts/{owner}/{receiptID}/" + operation
 		paths[path] = map[string]any{"post": openAPIOperation(operation+"IdempotencyReceipt", "Operations", "Safely "+operation+" an eligible idempotency receipt", openAPIAdminSecurity(), openAPIJSONResponse("Operation result", openAPIObject(nil)))}
 	}
-	paths["/metadata/manifests/current"] = map[string]any{"get": openAPIOperation("getCurrentRuntimeManifest", "Provision", "Authenticated read of the installed Runtime-native manifest", openAPIAdminSecurity(), openAPIJSONResponse("Installed manifest", openAPIObject(nil)))}
 	paths["/records/permissions/effective"] = map[string]any{
 		"get": openAPIOperation("getEffectivePermissions", "Permissions", "Effective generated-app principal permissions; optional object_key and record_id apply the same record RLS decision used by Action execution", openAPIAdminSecurity(), openAPIJSONResponse("Effective permissions", openAPIObject(nil))),
 	}
 	paths["/openapi.json"] = map[string]any{
 		"get": openAPIOperation("getOpenAPI", "OpenAPI", "Authenticated generated OpenAPI document", openAPIAdminSecurity(), openAPIJSONResponse("OpenAPI document", openAPIObject(nil))),
 	}
-	paths["/business-events/stream"] = map[string]any{
+	paths["/realtime/refresh-events"] = map[string]any{
 		"get": openAPIOperation(
 			"subscribeBusinessEvents", "Events", "Subscribe to tenant-scoped refresh signals; refetch durable state through authorized Runtime APIs",
 			openAPIAdminSecurity(),
@@ -131,7 +140,25 @@ func BuildWithModuleHTTPAdapters(snapshot appschemamodel.ApplicationSchemaSnapsh
 		addActionOpenAPIPath(paths, action)
 	}
 	addPublicationHandoffOpenAPIPaths(paths)
-	paths["/scheduler/triggers/accept"] = map[string]any{"post": openAPIOperation("acceptSchedulerTrigger", "Scheduler Dispatch Gateway", "Identity-authenticated execution callback for one Scheduler-owned run", openAPIProtocolAudience("scheduler_service_service"), openAPIServiceCredentialSecurity(), openAPIJSONRequest(openAPIObject(nil)), openAPIJSONResponse("Stable downstream receipt", openAPIObject(nil)))}
+	dispatchTarget := openAPIRequiredObject([]string{"type", "operation"}, map[string]any{
+		"type": map[string]any{"type": "string", "enum": []string{"runtime_operation", "http"}}, "owner": map[string]any{"type": "string"}, "operation": map[string]any{"type": "string"},
+		"connection_key": map[string]any{"type": "string"}, "payload": openAPIObject(nil),
+	})
+	dispatchRequest := openAPIRequiredObject([]string{"runtime_id", "execution_id", "idempotency_key", "target"}, map[string]any{
+		"runtime_id": map[string]any{"type": "string"}, "execution_id": map[string]any{"type": "string"}, "idempotency_key": map[string]any{"type": "string"},
+		"due_at": map[string]any{"type": "string", "format": "date-time"}, "target": dispatchTarget,
+	})
+	dispatchReceipt := openAPIRequiredObject([]string{"execution_id", "id", "owner", "status"}, map[string]any{
+		"execution_id": map[string]any{"type": "string"}, "id": map[string]any{"type": "string"}, "owner": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"},
+	})
+	paths["/dispatch/executions"] = map[string]any{"post": openAPIOperation(
+		"acceptExecution", "Runtime Dispatch", "Verify a Scheduler HMAC signature and start the fully resolved Runtime target.",
+		openAPIProtocolAudience("scheduler_service_service"), openAPISchedulerSignatureSecurity(),
+		openAPIParameter{Value: openAPIHeaderParameter("X-Domainry-Runtime-ID", "Target Runtime instance", true)},
+		openAPIParameter{Value: openAPIHeaderParameter("X-Client-ID", "Fixed Scheduler caller identity", true)},
+		openAPIParameter{Value: openAPIHeaderParameter("X-Timestamp", "Unix timestamp covered by the signature", true)},
+		openAPIJSONRequest(dispatchRequest), openAPIJSONResponse("Stable downstream receipt", dispatchReceipt),
+	)}
 	addOwnerOperationsReceiptOpenAPIContracts(paths)
 	applyCompiledEndpointContracts(paths)
 	annotateStaticModuleOwnerFallbacks(paths)
@@ -465,6 +492,10 @@ func openAPIIntegrationSecurity() openAPISecurity {
 
 func openAPIServiceCredentialSecurity() openAPISecurity {
 	return openAPISecurity{Items: []map[string]any{{"ServiceCredential": []string{}}}}
+}
+
+func openAPISchedulerSignatureSecurity() openAPISecurity {
+	return openAPISecurity{Items: []map[string]any{{"SchedulerSignature": []string{}}}}
 }
 
 func openAPIPathParameter(name string, description string) openAPIParameter {

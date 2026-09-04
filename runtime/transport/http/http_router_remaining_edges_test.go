@@ -141,8 +141,8 @@ func completeRouterForListenerGroupTests(config HTTPRouterConfig) *HTTPRouter {
 	calls := 0
 	registrar := routerCountingRegistrar{calls: &calls}
 	router.recordHTTP, router.uploadHTTP, router.discoveryHTTP, router.openAPIHTTP = registrar, registrar, registrar, registrar
-	router.workflowHTTP, router.automationHTTP, router.schedulerHTTP = registrar, registrar, registrar
-	router.businessReferenceHTTP, router.businessSystemHTTP, router.capabilityHTTP = registrar, registrar, registrar
+	router.workflowHTTP, router.automationHTTP, router.dispatchHTTP = registrar, registrar, registrar
+	router.businessReferenceHTTP, router.businessSystemHTTP = registrar, registrar
 	router.applicationSchemaHTTP, router.operationsHTTP = registrar, registrar
 	return router
 }
@@ -277,7 +277,7 @@ func TestRoutePolicyAndAnonymousPathCompleteMatrix(t *testing.T) {
 			t.Errorf("anonymous path rejected: %s", path)
 		}
 	}
-	for _, path := range []string{"", "/records", "/metrics", "/openapi.json", "/schema", "/capabilities", "/business-system/snapshot", "/metadata/manifests/x", "/api/x", "/auth/me", "/auth/change-password", "/auth/external-accounts", "/integration/webhooks/provider/events", "/agent/task-tools/invoke"} {
+	for _, path := range []string{"", "/records", "/metrics", "/openapi.json", "/schema", "/capabilities", "/authoring/snapshot", "/provision/manifests/x", "/api/x", "/auth/me", "/auth/change-password", "/auth/external-accounts", "/integration/webhooks/provider/events", "/agent/task-tools/invoke"} {
 		if anonymousAuthPath(path) {
 			t.Errorf("protected path accepted as anonymous: %s", path)
 		}
@@ -722,12 +722,12 @@ func TestCompleteRouterCompositionSmokeAndCallbacks(t *testing.T) {
 	calls := 0
 	registrar := routerCountingRegistrar{calls: &calls}
 	router.recordHTTP, router.uploadHTTP, router.discoveryHTTP, router.openAPIHTTP = registrar, registrar, registrar, registrar
-	router.workflowHTTP, router.automationHTTP, router.schedulerHTTP = registrar, registrar, registrar
-	router.businessReferenceHTTP, router.businessSystemHTTP, router.capabilityHTTP = registrar, registrar, registrar
+	router.workflowHTTP, router.automationHTTP, router.dispatchHTTP = registrar, registrar, registrar
+	router.businessReferenceHTTP, router.businessSystemHTTP = registrar, registrar
 	router.publicationHandoffHTTP = registrar
 	router.applicationSchemaHTTP, router.notificationHTTP, router.operationsHTTP = registrar, registrar, registrar
 	handler := router.Routes()
-	if calls != 14 {
+	if calls != 13 {
 		t.Fatalf("registrar calls=%d", calls)
 	}
 	for _, test := range []struct {

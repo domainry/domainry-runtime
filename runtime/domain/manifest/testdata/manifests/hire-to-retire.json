@@ -1078,66 +1078,11 @@
     {
       "key": "hire_to_retire_consistency",
       "name": "Hire to Retire Consistency",
-      "dataset": {
-        "source": {
-          "object_key": "employee_lifecycle",
-          "alias": "employee"
-        },
-        "joins": [
-          {
-            "alias": "onboarding",
-            "object_key": "onboarding_task",
-            "type": "left",
-            "left_alias": "employee",
-            "left_field": "identity_user",
-            "right_field": "employee_user",
-            "cardinality": "one_to_many"
-          },
-          {
-            "alias": "benefit",
-            "object_key": "benefit_enrollment",
-            "type": "left",
-            "left_alias": "employee",
-            "left_field": "identity_user",
-            "right_field": "employee_user",
-            "cardinality": "one_to_many"
-          },
-          {
-            "alias": "asset",
-            "object_key": "asset_assignment",
-            "type": "left",
-            "left_alias": "employee",
-            "left_field": "identity_user",
-            "right_field": "employee_user",
-            "cardinality": "one_to_many"
-          },
-          {
-            "alias": "access",
-            "object_key": "access_assignment",
-            "type": "left",
-            "left_alias": "employee",
-            "left_field": "identity_user",
-            "right_field": "employee_user",
-            "cardinality": "one_to_many"
-          },
-          {
-            "alias": "termination",
-            "object_key": "termination_case",
-            "type": "left",
-            "left_alias": "employee",
-            "left_field": "identity_user",
-            "right_field": "employee_user",
-            "cardinality": "one_to_many"
-          },
-          {
-            "alias": "ledger",
-            "object_key": "employee_lifecycle_ledger",
-            "type": "left",
-            "left_alias": "employee",
-            "left_field": "identity_user",
-            "right_field": "employee_user",
-            "cardinality": "one_to_many"
-          }
+      "object_sql_v1": {
+        "sql": "SELECT employee.id AS id FROM employee_lifecycle employee ORDER BY employee.id LIMIT 100",
+        "source_objects": ["employee_lifecycle"],
+        "result_schema": [
+          {"key": "id", "type": "text", "kind": "dimension"}
         ]
       },
       "required_permissions": [

@@ -4,8 +4,6 @@ import (
 	"reflect"
 	"sort"
 	"testing"
-
-	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 )
 
 func TestRuntimeAuthoringCapabilitiesContainOnlyRuntimeOwnedDomains(t *testing.T) {
@@ -32,18 +30,6 @@ func TestRuntimeAuthoringCapabilitiesAreValidAndDeterministic(t *testing.T) {
 	}
 	if first.ContractHash != RuntimeAuthoringContractHash {
 		t.Fatalf("published authoring contract hash is stale: catalog=%s published=%s", first.ContractHash, RuntimeAuthoringContractHash)
-	}
-	if first.EndpointContractVersion != endpointmodel.ContractVersion {
-		t.Fatalf("endpoint contract version=%q want=%q", first.EndpointContractVersion, endpointmodel.ContractVersion)
-	}
-	endpointContracts := managementEndpointContracts()
-	if len(endpointContracts) == 0 {
-		t.Fatal("capability discovery must publish compiled endpoint contracts")
-	}
-	for _, endpointContract := range endpointContracts {
-		if err := endpointContract.Validate(); err != nil {
-			t.Fatalf("invalid discovered endpoint contract %q: %v", endpointContract.EndpointIdentity, err)
-		}
 	}
 }
 

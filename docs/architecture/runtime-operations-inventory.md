@@ -22,8 +22,6 @@ disclosed.
 
 ## Unified control-plane endpoints
 
-- `POST /operations` registers a durable `created` job and returns `202`, a
-  receipt body, and `Location: /operations/{operationID}`;
 - `GET /operations/{operationID}` returns a workspace-isolated receipt;
 - `GET /operations?status=...&limit=...` returns a bounded workspace list;
 - `GET /operations/catalog` exposes the machine-checked definition contract;
@@ -37,20 +35,26 @@ disclosed.
 - `GET /operations/dead-letters/{owner}/{deadLetterID}` returns a redacted
   owner projection; the sibling `resolve|retry|ack` mutation routes register a
   durable receipt and delegate the transition back to the registered owner;
-- `POST /operations/bulk/dead-letters/dry-run|apply` binds a deduplicated
+- `POST /operations/dead-letters/bulk/dry-run|apply` binds a deduplicated
   explicit-ID filter (maximum 100) to a short-lived confirmation fingerprint,
   then records every owner outcome in one durable parent receipt;
 - `POST /operations/diagnostics/snapshots` captures only registered sections
   (`schema_migration`, `db_pool`, `worker_lease`, `queue_lag`, `dlq`,
   `backup_age`) with page size 50 and cost 300 hard limits; every section is
   redacted and links a machine-readable runbook;
-- `POST /operations/break-glass`, `GET /operations/break-glass`, and the revision-fenced disable route use
+- `POST /operations/break-glass-grants`, `GET /operations/break-glass-grants`, and the revision-fenced revoke route use
   `_operation_break_glass_grants`; grants require two approvers distinct from the
   actor, an incident, an alert target, durable audit, and expire within one hour;
 - the same key/fingerprint returns the original receipt with
   `Idempotency-Replayed: true`; a changed fingerprint returns conflict;
 - `OperationsApplicationService.Start` and `Finish` enforce expected-state
   transitions for process-owned executors using explicit system scope.
+
+There is deliberately no generic `POST /operations`: a caller cannot supply an
+owner callback over HTTP, so such a route could only leave a receipt in
+`created`. Owner-specific mutation endpoints register, execute, and finish the
+shared receipt around the real owner transition. `/operations` is the receipt
+query surface, not a second command bus.
 
 The HTTP mutation gate reads maintenance and current-instance drain state from
 `_operation_controls` on every non-exempt mutation. Reads and recovery
@@ -63,26 +67,22 @@ durable maintenance/drain state and the stable `RUNTIME_INSTANCE_ID`.
 
 | Owner | Production entrypoint | Current permission / scope | Current idempotency | Current audit / result | Unified job gap |
 | --- | --- | --- | --- | --- | --- |
-| Scheduler | `POST /scheduler/definitions/{definitionID}/run` | `scheduler.command`; workspace principal | required caller key | owner audit plus terminal shared receipt headers | owner execution is wrapped by `scheduler.job.run`; replay returns stored owner result without a second owner call |
-| Scheduler | `POST /scheduler/runs/{runID}/retry` | `scheduler.command`; workspace principal and owner precondition | required caller key | Scheduler-owned run event plus terminal shared receipt | wrapped by `scheduler.run.retry` |
-| Scheduler | `POST /scheduler/runs/{runID}/cancel` | `scheduler.command`; workspace principal and owner precondition | required caller key | Scheduler-owned run event plus terminal shared receipt | wrapped by `scheduler.run.cancel` |
-| Scheduler | `POST /scheduler/dead-letters/{deadLetterID}/resolve` | `scheduler.command`; workspace principal and Scheduler dead-letter policy | required caller key | Scheduler-owned dead-letter evidence plus terminal shared receipt | wrapped by `scheduler.dead_letter.resolve` |
-| Workflow | `POST /workflow-processes/{processID}/retry` | authenticated owner policy; workspace principal | required caller key | process/execution evidence and terminal shared receipt | wrapped by `workflow.process.retry` |
-| Workflow | `POST /workflow-processes/{processID}/cancel` | authenticated owner policy; workspace principal | required caller key | process/execution evidence and terminal shared receipt | wrapped by `workflow.process.cancel` |
-| Workflow | `POST /workflow-processes/{processID}/resolve` | authenticated owner policy; workspace principal | required caller key | process/execution evidence and terminal shared receipt | wrapped by `workflow.process.resolve` |
-| Workflow | `POST /workflow-executions/{executionID}/retry` | authenticated owner policy; workspace principal | required caller key | execution evidence and terminal shared receipt | wrapped by `workflow.execution.retry` |
-| Workflow | `POST /workflow-executions/{executionID}/resolve` | authenticated owner policy; workspace principal | required caller key | execution evidence and terminal shared receipt | wrapped by `workflow.execution.resolve` |
+| Scheduler | owner service API (not mounted by Runtime) | Scheduler principal and owner policy; HMAC-signed Runtime callback | owner-defined caller key | Scheduler-owned run/dead-letter evidence | Scheduler is the only scheduling ingress; Runtime verifies the signature and starts the resolved target at `POST /dispatch/executions` |
+| Workflow | `POST /workflow/recovery/processes/{processID}/retry` | authenticated owner policy; workspace principal | required caller key | process/execution evidence and terminal shared receipt | wrapped by `workflow.process.retry` |
+| Workflow | `POST /workflow/recovery/processes/{processID}/resolve` | authenticated owner policy; workspace principal | required caller key | process/execution evidence and terminal shared receipt | wrapped by `workflow.process.resolve` |
+| Workflow | `POST /workflow/recovery/executions/{executionID}/retry` | authenticated owner policy; workspace principal | required caller key | execution evidence and terminal shared receipt | wrapped by `workflow.execution.retry` |
+| Workflow | `POST /workflow/recovery/executions/{executionID}/resolve` | authenticated owner policy; workspace principal | required caller key | execution evidence and terminal shared receipt | wrapped by `workflow.execution.resolve` |
 | Automation | rule enable/disable/delete HTTP commands and process-owned rule/instruction/outbox execution | authenticated owner policy; workspace or restored worker scope | caller key for operator commands; execution/outbox owner receipts | terminal shared receipt for operator commands; execution trace/outbox evidence for workers | enable/disable/delete are wrapped by `automation.rule.enable|disable`; worker pause is the shared owner control |
 | Integration | `POST /integration/events/{eventID}/replay` | `integration.admin`; workspace principal | owner event identity plus replay semantics | Integration-owned correlated event evidence | source-owned `integration.event.replay`; Runtime exposes no Integration recovery facade |
 | Runtime publication handoff | `POST /operations/dead-letters/runtime_publication_outbox/{messageID}/retry` | Runtime operator policy; workspace principal | required caller key plus publication identity | Runtime handoff evidence and terminal shared receipt | wrapped by `runtime.publication.retry`; retry ends at idempotent Integration acceptance and never owns Provider delivery outcome |
-| Metadata / Migration | `GET /metadata/migration-plan`, manifest provision/apply, Runtime startup migration | provision/admin or process configuration; installation/system scope | migration checksum/lock | durable migration ledger, checksum, release identity and backup ID | process-owned migration receipt is the ordered ledger; it is not exposed as a workspace HTTP mutation |
+| Metadata / Migration | `GET /application-schema/migration-plan`, manifest provision/apply, Runtime startup migration | provision/admin or process configuration; installation/system scope | migration checksum/lock | durable migration ledger, checksum, release identity and backup ID | process-owned migration receipt is the ordered ledger; it is not exposed as a workspace HTTP mutation |
 | Backup / Restore | infrastructure-owned executable passed as `RUNTIME_DRILL_DRIVER` | infrastructure operator boundary; Runtime does not own database backup credentials or storage | backup ID and immutable target guards are enforced by the driver | validated machine-readable backup/drill receipt with actual RPO/RTO and reconciliation | external receipt is intentionally stored outside the database being restored and uploaded by the release/drill gate |
 | Retention | lifecycle policy and cleanup workers | owner/system scope | caller key plus owner cleanup semantics | policy/cleanup evidence and terminal shared receipt | manual cleanup execution is wrapped by `retention.cleanup`; scheduled cleanup remains a fenced process-owned worker |
 | Idempotency receipt recovery | `/operations/idempotency/receipts/*` | admin; workspace principal | required caller key plus receipt identity | explicit security audit and terminal shared receipt | retry/reset delegate to Deployment owner through `idempotency.receipt.retry|reset`; replay does not duplicate owner mutation or audit |
 
 ## Remaining migration work
 
-- production-reachable Scheduler, Workflow, Automation, retention
+- production-reachable Workflow, Automation, retention
   cleanup and idempotency recovery mutations register and finish the shared
   ledger around the real owner call. The wrapper never owns the business state
   transition; it prevents duplicate owner calls after a terminal replay and

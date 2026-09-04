@@ -84,14 +84,14 @@ func TestOperationsRecoveryHandlersExecuteThroughHTTP(t *testing.T) {
 		t.Fatalf("action=%#v", action)
 	}
 
-	dryRun := operationsRequest(t, mux, http.MethodPost, "/operations/bulk/dead-letters/dry-run", "bulk-dry-run", map[string]any{
+	dryRun := operationsRequest(t, mux, http.MethodPost, "/operations/dead-letters/bulk/dry-run", "bulk-dry-run", map[string]any{
 		"owner": "queue", "action": "ack", "filter": map[string]any{"ids": []string{"dl-2", "dl-1"}},
 		"limit": 2, "reason": "bounded recovery",
 	}, http.StatusOK)
 	if len(dryRun["candidates"].([]any)) != 2 || dryRun["confirmation_token"] == "" {
 		t.Fatalf("dry run=%#v", dryRun)
 	}
-	apply := operationsRequest(t, mux, http.MethodPost, "/operations/bulk/dead-letters/apply", "bulk-apply", map[string]any{
+	apply := operationsRequest(t, mux, http.MethodPost, "/operations/dead-letters/bulk/apply", "bulk-apply", map[string]any{
 		"dry_run_operation_id": dryRun["dry_run_operation_id"], "confirmation_token": dryRun["confirmation_token"],
 		"confirm": true, "reason": "approved recovery",
 	}, http.StatusOK)
@@ -106,17 +106,17 @@ func TestOperationsRecoveryHandlersExecuteThroughHTTP(t *testing.T) {
 		t.Fatalf("diagnostics=%#v", diagnostics)
 	}
 
-	enabled := operationsRequest(t, mux, http.MethodPost, "/operations/break-glass", "break-glass-enable", map[string]any{
+	enabled := operationsRequest(t, mux, http.MethodPost, "/operations/break-glass-grants", "break-glass-enable", map[string]any{
 		"duration_seconds": 60, "approver_ids": []string{"approver-a", "approver-b"}, "reason": "incident mitigation",
 		"incident_ref": "INC-1", "alert_target": "security-ops",
 	}, http.StatusOK)
 	grant := enabled["grant"].(map[string]any)
 	grantID := grant["id"].(string)
-	listed := operationsRequest(t, mux, http.MethodGet, "/operations/break-glass?limit=5", "", nil, http.StatusOK)
+	listed := operationsRequest(t, mux, http.MethodGet, "/operations/break-glass-grants?limit=5", "", nil, http.StatusOK)
 	if listed["count"].(float64) != 1 {
 		t.Fatalf("listed=%#v", listed)
 	}
-	disabled := operationsRequest(t, mux, http.MethodPost, "/operations/break-glass/"+grantID+"/disable", "break-glass-disable", map[string]any{
+	disabled := operationsRequest(t, mux, http.MethodPost, "/operations/break-glass-grants/"+grantID+"/revoke", "break-glass-disable", map[string]any{
 		"expected_revision": 1, "reason": "incident stabilized", "incident_ref": "INC-1",
 	}, http.StatusOK)
 	if disabled["grant"].(map[string]any)["state"] != "revoked" {
@@ -151,11 +151,11 @@ func TestOperationsRecoveryHandlersRejectInvalidInputAndUnavailableLease(t *test
 		key  string
 	}{
 		{path: "/operations/dead-letters/queue/dl-1/ack", key: "dead-letter-invalid"},
-		{path: "/operations/bulk/dead-letters/dry-run", key: "bulk-invalid"},
-		{path: "/operations/bulk/dead-letters/apply", key: "bulk-apply-invalid"},
+		{path: "/operations/dead-letters/bulk/dry-run", key: "bulk-invalid"},
+		{path: "/operations/dead-letters/bulk/apply", key: "bulk-apply-invalid"},
 		{path: "/operations/diagnostics/snapshots", key: "diagnostics-invalid"},
-		{path: "/operations/break-glass", key: "break-glass-invalid"},
-		{path: "/operations/break-glass/grant-1/disable", key: "break-glass-disable-invalid"},
+		{path: "/operations/break-glass-grants", key: "break-glass-invalid"},
+		{path: "/operations/break-glass-grants/grant-1/revoke", key: "break-glass-disable-invalid"},
 	} {
 		request := httptest.NewRequest(http.MethodPost, test.path, strings.NewReader("{"))
 		request.Header.Set("Idempotency-Key", test.key)
@@ -166,18 +166,18 @@ func TestOperationsRecoveryHandlersRejectInvalidInputAndUnavailableLease(t *test
 		}
 	}
 
-	operationsRequest(t, mux, http.MethodPost, "/operations/bulk/dead-letters/dry-run", "bulk-filter-invalid", map[string]any{
+	operationsRequest(t, mux, http.MethodPost, "/operations/dead-letters/bulk/dry-run", "bulk-filter-invalid", map[string]any{
 		"owner": "queue", "action": "ack", "filter": map[string]any{"ids": []string{}}, "limit": 2, "reason": "invalid",
 	}, http.StatusBadRequest)
 	operationsRequest(t, mux, http.MethodPost, "/operations/diagnostics/snapshots", "diagnostics-section-invalid", map[string]any{
 		"sections": []string{"secrets"}, "reason": "invalid",
 	}, http.StatusBadRequest)
-	operationsRequest(t, mux, http.MethodPost, "/operations/break-glass", "break-glass-command-invalid", map[string]any{
+	operationsRequest(t, mux, http.MethodPost, "/operations/break-glass-grants", "break-glass-command-invalid", map[string]any{
 		"duration_seconds": 0, "reason": "invalid",
 	}, http.StatusBadRequest)
 	for _, path := range []string{
 		"/operations/dead-letters/queue/dl-1",
-		"/operations/break-glass",
+		"/operations/break-glass-grants",
 		"/operations/missing-operation",
 	} {
 		request := httptest.NewRequest(http.MethodGet, path, nil)

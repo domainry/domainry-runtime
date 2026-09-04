@@ -471,8 +471,8 @@ func TestBusinessProfileLifecycleHandlersReturnUpdatedRecord(t *testing.T) {
 		call                   func(http.ResponseWriter, *http.Request)
 		body                   string
 	}{
-		{name: "deactivate", endpointIdentity: "POST /records/objects/{objectKey}/records/{recordID}/deactivate-profile", call: handler.deactivateBusinessProfile, body: `{"inactive_status":"inactive","expected_updated_at":"version-1","reason":" review "}`},
-		{name: "reactivate", endpointIdentity: "POST /records/objects/{objectKey}/records/{recordID}/reactivate-profile", call: handler.reactivateBusinessProfile, body: `{"active_status":"active","expected_updated_at":"version-1","reason":" restore "}`},
+		{name: "deactivate", endpointIdentity: "POST /records/{objectKey}/items/{recordID}/profile/deactivate", call: handler.deactivateBusinessProfile, body: `{"inactive_status":"inactive","expected_updated_at":"version-1","reason":" review "}`},
+		{name: "reactivate", endpointIdentity: "POST /records/{objectKey}/items/{recordID}/profile/reactivate", call: handler.reactivateBusinessProfile, body: `{"active_status":"active","expected_updated_at":"version-1","reason":" restore "}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			*serviceErr = nil

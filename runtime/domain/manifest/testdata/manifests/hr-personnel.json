@@ -1308,22 +1308,11 @@
           "name": "Team Leave Exposure"
         }
       },
-      "dataset": {
-        "source": {
-          "object_key": "leave_request",
-          "alias": "request",
-          "source_type": "snapshot"
-        },
-        "joins": [
-          {
-            "alias": "balance",
-            "object_key": "leave_balance",
-            "type": "left",
-            "left_alias": "request",
-            "left_field": "employee_user",
-            "right_field": "employee_user",
-            "cardinality": "one_to_many"
-          }
+      "object_sql_v1": {
+        "sql": "SELECT request.id AS id FROM leave_request request ORDER BY request.id LIMIT 100",
+        "source_objects": ["leave_request"],
+        "result_schema": [
+          {"key": "id", "type": "text", "kind": "dimension"}
         ]
       },
       "required_permissions": [

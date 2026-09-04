@@ -47,12 +47,12 @@ func TestListenerRouteGroupPolicyAppliesIndependentBodyTimeoutAndRateLimits(t *t
 		}
 	}))
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/records/objects/customer/records", strings.NewReader("12345")))
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/records/customer", strings.NewReader("12345")))
 	if response.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("body limit status=%d", response.Code)
 	}
 	timeoutResponse := httptest.NewRecorder()
-	handler.ServeHTTP(timeoutResponse, httptest.NewRequest(http.MethodPost, "/records/objects/customer/records", strings.NewReader("1")))
+	handler.ServeHTTP(timeoutResponse, httptest.NewRequest(http.MethodPost, "/records/customer", strings.NewReader("1")))
 
 	router.listenerGroupPolicies[ListenerRouteGroupPublic] = ListenerRouteGroupPolicy{
 		RateLimitPerMinute: 1,
@@ -66,9 +66,9 @@ func TestListenerRouteGroupPolicyAppliesIndependentBodyTimeoutAndRateLimits(t *t
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	first := httptest.NewRecorder()
-	fast.ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/records/objects/customer/records", nil))
+	fast.ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/records/customer", nil))
 	second := httptest.NewRecorder()
-	fast.ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/records/objects/customer/records", nil))
+	fast.ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/records/customer", nil))
 	if first.Code != http.StatusNoContent || second.Code != http.StatusTooManyRequests {
 		t.Fatalf("rate statuses first=%d second=%d", first.Code, second.Code)
 	}
@@ -84,9 +84,9 @@ func TestListenerRouteGroupUsesSharedRateLimiterAndFailsClosed(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 
 	first := httptest.NewRecorder()
-	firstRouter.withListenerRouteGroupPolicy(ListenerRouteGroupPublic, next).ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/records/objects/customer/records", nil))
+	firstRouter.withListenerRouteGroupPolicy(ListenerRouteGroupPublic, next).ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/records/customer", nil))
 	second := httptest.NewRecorder()
-	secondRouter.withListenerRouteGroupPolicy(ListenerRouteGroupPublic, next).ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/records/objects/customer/records", nil))
+	secondRouter.withListenerRouteGroupPolicy(ListenerRouteGroupPublic, next).ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/records/customer", nil))
 	if first.Code != http.StatusNoContent || second.Code != http.StatusTooManyRequests || second.Header().Get("Retry-After") == "" {
 		t.Fatalf("shared statuses first=%d second=%d retry=%q", first.Code, second.Code, second.Header().Get("Retry-After"))
 	}
@@ -101,7 +101,7 @@ func TestListenerRouteGroupUsesSharedRateLimiterAndFailsClosed(t *testing.T) {
 		}),
 	}
 	unavailable := httptest.NewRecorder()
-	failing.withListenerRouteGroupPolicy(ListenerRouteGroupPublic, next).ServeHTTP(unavailable, httptest.NewRequest(http.MethodGet, "/records/objects/customer/records", nil))
+	failing.withListenerRouteGroupPolicy(ListenerRouteGroupPublic, next).ServeHTTP(unavailable, httptest.NewRequest(http.MethodGet, "/records/customer", nil))
 	if unavailable.Code != http.StatusServiceUnavailable || unavailable.Header().Get("Retry-After") != "1" {
 		t.Fatalf("unavailable status=%d retry=%q", unavailable.Code, unavailable.Header().Get("Retry-After"))
 	}
@@ -124,7 +124,7 @@ func TestListenerRouteGroupFailureDoesNotBlockIndependentPublicTraffic(t *testin
 	opsResponse := httptest.NewRecorder()
 	ops.ServeHTTP(opsResponse, httptest.NewRequest(http.MethodPost, "/scheduler/runs/run-1/retry", nil))
 	publicResponse := httptest.NewRecorder()
-	public.ServeHTTP(publicResponse, httptest.NewRequest(http.MethodGet, "/records/objects/order/records", nil))
+	public.ServeHTTP(publicResponse, httptest.NewRequest(http.MethodGet, "/records/order", nil))
 	if opsResponse.Code != http.StatusServiceUnavailable || publicResponse.Code != http.StatusNoContent {
 		t.Fatalf("independent listener statuses ops=%d public=%d", opsResponse.Code, publicResponse.Code)
 	}
@@ -181,7 +181,7 @@ func TestListenerRouteGroupPolicyRemainingBodyProbeWorkspaceAndRetryOutcomes(t *
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	nilBodyRequest := httptest.NewRequest(http.MethodGet, "/records/objects/customer/records", nil)
+	nilBodyRequest := httptest.NewRequest(http.MethodGet, "/records/customer", nil)
 	nilBodyRequest.Body = nil
 	nilBodyResponse := httptest.NewRecorder()
 	handler.ServeHTTP(nilBodyResponse, nilBodyRequest)
@@ -196,7 +196,7 @@ func TestListenerRouteGroupPolicyRemainingBodyProbeWorkspaceAndRetryOutcomes(t *
 	}
 
 	emptyWorkspaceRequest := requestWithPrincipal(
-		httptest.NewRequest(http.MethodGet, "/records/objects/customer/records", nil),
+		httptest.NewRequest(http.MethodGet, "/records/customer", nil),
 		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user"}},
 	)
 	emptyWorkspaceResponse := httptest.NewRecorder()
@@ -207,7 +207,7 @@ func TestListenerRouteGroupPolicyRemainingBodyProbeWorkspaceAndRetryOutcomes(t *
 
 	cancelledContext, cancel := context.WithCancel(t.Context())
 	cancel()
-	cancelledRequest := httptest.NewRequest(http.MethodGet, "/records/objects/customer/records", nil).WithContext(cancelledContext)
+	cancelledRequest := httptest.NewRequest(http.MethodGet, "/records/customer", nil).WithContext(cancelledContext)
 	cancelledResponse := httptest.NewRecorder()
 	handler.ServeHTTP(cancelledResponse, cancelledRequest)
 	if cancelledResponse.Code != http.StatusTooManyRequests || cancelledResponse.Header().Get("Retry-After") != "1" {
@@ -227,7 +227,7 @@ func TestManagementFrontendAvailabilityIsNotARuntimeBusinessDependency(t *testin
 	})
 
 	response := httptest.NewRecorder()
-	runtimeBusiness.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/records/objects/order/records", nil))
+	runtimeBusiness.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/records/order", nil))
 	if frontendAvailable || response.Code != http.StatusAccepted || businessExecutions != 1 {
 		t.Fatalf("frontendAvailable=%v status=%d executions=%d", frontendAvailable, response.Code, businessExecutions)
 	}

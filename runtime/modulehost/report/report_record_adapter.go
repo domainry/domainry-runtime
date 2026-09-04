@@ -20,8 +20,6 @@ func reportApplicationError(err error) error {
 }
 
 var _ reportcontract.ReportRecordAccess = (*ReportRecordAdapter)(nil)
-var _ reportcontract.ReportRecordReader = (*ReportRecordAdapter)(nil)
-var _ reportcontract.ReportDatasetPushdownAuthorizer = (*ReportRecordAdapter)(nil)
 var _ reportcontract.ReportObjectSQLFieldAuthorizer = (*ReportRecordAdapter)(nil)
 
 // ReportRecordAdapter is the Report-owned anti-corruption layer over Record use cases.
@@ -55,19 +53,6 @@ func (a *ReportRecordAdapter) ProjectReportRecordFields(ctx context.Context, pri
 	return a.application.ProjectRecordFields(ctx, principal, object, records, "report")
 }
 
-func (a *ReportRecordAdapter) CanPushdownReportDataset(_ context.Context, principal principalmodel.Principal, objects []definitionmodel.ObjectSchema) bool {
-	for _, object := range objects {
-		for _, field := range object.Fields {
-			if !recordpolicy.RecordCanReadObjectFieldForPrincipal(principal, object, field) ||
-				recordpolicy.RecordFieldReadMaskedForPrincipal(principal, object.Key, field.Key) ||
-				recordpolicy.RecordFieldRequiresPolicyEvaluation(principal, object.Key, field.Key, "read") {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 func (a *ReportRecordAdapter) AuthorizeReportExportField(_ context.Context, principal principalmodel.Principal, objectKey, fieldKey string) (bool, error) {
 	object, err := a.application.ObjectForAction(principal, objectKey, "export")
 	if err != nil {
@@ -96,6 +81,10 @@ func (a *ReportRecordAdapter) AuthorizeReportObjectSQLField(_ context.Context, p
 	if _, err := a.application.ObjectForAction(principal, object.Key, "read"); err != nil {
 		return err
 	}
+	// Record envelope columns are not authored ObjectSchema fields, so Identity
+	// cannot project role field permissions for them. ObjectForAction above
+	// still enforces object read, and the execution query applies RLS; only
+	// manifest business fields enter the field-level authorization path below.
 	if fieldKey != "id" && fieldKey != "created_at" && fieldKey != "updated_at" && fieldKey != "workspace_id" {
 		found := false
 		for _, field := range object.Fields {
@@ -110,8 +99,6 @@ func (a *ReportRecordAdapter) AuthorizeReportObjectSQLField(_ context.Context, p
 		if !found {
 			return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.object_sql_field_not_found"}
 		}
-	} else if fieldKey != "workspace_id" && !recordpolicy.RecordCanReadFieldForPrincipal(principal, object.Key, fieldKey) {
-		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.report.object_sql_field_denied"}
 	}
 	if recordpolicy.RecordFieldReadMaskedForPrincipal(principal, object.Key, fieldKey) {
 		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.report.object_sql_field_masked"}

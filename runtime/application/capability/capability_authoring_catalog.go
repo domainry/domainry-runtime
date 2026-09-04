@@ -15,7 +15,7 @@ const (
 )
 
 var RuntimeExecutionCapabilities = capabilitycontract.RuntimeExecutionCapabilities
-var RuntimeAutomationCapabilities = capabilitycontract.RuntimeAutomationCapabilities
+var RuntimeAutomationExecutionCatalog = capabilitycontract.RuntimeAutomationExecutionCatalog
 
 type RuntimeAuthoringCatalogDomainSummary struct {
 	Key             string

@@ -36,7 +36,6 @@ func (s *runtimeAssembly) applyManifestMetadata(templateID, templateVersion, nam
 		s.connectorRegistry.ReplaceSchema(integrations)
 	}
 	s.reports = append([]reportmodel.ReportSchema(nil), reports...)
-	s.reportObjects = reportSnapshotObjectKeySet(reports)
 	s.skills = append([]agentsdk.SkillSchema(nil), skills...)
 	s.agents = append([]agentsdk.AgentSchema(nil), agents...)
 	s.identityProfileExtensions = append([]profilebindingmodel.Binding(nil), profileBindings...)
@@ -60,18 +59,6 @@ func (s *runtimeAssembly) applyManifestMetadata(templateID, templateVersion, nam
 			s.automationRules[rule.Key] = rule
 		}
 	}
-}
-
-func reportSnapshotObjectKeySet(reports []reportmodel.ReportSchema) map[string]struct{} {
-	result := map[string]struct{}{}
-	for _, report := range reports {
-		for _, objectKey := range reportmodel.ReportDatasetSnapshotObjectKeys(report.Dataset) {
-			if objectKey = strings.TrimSpace(objectKey); objectKey != "" {
-				result[objectKey] = struct{}{}
-			}
-		}
-	}
-	return result
 }
 
 func (s *runtimeAssembly) applyManifestAgentMetadata(tasks []agentsdk.AgentTaskDefinition, entrypoints []agentsdk.AgentEntrypointAssignment, principals []agentsdk.AgentServicePrincipalBinding) {

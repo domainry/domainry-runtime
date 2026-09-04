@@ -23,15 +23,14 @@ import (
 	businesseventhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessevents"
 	businessreferencehttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessreferences"
 	businesssystemhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businesssystem"
-	capabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/capabilities"
 	discoveryhttp "github.com/domainry/domainry-runtime/runtime/transport/http/discovery"
+	dispatchhttp "github.com/domainry/domainry-runtime/runtime/transport/http/dispatch"
 	lifecyclehttp "github.com/domainry/domainry-runtime/runtime/transport/http/lifecycle"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	openapihttp "github.com/domainry/domainry-runtime/runtime/transport/http/openapi"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
 	publicationhandoffhttp "github.com/domainry/domainry-runtime/runtime/transport/http/publicationhandoff"
 	recordhttp "github.com/domainry/domainry-runtime/runtime/transport/http/records"
-	schedulerhttp "github.com/domainry/domainry-runtime/runtime/transport/http/scheduler"
 	uploadhttp "github.com/domainry/domainry-runtime/runtime/transport/http/uploads"
 	workflowhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workflows"
 	workspaceprovisionhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workspaceprovision"
@@ -158,11 +157,10 @@ type HTTPRouterHandlers struct {
 	OpenAPI            *openapihttp.OpenAPIHandler
 	Workflows          *workflowhttp.WorkflowsHandler
 	Automation         *automationhttp.AutomationHandler
-	Scheduler          *schedulerhttp.SchedulerHandler
+	Dispatch           *dispatchhttp.ExecutionHandler
 	BusinessReferences *businessreferencehttp.BusinessReferencesHandler
 	PublicationHandoff *publicationhandoffhttp.Handler
 	BusinessSystem     *businesssystemhttp.BusinessSystemHandler
-	Capabilities       *capabilityhttp.CapabilitiesHandler
 	ApplicationSchema  *appschemahttp.ApplicationSchemaHandler
 	Notifications      *notificationhttp.NotificationsHandler
 	Operations         *operationshttp.OperationsHandler

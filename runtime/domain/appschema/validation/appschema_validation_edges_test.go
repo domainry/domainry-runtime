@@ -290,37 +290,30 @@ func (f evidenceReaderFunc) ListRecords(ctx context.Context, workspace string, o
 func TestReportValidationEdges(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}, {Key: "email", Type: "text"}}}
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{object}}
-	invalid := reportmodel.ReportSchema{
-		Dataset:              reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "missing", Alias: ""}, Joins: []reportmodel.ReportDatasetJoin{{ObjectKey: "customer", Alias: "customer", LeftAlias: "unknown", LeftField: "id", RightField: "id", Type: "outer", Cardinality: "many_to_many"}}, Filters: []reportmodel.ReportDatasetFilter{{Field: reportmodel.ReportDatasetField{SourceAlias: "unknown", FieldKey: "x"}, Operator: "magic"}}, Measures: []reportmodel.ReportDatasetMeasure{{Key: "total", Operation: "sum"}}, Sort: []reportmodel.ReportDatasetSort{{Key: "missing", Direction: "sideways"}}, Limit: 10001},
-		RequiredPermissions:  []string{"", "unknown", "unknown"},
-		EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{}, {ObjectKey: "other", MinimumRecords: 1}, {ObjectKey: "customer", MinimumRecords: 0}, {ObjectKey: "customer", MinimumRecords: 1}},
-	}
-	validPermissionReport := reportmodel.ReportSchema{Key: "permission", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}}, RequiredPermissions: []string{"customer.read"}}
+	validSQL := &reportmodel.ReportObjectSQLSchema{SQL: "SELECT customer.name AS name FROM customer customer ORDER BY customer.name LIMIT 100", SourceObjects: []string{"customer"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "name", Type: "text", Kind: "dimension"}}}
+	validPermissionReport := reportmodel.ReportSchema{Key: "permission", ObjectSQLV1: validSQL, RequiredPermissions: []string{"customer.read"}}
 	if issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, validPermissionReport); len(issues) != 0 {
 		t.Fatalf("known permission: %#v", issues)
 	}
+	invalid := reportmodel.ReportSchema{RequiredPermissions: []string{"", "unknown", "unknown"}, ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{
+		SQL: "SELECT missing.value AS value FROM missing missing ORDER BY missing.value LIMIT 10", SourceObjects: []string{"missing"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "value", Type: "text", Kind: "dimension"}},
+	}, EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{}, {ObjectKey: "other", MinimumRecords: 1}, {ObjectKey: "customer", MinimumRecords: 0}, {ObjectKey: "customer", MinimumRecords: 1}}}
 	issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, invalid)
-	for _, code := range []string{"backend.report.key_required", "backend.report.dataset_source_invalid", "backend.report.source_object_not_found", "backend.report.permission_invalid", "backend.report.permission_not_found", "backend.report.dataset_alias_invalid", "backend.report.join_invalid", "backend.report.join_cardinality_invalid", "backend.report.field_reference_invalid", "backend.report.filter_invalid", "backend.report.measure_invalid", "backend.report.sort_invalid", "backend.report.limit_invalid", "backend.report.evidence_object_invalid", "backend.report.evidence_source_not_declared", "backend.report.evidence_minimum_invalid"} {
+	for _, code := range []string{"backend.report.key_required", "backend.report.source_object_not_found", "backend.report.permission_invalid", "backend.report.permission_not_found", "backend.report.evidence_object_invalid", "backend.report.evidence_source_not_declared"} {
 		if !hasMetadataIssue(issues, code) {
 			t.Errorf("missing %s in %#v", code, issues)
 		}
 	}
-	missingSources := invalid
-	missingSources.Dataset = reportmodel.ReportDatasetSchema{}
-	if !hasMetadataIssue(ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, missingSources), "backend.report.dataset_source_invalid") {
-		t.Fatal("missing dataset source issue")
+	if !hasMetadataIssue(ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, reportmodel.ReportSchema{Key: "missing"}), "backend.report.execution_definition_missing") {
+		t.Fatal("missing object SQL issue")
 	}
 
-	report := reportmodel.ReportSchema{Key: "r", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "name", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: "name"}}, {Key: "email", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: "email"}}}}, EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{ObjectKey: "customer", MinimumRecords: 2, RequiredNonEmptyFields: []string{"", "missing", "missing"}}}}
+	report := reportmodel.ReportSchema{Key: "r", ObjectSQLV1: validSQL, EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{ObjectKey: "customer", MinimumRecords: 2, RequiredNonEmptyFields: []string{"", "missing", "missing"}}}}
 	issues = ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, report)
 	for _, code := range []string{"backend.report.evidence_field_invalid", "backend.report.evidence_field_not_found"} {
 		if !hasMetadataIssue(issues, code) {
 			t.Errorf("missing %s in %#v", code, issues)
 		}
-	}
-	fieldCombinationReport := reportmodel.ReportSchema{Key: "field-combinations", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "missing", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: ""}}}}}
-	if issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, fieldCombinationReport); !hasMetadataIssue(issues, "backend.report.field_reference_invalid") {
-		t.Fatalf("field combinations: %#v", issues)
 	}
 	report.EvidenceRequirements[0].RequiredNonEmptyFields = []string{"name"}
 	reader := evidenceReaderFunc(func(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
@@ -349,10 +342,10 @@ func TestReportValidationEdges(t *testing.T) {
 		t.Fatal("report helpers mismatch")
 	}
 	emptyIssues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, reportmodel.ReportSchema{})
-	if !hasMetadataIssue(emptyIssues, "backend.report.dataset_source_invalid") {
+	if !hasMetadataIssue(emptyIssues, "backend.report.execution_definition_missing") {
 		t.Fatalf("missing source requirement: %#v", emptyIssues)
 	}
-	missingObjectEvidence := reportmodel.ReportSchema{Key: "r", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "missing", Alias: "missing"}}, EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{ObjectKey: "missing", MinimumRecords: 1}}}
+	missingObjectEvidence := reportmodel.ReportSchema{Key: "r", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "SELECT missing.id AS id FROM missing missing LIMIT 1", SourceObjects: []string{"missing"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}}, EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{ObjectKey: "missing", MinimumRecords: 1}}}
 	if issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), snapshot, missingObjectEvidence); !hasMetadataIssue(issues, "backend.report.source_object_not_found") {
 		t.Fatalf("missing object issues=%#v", issues)
 	}

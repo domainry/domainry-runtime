@@ -8,11 +8,6 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
-// ReportRecordReader is the minimal Record capability required to evaluate a report.
-type ReportRecordReader interface {
-	ListReportRecords(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error)
-}
-
 // ReportRecordAccess exposes the Record visibility rules needed by reporting without
 // coupling Report to the Record service or repository packages.
 type ReportRecordAccess interface {
@@ -25,13 +20,6 @@ type ReportRecordAccess interface {
 // test/read adapters while production applies contextual CLS before metrics.
 type ReportRecordFieldProjector interface {
 	ProjectReportRecordFields(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, []recordmodel.Record) ([]recordmodel.Record, error)
-}
-
-// ReportDatasetPushdownAuthorizer lets the Record owner decide whether a
-// dataset may bypass row-by-row field projection. Report must not duplicate
-// baseline, masking, or contextual CLS semantics when selecting its SQL path.
-type ReportDatasetPushdownAuthorizer interface {
-	CanPushdownReportDataset(context.Context, principalmodel.Principal, []definitionmodel.ObjectSchema) bool
 }
 
 // ReportExportFieldAuthorizer lets the Record owner apply the full Object

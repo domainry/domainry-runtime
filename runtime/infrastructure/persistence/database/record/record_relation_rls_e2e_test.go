@@ -11,7 +11,6 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -182,13 +181,8 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	if !strings.Contains(string(csv), "ledger-1") || strings.Contains(string(csv), "ledger-2") || strings.Contains(string(csv), "ledger-3") {
 		t.Fatalf("export did not preserve database RLS: csv=%s", csv)
 	}
-	reportDefinition := reportmodel.ReportSchema{Key: "member-ledger", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "ledger", Alias: "ledger"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "status", Field: reportmodel.ReportDatasetField{SourceAlias: "ledger", FieldKey: "status"}}}}}
-	sources := readAuthorizedReportSources(t, reportDefinition, memberPrincipal, relationRLSReportAccess{policy: policy}, relationRLSReportRecords{repository: repository})
-	if len(sources.Records["ledger"]) != 1 {
-		t.Fatalf("Report host did not preserve RLS downpush: sources=%#v", sources)
-	}
-	assertRelationScopeAcrossReadExportAndReport(t, reader, exporter, policy, repository, memberPrincipal, "card", "card-1", "card-2", "member_id")
-	assertRelationScopeAcrossReadExportAndReport(t, reader, exporter, policy, repository, memberPrincipal, "account", "account-1", "account-2", "card_id")
+	assertRelationScopeAcrossReadAndExport(t, reader, exporter, memberPrincipal, "card", "card-1", "card-2")
+	assertRelationScopeAcrossReadAndExport(t, reader, exporter, memberPrincipal, "account", "account-1", "account-2")
 
 	coachPredicate := &accessfixture.PredicateFixture{Operator: "eq", Path: []accessfixture.RelationSegmentFixture{{Direction: "reverse", RelationFieldKey: "member_id", TargetObjectKey: "package"}}, FieldKey: "coach_id", ValueSource: "actor_claim", ClaimKey: "business_profile_id"}
 	coachPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "coach-1"}}, accessfixture.Bundle{Key: "coach", Permissions: []string{"member.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Read: true, Predicate: coachPredicate}}})
@@ -217,11 +211,6 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	if !strings.Contains(string(csv), "training-session-1") || strings.Contains(string(csv), "training-session-2") {
 		t.Fatalf("session-package-student export scope mismatch: csv=%s", csv)
 	}
-	sessionDefinition := reportmodel.ReportSchema{Key: "student-sessions", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "training_session", Alias: "training_session"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "status", Field: reportmodel.ReportDatasetField{SourceAlias: "training_session", FieldKey: "status"}}}}}
-	sources = readAuthorizedReportSources(t, sessionDefinition, studentPrincipal, relationRLSReportAccess{policy: policy}, relationRLSReportRecords{repository: repository})
-	if len(sources.Records["training_session"]) != 1 {
-		t.Fatalf("session-package-student Report host scope mismatch: sources=%#v", sources)
-	}
 }
 
 func sqliteExplainQueryPlan(t *testing.T, store *RuntimeStore, query string, args ...any) string {
@@ -246,7 +235,7 @@ func sqliteExplainQueryPlan(t *testing.T, store *RuntimeStore, query string, arg
 	return strings.Join(parts, "\n")
 }
 
-func assertRelationScopeAcrossReadExportAndReport(t *testing.T, reader *recordservice.RecordReadDomainService, exporter *recordapplication.RecordExportApplicationService, policy *recordservice.RecordQueryPolicyDomainService, repository recordrepository.RecordRepository, principal principalmodel.Principal, objectKey, allowedID, deniedID, reportField string) {
+func assertRelationScopeAcrossReadAndExport(t *testing.T, reader *recordservice.RecordReadDomainService, exporter *recordapplication.RecordExportApplicationService, principal principalmodel.Principal, objectKey, allowedID, deniedID string) {
 	t.Helper()
 	page, err := reader.ListRecords(t.Context(), objectKey, recordmodel.RecordListQuery{Page: 1, PageSize: 20}, principal)
 	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != allowedID {
@@ -258,11 +247,6 @@ func assertRelationScopeAcrossReadExportAndReport(t *testing.T, reader *recordse
 	csv := dispatchDirectRecordExport(t, exporter, objectKey, principal)
 	if !strings.Contains(string(csv), allowedID) || strings.Contains(string(csv), deniedID) {
 		t.Fatalf("%s export scope mismatch: csv=%s", objectKey, csv)
-	}
-	reportDefinition := reportmodel.ReportSchema{Key: objectKey + "-scope", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: objectKey, Alias: objectKey}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: reportField, Field: reportmodel.ReportDatasetField{SourceAlias: objectKey, FieldKey: reportField}}}}}
-	sources := readAuthorizedReportSources(t, reportDefinition, principal, relationRLSReportAccess{policy: policy}, relationRLSReportRecords{repository: repository})
-	if len(sources.Records[objectKey]) != 1 {
-		t.Fatalf("%s Report host scope mismatch: sources=%#v", objectKey, sources)
 	}
 }
 

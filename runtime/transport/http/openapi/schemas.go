@@ -69,7 +69,7 @@ func openAPISchemas(snapshot appschemamodel.ApplicationSchemaSnapshot) map[strin
 			"properties": map[string]any{"record_ids": openAPIArray(map[string]any{"type": "string"}), "data": openAPIObject(nil), "expected_versions": openAPIObject(map[string]any{"type": "integer"})},
 		},
 		"AutomationRule":                openAPIObject(nil),
-		"AutomationCapabilities":        openAPIObject(nil),
+		"AutomationExecutionCatalog":    openAPIObject(nil),
 		"AutomationSimulationRequest":   openAPIObject(nil),
 		"AutomationSimulationResult":    openAPIObject(nil),
 		"AgentTaskDefinition":           openAPIAgentTaskDefinitionSchema(),

@@ -407,11 +407,11 @@ func (compositionIdentityProjection) ListUserRoleAssignments(context.Context, id
 
 func TestRuntimeApplicationsHandlesNilAndPartiallyAssembledState(t *testing.T) {
 	var services *runtimeAssembly
-	if applications := services.Applications(); applications.Scheduler == nil {
-		t.Fatal("nil RuntimeServices must still expose stateless Scheduler validation")
+	if applications := services.Applications(); applications.TargetExecutions == nil {
+		t.Fatal("nil RuntimeServices must still expose stateless target execution validation")
 	}
 	applications := (&runtimeAssembly{}).Applications()
-	if applications.Scheduler == nil || applications.Records != nil {
+	if applications.TargetExecutions == nil || applications.Records != nil {
 		t.Fatalf("partial applications=%#v", applications)
 	}
 }
@@ -462,11 +462,11 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 	if _, err := configuredRuntime.Applications().Automations.AutomationExecutions(t.Context(), automationmodel.AutomationExecutionFilter{}, historyPrincipal); err != nil {
 		t.Fatalf("configured Automation history error=%v", err)
 	}
-	readPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"runtime.automation.automation_capabilities"}})
-	if _, err := emptyRuntime.Applications().Automations.AutomationCapabilities(t.Context(), readPrincipal); err != nil {
+	readPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Permissions: []string{"runtime.automation.get_execution_catalog"}})
+	if _, err := emptyRuntime.Applications().Automations.AutomationExecutionCatalog(t.Context(), readPrincipal); err != nil {
 		t.Fatalf("empty Automation capabilities error=%v", err)
 	}
-	if _, err := configuredRuntime.Applications().Automations.AutomationCapabilities(t.Context(), readPrincipal); err != nil {
+	if _, err := configuredRuntime.Applications().Automations.AutomationExecutionCatalog(t.Context(), readPrincipal); err != nil {
 		t.Fatalf("configured Automation capabilities error=%v", err)
 	}
 
@@ -622,7 +622,7 @@ func TestApplicationDefinitionValidationRoutesOwnerContracts(t *testing.T) {
 	if _, issues, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "report", "customer.summary", request(`{}`)); err != nil || len(issues) == 0 {
 		t.Fatalf("invalid report issues=%#v error=%v", issues, err)
 	}
-	validReport := `{"key":"customer.summary","dataset":{"source":{"object_key":"customer","alias":"customers"},"dimensions":[{"key":"name","field":{"source_alias":"customers","field_key":"name"}}]}}`
+	validReport := `{"key":"customer.summary","object_sql_v1":{"sql":"SELECT customers.name AS name FROM customer customers ORDER BY customers.name LIMIT 100","source_objects":["customer"],"result_schema":[{"key":"name","type":"text","kind":"dimension"}]}}`
 	if payload, issues, err := service.ValidateApplicationDefinitionRequestPayload(t.Context(), "report", "customer.summary", request(validReport)); err != nil || len(issues) != 0 || len(payload) == 0 {
 		t.Fatalf("report payload=%s issues=%#v error=%v", payload, issues, err)
 	}

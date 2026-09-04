@@ -77,8 +77,8 @@ func TestSnapshotVisibilityFiltersObjectsActionsReportsAndAgentRegistry(t *testi
 			{ObjectKey: "customer", ActionKey: "customer.reject"},
 		},
 		Reports: []reportmodel.ReportSchema{
-			{Key: "customer_report", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}}},
-			{Key: "invoice_report", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "invoice", Alias: "invoice"}}},
+			{Key: "customer_report", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "SELECT source.id AS id FROM customer source LIMIT 1", SourceObjects: []string{"customer"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}}},
+			{Key: "invoice_report", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "SELECT source.id AS id FROM invoice source LIMIT 1", SourceObjects: []string{"invoice"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}}},
 			{Key: "permission_report", RequiredPermissions: []string{"report.read"}},
 			{Key: "forbidden_report", RequiredPermissions: []string{"report.manage"}},
 			{Key: "global_report"},

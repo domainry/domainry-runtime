@@ -45,7 +45,7 @@ func TestRuntimeAuthoringValidationMapsCoverageDetailDiagnostics(t *testing.T) {
 		if diagnostic.Repair == nil {
 			continue
 		}
-		if diagnostic.Repair.CapabilityKey == "unknown.capability" && diagnostic.Repair.JSONPointer == "/coverage/requirements/0/capability_keys" && diagnostic.Repair.ReferenceEndpoint == "/capabilities/unknown.capability" {
+		if diagnostic.Repair.CapabilityKey == "unknown.capability" && diagnostic.Repair.JSONPointer == "/coverage/requirements/0/capability_keys" && diagnostic.Repair.ReferenceService == "plane" && diagnostic.Repair.ReferenceEndpoint == "/capabilities/authoring-contracts/unknown.capability" {
 			foundCapabilityRepair = true
 		}
 		if diagnostic.Repair.ResourceType == "object" && diagnostic.Repair.ResourceKey == "missing" && diagnostic.Repair.JSONPointer == "/coverage/requirements/0/resources" {

@@ -25,9 +25,6 @@ type operationsServiceEdgeStub struct {
 }
 
 func (s operationsServiceEdgeStub) Definitions() []operationsmodel.OperationsDefinition { return nil }
-func (s operationsServiceEdgeStub) Submit(context.Context, operationsapplication.OperationsSubmitRequest, string, principalmodel.Principal) (operationsmodel.OperationsReceipt, operationsmodel.OperationsSubmissionDecision, error) {
-	return operationsmodel.OperationsReceipt{}, "", s.err
-}
 func (s operationsServiceEdgeStub) Receipt(context.Context, string, principalmodel.Principal) (operationsmodel.OperationsReceipt, error) {
 	return operationsmodel.OperationsReceipt{}, s.err
 }
@@ -172,29 +169,8 @@ func TestOperationsCommandControlAndOwnerErrorEdges(t *testing.T) {
 		t.Fatalf("errors written=%d", *errorsWritten)
 	}
 
-	missingKey, _ := operationsEdgeHandler(operationsServiceEdgeStub{})
-	request := operationEdgeRequest(http.MethodPost, "/operations")
-	request.Header.Del("Idempotency-Key")
-	response := httptest.NewRecorder()
-	missingKey.submitOperation(response, request)
-	if response.Code != http.StatusTeapot {
-		t.Fatalf("missing-key status=%d", response.Code)
-	}
-	missingKey.decodeJSON = nil
-	response = httptest.NewRecorder()
-	missingKey.submitOperation(response, operationEdgeRequest(http.MethodPost, "/operations"))
-	if response.Code != http.StatusOK || response.Body.Len() != 0 {
-		t.Fatalf("nil-decode status=%d body=%s", response.Code, response.Body.String())
-	}
-	missingKey.decodeJSON = func(http.ResponseWriter, *http.Request, any) bool { return false }
-	response = httptest.NewRecorder()
-	missingKey.submitOperation(response, operationEdgeRequest(http.MethodPost, "/operations"))
-	if response.Code != http.StatusOK || response.Body.Len() != 0 {
-		t.Fatalf("false-decode status=%d body=%s", response.Code, response.Body.String())
-	}
-
 	controlHandler, _ := operationsEdgeHandler(operationsServiceEdgeStub{})
-	response = httptest.NewRecorder()
+	response := httptest.NewRecorder()
 	controlHandler.setControl(response, operationEdgeRequest(http.MethodPost, "/operations"))
 	if response.Code != http.StatusTeapot {
 		t.Fatalf("nil-control status=%d", response.Code)
@@ -205,7 +181,7 @@ func TestOperationsCommandControlAndOwnerErrorEdges(t *testing.T) {
 		t.Fatalf("nil-control-list status=%d", response.Code)
 	}
 	controlHandler.controls = operationsControlEdgeStub{err: failure}
-	request = operationEdgeRequest(http.MethodPost, "/operations")
+	request := operationEdgeRequest(http.MethodPost, "/operations")
 	request.Header.Del("Idempotency-Key")
 	response = httptest.NewRecorder()
 	controlHandler.setControl(response, request)

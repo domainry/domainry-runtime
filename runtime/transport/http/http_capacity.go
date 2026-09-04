@@ -14,7 +14,7 @@ import (
 func (s *HTTPRouter) withAdmission(routes *http.ServeMux, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		policy := routePolicyFor(routes, r)
-		if policy.path == "/business-events/stream" {
+		if policy.path == "/realtime/refresh-events" {
 			next.ServeHTTP(w, r)
 			return
 		}

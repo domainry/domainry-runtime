@@ -215,7 +215,7 @@ func (binding *manifestIdentityBinding) Verify(_ context.Context, request identi
 	}
 	now := time.Now()
 	return identitysdk.VerifiedToken{
-		Issuer: "plane-testkit-identity", Audience: binding.application.ApplicationKey, SubjectID: identitysdk.SubjectID(session.subject), WorkspaceID: binding.application.WorkspaceID,
+		Issuer: "plane-testkit-identity", Audience: binding.application.ApplicationKey, SubjectID: identitysdk.SubjectID(session.subject), TenantID: binding.application.TenantID, WorkspaceID: binding.application.WorkspaceID,
 		SessionID: "plane-testkit-session", AuthorizationRevision: "plane-testkit-authorization", IssuedAt: now.Add(-time.Minute).Unix(), ExpiresAt: now.Add(time.Hour).Unix(), TokenID: request.AccessToken,
 	}, nil
 }

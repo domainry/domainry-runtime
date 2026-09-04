@@ -59,7 +59,7 @@ func TestRuntimeBusinessEventStreamConnectsReplaysAndRejectsCrossTenant(t *testi
 	}
 	_ = secondResponse.Body.Close()
 
-	crossTenantRequest, _ := http.NewRequest(http.MethodGet, server.URL+"/business-events/stream", nil)
+	crossTenantRequest, _ := http.NewRequest(http.MethodGet, server.URL+"/realtime/refresh-events", nil)
 	crossTenantRequest.Header.Set("Authorization", "Bearer "+token)
 	crossTenantRequest.Header.Set("X-Workspace-ID", "workspace-sibling")
 	crossTenantResponse, err := client.Do(crossTenantRequest)
@@ -106,7 +106,7 @@ type runtimeSSEEvent struct {
 
 func openRuntimeEventStream(t *testing.T, client *http.Client, baseURL, token, lastEventID, workspaceID string) (*http.Response, *bufio.Reader) {
 	t.Helper()
-	request, _ := http.NewRequest(http.MethodGet, baseURL+"/business-events/stream?objects=customer", nil)
+	request, _ := http.NewRequest(http.MethodGet, baseURL+"/realtime/refresh-events?objects=customer", nil)
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("X-Workspace-ID", workspaceID)
 	if lastEventID != "" {
@@ -127,7 +127,7 @@ func openRuntimeEventStream(t *testing.T, client *http.Client, baseURL, token, l
 func createRuntimeCustomer(t *testing.T, client *http.Client, baseURL, token, requestKey, name string) {
 	t.Helper()
 	payload, _ := json.Marshal(map[string]any{"data": map[string]any{"name": name, "owner": "admin"}})
-	request, _ := http.NewRequest(http.MethodPost, baseURL+"/records/objects/customer/records", bytes.NewReader(payload))
+	request, _ := http.NewRequest(http.MethodPost, baseURL+"/records/customer", bytes.NewReader(payload))
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("X-Workspace-ID", "workspace-primary")
 	request.Header.Set("Content-Type", "application/json")

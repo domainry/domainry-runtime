@@ -21,9 +21,9 @@ import (
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
 
-var _ reportcontract.ReportObjectSQLExecutor = (*ReportDatasetStore)(nil)
+var _ reportcontract.ReportObjectSQLExecutor = (*ReportSQLStore)(nil)
 
-func (s *ReportDatasetStore) ExecuteReportObjectSQL(ctx context.Context, request reportcontract.ReportObjectSQLExecutionRequest) (reportcontract.ReportObjectSQLExecutionResult, error) {
+func (s *ReportSQLStore) ExecuteReportObjectSQL(ctx context.Context, request reportcontract.ReportObjectSQLExecutionRequest) (reportcontract.ReportObjectSQLExecutionResult, error) {
 	if s == nil || s.store == nil || s.store.DB() == nil {
 		return reportcontract.ReportObjectSQLExecutionResult{}, fmt.Errorf("report object SQL store is unavailable")
 	}
@@ -165,7 +165,7 @@ func crossWorkspaceJoinSafePlan(plan reportmodel.ReportObjectSQLPlan) reportmode
 	return plan
 }
 
-func (s *ReportDatasetStore) reportObjectSQLSources(ctx context.Context, tx *sql.Tx, request reportcontract.ReportObjectSQLExecutionRequest) ([]string, []any, error) {
+func (s *ReportSQLStore) reportObjectSQLSources(ctx context.Context, tx *sql.Tx, request reportcontract.ReportObjectSQLExecutionRequest) ([]string, []any, error) {
 	cteParts, args := make([]string, 0, len(request.Plan.Sources)), []any{}
 	for index, source := range request.Plan.Sources {
 		object, queryValue := request.Objects[source.Alias], request.Queries[source.Alias]
@@ -216,6 +216,19 @@ func (s *ReportDatasetStore) reportObjectSQLSources(ctx context.Context, tx *sql
 }
 
 func reportObjectSQLCTE(index int) string { return fmt.Sprintf("report_object_sql_source_%d", index) }
+
+func reportStoreSourceColumns(selected []string) []string {
+	columns := []string{"id", "created_at", "updated_at"}
+	seen := map[string]bool{"id": true, "created_at": true, "updated_at": true}
+	for _, field := range selected {
+		field = strings.TrimSpace(field)
+		if field != "" && !seen[field] {
+			seen[field] = true
+			columns = append(columns, field)
+		}
+	}
+	return columns
+}
 
 func reportObjectSQLResultValue(profile persistencedriver.EngineProfile, column reportmodel.ReportResultColumnSchema, raw any) (string, error) {
 	if bytes, ok := raw.([]byte); ok {

@@ -66,13 +66,10 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 	}
 	gymLedgerP6AssertBalances(t, full, map[string]string{"bonus": "20.00", "cashflow": "90.00", "principal": "70.00", "refund": "10.00"})
 	role := accessfixture.Bundle{Key: "finance", Permissions: []string{"report.summary.get", "gym_financial_ledger.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Scope: "all", Read: true}}}
-	field := func(key string) reportmodel.ReportDatasetField {
-		return reportmodel.ReportDatasetField{SourceAlias: "ledger", FieldKey: key}
-	}
-	report := reportmodel.ReportSchema{Key: "gym_ledger_reconciliation", RequiredPermissions: []string{"gym_financial_ledger.read"}, Dataset: reportmodel.ReportDatasetSchema{
-		Source:     reportmodel.ReportDatasetSource{ObjectKey: object.Key, Alias: "ledger"},
-		Dimensions: []reportmodel.ReportDatasetDimension{{Key: "bucket", Field: field("balance_bucket")}, {Key: "direction", Field: field("direction")}},
-		Measures:   []reportmodel.ReportDatasetMeasure{{Key: "entries", Operation: "count", SourceAlias: "ledger"}, {Key: "amount", Operation: "sum", Field: func() *reportmodel.ReportDatasetField { value := field("amount"); return &value }()}},
+	report := reportmodel.ReportSchema{Key: "gym_ledger_reconciliation", RequiredPermissions: []string{"gym_financial_ledger.read"}, ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{
+		SQL:           "SELECT ledger.balance_bucket AS bucket, ledger.direction AS direction, COUNT(ledger.id) AS entries, SUM(ledger.amount) AS amount FROM gym_financial_ledger ledger GROUP BY ledger.balance_bucket, ledger.direction ORDER BY ledger.balance_bucket, ledger.direction LIMIT 100",
+		SourceObjects: []string{object.Key},
+		ResultSchema:  []reportmodel.ReportResultColumnSchema{{Key: "bucket", Type: "text", Kind: "dimension"}, {Key: "direction", Type: "text", Kind: "dimension"}, {Key: "entries", Type: "integer", Kind: "measure"}, {Key: "amount", Type: "currency", Kind: "measure", Precision: 19, Scale: 2}},
 	}}
 	services := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "gym-ledger-report-p7", TemplateVersion: "1", Name: "Gym Ledger Report P7", Objects: []definitionmodel.ObjectSchema{object}, Reports: []reportmodel.ReportSchema{report}, Integrations: connectormodel.IntegrationSchema{}, Store: store})
 	summary, err := integrationReportSummary(t.Context(), services, report.Key, "realtime", accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "finance", WorkspaceID: "workspace-primary"}}, role))

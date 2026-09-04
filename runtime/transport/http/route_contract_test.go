@@ -34,13 +34,13 @@ func TestFallbackRouteCanReturnJSONBeforeAuthentication(t *testing.T) {
 
 func TestRoutePolicyUsesRegisteredPatternInsteadOfUserPathSegments(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /records/objects/{objectKey}/records", func(http.ResponseWriter, *http.Request) {})
+	mux.HandleFunc("POST /records/{objectKey}", func(http.ResponseWriter, *http.Request) {})
 	mux.HandleFunc("POST /integration/webhooks/{workspaceID}/{connectionKey}", func(http.ResponseWriter, *http.Request) {})
 	mux.HandleFunc("/{path...}", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNotFound) })
 
-	recordRequest := httptest.NewRequest(http.MethodPost, "/records/objects/report/records", nil)
+	recordRequest := httptest.NewRequest(http.MethodPost, "/records/report", nil)
 	recordPolicy := routePolicyFor(mux, recordRequest)
-	if recordPolicy.path != "/records/objects/{objectKey}/records" || recordPolicy.anonymous() || recordPolicy.fallback {
+	if recordPolicy.path != "/records/{objectKey}" || recordPolicy.anonymous() || recordPolicy.fallback {
 		t.Fatalf("unexpected record route policy: %#v", recordPolicy)
 	}
 
@@ -112,22 +112,23 @@ func TestEveryRuntimeRouteHasACompleteCompiledEndpointContract(t *testing.T) {
 
 func TestEveryRuntimeRouteUsesItsOwnerNamespace(t *testing.T) {
 	namespaces := map[string]string{
-		"appschema":          "/metadata",
+		"metadata":           "/metadata",
 		"automation":         "/automation",
-		"businessreferences": "/business-references",
-		"businesssystem":     "/business-system",
-		"businessevents":     "/business-events",
-		"capabilities":       "/capabilities",
+		"businessreferences": "/references",
+		"businesssystem":     "/authoring",
+		"businessevents":     "/realtime",
+		"appschema":          "/application-schema",
+		"dispatch":           "/dispatch",
 		"discovery":          "/discovery",
 		"lifecycle":          "/lifecycle",
 		"notifications":      "/notification",
 		"operations":         "/operations",
-		"publicationhandoff": "/publication-handoff",
+		"publicationhandoff": "/publication-handoffs",
 		"records":            "/records",
-		"scheduler":          "/scheduler",
+		"provision":          "/provision",
 		"uploads":            "/uploads",
 		"workflows":          "/workflow",
-		"workspaceprovision": "/workspace",
+		"workspaceprovision": "/workspaces",
 	}
 	for identity, contract := range runtimeEndpointContracts {
 		if contract.SourceOwner == "root" || contract.SourceOwner == "openapi" {
@@ -167,6 +168,41 @@ func TestLegacyFrontendSurfaceRoutesAreNotPublished(t *testing.T) {
 	}
 }
 
+func TestRuntimeRoutesDoNotReintroduceTransportContainerSegments(t *testing.T) {
+	routes := declaredRuntimeRoutes(t)
+	paths := runtimeopenapi.Build(appschemamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
+	forbidden := []string{
+		"/runtime/",
+		"/records/objects/",
+		"/workflow/operations/",
+		"/workspace/provision",
+		"/uploads/files",
+		"/operations/bulk/dead-letters",
+		"/automation/rules/capabilities",
+		"/automation/rules/executions",
+		"/automation/rules/validate",
+		"/automation/rules/simulate",
+		"/automation/rules/authoring-fragments",
+	}
+	assertCanonical := func(kind, value string) {
+		t.Helper()
+		for _, fragment := range forbidden {
+			if strings.Contains(value, fragment) {
+				t.Errorf("%s still contains transport container %q: %s", kind, fragment, value)
+			}
+		}
+	}
+	for identity := range routes {
+		assertCanonical("registered route", identity)
+	}
+	for identity := range runtimeEndpointContracts {
+		assertCanonical("endpoint contract", identity)
+	}
+	for path := range paths {
+		assertCanonical("OpenAPI path", path)
+	}
+}
+
 func TestRuntimeDoesNotPublishIntegrationOwnerWebhookRoute(t *testing.T) {
 	routes := declaredRuntimeRoutes(t)
 	webhookRoutes := make([]string, 0)
@@ -203,11 +239,11 @@ func TestRoutesOnlyComposesDomainRegistrarsAndGlobalMiddleware(t *testing.T) {
 	expected := map[string]bool{
 		"discoveryHTTP": false, "openAPIHTTP": false,
 		"applicationSchemaHTTP": false,
-		"capabilityHTTP":        false, "businessSystemHTTP": false,
+		"businessSystemHTTP":    false,
 		"businessReferenceHTTP": false, "lifecycleHTTP": false,
 		"workspaceProvisionHTTP": false,
 		"uploadHTTP":             false, "recordHTTP": false, "workflowHTTP": false,
-		"automationHTTP": false, "schedulerHTTP": false,
+		"automationHTTP": false, "dispatchHTTP": false,
 		"operationsHTTP": false, "businessEventHTTP": false,
 	}
 	allowedDirectRoutes := map[string]bool{
@@ -267,12 +303,11 @@ func declaredRuntimeRoutes(t *testing.T) map[string]bool {
 	files = append(files, filepath.Join(filepath.Dir(current), "workflows", "workflows_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "lifecycle", "lifecycle_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "automation", "automation_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "scheduler", "scheduler_routes.go"))
+	files = append(files, filepath.Join(filepath.Dir(current), "dispatch", "dispatch_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "appschema", "appschema_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businessreferences", "businessreferences_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "publicationhandoff", "publication_handoff_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businesssystem", "businesssystem_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "capabilities", "capabilities_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "operations", "operations_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businessevents", "businessevents_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "notifications", "notifications_routes.go"))
@@ -314,11 +349,11 @@ func runtimeRouteOpenAPIExclusion(_ string, path string) string {
 		}
 	}
 	switch path {
-	case "/", "/health", "/metrics", "/uploads/files":
+	case "/", "/health", "/metrics", "/uploads":
 		return "operational or binary transport endpoint"
 	case "/integration/events/process-due", "/integration/events/{eventID}/status",
 		"/integration/invocations/{invocationID}/status", "/integration/outbox/process-due",
-		"/integration/outbox/{messageID}/status", "/workflow-executions/process":
+		"/integration/outbox/{messageID}/status":
 		return "internal worker control endpoint"
 	default:
 		return ""
@@ -326,7 +361,7 @@ func runtimeRouteOpenAPIExclusion(_ string, path string) string {
 }
 
 func isSchemaDerivedOpenAPIPath(path string) bool {
-	return strings.HasPrefix(path, "/records/objects/{objectKey}") || strings.Contains(path, "/actions/{actionKey}")
+	return strings.HasPrefix(path, "/records/{objectKey}") || strings.Contains(path, "/actions/{actionKey}")
 }
 
 func isHTTPMethod(value string) bool {

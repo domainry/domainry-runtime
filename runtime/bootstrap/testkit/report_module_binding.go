@@ -27,9 +27,6 @@ type testkitReportApplicationHost struct {
 func (h testkitReportApplicationHost) ReportSubjects() reportmodulehost.SubjectResolver {
 	return h.ports.Subjects
 }
-func (h testkitReportApplicationHost) ReportDatasets() reportmodulehost.DatasetReader {
-	return h.ports.Datasets
-}
 func (h testkitReportApplicationHost) ReportObjectSQL() reportmodulehost.ObjectSQLExecutor {
 	return h.ports.ObjectSQL
 }

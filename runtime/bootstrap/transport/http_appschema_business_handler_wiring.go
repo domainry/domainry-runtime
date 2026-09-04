@@ -17,7 +17,6 @@ import (
 	appschemahttp "github.com/domainry/domainry-runtime/runtime/transport/http/appschema"
 	businessreferencehttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessreferences"
 	businesssystemhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businesssystem"
-	capabilityhttp "github.com/domainry/domainry-runtime/runtime/transport/http/capabilities"
 	discoveryhttp "github.com/domainry/domainry-runtime/runtime/transport/http/discovery"
 	lifecyclehttp "github.com/domainry/domainry-runtime/runtime/transport/http/lifecycle"
 	openapihttp "github.com/domainry/domainry-runtime/runtime/transport/http/openapi"
@@ -32,7 +31,7 @@ func (a *httpServerAssembly) wireOperationsApplication() {
 	useDirectAuthoringProjection(operationsService, records.Applications().AuthoringCapabilities)
 	_ = operationsService.RegisterDiagnostics(operationsStore, a.dependencies.RuntimeInstanceID)
 	_ = operationsService.RegisterBreakGlass(operationsStore, operationsBreakGlassAuditAlert{audit: records.Applications().Audit})
-	registerOperationsDeadLetterOwners(operationsService, records.Applications().PublicationHandoff, records.Applications().Workflows, a.dependencies.SchedulerBinding, records.Applications().RecordTimers)
+	registerOperationsDeadLetterOwners(operationsService, records.Applications().PublicationHandoff, records.Applications().Workflows, records.Applications().RecordTimers)
 	a.operations = operationsService
 }
 
@@ -41,8 +40,9 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 	operationsService := a.operations
 	operationsStore := operationspersistence.NewOperationsStore(a.dependencies.Store)
 	a.handlers.Discovery = discoveryhttp.NewDiscoveryHandler(discoveryhttp.DiscoveryDependencies{
-		Schema: records.Applications().Schema, Principal: a.callbacks.Principal,
-		WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
+		Schema: records.Applications().Schema, References: records.Applications().AuthoringCapabilities,
+		Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
+		WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,
 	})
 	a.handlers.OpenAPI = openapihttp.NewOpenAPIHandler(openapihttp.OpenAPIDependencies{
 		Schema: records.Applications().Schema, WriteJSON: a.callbacks.WriteJSON,
@@ -78,16 +78,10 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 	})
 	a.handlers.ApplicationSchema = appschemahttp.NewApplicationSchemaHandler(appschemahttp.ApplicationSchemaDependencies{
 		Definitions: a.metadata, RuntimeCatalog: a.metadata,
-		Capabilities: records.Applications().AuthoringCapabilities,
-		Principal:    a.callbacks.Principal,
-		WriteJSON:    a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
+		Principal: a.callbacks.Principal,
+		WriteJSON: a.callbacks.WriteJSON, WriteError: a.callbacks.WriteError,
 		WriteServiceError: a.callbacks.WriteServiceError, DecodeJSON: a.callbacks.DecodeJSON,
-		Authenticated: a.identityHTTP.AuthenticatedFunc, LegacyHeaders: capabilityhttp.WriteLegacyProjectionHeaders,
-		ProvisionRequired: a.callbacks.ProvisionRequired,
-	})
-	a.handlers.Capabilities = capabilityhttp.NewCapabilitiesHandler(capabilityhttp.CapabilitiesDependencies{
-		Service: records.Applications().AuthoringCapabilities, Principal: a.callbacks.Principal,
-		WriteJSON: a.callbacks.WriteJSON, WriteServiceError: a.callbacks.WriteServiceError,
+		Authenticated: a.identityHTTP.AuthenticatedFunc,
 	})
 	a.handlers.BusinessReferences = businessreferencehttp.NewBusinessReferencesHandler(businessreferencehttp.BusinessReferencesDependencies{
 		Service:   records.Applications().BusinessReferences,

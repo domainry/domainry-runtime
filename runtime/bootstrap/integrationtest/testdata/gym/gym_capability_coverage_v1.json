@@ -23,7 +23,7 @@
     {"key": "ledger.append_only", "support_status": "supported", "authoring_contract": "schema.object.append_only_ledger", "validation_owner": "ledger/validation", "execution_owner": "ledger/application", "persistence_owner": "database/ledger", "audit_owner": "audit", "failure_semantics": {"code": "backend.ledger.immutable", "http_status": 409}},
     {"key": "audit.evidence", "support_status": "supported_with_modeling", "authoring_contract": "maintenance.audit", "validation_owner": "audit/validation", "execution_owner": "audit/application", "persistence_owner": "database/audit", "audit_owner": "audit", "failure_semantics": {"code": "backend.audit.append_failed", "http_status": 500}},
     {"key": "connector.device_payment", "support_status": "external_connector", "authoring_contract": "integration.connector_operation", "validation_owner": "integration/validation", "execution_owner": "integration/application", "persistence_owner": "database/integration", "audit_owner": "audit", "failure_semantics": {"code": "backend.integration.provider_failed", "http_status": 502}},
-    {"key": "report.relational_dataset", "support_status": "supported", "authoring_contract": "report.dataset", "validation_owner": "report/validation", "execution_owner": "report/application", "persistence_owner": "database/report", "audit_owner": "audit", "failure_semantics": {"code": "backend.report.invalid_dataset", "http_status": 422}}
+    {"key": "report.object_sql_v1", "support_status": "supported", "authoring_contract": "report.object_sql_v1", "validation_owner": "report/validation", "execution_owner": "report/application", "persistence_owner": "database/report", "audit_owner": "audit", "failure_semantics": {"code": "backend.report.object_sql_invalid", "http_status": 422}}
   ],
   "entities": [
     {"key": "gym_member", "capability_owner": "schema.dynamic_object", "support_status": "supported", "e2e_case": "GYM-11"},
@@ -51,7 +51,7 @@
     {"key": "experience_voucher", "capability_owner": "record.conditional_mutation", "support_status": "supported", "e2e_case": "GYM-10"},
     {"key": "referral", "capability_owner": "action.typed_rules", "support_status": "supported", "e2e_case": "GYM-10"},
     {"key": "coupon", "capability_owner": "record.conditional_mutation", "support_status": "supported", "e2e_case": "GYM-10"},
-    {"key": "campaign", "capability_owner": "report.relational_dataset", "support_status": "supported", "e2e_case": "GYM-12"}
+    {"key": "campaign", "capability_owner": "report.object_sql_v1", "support_status": "supported", "e2e_case": "GYM-12"}
   ],
   "state_machines": [
     {"key": "membership_card", "states": ["draft", "active", "frozen", "disabled", "expired", "refunded"], "capability_owner": "schema.state_machine", "support_status": "supported", "e2e_case": "GYM-01"},
@@ -83,7 +83,7 @@
     {"id": "GYM-09", "capability_owner": "action.typed_rules", "title": "commission settlement"},
     {"id": "GYM-10", "capability_owner": "record.conditional_mutation", "title": "marketing redemption"},
     {"id": "GYM-11", "capability_owner": "identity.relation_rls", "title": "RBAC RLS and CLS"},
-    {"id": "GYM-12", "capability_owner": "report.relational_dataset", "title": "operational dashboards"},
+    {"id": "GYM-12", "capability_owner": "report.object_sql_v1", "title": "operational dashboards"},
     {"id": "GYM-13", "capability_owner": "schema.dynamic_object", "title": "metadata draft publish and replay"},
     {"id": "GYM-14", "capability_owner": "connector.device_payment", "title": "external failure and reconciliation"}
   ],

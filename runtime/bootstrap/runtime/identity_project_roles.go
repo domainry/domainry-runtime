@@ -7,14 +7,18 @@ import (
 	"encoding/json"
 	"strings"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
+
+const runtimeBootstrapAdministratorRoleKey = "admin"
 
 // publishRuntimeProjectRoles projects application-owned authorization roles
 // through Identity's deployment-neutral port. Older/remote bindings may omit
 // the optional capability; they continue to own their role provisioning.
-func publishRuntimeProjectRoles(ctx context.Context, binding identitysdk.Binding, roles []manifestmodel.RoleSchema, workspaceID, applicationKey string) error {
+func publishRuntimeProjectRoles(ctx context.Context, binding identitysdk.Binding, objects []definitionmodel.ObjectSchema, roles []manifestmodel.RoleSchema, workspaceID, applicationKey string) error {
 	if binding == nil {
 		return nil
 	}
@@ -22,17 +26,55 @@ func publishRuntimeProjectRoles(ctx context.Context, binding identitysdk.Binding
 	if !ok {
 		return nil
 	}
-	_, err := publisher.PublishProjectRoles(ctx, runtimeProjectRoleCatalog(roles, workspaceID, applicationKey))
+	_, err := publisher.PublishProjectRoles(ctx, runtimeProjectRoleCatalog(objects, roles, workspaceID, applicationKey))
 	return err
 }
 
-func runtimeProjectRoleCatalog(roles []manifestmodel.RoleSchema, workspaceID, applicationKey string) identitysdk.ProjectRoleCatalog {
+// runtimeProjectRolesWithBootstrapAdministrator gives the Identity-owned
+// bootstrap administrator the complete, explicit Runtime permission set when
+// the application manifest does not define its own admin role. Identity owns
+// the bootstrap user and assignment; Runtime owns the complete application
+// Action registry. Keeping the composition here avoids teaching Identity about
+// optional modules and avoids a wildcard permission that could outlive the
+// installed module cohort.
+func runtimeProjectRolesWithBootstrapAdministrator(roles []manifestmodel.RoleSchema, definitions []actioncontract.PermissionDefinition) []manifestmodel.RoleSchema {
+	result := append([]manifestmodel.RoleSchema(nil), roles...)
+	for _, role := range result {
+		if strings.TrimSpace(role.Key) == runtimeBootstrapAdministratorRoleKey {
+			return result
+		}
+	}
+	permissions := make([]manifestmodel.RolePermission, 0, len(definitions))
+	for _, definition := range definitions {
+		if key := strings.TrimSpace(definition.Key); key != "" {
+			permissions = append(permissions, manifestmodel.RolePermission{
+				PermissionKey: key,
+				DataScope:     identitysdk.DataScopeAll,
+			})
+		}
+	}
+	if len(permissions) == 0 {
+		return result
+	}
+	return append(result, manifestmodel.RoleSchema{
+		Key:               runtimeBootstrapAdministratorRoleKey,
+		Name:              "Admin",
+		Permissions:       permissions,
+		Audience:          "any",
+		AssignmentMode:    "manual",
+		RiskLevel:         "privileged",
+		GrantableRoleKeys: []string{"*"},
+	})
+}
+
+func runtimeProjectRoleCatalog(objects []definitionmodel.ObjectSchema, roles []manifestmodel.RoleSchema, workspaceID, applicationKey string) identitysdk.ProjectRoleCatalog {
 	catalog := identitysdk.ProjectRoleCatalog{
 		Application: identitysdk.ApplicationRef{
 			WorkspaceID:    identitysdk.WorkspaceID(strings.TrimSpace(workspaceID)),
 			ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(applicationKey)),
 		},
-		Roles: make([]identitysdk.ProjectRoleDefinition, 0, len(roles)),
+		Objects: mustProjectRoleJSON(objects),
+		Roles:   make([]identitysdk.ProjectRoleDefinition, 0, len(roles)),
 	}
 	for _, role := range roles {
 		definition := identitysdk.ProjectRoleDefinition{

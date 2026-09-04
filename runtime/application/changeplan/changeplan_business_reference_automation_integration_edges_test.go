@@ -4,57 +4,27 @@ import (
 	"testing"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
-func TestReportIntegrationReferencesIncludeRangePrivacyAndAnalysisFields(t *testing.T) {
-	field := func(key string) *reportmodel.ReportDatasetField {
-		return &reportmodel.ReportDatasetField{SourceAlias: "orders", FieldKey: key}
-	}
+func TestReportIntegrationReferencesIncludeObjectSQLFields(t *testing.T) {
 	builder := NewReferenceGraphBuilder()
 	AddReportIntegrationReferences(builder, ReferenceSchema{
+		Objects: []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}, {Key: "amount", Type: "decimal"}}}},
 		Reports: []reportmodel.ReportSchema{{
 			Key: "order-cycle-time",
-			Dataset: reportmodel.ReportDatasetSchema{
-				Source:  reportmodel.ReportDatasetSource{ObjectKey: "order", Alias: "orders"},
-				Filters: []reportmodel.ReportDatasetFilter{{Field: *field("status")}},
-				Measures: []reportmodel.ReportDatasetMeasure{
-					{
-						Key:        "cycle-time",
-						StartField: field("started_at"),
-						EndField:   field("completed_at"),
-					},
-					{
-						Key:   "total",
-						Field: field("amount"),
-					},
-				},
-				Privacy: &reportmodel.ReportDatasetPrivacy{
-					EntityField: *field("customer_id"),
-				},
-				Analyses: []reportmodel.ReportDatasetAnalysis{{
-					Key:         "conversion",
-					EntityField: *field("customer_id"),
-					TimeField:   *field("created_at"),
-					EventField:  field("status"),
-				}, {
-					Key:         "retention",
-					EntityField: *field("customer_id"),
-					TimeField:   *field("created_at"),
-				}},
+			ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{
+				SQL:           "SELECT orders.status AS status, SUM(orders.amount) AS amount FROM `order` orders GROUP BY orders.status LIMIT 100",
+				SourceObjects: []string{"order"},
+				ResultSchema:  []reportmodel.ReportResultColumnSchema{{Key: "status", Type: "text", Kind: "dimension"}, {Key: "amount", Type: "decimal", Kind: "measure"}},
 			},
 		}},
 	})
 
 	want := map[string]bool{
-		"measures_start_field:order.started_at":   false,
-		"measures_end_field:order.completed_at":   false,
-		"measures_field:order.amount":             false,
-		"filters_field:order.status":              false,
-		"privacy_entity_field:order.customer_id":  false,
-		"analyzes_entity_field:order.customer_id": false,
-		"analyzes_time_field:order.created_at":    false,
-		"analyzes_event_field:order.status":       false,
+		"reads_field:order.status": false,
+		"reads_field:order.amount": false,
 	}
 	for _, edge := range builder.Graph().Edges {
 		key := edge.Kind + ":" + edge.ToKey

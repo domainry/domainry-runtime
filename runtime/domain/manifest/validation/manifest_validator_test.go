@@ -72,7 +72,7 @@ func TestValidateManifestRejectsAmbiguousSubjectLifecycleFieldPolicy(t *testing.
 func TestValidateManifestEnforcesReportFieldAndSeedEvidenceContract(t *testing.T) {
 	manifest := loadFixtureManifest(t, "domain-only-minimal.json")
 	manifest.Reports = []reportmodel.ReportSchema{{
-		Key: "customer.summary", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "name", Field: reportmodel.ReportDatasetField{SourceAlias: "customer", FieldKey: "name"}}}},
+		Key: "customer.summary", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "SELECT customer.name AS name FROM customer customer ORDER BY customer.name LIMIT 100", SourceObjects: []string{"customer"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "name", Type: "text", Kind: "dimension"}}},
 		EvidenceRequirements: []reportmodel.ReportEvidenceRequirement{{ObjectKey: "customer", MinimumRecords: 2, RequiredNonEmptyFields: []string{"name"}}},
 	}}
 	err := ValidateManifest(manifest)

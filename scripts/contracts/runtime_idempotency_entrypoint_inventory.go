@@ -55,10 +55,11 @@ func discoverHTTPMutations() []inventoryEntry {
 		if err != nil {
 			return err
 		}
-		owner := filepath.Base(filepath.Dir(path))
+		owner := inventoryBusinessOwner(filepath.Base(filepath.Dir(path)))
 		for _, match := range mutationRoute.FindAllStringSubmatch(string(raw), -1) {
-			decision, keySource := classifyHTTP(match[2], strings.TrimPrefix(match[1], match[2]+" "))
-			entries = append(entries, inventoryEntry{kind: "http", owner: owner, entrypoint: match[1], source: path, decision: decision, keySource: keySource})
+			routePath := strings.TrimPrefix(match[1], match[2]+" ")
+			decision, keySource := classifyHTTP(match[2], routePath)
+			entries = append(entries, inventoryEntry{kind: "http", owner: inventoryHTTPRouteOwner(owner, routePath), entrypoint: match[1], source: path, decision: decision, keySource: keySource})
 		}
 		return nil
 	})
@@ -69,7 +70,17 @@ func discoverHTTPMutations() []inventoryEntry {
 	return entries
 }
 
+func inventoryHTTPRouteOwner(owner, routePath string) string {
+	if strings.HasPrefix(strings.TrimSpace(routePath), "/dispatch/") {
+		return "dispatch"
+	}
+	return owner
+}
+
 func classifyHTTP(method, path string) (string, string) {
+	if strings.HasPrefix(path, "/dispatch/") {
+		return "system_key_required", "upstream operation and resolved target identity"
+	}
 	readOnlyFragments := []string{"/validate", "/preview", "/simulate", "/analysis/query", "/context"}
 	for _, fragment := range readOnlyFragments {
 		if strings.Contains(path, fragment) {
@@ -89,7 +100,7 @@ func classifyHTTP(method, path string) (string, string) {
 	if method == "PUT" {
 		return "natural_key", "workspace plus stable path resource"
 	}
-	if strings.HasPrefix(path, "/records/objects/") && strings.Contains(path, "/records/") && (method == "PATCH" || method == "DELETE") {
+	if strings.HasPrefix(path, "/records/") && strings.Contains(path, "/") && (method == "PATCH" || method == "DELETE") {
 		return "caller_key_required", "Idempotency-Key header"
 	}
 	if method == "PATCH" || method == "DELETE" {
@@ -113,13 +124,13 @@ func discoverApplicationCommands() []inventoryEntry {
 			return err
 		}
 		owner, _ := filepath.Rel("runtime/application", filepath.Dir(path))
-		owner = strings.Split(filepath.ToSlash(owner), "/")[0]
+		owner = inventoryBusinessOwner(strings.Split(filepath.ToSlash(owner), "/")[0])
 		for _, declaration := range file.Decls {
 			method, ok := declaration.(*ast.FuncDecl)
 			if !ok || method.Recv == nil || !method.Name.IsExported() || !isApplicationServiceReceiver(method.Recv.List[0].Type) || !hasContextFirst(method.Type.Params) || !isMutationMethod(method.Name.Name) {
 				continue
 			}
-			decision, keySource := classifyApplicationCommand(method.Name.Name)
+			decision, keySource := classifyApplicationCommand(owner, method.Name.Name)
 			entries = append(entries, inventoryEntry{kind: "application", owner: owner, entrypoint: method.Name.Name, source: path, decision: decision, keySource: keySource})
 		}
 		return nil
@@ -129,6 +140,10 @@ func discoverApplicationCommands() []inventoryEntry {
 	}
 	sortEntries(entries)
 	return entries
+}
+
+func inventoryBusinessOwner(owner string) string {
+	return strings.TrimSpace(owner)
 }
 
 func hasContextFirst(params *ast.FieldList) bool {
@@ -161,7 +176,10 @@ func isMutationMethod(name string) bool {
 	return false
 }
 
-func classifyApplicationCommand(name string) (string, string) {
+func classifyApplicationCommand(owner, name string) (string, string) {
+	if owner == "dispatch" && name == "Execute" {
+		return "system_key_required", "upstream operation and resolved target identity"
+	}
 	if strings.Contains(name, "Idempotent") {
 		return "caller_key_required", "use-case key propagated from transport or parent execution"
 	}

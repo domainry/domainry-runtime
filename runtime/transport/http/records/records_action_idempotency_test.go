@@ -11,7 +11,7 @@ import (
 )
 
 func TestRecordsActionIdempotencyKeyRequiresHeader(t *testing.T) {
-	request := httptest.NewRequest(http.MethodPost, "/records/objects/order/actions/create/run", nil)
+	request := httptest.NewRequest(http.MethodPost, "/records/order/actions/create", nil)
 	request.Header.Set("Idempotency-Key", " key-1 ")
 	if key, err := recordsActionIdempotencyKey(request); err != nil || key != "key-1" {
 		t.Fatalf("header key=%q err=%v", key, err)
@@ -26,7 +26,7 @@ func TestRecordsActionIdempotencyResponseHeaders(t *testing.T) {
 	var captured error
 	handler := &RecordsHandler{writeServiceError: func(_ http.ResponseWriter, _ *http.Request, errorValue error) { captured = errorValue }}
 	writer := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/records/objects/order/actions/create/run", nil)
+	request := httptest.NewRequest(http.MethodPost, "/records/order/actions/create", nil)
 	inProgress := apperror.New(apperror.KindConflict, idempotency.ErrorCodeInProgress, errors.New("processing"), map[string]string{"retry_after": "7"})
 	handler.writeActionServiceError(writer, request, inProgress)
 	if !errors.Is(captured, inProgress) || writer.Header().Get("Retry-After") != "7" {

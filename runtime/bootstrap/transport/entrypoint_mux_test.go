@@ -29,7 +29,7 @@ func TestEntrypointMuxKeepsProvisionAndBusinessTransportsSeparate(t *testing.T) 
 	}
 
 	manifestResponse := httptest.NewRecorder()
-	handler.ServeHTTP(manifestResponse, httptest.NewRequest(http.MethodPut, "/metadata/manifests/current", nil))
+	handler.ServeHTTP(manifestResponse, httptest.NewRequest(http.MethodPut, "/provision/manifests/current", nil))
 	if manifestResponse.Code != http.StatusAccepted {
 		t.Fatalf("manifest provision status=%d", manifestResponse.Code)
 	}
@@ -61,7 +61,7 @@ func TestEntrypointMuxHandlesMissingTransports(t *testing.T) {
 func TestEntrypointMuxProvisionPathWithoutProvisionHandler(t *testing.T) {
 	handler := &EntrypointMux{}
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metadata/manifests/current", nil))
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/provision/manifests/current", nil))
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status=%d", response.Code)
 	}
@@ -86,7 +86,7 @@ func TestEntrypointMuxHidesConfiguringRuntimeFromNonBuilderTraffic(t *testing.T)
 	handler.SetConfiguring("task-1")
 
 	blocked := httptest.NewRecorder()
-	handler.ServeHTTP(blocked, httptest.NewRequest(http.MethodGet, "/capabilities/index", nil))
+	handler.ServeHTTP(blocked, httptest.NewRequest(http.MethodGet, "/authoring/snapshot", nil))
 	if blocked.Code != http.StatusLocked {
 		t.Fatalf("non-builder status=%d body=%s", blocked.Code, blocked.Body.String())
 	}
@@ -95,7 +95,7 @@ func TestEntrypointMuxHidesConfiguringRuntimeFromNonBuilderTraffic(t *testing.T)
 	if blockedReady.Code != http.StatusLocked {
 		t.Fatalf("configuring Runtime leaked technical readiness to non-builder traffic: status=%d body=%s", blockedReady.Code, blockedReady.Body.String())
 	}
-	allowedRequest := httptest.NewRequest(http.MethodGet, "/capabilities/index", nil)
+	allowedRequest := httptest.NewRequest(http.MethodGet, "/authoring/snapshot", nil)
 	allowedRequest.Header.Set("Builder-Task-ID", "task-1")
 	allowed := httptest.NewRecorder()
 	handler.ServeHTTP(allowed, allowedRequest)

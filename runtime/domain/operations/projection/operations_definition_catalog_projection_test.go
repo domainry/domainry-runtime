@@ -9,7 +9,7 @@ import (
 
 func TestOperationsDefinitionCatalogDeclaresCompleteOperationContract(t *testing.T) {
 	definitions := OperationsDefinitions()
-	if len(definitions) < 31 {
+	if len(definitions) != 30 {
 		t.Fatalf("operation definitions=%d", len(definitions))
 	}
 	seen := map[string]bool{}
@@ -33,7 +33,7 @@ func TestOperationsDefinitionCatalogDeclaresCompleteOperationContract(t *testing
 			t.Errorf("failure semantics incomplete: %#v", definition)
 		}
 	}
-	for _, required := range []string{"scheduler.run.retry", "workflow.execution.retry", "agent.task.retry", "agent.task.cancel", "agent.task.resolve", "agent.task.reconcile", "integration.event.replay", "backup.create", "backup.restore", "retention.cleanup", "database.retirement.execute", "runtime.maintenance.enable", "worker.owner.pause", "runtime.instance.drain", "worker.lease.force_release", "dead_letter.retry", "bulk_operation.dry_run", "diagnostics.snapshot", "break_glass.enable"} {
+	for _, required := range []string{"workflow.execution.retry", "automation.rule.enable", "runtime.publication.retry", "backup.create", "backup.restore", "retention.cleanup", "database.retirement.execute", "runtime.maintenance.enable", "worker.owner.pause", "runtime.instance.drain", "worker.lease.force_release", "dead_letter.retry", "bulk_operation.dry_run", "diagnostics.snapshot", "break_glass.enable"} {
 		if !seen[required] {
 			t.Errorf("missing operation definition %s", required)
 		}
@@ -67,12 +67,24 @@ func TestWorkflowOperationsUseTheirExactEndpointActions(t *testing.T) {
 	}
 }
 
-func TestSchedulerManualRunDefinitionPreservesPublicOwnerPermission(t *testing.T) {
-	definition, found := OperationsDefinition("scheduler.job.run")
-	if !found {
-		t.Fatal("missing scheduler.job.run operation definition")
-	}
-	if definition.ActionKey != "scheduler.definitions.run" {
-		t.Fatalf("scheduler.job.run must exactly match its Runtime endpoint Action: %q", definition.ActionKey)
+func TestExternalOwnerOperationsAreNotProxiedByRuntime(t *testing.T) {
+	for _, kind := range []string{
+		"scheduler.job.run",
+		"scheduler.definition.reschedule",
+		"scheduler.run.retry",
+		"scheduler.run.cancel",
+		"scheduler.dead_letter.resolve",
+		"scheduler.dead_letter.requeue",
+		"agent.task.retry",
+		"agent.task.cancel",
+		"agent.task.resolve",
+		"agent.task.reconcile",
+		"integration.event.retry",
+		"integration.event.replay",
+		"integration.invocation.reconcile",
+	} {
+		if _, found := OperationsDefinition(kind); found {
+			t.Errorf("external source-owner operation %q must not be exposed through Runtime Operations", kind)
+		}
 	}
 }

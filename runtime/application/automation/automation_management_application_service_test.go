@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	capability "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 )
 
 type managementExecutionRepository struct {
@@ -44,10 +43,10 @@ func TestAutomationApplicationAuthorizesWorkspaceBeforeRepositoryAccess(t *testi
 		},
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, accessfixture.Bundle{Permissions: []string{
-		"runtime.automation.automation_capabilities",
+		"runtime.automation.get_execution_catalog",
 		"runtime.automation.list_automation_executions",
 	}})
-	if _, err := service.Capabilities(t.Context(), principal); apperror.CodeOf(err) != "backend.workspace_scope_required" {
+	if _, err := service.ExecutionCatalog(t.Context(), principal); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("capabilities error=%v", err)
 	}
 	if _, err := service.ExecutionHistory(t.Context(), automationmodel.AutomationExecutionFilter{}, principal); apperror.CodeOf(err) != "backend.workspace_scope_required" {
@@ -103,26 +102,18 @@ func TestManagementServiceOwnsSortedRulesCapabilitiesAndHistory(t *testing.T) {
 		Connectors: func(context.Context, principalmodel.Principal) []connectormodel.ConnectorSchema {
 			return []connectormodel.ConnectorSchema{{Key: "crm"}}
 		},
-		AuthoringProjection: func() capability.CapabilityAuthoringProjection {
-			return capability.CapabilityAuthoringProjection{
-				Mode:            "compatibility_projection",
-				Successor:       "/capabilities",
-				ContractVersion: capability.RuntimeAuthoringContractVersion,
-				Domains:         []string{"automation"},
-			}
-		},
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1"}}, accessfixture.Bundle{Permissions: []string{
 		"runtime.automation.list_automation_rules",
-		"runtime.automation.automation_capabilities",
+		"runtime.automation.get_execution_catalog",
 		"runtime.automation.list_automation_executions",
 	}})
 	listed, err := service.Rules(t.Context(), principal)
 	if err != nil || len(listed) != 2 || listed[0].Key != "a" {
 		t.Fatalf("rules=%#v err=%v", listed, err)
 	}
-	catalog, err := service.Capabilities(t.Context(), principal)
-	if err != nil || len(catalog.Connectors) != 1 || len(catalog.Connections) != 1 || catalog.AuthoringProjection == nil {
+	catalog, err := service.ExecutionCatalog(t.Context(), principal)
+	if err != nil || len(catalog.Connectors) != 1 || len(catalog.Connections) != 1 {
 		t.Fatalf("catalog=%#v err=%v", catalog, err)
 	}
 	history, err := service.ExecutionHistory(t.Context(), automationmodel.AutomationExecutionFilter{}, principal)

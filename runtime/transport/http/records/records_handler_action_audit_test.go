@@ -196,7 +196,7 @@ func TestRecordsActionHandlersProjectInputsAndReplayHeaders(t *testing.T) {
 
 	for name, call := range map[string]func(*httptest.ResponseRecorder){
 		"list": func(w *httptest.ResponseRecorder) {
-			handler.listActions(w, recordsRequest("GET", "/records/objects/customer/actions", "", map[string]string{"objectKey": " customer "}))
+			handler.listActions(w, recordsRequest("GET", "/records/customer/actions", "", map[string]string{"objectKey": " customer "}))
 		},
 		"bulk": func(w *httptest.ResponseRecorder) {
 			r := recordsRequest("POST", "/bulk", `{"record_ids":["one"]}`, map[string]string{"objectKey": " customer ", "actionKey": " customer.approve "})

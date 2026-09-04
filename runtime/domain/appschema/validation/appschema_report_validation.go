@@ -81,38 +81,19 @@ func (v *reportDefinitionValidator) validateIdentity() {
 	if strings.TrimSpace(v.report.Key) == "" {
 		v.issue("backend.report.key_required", "key", map[string]string{"field": "key"})
 	}
-	datasetDefined := reportmodel.ReportDatasetDefined(v.report.Dataset)
-	if v.report.ObjectSQLV1 == nil && !datasetDefined {
-		v.issue("backend.report.execution_definition_missing", "dataset", nil)
-		return
-	}
-	if v.report.ObjectSQLV1 != nil && datasetDefined {
-		v.issue("backend.report.execution_definition_conflict", "object_sql_v1", nil)
-		return
-	}
-	if v.report.ObjectSQLV1 == nil && (strings.TrimSpace(v.report.Dataset.Source.ObjectKey) == "" || strings.TrimSpace(v.report.Dataset.Source.Alias) == "") {
-		v.issue("backend.report.dataset_source_invalid", "dataset.source", map[string]string{"field": "dataset.source"})
+	if v.report.ObjectSQLV1 == nil {
+		v.issue("backend.report.execution_definition_missing", "object_sql_v1", nil)
 	}
 }
 
 func (v *reportDefinitionValidator) validateSourceObjects() {
 	v.sourceKeys = map[string]bool{}
-	objectKeys := reportmodel.ReportDatasetObjectKeys(v.report.Dataset)
-	objectPath := func(index int) string {
-		if index == 0 {
-			return "dataset.source.object_key"
-		}
-		return fmt.Sprintf("dataset.joins[%d].object_key", index-1)
-	}
-	if v.report.ObjectSQLV1 != nil {
-		objectKeys = reportmodel.ReportObjectSQLObjectKeys(v.report.ObjectSQLV1)
-		objectPath = func(index int) string { return fmt.Sprintf("object_sql_v1.source_objects[%d]", index) }
-	}
+	objectKeys := reportmodel.ReportObjectSQLObjectKeys(v.report.ObjectSQLV1)
 	for index, objectKey := range objectKeys {
 		objectKey = strings.TrimSpace(objectKey)
-		path := objectPath(index)
+		path := fmt.Sprintf("object_sql_v1.source_objects[%d]", index)
 		if objectKey == "" {
-			v.issue("backend.report.dataset_source_invalid", path, map[string]string{"object": objectKey, "actual": objectKey})
+			v.issue("backend.report.object_sql_source_invalid", path, map[string]string{"object": objectKey, "actual": objectKey})
 		} else if _, exists := v.objects[objectKey]; !exists {
 			v.issue("backend.report.source_object_not_found", path, map[string]string{"object": objectKey, "actual": objectKey})
 		}

@@ -15,9 +15,9 @@ const (
 	BusinessSystemRuntimeStateIndexVersion     = "domain-system-runtime-state-index-v1"
 	BusinessSystemDefaultResourcePageSize      = 25
 	BusinessSystemMaximumResourcePageSize      = 100
-	businessSystemSnapshotEndpoint             = "/business-system/snapshot"
-	businessSystemResourcePageEndpointTemplate = "/business-system/snapshot?projection=resources&resource_type={resource_type}&cursor={cursor}&limit={limit}"
-	businessSystemResourceEndpointTemplate     = "/business-system/snapshot?projection=resource&resource_type={resource_type}&resource_key={resource_key}"
+	businessSystemSnapshotEndpoint             = "/authoring/snapshot"
+	businessSystemResourcePageEndpointTemplate = "/authoring/snapshot?projection=resources&resource_type={resource_type}&cursor={cursor}&limit={limit}"
+	businessSystemResourceEndpointTemplate     = "/authoring/snapshot?projection=resource&resource_type={resource_type}&resource_key={resource_key}"
 )
 
 // RuntimeNativeMetadataIndex is the scalar Runtime identity needed to detect

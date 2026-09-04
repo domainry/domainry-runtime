@@ -3,9 +3,7 @@ package openapi
 import (
 	"strings"
 
-	"github.com/domainry/domainry-foundation/modulehttp"
 	changeplanmodel "github.com/domainry/domainry-runtime/runtime/domain/changeplan/model"
-	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 func runtimeAuthoringCoverageRequestSchema() map[string]any {
@@ -95,7 +93,7 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/notification/preferences", "Notification Governance", "get")
 	addBuilderPath(paths, "/notification/preferences/{recipientKey}", "Notification Governance", "put")
 	addBuilderPath(paths, "/notification/metrics", "Notification Governance", "get")
-	addBuilderPath(paths, "/notification/deliveries", "Notification Governance", "get")
+	addNotificationDeliveryOpenAPIPath(paths)
 	addBuilderPath(paths, "/notification/governance/catalog", "Notification Governance", "get")
 	addBuilderPath(paths, "/notification/governance/inbox-metrics", "Notification Governance", "get")
 	addBuilderPath(paths, "/notification/templates/preview", "Notification Governance", "post")
@@ -108,11 +106,10 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/notification/templates/{templateKey}/versions", "Notification Governance", "get")
 	addBuilderPath(paths, "/notification/templates/{templateKey}/versions/{version}/restore-draft", "Notification Governance", "post")
 	addBuilderPath(paths, "/discovery/schema/administration", "Metadata Administration", "get")
-	addBuilderPath(paths, "/metadata/definitions/{resourceType}/{resourceKey}/validate", "Metadata Administration", "post")
-	addBuilderPath(paths, "/metadata/migration-plan", "Metadata Administration", "get")
-	addBuilderPath(paths, "/metadata/objects/{objectKey}/record-count", "Metadata Administration", "get")
-	addBuilderPath(paths, "/metadata/capabilities", "Metadata Administration", "get")
-	addBuilderPath(paths, "/metadata/diagnostics", "Metadata Operations", "get")
+	addBuilderPath(paths, "/application-schema/definitions/{resourceType}/{resourceKey}/validate", "Application Schema", "post")
+	addBuilderPath(paths, "/application-schema/migration-plan", "Application Schema", "get")
+	addBuilderPath(paths, "/application-schema/objects/{objectKey}/record-count", "Application Schema", "get")
+	addBuilderPath(paths, "/application-schema/diagnostics", "Application Schema Operations", "get")
 	addBuilderPath(paths, "/records/stream", "Business Records", "get")
 	addBuilderPath(paths, "/workflow/processes", "Workflow Business", "get")
 	addBuilderPath(paths, "/workflow/processes/{processID}", "Workflow Business", "get")
@@ -126,62 +123,56 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/workflow/definitions/{workflowKey}/run", "Workflow Business", "post")
 	addBusinessStreamOpenAPIPaths(paths)
 	annotateNotificationRuntimeClient(paths)
-	addBuilderPath(paths, "/workflow/operations/executions", "Workflow Operations", "get")
-	addBuilderPath(paths, "/workflow/operations/executions/process", "Workflow Operations", "post")
-	addBuilderPath(paths, "/workflow/operations/executions/{executionID}/retry", "Workflow Operations", "post")
-	addBuilderPath(paths, "/workflow/operations/executions/{executionID}/resolve", "Workflow Operations", "post")
-	addBuilderPath(paths, "/workflow/operations/processes", "Workflow Operations", "get")
-	addBuilderPath(paths, "/workflow/operations/processes/{processID}", "Workflow Operations", "get")
-	addBuilderPath(paths, "/workflow/operations/processes/{processID}/retry", "Workflow Operations", "post")
-	addBuilderPath(paths, "/workflow/operations/processes/{processID}/resolve", "Workflow Operations", "post")
+	addBuilderPath(paths, "/workflow/recovery/executions", "Workflow Operations", "get")
+	addBuilderPath(paths, "/workflow/recovery/executions/process", "Workflow Operations", "post")
+	addBuilderPath(paths, "/workflow/recovery/executions/{executionID}/retry", "Workflow Operations", "post")
+	addBuilderPath(paths, "/workflow/recovery/executions/{executionID}/resolve", "Workflow Operations", "post")
+	addBuilderPath(paths, "/workflow/recovery/processes", "Workflow Operations", "get")
+	addBuilderPath(paths, "/workflow/recovery/processes/{processID}", "Workflow Operations", "get")
+	addBuilderPath(paths, "/workflow/recovery/processes/{processID}/retry", "Workflow Operations", "post")
+	addBuilderPath(paths, "/workflow/recovery/processes/{processID}/resolve", "Workflow Operations", "post")
 	addBuilderPath(paths, "/workflow/authoring-fragments/{capabilityKey}/validate", "Workflow Administration", "post")
 	addBuilderPath(paths, "/workflow/definitions/{workflowKey}/validate", "Workflow Administration", "post")
 	addBuilderPath(paths, "/workflow/definitions/{workflowKey}/simulate", "Workflow Administration", "post")
-	addSchedulerOpenAPIPaths(paths)
-	addBuilderPath(paths, "/automation/rules/authoring-fragments/{capabilityKey}/validate", "Automation", "post")
+	addBuilderPath(paths, "/automation/fragments/{capabilityKey}/validate", "Automation", "post")
 
 }
 
-func addSchedulerOpenAPIPaths(paths map[string]any) {
-	contract, err := schedulersdk.SchedulerHTTPAdapterContract()
-	if err != nil {
-		panic("compile Scheduler OpenAPI adapter: " + err.Error())
-	}
-	routes := make(map[string]modulehttp.Route, len(contract.Routes))
-	for _, source := range contract.Routes {
-		route, routeErr := modulehttp.RouteFromAction(source.Action)
-		if routeErr != nil {
-			panic("project Scheduler OpenAPI route: " + routeErr.Error())
-		}
-		routes[route.Pattern()] = route
-	}
-	for pattern, sourceOperation := range contract.OpenAPI {
-		method, path, found := strings.Cut(strings.TrimSpace(pattern), " ")
-		if !found || strings.TrimSpace(method) == "" || strings.TrimSpace(path) == "" {
-			panic("Scheduler OpenAPI operation has invalid route pattern: " + pattern)
-		}
-		route, found := routes[pattern]
-		if !found {
-			panic("Scheduler OpenAPI operation has no source Action: " + pattern)
-		}
-		operation := cloneOpenAPIOperation(sourceOperation)
-		responses, _ := operation["responses"].(map[string]any)
-		if responses == nil {
-			responses = map[string]any{}
-		}
-		responses["default"] = openAPIJSONResponse("Error", openAPIRef("Error")).Value
-		operation["responses"] = responses
-		applyModuleHTTPRouteMetadata(operation, path, contract.Owner, contract.Name, contract.ContractVersion, route)
-		pathItem, _ := paths[path].(map[string]any)
-		if pathItem == nil {
-			pathItem = map[string]any{}
-		}
-		pathItem[strings.ToLower(method)] = operation
-		paths[path] = pathItem
-		delete(routes, pattern)
-	}
-	if len(routes) != 0 {
-		panic("Scheduler source Action has no OpenAPI operation")
+func addNotificationDeliveryOpenAPIPath(paths map[string]any) {
+	delivery := openAPIRequiredObject(
+		[]string{"id", "connector_key", "operation", "status", "attempt_count"},
+		map[string]any{
+			"id":              map[string]any{"type": "string"},
+			"connector_key":   map[string]any{"type": "string"},
+			"connection_key":  map[string]any{"type": "string"},
+			"operation":       map[string]any{"type": "string"},
+			"status":          map[string]any{"type": "string"},
+			"payload":         openAPIObject(nil),
+			"response_ref":    map[string]any{"type": "string"},
+			"error":           map[string]any{"type": "string"},
+			"attempt_count":   map[string]any{"type": "integer", "minimum": 0},
+			"next_attempt_at": map[string]any{"type": "string"},
+			"created_at":      map[string]any{"type": "string"},
+			"updated_at":      map[string]any{"type": "string"},
+		},
+	)
+	response := openAPIRequiredObject(
+		[]string{"deliveries", "count"},
+		map[string]any{
+			"deliveries": openAPIArray(delivery),
+			"count":      map[string]any{"type": "integer", "minimum": 0},
+		},
+	)
+	paths["/notification/deliveries"] = map[string]any{
+		"get": openAPIOperation(
+			"GetNotificationDeliveries",
+			"Notification Governance",
+			"List bounded notification delivery ledger entries",
+			openAPIAdminSecurity(),
+			openAPIQueryParameter("status", "Optional delivery status filter", map[string]any{"type": "string"}),
+			openAPIQueryParameter("limit", "Bounded delivery result size", map[string]any{"type": "integer", "minimum": 1, "maximum": 200, "default": 100}),
+			openAPIJSONResponse("Notification delivery ledger", response),
+		),
 	}
 }
 

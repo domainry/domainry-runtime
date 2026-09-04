@@ -65,7 +65,7 @@ func TestRuntimeLifecycleHTTPKeepsOnlyDurableCleanupRunOrchestration(t *testing.
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	request := httptest.NewRequest(http.MethodPost, "/lifecycle/cleanup/jobs/job-1/run?batch_size=25", nil)
+	request := httptest.NewRequest(http.MethodPost, "/operations/lifecycle/cleanup/jobs/job-1/run?batch_size=25", nil)
 	request.Header.Set("Idempotency-Key", "cleanup-1")
 	request.Header.Set("X-Operation-Reason", "verified retention cleanup")
 	response := httptest.NewRecorder()

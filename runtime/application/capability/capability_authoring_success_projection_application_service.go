@@ -47,7 +47,8 @@ func directAuthoringSuccessProjection(contract capabilitycontract.CapabilityRunt
 			seen[definition.Key] = true
 			successors = append(successors, capabilitycontract.CapabilityAuthoringSuccessorSummary{
 				Key: definition.Key, Domain: domain.Key, Status: definition.Status,
-				DetailEndpoint:     "/capabilities/" + url.PathEscape(definition.Key),
+				DetailService:      "plane",
+				DetailEndpoint:     "/capabilities/authoring-contracts/" + url.PathEscape(definition.Key),
 				ValidationEndpoint: definition.ValidationEndpoint,
 			})
 		}

@@ -2,7 +2,6 @@ package record_test
 
 import (
 	"context"
-	"fmt"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"strings"
 	"testing"
@@ -11,7 +10,6 @@ import (
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
-	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -20,7 +18,7 @@ import (
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 )
 
-func TestContextualFieldPolicyEndToEndKeepsReadExportReportAuditAndWriteAligned(t *testing.T) {
+func TestContextualFieldPolicyEndToEndKeepsReadExportAuditAndWriteAligned(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
@@ -96,13 +94,6 @@ func TestContextualFieldPolicyEndToEndKeepsReadExportReportAuditAndWriteAligned(
 	csv := dispatchDirectRecordExport(t, exporter, "member", principal)
 	if !strings.Contains(string(csv), "10000000004") || strings.Contains(string(csv), "10000000005") || strings.Contains(string(csv), "allergy-b") {
 		t.Fatalf("contextual export leaked or hid wrong value: csv=%s", csv)
-	}
-
-	reportAccess := contextualFieldReportAccess{policy: policy, fields: fieldPolicy}
-	reportDefinition := reportmodel.ReportSchema{Key: "member-sensitive", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "member", Alias: "member"}, Dimensions: []reportmodel.ReportDatasetDimension{{Key: "health_note", Field: reportmodel.ReportDatasetField{SourceAlias: "member", FieldKey: "health_note"}}}}}
-	sources := readAuthorizedReportSources(t, reportDefinition, principal, reportAccess, contextualFieldReportRecords{repository: repository})
-	if strings.Contains(fmt.Sprint(sources.Records["member"]), "allergy-b") || !strings.Contains(fmt.Sprint(sources.Records["member"]), "allergy-a") {
-		t.Fatalf("contextual Report host projection mismatch: sources=%#v", sources)
 	}
 
 	auditProjection, _, err := fieldPolicy.ApplyReadPage(t.Context(), principal, member, []recordmodel.Record{

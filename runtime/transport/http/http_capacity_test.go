@@ -62,7 +62,7 @@ func TestHTTPAdmissionShedsNonessentialWorkDuringQueueBackpressure(t *testing.T)
 		t.Fatalf("queue pressure status=%d headers=%v body=%s", response.Code, response.Header(), response.Body.String())
 	}
 	response = httptest.NewRecorder()
-	handler.ServeHTTP(response, initializedCapacityRequest(http.MethodPost, "/records/objects/customer/records"))
+	handler.ServeHTTP(response, initializedCapacityRequest(http.MethodPost, "/records/customer"))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("essential mutation was shed: status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -71,11 +71,11 @@ func TestHTTPAdmissionShedsNonessentialWorkDuringQueueBackpressure(t *testing.T)
 func TestHTTPAdmissionClassifiesRegisteredRouteNotPathParameter(t *testing.T) {
 	router := &HTTPRouter{capacityController: capacityplatform.NewController(capacityplatform.Limits{}, nil), requestTimeout: time.Second, backpressure: func(context.Context) bool { return true }}
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /records/objects/{objectKey}/records", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("POST /records/{objectKey}", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	handler := router.withAdmission(mux, mux)
 
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, initializedCapacityRequest(http.MethodPost, "/records/objects/report/records"))
+	handler.ServeHTTP(response, initializedCapacityRequest(http.MethodPost, "/records/report"))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("business object key changed capacity policy: status=%d body=%s", response.Code, response.Body.String())
 	}

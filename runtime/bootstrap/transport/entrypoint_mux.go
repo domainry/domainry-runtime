@@ -54,7 +54,7 @@ func (h *EntrypointMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	businessHandler := h.business
 	lifecycleStatus, builderTaskID := h.lifecycleStatus, h.builderTaskID
 	h.mu.RUnlock()
-	if (strings.HasPrefix(r.URL.Path, "/metadata/manifests") || strings.HasPrefix(r.URL.Path, "/provision/")) && provisionHandler != nil {
+	if strings.HasPrefix(r.URL.Path, "/provision/") && provisionHandler != nil {
 		provisionHandler.ServeHTTP(w, r)
 		return
 	}

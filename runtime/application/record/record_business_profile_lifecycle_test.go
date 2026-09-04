@@ -136,8 +136,8 @@ func TestBusinessProfileLifecycleDefinitionErrorsSkipsAndExpectedRevision(t *tes
 		return []profilebindingmodel.Binding{{ObjectKey: "profile", BusinessIdentity: binding}}
 	}
 	service := &RecordApplicationService{update: NewRecordUpdateApplicationService(dependencies), identityProfileExtensions: applicationSource}
-	deactivateContext := businessProfileAuthorizedContext(t, "POST /records/objects/{objectKey}/records/{recordID}/deactivate-profile")
-	reactivateContext := businessProfileAuthorizedContext(t, "POST /records/objects/{objectKey}/records/{recordID}/reactivate-profile")
+	deactivateContext := businessProfileAuthorizedContext(t, "POST /records/{objectKey}/items/{recordID}/profile/deactivate")
+	reactivateContext := businessProfileAuthorizedContext(t, "POST /records/{objectKey}/items/{recordID}/profile/reactivate")
 	if _, err := service.DeactivateBusinessProfile(deactivateContext, "profile", "profile-1", "inactive", " revision-1 ", "deactivate-key", principal); apperror.CodeOf(err) != "backend.idempotency.receipt_unavailable" {
 		t.Fatalf("deactivate err=%v", err)
 	}
@@ -153,7 +153,7 @@ func TestBusinessProfileLifecycleDefinitionErrorsSkipsAndExpectedRevision(t *tes
 }
 
 func TestBusinessProfileActionMutationContextPreservesGeneratedActionAndLimitsField(t *testing.T) {
-	ctx := businessProfileAuthorizedContext(t, "POST /records/objects/{objectKey}/records/{recordID}/deactivate-profile")
+	ctx := businessProfileAuthorizedContext(t, "POST /records/{objectKey}/items/{recordID}/profile/deactivate")
 	ctx, err := businessProfileActionMutationContext(ctx, " member_profile ", " status ")
 	if err != nil {
 		t.Fatal(err)

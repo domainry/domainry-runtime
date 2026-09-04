@@ -30,12 +30,12 @@ import (
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	deploymentbusiness "github.com/domainry/domainry-runtime/runtime/application/deployment"
+	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	reportexportapplication "github.com/domainry/domainry-runtime/runtime/application/report/export/application"
-	schedulerapplication "github.com/domainry/domainry-runtime/runtime/application/scheduler"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
@@ -79,7 +79,6 @@ type runtimeAssembly struct {
 	recordRepo                        recordrepository.RecordRepository
 	dataExchange                      dataexchange.Binding
 	dataExchangeProviders             *recordapplication.DataExchangeProviders
-	reportDatasetRows                 reportcontract.ReportDatasetRowReader
 	reportObjectSQL                   reportcontract.ReportObjectSQLExecutor
 	reportSnapshotSources             reportcontract.ReportSnapshotSourceVersionReader
 	auditRepo                         auditrepository.AuditRepository
@@ -142,7 +141,8 @@ type runtimeAssembly struct {
 	reportModuleQueryHost               *reportadapter.ReportModuleQueryHost
 	reportModuleSnapshotHost            reportmodulehost.SnapshotTerminalCommitter
 	reportModuleExportHost              reportmodulehost.ExportGateway
-	schedulerService                    *schedulerapplication.SchedulerApplicationService
+	targetExecutionService              *dispatchapplication.TargetExecutionApplicationService
+	schedulerDefinitionSource           schedulerDefinitionSourceAdapter
 	recordTimerService                  *recordtimerapplication.RecordTimerApplicationService
 	agentAuthorizationService           *agentapplication.AgentAuthorizationApplicationService
 	agentTaskDispatchService            *agentapplication.AgentTaskDispatchApplicationService

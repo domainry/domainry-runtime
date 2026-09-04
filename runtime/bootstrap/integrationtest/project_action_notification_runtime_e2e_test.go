@@ -27,7 +27,7 @@ func TestProjectActionNotificationDispatchRealRuntimeReplayConcurrencyLifecycleA
 	bootstrap.StartWorkers(t.Context(), runtime)
 	handler := notificationModuleRoutes(t, runtime)
 	leadID := firstRuntimeFixtureRecordID(t, handler, "sales_manager", "lead")
-	path := "/records/objects/lead/records/" + leadID + "/actions/lead.qualify"
+	path := "/records/lead/items/" + leadID + "/actions/lead.qualify"
 
 	type result struct {
 		status int
@@ -78,11 +78,11 @@ func TestProjectActionNotificationDispatchRealRuntimeReplayConcurrencyLifecycleA
 	if status != http.StatusForbidden {
 		t.Fatalf("denied Action status=%d body=%s", status, body)
 	}
-	status, body = projectNotificationRequest(handler, "runtime_fixture_user", "sales_manager", http.MethodPost, "/records/objects/lead/records/"+leadID+"/actions/lead.convert", "notification-invalid", map[string]any{"data": map[string]any{}})
+	status, body = projectNotificationRequest(handler, "runtime_fixture_user", "sales_manager", http.MethodPost, "/records/lead/items/"+leadID+"/actions/lead.convert", "notification-invalid", map[string]any{"data": map[string]any{}})
 	if status != http.StatusBadRequest || !bytes.Contains([]byte(body), []byte("backend.notification.template_variable_required")) {
 		t.Fatalf("invalid Action status=%d body=%s", status, body)
 	}
-	lead := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/records/objects/lead/records/"+leadID, nil)
+	lead := runtimeFixtureRequest[map[string]any](t, handler, "sales_manager", http.MethodGet, "/records/lead/items/"+leadID, nil)
 	data, _ := lead["data"].(map[string]any)
 	if data["status"] != "qualified" || item["subject_version"] != lead["updated_at"] {
 		t.Fatalf("invalid notification partially committed record=%#v", lead)

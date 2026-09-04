@@ -41,7 +41,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 		Key: "admin",
 		Permissions: []string{
 			changeplanapplication.ActionBusinessReferenceGraph, "customer.read", "customer.update",
-			"scheduler.definitions.list", "runtime.workflows.list_ops_workflow_executions", "runtime.workflows.list_ops_workflow_processes",
+			"runtime.workflows.list_ops_workflow_executions", "runtime.workflows.list_ops_workflow_processes",
 			"integration.invocations.list",
 		},
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}},
@@ -54,7 +54,7 @@ func TestBusinessReferenceGraphCompositionFindsCrossOwnerConsumers(t *testing.T)
 		}, Edges: []definitionmodel.WorkflowGraphEdge{{ID: "start-qualify", Source: "started", Target: "qualify"}}}}}
 		manifest.AutomationRules = []automationmodel.AutomationRuleSchema{{Key: "customer.after_update", Name: "Customer updated", ObjectKey: "customer", Enabled: true, Trigger: automationmodel.AutomationTriggerSchema{Phase: "after", Operation: "update", ChangedFields: []string{"status"}, FromState: "new", ToState: "qualified"}, Instructions: []automationmodel.AutomationInstructionSchema{{Key: "start", Type: "start_workflow", Config: map[string]any{"workflow_key": "customer.approval"}}}}}
 		manifest.Integrations = connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "crm", Providers: []connectormodel.ConnectorProviderSchema{{Key: "test"}}, Operations: []connectormodel.ConnectorOperationSchema{{Key: "sync", Method: "POST", ExecutionMode: "sync", SideEffect: "write", TimeoutDefaultSeconds: 10, TimeoutMaxSeconds: 30}}}}}
-		manifest.Reports = []reportmodel.ReportSchema{{Key: "customer.summary", Name: "Customer summary", Dataset: reportmodel.ReportDatasetSchema{Source: reportmodel.ReportDatasetSource{ObjectKey: "customer", Alias: "customer"}}, RequiredPermissions: []string{"customer.read"}}}
+		manifest.Reports = []reportmodel.ReportSchema{{Key: "customer.summary", Name: "Customer summary", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "SELECT customer.id AS id FROM customer customer ORDER BY customer.id LIMIT 100", SourceObjects: []string{"customer"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}}, RequiredPermissions: []string{"customer.read"}}}
 	})
 	defer application.CloseContext(t.Context())
 	if _, err := publicationpersistence.NewPublicationStore(application.store).InsertOutbox(t.Context(), "workspace-primary", publicationmodel.Message{ID: "outbox-1", WorkspaceID: "workspace-primary", ConnectorKey: "crm", Operation: "sync", Status: "queued", CreatedBy: admin.UserID}); err != nil {

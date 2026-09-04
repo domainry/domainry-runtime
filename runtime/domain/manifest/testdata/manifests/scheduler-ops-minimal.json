@@ -33,38 +33,6 @@
           "data_scope": "all"
         },
         {
-          "permission_key": "scheduler.definitions.run",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.definitions.reschedule",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.runs.retry",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.runs.cancel",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.dead_letters.resolve",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.dead_letters.requeue",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.definitions.list",
-          "data_scope": "all"
-        },
-        {
-          "permission_key": "scheduler.definitions.get",
-          "data_scope": "all"
-        },
-        {
           "permission_key": "scheduler_probe.read",
           "data_scope": "all"
         }
