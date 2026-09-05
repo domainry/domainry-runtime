@@ -1,17 +1,28 @@
 package runtimehost
 
 import (
+	"context"
 	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	connector "github.com/domainry/domainry-connector-sdk"
+	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identitymodule "github.com/domainry/domainry-identity/module"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
+	notificationsdk "github.com/domainry/domainry-notification-sdk"
+	reportsdk "github.com/domainry/domainry-report-sdk"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 func TestInitialTenantRequestDecodesManagedAcceptanceFixturesWithoutSerializableCredentials(t *testing.T) {
@@ -110,6 +121,57 @@ func TestProjectTenantManagerInitializesBaselineAcceptanceFixturesWithProjectRol
 	}
 	if strings.Contains(string(manifestJSON), actorSecret) || strings.Contains(string(configJSON), actorSecret) || strings.Contains(string(configJSON), "INITIAL_ACCEPTANCE_FIXTURES") {
 		t.Fatalf("acceptance credential entered persistent/public configuration: manifest=%s config=%s", manifestJSON, configJSON)
+	}
+	references, err := manager.BusinessSeedReferenceCandidates()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]bool{}
+	for _, reference := range references {
+		if reference.WorkspaceID != workspaceID || reference.RecordID == "" || reference.SourceKind == "" {
+			t.Fatalf("unscoped baseline reference candidate=%+v", reference)
+		}
+		found[reference.TargetObjectKey+"/"+reference.RecordID] = true
+	}
+	for _, key := range []string{
+		"identity_user/admin", "identity_user/director", "identity_user/rep-1", "identity_user/rep-2",
+		"identity_organization_unit/department-1", "identity_organization_unit/department-2",
+	} {
+		if !found[key] {
+			t.Fatalf("missing committed fixture reference %s in %+v", key, references)
+		}
+	}
+}
+
+func TestRuntimeHostPassesCommittedAcceptanceReferenceCandidatesIntoStartup(t *testing.T) {
+	cfg := serverTestConfig()
+	cfg.InitialAcceptanceFixtures = `{"organizations":[{"id":"department-2","code":"department-2","name":"Department 2"},{"id":"department-1","code":"department-1","name":"Department 1"}],"actors":[{"id":"director","login_id":"director@example.test","name":"Director","role_key":"sales_director","initial_password":"ActorPassword1!"},{"id":"rep-1","login_id":"rep-1@example.test","name":"Rep 1","role_key":"sales_rep","organization_id":"department-1","manager_user_id":"director","initial_password":"ActorPassword1!"}]}`
+	runtime := &serverRuntimeFake{}
+	dependencies := serverTestDependencies(t, cfg, runtime)
+	createRuntime := dependencies.newRuntime
+	var captured []bootstrap.BusinessSeedReferenceCandidate
+	dependencies.newRuntime = func(ctx context.Context, runtimeConfig config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, release runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, agent agentsdk.Factory, integration integrationsdk.Factory, report reportsdk.Factory, database *bootstrap.ProjectDatabase, references []bootstrap.BusinessSeedReferenceCandidate) runtimeProcess {
+		captured = append([]bootstrap.BusinessSeedReferenceCandidate(nil), references...)
+		return createRuntime(ctx, runtimeConfig, handlers, connectors, release, evidence, identity, notification, monitoring, scheduler, dataExchange, agent, integration, report, database, references)
+	}
+	if err := runWithDependencies(validOptions(), dependencies); err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]bool{}
+	workspaceID := ""
+	for _, reference := range captured {
+		if workspaceID == "" {
+			workspaceID = reference.WorkspaceID
+		}
+		if reference.WorkspaceID == "" || reference.WorkspaceID != workspaceID {
+			t.Fatalf("mixed or empty candidate workspace: %+v", captured)
+		}
+		found[reference.TargetObjectKey+"/"+reference.RecordID] = true
+	}
+	for _, key := range []string{"identity_user/admin", "identity_user/director", "identity_user/rep-1", "identity_organization_unit/department-1", "identity_organization_unit/department-2"} {
+		if !found[key] {
+			t.Fatalf("host omitted candidate %s from %+v", key, captured)
+		}
 	}
 }
 

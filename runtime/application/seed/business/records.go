@@ -109,8 +109,16 @@ func SyncManifestBusinessSeeds(ctx context.Context, records recordrepository.Rec
 // fills only uncovered business objects with one Runtime-generated baseline
 // row. Model-authored manifests no longer need to carry per-table fixtures.
 func BuildManifestBusinessSeedRows(manifest manifestmodel.ManifestSchema) ([]manifestBusinessSeedRow, error) {
+	return BuildManifestBusinessSeedRowsWithReferenceResolver(context.Background(), manifest, "", nil)
+}
+
+// BuildManifestBusinessSeedRowsWithReferenceResolver is the managed Runtime
+// startup path. It keeps manifest generation deterministic while requiring an
+// external resolver to prove every generated Foundation reference against the
+// active workspace before the row is encoded or persisted.
+func BuildManifestBusinessSeedRowsWithReferenceResolver(ctx context.Context, manifest manifestmodel.ManifestSchema, workspaceID string, resolver BaselineReferenceResolver) ([]manifestBusinessSeedRow, error) {
 	rows := ManifestBusinessSeedRowsFromManifest(manifest)
-	generated, err := generateManifestBusinessSeedRows(manifest, rows)
+	generated, err := generateManifestBusinessSeedRows(ctx, manifest, rows, strings.TrimSpace(workspaceID), resolver)
 	if err != nil {
 		return nil, err
 	}

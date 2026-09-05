@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"strings"
 
-	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 )
@@ -76,8 +75,17 @@ func AddReportIntegrationReferences(builder *changeplanprojection.ChangePlanRefe
 	}
 	for _, report := range snapshot.Reports {
 		builder.Node("report", report.Key, "", report.Name, "")
-		for index, objectKey := range reportmodel.ReportObjectSQLObjectKeys(report.ObjectSQLV1) {
-			builder.Edge("report", report.Key, "object", objectKey, "reads_object", fmt.Sprintf("object_sql_v1.source_objects[%d]", index))
+		if report.ObjectSQLV1 != nil {
+			sources, err := reportcontract.ReportObjectSQLSourceObjects(*report.ObjectSQLV1)
+			if err == nil {
+				for index, objectKey := range sources {
+					path := "object_sql_v1.sql"
+					if len(report.ObjectSQLV1.SourceObjects) > 0 {
+						path = fmt.Sprintf("object_sql_v1.source_objects[%d]", index)
+					}
+					builder.Edge("report", report.Key, "object", objectKey, "reads_object", path)
+				}
+			}
 		}
 		if report.ObjectSQLV1 != nil {
 			if plan, err := reportcontract.CompileReportObjectSQL(*report.ObjectSQLV1, objects); err == nil {

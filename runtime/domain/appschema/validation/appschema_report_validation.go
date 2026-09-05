@@ -13,6 +13,7 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 )
 
 func ApplicationSchemaValidateReportDefinition(ctx context.Context, workspaceID string, snapshot appschemamodel.ApplicationSchemaSnapshot, records appschemacontract.ApplicationSchemaReportEvidenceReader, report reportmodel.ReportSchema) error {
@@ -88,10 +89,20 @@ func (v *reportDefinitionValidator) validateIdentity() {
 
 func (v *reportDefinitionValidator) validateSourceObjects() {
 	v.sourceKeys = map[string]bool{}
-	objectKeys := reportmodel.ReportObjectSQLObjectKeys(v.report.ObjectSQLV1)
+	if v.report.ObjectSQLV1 == nil {
+		return
+	}
+	objectKeys, err := reportcontract.ReportObjectSQLSourceObjects(*v.report.ObjectSQLV1)
+	if err != nil {
+		// The execution compiler below owns the located parser diagnostic.
+		return
+	}
 	for index, objectKey := range objectKeys {
 		objectKey = strings.TrimSpace(objectKey)
-		path := fmt.Sprintf("object_sql_v1.source_objects[%d]", index)
+		path := "object_sql_v1.sql"
+		if len(v.report.ObjectSQLV1.SourceObjects) > 0 {
+			path = fmt.Sprintf("object_sql_v1.source_objects[%d]", index)
+		}
 		if objectKey == "" {
 			v.issue("backend.report.object_sql_source_invalid", path, map[string]string{"object": objectKey, "actual": objectKey})
 		} else if _, exists := v.objects[objectKey]; !exists {

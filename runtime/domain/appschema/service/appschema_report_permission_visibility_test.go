@@ -17,7 +17,7 @@ func TestSnapshotReportPermissionAndObjectVisibilityIntersection(t *testing.T) {
 	report := func(key string, permissions []string) reportmodel.ReportSchema {
 		return reportmodel.ReportSchema{
 			Key:                 key,
-			ObjectSQLV1:         &reportmodel.ReportObjectSQLSchema{SQL: "SELECT source.id AS id FROM order_line source LIMIT 1", SourceObjects: []string{orderLine.Key}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}},
+			ObjectSQLV1:         &reportmodel.ReportObjectSQLSchema{SQL: "SELECT COUNT(*) AS record_count FROM order_line source LIMIT 1"},
 			RequiredPermissions: permissions,
 		}
 	}
@@ -27,6 +27,7 @@ func TestSnapshotReportPermissionAndObjectVisibilityIntersection(t *testing.T) {
 			report("order_line_permission", []string{"order_line.read"}),
 			report("finance_permission", []string{"finance.read"}),
 			report("object_visibility", nil),
+			{Key: "invalid", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "not sql"}, RequiredPermissions: []string{"order_line.read"}},
 			{Key: "global"},
 		},
 	}

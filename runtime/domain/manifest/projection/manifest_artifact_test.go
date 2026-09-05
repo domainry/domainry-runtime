@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
 
@@ -29,6 +30,19 @@ func TestRenderManifestReviewMarkdownIncludesAuditableBusinessScope(t *testing.T
 		if !strings.Contains(markdown, want) {
 			t.Fatalf("RenderManifestReviewMarkdown() missing %q\n%s", want, markdown)
 		}
+	}
+}
+
+func TestRenderManifestReviewMarkdownDiscoversSQLOnlyReportSources(t *testing.T) {
+	manifest := manifestmodel.ManifestSchema{Reports: []reportmodel.ReportSchema{{
+		Key: "order_summary",
+		ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{
+			SQL: "SELECT COUNT(*) AS record_count FROM sales_order orders LIMIT 1",
+		},
+	}}}
+	markdown := RenderManifestReviewMarkdown(manifest, ReviewArtifactOptions{Title: "Review"})
+	if !strings.Contains(markdown, "`sales_order`") {
+		t.Fatalf("SQL-owned report source missing from review artifact:\n%s", markdown)
 	}
 }
 

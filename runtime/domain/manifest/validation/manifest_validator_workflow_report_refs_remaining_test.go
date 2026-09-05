@@ -13,7 +13,7 @@ func TestValidateReportsCoversObjectSQLSourceAndFieldEdges(t *testing.T) {
 	state := newValidationState(manifestmodel.ManifestSchema{
 		Objects: []definitionmodel.ObjectSchema{{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "customer_id"}}}},
 		Reports: []reportmodel.ReportSchema{{Key: "missing-source", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{
-			SQL: "SELECT orders.missing AS missing FROM `order` orders LIMIT 10", SourceObjects: []string{"order"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "missing", Type: "text", Kind: "dimension"}},
+			SQL: "SELECT orders.missing AS missing FROM `order` orders LIMIT 10",
 		}}},
 	}, nil)
 	state.validateReports()

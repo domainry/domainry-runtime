@@ -232,11 +232,16 @@ func (state *validationState) validateReports() {
 			}
 		}
 		sourceObjects := map[string]bool{}
-		for sourceIndex, objectKey := range reportmodel.ReportObjectSQLObjectKeys(report.ObjectSQLV1) {
+		sources, _ := reportcontract.ReportObjectSQLSourceObjects(*report.ObjectSQLV1)
+		for sourceIndex, objectKey := range sources {
 			objectKey = strings.TrimSpace(objectKey)
 			sourceObjects[objectKey] = true
 			if state.objects[objectKey].Key == "" {
-				state.add(fmt.Sprintf("%s.object_sql_v1.source_objects[%d]", path, sourceIndex), "unknown object %q", objectKey)
+				sourcePath := path + ".object_sql_v1.sql"
+				if len(report.ObjectSQLV1.SourceObjects) > 0 {
+					sourcePath = fmt.Sprintf("%s.object_sql_v1.source_objects[%d]", path, sourceIndex)
+				}
+				state.add(sourcePath, "unknown object %q", objectKey)
 			}
 		}
 		for evidenceIndex, requirement := range report.EvidenceRequirements {

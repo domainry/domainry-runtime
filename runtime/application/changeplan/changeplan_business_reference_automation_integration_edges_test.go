@@ -15,14 +15,14 @@ func TestReportIntegrationReferencesIncludeObjectSQLFields(t *testing.T) {
 		Reports: []reportmodel.ReportSchema{{
 			Key: "order-cycle-time",
 			ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{
-				SQL:           "SELECT orders.status AS status, SUM(orders.amount) AS amount FROM `order` orders GROUP BY orders.status LIMIT 100",
-				SourceObjects: []string{"order"},
-				ResultSchema:  []reportmodel.ReportResultColumnSchema{{Key: "status", Type: "text", Kind: "dimension"}, {Key: "amount", Type: "decimal", Kind: "measure"}},
+				SQL:          "SELECT orders.status AS status, SUM(orders.amount) AS amount FROM `order` orders GROUP BY orders.status LIMIT 100",
+				ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "status", Type: "text", Kind: "dimension"}, {Key: "amount", Type: "decimal", Kind: "measure"}},
 			},
 		}},
 	})
 
 	want := map[string]bool{
+		"reads_object:order":       false,
 		"reads_field:order.status": false,
 		"reads_field:order.amount": false,
 	}

@@ -77,7 +77,7 @@ func TestSynchronizeRuntimeSeedsRejectsClosedStore(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, true); err == nil {
+	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, true, nil); err == nil {
 		t.Fatal("closed store must fail seed synchronization")
 	}
 }
@@ -95,10 +95,10 @@ func TestSynchronizeRuntimeSeedsDoesNotRequireIdentityProjection(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 	manifest.SeedRecords = nil
 	manifest.Objects = nil
-	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, true); err != nil {
+	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, true, nil); err != nil {
 		t.Fatalf("business seed synchronization failed: %v", err)
 	}
-	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, false); err != nil {
+	if err := synchronizeRuntimeSeeds(t.Context(), store, manifest, false, nil); err != nil {
 		t.Fatalf("disabled business seed synchronization failed: %v", err)
 	}
 }

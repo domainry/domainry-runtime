@@ -57,8 +57,12 @@ func (h *ReportModuleQueryHost) ResolveReportObjectSQLSources(ctx context.Contex
 		return nil, stableReportHostError(nil)
 	}
 	principal := RuntimePrincipalFromReportSubject(subject)
-	objects := make(map[string]definitionmodel.ObjectSchema, len(report.ObjectSQLV1.SourceObjects))
-	for _, rawKey := range report.ObjectSQLV1.SourceObjects {
+	sourceObjects, err := reportcontract.ReportObjectSQLSourceObjects(*report.ObjectSQLV1)
+	if err != nil {
+		return nil, stableReportHostError(reportObjectSQLHostError(err))
+	}
+	objects := make(map[string]definitionmodel.ObjectSchema, len(sourceObjects))
+	for _, rawKey := range sourceObjects {
 		key := strings.TrimSpace(rawKey)
 		object, err := h.dependencies.Access.ReportObjectForAction(ctx, principal, key, "read")
 		if err != nil {
@@ -168,8 +172,12 @@ func (h *ReportModuleQueryHost) reportSourceVersionRequest(ctx context.Context, 
 	if report.ObjectSQLV1 == nil {
 		return request, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.object_sql_required"}
 	}
-	objectsByKey := make(map[string]definitionmodel.ObjectSchema, len(report.ObjectSQLV1.SourceObjects))
-	for _, rawKey := range report.ObjectSQLV1.SourceObjects {
+	sourceObjects, err := reportcontract.ReportObjectSQLSourceObjects(*report.ObjectSQLV1)
+	if err != nil {
+		return request, reportObjectSQLHostError(err)
+	}
+	objectsByKey := make(map[string]definitionmodel.ObjectSchema, len(sourceObjects))
+	for _, rawKey := range sourceObjects {
 		key := strings.TrimSpace(rawKey)
 		object, err := h.dependencies.Access.ReportObjectForAction(ctx, principal, key, "read")
 		if err != nil {
@@ -211,7 +219,10 @@ func (h *ReportModuleQueryHost) AppendReportExecution(ctx context.Context, repor
 func portableReportObject(object reportquery.Object) reportmodel.ReportSourceObject {
 	fields := make([]reportmodel.ReportSourceField, 0, len(object.Fields))
 	for _, field := range object.Fields {
-		fields = append(fields, reportmodel.ReportSourceField{Key: field.Key, Type: field.Type, Precision: field.Precision, Scale: field.Scale})
+		fields = append(fields, reportmodel.ReportSourceField{
+			Key: field.Key, Type: field.Type, Precision: field.Precision, Scale: field.Scale,
+			Unique: field.Unique, RelationTarget: field.RelationTarget, RelationCardinality: field.RelationCardinality,
+		})
 	}
 	return reportmodel.ReportSourceObject{Key: object.Key, Fields: fields}
 }

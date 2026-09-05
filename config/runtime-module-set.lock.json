@@ -1,6 +1,6 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "6005e1e54b801342d78c1a8a0fe9650c7320536198f2407715701c866e455eff",
+  "set_sha256": "2605f7fb2edb5852d4385669e06ca2e0a67cca42304206cf3a7a013fedb73dd2",
   "modules": [
     {
       "key": "agent",
@@ -100,7 +100,7 @@
       "sdk": "github.com/domainry/domainry-report-sdk",
       "sdk_version": "v0.1.2-0.20260904010612-3ae156de9f45",
       "sdk_sum": "h1:t/WlOqrZCoUo1mEoDiGsJNREKcivbH0tj1NXUVdNubQ=",
-      "capability_contract_sha256": "1cdc461d1628e5d7bd4670f8d8833bdc56d046109e45637daf251ddfce25a7aa"
+      "capability_contract_sha256": "43b51b9552f96d42b53ff8a570d909bedbb53bd6f15fc7f550b17cb3cf8cb1e0"
     },
     {
       "key": "scheduler",

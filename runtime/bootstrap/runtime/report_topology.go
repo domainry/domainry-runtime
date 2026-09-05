@@ -31,5 +31,16 @@ func NewVerifiedProjectWithAllTopologyFactoriesAndDatabase(ctx context.Context, 
 	if len(agent) > 0 {
 		agentFactory = agent[0]
 	}
-	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, handlers, connectors, release, identity, notification, monitoring, scheduler, dataExchange, agentFactory, integration, report, store, evidence)
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, handlers, connectors, release, identity, notification, monitoring, scheduler, dataExchange, agentFactory, integration, report, store, ProjectStartupOptions{}, evidence)
+}
+
+// NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions is the project
+// host entrypoint for non-serializable startup evidence such as verified
+// acceptance-fixture reference candidates.
+func NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, release runtimehttp.RuntimeReleaseIdentity, evidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, report reportsdk.Factory, store *persistence.RuntimeStore, options ProjectStartupOptions, agent ...agentsdk.Factory) *Runtime {
+	var agentFactory agentsdk.Factory
+	if len(agent) > 0 {
+		agentFactory = agent[0]
+	}
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, handlers, connectors, release, identity, notification, monitoring, scheduler, dataExchange, agentFactory, integration, report, store, options, evidence)
 }

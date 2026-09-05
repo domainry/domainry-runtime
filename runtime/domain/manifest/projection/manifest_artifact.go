@@ -8,8 +8,8 @@ import (
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 
-	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 )
 
 type ReviewArtifactOptions struct {
@@ -71,7 +71,11 @@ func writeWorkflowsActionsReports(out *strings.Builder, manifest manifestmodel.M
 		writeLine(out, fmt.Sprintf("| Workflow | `%s` %s | %s | `%s` |", workflow.Key, workflow.Name, codeList(manifestWorkflowObjectKeys(workflow)), workflow.RunAs))
 	}
 	for _, report := range manifest.Reports {
-		writeLine(out, fmt.Sprintf("| Report | `%s` %s | %s | %s |", report.Key, report.Name, codeList(reportmodel.ReportObjectSQLObjectKeys(report.ObjectSQLV1)), codeList(report.RequiredPermissions)))
+		sources := []string(nil)
+		if report.ObjectSQLV1 != nil {
+			sources, _ = reportcontract.ReportObjectSQLSourceObjects(*report.ObjectSQLV1)
+		}
+		writeLine(out, fmt.Sprintf("| Report | `%s` %s | %s | %s |", report.Key, report.Name, codeList(sources), codeList(report.RequiredPermissions)))
 	}
 	writeLine(out, "")
 }

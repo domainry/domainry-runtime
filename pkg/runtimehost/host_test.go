@@ -225,7 +225,7 @@ func serverTestDependencies(t *testing.T, cfg config.Config, runtime runtimeProc
 			databaseConfig.DBPath = databasePath
 			return bootstrap.PrepareProjectDatabase(ctx, databaseConfig)
 		},
-		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ agentsdk.Factory, _ integrationsdk.Factory, _ reportsdk.Factory, _ *bootstrap.ProjectDatabase) runtimeProcess {
+		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ agentsdk.Factory, _ integrationsdk.Factory, _ reportsdk.Factory, _ *bootstrap.ProjectDatabase, _ []bootstrap.BusinessSeedReferenceCandidate) runtimeProcess {
 			if handlers == nil || !handlers.Frozen() {
 				panic("host passed an unfrozen registry")
 			}
@@ -434,7 +434,7 @@ func TestRunWithDependenciesRejectsManifestSDKTargetBeforeRuntimeCreation(t *tes
 			created := 0
 			deps := serverTestDependencies(t, serverTestConfig(), &serverRuntimeFake{})
 			deps.readFile = func(string) ([]byte, error) { return serverManifestJSON(t, test.target), nil }
-			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
+			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, []bootstrap.BusinessSeedReferenceCandidate) runtimeProcess {
 				created++
 				return &serverRuntimeFake{}
 			}
@@ -539,7 +539,7 @@ func TestRunWithDependenciesCoversConfigurationActivationAndServeOutcomes(t *tes
 		return runtimeext.ExtensionSet{}, nil
 	}
 	deps = serverTestDependencies(t, cfg, &serverRuntimeFake{})
-	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase) runtimeProcess {
+	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, []bootstrap.BusinessSeedReferenceCandidate) runtimeProcess {
 		return nil
 	}
 	if err := runWithDependencies(options, deps); err == nil || !strings.Contains(err.Error(), "returned no process") {

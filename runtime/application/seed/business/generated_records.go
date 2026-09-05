@@ -1,6 +1,7 @@
 package businessseed
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -13,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	appschemaprojection "github.com/domainry/domainry-runtime/runtime/domain/appschema/projection"
+	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
@@ -21,7 +23,7 @@ import (
 
 const runtimeGeneratedBusinessSeedSourceKind = "runtime_generated"
 
-func generateManifestBusinessSeedRows(manifest manifestmodel.ManifestSchema, explicit []manifestBusinessSeedRow) ([]manifestBusinessSeedRow, error) {
+func generateManifestBusinessSeedRows(ctx context.Context, manifest manifestmodel.ManifestSchema, explicit []manifestBusinessSeedRow, workspaceID string, resolver BaselineReferenceResolver) ([]manifestBusinessSeedRow, error) {
 	covered := map[string]bool{}
 	firstSeedKeyByObject := map[string]string{}
 	for _, row := range explicit {
@@ -57,7 +59,7 @@ func generateManifestBusinessSeedRows(manifest manifestmodel.ManifestSchema, exp
 		if objectKey == "" || covered[objectKey] {
 			continue
 		}
-		data, err := generateManifestBusinessSeedData(object, firstSeedKeyByObject, referenceTime)
+		data, err := generateManifestBusinessSeedData(ctx, object, firstSeedKeyByObject, referenceTime, workspaceID, resolver)
 		if err != nil {
 			return nil, fmt.Errorf("generate Runtime baseline record for %s: %w", objectKey, err)
 		}
@@ -81,7 +83,7 @@ func runtimeGeneratedBusinessSeedKey(objectKey string) string {
 	return "runtime_baseline_" + strings.TrimSpace(objectKey)
 }
 
-func generateManifestBusinessSeedData(object definitionmodel.ObjectSchema, targetSeedKeys map[string]string, referenceTime time.Time) (map[string]any, error) {
+func generateManifestBusinessSeedData(ctx context.Context, object definitionmodel.ObjectSchema, targetSeedKeys map[string]string, referenceTime time.Time, workspaceID string, resolver BaselineReferenceResolver) (map[string]any, error) {
 	data := map[string]any{}
 	recordpolicy.RecordApplyFieldDefaults(object, data)
 	mustPopulate := generatedSeedRequiredFields(object)
@@ -91,6 +93,13 @@ func generateManifestBusinessSeedData(object definitionmodel.ObjectSchema, targe
 			continue
 		}
 		if !recordvalidation.RecordIsEmptyValue(data[field.Key]) {
+			if targetObjectKey := generatedSeedExternalReferenceTarget(field, targetSeedKeys); resolver != nil && targetObjectKey != "" {
+				value, _, err := resolveGeneratedSeedBaselineReference(ctx, resolver, workspaceID, object.Key, field.Key, targetObjectKey, strings.TrimSpace(fmt.Sprint(data[field.Key])))
+				if err != nil {
+					return nil, err
+				}
+				data[field.Key] = value
+			}
 			populated = true
 			continue
 		}
@@ -98,7 +107,7 @@ func generateManifestBusinessSeedData(object definitionmodel.ObjectSchema, targe
 		if !shouldPopulate {
 			continue
 		}
-		value, found, err := generatedSeedFieldValue(object, field, index, targetSeedKeys, referenceTime)
+		value, found, err := generatedSeedFieldValue(ctx, object, field, index, targetSeedKeys, referenceTime, workspaceID, resolver)
 		if err != nil {
 			if mustPopulate[field.Key] {
 				return nil, err
@@ -167,12 +176,15 @@ func generatedSeedRepresentativeField(field definitionmodel.FieldSchema) bool {
 	)
 }
 
-func generatedSeedFieldValue(object definitionmodel.ObjectSchema, field definitionmodel.FieldSchema, index int, targetSeedKeys map[string]string, referenceTime time.Time) (any, bool, error) {
+func generatedSeedFieldValue(ctx context.Context, object definitionmodel.ObjectSchema, field definitionmodel.FieldSchema, index int, targetSeedKeys map[string]string, referenceTime time.Time, workspaceID string, resolver BaselineReferenceResolver) (any, bool, error) {
 	switch strings.TrimSpace(field.Type) {
 	case "relation":
 		target := recordvalidation.RecordRelationTarget(field)
 		if seedKey := strings.TrimSpace(targetSeedKeys[target]); seedKey != "" {
 			return "$record:" + seedKey, true, nil
+		}
+		if resolver != nil {
+			return resolveGeneratedSeedBaselineReference(ctx, resolver, workspaceID, object.Key, field.Key, target, "")
 		}
 		if target == "identity_user" {
 			return "admin", true, nil
@@ -185,6 +197,9 @@ func generatedSeedFieldValue(object definitionmodel.ObjectSchema, field definiti
 		}
 		return nil, false, fmt.Errorf("relation field %s has unknown target %q", field.Key, target)
 	case "user":
+		if resolver != nil {
+			return resolveGeneratedSeedBaselineReference(ctx, resolver, workspaceID, object.Key, field.Key, definitioncontract.IdentityUserObjectKey, "")
+		}
 		return "admin", true, nil
 	case "select":
 		value, found := generatedSeedSelectValue(object.Key, field)
@@ -220,6 +235,37 @@ func generatedSeedFieldValue(object definitionmodel.ObjectSchema, field definiti
 	default:
 		return nil, false, fmt.Errorf("field %s uses unsupported type %q", field.Key, field.Type)
 	}
+}
+
+func generatedSeedExternalReferenceTarget(field definitionmodel.FieldSchema, targetSeedKeys map[string]string) string {
+	switch strings.TrimSpace(field.Type) {
+	case "user":
+		return definitioncontract.IdentityUserObjectKey
+	case "relation":
+		target := recordvalidation.RecordRelationTarget(field)
+		if strings.TrimSpace(targetSeedKeys[target]) == "" {
+			return target
+		}
+	}
+	return ""
+}
+
+func resolveGeneratedSeedBaselineReference(ctx context.Context, resolver BaselineReferenceResolver, workspaceID, objectKey, fieldKey, targetObjectKey, preferredRecordID string) (any, bool, error) {
+	request := BaselineReferenceRequest{
+		WorkspaceID: strings.TrimSpace(workspaceID), ObjectKey: strings.TrimSpace(objectKey),
+		FieldKey: strings.TrimSpace(fieldKey), TargetObjectKey: strings.TrimSpace(targetObjectKey), PreferredRecordID: strings.TrimSpace(preferredRecordID),
+	}
+	value, err := resolver.ResolveBaselineReference(ctx, request)
+	if err != nil {
+		return nil, false, err
+	}
+	if value = strings.TrimSpace(value); value == "" {
+		return nil, false, &BaselineReferenceResolutionError{
+			WorkspaceID: request.WorkspaceID, ObjectKey: request.ObjectKey, FieldKey: request.FieldKey,
+			TargetObjectKey: request.TargetObjectKey, Reason: "resolver_returned_empty",
+		}
+	}
+	return value, true, nil
 }
 
 func generatedSeedSelectValue(objectKey string, field definitionmodel.FieldSchema) (string, bool) {

@@ -13,6 +13,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 
 	"strings"
 
@@ -301,6 +302,14 @@ func metadataSDKFieldAllowed(principal principalmodel.Principal, objectKey, fiel
 }
 
 func reportVisibleForPrincipal(report reportmodel.ReportSchema, principal principalmodel.Principal, visibleObjects map[string]bool) bool {
+	objectKeys := []string(nil)
+	if report.ObjectSQLV1 != nil {
+		var err error
+		objectKeys, err = reportcontract.ReportObjectSQLSourceObjects(*report.ObjectSQLV1)
+		if err != nil {
+			return false
+		}
+	}
 	if len(report.RequiredPermissions) > 0 {
 		for _, permission := range report.RequiredPermissions {
 			if !principal.HasExactPermission(permission) {
@@ -309,7 +318,6 @@ func reportVisibleForPrincipal(report reportmodel.ReportSchema, principal princi
 		}
 		return true
 	}
-	objectKeys := reportmodel.ReportObjectSQLObjectKeys(report.ObjectSQLV1)
 	for _, objectKey := range objectKeys {
 		if visibleObjects[objectKey] {
 			return true

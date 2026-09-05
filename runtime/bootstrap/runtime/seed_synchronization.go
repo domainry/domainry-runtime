@@ -19,7 +19,7 @@ type runtimeSeedSynchronizationOperations struct {
 	synchronizeAutomation func() error
 }
 
-func synchronizeRuntimeSeeds(ctx context.Context, store *persistence.RuntimeStore, manifest manifestmodel.ManifestSchema, businessSeedSyncEnabled bool) error {
+func synchronizeRuntimeSeeds(ctx context.Context, store *persistence.RuntimeStore, manifest manifestmodel.ManifestSchema, businessSeedSyncEnabled bool, resolver businessseed.BaselineReferenceResolver) error {
 	workspaceIDs := []string{principalmodel.InstallationWorkspaceID}
 	for _, workspaceID := range workspaceIDs {
 		workspaceContext := requestcontext.WithWorkspaceID(ctx, workspaceID)
@@ -33,7 +33,7 @@ func synchronizeRuntimeSeeds(ctx context.Context, store *persistence.RuntimeStor
 				if !businessSeedSyncEnabled {
 					return nil
 				}
-				rows, err := businessseed.BuildManifestBusinessSeedRows(manifest)
+				rows, err := businessseed.BuildManifestBusinessSeedRowsWithReferenceResolver(ctx, manifest, workspaceID, resolver)
 				if err != nil {
 					return err
 				}

@@ -18,14 +18,15 @@ import (
 )
 
 type projectTenantManager struct {
-	mu        sync.Mutex
-	cfg       config.Config
-	factory   identitysdk.Factory
-	database  *bootstrap.ProjectDatabase
-	handle    identitysdk.DatabaseHandle
-	bootstrap identitysdk.BootstrapBinding
-	binding   identitysdk.Binding
-	adapters  []identityhttpapi.Adapter
+	mu                              sync.Mutex
+	cfg                             config.Config
+	factory                         identitysdk.Factory
+	database                        *bootstrap.ProjectDatabase
+	handle                          identitysdk.DatabaseHandle
+	bootstrap                       identitysdk.BootstrapBinding
+	binding                         identitysdk.Binding
+	adapters                        []identityhttpapi.Adapter
+	businessSeedReferenceCandidates []bootstrap.BusinessSeedReferenceCandidate
 }
 
 func newProjectTenantManager(ctx context.Context, cfg config.Config, factory identitysdk.Factory, database *bootstrap.ProjectDatabase, handle identitysdk.DatabaseHandle) (*projectTenantManager, error) {
@@ -82,6 +83,7 @@ func (manager *projectTenantManager) Activate(ctx context.Context, manifest mani
 		return fmt.Errorf("close Identity bootstrap after initial tenant: %w", err)
 	}
 	manager.bootstrap = nil
+	manager.businessSeedReferenceCandidates = acceptanceBusinessSeedReferenceCandidates(result.WorkspaceID, organizations, actors)
 	installation, found, err := workspaceprovision.LoadInstallation(ctx, manager.database)
 	if err != nil {
 		return fmt.Errorf("verify committed initial tenant: %w", err)
@@ -90,6 +92,46 @@ func (manager *projectTenantManager) Activate(ctx context.Context, manifest mani
 		return fmt.Errorf("verify committed initial tenant: committed marker does not match transaction result")
 	}
 	return manager.bindInitializedIdentity(ctx, installation)
+}
+
+func (manager *projectTenantManager) BusinessSeedReferenceCandidates() ([]bootstrap.BusinessSeedReferenceCandidate, error) {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	if len(manager.businessSeedReferenceCandidates) != 0 {
+		return append([]bootstrap.BusinessSeedReferenceCandidate(nil), manager.businessSeedReferenceCandidates...), nil
+	}
+	organizations, actors, err := decodeInitialAcceptanceFixtures(manager.cfg.InitialAcceptanceFixtures)
+	if err != nil {
+		return nil, err
+	}
+	manager.businessSeedReferenceCandidates = acceptanceBusinessSeedReferenceCandidates(manager.cfg.IdentityWorkspaceID, organizations, actors)
+	return append([]bootstrap.BusinessSeedReferenceCandidate(nil), manager.businessSeedReferenceCandidates...), nil
+}
+
+func acceptanceBusinessSeedReferenceCandidates(workspaceID string, organizations []identitysdk.WorkspaceAcceptanceOrganization, actors []identitysdk.WorkspaceAcceptanceActor) []bootstrap.BusinessSeedReferenceCandidate {
+	workspaceID = strings.TrimSpace(workspaceID)
+	candidates := []bootstrap.BusinessSeedReferenceCandidate{{
+		WorkspaceID: workspaceID, TargetObjectKey: "identity_user", RecordID: "admin", SourceKind: "runtime_initial_administrator",
+	}}
+	for _, organization := range organizations {
+		candidates = append(candidates, bootstrap.BusinessSeedReferenceCandidate{
+			WorkspaceID: workspaceID, TargetObjectKey: "identity_organization_unit",
+			RecordID: strings.TrimSpace(organization.ID), SourceKind: "runtime_acceptance_fixture",
+		})
+	}
+	for _, actor := range actors {
+		candidates = append(candidates, bootstrap.BusinessSeedReferenceCandidate{
+			WorkspaceID: workspaceID, TargetObjectKey: "identity_user",
+			RecordID: strings.TrimSpace(actor.ID), SourceKind: "runtime_acceptance_fixture",
+		})
+		if organizationID := strings.TrimSpace(actor.OrganizationID); organizationID != "" {
+			candidates = append(candidates, bootstrap.BusinessSeedReferenceCandidate{
+				WorkspaceID: workspaceID, TargetObjectKey: "identity_organization_unit",
+				RecordID: organizationID, SourceKind: "runtime_acceptance_actor_graph",
+			})
+		}
+	}
+	return candidates
 }
 
 func initialTenantRequest(cfg config.Config) (workspaceprovisionmodel.Request, string, []identitysdk.WorkspaceAcceptanceOrganization, []identitysdk.WorkspaceAcceptanceActor, error) {
@@ -108,6 +150,18 @@ func initialTenantRequest(cfg config.Config) (workspaceprovisionmodel.Request, s
 	if password == "" {
 		return workspaceprovisionmodel.Request{}, "", nil, nil, fmt.Errorf("INITIAL_MANAGEMENT_PASSWORD or INITIAL_MANAGEMENT_PASSWORD_FILE is required before tenant initialization")
 	}
+	organizations, actors, err := decodeInitialAcceptanceFixtures(cfg.InitialAcceptanceFixtures)
+	if err != nil {
+		return workspaceprovisionmodel.Request{}, "", nil, nil, err
+	}
+	return workspaceprovisionmodel.Request{
+		RequestID: strings.TrimSpace(cfg.InitialTenantRequestID), TenantCode: strings.TrimSpace(cfg.InitialTenantCode),
+		TenantName: strings.TrimSpace(cfg.InitialTenantName), AdminLoginID: strings.TrimSpace(cfg.InitialManagementLoginID),
+		AdminName: strings.TrimSpace(cfg.InitialManagementName), StoreConfiguration: configuration,
+	}, password, organizations, actors, nil
+}
+
+func decodeInitialAcceptanceFixtures(raw string) ([]identitysdk.WorkspaceAcceptanceOrganization, []identitysdk.WorkspaceAcceptanceActor, error) {
 	fixtures := struct {
 		Organizations []identitysdk.WorkspaceAcceptanceOrganization `json:"organizations"`
 		Actors        []struct {
@@ -120,9 +174,9 @@ func initialTenantRequest(cfg config.Config) (workspaceprovisionmodel.Request, s
 			InitialPassword string `json:"initial_password"`
 		} `json:"actors"`
 	}{}
-	if raw := strings.TrimSpace(cfg.InitialAcceptanceFixtures); raw != "" {
+	if raw = strings.TrimSpace(raw); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &fixtures); err != nil {
-			return workspaceprovisionmodel.Request{}, "", nil, nil, fmt.Errorf("INITIAL_ACCEPTANCE_FIXTURES must be a valid managed fixture envelope: %w", err)
+			return nil, nil, fmt.Errorf("INITIAL_ACCEPTANCE_FIXTURES must be a valid managed fixture envelope: %w", err)
 		}
 	}
 	actors := make([]identitysdk.WorkspaceAcceptanceActor, 0, len(fixtures.Actors))
@@ -132,11 +186,7 @@ func initialTenantRequest(cfg config.Config) (workspaceprovisionmodel.Request, s
 			OrganizationID: actor.OrganizationID, ManagerUserID: actor.ManagerUserID, InitialPassword: actor.InitialPassword,
 		})
 	}
-	return workspaceprovisionmodel.Request{
-		RequestID: strings.TrimSpace(cfg.InitialTenantRequestID), TenantCode: strings.TrimSpace(cfg.InitialTenantCode),
-		TenantName: strings.TrimSpace(cfg.InitialTenantName), AdminLoginID: strings.TrimSpace(cfg.InitialManagementLoginID),
-		AdminName: strings.TrimSpace(cfg.InitialManagementName), StoreConfiguration: configuration,
-	}, password, fixtures.Organizations, actors, nil
+	return fixtures.Organizations, actors, nil
 }
 
 func (manager *projectTenantManager) bindInitializedIdentity(ctx context.Context, installation workspaceprovision.Installation) error {
