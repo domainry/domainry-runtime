@@ -80,6 +80,10 @@ func (factory identityFactoryStub) OpenBootstrapWithDatabase(context.Context, id
 
 type identityBootstrapBindingStub struct{}
 
+func (identityBootstrapBindingStub) BindBootstrapProjectRoleCatalog(context.Context, identitysdk.ProjectRoleCatalog) error {
+	return nil
+}
+
 func (identityBootstrapBindingStub) ProvisionWorkspaceIdentity(_ context.Context, request identitysdk.WorkspaceIdentityProvisionRequest, _ identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceIdentityProvisionResult, error) {
 	return identitysdk.WorkspaceIdentityProvisionResult{AdminLoginID: request.AdminLoginID, InitialPassword: request.InitialPassword, MustChangePassword: true, ProvisionedRoles: 1}, nil
 }

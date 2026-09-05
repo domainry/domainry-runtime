@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v18"
-	ContractSHA256  = "858d3a59ade02810d9dcd99e6116e23bd795be99958a02cf5370465ded03f62f"
+	ContractVersion = "runtimeext-v19"
+	ContractSHA256  = "4fb75c9d97abd1a10e016a6b7996cd647b62612824e620586880f6b166664940"
 )
 
-const contractDefinitionV18 = `runtimeext-v18
+const contractDefinitionV19 = `runtimeext-v19
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -25,6 +25,8 @@ ActionExecution.QueryRecords(context.Context,RecordQuery)(RecordQueryResult,erro
 ActionExecution.ApplyRecordMutation(context.Context,RecordMutation)(RecordMutationResult,error)
 ActionExecution.StageDurableIntent(context.Context,DurableIntent)(DurableIntentReceipt,error)
 ActionExecution.AcquireSynchronousConnectorCall(ActionConnectorCapability)(SynchronousConnectorCallLease,error)
+ResolveRecordNotificationRecipient(context.Context,ActionExecution,RecordNotificationRecipientRequest)(string,error)
+RecordNotificationRecipientOperation=notification_recipient
 VerifyFileClean(context.Context,ActionExecution,FileVerificationRequest)(FileVerificationEvidence,error)
 FileOperationVerifyClean=verify_clean
 FileActionGrantDeniedErrorCode=backend.upload.action_grant_denied
@@ -52,14 +54,14 @@ RecordQueryPagination=after_id
 // by generated project code and Runtime readiness checks.
 func ComputedContractSHA256() string {
 	structs := []any{
-		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, HandlerDescriptor{}, BusinessHandlerBinding{},
+		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, RecordNotificationRecipientRequest{}, HandlerDescriptor{}, BusinessHandlerBinding{},
 		Record{}, Filter{}, Sort{}, RecordQuery{}, RecordQueryResult{},
 		Predicate{}, Arithmetic{}, RecordMutation{}, RecordMutationResult{},
 		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ExtensionSet{},
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV18)
+	definition.WriteString(contractDefinitionV19)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

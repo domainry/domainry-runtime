@@ -245,7 +245,12 @@ func (s *RecordApplicationService) ListRecords(ctx context.Context, objectKey st
 	if err := recordAuthorizeQuery(principal); err != nil {
 		return recordmodel.RecordPageResult{}, err
 	}
-	return s.RecordDomainService.ListRecords(ctx, objectKey, query, principal)
+	page, err := s.RecordDomainService.ListRecords(ctx, objectKey, query, principal)
+	if err != nil {
+		return recordmodel.RecordPageResult{}, err
+	}
+	s.resolveRecordSystemDisplayNames(ctx, page.Items)
+	return page, nil
 }
 
 func (s *RecordApplicationService) GetRecord(ctx context.Context, objectKey, recordID string, principal principalmodel.Principal) (recordmodel.Record, error) {
@@ -318,7 +323,12 @@ func (s *RecordApplicationService) RelatedRecords(ctx context.Context, objectKey
 	if err := recordAuthorizeQuery(principal); err != nil {
 		return recordmodel.RecordPageResult{}, err
 	}
-	return s.RecordDomainService.RelatedRecords(ctx, objectKey, recordID, relatedObjectKey, request, principal)
+	page, err := s.RecordDomainService.RelatedRecords(ctx, objectKey, recordID, relatedObjectKey, request, principal)
+	if err != nil {
+		return recordmodel.RecordPageResult{}, err
+	}
+	s.resolveRecordSystemDisplayNames(ctx, page.Items)
+	return page, nil
 }
 
 func (s *RecordApplicationService) IdentityProfileReferences(ctx context.Context, userID string, principal principalmodel.Principal) ([]recordservice.RecordIdentityProfileReference, error) {

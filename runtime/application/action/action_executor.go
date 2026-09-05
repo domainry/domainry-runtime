@@ -85,6 +85,7 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 		connectorGrants:    append([]runtimeext.ActionConnectorCapability(nil), descriptor.ConnectorCapabilities...),
 		notificationGrants: append([]string(nil), descriptor.NotificationEventTypes...),
 		fileGrants:         append([]string(nil), descriptor.FileCapabilities...),
+		objectGrants:       append([]runtimeext.ActionObjectCapability(nil), descriptor.ObjectCapabilities...),
 	}
 	rawOutput, err := binding.Handler.Invoke(ctx, session, rawInput)
 	if err != nil {
@@ -146,6 +147,7 @@ type businessActionExecution struct {
 	connectorGrants    []runtimeext.ActionConnectorCapability
 	notificationGrants []string
 	fileGrants         []string
+	objectGrants       []runtimeext.ActionObjectCapability
 	plans              []transactionmodel.MutationPlan
 	intents            []runtimeext.DurableIntent
 	notifications      []notificationmodel.NotificationEvent
@@ -158,6 +160,7 @@ type businessActionExecution struct {
 }
 
 var _ runtimeext.ActionExecution = (*businessActionExecution)(nil)
+var _ runtimeext.RecordNotificationRecipientExecution = (*businessActionExecution)(nil)
 
 func (e *businessActionExecution) Identity() runtimeext.ExecutionIdentity { return e.identity }
 func (e *businessActionExecution) Principal() runtimeext.Principal {

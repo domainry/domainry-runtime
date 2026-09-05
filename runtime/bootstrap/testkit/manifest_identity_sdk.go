@@ -475,6 +475,16 @@ func (binding *manifestIdentityBinding) accessBundle(subject, roleKey string) id
 	}
 	dataPolicies := append([]identitysdk.DataPolicy(nil), role.DataPolicies...)
 	for index, grant := range grants {
+		hasExplicitPolicy := false
+		for _, declared := range role.DataPolicies {
+			if declared.Resource == grant.Resource && declared.Action == grant.Action {
+				hasExplicitPolicy = true
+				break
+			}
+		}
+		if hasExplicitPolicy {
+			continue
+		}
 		policy := identitysdk.DataPolicy{Key: fmt.Sprintf("plane-testkit-%s-%s-%d", grant.Resource, grant.Action, index), Resource: grant.Resource, Action: grant.Action, Effect: identitysdk.EffectAllow}
 		switch {
 		case !resources[grant.Resource]:

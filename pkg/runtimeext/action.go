@@ -114,6 +114,7 @@ func (d HandlerDescriptor) Validate() error {
 	allowed := map[string]bool{
 		"get": true, "get_for_update": true, "optional": true, "list": true, "exists": true, "count": true,
 		"create": true, "update": true, "conditional_update": true, "delete": true, "restore": true,
+		RecordNotificationRecipientOperation: true,
 	}
 	for _, capability := range d.ObjectCapabilities {
 		objectKey := strings.TrimSpace(capability.ObjectKey)

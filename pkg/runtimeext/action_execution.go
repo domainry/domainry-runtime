@@ -22,6 +22,7 @@ const (
 	ConnectorActionGrantDeniedErrorCode       = "backend.connector.action_grant_denied"
 	ConnectorActionSideEffectOutboxErrorCode  = "backend.connector.action_side_effect_requires_outbox"
 	FileActionGrantDeniedErrorCode            = "backend.upload.action_grant_denied"
+	RecordNotificationRecipientOperation      = "notification_recipient"
 )
 
 // SynchronousConnectorCallLease keeps the Action UoW in prewrite for the
@@ -55,6 +56,26 @@ type ActionExecution interface {
 
 type FileVerificationExecution interface {
 	VerifyFileClean(context.Context, FileVerificationRequest) (FileVerificationEvidence, error)
+}
+
+// RecordNotificationRecipientRequest identifies one record whose Runtime-owned
+// owner user is needed as a notification recipient. The projection never
+// exposes organization ownership or other system metadata to project code.
+type RecordNotificationRecipientRequest struct {
+	ObjectKey string
+	RecordID  string
+}
+
+type RecordNotificationRecipientExecution interface {
+	ResolveRecordNotificationRecipient(context.Context, RecordNotificationRecipientRequest) (string, error)
+}
+
+func ResolveRecordNotificationRecipient(ctx context.Context, execution ActionExecution, request RecordNotificationRecipientRequest) (string, error) {
+	resolver, ok := execution.(RecordNotificationRecipientExecution)
+	if !ok {
+		return "", &BusinessError{Code: "backend.notification.record_recipient_unavailable", Message: "Runtime record notification recipient resolution is unavailable"}
+	}
+	return resolver.ResolveRecordNotificationRecipient(ctx, request)
 }
 
 func VerifyFileClean(ctx context.Context, execution ActionExecution, request FileVerificationRequest) (FileVerificationEvidence, error) {

@@ -1,18 +1,22 @@
 package recordmodel
 
 type Record struct {
-	WorkspaceID  string                        `json:"workspace_id"`
-	ID           string                        `json:"id"`
-	Data         map[string]any                `json:"data"`
-	CreatedAt    string                        `json:"created_at"`
-	UpdatedAt    string                        `json:"updated_at"`
-	Deleted      bool                          `json:"deleted"`
-	ExtInfo      map[string]any                `json:"ext_info,omitempty"`
-	CreateBy     string                        `json:"create_by,omitempty"`
-	UpdateBy     string                        `json:"update_by,omitempty"`
-	OwnerUserID  string                        `json:"owner_user_id,omitempty"`
-	OwnerOrgID   string                        `json:"owner_org_id,omitempty"`
-	Localization *RecordLocalizationResolution `json:"localization,omitempty"`
+	WorkspaceID   string                        `json:"workspace_id"`
+	ID            string                        `json:"id"`
+	Data          map[string]any                `json:"data"`
+	CreatedAt     string                        `json:"created_at"`
+	UpdatedAt     string                        `json:"updated_at"`
+	Deleted       bool                          `json:"deleted"`
+	ExtInfo       map[string]any                `json:"ext_info,omitempty"`
+	CreateBy      string                        `json:"create_by,omitempty"`
+	UpdateBy      string                        `json:"update_by,omitempty"`
+	OwnerUserID   string                        `json:"owner_user_id,omitempty"`
+	OwnerOrgID    string                        `json:"owner_org_id,omitempty"`
+	CreateByName  string                        `json:"create_by_name,omitempty"`
+	UpdateByName  string                        `json:"update_by_name,omitempty"`
+	OwnerUserName string                        `json:"owner_user_name,omitempty"`
+	OwnerOrgName  string                        `json:"owner_org_name,omitempty"`
+	Localization  *RecordLocalizationResolution `json:"localization,omitempty"`
 }
 
 // RecordLocalizedValue is one translated business-record field. Stable facts

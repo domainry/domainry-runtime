@@ -10,6 +10,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityhttpapi "github.com/domainry/domainry-identity-sdk/httpapi"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
+	runtimebootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/runtime"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	workspaceprovisionmodel "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
@@ -66,11 +67,14 @@ func (manager *projectTenantManager) Activate(ctx context.Context, manifest mani
 	if err := manager.database.EnsureRuntimeSchema(ctx); err != nil {
 		return fmt.Errorf("prepare application schema before initial tenant: %w", err)
 	}
-	request, password, err := initialTenantRequest(manager.cfg)
+	request, password, organizations, actors, err := initialTenantRequest(manager.cfg)
 	if err != nil {
 		return err
 	}
-	result, err := workspaceprovision.NewTenantInitializationStore(manager.database, manager.bootstrap, manifest).Initialize(ctx, request, password)
+	if err := manager.bootstrap.BindBootstrapProjectRoleCatalog(ctx, runtimebootstrap.RuntimeProjectRoleCatalog(manifest.Objects, manifest.Roles, "", manager.cfg.IdentityAudience)); err != nil {
+		return fmt.Errorf("bind project roles for initial tenant: %w", err)
+	}
+	result, err := workspaceprovision.NewTenantInitializationStore(manager.database, manager.bootstrap, manifest).InitializeWithAcceptanceFixtures(ctx, request, password, organizations, actors)
 	if err != nil {
 		return fmt.Errorf("initialize first tenant atomically: %w", err)
 	}
@@ -88,27 +92,51 @@ func (manager *projectTenantManager) Activate(ctx context.Context, manifest mani
 	return manager.bindInitializedIdentity(ctx, installation)
 }
 
-func initialTenantRequest(cfg config.Config) (workspaceprovisionmodel.Request, string, error) {
+func initialTenantRequest(cfg config.Config) (workspaceprovisionmodel.Request, string, []identitysdk.WorkspaceAcceptanceOrganization, []identitysdk.WorkspaceAcceptanceActor, error) {
 	configuration := map[string]any{}
 	rawConfiguration := strings.TrimSpace(cfg.InitialTenantStoreConfiguration)
 	if rawConfiguration == "" {
 		rawConfiguration = "{}"
 	}
 	if err := json.Unmarshal([]byte(rawConfiguration), &configuration); err != nil {
-		return workspaceprovisionmodel.Request{}, "", fmt.Errorf("INITIAL_TENANT_STORE_CONFIGURATION must be a JSON object: %w", err)
+		return workspaceprovisionmodel.Request{}, "", nil, nil, fmt.Errorf("INITIAL_TENANT_STORE_CONFIGURATION must be a JSON object: %w", err)
 	}
 	if configuration == nil {
-		return workspaceprovisionmodel.Request{}, "", fmt.Errorf("INITIAL_TENANT_STORE_CONFIGURATION must be a JSON object")
+		return workspaceprovisionmodel.Request{}, "", nil, nil, fmt.Errorf("INITIAL_TENANT_STORE_CONFIGURATION must be a JSON object")
 	}
 	password := strings.TrimSpace(cfg.InitialManagementPassword)
 	if password == "" {
-		return workspaceprovisionmodel.Request{}, "", fmt.Errorf("INITIAL_MANAGEMENT_PASSWORD or INITIAL_MANAGEMENT_PASSWORD_FILE is required before tenant initialization")
+		return workspaceprovisionmodel.Request{}, "", nil, nil, fmt.Errorf("INITIAL_MANAGEMENT_PASSWORD or INITIAL_MANAGEMENT_PASSWORD_FILE is required before tenant initialization")
+	}
+	fixtures := struct {
+		Organizations []identitysdk.WorkspaceAcceptanceOrganization `json:"organizations"`
+		Actors        []struct {
+			ID              string `json:"id"`
+			LoginID         string `json:"login_id"`
+			Name            string `json:"name"`
+			RoleKey         string `json:"role_key"`
+			OrganizationID  string `json:"organization_id"`
+			ManagerUserID   string `json:"manager_user_id"`
+			InitialPassword string `json:"initial_password"`
+		} `json:"actors"`
+	}{}
+	if raw := strings.TrimSpace(cfg.InitialAcceptanceFixtures); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &fixtures); err != nil {
+			return workspaceprovisionmodel.Request{}, "", nil, nil, fmt.Errorf("INITIAL_ACCEPTANCE_FIXTURES must be a valid managed fixture envelope: %w", err)
+		}
+	}
+	actors := make([]identitysdk.WorkspaceAcceptanceActor, 0, len(fixtures.Actors))
+	for _, actor := range fixtures.Actors {
+		actors = append(actors, identitysdk.WorkspaceAcceptanceActor{
+			ID: actor.ID, LoginID: actor.LoginID, Name: actor.Name, RoleKey: actor.RoleKey,
+			OrganizationID: actor.OrganizationID, ManagerUserID: actor.ManagerUserID, InitialPassword: actor.InitialPassword,
+		})
 	}
 	return workspaceprovisionmodel.Request{
 		RequestID: strings.TrimSpace(cfg.InitialTenantRequestID), TenantCode: strings.TrimSpace(cfg.InitialTenantCode),
 		TenantName: strings.TrimSpace(cfg.InitialTenantName), AdminLoginID: strings.TrimSpace(cfg.InitialManagementLoginID),
 		AdminName: strings.TrimSpace(cfg.InitialManagementName), StoreConfiguration: configuration,
-	}, password, nil
+	}, password, fixtures.Organizations, actors, nil
 }
 
 func (manager *projectTenantManager) bindInitializedIdentity(ctx context.Context, installation workspaceprovision.Installation) error {

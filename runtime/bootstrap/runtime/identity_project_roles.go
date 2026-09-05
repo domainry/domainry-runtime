@@ -26,7 +26,7 @@ func publishRuntimeProjectRoles(ctx context.Context, binding identitysdk.Binding
 	if !ok {
 		return nil
 	}
-	_, err := publisher.PublishProjectRoles(ctx, runtimeProjectRoleCatalog(objects, roles, workspaceID, applicationKey))
+	_, err := publisher.PublishProjectRoles(ctx, RuntimeProjectRoleCatalog(objects, roles, workspaceID, applicationKey))
 	return err
 }
 
@@ -67,7 +67,11 @@ func runtimeProjectRolesWithBootstrapAdministrator(roles []manifestmodel.RoleSch
 	})
 }
 
-func runtimeProjectRoleCatalog(objects []definitionmodel.ObjectSchema, roles []manifestmodel.RoleSchema, workspaceID, applicationKey string) identitysdk.ProjectRoleCatalog {
+// RuntimeProjectRoleCatalog converts the compiler-bound Runtime manifest into
+// Identity's deployment-neutral role contract. It is also used before the
+// first workspace exists so bootstrap provisioning and ordinary publication
+// validate the exact same role definitions.
+func RuntimeProjectRoleCatalog(objects []definitionmodel.ObjectSchema, roles []manifestmodel.RoleSchema, workspaceID, applicationKey string) identitysdk.ProjectRoleCatalog {
 	catalog := identitysdk.ProjectRoleCatalog{
 		Application: identitysdk.ApplicationRef{
 			WorkspaceID:    identitysdk.WorkspaceID(strings.TrimSpace(workspaceID)),

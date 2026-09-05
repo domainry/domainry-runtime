@@ -133,6 +133,10 @@ type Config struct {
 	InitialManagementName           string
 	InitialManagementPassword       string
 	InitialTenantStoreConfiguration string
+	// InitialAcceptanceFixtures is a process-local verification bootstrap
+	// payload. It is accepted only from the managed Runtime child environment
+	// and is never part of public configuration, receipts, or persisted state.
+	InitialAcceptanceFixtures string `json:"-"`
 	// AllowEmptyAuthoringManifest is set only by the trusted configuring
 	// Provision lifecycle. It is not loaded from environment configuration.
 	AllowEmptyAuthoringManifest    bool
@@ -290,6 +294,7 @@ func FromEnv() Config {
 		InitialManagementName:                   strings.TrimSpace(os.Getenv("INITIAL_MANAGEMENT_NAME")),
 		InitialManagementPassword:               strings.TrimSpace(os.Getenv("INITIAL_MANAGEMENT_PASSWORD")),
 		InitialTenantStoreConfiguration:         env("INITIAL_TENANT_STORE_CONFIGURATION", "{}"),
+		InitialAcceptanceFixtures:               strings.TrimSpace(os.Getenv("INITIAL_ACCEPTANCE_FIXTURES")),
 		UploadDir:                               env("UPLOAD_DIR", "../data/uploads"),
 		CORSAllowedOrigins:                      csvEnv("CORS_ALLOWED_ORIGINS", []string{"*"}),
 		HTTPPublicOrigins:                       csvEnv("HTTP_PUBLIC_ORIGINS", nil),

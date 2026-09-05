@@ -48,3 +48,24 @@ func TestIdentityFixtureSeparatesExactFunctionGrantsFromBusinessDataEnvelope(t *
 		t.Fatalf("customer editor field envelope=%+v", fields)
 	}
 }
+
+func TestIdentityFixtureKeepsExplicitModuleOwnerPolicyWithoutBroaderSyntheticScope(t *testing.T) {
+	binding, err := NewIdentityFactory(IdentityFixtureConfig{
+		Roles: []IdentityFixtureRole{{
+			Key:         "exporter",
+			Permissions: []string{"data_exchange.jobs.get"},
+			DataPolicies: []identitysdk.DataPolicy{{
+				Key: "owner-job-get", Resource: "data_exchange.jobs", Action: "get", Effect: identitysdk.EffectAllow,
+				DataScopes: []identitysdk.DataScope{identitysdk.DataScopeOwner},
+				Predicate:  identitysdk.Predicate{Fact: "owner_user_id", Operator: identitysdk.OperatorEqual, Value: "$subject.id"},
+			}},
+		}},
+	}).Open(context.Background(), identitysdk.ApplicationRef{WorkspaceID: "workspace-primary", ApplicationKey: "runtime"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle := binding.(*manifestIdentityBinding).accessBundle("exporter", "exporter")
+	if len(bundle.DataPolicies) != 1 || bundle.DataPolicies[0].DataScopes[0] != identitysdk.DataScopeOwner {
+		t.Fatalf("explicit owner policy was broadened by fixture defaults: %+v", bundle.DataPolicies)
+	}
+}

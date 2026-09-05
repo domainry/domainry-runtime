@@ -307,7 +307,7 @@ func moduleSetCapabilityDigests(t *testing.T, application *Runtime) map[string]s
 			t.Fatalf("%s capability identity=%+v", key, summary.Identity)
 		}
 		if summary.Identity.ContractSHA256 != expected[key] {
-			t.Fatalf("%s capability contract digest=%q lock=%q", key, summary.Identity.ContractSHA256, expected[key])
+			t.Errorf("%s capability contract digest=%q lock=%q", key, summary.Identity.ContractSHA256, expected[key])
 		}
 		digests[key] = summary.Identity.ContractSHA256
 	}

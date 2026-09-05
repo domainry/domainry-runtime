@@ -1,15 +1,117 @@
 package runtimehost
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	identitysdk "github.com/domainry/domainry-identity-sdk"
+	identitymodule "github.com/domainry/domainry-identity/module"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
+
+func TestInitialTenantRequestDecodesManagedAcceptanceFixturesWithoutSerializableCredentials(t *testing.T) {
+	secret := "ActorPassword1!"
+	cfg := config.Config{
+		InitialTenantRequestID: "request", InitialTenantCode: "tenant", InitialTenantName: "Tenant",
+		InitialManagementLoginID: "admin@example.test", InitialManagementName: "Admin", InitialManagementPassword: "AdminPassword1!",
+		InitialAcceptanceFixtures: `{"organizations":[{"id":"east","code":"east","name":"East"}],"actors":[{"id":"director","login_id":"director@example.test","name":"Director","role_key":"sales_director","initial_password":"` + secret + `"},{"id":"sales-east","login_id":"sales@example.test","name":"Sales","role_key":"sales_rep","organization_id":"east","manager_user_id":"director","initial_password":"` + secret + `"}]}`,
+	}
+	_, _, organizations, actors, err := initialTenantRequest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(organizations) != 1 || len(actors) != 2 || actors[1].ManagerUserID != "director" || actors[1].OrganizationID != "east" || actors[1].InitialPassword != secret {
+		t.Fatalf("fixtures organizations=%+v actors=%+v", organizations, actors)
+	}
+	encoded, err := json.Marshal(struct {
+		Config config.Config                        `json:"config"`
+		Actor  identitysdk.WorkspaceAcceptanceActor `json:"actor"`
+	}{Config: cfg, Actor: actors[1]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), secret) || strings.Contains(string(encoded), "initial_acceptance") {
+		t.Fatalf("acceptance credential leaked through serializable config: %s", encoded)
+	}
+}
+
+func TestProjectTenantManagerInitializesBaselineAcceptanceFixturesWithProjectRoleCatalog(t *testing.T) {
+	const actorSecret = "ActorPassword1!"
+	cfg := serverTestConfig()
+	cfg.DatabaseDriver = "sqlite"
+	cfg.DBPath = filepath.Join(t.TempDir(), "baseline-acceptance.db")
+	cfg.InitialAcceptanceFixtures = `{"organizations":[{"id":"department-1","code":"department-1","name":"Department 1"},{"id":"department-2","code":"department-2","name":"Department 2"}],"actors":[{"id":"director","login_id":"director@example.test","name":"Director","role_key":"sales_director","initial_password":"` + actorSecret + `"},{"id":"rep-1","login_id":"rep-1@example.test","name":"Rep 1","role_key":"sales_rep","organization_id":"department-1","manager_user_id":"director","initial_password":"` + actorSecret + `"},{"id":"rep-2","login_id":"rep-2@example.test","name":"Rep 2","role_key":"sales_rep","organization_id":"department-2","manager_user_id":"director","initial_password":"` + actorSecret + `"}]}`
+	manifest := manifestmodel.ManifestSchema{Roles: []manifestmodel.RoleSchema{
+		{Key: "sales_director", Name: "Sales Director", Audience: "user", ProvisionToWorkspaces: true, Permissions: []manifestmodel.RolePermission{{PermissionKey: "lead.read", DataScope: identitysdk.DataScopeAll}}},
+		{Key: "sales_rep", Name: "Sales Representative", Audience: "user", ProvisionToWorkspaces: true, Permissions: []manifestmodel.RolePermission{{PermissionKey: "lead.read", DataScope: identitysdk.DataScopeOrg}}},
+	}}
+	database, err := bootstrap.PrepareProjectDatabase(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = database.CloseContext(t.Context()) })
+	manager, err := newProjectTenantManager(
+		t.Context(), cfg, identitymodule.NewFactory(identitymodule.Options{IdentityVersion: "test", DatabaseDriver: "sqlite", DatabasePath: cfg.DBPath}),
+		database, projectIdentityDatabaseHandle(database, cfg.DBPath, nil),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.Close(t.Context()) })
+	if err := manager.Activate(t.Context(), manifest); err != nil {
+		t.Fatal(err)
+	}
+	workspaceID := manager.Config().IdentityWorkspaceID
+	for table, want := range map[string]int{
+		"_tenant_installation": 1, "_tenant_registry": 1, "_workspaces": 1,
+		"_identity_organization_units": 2,
+	} {
+		var count int
+		query := `SELECT COUNT(*) FROM "` + table + `"`
+		arguments := []any{}
+		if strings.HasPrefix(table, "_identity_") {
+			query += ` WHERE "workspace_id" = ?`
+			arguments = append(arguments, workspaceID)
+		}
+		if err := database.DB().QueryRowContext(t.Context(), query, arguments...).Scan(&count); err != nil || count != want {
+			t.Fatalf("%s count=%d want=%d err=%v", table, count, want, err)
+		}
+	}
+	var projectRoleCount int
+	if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM "_identity_roles" WHERE "workspace_id" = ? AND "role_key" IN (?, ?)`, workspaceID, "sales_director", "sales_rep").Scan(&projectRoleCount); err != nil || projectRoleCount != 2 {
+		t.Fatalf("project role count=%d want=2 err=%v", projectRoleCount, err)
+	}
+	for _, table := range []string{"_identity_users", "_identity_credentials"} {
+		var acceptancePrincipalCount int
+		userColumn := "id"
+		if table == "_identity_credentials" {
+			userColumn = "user_id"
+		}
+		if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM "`+table+`" WHERE "workspace_id" = ? AND "`+userColumn+`" IN (?, ?, ?, ?)`, workspaceID, "admin", "director", "rep-1", "rep-2").Scan(&acceptancePrincipalCount); err != nil || acceptancePrincipalCount != 4 {
+			t.Fatalf("%s acceptance principal count=%d want=4 err=%v", table, acceptancePrincipalCount, err)
+		}
+	}
+	var acceptanceAssignmentCount int
+	if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM "_identity_user_role_assignments" WHERE "workspace_id" = ? AND "user_id" IN (?, ?, ?) AND "source" = ?`, workspaceID, "director", "rep-1", "rep-2", "runtime_acceptance_fixture").Scan(&acceptanceAssignmentCount); err != nil || acceptanceAssignmentCount != 3 {
+		t.Fatalf("acceptance assignment count=%d want=3 err=%v", acceptanceAssignmentCount, err)
+	}
+	manifestJSON, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configJSON, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(manifestJSON), actorSecret) || strings.Contains(string(configJSON), actorSecret) || strings.Contains(string(configJSON), "INITIAL_ACCEPTANCE_FIXTURES") {
+		t.Fatalf("acceptance credential entered persistent/public configuration: manifest=%s config=%s", manifestJSON, configJSON)
+	}
+}
 
 func TestResolveInstallationConfigAlignsNotificationWithIdentityPrincipalScope(t *testing.T) {
 	installation := workspaceprovision.Installation{

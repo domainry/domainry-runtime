@@ -51,15 +51,19 @@ func NewWorkspaceProvisionStoreWithFailureInjector(store *database.RuntimeStore,
 var codePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,62}$`)
 
 func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request workspaceprovisionmodel.Request) (workspaceprovisionmodel.Result, error) {
-	return store.provision(ctx, request, false)
+	return store.provision(ctx, request, false, nil, nil)
 }
 
 func (store *WorkspaceProvisionStore) Initialize(ctx context.Context, request workspaceprovisionmodel.Request, initialPassword string) (workspaceprovisionmodel.Result, error) {
-	request.InitialPassword = initialPassword
-	return store.provision(ctx, request, true)
+	return store.InitializeWithAcceptanceFixtures(ctx, request, initialPassword, nil, nil)
 }
 
-func (store *WorkspaceProvisionStore) provision(ctx context.Context, request workspaceprovisionmodel.Request, initialize bool) (workspaceprovisionmodel.Result, error) {
+func (store *WorkspaceProvisionStore) InitializeWithAcceptanceFixtures(ctx context.Context, request workspaceprovisionmodel.Request, initialPassword string, organizations []identitysdk.WorkspaceAcceptanceOrganization, actors []identitysdk.WorkspaceAcceptanceActor) (workspaceprovisionmodel.Result, error) {
+	request.InitialPassword = initialPassword
+	return store.provision(ctx, request, true, organizations, actors)
+}
+
+func (store *WorkspaceProvisionStore) provision(ctx context.Context, request workspaceprovisionmodel.Request, initialize bool, acceptanceOrganizations []identitysdk.WorkspaceAcceptanceOrganization, acceptanceActors []identitysdk.WorkspaceAcceptanceActor) (workspaceprovisionmodel.Result, error) {
 	request.RequestID = strings.TrimSpace(request.RequestID)
 	request.TenantCode = canonicalCode(request.TenantCode)
 	request.TenantName = strings.TrimSpace(request.TenantName)
@@ -120,6 +124,7 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	}
 	identityResult, err := store.identity.ProvisionWorkspaceIdentity(ctx, identitysdk.WorkspaceIdentityProvisionRequest{
 		WorkspaceID: result.WorkspaceID, AdminLoginID: request.AdminLoginID, AdminName: request.AdminName, InitialPassword: request.InitialPassword,
+		AcceptanceOrganizations: acceptanceOrganizations, AcceptanceActors: acceptanceActors,
 	}, identitysdk.EmbeddedTransaction{Native: tx, WorkspaceProvisionFailures: store.identityFailureInjector()})
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, err

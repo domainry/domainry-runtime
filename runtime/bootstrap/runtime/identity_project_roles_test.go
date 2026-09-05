@@ -56,7 +56,7 @@ func TestRuntimeProjectRoleCatalogPreservesExternalAssignmentSafetyFacts(t *test
 	}
 
 	objects := []definitionmodel.ObjectSchema{{Key: "course", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}}
-	catalog := runtimeProjectRoleCatalog(objects, roles, " workspace-primary ", " runtime ")
+	catalog := RuntimeProjectRoleCatalog(objects, roles, " workspace-primary ", " runtime ")
 	if catalog.Application.WorkspaceID != "workspace-primary" || catalog.Application.ApplicationKey != "runtime" || len(catalog.Roles) != 3 {
 		t.Fatalf("catalog = %#v", catalog)
 	}
