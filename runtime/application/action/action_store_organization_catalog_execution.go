@@ -10,12 +10,8 @@ import (
 )
 
 func (e *businessActionExecution) ListStoreOrganizations(ctx context.Context, request runtimeext.StoreOrganizationCatalogRequest) (runtimeext.StoreOrganizationCatalogPage, error) {
-	if e == nil || e.unitOfWork == nil || e.storeCatalogGrant == nil {
-		return runtimeext.StoreOrganizationCatalogPage{}, apperror.New(apperror.KindForbidden, "backend.action.store_organization_catalog_grant_denied", nil, nil)
-	}
-	phase := e.Phase()
-	if (phase != runtimeext.ExecutionPhasePrewrite && phase != runtimeext.ExecutionPhaseWriting) || !ActionAllowed(e.invocation.Principal, e.action) {
-		return runtimeext.StoreOrganizationCatalogPage{}, apperror.New(apperror.KindForbidden, "backend.action.store_organization_catalog_phase_or_permission_denied", nil, nil)
+	if err := e.validateStoreOrganizationCatalogAccess(); err != nil {
+		return runtimeext.StoreOrganizationCatalogPage{}, err
 	}
 	if !request.Valid() {
 		return runtimeext.StoreOrganizationCatalogPage{}, apperror.New(apperror.KindBadRequest, "backend.action.store_organization_catalog_request_invalid", nil, nil)
@@ -55,19 +51,68 @@ func (e *businessActionExecution) ListStoreOrganizations(ctx context.Context, re
 		if strings.TrimSpace(item.ID) == "" {
 			return runtimeext.StoreOrganizationCatalogPage{}, apperror.New(apperror.KindInternal, "backend.action.store_organization_catalog_result_invalid", nil, nil)
 		}
-		projected := runtimeext.StoreOrganizationCatalogItem{
-			ID: strings.TrimSpace(item.ID), Code: strings.TrimSpace(item.Code), Name: strings.TrimSpace(item.Name), Status: strings.TrimSpace(item.Status),
-			ParentOrganizationID: strings.TrimSpace(item.ParentOrganizationID), SortOrder: item.SortOrder, Version: item.Version,
-		}
-		issued, claim, issueErr := runtimeext.IssueStoreOrganizationCatalogItem(projected)
+		issued, issueErr := e.issueStoreOrganizationCatalogItem(item)
 		if issueErr != nil {
 			return runtimeext.StoreOrganizationCatalogPage{}, issueErr
 		}
-		if e.storeCatalogClaims == nil {
-			e.storeCatalogClaims = map[string]string{}
-		}
-		e.storeCatalogClaims[claim] = projected.ID
 		result.Items[index] = issued
 	}
 	return result, nil
+}
+
+func (e *businessActionExecution) ResolveStoreOrganization(ctx context.Context, organizationID string) (runtimeext.StoreOrganizationCatalogItem, error) {
+	if err := e.validateStoreOrganizationCatalogAccess(); err != nil {
+		return runtimeext.StoreOrganizationCatalogItem{}, err
+	}
+	organizationID = strings.TrimSpace(organizationID)
+	if organizationID == "" {
+		return runtimeext.StoreOrganizationCatalogItem{}, apperror.New(apperror.KindBadRequest, "backend.action.store_organization_catalog_reference_invalid", nil, nil)
+	}
+	txCtx, err := e.unitOfWork.beginWriting(ctx)
+	if err != nil {
+		return runtimeext.StoreOrganizationCatalogItem{}, err
+	}
+	delivery, err := e.bindStoreOrganizationDelivery(txCtx)
+	if err != nil {
+		return runtimeext.StoreOrganizationCatalogItem{}, err
+	}
+	resolved, err := delivery.ResolveStoreOrganization(txCtx, identitysdk.StoreOrganizationResolveRequest{
+		ContractVersion: identitysdk.StoreOrganizationDeliveryContractVersionV1,
+		AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken),
+		OrganizationID:  organizationID,
+	})
+	if err != nil {
+		return runtimeext.StoreOrganizationCatalogItem{}, normalizeIdentityCapabilityError(err, "identity.store_organization_delivery.resolve_failed")
+	}
+	if strings.TrimSpace(resolved.ID) != organizationID {
+		return runtimeext.StoreOrganizationCatalogItem{}, apperror.New(apperror.KindInternal, "backend.action.store_organization_catalog_result_invalid", nil, nil)
+	}
+	return e.issueStoreOrganizationCatalogItem(resolved)
+}
+
+func (e *businessActionExecution) validateStoreOrganizationCatalogAccess() error {
+	if e == nil || e.unitOfWork == nil || e.storeCatalogGrant == nil {
+		return apperror.New(apperror.KindForbidden, "backend.action.store_organization_catalog_grant_denied", nil, nil)
+	}
+	phase := e.Phase()
+	if (phase != runtimeext.ExecutionPhasePrewrite && phase != runtimeext.ExecutionPhaseWriting) || !ActionAllowed(e.invocation.Principal, e.action) {
+		return apperror.New(apperror.KindForbidden, "backend.action.store_organization_catalog_phase_or_permission_denied", nil, nil)
+	}
+	return nil
+}
+
+func (e *businessActionExecution) issueStoreOrganizationCatalogItem(item identitysdk.StoreOrganization) (runtimeext.StoreOrganizationCatalogItem, error) {
+	projected := runtimeext.StoreOrganizationCatalogItem{
+		ID: strings.TrimSpace(item.ID), Code: strings.TrimSpace(item.Code), Name: strings.TrimSpace(item.Name), Status: strings.TrimSpace(item.Status),
+		ParentOrganizationID: strings.TrimSpace(item.ParentOrganizationID), SortOrder: item.SortOrder, Version: item.Version,
+	}
+	issued, claim, err := runtimeext.IssueStoreOrganizationCatalogItem(projected)
+	if err != nil {
+		return runtimeext.StoreOrganizationCatalogItem{}, err
+	}
+	if e.storeCatalogClaims == nil {
+		e.storeCatalogClaims = map[string]string{}
+	}
+	e.storeCatalogClaims[claim] = projected.ID
+	return issued, nil
 }

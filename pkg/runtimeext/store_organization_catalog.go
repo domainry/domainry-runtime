@@ -81,6 +81,7 @@ type StoreOrganizationCatalogPage struct {
 
 type StoreOrganizationCatalogExecution interface {
 	ListStoreOrganizations(context.Context, StoreOrganizationCatalogRequest) (StoreOrganizationCatalogPage, error)
+	ResolveStoreOrganization(context.Context, string) (StoreOrganizationCatalogItem, error)
 }
 
 func ExecuteStoreOrganizationCatalog(ctx context.Context, execution ActionExecution, request StoreOrganizationCatalogRequest) (StoreOrganizationCatalogPage, error) {
@@ -89,4 +90,12 @@ func ExecuteStoreOrganizationCatalog(ctx context.Context, execution ActionExecut
 		return StoreOrganizationCatalogPage{}, &BusinessError{Code: "backend.action.store_organization_catalog_unavailable", Message: "Runtime store Organization catalog is unavailable"}
 	}
 	return catalog.ListStoreOrganizations(ctx, request)
+}
+
+func ExecuteStoreOrganizationCatalogResolve(ctx context.Context, execution ActionExecution, organizationID string) (StoreOrganizationCatalogItem, error) {
+	catalog, ok := execution.(StoreOrganizationCatalogExecution)
+	if !ok {
+		return StoreOrganizationCatalogItem{}, &BusinessError{Code: "backend.action.store_organization_catalog_unavailable", Message: "Runtime store Organization catalog is unavailable"}
+	}
+	return catalog.ResolveStoreOrganization(ctx, organizationID)
 }

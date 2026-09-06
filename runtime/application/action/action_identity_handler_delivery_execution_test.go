@@ -76,14 +76,15 @@ func TestIdentityInitialCredentialIsAbsentBeforeCommitAndFromReplayState(t *test
 }
 
 type identityHandlerDeliveryStub struct {
-	request        identitysdk.HandlerDeliveryRequest
-	result         identitysdk.HandlerDeliveryResult
-	err            error
-	calls          int
-	resolveRequest identitysdk.HandlerBoundIdentityRequest
-	resolveResult  identitysdk.HandlerBoundIdentity
-	resolveErr     error
-	resolveCalls   int
+	request         identitysdk.HandlerDeliveryRequest
+	result          identitysdk.HandlerDeliveryResult
+	err             error
+	calls           int
+	resolveRequest  identitysdk.HandlerBoundIdentityRequest
+	resolveRequests []identitysdk.HandlerBoundIdentityRequest
+	resolveResult   identitysdk.HandlerBoundIdentity
+	resolveErr      error
+	resolveCalls    int
 }
 
 func identityDeliveryMutationContext(t *testing.T) transactionmodel.MutationContext {
@@ -107,7 +108,12 @@ func (stub *identityHandlerDeliveryStub) DeliverIdentity(_ context.Context, requ
 func (stub *identityHandlerDeliveryStub) ResolveBoundIdentity(_ context.Context, request identitysdk.HandlerBoundIdentityRequest) (identitysdk.HandlerBoundIdentity, error) {
 	stub.resolveCalls++
 	stub.resolveRequest = request
-	return stub.resolveResult, stub.resolveErr
+	stub.resolveRequests = append(stub.resolveRequests, request)
+	result := stub.resolveResult
+	if strings.TrimSpace(result.UserID) == "" {
+		result.UserID = request.UserID
+	}
+	return result, stub.resolveErr
 }
 
 func TestIdentityBoundProfileResolutionInjectsStaticBindingAndReturnsCurrentCAS(t *testing.T) {
@@ -151,6 +157,34 @@ func TestIdentityBoundProfileResolutionInjectsStaticBindingAndReturnsCurrentCAS(
 		t.Fatalf("mismatched Identity projection err=%v", err)
 	}
 	mismatch.unitOfWork.rollBack(t.Context())
+}
+
+func TestIdentityBoundIdentityBatchUsesOneActionTransactionAndPreservesOrder(t *testing.T) {
+	delivery := &identityHandlerDeliveryStub{}
+	execution := identityDeliveryTestExecution(t, delivery)
+	execution.identityGrant.Operations = append(execution.identityGrant.Operations, runtimeext.IdentityHandlerResolve)
+	delivery.resolveResult = identitysdk.HandlerBoundIdentity{DisplayName: "resolved", Active: true, Version: 1}
+
+	results, err := execution.ResolveBoundIdentities(t.Context(), []string{" user-2 ", "user-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 2 || results[0].UserID != "user-2" || results[1].UserID != "user-1" || delivery.resolveCalls != 2 || execution.boundIdentityCalls != 2 || len(delivery.resolveRequests) != 2 || delivery.resolveRequests[0].UserID != "user-2" || delivery.resolveRequests[1].UserID != "user-1" {
+		t.Fatalf("results=%+v delivery calls=%d execution calls=%d last request=%+v", results, delivery.resolveCalls, execution.boundIdentityCalls, delivery.resolveRequest)
+	}
+	if results[0].DisplayName != "resolved" || results[1].DisplayName != "resolved" {
+		t.Fatalf("result order/projection=%+v", results)
+	}
+	execution.unitOfWork.rollBack(t.Context())
+
+	invalid := identityDeliveryTestExecution(t, delivery)
+	invalid.identityGrant.Operations = append(invalid.identityGrant.Operations, runtimeext.IdentityHandlerResolve)
+	if _, err := invalid.ResolveBoundIdentities(t.Context(), []string{"user-1", " user-1 "}); apperror.CodeOf(err) != "identity.handler_delivery_resolve_batch_invalid" {
+		t.Fatalf("duplicate batch error=%v", err)
+	}
+	if delivery.resolveCalls != 2 {
+		t.Fatalf("invalid batch reached Identity: calls=%d", delivery.resolveCalls)
+	}
 }
 
 func identityDeliveryTestExecution(t *testing.T, delivery identitysdk.HandlerDelivery) *businessActionExecution {

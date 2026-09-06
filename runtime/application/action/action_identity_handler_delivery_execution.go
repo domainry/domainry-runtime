@@ -184,6 +184,42 @@ func (e *businessActionExecution) ResolveBoundIdentity(ctx context.Context, user
 	return e.resolveBoundIdentity(ctx, userID, nil)
 }
 
+func (e *businessActionExecution) ResolveBoundIdentities(ctx context.Context, userIDs []string) ([]runtimeext.IdentityBoundIdentity, error) {
+	if e == nil || e.identityGrant == nil || !e.identityOperationGranted(runtimeext.IdentityHandlerResolve) {
+		return nil, apperror.New(apperror.KindForbidden, "identity.handler_delivery_operation_denied", nil, nil)
+	}
+	if len(userIDs) == 0 || len(userIDs) > runtimeext.IdentityHandlerMaximumResolveBatchSize {
+		return nil, apperror.New(apperror.KindBadRequest, "identity.handler_delivery_resolve_batch_invalid", nil, nil)
+	}
+	normalized := make([]string, len(userIDs))
+	seen := make(map[string]bool, len(userIDs))
+	for index, userID := range userIDs {
+		userID = strings.TrimSpace(userID)
+		if userID == "" || seen[userID] {
+			return nil, apperror.New(apperror.KindBadRequest, "identity.handler_delivery_resolve_batch_invalid", nil, nil)
+		}
+		seen[userID] = true
+		normalized[index] = userID
+	}
+	txCtx, err := e.unitOfWork.beginWriting(ctx)
+	if err != nil {
+		return nil, err
+	}
+	delivery, err := e.bindIdentityHandlerDelivery(txCtx)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]runtimeext.IdentityBoundIdentity, len(normalized))
+	for index, userID := range normalized {
+		resolved, resolveErr := e.resolveBoundIdentityWithDelivery(txCtx, delivery, userID, nil)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		results[index] = resolved
+	}
+	return results, nil
+}
+
 func (e *businessActionExecution) ResolveBoundIdentityProfile(ctx context.Context, userID string, selector runtimeext.IdentityHandlerProfileBindingSelector) (runtimeext.IdentityBoundIdentity, error) {
 	if e == nil {
 		return runtimeext.IdentityBoundIdentity{}, apperror.New(apperror.KindForbidden, "identity.handler_delivery_operation_denied", nil, nil)
@@ -216,6 +252,10 @@ func (e *businessActionExecution) resolveBoundIdentity(ctx context.Context, user
 	if err != nil {
 		return runtimeext.IdentityBoundIdentity{}, err
 	}
+	return e.resolveBoundIdentityWithDelivery(txCtx, delivery, userID, selector)
+}
+
+func (e *businessActionExecution) resolveBoundIdentityWithDelivery(ctx context.Context, delivery identitysdk.HandlerDelivery, userID string, selector *runtimeext.IdentityHandlerProfileBindingSelector) (runtimeext.IdentityBoundIdentity, error) {
 	e.boundIdentityCalls++
 	sdkRequest := identitysdk.HandlerBoundIdentityRequest{
 		ContractVersion: identitysdk.HandlerDeliveryContractVersionV1,
@@ -225,9 +265,12 @@ func (e *businessActionExecution) resolveBoundIdentity(ctx context.Context, user
 	if selector != nil {
 		sdkRequest.ProfileBinding = &identitysdk.HandlerProfileBindingSelector{BindingKey: selector.BindingKey, ObjectKey: selector.ObjectKey, ProfileID: selector.ProfileID}
 	}
-	resolved, err := delivery.ResolveBoundIdentity(txCtx, sdkRequest)
+	resolved, err := delivery.ResolveBoundIdentity(ctx, sdkRequest)
 	if err != nil {
 		return runtimeext.IdentityBoundIdentity{}, normalizeIdentityCapabilityError(err, "identity.handler_delivery_resolve_failed")
+	}
+	if strings.TrimSpace(resolved.UserID) != userID {
+		return runtimeext.IdentityBoundIdentity{}, apperror.New(apperror.KindInternal, "identity.handler_delivery_resolution_mismatch", nil, nil)
 	}
 	result := runtimeext.IdentityBoundIdentity{
 		UserID: resolved.UserID, DisplayName: resolved.DisplayName, Status: resolved.Status, Active: resolved.Active, Version: resolved.Version,

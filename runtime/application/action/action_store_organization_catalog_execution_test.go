@@ -12,17 +12,56 @@ import (
 )
 
 type storeOrganizationCatalogDeliveryStub struct {
-	requests []identitysdk.StoreOrganizationListRequest
-	pages    []identitysdk.StoreOrganizationPage
-	err      error
+	requests       []identitysdk.StoreOrganizationListRequest
+	resolveRequest identitysdk.StoreOrganizationResolveRequest
+	resolveResult  identitysdk.StoreOrganization
+	resolveCalls   int
+	pages          []identitysdk.StoreOrganizationPage
+	err            error
 }
 
 func (*storeOrganizationCatalogDeliveryStub) DeliverStoreOrganization(context.Context, identitysdk.StoreOrganizationDeliveryRequest) (identitysdk.StoreOrganizationDeliveryResult, error) {
 	panic("generic Organization mutation is not exposed by the Runtime catalog capability")
 }
 
-func (*storeOrganizationCatalogDeliveryStub) ResolveStoreOrganization(context.Context, identitysdk.StoreOrganizationResolveRequest) (identitysdk.StoreOrganization, error) {
-	panic("generic Organization resolve is not exposed by the Runtime catalog capability")
+func (stub *storeOrganizationCatalogDeliveryStub) ResolveStoreOrganization(_ context.Context, request identitysdk.StoreOrganizationResolveRequest) (identitysdk.StoreOrganization, error) {
+	stub.resolveCalls++
+	stub.resolveRequest = request
+	return stub.resolveResult, stub.err
+}
+
+func TestStoreOrganizationCatalogResolvesExactAuthorizedOrganization(t *testing.T) {
+	delivery := &storeOrganizationCatalogDeliveryStub{resolveResult: identitysdk.StoreOrganization{
+		ID: "store-north", Code: "north", Name: "North", Status: "active", ParentOrganizationID: "company-hq", SortOrder: 1, Version: 4,
+	}}
+	execution := workspaceAggregateTestExecution(workspaceAggregatePrincipal("sale.aggregate"), nil, nil, new([]WorkspaceAggregateAudit))
+	execution.unitOfWork = newActionTestUnitOfWork()
+	execution.storeCatalogGrant = &runtimeext.StoreOrganizationCatalogCapability{MaxPageSize: 25}
+	execution.requestIdentity = identitysdk.RequestIdentity{AccessToken: "trusted-access-token"}
+	execution.dependencies.BindStoreOrganizationDelivery = func(context.Context) (identitysdk.StoreOrganizationDelivery, error) { return delivery, nil }
+
+	item, err := execution.ResolveStoreOrganization(t.Context(), " store-north ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.ID != "store-north" || item.Version != 4 || delivery.resolveCalls != 1 || delivery.resolveRequest.OrganizationID != "store-north" || delivery.resolveRequest.AccessToken != "trusted-access-token" {
+		t.Fatalf("item=%+v request=%+v calls=%d", item, delivery.resolveRequest, delivery.resolveCalls)
+	}
+	if ownerID, claim, ok := runtimeext.ResolveStoreOrganizationCatalogItem(item); !ok || ownerID != "store-north" || claim == "" {
+		t.Fatalf("issued item owner=%q claim=%q ok=%v", ownerID, claim, ok)
+	}
+	execution.unitOfWork.rollBack(t.Context())
+
+	delivery.resolveResult.ID = "store-south"
+	mismatch := workspaceAggregateTestExecution(workspaceAggregatePrincipal("sale.aggregate"), nil, nil, new([]WorkspaceAggregateAudit))
+	mismatch.unitOfWork = newActionTestUnitOfWork()
+	mismatch.storeCatalogGrant = &runtimeext.StoreOrganizationCatalogCapability{MaxPageSize: 25}
+	mismatch.requestIdentity = identitysdk.RequestIdentity{AccessToken: "trusted-access-token"}
+	mismatch.dependencies.BindStoreOrganizationDelivery = func(context.Context) (identitysdk.StoreOrganizationDelivery, error) { return delivery, nil }
+	if _, err := mismatch.ResolveStoreOrganization(t.Context(), "store-north"); apperror.CodeOf(err) != "backend.action.store_organization_catalog_result_invalid" {
+		t.Fatalf("mismatched resolve error=%v", err)
+	}
+	mismatch.unitOfWork.rollBack(t.Context())
 }
 
 func (stub *storeOrganizationCatalogDeliveryStub) ListStoreOrganizations(_ context.Context, request identitysdk.StoreOrganizationListRequest) (identitysdk.StoreOrganizationPage, error) {

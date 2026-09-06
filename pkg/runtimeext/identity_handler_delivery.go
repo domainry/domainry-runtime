@@ -184,6 +184,16 @@ type IdentityHandlerDeliveryExecution interface {
 	ResolveBoundIdentity(context.Context, string) (IdentityBoundIdentity, error)
 }
 
+const IdentityHandlerMaximumResolveBatchSize = 200
+
+// IdentityHandlerBatchResolutionExecution is separate from the original
+// delivery interface so existing Runtime embeddings remain source compatible.
+// Runtime implements the bounded batch inside one Action transaction even when
+// the embedded Identity delivery exposes only its exact scalar resolver.
+type IdentityHandlerBatchResolutionExecution interface {
+	ResolveBoundIdentities(context.Context, []string) ([]IdentityBoundIdentity, error)
+}
+
 // IdentityHandlerProfileResolutionExecution is separate from the original
 // delivery interface so existing consumers that only resolve user facts stay
 // source compatible. Generated bindings use it only for a statically authored
@@ -208,6 +218,25 @@ func ResolveBoundIdentity(ctx context.Context, execution ActionExecution, userID
 		return IdentityBoundIdentity{}, ErrIdentityHandlerDeliveryUnavailable
 	}
 	return capability.ResolveBoundIdentity(ctx, userID)
+}
+
+func ResolveBoundIdentities(ctx context.Context, execution ActionExecution, userIDs []string) ([]IdentityBoundIdentity, error) {
+	if len(userIDs) == 0 || len(userIDs) > IdentityHandlerMaximumResolveBatchSize {
+		return nil, &BusinessError{Code: "identity.handler_delivery_resolve_batch_invalid", Message: "Identity resolve batch must contain from 1 through 200 users"}
+	}
+	seen := make(map[string]bool, len(userIDs))
+	for _, userID := range userIDs {
+		userID = strings.TrimSpace(userID)
+		if userID == "" || seen[userID] {
+			return nil, &BusinessError{Code: "identity.handler_delivery_resolve_batch_invalid", Message: "Identity resolve batch user identities must be non-empty and distinct"}
+		}
+		seen[userID] = true
+	}
+	capability, ok := execution.(IdentityHandlerBatchResolutionExecution)
+	if !ok {
+		return nil, ErrIdentityHandlerDeliveryUnavailable
+	}
+	return capability.ResolveBoundIdentities(ctx, userIDs)
 }
 
 func ResolveBoundIdentityProfile(ctx context.Context, execution ActionExecution, userID string, selector IdentityHandlerProfileBindingSelector) (IdentityBoundIdentity, error) {
