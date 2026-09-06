@@ -1,6 +1,6 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "ccff33db53168e68389367ac179c271902271d9653c8855b139baa22017dff2d",
+  "set_sha256": "9500b259a95dd749e521b6775dd5551a804c81c51f36b37ebc42dd43d5411967",
   "modules": [
     {
       "key": "agent",
@@ -105,12 +105,12 @@
     {
       "key": "scheduler",
       "implementation": "github.com/domainry/domainry-scheduler",
-      "implementation_version": "v0.1.5",
-      "implementation_sum": "h1:hyaF0J2rstpS4src+dy+2Pfy2n0AFtU4e2XfoSbWPlA=",
+      "implementation_version": "v0.1.6",
+      "implementation_sum": "h1:m+HW1ZUC7J3SUEshZjYbncrImv6Qna59Wbb3u4Jk6ow=",
       "sdk": "github.com/domainry/domainry-scheduler-sdk",
-      "sdk_version": "v0.1.2",
-      "sdk_sum": "h1:Tn3vN0eZevZ5LSsfha8sRT4PHUKd8P29BdOQL29hACc=",
-      "capability_contract_sha256": "fd7a2fdc130e51d404e355b3464a861189ee2b855b74f5b6b9414790cefa15fc"
+      "sdk_version": "v0.1.3",
+      "sdk_sum": "h1:YUdO2v2dxyKMmCBLW4x9ffVsrWN8OQ4tWc8bZ/HcN9A=",
+      "capability_contract_sha256": "2a62640fe8bd0665ba55246fc0e60ec9c0762e06546d02a0af2b819dafbcd3e5"
     }
   ]
 }

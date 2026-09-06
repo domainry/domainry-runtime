@@ -28,8 +28,8 @@ require (
 	github.com/domainry/domainry-notification-sdk v0.1.0-dev.8
 	github.com/domainry/domainry-report v0.1.6
 	github.com/domainry/domainry-report-sdk v0.1.2
-	github.com/domainry/domainry-scheduler v0.1.5
-	github.com/domainry/domainry-scheduler-sdk v0.1.2
+	github.com/domainry/domainry-scheduler v0.1.6
+	github.com/domainry/domainry-scheduler-sdk v0.1.3
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/microsoft/go-mssqldb v1.10.0
