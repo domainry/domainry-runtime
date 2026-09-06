@@ -75,9 +75,13 @@ func (e *businessActionExecution) durableIntentGrant(intent runtimeext.DurableIn
 }
 
 func (e *businessActionExecution) canonicalCommits() ([]transactionmodel.RecordMutationCommit, error) {
-	commits := make([]transactionmodel.RecordMutationCommit, 0, len(e.plans))
+	commits := make([]transactionmodel.RecordMutationCommit, 0, len(e.plans)+len(e.setCommits))
 	for _, plan := range e.plans {
 		commits = append(commits, plan.CanonicalCommit())
+	}
+	commits = append(commits, e.setCommits...)
+	if err := e.validateMutationTarget(e.plans); err != nil {
+		return nil, err
 	}
 	if len(e.intents) > 0 && len(commits) == 0 {
 		return nil, apperror.New(apperror.KindBadRequest, "backend.action.durable_intent_requires_business_mutation", nil, nil)
@@ -121,6 +125,9 @@ func (e *businessActionExecution) ApplyRecordMutation(ctx context.Context, mutat
 	if !actionEffectAllows(e.action.EffectSet, mutation.ObjectKey, true) {
 		return runtimeext.RecordMutationResult{}, apperror.New(apperror.KindForbidden, "backend.action.effect_authority_denied", nil, map[string]string{"object": mutation.ObjectKey})
 	}
+	if e.targetGrant != nil && !e.targetResolved {
+		return runtimeext.RecordMutationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.target_organization_unresolved", nil, nil)
+	}
 	var err error
 	// Create planning may validate Identity relations through a separately
 	// composed module which shares the Runtime SQLite pool. Do not retain the
@@ -139,7 +146,8 @@ func (e *businessActionExecution) ApplyRecordMutation(ctx context.Context, mutat
 		Source: transactionmodel.MutationSourceAction, ActionKey: e.action.Key, IdempotencyKey: e.invocation.IdempotencyKey,
 		ActionResource: actionResource, ActionOperation: actionOperation,
 		EffectAuthority: actionEffectAuthority(e.action.EffectSet), AssuranceEvidence: e.invocation.AssuranceEvidence,
-		WorkflowTriggers: []string{"action_executed:" + e.action.Key},
+		WorkflowTriggers:     []string{"action_executed:" + e.action.Key},
+		TargetOrganizationID: e.targetOrganization.ID,
 	})
 	ctx = e.withPlannedRelationRecords(ctx)
 	var plans []transactionmodel.MutationPlan
@@ -150,14 +158,14 @@ func (e *businessActionExecution) ApplyRecordMutation(ctx context.Context, mutat
 			return runtimeext.RecordMutationResult{}, missingExecutorPort("plan_create")
 		}
 		var plan transactionmodel.MutationPlan
-		plan, record, err = e.dependencies.PlanCreateMutation(ctx, mutation.ObjectKey, mutation.Fields, "", e.invocation.Principal)
+		plan, record, err = e.dependencies.PlanCreateMutation(ctx, mutation.ObjectKey, mutation.Fields, "", e.actionMutationPrincipal())
 		plans = append(plans, plan)
 	case runtimeext.MutationUpdate:
 		if e.dependencies.PlanUpdateMutation == nil {
 			return runtimeext.RecordMutationResult{}, missingExecutorPort("plan_update")
 		}
 		var plan transactionmodel.MutationPlan
-		plan, record, err = e.dependencies.PlanUpdateMutation(ctx, mutation.ObjectKey, mutation.RecordID, mutation.Fields, e.invocation.Principal)
+		plan, record, err = e.dependencies.PlanUpdateMutation(ctx, mutation.ObjectKey, mutation.RecordID, mutation.Fields, e.actionMutationPrincipal())
 		plans = append(plans, plan)
 	case runtimeext.MutationConditionalUpdate:
 		plans, record, err = e.planConditionalUpdate(ctx, mutation)
@@ -165,17 +173,20 @@ func (e *businessActionExecution) ApplyRecordMutation(ctx context.Context, mutat
 		if e.dependencies.PlanDeleteMutation == nil {
 			return runtimeext.RecordMutationResult{}, missingExecutorPort("plan_delete")
 		}
-		plans, err = e.dependencies.PlanDeleteMutation(ctx, mutation.ObjectKey, mutation.RecordID, mutation.ExpectedUpdatedAt, e.invocation.Principal)
+		plans, err = e.dependencies.PlanDeleteMutation(ctx, mutation.ObjectKey, mutation.RecordID, mutation.ExpectedUpdatedAt, e.actionMutationPrincipal())
 		record = recordmodel.Record{ID: mutation.RecordID}
 	case runtimeext.MutationRestore:
 		if e.dependencies.PlanRestoreMutation == nil {
 			return runtimeext.RecordMutationResult{}, missingExecutorPort("plan_restore")
 		}
 		var plan transactionmodel.MutationPlan
-		plan, record, err = e.dependencies.PlanRestoreMutation(ctx, mutation.ObjectKey, mutation.RecordID, mutation.ExpectedUpdatedAt, e.invocation.Principal)
+		plan, record, err = e.dependencies.PlanRestoreMutation(ctx, mutation.ObjectKey, mutation.RecordID, mutation.ExpectedUpdatedAt, e.actionMutationPrincipal())
 		plans = append(plans, plan)
 	}
 	if err != nil {
+		return runtimeext.RecordMutationResult{}, err
+	}
+	if err := e.validateMutationTarget(plans); err != nil {
 		return runtimeext.RecordMutationResult{}, err
 	}
 	// The canonical plan is the persistence authority. A planner also returns a
@@ -279,7 +290,7 @@ func (e *businessActionExecution) planConditionalUpdate(ctx context.Context, mut
 	if expectedUpdatedAt := strings.TrimSpace(mutation.ExpectedUpdatedAt); expectedUpdatedAt != "" {
 		input.Predicates = append(input.Predicates, transactionmodel.MutationPredicate{Field: "updated_at", Operator: "eq", Value: expectedUpdatedAt, ErrorCode: "backend.record.version_conflict"})
 	}
-	plan, record, err := e.dependencies.PlanConditionalUpdate(ctx, mutation.ObjectKey, mutation.RecordID, input, e.invocation.Principal)
+	plan, record, err := e.dependencies.PlanConditionalUpdate(ctx, mutation.ObjectKey, mutation.RecordID, input, e.actionMutationPrincipal())
 	if err != nil && e.isDeclaredConcurrentRecordChange(mutation) {
 		return nil, recordmodel.Record{}, apperror.New(
 			apperror.KindConflict,

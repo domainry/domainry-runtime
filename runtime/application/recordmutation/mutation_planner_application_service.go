@@ -17,17 +17,26 @@ import (
 type MutationMetadataRevisionResolver func(context.Context, principalmodel.Principal) (string, error)
 
 type MutationInvocation struct {
-	Source            transactionmodel.MutationSource
-	ActionKey         string
-	ActionResource    string
-	ActionOperation   string
-	WorkflowKey       string
-	AutomationKey     string
-	IdempotencyKey    string
-	CausationID       string
-	EffectAuthority   map[string][]string
-	AssuranceEvidence map[string]string
-	WorkflowTriggers  []string
+	Source                    transactionmodel.MutationSource
+	ActionKey                 string
+	ActionResource            string
+	ActionOperation           string
+	WorkflowKey               string
+	AutomationKey             string
+	IdempotencyKey            string
+	CausationID               string
+	EffectAuthority           map[string][]string
+	AssuranceEvidence         map[string]string
+	WorkflowTriggers          []string
+	TargetOrganizationID      string
+	ProfileBindingAuthorities []ProfileBindingAuthority
+}
+
+type ProfileBindingAuthority struct {
+	ObjectKey      string
+	ProfileID      string
+	FieldKey       string
+	IdentityUserID string
 }
 
 type mutationInvocationContextKey struct{}

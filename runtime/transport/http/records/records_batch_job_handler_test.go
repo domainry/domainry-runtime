@@ -41,6 +41,10 @@ type recordBatchHTTPFixture struct {
 }
 
 func newRecordBatchHTTPFixture(t *testing.T) recordBatchHTTPFixture {
+	return newRecordBatchHTTPFixtureWithObject(t, definitionmodel.ObjectSchema{Key: "customer", Name: "Customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text", Required: true}}})
+}
+
+func newRecordBatchHTTPFixtureWithObject(t *testing.T, object definitionmodel.ObjectSchema) recordBatchHTTPFixture {
 	t.Helper()
 	store, err := database.OpenContext(t.Context(), config.Config{
 		DatabaseDriver: "sqlite",
@@ -53,13 +57,12 @@ func newRecordBatchHTTPFixture(t *testing.T) recordBatchHTTPFixture {
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	object := definitionmodel.ObjectSchema{Key: "customer", Name: "Customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text", Required: true}}}
 	if err := appschemapersistence.NewApplicationSchemaStore(store).SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "prepare record batch test storage"), manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{object}}); err != nil {
 		t.Fatal(err)
 	}
 	role := accessfixture.Bundle{
-		Key: "admin", Permissions: []string{"customer.create", "customer.read", "customer.update", "customer.delete", "customer.import", "customer.export"},
-		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "customer", Scope: "all", Read: true, Write: true}},
+		Key: "admin", Permissions: []string{object.Key + ".create", object.Key + ".read", object.Key + ".update", object.Key + ".delete", object.Key + ".import", object.Key + ".export"},
+		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Scope: "all", Read: true, Write: true}},
 	}
 	exchange := &recordBatchDataExchangeProbe{}
 	services := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{
@@ -110,6 +113,18 @@ func newRecordBatchHTTPFixture(t *testing.T) recordBatchHTTPFixture {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	return recordBatchHTTPFixture{handler: handler, mux: mux, principal: principal, exchange: exchange}
+}
+
+func TestActionOnlyObjectDirectPostRemainsForbidden(t *testing.T) {
+	object := definitionmodel.ObjectSchema{
+		Key: "lead", Name: "Lead", Config: map[string]any{"write_policy": "action_only"},
+		Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text", Required: true}},
+	}
+	fixture := newRecordBatchHTTPFixtureWithObject(t, object)
+	response := fixture.call(http.MethodPost, "/records/lead", `{"data":{"name":"Bypass attempt"}}`, map[string]string{"Idempotency-Key": "direct-action-only"})
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "backend.mutation.action_required") {
+		t.Fatalf("direct POST status=%d body=%s", response.Code, response.Body.String())
+	}
 }
 
 type recordBatchDataExchangeProbe struct {

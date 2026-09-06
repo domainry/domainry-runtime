@@ -104,8 +104,8 @@ func LoadContract(sources ...Source) (Config, Snapshot, error) {
 			if !ok {
 				return Config{}, Snapshot{}, fmt.Errorf("unknown configuration %s from %s", name, source.Name)
 			}
-			if name == "WORKSPACE_PROVISION_FAILURE_POINT" && source.Name != "environment" {
-				return Config{}, Snapshot{}, fmt.Errorf("WORKSPACE_PROVISION_FAILURE_POINT is process-environment-only and cannot be loaded from %s", source.Name)
+			if processEnvironmentOnlyConfig(name) && source.Name != "environment" {
+				return Config{}, Snapshot{}, fmt.Errorf("%s is process-environment-only and cannot be loaded from %s", name, source.Name)
 			}
 			if err := setConfigField(&cfg, definition, raw); err != nil {
 				return Config{}, Snapshot{}, fmt.Errorf("invalid %s from %s: %w", name, source.Name, err)
@@ -126,6 +126,17 @@ func LoadContract(sources ...Source) (Config, Snapshot, error) {
 	}
 	revision := snapshotRevision(entries)
 	return cfg, Snapshot{Revision: revision, Entries: entries}, nil
+}
+
+func processEnvironmentOnlyConfig(name string) bool {
+	switch name {
+	case "WORKSPACE_PROVISION_FAILURE_POINT", "INITIAL_ACCEPTANCE_FIXTURES", "RUNTIME_ACCEPTANCE_FIXTURES_ENABLED",
+		"INSTALLATION_ADMINISTRATOR_BOOTSTRAP_ENABLED", "INSTALLATION_ADMINISTRATOR_REQUEST_ID", "INSTALLATION_ADMINISTRATOR_LOGIN_ID",
+		"INSTALLATION_ADMINISTRATOR_NAME", "INSTALLATION_ADMINISTRATOR_CREDENTIAL_FILE":
+		return true
+	default:
+		return false
+	}
 }
 
 func Load() (Config, Snapshot, error) {
@@ -223,8 +234,32 @@ func (s Snapshot) StartupReport() []Provenance {
 }
 
 func (c Config) Validate() error {
+	if strings.TrimSpace(os.Getenv("NOTIFICATION_TENANT_ID")) != "" {
+		return errors.New("NOTIFICATION_TENANT_ID is retired; Notification scope is derived from NOTIFICATION_WORKSPACE_ID")
+	}
 	if err := c.ValidateSecurity(); err != nil {
 		return err
+	}
+	installationAdministratorValues := []struct {
+		name, value string
+	}{
+		{"INSTALLATION_ADMINISTRATOR_REQUEST_ID", c.InstallationAdministratorRequestID},
+		{"INSTALLATION_ADMINISTRATOR_LOGIN_ID", c.InstallationAdministratorLoginID},
+		{"INSTALLATION_ADMINISTRATOR_NAME", c.InstallationAdministratorName},
+		{"INSTALLATION_ADMINISTRATOR_CREDENTIAL_FILE", c.InstallationAdministratorCredentialFile},
+	}
+	if c.InstallationAdministratorBootstrapEnabled {
+		for _, field := range installationAdministratorValues {
+			if strings.TrimSpace(field.value) == "" {
+				return fmt.Errorf("%s is required when INSTALLATION_ADMINISTRATOR_BOOTSTRAP_ENABLED=true", field.name)
+			}
+		}
+	} else {
+		for _, field := range installationAdministratorValues {
+			if strings.TrimSpace(field.value) != "" {
+				return fmt.Errorf("%s requires INSTALLATION_ADMINISTRATOR_BOOTSTRAP_ENABLED=true", field.name)
+			}
+		}
 	}
 	switch strings.ToLower(strings.TrimSpace(c.RateLimitBackend)) {
 	case "", "database":
@@ -261,7 +296,7 @@ func (c Config) Validate() error {
 		return fmt.Errorf("NOTIFICATION_APPLICATION_KEY is required")
 	}
 	for name, value := range map[string]string{
-		"IDENTITY_WORKSPACE_ID": c.IdentityWorkspaceID, "NOTIFICATION_TENANT_ID": c.NotificationTenantID,
+		"IDENTITY_WORKSPACE_ID":     c.IdentityWorkspaceID,
 		"NOTIFICATION_WORKSPACE_ID": c.NotificationWorkspaceID,
 	} {
 		if strings.EqualFold(strings.TrimSpace(value), "default") {

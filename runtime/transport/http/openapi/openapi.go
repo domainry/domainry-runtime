@@ -9,6 +9,7 @@ import (
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
 
@@ -21,6 +22,10 @@ func BuildWithProductBrand(snapshot appschemamodel.ApplicationSchemaSnapshot, pr
 }
 
 func BuildWithModuleHTTPAdapters(snapshot appschemamodel.ApplicationSchemaSnapshot, productBrandName string, adapters []modulehttp.Adapter) map[string]any {
+	return BuildWithWorkspaceBootstrap(snapshot, productBrandName, adapters, nil)
+}
+
+func BuildWithWorkspaceBootstrap(snapshot appschemamodel.ApplicationSchemaSnapshot, productBrandName string, adapters []modulehttp.Adapter, participant runtimeext.WorkspaceBootstrapParticipant) map[string]any {
 	productBrandName = productbrand.ResolveName(productBrandName)
 	paths := map[string]any{}
 	components := map[string]any{
@@ -132,12 +137,12 @@ func BuildWithModuleHTTPAdapters(snapshot appschemamodel.ApplicationSchemaSnapsh
 	addRuntimeContractOpenAPIPaths(paths)
 	addLifecycleOpenAPIPaths(paths)
 	addBusinessBuilderOpenAPIPaths(paths)
-	addAdminListenerOpenAPIPaths(paths)
+	addAdminListenerOpenAPIPaths(paths, participant)
 	for _, object := range snapshot.Objects {
 		addObjectOpenAPIPaths(paths, object)
 	}
 	for _, action := range snapshot.Actions {
-		addActionOpenAPIPath(paths, action)
+		addActionOpenAPIPath(paths, action, snapshot.Objects)
 	}
 	addPublicationHandoffOpenAPIPaths(paths)
 	dispatchTarget := openAPIRequiredObject([]string{"type", "operation"}, map[string]any{

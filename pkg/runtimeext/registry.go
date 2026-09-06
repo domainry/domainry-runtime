@@ -17,7 +17,8 @@ var (
 // ExtensionSet is generated project composition input. Runtime freezes its
 // handlers before accepting traffic.
 type ExtensionSet struct {
-	BusinessHandlers []BusinessHandler
+	BusinessHandlers              []BusinessHandler
+	WorkspaceBootstrapParticipant WorkspaceBootstrapParticipant
 }
 
 // BusinessHandlerBinding is the immutable registration-time association
@@ -30,9 +31,10 @@ type BusinessHandlerBinding struct {
 // BusinessHandlerRegistry owns startup-time Business Handler registration. It
 // intentionally has no runtime replacement or unregister operation.
 type BusinessHandlerRegistry struct {
-	mu       sync.RWMutex
-	frozen   bool
-	bindings map[string]BusinessHandlerBinding
+	mu                 sync.RWMutex
+	frozen             bool
+	bindings           map[string]BusinessHandlerBinding
+	workspaceBootstrap WorkspaceBootstrapParticipant
 }
 
 func NewBusinessHandlerRegistry() *BusinessHandlerRegistry {
@@ -64,6 +66,11 @@ func (r *BusinessHandlerRegistry) Register(handler BusinessHandler) error {
 }
 
 func (r *BusinessHandlerRegistry) RegisterExtensionSet(set ExtensionSet) error {
+	if set.WorkspaceBootstrapParticipant != nil {
+		if err := set.WorkspaceBootstrapParticipant.Descriptor().Validate(); err != nil {
+			return err
+		}
+	}
 	type registration struct {
 		key     string
 		binding BusinessHandlerBinding
@@ -90,6 +97,9 @@ func (r *BusinessHandlerRegistry) RegisterExtensionSet(set ExtensionSet) error {
 	if r.frozen {
 		return ErrBusinessHandlerRegistryFrozen
 	}
+	if set.WorkspaceBootstrapParticipant != nil && r.workspaceBootstrap != nil {
+		return ErrWorkspaceBootstrapParticipantDuplicate
+	}
 	if r.bindings == nil {
 		r.bindings = map[string]BusinessHandlerBinding{}
 	}
@@ -100,6 +110,9 @@ func (r *BusinessHandlerRegistry) RegisterExtensionSet(set ExtensionSet) error {
 	}
 	for _, current := range registrations {
 		r.bindings[current.key] = current.binding
+	}
+	if set.WorkspaceBootstrapParticipant != nil {
+		r.workspaceBootstrap = set.WorkspaceBootstrapParticipant
 	}
 	return nil
 }
@@ -135,6 +148,15 @@ func (r *BusinessHandlerRegistry) Descriptors() []HandlerDescriptor {
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].ActionKey < result[j].ActionKey })
 	return result
+}
+
+func (r *BusinessHandlerRegistry) WorkspaceBootstrapParticipant() WorkspaceBootstrapParticipant {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.workspaceBootstrap
 }
 
 func normalizeHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor {
@@ -174,6 +196,84 @@ func normalizeHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor 
 		result.FileCapabilities[index] = strings.TrimSpace(result.FileCapabilities[index])
 	}
 	sort.Strings(result.FileCapabilities)
+	for index := range result.CrossWorkspaceAggregates {
+		capability := &result.CrossWorkspaceAggregates[index]
+		capability.Key = strings.TrimSpace(capability.Key)
+		capability.ObjectKey = strings.TrimSpace(capability.ObjectKey)
+		for dimensionIndex := range capability.Dimensions {
+			capability.Dimensions[dimensionIndex].Key = strings.TrimSpace(capability.Dimensions[dimensionIndex].Key)
+			capability.Dimensions[dimensionIndex].Field = strings.TrimSpace(capability.Dimensions[dimensionIndex].Field)
+			if capability.Dimensions[dimensionIndex].Transform != nil {
+				transform := *capability.Dimensions[dimensionIndex].Transform
+				if transform.DateBucket != nil {
+					dateBucket := *transform.DateBucket
+					dateBucket.Grain = strings.TrimSpace(dateBucket.Grain)
+					dateBucket.TimeZone = strings.TrimSpace(dateBucket.TimeZone)
+					transform.DateBucket = &dateBucket
+				}
+				capability.Dimensions[dimensionIndex].Transform = &transform
+			}
+		}
+		sort.Slice(capability.Dimensions, func(i, j int) bool { return capability.Dimensions[i].Key < capability.Dimensions[j].Key })
+		for measureIndex := range capability.Measures {
+			capability.Measures[measureIndex].Key = strings.TrimSpace(capability.Measures[measureIndex].Key)
+			capability.Measures[measureIndex].Field = strings.TrimSpace(capability.Measures[measureIndex].Field)
+		}
+		sort.Slice(capability.Measures, func(i, j int) bool { return capability.Measures[i].Key < capability.Measures[j].Key })
+		for filterIndex := range capability.Filters {
+			capability.Filters[filterIndex].Field = strings.TrimSpace(capability.Filters[filterIndex].Field)
+			for operatorIndex := range capability.Filters[filterIndex].Operators {
+				capability.Filters[filterIndex].Operators[operatorIndex] = strings.TrimSpace(capability.Filters[filterIndex].Operators[operatorIndex])
+			}
+			sort.Strings(capability.Filters[filterIndex].Operators)
+		}
+		sort.Slice(capability.Filters, func(i, j int) bool { return capability.Filters[i].Field < capability.Filters[j].Field })
+	}
+	sort.Slice(result.CrossWorkspaceAggregates, func(i, j int) bool {
+		return result.CrossWorkspaceAggregates[i].Key < result.CrossWorkspaceAggregates[j].Key
+	})
+	if result.TargetOrganization != nil {
+		capability := *result.TargetOrganization
+		capability.Source = TargetOrganizationSource(strings.TrimSpace(string(capability.Source)))
+		capability.Input = strings.TrimSpace(capability.Input)
+		result.TargetOrganization = &capability
+	}
+	if result.IdentityHandlerDelivery != nil {
+		capability := *result.IdentityHandlerDelivery
+		capability.InitialCredentialOutputField = strings.TrimSpace(capability.InitialCredentialOutputField)
+		capability.Operations = append([]IdentityHandlerOperation(nil), capability.Operations...)
+		for index := range capability.Operations {
+			capability.Operations[index] = IdentityHandlerOperation(strings.TrimSpace(string(capability.Operations[index])))
+		}
+		sort.Slice(capability.Operations, func(i, j int) bool { return capability.Operations[i] < capability.Operations[j] })
+		capability.ProfileBindings = append([]IdentityProfileBindingCapability(nil), capability.ProfileBindings...)
+		for index := range capability.ProfileBindings {
+			capability.ProfileBindings[index].BindingKey = strings.TrimSpace(capability.ProfileBindings[index].BindingKey)
+			capability.ProfileBindings[index].ObjectKey = strings.TrimSpace(capability.ProfileBindings[index].ObjectKey)
+		}
+		sort.Slice(capability.ProfileBindings, func(i, j int) bool {
+			left, right := capability.ProfileBindings[i], capability.ProfileBindings[j]
+			return left.BindingKey+"\x00"+left.ObjectKey < right.BindingKey+"\x00"+right.ObjectKey
+		})
+		result.IdentityHandlerDelivery = &capability
+	}
+	if result.StoreOrganizationCatalog != nil {
+		capability := *result.StoreOrganizationCatalog
+		result.StoreOrganizationCatalog = &capability
+	}
+	if result.StoreOrganizationMutation != nil {
+		capability := *result.StoreOrganizationMutation
+		capability.Operations = append([]StoreOrganizationMutationOperation(nil), capability.Operations...)
+		for index := range capability.Operations {
+			capability.Operations[index] = StoreOrganizationMutationOperation(strings.TrimSpace(string(capability.Operations[index])))
+		}
+		sort.Slice(capability.Operations, func(i, j int) bool { return capability.Operations[i] < capability.Operations[j] })
+		result.StoreOrganizationMutation = &capability
+	}
+	if result.WorkspaceIdentityUsage != nil {
+		capability := *result.WorkspaceIdentityUsage
+		result.WorkspaceIdentityUsage = &capability
+	}
 	return result
 }
 
@@ -186,5 +286,51 @@ func cloneHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor {
 	result.ConnectorCapabilities = append([]ActionConnectorCapability(nil), descriptor.ConnectorCapabilities...)
 	result.NotificationEventTypes = append([]string(nil), descriptor.NotificationEventTypes...)
 	result.FileCapabilities = append([]string(nil), descriptor.FileCapabilities...)
+	if descriptor.CrossWorkspaceAggregates != nil {
+		result.CrossWorkspaceAggregates = make([]CrossWorkspaceAggregateCapability, len(descriptor.CrossWorkspaceAggregates))
+		for index, capability := range descriptor.CrossWorkspaceAggregates {
+			result.CrossWorkspaceAggregates[index] = capability
+			result.CrossWorkspaceAggregates[index].Dimensions = append([]CrossWorkspaceAggregateDimension(nil), capability.Dimensions...)
+			for dimensionIndex := range result.CrossWorkspaceAggregates[index].Dimensions {
+				dimension := &result.CrossWorkspaceAggregates[index].Dimensions[dimensionIndex]
+				if dimension.Transform != nil {
+					transform := *dimension.Transform
+					if transform.DateBucket != nil {
+						dateBucket := *transform.DateBucket
+						transform.DateBucket = &dateBucket
+					}
+					dimension.Transform = &transform
+				}
+			}
+			result.CrossWorkspaceAggregates[index].Measures = append([]CrossWorkspaceAggregateMeasure(nil), capability.Measures...)
+			result.CrossWorkspaceAggregates[index].Filters = make([]CrossWorkspaceAggregateFilterCapability, len(capability.Filters))
+			for filterIndex, filter := range capability.Filters {
+				result.CrossWorkspaceAggregates[index].Filters[filterIndex] = CrossWorkspaceAggregateFilterCapability{Field: filter.Field, Operators: append([]string(nil), filter.Operators...)}
+			}
+		}
+	}
+	if descriptor.TargetOrganization != nil {
+		capability := *descriptor.TargetOrganization
+		result.TargetOrganization = &capability
+	}
+	if descriptor.IdentityHandlerDelivery != nil {
+		capability := *descriptor.IdentityHandlerDelivery
+		capability.Operations = append([]IdentityHandlerOperation(nil), capability.Operations...)
+		capability.ProfileBindings = append([]IdentityProfileBindingCapability(nil), capability.ProfileBindings...)
+		result.IdentityHandlerDelivery = &capability
+	}
+	if descriptor.StoreOrganizationCatalog != nil {
+		capability := *descriptor.StoreOrganizationCatalog
+		result.StoreOrganizationCatalog = &capability
+	}
+	if descriptor.StoreOrganizationMutation != nil {
+		capability := *descriptor.StoreOrganizationMutation
+		capability.Operations = append([]StoreOrganizationMutationOperation(nil), capability.Operations...)
+		result.StoreOrganizationMutation = &capability
+	}
+	if descriptor.WorkspaceIdentityUsage != nil {
+		capability := *descriptor.WorkspaceIdentityUsage
+		result.WorkspaceIdentityUsage = &capability
+	}
 	return result
 }

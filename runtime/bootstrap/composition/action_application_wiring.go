@@ -11,13 +11,16 @@ import (
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
+	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
 func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthoringSchemaProvider, policy recordQueryPolicy, metadata interface {
@@ -70,14 +73,15 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 				}
 				return records.applicationSchemaRepo.SnapshotRevision(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "resolve Action execution identity"))
 			},
-			GetRecord:             records.recordApplicationService.GetRecordForAction,
-			GetRecordForUpdate:    records.recordApplicationService.GetRecordForUpdateForAction,
-			ListRecords:           records.recordApplicationService.ListRecordsForAction,
-			PlanCreateMutation:    records.recordApplicationService.PlanCreateMutation,
-			PlanUpdateMutation:    records.recordApplicationService.PlanUpdateMutation,
-			PlanConditionalUpdate: records.recordApplicationService.PlanConditionalUpdateMutation,
-			PlanDeleteMutation:    records.recordApplicationService.PlanDeleteMutation,
-			PlanRestoreMutation:   records.recordApplicationService.PlanRestoreMutation,
+			GetRecord:                         records.recordApplicationService.GetRecordForAction,
+			GetRecordForUpdate:                records.recordApplicationService.GetRecordForUpdateForAction,
+			ListRecords:                       records.recordApplicationService.ListRecordsForAction,
+			PlanCreateMutation:                records.recordApplicationService.PlanCreateMutation,
+			PlanUpdateMutation:                records.recordApplicationService.PlanUpdateMutation,
+			PlanConditionalUpdate:             records.recordApplicationService.PlanConditionalUpdateMutation,
+			PlanConditionalUpdateLockedRecord: records.recordApplicationService.PlanConditionalUpdateLockedRecord,
+			PlanDeleteMutation:                records.recordApplicationService.PlanDeleteMutation,
+			PlanRestoreMutation:               records.recordApplicationService.PlanRestoreMutation,
 			ValidateDurableIntent: func(ctx context.Context, intent runtimeext.DurableIntent, principal principalmodel.Principal) error {
 				if records.publicationHandoffService == nil {
 					return apperror.New(apperror.KindInternal, "backend.action.durable_intent_validator_required", nil, nil)
@@ -86,6 +90,104 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 			},
 			CompileNotification: compileActionNotification(records),
 			VerifyFileClean:     records.verifyFileClean,
+			ObjectForKey: func(key string) (definitionmodel.ObjectSchema, bool) {
+				object, ok := records.schema[strings.TrimSpace(key)]
+				return object, ok
+			},
+			NormalizeAggregateQuery: func(object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, principal principalmodel.Principal) recordmodel.RecordListQuery {
+				return records.RecordQueryPolicyDomainService.NormalizeListQueryForAction(object, query, principal, "read")
+			},
+			WorkspaceAggregateCatalog:    records.workspaceAggregateCatalog,
+			WorkspaceActiveResolver:      records.workspaceActiveResolver,
+			WorkspaceUsageResolver:       records.workspaceUsageResolver,
+			WorkspaceAggregateRepository: records.workspaceAggregateRepository,
+			AuditWorkspaceAggregate: func(ctx context.Context, value actionapplication.WorkspaceAggregateAudit) error {
+				return records.auditApplicationService.AppendAudit(ctx, auditapplication.AuditAppendRequest{
+					Event: "action_cross_workspace_aggregate", ObjectKey: value.ObjectKey, Principal: value.Principal, Summary: "Executed controlled cross-Workspace aggregate",
+					Metadata: map[string]any{
+						"action_key": value.ActionKey, "capability_key": value.CapabilityKey, "outcome": value.Outcome, "error_code": value.ErrorCode,
+						"scope_sha256": value.ScopeSHA256, "workspace_count": value.WorkspaceCount, "source_row_count": value.SourceRowCount, "result_row_count": value.ResultRowCount,
+					},
+				})
+			},
+			AuditWorkspaceIdentityUsage: func(ctx context.Context, value actionapplication.WorkspaceIdentityUsageAudit) error {
+				return records.auditApplicationService.AppendAudit(ctx, auditapplication.AuditAppendRequest{
+					Event: "action_workspace_identity_usage", Principal: value.Principal, Summary: "Read controlled Workspace identity usage aggregates",
+					Metadata: map[string]any{
+						"action_key": value.ActionKey, "outcome": value.Outcome, "error_code": value.ErrorCode,
+						"scope_sha256": value.ScopeSHA256, "workspace_count": value.WorkspaceCount,
+					},
+				})
+			},
+			WorkspaceIdentityUsageCursor: records.workspaceIdentityUsageCursor,
+			AuthorizeWorkspaceIdentityUsage: func(ctx context.Context, accessToken string) (identitysdk.WorkspaceIdentityUsageAuthorization, error) {
+				if records.workspaceIdentityUsageBinder == nil {
+					return identitysdk.WorkspaceIdentityUsageAuthorization{}, apperror.New(apperror.KindInternal, "identity.workspace_usage_authority_required", nil, nil)
+				}
+				return records.workspaceIdentityUsageBinder.AuthorizeWorkspaceIdentityUsage(ctx, identitysdk.WorkspaceIdentityUsageAuthorizationRequest{AccessToken: accessToken})
+			},
+			ResolveRecordTargetOrganization: func(ctx context.Context, action definitionmodel.ActionSchema, invocation actionmodel.ActionInvocation) (string, error) {
+				object, ok := records.schema[strings.TrimSpace(action.ObjectKey)]
+				if !ok || strings.TrimSpace(invocation.RecordID) == "" {
+					return "", apperror.New(apperror.KindNotFound, "backend.record.not_found", nil, nil)
+				}
+				operation := actionpolicy.ActionName(action)
+				if _, err := records.RecordQueryPolicyDomainService.ObjectForAction(invocation.Principal, object.Key, operation); err != nil {
+					return "", err
+				}
+				query := records.RecordQueryPolicyDomainService.NormalizeListQueryForAction(object, recordmodel.RecordListQuery{
+					Page: 1, PageSize: 1, Filters: map[string]any{"id__in": []any{strings.TrimSpace(invocation.RecordID)}},
+					LockIntent: recordmodel.RecordQueryLockForUpdate,
+				}, invocation.Principal, operation)
+				page, err := records.recordRepo.ListRecords(ctx, invocation.Principal.WorkspaceID, object, query)
+				if err != nil {
+					return "", err
+				}
+				if len(page.Items) != 1 || strings.TrimSpace(page.Items[0].OwnerOrgID) == "" {
+					return "", apperror.New(apperror.KindNotFound, "backend.record.not_found", nil, nil)
+				}
+				return strings.TrimSpace(page.Items[0].OwnerOrgID), nil
+			},
+			BindStoreOrganizationDelivery: func(ctx context.Context) (identitysdk.StoreOrganizationDelivery, error) {
+				if records.storeOrganizationDeliveryBinder == nil {
+					return nil, apperror.New(apperror.KindInternal, "identity.store_organization_delivery_transaction_required", nil, nil)
+				}
+				executor := database.ActionExecutionTransaction(ctx)
+				if executor == nil {
+					return nil, apperror.New(apperror.KindInternal, "identity.store_organization_delivery_transaction_required", nil, nil)
+				}
+				return records.storeOrganizationDeliveryBinder.BindStoreOrganizationDeliveryUnitOfWork(identitysdk.EmbeddedTransaction{Executor: executor})
+			},
+			BindIdentityHandlerDelivery: func(ctx context.Context) (identitysdk.HandlerDelivery, error) {
+				if records.identityHandlerDeliveryBinder == nil {
+					return nil, apperror.New(apperror.KindInternal, "identity.handler_delivery_transaction_required", nil, nil)
+				}
+				executor := database.ActionExecutionTransaction(ctx)
+				if executor == nil {
+					return nil, apperror.New(apperror.KindInternal, "identity.handler_delivery_transaction_required", nil, nil)
+				}
+				return records.identityHandlerDeliveryBinder.BindHandlerDeliveryUnitOfWork(identitysdk.EmbeddedTransaction{Executor: executor})
+			},
+			BindWorkspaceIdentityUsage: func(ctx context.Context) (identitysdk.WorkspaceIdentityUsageAggregate, error) {
+				if records.workspaceIdentityUsageBinder == nil {
+					return nil, apperror.New(apperror.KindInternal, "identity.workspace_usage_transaction_required", nil, nil)
+				}
+				executor := database.ActionExecutionTransaction(ctx)
+				if executor == nil {
+					return nil, apperror.New(apperror.KindInternal, "identity.workspace_usage_transaction_required", nil, nil)
+				}
+				return records.workspaceIdentityUsageBinder.BindWorkspaceIdentityUsageUnitOfWork(identitysdk.EmbeddedTransaction{Executor: executor})
+			},
+			WorkspaceCommercialConfiguration: records.workspaceCommercialConfiguration,
+			ResolveProfileBindingField: func(bindingKey, objectKey string) (string, bool) {
+				for _, extension := range records.identityProfileExtensions {
+					if strings.TrimSpace(extension.BusinessIdentity.Key) == strings.TrimSpace(bindingKey) && strings.TrimSpace(extension.ObjectKey) == strings.TrimSpace(objectKey) {
+						field := strings.TrimSpace(extension.IdentityRelationField)
+						return field, field != ""
+					}
+				}
+				return "", false
+			},
 		}),
 		Authorization: actionapplication.ActionAuthorization{ObjectForAction: records.RecordQueryPolicyDomainService.ObjectForAction},
 		Assurance:     actionapplication.ActionAssurance{Validate: actionAssuranceValidator(records, assuranceDomain, audit)},

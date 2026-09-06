@@ -10,7 +10,7 @@ import (
 func (state *validationState) validateWorkspaceProvisioning() {
 	seen := map[string]bool{}
 	allowedExpressions := map[string]bool{
-		"$provision.canonical_code": true, "$provision.tenant_name": true,
+		"$provision.canonical_code": true, "$provision.workspace_name": true,
 		"$provision.workspace_id": true, "$provision.admin_login_id": true,
 		"$provision.configuration_json": true,
 	}

@@ -24,6 +24,14 @@ func (s *RecordApplicationService) PlanConditionalUpdateMutation(ctx context.Con
 	return s.update.PlanConditionalUpdateMutation(ctx, objectKey, recordID, input, principal)
 }
 
+// PlanConditionalUpdateLockedRecord plans one member of a Runtime-owned set
+// mutation from the row already selected FOR UPDATE. It deliberately has no
+// repository lookup, so a conditional_update_many Action performs one target
+// SELECT regardless of set size.
+func (s *RecordApplicationService) PlanConditionalUpdateLockedRecord(ctx context.Context, objectKey string, record recordmodel.Record, input transactionmodel.ConditionalUpdateInput, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
+	return s.update.PlanConditionalUpdateLockedRecord(ctx, objectKey, record, input, principal)
+}
+
 func (s *RecordUpdateApplicationService) ConditionalUpdate(ctx context.Context, objectKey, recordID string, input transactionmodel.ConditionalUpdateInput, principal principalmodel.Principal) (recordmodel.Record, error) {
 	if err := ctx.Err(); err != nil {
 		return recordmodel.Record{}, err
@@ -90,6 +98,39 @@ func (s *RecordUpdateApplicationService) PlanConditionalUpdateMutation(ctx conte
 	if !allowed {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindForbidden, "backend.record.outside_scope", nil)
 	}
+	return s.planConditionalUpdateLockedRecord(ctx, objectKey, object, record, input, principal, authorizationPrincipal, authorizationScope)
+}
+
+func (s *RecordUpdateApplicationService) PlanConditionalUpdateLockedRecord(ctx context.Context, objectKey string, record recordmodel.Record, input transactionmodel.ConditionalUpdateInput, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
+	if err := recordAuthorizeCommand(principal); err != nil {
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
+	}
+	authorizationPrincipal := recordEffectAuthorizationPrincipal(ctx, principal, objectKey, "update")
+	object, err := s.dependencies.ObjectForAction(authorizationPrincipal, objectKey, "update")
+	if err != nil {
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
+	}
+	if err := recordpolicy.RecordValidateRuntimeOwnedCRUD(object, "update"); err != nil {
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
+	}
+	authorizationScope, err := resolveRecordMutationScope(s.dependencies.ScopeForAction, authorizationPrincipal, object, "update")
+	if err != nil {
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
+	}
+	if strings.TrimSpace(record.ID) == "" {
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindBadRequest, "backend.record.id_required", nil)
+	}
+	allowed, err := s.canAccessScope(ctx, authorizationPrincipal, object, record, false)
+	if err != nil {
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
+	}
+	if !allowed {
+		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindForbidden, "backend.record.outside_scope", nil)
+	}
+	return s.planConditionalUpdateLockedRecord(ctx, objectKey, object, record, input, principal, authorizationPrincipal, authorizationScope)
+}
+
+func (s *RecordUpdateApplicationService) planConditionalUpdateLockedRecord(ctx context.Context, objectKey string, object definitionmodel.ObjectSchema, record recordmodel.Record, input transactionmodel.ConditionalUpdateInput, principal, authorizationPrincipal principalmodel.Principal, authorizationScope *recordmodel.RecordScopeExpression) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 	predicates, err := recordCanonicalPredicates(object, record, input.Predicates)
 	if err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err

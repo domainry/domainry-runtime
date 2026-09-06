@@ -30,6 +30,7 @@ import (
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
@@ -55,6 +56,8 @@ import (
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	reportnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/reportnotification"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
+	workspaceaggregatepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceaggregate"
+	workspaceprovisionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -69,26 +72,29 @@ type runtimeServiceAssembly struct {
 }
 
 type runtimeExtensionRegistries struct {
-	businessHandlers             *runtimeext.BusinessHandlerRegistry
-	connectorProviders           *connector.Registry
-	notificationCompiler         func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
-	taskNotificationCommitter    workflowapplication.WorkflowTaskNotificationCommitter
-	notificationPublisher        notificationIntentPublisher
-	integrationOwnerDelivery     integrationsdk.Delivery
-	integrationOwnerCatalog      integrationsdk.Catalog
-	integrationOwnerManagement   integrationsdk.Management
-	integrationOwnerOperations   integrationsdk.Operations
-	dataExchangeProviderKey      string
-	dataExchangeImportProvider   dataexchangemodulehost.ImportProvider
-	dataExchangeExportProvider   dataexchangemodulehost.ExportProvider
-	integrationMode              integrationsdk.DeploymentMode
-	notificationSubjectLifecycle lifecyclecontract.SubjectExecutionHandler
-	notificationRetention        lifecyclecontract.OwnerLifecycleExecutor
-	auditRepository              auditrepository.AuditRepository
-	auditSubjectLifecycle        lifecyclecontract.SubjectExecutionHandler
-	dataExchangeFactory          dataexchangesdk.Factory
-	agentBinding                 agentsdk.Binding
-	reportBinding                reportsdk.Binding
+	businessHandlers                *runtimeext.BusinessHandlerRegistry
+	connectorProviders              *connector.Registry
+	notificationCompiler            func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
+	taskNotificationCommitter       workflowapplication.WorkflowTaskNotificationCommitter
+	notificationPublisher           notificationIntentPublisher
+	integrationOwnerDelivery        integrationsdk.Delivery
+	integrationOwnerCatalog         integrationsdk.Catalog
+	integrationOwnerManagement      integrationsdk.Management
+	integrationOwnerOperations      integrationsdk.Operations
+	dataExchangeProviderKey         string
+	dataExchangeImportProvider      dataexchangemodulehost.ImportProvider
+	dataExchangeExportProvider      dataexchangemodulehost.ExportProvider
+	integrationMode                 integrationsdk.DeploymentMode
+	notificationSubjectLifecycle    lifecyclecontract.SubjectExecutionHandler
+	notificationRetention           lifecyclecontract.OwnerLifecycleExecutor
+	auditRepository                 auditrepository.AuditRepository
+	auditSubjectLifecycle           lifecyclecontract.SubjectExecutionHandler
+	dataExchangeFactory             dataexchangesdk.Factory
+	agentBinding                    agentsdk.Binding
+	reportBinding                   reportsdk.Binding
+	identityHandlerDeliveryBinder   identitysdk.HandlerDeliveryUnitOfWorkBinder
+	storeOrganizationDeliveryBinder identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
+	workspaceIdentityUsageBinder    identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
 }
 
 func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest manifestmodel.ManifestSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityProjection identitysdk.Projection, identityPrincipals identitysdk.PrincipalResolver, auditApplication *auditapplication.AuditApplicationService, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
@@ -108,6 +114,9 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	var dataExchangeFactory dataexchangesdk.Factory
 	var agentBinding agentsdk.Binding
 	var reportBinding reportsdk.Binding
+	var identityHandlerDeliveryBinder identitysdk.HandlerDeliveryUnitOfWorkBinder
+	var storeOrganizationDeliveryBinder identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
+	var workspaceIdentityUsageBinder identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
 	var dataExchangeProviderKey string
 	var dataExchangeImportProvider dataexchangemodulehost.ImportProvider
 	var dataExchangeExportProvider dataexchangemodulehost.ExportProvider
@@ -140,6 +149,9 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		dataExchangeFactory = extensionRegistries[0].dataExchangeFactory
 		agentBinding = extensionRegistries[0].agentBinding
 		reportBinding = extensionRegistries[0].reportBinding
+		identityHandlerDeliveryBinder = extensionRegistries[0].identityHandlerDeliveryBinder
+		storeOrganizationDeliveryBinder = extensionRegistries[0].storeOrganizationDeliveryBinder
+		workspaceIdentityUsageBinder = extensionRegistries[0].workspaceIdentityUsageBinder
 		dataExchangeProviderKey = extensionRegistries[0].dataExchangeProviderKey
 		dataExchangeImportProvider = extensionRegistries[0].dataExchangeImportProvider
 		dataExchangeExportProvider = extensionRegistries[0].dataExchangeExportProvider
@@ -158,6 +170,15 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		}
 	}
 	records := recordpersistence.NewRecordStore(store)
+	workspaceAggregates := workspaceaggregatepersistence.NewStore(store)
+	installationIdentity, err := store.InstallationIdentity(ctx)
+	if err != nil {
+		return runtimeServiceAssembly{}, fmt.Errorf("load Runtime installation identity: %w", err)
+	}
+	workspaceIdentityUsageCursor, err := actionapplication.NewWorkspaceIdentityUsageCursorCodec([]byte(cfg.AuditExportTokenKey), installationIdentity, workerDependencies.Clock.Now)
+	if err != nil {
+		return runtimeServiceAssembly{}, fmt.Errorf("initialize Workspace identity usage cursor: %w", err)
+	}
 	if dataExchangeFactory == nil {
 		return runtimeServiceAssembly{}, fmt.Errorf("Data Exchange factory is required")
 	}
@@ -305,6 +326,11 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			ActionExecutions:                    actionpersistence.NewActionBusinessExecutionStore(store),
 			ActionAssurance:                     actionpersistence.NewActionAssuranceStore(store),
 			BusinessHandlers:                    businessHandlers,
+			WorkspaceAggregateCatalog:           workspaceAggregates,
+			WorkspaceActiveResolver:             workspaceAggregates,
+			WorkspaceUsageResolver:              workspaceAggregates,
+			WorkspaceAggregateRepository:        workspaceAggregates,
+			WorkspaceCommercialConfiguration:    workspaceprovisionpersistence.NewCommercialConfigurationStore(store),
 			VerifyFileClean: func(ctx context.Context, workspaceID string, request runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error) {
 				evidence, err := fileScans.VerifyClean(ctx, workspaceID, request.FileID, request.ContentSHA256, request.ScanReceipt)
 				if err != nil {
@@ -344,14 +370,18 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 				prepared["_runtime_scan_evidence_ref"] = evidence.EvidenceRef
 				return prepared, nil
 			},
-			RuntimeStatus:              deploymentpersistence.NewRuntimeStatusStore(store),
-			Notifications:              notifications,
-			IdentityProjection:         identityProjection,
-			IntegrationOwnerDelivery:   integrationOwnerDelivery,
-			IntegrationOwnerCatalog:    integrationOwnerCatalog,
-			IntegrationOwnerManagement: integrationOwnerManagement,
-			IntegrationOwnerOperations: integrationOwnerOperations,
-			Worker:                     workerDependencies,
+			RuntimeStatus:                   deploymentpersistence.NewRuntimeStatusStore(store),
+			Notifications:                   notifications,
+			IdentityProjection:              identityProjection,
+			IdentityHandlerDeliveryBinder:   identityHandlerDeliveryBinder,
+			StoreOrganizationDeliveryBinder: storeOrganizationDeliveryBinder,
+			WorkspaceIdentityUsageBinder:    workspaceIdentityUsageBinder,
+			WorkspaceIdentityUsageCursor:    workspaceIdentityUsageCursor,
+			IntegrationOwnerDelivery:        integrationOwnerDelivery,
+			IntegrationOwnerCatalog:         integrationOwnerCatalog,
+			IntegrationOwnerManagement:      integrationOwnerManagement,
+			IntegrationOwnerOperations:      integrationOwnerOperations,
+			Worker:                          workerDependencies,
 		},
 	})
 	lifecycleScope := lifecycleaccess.NewSystemScope(lifecycleaccess.SystemScopeInstallation, "install default lifecycle policies")

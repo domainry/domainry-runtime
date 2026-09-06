@@ -120,6 +120,76 @@ func TestBusinessHandlerExecutorRequiresCompleteTraceIdentity(t *testing.T) {
 	}
 }
 
+func TestActionCatalogRequiresGeneratedCredentialOutputWithoutSourceLineage(t *testing.T) {
+	descriptor := actionTestHandlerDescriptor("employee.invite", nil)
+	descriptor.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceExplicit, Input: runtimeext.TargetOrganizationInputInvocation}
+	descriptor.IdentityHandlerDelivery = &runtimeext.IdentityHandlerDeliveryCapability{
+		Operations: []runtimeext.IdentityHandlerOperation{runtimeext.IdentityHandlerCreate}, InitialCredentialOutputField: "initial_credential",
+	}
+	handler := &catalogHandler{descriptor: descriptor}
+	registry := runtimeext.NewBusinessHandlerRegistry()
+	if err := registry.Register(handler); err != nil {
+		t.Fatal(err)
+	}
+	registry.Freeze()
+	base := actionTestPublishedContract(definitionmodel.ActionSchema{
+		Key: "employee.invite", ObjectKey: "employee", Kind: definitionmodel.ActionKindObjectOperation,
+		TargetOrganization: &definitionmodel.ActionTargetOrganizationPolicy{Source: definitionmodel.ActionTargetOrganizationSourceExplicit, Input: runtimeext.TargetOrganizationInputInvocation},
+	})
+	for _, test := range []struct {
+		name   string
+		fields []definitionmodel.ActionOutputField
+		want   string
+	}{
+		{name: "missing", want: "requires generated initial credential output field"},
+		{name: "scalar", fields: []definitionmodel.ActionOutputField{{Key: "initial_credential", Type: "text"}}, want: "must be a generated non-repeated object"},
+		{name: "lineage", fields: []definitionmodel.ActionOutputField{{Key: "initial_credential", Type: "object", SourceObjectKey: "employee", SourceFieldKey: "credential"}}, want: "must be a generated non-repeated object"},
+		{name: "repeated", fields: []definitionmodel.ActionOutputField{{Key: "initial_credential", Type: "object", Repeated: true}}, want: "must be a generated non-repeated object"},
+		{name: "valid", fields: []definitionmodel.ActionOutputField{{Key: "initial_credential", Type: "object"}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			action := base
+			action.OutputFields = test.fields
+			errors := NewActionCatalog([]definitionmodel.ActionSchema{action}, NewSystemOperationCatalog(), registry).ValidationErrors()
+			if test.want == "" {
+				if len(errors) != 0 {
+					t.Fatalf("errors=%v", errors)
+				}
+				return
+			}
+			if len(errors) != 1 || !strings.Contains(errors[0].Error(), test.want) {
+				t.Fatalf("errors=%v", errors)
+			}
+		})
+	}
+}
+
+func TestActionCatalogRequiresExactStoreOrganizationMutationGrant(t *testing.T) {
+	descriptor := actionTestHandlerDescriptor("store.settings.replace", nil)
+	descriptor.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceRecordOwner}
+	descriptor.StoreOrganizationMutation = &runtimeext.ActionStoreOrganizationMutationCapability{Operations: []runtimeext.StoreOrganizationMutationOperation{runtimeext.StoreOrganizationMutationRename}}
+	registry := runtimeext.NewBusinessHandlerRegistry()
+	if err := registry.Register(&catalogHandler{descriptor: descriptor}); err != nil {
+		t.Fatal(err)
+	}
+	registry.Freeze()
+	base := actionTestPublishedContract(definitionmodel.ActionSchema{
+		Key: "store.settings.replace", ObjectKey: "store_settings", Kind: definitionmodel.ActionKindRecordUpdate,
+		TargetOrganization: &definitionmodel.ActionTargetOrganizationPolicy{Source: definitionmodel.ActionTargetOrganizationSourceRecordOwner},
+	})
+	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 1 || !strings.Contains(errors[0].Error(), "store organization mutation capability mismatch") {
+		t.Fatalf("missing policy errors=%v", errors)
+	}
+	base.StoreOrganizationMutation = &definitionmodel.ActionStoreOrganizationMutationPolicy{Operations: []string{"disable"}}
+	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 1 || !strings.Contains(errors[0].Error(), "store organization mutation capability mismatch") {
+		t.Fatalf("wrong operation errors=%v", errors)
+	}
+	base.StoreOrganizationMutation.Operations = []string{"rename"}
+	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 0 {
+		t.Fatalf("matching policy errors=%v", errors)
+	}
+}
+
 func TestActionCatalogRejectsEmptyAndDuplicatePublishedActionKeys(t *testing.T) {
 	actions := []definitionmodel.ActionSchema{
 		{Key: " ", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectCreate},

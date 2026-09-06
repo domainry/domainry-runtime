@@ -5,7 +5,9 @@ import (
 	"reflect"
 	"testing"
 
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 )
 
 func TestParseListQueryNormalizesPaginationFiltersAndSort(t *testing.T) {
@@ -22,6 +24,14 @@ func TestParseListQueryNormalizesPaginationFiltersAndSort(t *testing.T) {
 	}
 	if !reflect.DeepEqual(query.Sort, want) {
 		t.Fatalf("sort=%#v want=%#v", query.Sort, want)
+	}
+}
+
+func TestInvalidPaginationTextUsesRuntimeDefaults(t *testing.T) {
+	raw := parseListQuery(httptest.NewRequest("GET", "/records?page=invalid&page_size=invalid", nil))
+	query := recordvalidation.RecordNormalizeListQuery(definitionmodel.ObjectSchema{Key: "lead"}, raw)
+	if query.Page != 1 || query.PageSize != 25 {
+		t.Fatalf("pagination=(%d,%d)", query.Page, query.PageSize)
 	}
 }
 

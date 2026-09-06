@@ -233,6 +233,18 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if identityProjection == nil || identityPrincipals == nil {
 		mustCompleteRuntimeStartup(errors.New("Identity Binding returned incomplete Runtime ports"))
 	}
+	var identityHandlerDeliveryBinder identitysdk.HandlerDeliveryUnitOfWorkBinder
+	if embedded, ok := identityBinding.(identitysdk.EmbeddedHandlerDeliveryBinding); ok {
+		identityHandlerDeliveryBinder = embedded.HandlerDeliveryUnitOfWorkBinder()
+	}
+	var storeOrganizationDeliveryBinder identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
+	if embedded, ok := identityBinding.(identitysdk.EmbeddedStoreOrganizationDeliveryBinding); ok {
+		storeOrganizationDeliveryBinder = embedded.StoreOrganizationDeliveryUnitOfWorkBinder()
+	}
+	var workspaceIdentityUsageBinder identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
+	if embedded, ok := identityBinding.(identitysdk.EmbeddedWorkspaceIdentityUsageBinding); ok {
+		workspaceIdentityUsageBinder = embedded.WorkspaceIdentityUsageUnitOfWorkBinder()
+	}
 	identityDataExchangeKey, identityDataExchangeImport, identityDataExchangeExport := identityDataExchangeProviders(identityBinding)
 	expectedSchemaRevision := ""
 	if releaseIdentity.Coordinated() {
@@ -280,7 +292,9 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		catalog, catalogErr := notificationSDKCatalog(valueOrDefault(manifest.DefaultLocale, cfg.AppLocale), manifest, runtimeNotificationEventTypes)
 		mustCompleteRuntimeStartup(catalogErr)
 		sdkDeliveryGateway = &notificationSDKDeliveryGateway{repository: publicationhandoffpersistence.NewPublicationStore(store), productName: cfg.EffectiveProductBrandName()}
-		application := notificationsdk.ApplicationRef{TenantID: cfg.NotificationTenantID, WorkspaceID: cfg.NotificationWorkspaceID, ApplicationKey: cfg.NotificationApplicationKey}
+		notificationScope, scopeErr := resolveLegacyNotificationWorkspaceScope(cfg)
+		mustCompleteRuntimeStartup(scopeErr)
+		application := notificationScope.applicationRef()
 		if moduleFactory, ok := notificationFactory.(modulehost.Factory); ok {
 			host := notificationSDKModuleHost{
 				store: store, identity: identityBinding, clock: workerDependencies.Clock, workerID: workerDependencies.WorkerID.String(), catalog: catalog,
@@ -309,9 +323,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 				mustCompleteRuntimeStartup(errors.New("Notification Module Binding returned no local workers"))
 			}
 		} else if notificationBinding.Descriptor().Mode == notificationsdk.DeploymentModeSaaS {
-			mustCompleteRuntimeStartup(store.BindNotificationSaaSPublications(persistence.NotificationSaaSPublicationScope{
-				TenantID: cfg.NotificationTenantID, WorkspaceID: cfg.NotificationWorkspaceID, ApplicationKey: cfg.NotificationApplicationKey,
-			}))
+			mustCompleteRuntimeStartup(store.BindNotificationSaaSPublications(notificationScope.publicationScope()))
 			notificationCompiler = notificationfacade.SaaSCompiler{}
 			notificationRelay, err = notificationpublication.NewRelay(notificationpublication.NewPublicationOutboxStore(store), notificationBinding.Publisher(), workerDependencies.WorkerID.String(), workerDependencies.Clock)
 			mustCompleteRuntimeStartup(err)
@@ -369,24 +381,27 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(synchronizeAgentDefinitions(ctx, agentBinding, &manifest))
 	serviceAssembly, err := assembleRuntimeServices(ctx, cfg, manifest, templateRenderer, store, identityProjection, identityPrincipals, runtimeAudit, workerDependencies, runtimeExtensionRegistries{
 		businessHandlers: businessHandlers, connectorProviders: connectorProviders,
-		notificationCompiler:         startupCallbacks.CompileNotification,
-		taskNotificationCommitter:    workflowpersistence.NewWorkflowTaskNotificationStore(store),
-		notificationPublisher:        notificationPublisher,
-		integrationOwnerDelivery:     integrationOwner.Delivery,
-		integrationOwnerCatalog:      integrationOwner.Catalog,
-		integrationOwnerManagement:   integrationOwner.Management,
-		integrationOwnerOperations:   integrationOwner.Operations,
-		dataExchangeProviderKey:      identityDataExchangeKey,
-		dataExchangeImportProvider:   identityDataExchangeImport,
-		dataExchangeExportProvider:   identityDataExchangeExport,
-		integrationMode:              integrationOwner.Binding.Descriptor().Mode,
-		notificationSubjectLifecycle: notificationSystemSubjectLifecycle{subjects: systemSubjectBinding.SystemSubjects()},
-		notificationRetention:        notificationSystemRetention{retention: systemRetentionBinding.SystemRetention()},
-		auditRepository:              runtimeAuditRepository,
-		auditSubjectLifecycle:        runtimeauditmodule.NewSubjectLifecycle(auditBinding),
-		dataExchangeFactory:          dataExchangeFactory,
-		agentBinding:                 agentBinding,
-		reportBinding:                reportBinding,
+		notificationCompiler:            startupCallbacks.CompileNotification,
+		taskNotificationCommitter:       workflowpersistence.NewWorkflowTaskNotificationStore(store),
+		notificationPublisher:           notificationPublisher,
+		integrationOwnerDelivery:        integrationOwner.Delivery,
+		integrationOwnerCatalog:         integrationOwner.Catalog,
+		integrationOwnerManagement:      integrationOwner.Management,
+		integrationOwnerOperations:      integrationOwner.Operations,
+		dataExchangeProviderKey:         identityDataExchangeKey,
+		dataExchangeImportProvider:      identityDataExchangeImport,
+		dataExchangeExportProvider:      identityDataExchangeExport,
+		integrationMode:                 integrationOwner.Binding.Descriptor().Mode,
+		notificationSubjectLifecycle:    notificationSystemSubjectLifecycle{subjects: systemSubjectBinding.SystemSubjects()},
+		notificationRetention:           notificationSystemRetention{retention: systemRetentionBinding.SystemRetention()},
+		auditRepository:                 runtimeAuditRepository,
+		auditSubjectLifecycle:           runtimeauditmodule.NewSubjectLifecycle(auditBinding),
+		dataExchangeFactory:             dataExchangeFactory,
+		agentBinding:                    agentBinding,
+		reportBinding:                   reportBinding,
+		identityHandlerDeliveryBinder:   identityHandlerDeliveryBinder,
+		storeOrganizationDeliveryBinder: storeOrganizationDeliveryBinder,
+		workspaceIdentityUsageBinder:    workspaceIdentityUsageBinder,
 	})
 	mustCompleteRuntimeStartup(err)
 	records, recordRepository := serviceAssembly.services, serviceAssembly.records
@@ -472,8 +487,8 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if binder, embedded := identityBinding.(identitysdk.PermissionUsageProviderBinder); embedded {
 		mustCompleteRuntimeStartup(binder.BindPermissionUsageProvider(authorizationRegistrySnapshot))
 	}
-	publishedRuntimeRoles := runtimeProjectRolesWithBootstrapAdministrator(manifest.Roles, authorizationRegistry.PermissionDefinitions())
-	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, records.Schema().Objects, publishedRuntimeRoles, cfg.IdentityWorkspaceID, cfg.IdentityAudience))
+	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, records.Schema().Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience))
+	mustCompleteRuntimeStartup(publishRuntimeProjectProfileExtensions(ctx, identityBinding, records.Schema().IdentityProfileExtensions))
 	startupCallbacks.records = records
 	notificationWakeup := func(message publicationmodel.Message) {
 		records.Applications().PublicationHandoff.Wake(ctx, publicationhandoff.Locator{WorkspaceID: message.WorkspaceID, MessageID: message.ID})
@@ -507,29 +522,35 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		preparation := appschemaapplication.ApplicationSchemaReloadPreparation{
 			Commit: func() { authorizationRegistrySnapshot.Store(candidateRegistry) },
 		}
-		candidatePublishedRoles := runtimeProjectRolesWithBootstrapAdministrator(manifest.Roles, candidateRegistry.PermissionDefinitions())
 		if identityBinding != nil {
+			previousSnapshot := records.Schema()
 			application := identitysdk.ApplicationRef{
 				WorkspaceID: identitysdk.WorkspaceID(strings.TrimSpace(cfg.IdentityWorkspaceID)), ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(cfg.IdentityAudience)),
+			}
+			rollbackIdentityPublication := func(rollbackCtx context.Context) error {
+				return errors.Join(
+					reconcileRuntimePermissionRegistries(rollbackCtx, identityBinding.Permissions(), application, candidateRegistry, previousRegistry),
+					publishRuntimeProjectRoles(rollbackCtx, identityBinding, previousSnapshot.Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience),
+					publishRuntimeProjectProfileExtensions(rollbackCtx, identityBinding, previousSnapshot.IdentityProfileExtensions),
+				)
 			}
 			preparation.Abort = func(abortCtx context.Context) error {
 				rollbackCtx, rollbackCancel := context.WithTimeout(context.WithoutCancel(abortCtx), 10*time.Second)
 				defer rollbackCancel()
-				if err := reconcileRuntimePermissionRegistries(rollbackCtx, identityBinding.Permissions(), application, candidateRegistry, previousRegistry); err != nil {
-					return err
-				}
-				previousPublishedRoles := runtimeProjectRolesWithBootstrapAdministrator(manifest.Roles, previousRegistry.PermissionDefinitions())
-				return publishRuntimeProjectRoles(rollbackCtx, identityBinding, records.Schema().Objects, previousPublishedRoles, cfg.IdentityWorkspaceID, cfg.IdentityAudience)
+				return rollbackIdentityPublication(rollbackCtx)
 			}
-		}
-		if err := publishRuntimeProjectRoles(publishCtx, identityBinding, snapshot.Objects, candidatePublishedRoles, cfg.IdentityWorkspaceID, cfg.IdentityAudience); err != nil {
-			rollbackErr := reconcileRuntimePermissionRegistries(publishCtx, identityBinding.Permissions(), identitysdk.ApplicationRef{
-				WorkspaceID: identitysdk.WorkspaceID(strings.TrimSpace(cfg.IdentityWorkspaceID)), ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(cfg.IdentityAudience)),
-			}, candidateRegistry, previousRegistry)
-			if rollbackErr != nil {
-				return appschemaapplication.ApplicationSchemaReloadPreparation{}, errors.Join(fmt.Errorf("publish Runtime project roles and objects to Identity: %w", err), fmt.Errorf("rollback Runtime permissions after project catalog failure: %w", rollbackErr))
+			if err := publishRuntimeProjectRoles(publishCtx, identityBinding, snapshot.Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience); err != nil {
+				return appschemaapplication.ApplicationSchemaReloadPreparation{}, errors.Join(
+					fmt.Errorf("publish Runtime project roles and objects to Identity: %w", err),
+					fmt.Errorf("rollback Runtime Identity publication after project catalog failure: %w", rollbackIdentityPublication(publishCtx)),
+				)
 			}
-			return appschemaapplication.ApplicationSchemaReloadPreparation{}, fmt.Errorf("publish Runtime project roles and objects to Identity: %w", err)
+			if err := publishRuntimeProjectProfileExtensions(publishCtx, identityBinding, snapshot.IdentityProfileExtensions); err != nil {
+				return appschemaapplication.ApplicationSchemaReloadPreparation{}, errors.Join(
+					fmt.Errorf("publish Runtime profile extensions to Identity: %w", err),
+					fmt.Errorf("rollback Runtime Identity publication after profile-extension failure: %w", rollbackIdentityPublication(publishCtx)),
+				)
+			}
 		}
 		return preparation, nil
 	})

@@ -6,6 +6,7 @@ package invocation
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -14,6 +15,8 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 )
+
+var canonicalExactDecimalLiteralPattern = regexp.MustCompile(`^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$`)
 
 type WorkflowEntryMode string
 
@@ -200,7 +203,7 @@ func validateInputValue(field definitionmodel.ActionPayloadField, value any, bin
 		return []Issue{{Code: "invocation.input_reference_unknown", Field: field.Key, Reference: strings.TrimSpace(text), Expected: field.Type}}
 	}
 	expected := bindingcontract.NormalizeType(field.Type)
-	if known && !inputValueCompatible(value, actual, expected) {
+	if known && !exactDecimalLiteralCompatible(field.Type, value, actual) && !inputValueCompatible(value, actual, expected) {
 		return []Issue{{Code: "invocation.input_type_mismatch", Field: field.Key, Expected: string(expected), Actual: string(actual)}}
 	}
 	if len(field.Options) > 0 && known && actual == bindingcontract.TypeText {
@@ -223,6 +226,19 @@ func validateInputValue(field definitionmodel.ActionPayloadField, value any, bin
 		}
 	}
 	return nil
+}
+
+// Exact decimal values are transported as canonical strings end-to-end. This
+// keeps Action defaults and invocations lossless and avoids a float64 round
+// trip while retaining number compatibility for typed producer references.
+func exactDecimalLiteralCompatible(fieldType string, value any, actual bindingcontract.ValueType) bool {
+	switch strings.ToLower(strings.TrimSpace(fieldType)) {
+	case "currency", "decimal", "percent":
+		text, literal := value.(string)
+		return literal && actual == bindingcontract.TypeText && exactInputReference(text) == "" && canonicalExactDecimalLiteralPattern.MatchString(text)
+	default:
+		return false
+	}
 }
 
 func inputValueCompatible(value any, actual, expected bindingcontract.ValueType) bool {

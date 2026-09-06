@@ -211,6 +211,11 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 	}
 	candidate := recordmodel.Record{ID: recordID, Data: data}
 	recordpolicy.RecordApplyOwnerDefault(&candidate, principal)
+	if invocation, ok := recordmutation.MutationInvocationFromContext(ctx); ok && invocation.Source == transactionmodel.MutationSourceAction {
+		if targetOrganizationID := strings.TrimSpace(invocation.TargetOrganizationID); targetOrganizationID != "" {
+			candidate.OwnerOrgID = targetOrganizationID
+		}
+	}
 	if s.dependencies.CanWriteCandidate != nil {
 		allowed, authorizeErr := s.dependencies.CanWriteCandidate(ctx, authorizationPrincipal, object, candidate)
 		if authorizeErr != nil {

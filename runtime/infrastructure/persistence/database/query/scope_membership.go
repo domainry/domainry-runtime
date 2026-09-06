@@ -71,6 +71,24 @@ func ScopeExpressionHasRelation(expression recordmodel.RecordScopeExpression) bo
 	return false
 }
 
+// PreserveScopeRelations returns a deep copy whose relation-path leaves are
+// evaluated as correlated EXISTS predicates. Cross-Workspace reads cannot
+// resolve membership once against the caller's Workspace and reuse it for a
+// different Workspace.
+func PreserveScopeRelations(expression recordmodel.RecordScopeExpression) recordmodel.RecordScopeExpression {
+	result := expression
+	result.Values = append([]string(nil), expression.Values...)
+	result.Path = append([]recordmodel.RecordScopePathSegment(nil), expression.Path...)
+	result.Children = make([]recordmodel.RecordScopeExpression, len(expression.Children))
+	for index, child := range expression.Children {
+		result.Children[index] = PreserveScopeRelations(child)
+	}
+	if len(result.Path) > 0 {
+		result.RelationExists = true
+	}
+	return result
+}
+
 func CandidateScopeMatches(s Store, workspace string, candidate recordmodel.Record, expression recordmodel.RecordScopeExpression, lookup CandidateScopeLookup) (bool, error) {
 	switch expression.Operator {
 	case "and":

@@ -17,11 +17,13 @@ type ActionResult struct {
 	DeletedRecords     []ActionObjectRecordRef            `json:"deleted_records,omitempty"`
 	RestoredRecords    []ActionObjectRecordRef            `json:"restored_records,omitempty"`
 	TriggeredWorkflows []workflowmodel.WorkflowRunSummary `json:"triggered_workflows"`
+	NoStore            bool                               `json:"-"`
 }
 
 type ActionObjectRequest struct {
-	Data           map[string]any `json:"data,omitempty"`
-	AssuranceToken string         `json:"assurance_token,omitempty"`
+	Data                 map[string]any `json:"data,omitempty"`
+	TargetOrganizationID string         `json:"target_organization_id,omitempty"`
+	AssuranceToken       string         `json:"assurance_token,omitempty"`
 }
 
 type ActionObjectRecordRef struct {
@@ -40,6 +42,7 @@ type ActionObjectResult struct {
 	DeletedRecords     []ActionObjectRecordRef            `json:"deleted_records,omitempty"`
 	RestoredRecords    []ActionObjectRecordRef            `json:"restored_records,omitempty"`
 	TriggeredWorkflows []workflowmodel.WorkflowRunSummary `json:"triggered_workflows,omitempty"`
+	NoStore            bool                               `json:"-"`
 }
 
 type ActionBulkRequest struct {

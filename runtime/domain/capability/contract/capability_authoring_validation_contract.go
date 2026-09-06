@@ -99,6 +99,17 @@ func validateAuthoringSchemaReferences(root, schema *CapabilityAuthoringSchema) 
 			return err
 		}
 	}
+	for _, nested := range []struct {
+		keyword string
+		schema  *CapabilityAuthoringSchema
+	}{{"if", schema.If}, {"then", schema.Then}, {"else", schema.Else}, {"contains", schema.Contains}} {
+		keyword, conditional := nested.keyword, nested.schema
+		if conditional != nil {
+			if err := validateAuthoringSchemaReferences(root, conditional); err != nil {
+				return fmt.Errorf("%s: %w", keyword, err)
+			}
+		}
+	}
 	for key, property := range schema.Properties {
 		property := property
 		if err := validateAuthoringSchemaReferences(root, &property); err != nil {

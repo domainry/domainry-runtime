@@ -11,47 +11,48 @@ import (
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
-const installationKey = "primary"
-
 type Installation struct {
-	TenantRegistryID string
-	WorkspaceID      string
-	InitializedAt    string
+	WorkspaceID   string
+	InitializedAt string
 }
 
 func LoadInstallation(ctx context.Context, store *database.RuntimeStore) (Installation, bool, error) {
 	if store == nil {
 		return Installation{}, false, fmt.Errorf("Runtime installation store is required")
 	}
-	statement, arguments, err := query.NewSelectBuilder(store.RuntimeRenderer(), "_tenant_installation").
-		Columns("tenant_registry_id", "workspace_id", "initialized_at").
-		Where(query.Equal("installation_key", installationKey)).Build()
+	installationIdentity, err := store.InstallationIdentity(ctx)
+	if err != nil {
+		return Installation{}, false, err
+	}
+	statement, arguments, err := query.NewSelectBuilder(store.RuntimeRenderer(), "_workspaces").
+		Columns("id", "created_at").
+		Where(query.Equal("initial_installation_identity", installationIdentity)).Build()
 	if err != nil {
 		return Installation{}, false, err
 	}
 	var result Installation
-	err = store.DB().QueryRowContext(ctx, statement, arguments...).Scan(&result.TenantRegistryID, &result.WorkspaceID, &result.InitializedAt)
+	err = store.DB().QueryRowContext(ctx, statement, arguments...).Scan(&result.WorkspaceID, &result.InitializedAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		legacyStatement, legacyArguments, buildErr := query.NewSelectBuilder(store.RuntimeRenderer(), "_workspaces").
+		workspaceStatement, workspaceArguments, buildErr := query.NewSelectBuilder(store.RuntimeRenderer(), "_workspaces").
 			Columns("id").Build()
 		if buildErr != nil {
 			return Installation{}, false, buildErr
 		}
-		var legacyWorkspaceID string
-		legacyErr := store.DB().QueryRowContext(ctx, legacyStatement, legacyArguments...).Scan(&legacyWorkspaceID)
-		if legacyErr == nil {
-			return Installation{}, false, fmt.Errorf("Runtime tenant initialization marker is missing for existing workspace %q; explicit migration is required", strings.TrimSpace(legacyWorkspaceID))
+		var workspaceID string
+		workspaceErr := store.DB().QueryRowContext(ctx, workspaceStatement, workspaceArguments...).Scan(&workspaceID)
+		if workspaceErr == nil {
+			return Installation{}, false, fmt.Errorf("Runtime initial Workspace authority is missing for existing Workspace %q; explicit migration is required", strings.TrimSpace(workspaceID))
 		}
-		if !errors.Is(legacyErr, sql.ErrNoRows) {
-			return Installation{}, false, fmt.Errorf("inspect Runtime tenant initialization state: %w", legacyErr)
+		if !errors.Is(workspaceErr, sql.ErrNoRows) {
+			return Installation{}, false, fmt.Errorf("inspect Runtime initial Workspace state: %w", workspaceErr)
 		}
 		return Installation{}, false, nil
 	}
 	if err != nil {
-		return Installation{}, false, fmt.Errorf("load Runtime tenant initialization: %w", err)
+		return Installation{}, false, fmt.Errorf("load Runtime initial Workspace: %w", err)
 	}
-	if strings.TrimSpace(result.TenantRegistryID) == "" || strings.TrimSpace(result.WorkspaceID) == "" || strings.EqualFold(strings.TrimSpace(result.TenantRegistryID), "default") || strings.EqualFold(strings.TrimSpace(result.WorkspaceID), "default") {
-		return Installation{}, false, fmt.Errorf("Runtime tenant initialization is corrupt")
+	if strings.TrimSpace(result.WorkspaceID) == "" || strings.EqualFold(strings.TrimSpace(result.WorkspaceID), "default") {
+		return Installation{}, false, fmt.Errorf("Runtime initial Workspace authority is corrupt")
 	}
 	return result, true, nil
 }

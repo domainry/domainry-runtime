@@ -73,7 +73,11 @@ func (m *ActionUnitOfWorkManager) begin(ctx context.Context, invocation actionmo
 	if m == nil {
 		m = NewActionUnitOfWorkManager(nil)
 	}
-	fingerprint := idempotency.FingerprintInput{UseCase: "action.invoke", ResourceType: "action", TargetID: action.Key, Payload: invocation.Input}
+	fingerprintPayload := any(invocation.Input)
+	if targetOrganizationID := strings.TrimSpace(invocation.TargetOrganizationID); targetOrganizationID != "" {
+		fingerprintPayload = map[string]any{"input": invocation.Input, "target_organization_id": targetOrganizationID}
+	}
+	fingerprint := idempotency.FingerprintInput{UseCase: "action.invoke", ResourceType: "action", TargetID: action.Key, Payload: fingerprintPayload}
 	var cached actionmodel.ActionInvocationResult
 	var claim actionmodel.ActionExecutionClaimResult
 	var replay bool

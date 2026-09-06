@@ -407,6 +407,12 @@ func moduleSetTestConfig(t *testing.T) config.Config {
 		"key": "composition_probe", "name": "Composition probe", "description": "Opens the Agent Binding for the Runtime composition gate.",
 		"tools": []any{"createRecord"},
 	}}
+	manifest["roles"] = []any{
+		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleTenantAdmin, "name": "Platform administrator", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin, "name": "Headquarters administrator", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleStoreManager, "name": "Store manager", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleStaff, "name": "Staff", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+	}
 	raw, err = json.Marshal(manifest)
 	if err != nil {
 		t.Fatal(err)

@@ -138,6 +138,12 @@ func TestRelationValidatorValidatesTargetAndIdentityProjection(t *testing.T) {
 	profile := definitionmodel.ObjectSchema{Key: "employee_profile", Fields: []definitionmodel.FieldSchema{{Key: "identity_user", Type: "relation", Config: map[string]any{"object_key": "identity_user"}}}}
 	err = validator.Validate(t.Context(), profile, map[string]any{"identity_user": "user-1"}, principalmodel.Principal{})
 	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check identity user relation"})
+	plannedIdentityContext := RecordWithPlannedIdentityUsers(t.Context(), "user-1")
+	if err := validator.Validate(plannedIdentityContext, profile, map[string]any{"identity_user": "user-1"}, principalmodel.Principal{}); err != nil {
+		t.Fatalf("same-UoW planned Identity user relation rejected: %v", err)
+	}
+	err = validator.Validate(plannedIdentityContext, profile, map[string]any{"identity_user": "sibling-user"}, principalmodel.Principal{})
+	assertRecordAppError(t, err, apperror.KindInternal, "backend.internal", map[string]string{"operation": "check identity user relation"})
 
 	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{Identity: identityLookupProbe{found: true}})
 	if err := validator.Validate(t.Context(), profile, map[string]any{"identity_user": "user-1"}, principalmodel.Principal{}); err != nil {
@@ -194,6 +200,12 @@ func TestPlannedRelationContextNilAndEmptyEdges(t *testing.T) {
 	}
 	if got := RecordPlannedRelations(nil); got != nil {
 		t.Fatalf("nil planned relations=%#v", got)
+	}
+	if got := RecordWithPlannedIdentityUsers(nil, "user-1"); got != nil {
+		t.Fatalf("nil planned Identity context became %#v", got)
+	}
+	if got := RecordWithPlannedIdentityUsers(ctx, " "); got != ctx {
+		t.Fatal("empty planned Identity user replaced context")
 	}
 	plannedContext := RecordWithPlannedRelations(ctx, records)
 	planned := RecordPlannedRelations(plannedContext)

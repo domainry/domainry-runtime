@@ -13,6 +13,7 @@ import (
 	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	localization "github.com/domainry/domainry-runtime/runtime/platform/localization"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -273,6 +274,9 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 				writeError(w, r, http.StatusUnauthorized, "auth.session_expired")
 				return
 			}
+			if !s.admitAuthenticatedWorkspace(w, r, principal) {
+				return
+			}
 			if !authenticatedWorkspaceMatchesRequest(principal, r) {
 				s.appendSecurityAuditForPrincipal(r, principal, "auth_workspace_denied", "Authenticated workspace does not match request target", map[string]any{"target_workspace_id": explicitWorkspaceIDFromRequest(r)})
 				writeError(w, r, http.StatusForbidden, "backend.workspace_scope_mismatch")
@@ -313,6 +317,9 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 				writeError(w, authenticatedRequest, http.StatusUnauthorized, "auth.session_expired")
 				return
 			}
+			if !s.admitAuthenticatedWorkspace(w, authenticatedRequest, principal) {
+				return
+			}
 			if !authenticatedWorkspaceMatchesRequest(principal, authenticatedRequest) {
 				s.appendSecurityAuditForPrincipal(authenticatedRequest, principal, "auth_workspace_denied", "Authenticated workspace does not match request target", map[string]any{"target_workspace_id": explicitWorkspaceIDFromRequest(authenticatedRequest)})
 				writeError(w, authenticatedRequest, http.StatusForbidden, "backend.workspace_scope_mismatch")
@@ -322,6 +329,24 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 		}))
 		s.identityAuthentication.Authenticate(authenticatedBusinessRequest).ServeHTTP(w, r)
 	})
+}
+
+func (s *HTTPRouter) admitAuthenticatedWorkspace(w http.ResponseWriter, r *http.Request, principal principalmodel.Principal) bool {
+	if s.workspaceAdmission == nil {
+		return true
+	}
+	active, err := s.workspaceAdmission.WorkspaceActive(r.Context(), principal.WorkspaceID)
+	if err != nil {
+		s.appendSecurityAuditForPrincipal(r, principal, "auth_workspace_denied", "Workspace admission failed closed", map[string]any{"reason": "workspace_admission_failed"})
+		writeError(w, r, http.StatusServiceUnavailable, "workspace.administration_unavailable")
+		return false
+	}
+	if !active {
+		s.appendSecurityAuditForPrincipal(r, principal, "auth_workspace_denied", "Workspace is suspended", map[string]any{"reason": "workspace_suspended"})
+		writeError(w, r, http.StatusUnauthorized, "auth.workspace_suspended")
+		return false
+	}
+	return true
 }
 
 func fallbackRoute(next http.Handler, r *http.Request) bool {

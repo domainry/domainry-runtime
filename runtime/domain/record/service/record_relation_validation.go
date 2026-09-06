@@ -34,6 +34,34 @@ type RecordRelationValidator struct {
 }
 
 type recordPlannedRelationsContextKey struct{}
+type recordPlannedIdentityUsersContextKey struct{}
+
+// RecordWithPlannedIdentityUsers marks exact Identity users that a trusted
+// embedded Identity delivery will create in the same outer transaction. It is
+// used only for relation validation of the matching staged Runtime create.
+func RecordWithPlannedIdentityUsers(ctx context.Context, userIDs ...string) context.Context {
+	if ctx == nil {
+		return nil
+	}
+	planned := map[string]bool{}
+	for _, userID := range userIDs {
+		if userID = strings.TrimSpace(userID); userID != "" {
+			planned[userID] = true
+		}
+	}
+	if len(planned) == 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, recordPlannedIdentityUsersContextKey{}, planned)
+}
+
+func recordPlannedIdentityUser(ctx context.Context, userID string) bool {
+	if ctx == nil {
+		return false
+	}
+	planned, _ := ctx.Value(recordPlannedIdentityUsersContextKey{}).(map[string]bool)
+	return planned[strings.TrimSpace(userID)]
+}
 
 // RecordWithPlannedRelations exposes records already planned in the current
 // canonical mutation batch. It permits ordered intra-batch references without
@@ -111,6 +139,9 @@ func (s *RecordRelationValidator) Validate(ctx context.Context, object definitio
 		}
 		recordID := strings.TrimSpace(fmt.Sprint(data[field.Key]))
 		if target == definitioncontract.IdentityUserObjectKey {
+			if recordPlannedIdentityUser(ctx, recordID) {
+				continue
+			}
 			if s.identity == nil {
 				return recordInternalError("check identity user relation", fmt.Errorf("identity projection is not configured"))
 			}

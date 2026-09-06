@@ -102,7 +102,7 @@ func TestManifestRestorationProjection(t *testing.T) {
 		Skills:               []agentsdk.SkillSchema{{Key: "lookup"}},
 		Agents:               []agentsdk.AgentSchema{{Key: "assistant"}},
 		WorkspaceProvisioning: []manifestmodel.WorkspaceProvisionProjection{{
-			Key: "baseline", ObjectKey: "store_config", Scope: "provisioned_workspace", Data: map[string]any{"name": "$provision.tenant_name"},
+			Key: "baseline", ObjectKey: "store_config", Scope: "provisioned_workspace", Data: map[string]any{"name": "$provision.workspace_name"},
 		}},
 	}
 	merged := MergeInstalledEnvelope(persisted, installed, []notificationmodel.NotificationTemplate{{Key: "template"}})

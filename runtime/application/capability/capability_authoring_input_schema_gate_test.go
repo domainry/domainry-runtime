@@ -45,5 +45,11 @@ func assertAuthoringInputSchemaHasExplicitContainerStrategy(t *testing.T, capabi
 	for index := range schema.OneOf {
 		assertAuthoringInputSchemaHasExplicitContainerStrategy(t, capabilityKey, path+"/oneOf", &schema.OneOf[index])
 	}
+	for _, nested := range []struct {
+		keyword string
+		schema  *capabilitycontract.CapabilityAuthoringSchema
+	}{{"if", schema.If}, {"then", schema.Then}, {"else", schema.Else}, {"contains", schema.Contains}} {
+		assertAuthoringInputSchemaHasExplicitContainerStrategy(t, capabilityKey, path+"/"+nested.keyword, nested.schema)
+	}
 	assertAuthoringInputSchemaHasExplicitContainerStrategy(t, capabilityKey, path+"/items", schema.Items)
 }

@@ -129,26 +129,32 @@ type ObjectLedgerPolicy struct {
 }
 
 type ActionSchema struct {
-	Key                   string                             `json:"key"`
-	ObjectKey             string                             `json:"object_key"`
-	Label                 string                             `json:"label"`
-	I18n                  localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
-	Kind                  string                             `json:"kind"`
-	RiskLevel             string                             `json:"risk_level,omitempty"`
-	Preconditions         []string                           `json:"preconditions"`
-	AuditEvent            string                             `json:"audit_event"`
-	InputType             string                             `json:"input_type,omitempty"`
-	OutputType            string                             `json:"output_type,omitempty"`
-	InputContractSHA256   string                             `json:"input_contract_sha256,omitempty"`
-	OutputContractSHA256  string                             `json:"output_contract_sha256,omitempty"`
-	PayloadFields         []ActionPayloadField               `json:"payload_fields,omitempty"`
-	OutputFields          []ActionOutputField                `json:"output_fields,omitempty"`
-	Defaults              map[string]any                     `json:"defaults,omitempty"`
-	OptimisticConcurrency bool                               `json:"optimistic_concurrency,omitempty"`
-	ConcurrencyField      string                             `json:"concurrency_field,omitempty"`
-	AssurancePolicy       *ActionAssurancePolicy             `json:"assurance_policy,omitempty"`
-	EffectSet             *ActionEffectSet                   `json:"effect_set,omitempty"`
-	FileOperations        []string                           `json:"file_operations,omitempty"`
+	Key                       string                                 `json:"key"`
+	ObjectKey                 string                                 `json:"object_key"`
+	Label                     string                                 `json:"label"`
+	I18n                      localizationmodel.LocalizedTextMap     `json:"i18n,omitempty"`
+	Kind                      string                                 `json:"kind"`
+	RiskLevel                 string                                 `json:"risk_level,omitempty"`
+	Preconditions             []string                               `json:"preconditions"`
+	AuditEvent                string                                 `json:"audit_event"`
+	InputType                 string                                 `json:"input_type,omitempty"`
+	OutputType                string                                 `json:"output_type,omitempty"`
+	InputContractSHA256       string                                 `json:"input_contract_sha256,omitempty"`
+	OutputContractSHA256      string                                 `json:"output_contract_sha256,omitempty"`
+	PayloadFields             []ActionPayloadField                   `json:"payload_fields,omitempty"`
+	OutputFields              []ActionOutputField                    `json:"output_fields,omitempty"`
+	Defaults                  map[string]any                         `json:"defaults,omitempty"`
+	OptimisticConcurrency     bool                                   `json:"optimistic_concurrency,omitempty"`
+	ConcurrencyField          string                                 `json:"concurrency_field,omitempty"`
+	AssurancePolicy           *ActionAssurancePolicy                 `json:"assurance_policy,omitempty"`
+	EffectSet                 *ActionEffectSet                       `json:"effect_set,omitempty"`
+	FileOperations            []string                               `json:"file_operations,omitempty"`
+	TargetOrganization        *ActionTargetOrganizationPolicy        `json:"target_organization,omitempty"`
+	StoreOrganizationMutation *ActionStoreOrganizationMutationPolicy `json:"store_organization_mutation,omitempty"`
+}
+
+type ActionStoreOrganizationMutationPolicy struct {
+	Operations []string `json:"operations"`
 }
 
 const DefaultBusinessActionAuditEvent = "business_action_executed"
@@ -220,6 +226,19 @@ type ActionObjectEffect struct {
 	Operations []string `json:"operations,omitempty"`
 }
 
+type ActionTargetOrganizationPolicy struct {
+	Source string `json:"source"`
+	Input  string `json:"input,omitempty"`
+}
+
+const (
+	ActionTargetOrganizationSourceExplicit                      = "explicit"
+	ActionTargetOrganizationSourceExplicitOrSoleAuthorizedStore = "explicit_or_sole_authorized_store"
+	ActionTargetOrganizationSourceRecordOwner                   = "record_owner"
+	ActionTargetOrganizationSourceProvisionedStore              = "provisioned_store"
+	ActionTargetOrganizationInputInvocation                     = "target_organization_id"
+)
+
 const (
 	ActionAssuranceNormalLogin      = "normal_login"
 	ActionAssuranceRecentReauth     = "recent_reauth"
@@ -261,12 +280,13 @@ type ActionPayloadField struct {
 // result. Runtime uses this closed contract to re-apply caller field security
 // after trusted business code has completed its internal reads.
 type ActionOutputField struct {
-	Key             string `json:"key"`
-	Type            string `json:"type"`
-	SourceObjectKey string `json:"source_object_key,omitempty"`
-	SourceFieldKey  string `json:"source_field_key,omitempty"`
-	Required        bool   `json:"required,omitempty"`
-	Repeated        bool   `json:"repeated,omitempty"`
+	Key                                 string   `json:"key"`
+	Type                                string   `json:"type"`
+	SourceObjectKey                     string   `json:"source_object_key,omitempty"`
+	SourceFieldKey                      string   `json:"source_field_key,omitempty"`
+	Required                            bool     `json:"required,omitempty"`
+	Repeated                            bool     `json:"repeated,omitempty"`
+	StoreOrganizationSnapshotObjectKeys []string `json:"store_organization_snapshot_object_keys,omitempty"`
 }
 
 type WorkflowSchema struct {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -21,6 +22,16 @@ func TestPublishContainsOnlyRuntimeBuildClosureAndCompilesConsumer(t *testing.T)
 	result, err := publish(repository, proxy)
 	if err != nil {
 		t.Fatal(err)
+	}
+	secondProxy := filepath.Join(t.TempDir(), "proxy")
+	secondResult, err := publish(repository, secondProxy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(result, secondResult) {
+		firstJSON, _ := json.MarshalIndent(result, "", "  ")
+		secondJSON, _ := json.MarshalIndent(secondResult, "", "  ")
+		t.Fatalf("consecutive source-identical publishes were not byte-deterministic:\nfirst=%s\nsecond=%s", firstJSON, secondJSON)
 	}
 	if result.ContractVersion != "domainry-runtime-module-build-closure-v1" ||
 		!strings.HasPrefix(result.Version, "v0.0.0-source-") ||
@@ -215,5 +226,28 @@ func TestContentVersionIncludesFinalDistributionClosure(t *testing.T) {
 	}
 	if contentVersion(first, files) == contentVersion(second, files) {
 		t.Fatal("final dependency closure did not affect immutable module version")
+	}
+}
+
+func TestDistributionGoModAddsVersionOverridesInPathOrder(t *testing.T) {
+	content, err := distributionGoModWithVersions([]byte("module example.com/root\n\ngo 1.26.0\n"), map[string]string{
+		"example.com/zeta":   "v1.0.0",
+		"example.com/alpha":  "v1.0.0",
+		"example.com/middle": "v1.0.0",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := modfile.Parse("go.mod", content, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := make([]string, 0, len(parsed.Require))
+	for _, requirement := range parsed.Require {
+		paths = append(paths, requirement.Mod.Path)
+	}
+	want := []string{"example.com/alpha", "example.com/middle", "example.com/zeta"}
+	if !reflect.DeepEqual(paths, want) {
+		t.Fatalf("require order=%v want=%v\n%s", paths, want, content)
 	}
 }

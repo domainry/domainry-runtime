@@ -14,6 +14,7 @@ var errRecordSQL = errors.New("scripted record SQL failure")
 type recordSQLState struct {
 	execSteps                        []recordSQLExecStep
 	querySteps                       []recordSQLQueryStep
+	execStatements, queryStatements  []string
 	beginErr, commitErr, rollbackErr error
 	execHook                         func()
 }
@@ -59,7 +60,8 @@ func (connection *recordSQLConn) Begin() (driver.Tx, error) {
 func (connection *recordSQLConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) {
 	return connection.Begin()
 }
-func (connection *recordSQLConn) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
+func (connection *recordSQLConn) ExecContext(_ context.Context, statement string, _ []driver.NamedValue) (driver.Result, error) {
+	connection.state.execStatements = append(connection.state.execStatements, statement)
 	if connection.state.execHook != nil {
 		connection.state.execHook()
 		connection.state.execHook = nil
@@ -73,7 +75,8 @@ func (connection *recordSQLConn) ExecContext(context.Context, string, []driver.N
 	}
 	return recordSQLResult{rows: step.rows, err: step.rowsErr}, nil
 }
-func (connection *recordSQLConn) QueryContext(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
+func (connection *recordSQLConn) QueryContext(_ context.Context, statement string, _ []driver.NamedValue) (driver.Rows, error) {
+	connection.state.queryStatements = append(connection.state.queryStatements, statement)
 	step := recordSQLQueryStep{}
 	if len(connection.state.querySteps) > 0 {
 		step, connection.state.querySteps = connection.state.querySteps[0], connection.state.querySteps[1:]

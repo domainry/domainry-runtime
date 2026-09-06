@@ -573,7 +573,13 @@ func distributionGoModWithVersions(content []byte, versions map[string]string) (
 			return nil, err
 		}
 	}
-	for path, version := range versions {
+	paths := make([]string, 0, len(versions))
+	for path := range versions {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		version := versions[path]
 		if strings.TrimSpace(version) == "" {
 			continue
 		}

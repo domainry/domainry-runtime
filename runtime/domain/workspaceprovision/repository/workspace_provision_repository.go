@@ -8,5 +8,4 @@ import (
 
 type WorkspaceProvisionRepository interface {
 	Provision(context.Context, workspaceprovisionmodel.Request) (workspaceprovisionmodel.Result, error)
-	ReconcileWorkspaceRoles(context.Context, string) (workspaceprovisionmodel.RoleReconciliationResult, error)
 }

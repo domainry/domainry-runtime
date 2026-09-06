@@ -4,6 +4,7 @@ import (
 	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
 	"github.com/domainry/domainry-foundation/mutation"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
@@ -186,6 +187,10 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			}
 			return mutation.MutationConflict(commit.Object.Key, commit.Record.ID, mutation.MutationConflictOptimistic, nil)
 		}
+	case "conditional_update_many":
+		if err := r.applyConditionalUpdateManyTx(ctx, tx, workspaceID, commit); err != nil {
+			return err
+		}
 	case "delete":
 		id := strings.TrimSpace(commit.RecordID)
 		if id == "" {
@@ -262,6 +267,76 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		if err := notificationpersistence.NewInboxEventWriter(r.store).InsertEventTx(ctx, tx, event); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (r RecordStore) applyConditionalUpdateManyTx(ctx context.Context, tx TransactionExecutor, workspaceID string, commit transactionmodel.RecordMutationCommit) error {
+	if commit.SetExpectedAffected < 1 || commit.SetExpectedAffected > 200 || len(commit.SetRecordIDs) != commit.SetExpectedAffected || len(commit.Record.Data) == 0 || commit.SetFilterExpression == nil {
+		return fmt.Errorf("conditional update-many commit is invalid")
+	}
+	ids := make([]any, 0, len(commit.SetRecordIDs))
+	seen := map[string]bool{}
+	for _, raw := range commit.SetRecordIDs {
+		id := strings.TrimSpace(raw)
+		if id == "" || seen[id] {
+			return fmt.Errorf("conditional update-many record set is invalid")
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	filter, err := recordvalidation.RecordNormalizeFilterExpression(commit.Object, commit.SetFilterExpression)
+	if err != nil {
+		return fmt.Errorf("normalize conditional update-many filter: %w", err)
+	}
+	authorizationMode := recordmodel.RecordQueryAuthorizationUnrestricted
+	if commit.AuthorizationScope != nil {
+		authorizationMode = recordmodel.RecordQueryAuthorizationPredicate
+	}
+	queryValue := recordQueryDBValues(r.store.RuntimeEngine, commit.Object, recordmodel.RecordListQuery{
+		AuthorizationMode: authorizationMode,
+		RootObjectKey:     commit.Object.Key, ScopeExpression: commit.AuthorizationScope,
+		FilterExpression: filter, OwnerOrganizationScopeID: strings.TrimSpace(commit.SetOwnerOrganizationScope),
+	})
+	predicate, err := recordLocalizedSearchPredicate(r.store, workspaceID, commit.Object, queryValue)
+	if err != nil {
+		return fmt.Errorf("compile conditional update-many scope: %w", err)
+	}
+	predicate = query.And(predicate, query.In("id", ids...))
+	builder := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, commit.Object.Key, workspaceID).
+		Set("updated_at", commit.Record.UpdatedAt)
+	if userID := strings.TrimSpace(commit.Record.UpdateBy); userID != "" {
+		builder.Set("update_by", userID)
+	}
+	fields := make([]string, 0, len(commit.Record.Data))
+	fieldCatalog := map[string]definitionmodel.FieldSchema{}
+	for _, field := range commit.Object.Fields {
+		fieldCatalog[field.Key] = field
+	}
+	for key := range commit.Record.Data {
+		if _, ok := fieldCatalog[key]; !ok || recordFieldIsSystemOwned(key) {
+			return fmt.Errorf("conditional update-many field %q is invalid", key)
+		}
+		fields = append(fields, key)
+	}
+	sort.Strings(fields)
+	for _, key := range fields {
+		builder.Set(key, dbFieldValue(r.store.RuntimeEngine, fieldCatalog[key], commit.Record.Data[key]))
+	}
+	statement, args, err := builder.Where(predicate).Build()
+	if err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, statement, args...)
+	if err != nil {
+		return fmt.Errorf("conditional update-many mutation: %w", database.MutationConstraintError(err, commit.Object.Key, commit.Record.ID, mutation.MutationConflictUnique))
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("inspect conditional update-many mutation: %w", err)
+	}
+	if affected != int64(commit.SetExpectedAffected) {
+		return mutation.PolicyConflict("backend.action.conditional_update_many_affected_mismatch", commit.Object.Key, commit.Record.ID, "affected_count")
 	}
 	return nil
 }

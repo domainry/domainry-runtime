@@ -123,6 +123,7 @@ func (state *validationState) validateActions() {
 			state.add(path+".object_key", "unknown object %q", action.ObjectKey)
 		}
 		outputKeys := map[string]bool{}
+		storeOrganizationSnapshotOutputs := 0
 		for outputIndex, field := range action.OutputFields {
 			fieldPath := fmt.Sprintf("%s.output_fields[%d]", path, outputIndex)
 			fieldKey := strings.TrimSpace(field.Key)
@@ -133,6 +134,32 @@ func (state *validationState) validateActions() {
 			}
 			outputKeys[fieldKey] = true
 			sourceObjectKey, sourceFieldKey := strings.TrimSpace(field.SourceObjectKey), strings.TrimSpace(field.SourceFieldKey)
+			if strings.TrimSpace(field.Type) == "store_organization_snapshot" {
+				storeOrganizationSnapshotOutputs++
+				if strings.TrimSpace(action.Kind) != definitionmodel.ActionKindObjectOperation {
+					state.add(fieldPath+".type", "store_organization_snapshot requires object_operation")
+				}
+				if !field.Required || field.Repeated || sourceObjectKey != "" || sourceFieldKey != "" || len(field.StoreOrganizationSnapshotObjectKeys) == 0 {
+					state.add(fieldPath, "store_organization_snapshot must be required, non-repeated, have no source lineage, and declare singleton Objects")
+				}
+				seenObjects := map[string]bool{}
+				for objectIndex, raw := range field.StoreOrganizationSnapshotObjectKeys {
+					objectKey := strings.TrimSpace(raw)
+					objectPath := fmt.Sprintf("%s.store_organization_snapshot_object_keys[%d]", fieldPath, objectIndex)
+					if objectKey == "" || objectKey != raw {
+						state.add(objectPath, "must be a canonical Object key")
+					} else if seenObjects[objectKey] {
+						state.add(objectPath, "duplicate singleton Object %q", objectKey)
+					} else if _, ok := state.objects[objectKey]; !ok {
+						state.add(objectPath, "unknown object %q", objectKey)
+					} else if objectKey == "organization" {
+						state.add(objectPath, "collides with the generated organization envelope")
+					}
+					seenObjects[objectKey] = true
+				}
+			} else if len(field.StoreOrganizationSnapshotObjectKeys) != 0 {
+				state.add(fieldPath+".store_organization_snapshot_object_keys", "is only valid for store_organization_snapshot")
+			}
 			if (sourceObjectKey == "") != (sourceFieldKey == "") {
 				state.add(fieldPath+".source_object_key", "source_object_key and source_field_key must be declared together")
 				continue
@@ -145,6 +172,9 @@ func (state *validationState) validateActions() {
 			} else if state.fields[sourceObjectKey][sourceFieldKey].Key == "" {
 				state.add(fieldPath+".source_field_key", "unknown field %q on object %q", sourceFieldKey, sourceObjectKey)
 			}
+		}
+		if storeOrganizationSnapshotOutputs > 1 {
+			state.add(path+".output_fields", "may declare only one store_organization_snapshot page")
 		}
 		state.validateActionAssurancePolicy(path, action)
 		for _, issue := range invocationcontract.ValidateDefaults(action.PayloadFields, action.Defaults) {

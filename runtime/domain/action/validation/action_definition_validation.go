@@ -38,7 +38,78 @@ func ActionValidateDefinitionIssuesWithObjects(action definitionmodel.ActionSche
 	}
 	issues = append(issues, actionValidatePermissionPolicy(action)...)
 	issues = append(issues, actionValidateAssurancePolicy(action, objects)...)
+	issues = append(issues, actionValidateTargetOrganizationPolicy(action)...)
+	issues = append(issues, actionValidateStoreOrganizationMutationPolicy(action)...)
 	return issues
+}
+
+func actionValidateStoreOrganizationMutationPolicy(action definitionmodel.ActionSchema) []appschemamodel.ApplicationDefinitionValidationIssue {
+	policy := action.StoreOrganizationMutation
+	if policy == nil {
+		return nil
+	}
+	issue := func(path, reason string) appschemamodel.ApplicationDefinitionValidationIssue {
+		return actionDefinitionValidationIssue("backend.action.definition_invalid", "store_organization_mutation."+path, map[string]string{"field": "store_organization_mutation." + path, "reason": reason})
+	}
+	if action.TargetOrganization == nil || strings.TrimSpace(action.TargetOrganization.Source) != definitionmodel.ActionTargetOrganizationSourceRecordOwner {
+		return []appschemamodel.ApplicationDefinitionValidationIssue{issue("operations", "store Organization mutation requires a record_owner target")}
+	}
+	if len(policy.Operations) == 0 {
+		return []appschemamodel.ApplicationDefinitionValidationIssue{issue("operations", "at least one operation is required")}
+	}
+	seen := map[string]bool{}
+	issues := []appschemamodel.ApplicationDefinitionValidationIssue{}
+	for index, raw := range policy.Operations {
+		operation := strings.TrimSpace(raw)
+		if operation != "rename" && operation != "disable" || seen[operation] {
+			issues = append(issues, issue(fmt.Sprintf("operations[%d]", index), "operation must be one unique rename or disable grant"))
+		}
+		seen[operation] = true
+	}
+	return issues
+}
+
+func actionValidateTargetOrganizationPolicy(action definitionmodel.ActionSchema) []appschemamodel.ApplicationDefinitionValidationIssue {
+	policy := action.TargetOrganization
+	if policy == nil {
+		return nil
+	}
+	issue := func(path, reason string) appschemamodel.ApplicationDefinitionValidationIssue {
+		return actionDefinitionValidationIssue("backend.action.definition_invalid", "target_organization."+path, map[string]string{"field": "target_organization." + path, "reason": reason})
+	}
+	source, input := strings.TrimSpace(policy.Source), strings.TrimSpace(policy.Input)
+	recordKind := action.Kind == definitionmodel.ActionKindRecordUpdate ||
+		action.Kind == definitionmodel.ActionKindRecordDelete ||
+		action.Kind == definitionmodel.ActionKindRecordRestore ||
+		action.Kind == definitionmodel.ActionKindTransitionState ||
+		action.Kind == definitionmodel.ActionKindConditionalUpdate ||
+		action.Kind == definitionmodel.ActionKindRecordOperation
+	switch source {
+	case definitionmodel.ActionTargetOrganizationSourceExplicit, definitionmodel.ActionTargetOrganizationSourceExplicitOrSoleAuthorizedStore:
+		if recordKind {
+			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("source", "record Actions must inherit the anchor record owner")}
+		}
+		if input != definitionmodel.ActionTargetOrganizationInputInvocation {
+			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("input", "caller-selectable target organization must use Runtime invocation metadata")}
+		}
+	case definitionmodel.ActionTargetOrganizationSourceRecordOwner:
+		if !recordKind {
+			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("source", "record_owner requires a record Action")}
+		}
+		if input != "" {
+			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("input", "record_owner does not accept caller input")}
+		}
+	case definitionmodel.ActionTargetOrganizationSourceProvisionedStore:
+		if recordKind {
+			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("source", "provisioned_store requires an object Action")}
+		}
+		if input != "" {
+			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("input", "provisioned_store does not accept caller input")}
+		}
+	default:
+		return []appschemamodel.ApplicationDefinitionValidationIssue{issue("source", "unknown target organization source")}
+	}
+	return nil
 }
 
 func actionValidateAssurancePolicy(action definitionmodel.ActionSchema, objects []definitionmodel.ObjectSchema) []appschemamodel.ApplicationDefinitionValidationIssue {

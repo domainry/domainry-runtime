@@ -20,6 +20,7 @@ import (
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
@@ -72,6 +73,7 @@ type HTTPServerDependencies struct {
 	BusinessEventBackplane   businesseventcontract.Backplane
 	ModuleHTTPAdapters       []modulehttp.Adapter
 	NotificationInboxActions notificationhttp.NotificationInboxActionResolver
+	BusinessHandlers         *runtimeext.BusinessHandlerRegistry
 }
 
 type httpServerAssembly struct {
@@ -120,6 +122,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	if identityProjection == nil || identityPrincipals == nil {
 		panic("transport.AssembleRuntimeHTTPServer requires a complete Identity SDK Binding")
 	}
+	workspaceAdministrationStore := workspaceprovisionpersistence.NewWorkspaceAdministrationStore(dependencies.Store)
 	var integrationAuthentication runtimehttp.IntegrationAuthenticationPrincipalProvider
 	scenarioReceiptKey := sha256.Sum256([]byte("domainry-runtime-authoring-scenario-receipt-v1:" + dependencies.Config.IntegrationSecretKey))
 	scenarioReceipts := businesssystemapplication.NewRuntimeAuthoringScenarioReceiptService(scenarioReceiptKey[:])
@@ -165,7 +168,8 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 				return records.Schema().IdentityProfileExtensions
 			},
 		}),
-		SecurityAudit: records.Applications().Audit, RuntimeStatus: dependencies.MonitoringBinding,
+		WorkspaceAdmission: workspaceAdministrationStore,
+		SecurityAudit:      records.Applications().Audit, RuntimeStatus: dependencies.MonitoringBinding,
 		TechnicalMetrics: func(ctx context.Context) string {
 			return runtimeTechnicalOpenMetrics(ctx, dependencies.Store, records.Applications().RuntimeStatus) + runtimeOptionalWorkerMetrics(dependencies.WorkerControl)
 		},
@@ -191,7 +195,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	assembly.wireRecordAndProcessHandlers()
 	assembly.wireMetadataAndBusinessHandlers()
 	assembly.wireRuntimePublicationHandoff()
-	assembly.wireWorkspaceProvisioning()
+	assembly.wireWorkspaceProvisioning(ctx)
 	assembly.wireNotificationHandlers()
 	server = runtimehttp.UseHandlers(server, assembly.handlers)
 	server = runtimehttp.UseServiceIdentity(server, dependencies.Config.RuntimeVersion)
@@ -199,7 +203,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	return runtimehttp.UseManifest(server, dependencies.Manifest)
 }
 
-func (a *httpServerAssembly) wireWorkspaceProvisioning() {
+func (a *httpServerAssembly) wireWorkspaceProvisioning(ctx context.Context) {
 	if a.dependencies.Store == nil {
 		return
 	}
@@ -207,14 +211,37 @@ func (a *httpServerAssembly) wireWorkspaceProvisioning() {
 		a.dependencies.Store,
 		a.dependencies.IdentityBinding,
 		a.dependencies.Manifest,
+		a.workspaceBootstrapParticipant(),
 		workspaceprovisionpersistence.NewAcceptanceFailureInjector(a.dependencies.Config.WorkspaceProvisionFailurePoint),
 	)
 	service := workspaceprovisionapplication.NewWorkspaceProvisionApplicationService(repository)
+	installationIdentity, err := a.dependencies.Store.InstallationIdentity(ctx)
+	if err != nil {
+		panic("assemble Workspace administration cursor: " + err.Error())
+	}
+	cursorKey := a.dependencies.Config.AuditExportTokenKey
+	if cursorKey == "" {
+		cursorKey = config.DevAuditExportTokenKey
+	}
+	cursor, err := workspaceprovisionapplication.NewWorkspaceAdministrationCursorCodec([]byte(cursorKey), installationIdentity, nil)
+	if err != nil {
+		panic("assemble Workspace administration cursor: " + err.Error())
+	}
+	administration := workspaceprovisionapplication.NewWorkspaceAdministrationApplicationService(
+		workspaceprovisionpersistence.NewWorkspaceAdministrationStore(a.dependencies.Store), cursor,
+	)
 	a.handlers.WorkspaceProvision = workspaceprovisionhttp.NewWorkspaceProvisionHandler(workspaceprovisionhttp.WorkspaceProvisionDependencies{
-		UseCases: service, Principal: a.callbacks.Principal, DecodeJSON: a.callbacks.DecodeJSON,
+		UseCases: service, Administration: administration, Principal: a.callbacks.Principal, DecodeJSON: a.callbacks.DecodeJSON,
 		WriteJSON: a.callbacks.WriteJSON, WriteServiceError: a.callbacks.WriteServiceError,
 		SecurityAudit: a.callbacks.SecurityAudit,
 	})
+}
+
+func (a *httpServerAssembly) workspaceBootstrapParticipant() runtimeext.WorkspaceBootstrapParticipant {
+	if a == nil || a.dependencies.BusinessHandlers == nil {
+		return nil
+	}
+	return a.dependencies.BusinessHandlers.WorkspaceBootstrapParticipant()
 }
 
 // wireRuntimePublicationHandoff exposes only the Runtime-owned publication

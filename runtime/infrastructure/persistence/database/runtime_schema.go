@@ -21,7 +21,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "020_tenant_initialization"
+const CurrentRuntimeSchemaVersion = "021_workspace_only_foundation"
 
 const (
 	managedDatabaseCohortTable           = "_domainry_managed_runtime_database_cohort"
@@ -29,7 +29,7 @@ const (
 )
 
 func SupportedRuntimeSchemaUpgradeVersions() []string {
-	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "007_identity_global_names", "008_identity_account_projection", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox", "012_rate_limit_schema_owner", "013_agent_schema_owner"}
+	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "007_identity_global_names", "008_identity_account_projection", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox", "012_rate_limit_schema_owner", "013_agent_schema_owner", "020_tenant_initialization"}
 }
 
 func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
@@ -73,8 +73,16 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := s.ensureManagedDatabaseCohortMarker(ctx); err != nil {
 		return err
 	}
+	if err := s.ensureWorkspaceV3AuthorityColumns(ctx); err != nil {
+		return err
+	}
 	if err := runtimeschema.EnsureWorkspaceProvisioningSchema(ctx, s); err != nil {
 		return err
+	}
+	if pending {
+		if err := s.migrateLegacyWorkspaceAuthorities(ctx); err != nil {
+			return err
+		}
 	}
 	if err := s.EnsureApplicationSchema(ctx); err != nil {
 		return err
@@ -98,6 +106,20 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+func (s *RuntimeStore) ensureWorkspaceV3AuthorityColumns(ctx context.Context) error {
+	exists, err := s.RuntimeTableExists(ctx, "_workspaces")
+	if errors.Is(err, sql.ErrNoRows) {
+		exists, err = false, nil
+	}
+	if err != nil || !exists {
+		return err
+	}
+	if err := s.ensureRuntimeColumn(ctx, "_workspaces", "initial_installation_identity", "TEXT NULL"); err != nil {
+		return err
+	}
+	return s.ensureRuntimeColumn(ctx, "_workspaces", "revision", "INTEGER NOT NULL DEFAULT 1")
 }
 
 func (s *RuntimeStore) ensureAuditModuleSchemaLocked(ctx context.Context) error {
@@ -400,7 +422,7 @@ func (s *RuntimeStore) removeObsoleteMigrationLedgers(ctx context.Context) error
 }
 
 func currentRuntimeSchemaChecksum() string {
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,lifecycle,operations,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_provisioning,tenant_initialization"))
+	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,lifecycle,operations,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_only_provisioning,typed_commercial_configuration,legacy_workspace_authority_migration"))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -452,6 +474,46 @@ func (s *RuntimeStore) verifyManagedDatabaseCohortMarkerWith(ctx context.Context
 		return fmt.Errorf("verify managed database cohort marker: invalid marker identity")
 	}
 	return nil
+}
+
+// InstallationIdentity returns a stable identity for the host-owned database
+// installation. It is neither a Workspace identifier nor legacy tenant
+// registry state. Managed server databases use their persisted random cohort
+// marker; SQLite installations use the stable absolute database location
+// because the managed marker is intentionally disabled for that engine.
+func (s *RuntimeStore) InstallationIdentity(ctx context.Context) (string, error) {
+	if s == nil {
+		return "", fmt.Errorf("Runtime installation identity store is required")
+	}
+	if !s.sqlBase().RuntimeEngine.ManagedDatabaseMarkerEnabled() {
+		path := strings.TrimSpace(s.config.DBPath)
+		if path == "" || path == ":memory:" {
+			return "", fmt.Errorf("stable SQLite installation path is required")
+		}
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			return "", fmt.Errorf("resolve SQLite installation identity: %w", err)
+		}
+		sum := sha256.Sum256([]byte("domainry-runtime/sqlite-installation/v1\x00" + filepath.Clean(absolute)))
+		return hex.EncodeToString(sum[:]), nil
+	}
+	statement, arguments, err := query.NewSelectBuilder(s.sqlBase().SQLRenderer, managedDatabaseCohortTable).
+		Columns("contract_version", "database_identity_sha256").Where(query.Equal("marker_id", 1)).Build()
+	if err != nil {
+		return "", fmt.Errorf("build Runtime installation identity query: %w", err)
+	}
+	var contractVersion, identity string
+	if err := s.db.QueryRowContext(ctx, statement, arguments...).Scan(&contractVersion, &identity); err != nil {
+		return "", fmt.Errorf("load Runtime installation identity: %w", err)
+	}
+	identity = strings.TrimSpace(identity)
+	if contractVersion != managedDatabaseCohortContractVersion || len(identity) != 64 {
+		return "", fmt.Errorf("Runtime installation identity is invalid")
+	}
+	if _, err := hex.DecodeString(identity); err != nil {
+		return "", fmt.Errorf("Runtime installation identity is invalid")
+	}
+	return identity, nil
 }
 
 func (s *RuntimeStore) ensureRuntimeColumn(ctx context.Context, table, column, definition string) error {

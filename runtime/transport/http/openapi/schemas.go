@@ -70,9 +70,9 @@ func openAPISchemas(snapshot appschemamodel.ApplicationSchemaSnapshot) map[strin
 			},
 		},
 		"Action":              openAPIObject(nil),
-		"ActionRequest":       map[string]any{"type": "object", "properties": map[string]any{"data": openAPIObject(nil)}},
+		"ActionRequest":       map[string]any{"type": "object", "properties": map[string]any{"data": openAPIObject(nil), "target_organization_id": map[string]any{"type": "string"}}},
 		"ActionResult":        openAPIObject(nil),
-		"ObjectActionRequest": map[string]any{"type": "object", "properties": map[string]any{"data": openAPIObject(nil)}},
+		"ObjectActionRequest": map[string]any{"type": "object", "properties": map[string]any{"data": openAPIObject(nil), "target_organization_id": map[string]any{"type": "string"}}},
 		"ObjectActionResult":  openAPIObject(nil),
 		"BulkActionRequest": map[string]any{
 			"type":       "object",
@@ -234,7 +234,7 @@ func openAPIObjectDataSchema(object definitionmodel.ObjectSchema) map[string]any
 func openAPIFieldSchema(field definitionmodel.FieldSchema) map[string]any {
 	schema := map[string]any{}
 	switch strings.ToLower(strings.TrimSpace(field.Type)) {
-	case "currency", "decimal":
+	case "currency", "decimal", "percent":
 		schema["type"] = "string"
 		schema["format"] = "decimal"
 		schema["pattern"] = `^-?[0-9]+(?:\.[0-9]+)?$`

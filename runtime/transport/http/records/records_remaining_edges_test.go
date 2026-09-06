@@ -202,6 +202,38 @@ func TestRecordsActionHandlersRejectMissingTypedResults(t *testing.T) {
 	}
 }
 
+func TestRecordsActionHandlersMarkCredentialResponsesNoStore(t *testing.T) {
+	handler, serviceErr := recordsHandlerForTest(recordsHTTPPrincipal())
+	handler.actions = recordsActionService([]definitionmodel.ActionSchema{
+		{Key: "customer.approve", ObjectKey: "customer", Kind: "record_update"},
+		{Key: "customer.approve_object", ObjectKey: "customer", Kind: "object_operation"},
+	}, func(_ context.Context, invocation actionmodel.ActionInvocation, action definitionmodel.ActionSchema, _ map[string]any) (actionapplication.ActionExecutionResult, error) {
+		credential := map[string]any{"initial_password": "one-time", "must_change_password": true}
+		if invocation.RecordID == "" {
+			result := actionmodel.ActionObjectResult{ActionKey: action.Key, ObjectKey: action.ObjectKey, Status: "success", Output: map[string]any{"initial_credential": credential}, NoStore: true}
+			return actionapplication.ActionExecutionResult{Object: &result}, nil
+		}
+		result := actionmodel.ActionResult{ActionKey: action.Key, ObjectKey: action.ObjectKey, RecordID: invocation.RecordID, Output: map[string]any{"initial_credential": credential}, NoStore: true}
+		return actionapplication.ActionExecutionResult{Record: &result}, nil
+	}, nil)
+
+	for name, call := range map[string]func(http.ResponseWriter, *http.Request){"object": handler.executeObjectAction, "record": handler.executeAction} {
+		t.Run(name, func(t *testing.T) {
+			actionKey, recordID := "customer.approve", "customer-1"
+			if name == "object" {
+				actionKey, recordID = "customer.approve_object", ""
+			}
+			request := recordsRequest(http.MethodPost, "/action", `{"data":{}}`, map[string]string{"objectKey": "customer", "recordID": recordID, "actionKey": actionKey})
+			request.Header.Set("Idempotency-Key", name+"-credential")
+			response := httptest.NewRecorder()
+			call(response, request)
+			if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" || *serviceErr != nil || !strings.Contains(response.Body.String(), "one-time") {
+				t.Fatalf("status=%d cache=%q body=%s err=%v", response.Code, response.Header().Get("Cache-Control"), response.Body.String(), *serviceErr)
+			}
+		})
+	}
+}
+
 func TestRecordsImportAndBatchReplayFailureEdges(t *testing.T) {
 	fixture := newRecordBatchHTTPFixture(t)
 	path := "/records/customer/import/jobs"

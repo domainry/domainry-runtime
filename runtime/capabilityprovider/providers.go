@@ -363,16 +363,16 @@ func providerSpecs() ([]providerSpec, error) {
 			categories: []categorySpec{{key: "runtime_core.operations", name: "Runtime process operations", description: "Read Runtime process identity, probe state, health, and metrics.", chains: []string{"runtime_process_to_operational_probe"}, selectEndpoints: owner("root")}},
 		},
 		{
-			key: "workspace_provision", sourceOwner: "workspaceprovision", name: "Workspace provision", description: "Runtime-local workspace initialization and Identity role reconciliation.",
+			key: "workspace_provision", sourceOwner: "workspaceprovision", name: "Workspace provision", description: "Runtime-local Workspace initialization.",
 			scenarios: scenarios(
-				[]string{"An operator must initialize a Runtime workspace or reconcile its installed roles"},
+				[]string{"An operator must initialize a Runtime Workspace"},
 				[]string{"The requirement authors a project manifest or manages ordinary Identity users"},
-				[]string{"provision workspace", "reconcile workspace roles"},
-				[]string{"workspace.provision", "workspace.roles.reconcile"}, []string{"identity"}, []string{"audit"},
+				[]string{"provision Workspace"},
+				[]string{"workspace.provision"}, []string{"identity"}, []string{"audit"},
 				[]string{"workspace_manifest_to_runtime_provision"}, nil,
-				"Initialize a workspace and reconcile installed roles", "Workspace Provision owns Runtime-local initialization",
+				"Initialize a Workspace", "Workspace Provision owns Runtime-local initialization",
 				"Author the project model", "Plane and source control own project authoring"),
-			categories: []categorySpec{{key: "workspace_provision.runtime", name: "Runtime workspace provision", description: "Provision a Runtime workspace and reconcile its installed role projection.", chains: []string{"workspace_manifest_to_runtime_provision"}, selectEndpoints: owner("workspaceprovision")}},
+			categories: []categorySpec{{key: "workspace_provision.runtime", name: "Runtime Workspace provision", description: "Provision a Runtime Workspace with its fixed Identity bootstrap graph and typed configuration.", chains: []string{"workspace_manifest_to_runtime_provision"}, selectEndpoints: owner("workspaceprovision")}},
 		},
 	}, nil
 }

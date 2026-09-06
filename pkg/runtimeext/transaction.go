@@ -45,6 +45,9 @@ type RecordQuery struct {
 	Projection []string
 	Limit      int
 	AfterID    string
+	// StoreOrganization is an execution-scoped catalog reference used only by
+	// generated catalog-owned list methods. It is not a business-field filter.
+	StoreOrganization *StoreOrganizationCatalogItem
 }
 
 func (q RecordQuery) Valid() bool {
@@ -56,14 +59,34 @@ func (q RecordQuery) Valid() bool {
 	}
 	switch q.Operation {
 	case QueryGet, QueryGetForUpdate:
-		return strings.TrimSpace(q.RecordID) != "" && len(q.Filters) == 0 && len(q.Sorts) == 0 && len(q.Projection) == 0 && q.Limit == 0 && strings.TrimSpace(q.AfterID) == ""
+		return q.StoreOrganization == nil && strings.TrimSpace(q.RecordID) != "" && len(q.Filters) == 0 && len(q.Sorts) == 0 && len(q.Projection) == 0 && q.Limit == 0 && strings.TrimSpace(q.AfterID) == ""
 	case QueryList:
-		return strings.TrimSpace(q.RecordID) == ""
+		if strings.TrimSpace(q.RecordID) != "" || recordQueryContainsRuntimeOwnedFilter(q.Filters) {
+			return false
+		}
+		if q.StoreOrganization != nil {
+			_, _, valid := ResolveStoreOrganizationCatalogItem(*q.StoreOrganization)
+			return valid
+		}
+		return true
 	case QueryExists, QueryCount:
-		return strings.TrimSpace(q.RecordID) == "" && len(q.Sorts) == 0 && len(q.Projection) == 0 && q.Limit == 0 && strings.TrimSpace(q.AfterID) == ""
+		return q.StoreOrganization == nil && !recordQueryContainsRuntimeOwnedFilter(q.Filters) && strings.TrimSpace(q.RecordID) == "" && len(q.Sorts) == 0 && len(q.Projection) == 0 && q.Limit == 0 && strings.TrimSpace(q.AfterID) == ""
 	default:
 		return false
 	}
+}
+
+func recordQueryContainsRuntimeOwnedFilter(filters []Filter) bool {
+	for _, filter := range filters {
+		switch strings.ToLower(strings.TrimSpace(filter.Field)) {
+		case "workspace_id", "owner_org_id", "owner_user_id":
+			return true
+		}
+		if recordQueryContainsRuntimeOwnedFilter(filter.Children) {
+			return true
+		}
+	}
+	return false
 }
 
 type RecordQueryResult struct {
@@ -122,6 +145,12 @@ func (m RecordMutation) Valid() bool {
 			return false
 		}
 	}
+	for key := range m.Fields {
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "workspace_id", "owner_org_id", "owner_user_id", "created_at", "updated_at":
+			return false
+		}
+	}
 	switch m.Operation {
 	case MutationCreate:
 		return !hasRecordID && !hasConditionalInput
@@ -139,4 +168,40 @@ func (m RecordMutation) Valid() bool {
 type RecordMutationResult struct {
 	Record  Record
 	Applied bool
+}
+
+const (
+	ConditionalUpdateManyMinSize = 1
+	ConditionalUpdateManyMaxSize = 200
+)
+
+// ConditionalUpdateManyRequest is one closed set mutation. Runtime selects and
+// locks the matching rows once, validates ExpectedCount, and commits one
+// conditional UPDATE in the same Action transaction. Project code cannot
+// supply storage ownership or SQL.
+type ConditionalUpdateManyRequest struct {
+	ObjectKey     string
+	Filters       []Filter
+	Fields        map[string]any
+	ExpectedCount int
+}
+
+func (request ConditionalUpdateManyRequest) Valid() bool {
+	if strings.TrimSpace(request.ObjectKey) == "" || len(request.Filters) == 0 || len(request.Fields) == 0 ||
+		request.ExpectedCount < ConditionalUpdateManyMinSize || request.ExpectedCount > ConditionalUpdateManyMaxSize ||
+		recordQueryContainsRuntimeOwnedFilter(request.Filters) {
+		return false
+	}
+	for key := range request.Fields {
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "", "workspace_id", "owner_org_id", "owner_user_id", "created_at", "updated_at", "create_by", "update_by", "deleted", "ext_info":
+			return false
+		}
+	}
+	return RecordQuery{Operation: QueryList, ObjectKey: request.ObjectKey, Filters: request.Filters, Limit: request.ExpectedCount}.Valid()
+}
+
+type ConditionalUpdateManyResult struct {
+	RecordIDs     []string
+	AffectedCount int
 }

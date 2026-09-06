@@ -51,6 +51,7 @@ import (
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
+	workspaceaggregatecontract "github.com/domainry/domainry-runtime/runtime/domain/workspaceaggregate/contract"
 	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 )
 
@@ -129,10 +130,19 @@ type runtimeAssembly struct {
 	businessEvidenceRepo                changeplanrepository.ChangePlanEvidenceRepository
 	runtimeStatusRepo                   deploymentrepository.DeploymentRuntimeStatusRepository
 	identityProjection                  identitysdk.Projection
+	identityHandlerDeliveryBinder       identitysdk.HandlerDeliveryUnitOfWorkBinder
+	storeOrganizationDeliveryBinder     identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
+	workspaceIdentityUsageBinder        identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
+	workspaceIdentityUsageCursor        actionapplication.WorkspaceIdentityUsageCursorCodec
+	workspaceCommercialConfiguration    actionapplication.WorkspaceCommercialConfigurationLocker
 	actionAssuranceStore                actioncontract.ActionAssuranceStore
 	workflowProcesses                   *workflowapplication.WorkflowProcessEngine
 	connectorRegistry                   *runtimeConnectorCatalog
 	verifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
+	workspaceAggregateCatalog           workspaceaggregatecontract.Catalog
+	workspaceActiveResolver             workspaceaggregatecontract.ActiveResolver
+	workspaceUsageResolver              workspaceaggregatecontract.UsageResolver
+	workspaceAggregateRepository        workspaceaggregatecontract.Repository
 	prepareOutboxPayload                publicationhandoff.PayloadPreparer
 	authoringCapabilities               *capabilityapplication.CapabilityAuthoringApplicationService
 	businessReferences                  *changeplanapplication.ChangePlanReferenceApplicationService

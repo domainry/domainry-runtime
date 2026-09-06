@@ -80,16 +80,31 @@ func (factory identityFactoryStub) OpenBootstrapWithDatabase(context.Context, id
 
 type identityBootstrapBindingStub struct{}
 
+type acceptingCredentialDelivery struct{}
+
+func (acceptingCredentialDelivery) DeliverInitialWorkspaceCredential(context.Context, InitialWorkspaceCredential) (InitialWorkspaceCredentialDeliveryAcknowledgment, error) {
+	return InitialWorkspaceCredentialDeliveryAcknowledgment{Accepted: true}, nil
+}
+
 func (identityBootstrapBindingStub) BindBootstrapProjectRoleCatalog(context.Context, identitysdk.ProjectRoleCatalog) error {
 	return nil
 }
 
-func (identityBootstrapBindingStub) ProvisionWorkspaceIdentity(_ context.Context, request identitysdk.WorkspaceIdentityProvisionRequest, _ identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceIdentityProvisionResult, error) {
-	return identitysdk.WorkspaceIdentityProvisionResult{AdminLoginID: request.AdminLoginID, InitialPassword: request.InitialPassword, MustChangePassword: true, ProvisionedRoles: 1}, nil
+func (identityBootstrapBindingStub) BootstrapWorkspaceIdentityV2(_ context.Context, request identitysdk.WorkspaceIdentityBootstrapV2Request, _ identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceIdentityBootstrapV2Receipt, error) {
+	return identitysdk.WorkspaceIdentityBootstrapV2Receipt{
+		ContractVersion: request.ContractVersion, ContractHash: request.ContractHash,
+		ReceiptID: "identity-bootstrap-receipt", InvocationID: request.InvocationID,
+		WorkspaceID: request.WorkspaceID, CompanyID: request.CompanyID, FirstStoreID: request.FirstStoreID,
+		InitialAdminUserID: request.InitialAdminUserID, InitialAdminLoginID: request.InitialAdminLoginID,
+	}, nil
 }
 
-func (identityBootstrapBindingStub) ReconcileWorkspaceRoles(context.Context, identitysdk.WorkspaceRoleReconcileRequest, identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceRoleReconcileResult, error) {
-	return identitysdk.WorkspaceRoleReconcileResult{}, nil
+func (identityBootstrapBindingStub) ClaimWorkspaceIdentityBootstrapCredentialV2(context.Context, identitysdk.WorkspaceIdentityBootstrapCredentialClaim) (identitysdk.WorkspaceIdentityBootstrapOneTimeCredential, error) {
+	return identitysdk.WorkspaceIdentityBootstrapOneTimeCredential{LoginID: "admin@example.test", InitialPassword: "GeneratedBootstrap1!", MustChangePassword: true}, nil
+}
+
+func (identityBootstrapBindingStub) CompleteWorkspaceIdentityBootstrapV2(context.Context, identitysdk.WorkspaceIdentityBootstrapCompletion) error {
+	return nil
 }
 
 func (identityBootstrapBindingStub) Close(context.Context) error { return nil }
@@ -164,20 +179,29 @@ func validOptions() Options {
 		ConnectorContractVersion:  connector.ContractVersion,
 		ConnectorContractSHA256:   connector.ContractSHA256,
 		DomainSDK:                 domainSDK,
-	}, IdentityFactory: identityFactoryStub{}, NotificationFactory: notificationFactoryStub{}, MonitoringFactory: monitoringFactoryStub{}, SchedulerFactory: schedulerFactoryStub{}, DataExchangeFactory: dataExchangeFactoryStub{}, AgentFactory: agentFactoryStub{}, IntegrationFactory: integrationFactoryStub{}, ReportFactory: reportmodule.NewFactory()}
+	}, IdentityFactory: identityFactoryStub{}, NotificationFactory: notificationFactoryStub{}, MonitoringFactory: monitoringFactoryStub{}, SchedulerFactory: schedulerFactoryStub{}, DataExchangeFactory: dataExchangeFactoryStub{}, AgentFactory: agentFactoryStub{}, IntegrationFactory: integrationFactoryStub{}, ReportFactory: reportmodule.NewFactory(), InitialWorkspaceCredentialDelivery: acceptingCredentialDelivery{}}
 }
 
 func serverManifestJSON(t *testing.T, target *manifestmodel.GeneratedDomainSDKIdentity) []byte {
 	t.Helper()
 	manifest := manifestmodel.ManifestSchema{
 		SchemaVersion: manifestmodel.CurrentManifestSchemaVersion, TemplateID: "server-test", Version: "1.0.0", Name: "Server Test",
-		SourceBlueprintID: provision.DirectAuthoringSourceID, Objects: []definitionmodel.ObjectSchema{}, GeneratedDomainSDK: target,
+		SourceBlueprintID: provision.DirectAuthoringSourceID, Objects: []definitionmodel.ObjectSchema{}, Roles: workspaceRolesForTest(), GeneratedDomainSDK: target,
 	}
 	payload, err := json.Marshal(manifest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return payload
+}
+
+func workspaceRolesForTest() []manifestmodel.RoleSchema {
+	return []manifestmodel.RoleSchema{
+		{Key: identitysdk.WorkspaceBootstrapRoleTenantAdmin, Name: "Platform administrator", Audience: "user", AssignmentMode: "manual", RiskLevel: "privileged"},
+		{Key: identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin, Name: "Headquarters administrator", Audience: "user", AssignmentMode: "manual", RiskLevel: "privileged"},
+		{Key: identitysdk.WorkspaceBootstrapRoleStoreManager, Name: "Store manager", Audience: "user", AssignmentMode: "manual"},
+		{Key: identitysdk.WorkspaceBootstrapRoleStaff, Name: "Staff", Audience: "user", AssignmentMode: "manual"},
+	}
 }
 
 func manifestDomainSDKTarget(identity DomainSDKIdentity) *manifestmodel.GeneratedDomainSDKIdentity {
@@ -191,10 +215,11 @@ func manifestDomainSDKTarget(identity DomainSDKIdentity) *manifestmodel.Generate
 func serverTestConfig() config.Config {
 	return config.Config{
 		Port: ":0", ManifestPath: "runtime-manifest.json", TelemetryExportTimeout: time.Second,
-		IdentityAudience: "domainry-runtime", InitialTenantRequestID: "initial-tenant", InitialTenantCode: "primary",
-		InitialTenantName: "Primary", InitialManagementLoginID: "admin@example.test", InitialManagementName: "Admin",
-		InitialManagementPassword: "BootstrapAdmin1!", InitialTenantStoreConfiguration: "{}",
-		HTTPReadHeaderTimeout: time.Second, HTTPReadTimeout: time.Second, HTTPWriteTimeout: time.Second,
+		IdentityAudience: "domainry-runtime", InitialWorkspaceRequestID: "initial-workspace", InitialWorkspaceCode: "primary",
+		InitialWorkspaceName: "Primary", InitialWorkspaceFirstStoreCode: "primary-store", InitialWorkspaceFirstStoreName: "Primary Store",
+		InitialWorkspaceAdminLoginID: "admin@example.test", InitialWorkspaceAdminName: "Admin",
+		InitialWorkspaceCommercialConfigurationJSON: `{"plan":"standard","included_user_limit":1,"max_user_limit":100,"included_customer_limit":0,"max_customer_limit":1000,"included_store_limit":1,"max_stores":2,"contract_date":"2026-09-06","billing_day":1,"billing_contact_name":"","billing_contact_phone":"","billing_contact_email":"","billing_contact_address":"","billing_contact_notes":""}`,
+		HTTPReadHeaderTimeout:                       time.Second, HTTPReadTimeout: time.Second, HTTPWriteTimeout: time.Second,
 		HTTPIdleTimeout: time.Second, HTTPShutdownTimeout: time.Second, HTTPMaxHeaderBytes: 1024,
 	}
 }

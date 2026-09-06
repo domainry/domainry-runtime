@@ -11,7 +11,7 @@ import (
 
 func actionReadCapabilityOperation(operation string) bool {
 	switch strings.TrimSpace(operation) {
-	case "get", "get_for_update", "optional", "list", "exists", "count":
+	case "get", "get_for_update", "optional", "list", "exists", "count", "conditional_update_many":
 		return true
 	default:
 		return false
@@ -20,7 +20,7 @@ func actionReadCapabilityOperation(operation string) bool {
 
 func actionCapabilityWriteOperation(operation string) bool {
 	switch strings.TrimSpace(operation) {
-	case "create", "update", "conditional_update", "delete", "restore":
+	case "create", "update", "conditional_update", "conditional_update_many", "delete", "restore":
 		return true
 	default:
 		return false

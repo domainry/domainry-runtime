@@ -9,88 +9,101 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	"github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	workspaceprovisionmodel "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/model"
+	workspaceprovisionvalidation "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/validation"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 )
 
+const workspaceProvisioningReceiptTable = "_workspace_provisioning_receipts_v3"
+
 type WorkspaceProvisionStore struct {
-	runtime  *database.RuntimeStore
-	identity identitysdk.EmbeddedWorkspaceProvisioner
-	manifest manifestmodel.ManifestSchema
-	failures FailureInjector
-	issued   sync.Map
+	runtime     *database.RuntimeStore
+	bootstrap   identitysdk.EmbeddedWorkspaceIdentityBootstrapV2
+	manifest    manifestmodel.ManifestSchema
+	participant runtimeext.WorkspaceBootstrapParticipant
+	failures    FailureInjector
 }
 
+// NewWorkspaceProvisionStore accepts an ordinary initialized Binding, but the
+// provisioning path requires its V2 bootstrap capability. There is
+// deliberately no V1 fallback.
 func NewWorkspaceProvisionStore(store *database.RuntimeStore, binding identitysdk.Binding, manifest manifestmodel.ManifestSchema) *WorkspaceProvisionStore {
-	provisioner, _ := binding.(identitysdk.EmbeddedWorkspaceProvisioner)
-	return &WorkspaceProvisionStore{runtime: store, identity: provisioner, manifest: manifest}
+	bootstrap, _ := binding.(identitysdk.EmbeddedWorkspaceIdentityBootstrapV2)
+	return &WorkspaceProvisionStore{runtime: store, bootstrap: bootstrap, manifest: manifest}
 }
 
-func NewTenantInitializationStore(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, manifest manifestmodel.ManifestSchema) *WorkspaceProvisionStore {
-	return &WorkspaceProvisionStore{runtime: store, identity: binding, manifest: manifest}
-}
-
-func NewWorkspaceProvisionStoreWithFailureInjector(store *database.RuntimeStore, binding identitysdk.Binding, manifest manifestmodel.ManifestSchema, failures FailureInjector) *WorkspaceProvisionStore {
+func NewWorkspaceProvisionStoreWithParticipant(store *database.RuntimeStore, binding identitysdk.Binding, manifest manifestmodel.ManifestSchema, participant runtimeext.WorkspaceBootstrapParticipant) *WorkspaceProvisionStore {
 	result := NewWorkspaceProvisionStore(store, binding, manifest)
+	result.participant = participant
+	return result
+}
+
+func NewWorkspaceInitializationStore(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, manifest manifestmodel.ManifestSchema) *WorkspaceProvisionStore {
+	return &WorkspaceProvisionStore{runtime: store, bootstrap: binding, manifest: manifest}
+}
+
+func NewWorkspaceInitializationStoreWithParticipant(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, manifest manifestmodel.ManifestSchema, participant runtimeext.WorkspaceBootstrapParticipant) *WorkspaceProvisionStore {
+	result := NewWorkspaceInitializationStore(store, binding, manifest)
+	result.participant = participant
+	return result
+}
+
+func NewWorkspaceProvisionStoreWithFailureInjector(store *database.RuntimeStore, binding identitysdk.Binding, manifest manifestmodel.ManifestSchema, participant runtimeext.WorkspaceBootstrapParticipant, failures FailureInjector) *WorkspaceProvisionStore {
+	result := NewWorkspaceProvisionStoreWithParticipant(store, binding, manifest, participant)
 	result.failures = failures
 	return result
 }
 
-var codePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,62}$`)
-
 func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request workspaceprovisionmodel.Request) (workspaceprovisionmodel.Result, error) {
-	return store.provision(ctx, request, false, nil, nil)
+	return store.provision(ctx, request, false)
 }
 
-func (store *WorkspaceProvisionStore) Initialize(ctx context.Context, request workspaceprovisionmodel.Request, initialPassword string) (workspaceprovisionmodel.Result, error) {
-	return store.InitializeWithAcceptanceFixtures(ctx, request, initialPassword, nil, nil)
+func (store *WorkspaceProvisionStore) InitializeV2(ctx context.Context, request workspaceprovisionmodel.Request) (workspaceprovisionmodel.Result, error) {
+	return store.provision(ctx, request, true)
 }
 
-func (store *WorkspaceProvisionStore) InitializeWithAcceptanceFixtures(ctx context.Context, request workspaceprovisionmodel.Request, initialPassword string, organizations []identitysdk.WorkspaceAcceptanceOrganization, actors []identitysdk.WorkspaceAcceptanceActor) (workspaceprovisionmodel.Result, error) {
-	request.InitialPassword = initialPassword
-	return store.provision(ctx, request, true, organizations, actors)
-}
-
-func (store *WorkspaceProvisionStore) provision(ctx context.Context, request workspaceprovisionmodel.Request, initialize bool, acceptanceOrganizations []identitysdk.WorkspaceAcceptanceOrganization, acceptanceActors []identitysdk.WorkspaceAcceptanceActor) (workspaceprovisionmodel.Result, error) {
-	request.RequestID = strings.TrimSpace(request.RequestID)
-	request.TenantCode = canonicalCode(request.TenantCode)
-	request.TenantName = strings.TrimSpace(request.TenantName)
-	request.AdminLoginID = strings.ToLower(strings.TrimSpace(request.AdminLoginID))
-	request.AdminName = strings.TrimSpace(request.AdminName)
-	if store == nil || store.runtime == nil || store.identity == nil {
+func (store *WorkspaceProvisionStore) provision(ctx context.Context, request workspaceprovisionmodel.Request, initialize bool) (result workspaceprovisionmodel.Result, err error) {
+	request = workspaceprovisionvalidation.NormalizeRequest(request)
+	if store == nil || store.runtime == nil || store.bootstrap == nil {
 		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrIdentityUnavailable
 	}
-	if request.RequestID == "" || !codePattern.MatchString(request.TenantCode) || strings.EqualFold(request.TenantCode, "default") || request.TenantName == "" || request.AdminLoginID == "" || request.AdminName == "" {
-		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInvalid
+	if err := workspaceprovisionvalidation.ValidateRequest(request); err != nil {
+		return workspaceprovisionmodel.Result{}, err
 	}
-	configuration, err := json.Marshal(request.StoreConfiguration)
+	if err := store.validateApplicationBootstrapRequest(request.ApplicationBootstrap); err != nil {
+		return workspaceprovisionmodel.Result{}, err
+	}
+	configuration, err := json.Marshal(request.CommercialConfiguration)
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInvalid
 	}
-	fingerprint := requestFingerprint(request, configuration)
+	applicationInput, err := json.Marshal(request.ApplicationBootstrap)
+	if err != nil {
+		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInvalid
+	}
+	fingerprint := requestFingerprint(request, configuration, applicationInput)
 	if replay, found, replayErr := store.receipt(ctx, request.RequestID, fingerprint); found || replayErr != nil {
 		if replayErr != nil {
 			return workspaceprovisionmodel.Result{}, replayErr
 		}
-		if password, ok := store.issued.Load(request.RequestID); ok {
-			replay.InitialPassword, _ = password.(string)
-		}
 		replay.Replayed = true
+		replay.CredentialDelivery = workspaceprovisionmodel.CredentialUnavailableResetRequired
 		return replay, nil
 	}
-	installation, initialized, err := LoadInstallation(ctx, store.runtime)
+
+	_, initialized, err := LoadInstallation(ctx, store.runtime)
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
@@ -100,181 +113,321 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	if !initialize && !initialized {
 		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInitializationRequired
 	}
-	tenantRegistryID, err := randomID("tenant")
-	if err != nil {
-		return workspaceprovisionmodel.Result{}, err
-	}
+
 	workspaceID, err := randomID("workspace")
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
-	result := workspaceprovisionmodel.Result{
-		TenantRegistryID: tenantRegistryID, WorkspaceID: workspaceID, CanonicalCode: request.TenantCode,
-		AdminLoginID: request.AdminLoginID, MustChangePassword: true,
+	companyID, err := randomID("company")
+	if err != nil {
+		return workspaceprovisionmodel.Result{}, err
 	}
-	result.ProjectionIDs = store.applicationProjectionIDs(result.WorkspaceID)
+	firstStoreID, err := randomID("store")
+	if err != nil {
+		return workspaceprovisionmodel.Result{}, err
+	}
+	adminUserID, err := randomID("user")
+	if err != nil {
+		return workspaceprovisionmodel.Result{}, err
+	}
+	result = workspaceprovisionmodel.Result{
+		WorkspaceID: workspaceID, CompanyID: companyID, FirstStoreID: firstStoreID,
+		InitialAdminUserID: adminUserID, CanonicalCode: request.WorkspaceCode,
+		AdminLoginID: request.AdminLoginID, MustChangePassword: true,
+		CredentialDelivery: workspaceprovisionmodel.CredentialUnavailableResetRequired,
+	}
+
 	tx, err := store.runtime.DB().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
-	defer func() { _ = tx.Rollback() }()
-	if err := store.insertRuntimeWorkspace(ctx, tx, request, result, string(configuration)); err != nil {
+	var identityReceipt identitysdk.WorkspaceIdentityBootstrapV2Receipt
+	committed := false
+	completionAttempted := false
+	defer func() {
+		if committed {
+			return
+		}
 		_ = tx.Rollback()
-		return store.afterFailedInsert(ctx, request, fingerprint, err)
-	}
-	identityResult, err := store.identity.ProvisionWorkspaceIdentity(ctx, identitysdk.WorkspaceIdentityProvisionRequest{
-		WorkspaceID: result.WorkspaceID, AdminLoginID: request.AdminLoginID, AdminName: request.AdminName, InitialPassword: request.InitialPassword,
-		AcceptanceOrganizations: acceptanceOrganizations, AcceptanceActors: acceptanceActors,
-	}, identitysdk.EmbeddedTransaction{Native: tx, WorkspaceProvisionFailures: store.identityFailureInjector()})
-	if err != nil {
-		return workspaceprovisionmodel.Result{}, err
-	}
-	result.AdminLoginID, result.InitialPassword, result.MustChangePassword = identityResult.AdminLoginID, identityResult.InitialPassword, identityResult.MustChangePassword
-	headquartersWorkspaceID := installation.WorkspaceID
+		if identityReceipt.ReceiptID == "" || completionAttempted {
+			return
+		}
+		completionAttempted = true
+		completionErr := store.bootstrap.CompleteWorkspaceIdentityBootstrapV2(context.WithoutCancel(ctx), identitysdk.WorkspaceIdentityBootstrapCompletion{
+			WorkspaceID: identityReceipt.WorkspaceID, ReceiptID: identityReceipt.ReceiptID,
+			Outcome: identitysdk.WorkspaceIdentityBootstrapTransactionRolledBack,
+		})
+		if completionErr != nil && err == nil {
+			err = completionErr
+			result = workspaceprovisionmodel.Result{}
+		}
+	}()
+
+	installationIdentity := ""
 	if initialize {
-		headquartersWorkspaceID = result.WorkspaceID
-		if err := store.insertInstallation(ctx, tx, result); err != nil {
+		installationIdentity, err = store.runtime.InstallationIdentity(ctx)
+		if err != nil {
 			return workspaceprovisionmodel.Result{}, err
 		}
 	}
-	if err := store.insertConfigurationProjectionsAndReceipt(ctx, tx, request, result, headquartersWorkspaceID, fingerprint, string(configuration)); err != nil {
-		_ = tx.Rollback()
+	if err = store.insertRuntimeWorkspace(ctx, tx, request, result, installationIdentity); err != nil {
 		return store.afterFailedInsert(ctx, request, fingerprint, err)
 	}
-	if err := tx.Commit(); err != nil {
+
+	identityReceipt, err = store.bootstrap.BootstrapWorkspaceIdentityV2(ctx, identitysdk.WorkspaceIdentityBootstrapV2Request{
+		ContractVersion: identitysdk.CurrentWorkspaceIdentityBootstrapContractVersion,
+		ContractHash:    identitysdk.CurrentWorkspaceIdentityBootstrapContractHash,
+		InvocationID:    request.RequestID, WorkspaceID: result.WorkspaceID,
+		CompanyID: result.CompanyID, CompanyCode: request.WorkspaceCode + "-company", CompanyName: request.WorkspaceName,
+		FirstStoreID: result.FirstStoreID, FirstStoreCode: request.FirstStoreCode, FirstStoreName: request.FirstStoreName,
+		InitialAdminUserID: result.InitialAdminUserID, InitialAdminLoginID: request.AdminLoginID, InitialAdminName: request.AdminName,
+	}, identitysdk.EmbeddedTransaction{Executor: tx, WorkspaceProvisionFailures: store.identityFailureInjector()})
+	if err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
-	store.issued.Store(request.RequestID, result.InitialPassword)
+	if err = validateIdentityReceipt(result, request.RequestID, identityReceipt); err != nil {
+		return workspaceprovisionmodel.Result{}, err
+	}
+	result.AdminLoginID = identityReceipt.InitialAdminLoginID
+	if err = store.insertApplicationBootstrap(ctx, tx, request.ApplicationBootstrap, result); err != nil {
+		return workspaceprovisionmodel.Result{}, err
+	}
+	if err = store.insertConfigurationAndReceipt(ctx, tx, request, result, identityReceipt, fingerprint); err != nil {
+		return workspaceprovisionmodel.Result{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return workspaceprovisionmodel.Result{}, err
+	}
+	committed = true
+	completionAttempted = true
+	if err = store.bootstrap.CompleteWorkspaceIdentityBootstrapV2(context.WithoutCancel(ctx), identitysdk.WorkspaceIdentityBootstrapCompletion{
+		WorkspaceID: identityReceipt.WorkspaceID, ReceiptID: identityReceipt.ReceiptID,
+		Outcome: identitysdk.WorkspaceIdentityBootstrapTransactionCommitted,
+	}); err != nil {
+		return result, nil
+	}
+	credential, err := store.bootstrap.ClaimWorkspaceIdentityBootstrapCredentialV2(ctx, identitysdk.WorkspaceIdentityBootstrapCredentialClaim{
+		WorkspaceID: identityReceipt.WorkspaceID, ReceiptID: identityReceipt.ReceiptID,
+	})
+	if err != nil {
+		return result, nil
+	}
+	result.AdminLoginID = credential.LoginID
+	result.InitialPassword = credential.InitialPassword
+	result.MustChangePassword = credential.MustChangePassword
+	result.CredentialDelivery = workspaceprovisionmodel.CredentialDelivered
 	return result, nil
 }
 
-func (store *WorkspaceProvisionStore) insertInstallation(ctx context.Context, tx *sql.Tx, result workspaceprovisionmodel.Result) error {
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_tenant_installation").
-		Columns("installation_key", "tenant_registry_id", "workspace_id", "initialized_at").
-		Values(installationKey, result.TenantRegistryID, result.WorkspaceID, now)); err != nil {
-		return workspaceprovisionmodel.ErrAlreadyInitialized
+func validateIdentityReceipt(result workspaceprovisionmodel.Result, invocationID string, receipt identitysdk.WorkspaceIdentityBootstrapV2Receipt) error {
+	if receipt.ContractVersion != identitysdk.CurrentWorkspaceIdentityBootstrapContractVersion ||
+		receipt.ContractHash != identitysdk.CurrentWorkspaceIdentityBootstrapContractHash ||
+		receipt.InvocationID != invocationID || receipt.WorkspaceID != result.WorkspaceID ||
+		receipt.CompanyID != result.CompanyID || receipt.FirstStoreID != result.FirstStoreID ||
+		receipt.InitialAdminUserID != result.InitialAdminUserID || strings.TrimSpace(receipt.ReceiptID) == "" ||
+		strings.TrimSpace(receipt.InitialAdminLoginID) == "" {
+		return fmt.Errorf("Identity workspace bootstrap V2 returned an invalid receipt")
 	}
-	return store.inject(FailureAfterInstallation)
+	return nil
 }
 
-func (store *WorkspaceProvisionStore) ReconcileWorkspaceRoles(ctx context.Context, workspaceID string) (workspaceprovisionmodel.RoleReconciliationResult, error) {
-	workspaceID = strings.TrimSpace(workspaceID)
-	if store == nil || store.runtime == nil || store.identity == nil || len(workspaceID) == 0 {
-		return workspaceprovisionmodel.RoleReconciliationResult{}, workspaceprovisionmodel.ErrIdentityUnavailable
+func (store *WorkspaceProvisionStore) validateApplicationBootstrapRequest(input map[string]any) error {
+	if store.participant == nil {
+		if len(input) == 0 {
+			return nil
+		}
+		return workspaceprovisionmodel.ErrInvalid
 	}
-	tx, err := store.runtime.DB().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	descriptor := store.participant.Descriptor()
+	if err := descriptor.Validate(); err != nil {
+		return fmt.Errorf("workspace bootstrap participant: %w", err)
+	}
+	_, err := normalizeApplicationBootstrapInput(descriptor, input)
 	if err != nil {
-		return workspaceprovisionmodel.RoleReconciliationResult{}, err
+		return workspaceprovisionmodel.ErrInvalid
 	}
-	defer func() { _ = tx.Rollback() }()
-	queryValue, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("id").Where(query.Equal("id", workspaceID)).Build()
-	if err != nil {
-		return workspaceprovisionmodel.RoleReconciliationResult{}, err
-	}
-	var found string
-	if err := tx.QueryRowContext(ctx, queryValue, arguments...).Scan(&found); errors.Is(err, sql.ErrNoRows) {
-		return workspaceprovisionmodel.RoleReconciliationResult{}, workspaceprovisionmodel.ErrWorkspaceNotFound
-	} else if err != nil {
-		return workspaceprovisionmodel.RoleReconciliationResult{}, err
-	}
-	receipt, err := store.identity.ReconcileWorkspaceRoles(ctx, identitysdk.WorkspaceRoleReconcileRequest{WorkspaceID: workspaceID}, identitysdk.EmbeddedTransaction{Native: tx})
-	if err != nil {
-		return workspaceprovisionmodel.RoleReconciliationResult{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return workspaceprovisionmodel.RoleReconciliationResult{}, err
-	}
-	return workspaceprovisionmodel.RoleReconciliationResult{WorkspaceID: workspaceID, ProvisionedRoles: receipt.ProvisionedRoles}, nil
+	return nil
 }
 
-func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, configuration string) error {
+func (store *WorkspaceProvisionStore) insertApplicationBootstrap(ctx context.Context, tx *sql.Tx, input map[string]any, result workspaceprovisionmodel.Result) error {
+	if store.participant == nil {
+		return nil
+	}
+	descriptor := store.participant.Descriptor()
+	normalizedInput, err := normalizeApplicationBootstrapInput(descriptor, input)
+	if err != nil {
+		return workspaceprovisionmodel.ErrInvalid
+	}
+	records, err := store.participant.BuildWorkspaceBootstrap(ctx, runtimeext.WorkspaceBootstrapContext{
+		WorkspaceCode: result.CanonicalCode, CompanyOrganizationID: result.CompanyID,
+		FirstStoreOrganizationID: result.FirstStoreID, InitialAdministratorUserID: result.InitialAdminUserID,
+	}, normalizedInput)
+	if err != nil {
+		return fmt.Errorf("build application Workspace bootstrap: %w", err)
+	}
+	capabilities := make(map[string]runtimeext.WorkspaceBootstrapRecordCapability, len(descriptor.Records))
+	for _, capability := range descriptor.Records {
+		capabilities[strings.TrimSpace(capability.Key)] = capability
+	}
+	objects := make(map[string]definitionmodel.ObjectSchema, len(store.manifest.Objects))
+	for _, object := range store.manifest.Objects {
+		objects[strings.TrimSpace(object.Key)] = object
+	}
+	if len(records) != len(capabilities) {
+		return fmt.Errorf("application Workspace bootstrap must return exactly one record per capability")
+	}
+	seen := map[string]bool{}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("id", "canonical_code", "name", "status", "created_at", "updated_at").Values(result.WorkspaceID, result.CanonicalCode, request.TenantName, "active", now, now)); err != nil {
-		return err
+	for _, record := range records {
+		capabilityKey := strings.TrimSpace(record.CapabilityKey)
+		capability, found := capabilities[capabilityKey]
+		if !found || seen[capabilityKey] {
+			return fmt.Errorf("application Workspace bootstrap returned an undeclared record capability")
+		}
+		seen[capabilityKey] = true
+		object, found := objects[strings.TrimSpace(capability.ObjectKey)]
+		if !found {
+			return fmt.Errorf("application Workspace bootstrap object %q is unavailable", capability.ObjectKey)
+		}
+		allowed := map[string]bool{}
+		for _, field := range capability.Fields {
+			allowed[strings.TrimSpace(field)] = true
+		}
+		fields := map[string]definitionmodel.FieldSchema{}
+		for _, field := range object.Fields {
+			fields[field.Key] = field
+		}
+		columns := []string{"workspace_id", "id", "owner_org_id", "created_at", "updated_at"}
+		values := []any{result.WorkspaceID, stableApplicationBootstrapRecordID(result.WorkspaceID, capabilityKey, object.Key), result.FirstStoreID, now, now}
+		rawData := make(map[string]any, len(record.Data))
+		keys := make([]string, 0, len(record.Data))
+		for key := range record.Data {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			_, fieldFound := fields[key]
+			if !allowed[key] || !fieldFound {
+				return fmt.Errorf("application Workspace bootstrap returned an undeclared field")
+			}
+			rawData[key] = record.Data[key]
+		}
+		// Object defaults are manifest-owned static facts, not Handler-selected
+		// fields. Apply them inside the provisioning transaction before the same
+		// normalization and validation used for ordinary record creation.
+		recordpolicy.RecordApplyFieldDefaults(object, rawData)
+		keys = keys[:0]
+		for key := range rawData {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		normalizedData := map[string]any{}
+		for _, key := range keys {
+			field, fieldFound := fields[key]
+			if !fieldFound {
+				return fmt.Errorf("application Workspace bootstrap defaulted an unknown field")
+			}
+			value, normalizeErr := recordvalidation.RecordNormalizeFieldValue(field, rawData[key])
+			if normalizeErr != nil {
+				return workspaceprovisionmodel.ErrInvalid
+			}
+			normalizedData[key] = value
+			columns, values = append(columns, key), append(values, recordpersistence.RecordDatabaseFieldValue(store.runtime.RuntimeProfile(), field, value))
+		}
+		if err := recordvalidation.RecordValidateData(object, normalizedData, false); err != nil {
+			return workspaceprovisionmodel.ErrInvalid
+		}
+		if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), object.Key).Columns(columns...).Values(values...)); err != nil {
+			return fmt.Errorf("insert application Workspace bootstrap record %q: %w", capabilityKey, err)
+		}
+		if err := store.inject(FailureAfterApplicationBootstrapRecord + capabilityKey); err != nil {
+			return err
+		}
 	}
-	if err := store.inject(FailureAfterWorkspace); err != nil {
-		return err
-	}
-	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_tenant_registry").Columns("id", "workspace_id", "canonical_code", "created_at", "updated_at").Values(result.TenantRegistryID, result.WorkspaceID, result.CanonicalCode, now, now)); err != nil {
-		return err
-	}
-	return store.inject(FailureAfterTenantRegistry)
+	return store.inject(FailureAfterApplicationBootstrap)
 }
 
-func (store *WorkspaceProvisionStore) insertConfigurationProjectionsAndReceipt(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, headquartersWorkspaceID, fingerprint, configuration string) error {
+func normalizeApplicationBootstrapInput(descriptor runtimeext.WorkspaceBootstrapDescriptor, input map[string]any) (map[string]any, error) {
+	fields := make(map[string]runtimeext.WorkspaceBootstrapInputField, len(descriptor.InputFields))
+	result := make(map[string]any, len(descriptor.InputFields))
+	for _, field := range descriptor.InputFields {
+		key := strings.TrimSpace(field.Key)
+		fields[key] = field
+		if field.Default != nil {
+			normalized, err := runtimeext.NormalizeWorkspaceBootstrapInputValue(field, field.Default)
+			if err != nil {
+				return nil, fmt.Errorf("application bootstrap input default is invalid")
+			}
+			result[key] = normalized
+		}
+	}
+	for key, value := range input {
+		field, found := fields[key]
+		if !found {
+			return nil, fmt.Errorf("invalid application bootstrap input")
+		}
+		normalized, err := runtimeext.NormalizeWorkspaceBootstrapInputValue(field, value)
+		if err != nil {
+			return nil, fmt.Errorf("invalid application bootstrap input")
+		}
+		result[key] = normalized
+	}
+	for key, field := range fields {
+		value, found := result[key]
+		if field.Required && (!found || value == nil) {
+			return nil, fmt.Errorf("required application bootstrap input is missing")
+		}
+	}
+	return result, nil
+}
+
+func stableApplicationBootstrapRecordID(workspaceID, capabilityKey, objectKey string) string {
+	digest := sha256.Sum256([]byte("domainry-runtime/application-workspace-bootstrap/v1\x00" + workspaceID + "\x00" + capabilityKey + "\x00" + objectKey))
+	return objectKey + "_" + hex.EncodeToString(digest[:12])
+}
+
+func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, installationIdentity string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspace_configuration").Columns("workspace_id", "configuration_json", "created_at", "updated_at").Values(result.WorkspaceID, configuration, now, now)); err != nil {
+	var initialIdentity any
+	if installationIdentity != "" {
+		initialIdentity = installationIdentity
+	}
+	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspaces").
+		Columns("id", "canonical_code", "name", "status", "initial_installation_identity", "revision", "created_at", "updated_at").
+		Values(result.WorkspaceID, result.CanonicalCode, request.WorkspaceName, "active", initialIdentity, 1, now, now)); err != nil {
+		return err
+	}
+	return store.inject(FailureAfterWorkspace)
+}
+
+func (store *WorkspaceProvisionStore) insertConfigurationAndReceipt(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, identityReceipt identitysdk.WorkspaceIdentityBootstrapV2Receipt, fingerprint string) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	configuration := request.CommercialConfiguration
+	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspace_commercial_configuration").Columns(
+		"workspace_id", "plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit",
+		"included_store_limit", "max_stores", "contract_date", "billing_day", "billing_contact_name", "billing_contact_phone",
+		"billing_contact_email", "billing_contact_address", "billing_contact_notes", "revision", "created_at", "updated_at",
+	).Values(
+		result.WorkspaceID, configuration.Plan, configuration.IncludedUserLimit, configuration.MaxUserLimit,
+		configuration.IncludedCustomerLimit, configuration.MaxCustomerLimit, configuration.IncludedStoreLimit, configuration.MaxStores,
+		configuration.ContractDate, configuration.BillingDay, configuration.BillingContactName, configuration.BillingContactPhone,
+		configuration.BillingContactEmail, configuration.BillingContactAddress, configuration.BillingContactNotes, 1, now, now,
+	)); err != nil {
 		return err
 	}
 	if err := store.inject(FailureAfterWorkspaceConfiguration); err != nil {
 		return err
 	}
-	if err := store.insertApplicationProjections(ctx, tx, request, result, headquartersWorkspaceID, now); err != nil {
-		return err
-	}
-	if err := store.inject(FailureAfterApplicationProjections); err != nil {
-		return err
-	}
-	projectionIDs, err := json.Marshal(result.ProjectionIDs)
-	if err != nil {
-		return err
-	}
-	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspace_provisioning_receipts").Columns("request_id", "request_fingerprint", "tenant_registry_id", "workspace_id", "canonical_code", "admin_login_id", "must_change_password", "application_projection_ids_json", "created_at").Values(request.RequestID, fingerprint, result.TenantRegistryID, result.WorkspaceID, result.CanonicalCode, result.AdminLoginID, result.MustChangePassword, string(projectionIDs), now)); err != nil {
+	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), workspaceProvisioningReceiptTable).Columns(
+		"request_id", "request_fingerprint", "workspace_id", "canonical_code", "admin_login_id", "must_change_password",
+		"receipt_status", "identity_receipt_id", "identity_contract_version", "identity_contract_hash", "company_id", "first_store_id", "initial_admin_user_id", "created_at",
+	).Values(
+		request.RequestID, fingerprint, result.WorkspaceID, result.CanonicalCode, result.AdminLoginID, result.MustChangePassword,
+		"committed", identityReceipt.ReceiptID, identityReceipt.ContractVersion, identityReceipt.ContractHash, result.CompanyID, result.FirstStoreID, result.InitialAdminUserID, now,
+	)); err != nil {
 		return err
 	}
 	return store.inject(FailureAfterReceipt)
-}
-
-func (store *WorkspaceProvisionStore) insertApplicationProjections(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, headquartersWorkspaceID, now string) error {
-	objects := map[string]definitionmodel.ObjectSchema{}
-	for _, object := range store.manifest.Objects {
-		objects[object.Key] = object
-	}
-	for _, projection := range store.manifest.WorkspaceProvisioning {
-		object, found := objects[projection.ObjectKey]
-		if !found {
-			return fmt.Errorf("workspace provisioning projection object %q is unavailable", projection.ObjectKey)
-		}
-		workspaceID := result.WorkspaceID
-		if projection.Scope == "headquarters" {
-			workspaceID = headquartersWorkspaceID
-		}
-		columns := []string{"workspace_id", "id", "created_at", "updated_at"}
-		values := []any{workspaceID, result.ProjectionIDs[projection.Key], now, now}
-		fields := map[string]definitionmodel.FieldSchema{}
-		for _, field := range object.Fields {
-			fields[field.Key] = field
-		}
-		keys := make([]string, 0, len(projection.Data))
-		for key := range projection.Data {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		normalized := map[string]any{}
-		for _, key := range keys {
-			value, err := projectionValue(projection.Data[key], request, result)
-			if err != nil {
-				return workspaceprovisionmodel.ErrInvalid
-			}
-			value, err = recordvalidation.RecordNormalizeFieldValue(fields[key], value)
-			if err != nil {
-				return workspaceprovisionmodel.ErrInvalid
-			}
-			normalized[key] = value
-			columns, values = append(columns, key), append(values, recordpersistence.RecordDatabaseFieldValue(store.runtime.RuntimeProfile(), fields[key], value))
-		}
-		if err := recordvalidation.RecordValidateData(object, normalized, false); err != nil {
-			return workspaceprovisionmodel.ErrInvalid
-		}
-		if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), projection.ObjectKey).Columns(columns...).Values(values...)); err != nil {
-			return fmt.Errorf("insert workspace provisioning projection %s: %w", projection.Key, err)
-		}
-		if err := store.inject(FailureAfterApplicationProjection + projection.Key); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func insert(ctx context.Context, tx *sql.Tx, builder *query.InsertBuilder) error {
@@ -287,25 +440,32 @@ func insert(ctx context.Context, tx *sql.Tx, builder *query.InsertBuilder) error
 }
 
 func (store *WorkspaceProvisionStore) receipt(ctx context.Context, requestID, fingerprint string) (workspaceprovisionmodel.Result, bool, error) {
-	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspace_provisioning_receipts").Columns("request_fingerprint", "tenant_registry_id", "workspace_id", "canonical_code", "admin_login_id", "must_change_password", "application_projection_ids_json").Where(query.Equal("request_id", requestID)).Build()
+	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), workspaceProvisioningReceiptTable).Columns(
+		"request_fingerprint", "receipt_status", "workspace_id", "canonical_code", "admin_login_id", "must_change_password", "company_id", "first_store_id", "initial_admin_user_id",
+	).Where(query.Equal("request_id", requestID)).Build()
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, false, err
 	}
-	var stored, projectionIDs string
+	var stored, status string
+	var companyID, firstStoreID, adminUserID sql.NullString
 	var result workspaceprovisionmodel.Result
-	err = store.runtime.DB().QueryRowContext(ctx, statement, arguments...).Scan(&stored, &result.TenantRegistryID, &result.WorkspaceID, &result.CanonicalCode, &result.AdminLoginID, &result.MustChangePassword, &projectionIDs)
+	err = store.runtime.DB().QueryRowContext(ctx, statement, arguments...).Scan(
+		&stored, &status, &result.WorkspaceID, &result.CanonicalCode, &result.AdminLoginID, &result.MustChangePassword,
+		&companyID, &firstStoreID, &adminUserID,
+	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return workspaceprovisionmodel.Result{}, false, nil
 	}
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, false, err
 	}
+	if status != "committed" {
+		return workspaceprovisionmodel.Result{}, true, workspaceprovisionmodel.ErrLegacyAdjudicationRequired
+	}
 	if stored != fingerprint {
 		return workspaceprovisionmodel.Result{}, true, workspaceprovisionmodel.ErrIdempotencyConflict
 	}
-	if err := json.Unmarshal([]byte(projectionIDs), &result.ProjectionIDs); err != nil {
-		return workspaceprovisionmodel.Result{}, true, err
-	}
+	result.CompanyID, result.FirstStoreID, result.InitialAdminUserID = companyID.String, firstStoreID.String, adminUserID.String
 	return result, true, nil
 }
 
@@ -315,9 +475,10 @@ func (store *WorkspaceProvisionStore) afterFailedInsert(ctx context.Context, req
 			return workspaceprovisionmodel.Result{}, err
 		}
 		replay.Replayed = true
+		replay.CredentialDelivery = workspaceprovisionmodel.CredentialUnavailableResetRequired
 		return replay, nil
 	}
-	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("id").Where(query.Equal("canonical_code", request.TenantCode)).Build()
+	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("id").Where(query.Equal("canonical_code", request.WorkspaceCode)).Build()
 	if err == nil {
 		var id string
 		if scanErr := store.runtime.DB().QueryRowContext(ctx, statement, arguments...).Scan(&id); scanErr == nil && id != "" {
@@ -347,49 +508,8 @@ func (store *WorkspaceProvisionStore) identityFailureInjector() identitysdk.Work
 	return identityFailureInjectorAdapter{failures: store.failures}
 }
 
-func (store *WorkspaceProvisionStore) applicationProjectionIDs(workspaceID string) map[string]string {
-	ids := map[string]string{}
-	for _, projection := range store.manifest.WorkspaceProvisioning {
-		sum := sha256.Sum256([]byte(workspaceID + "\x00" + projection.Key + "\x00" + projection.ObjectKey))
-		ids[projection.Key] = projection.ObjectKey + "_" + hex.EncodeToString(sum[:12])
-	}
-	return ids
-}
-
-func projectionValue(value any, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result) (any, error) {
-	text, ok := value.(string)
-	if !ok || !strings.HasPrefix(text, "$provision.") {
-		return value, nil
-	}
-	switch text {
-	case "$provision.canonical_code":
-		return result.CanonicalCode, nil
-	case "$provision.tenant_name":
-		return request.TenantName, nil
-	case "$provision.workspace_id":
-		return result.WorkspaceID, nil
-	case "$provision.admin_login_id":
-		return result.AdminLoginID, nil
-	case "$provision.configuration_json":
-		payload, err := json.Marshal(request.StoreConfiguration)
-		return string(payload), err
-	}
-	if key := strings.TrimPrefix(text, "$provision.configuration."); key != text && key != "" {
-		value, found := request.StoreConfiguration[key]
-		if !found {
-			return nil, fmt.Errorf("configuration key %q is missing", key)
-		}
-		return value, nil
-	}
-	return nil, fmt.Errorf("unsupported provisioning expression %q", text)
-}
-
-func canonicalCode(value string) string {
-	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(value)), "_", "-")
-}
-
-func requestFingerprint(request workspaceprovisionmodel.Request, configuration []byte) string {
-	payload := strings.Join([]string{request.TenantCode, request.TenantName, request.AdminLoginID, request.AdminName, string(configuration)}, "\x00")
+func requestFingerprint(request workspaceprovisionmodel.Request, configuration, applicationInput []byte) string {
+	payload := strings.Join([]string{request.WorkspaceCode, request.WorkspaceName, request.FirstStoreCode, request.FirstStoreName, request.AdminLoginID, request.AdminName, string(configuration), string(applicationInput)}, "\x00")
 	sum := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(sum[:])
 }

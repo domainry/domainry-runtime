@@ -118,6 +118,10 @@ type BusinessPrincipalResolver interface {
 	ResolveBusinessPrincipal(context.Context, principalmodel.Principal, string, string) (principalmodel.Principal, error)
 }
 
+type WorkspaceAdmission interface {
+	WorkspaceActive(context.Context, string) (bool, error)
+}
+
 type SecurityAuditAppender interface {
 	AppendWithMetadata(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 }
@@ -135,6 +139,7 @@ type HTTPRouterDependencies struct {
 	IdentityAuthorization            identitysdk.PrincipalResolver
 	AuthorizationActions             func() *actioncontract.Registry
 	BusinessPrincipal                BusinessPrincipalResolver
+	WorkspaceAdmission               WorkspaceAdmission
 	SecurityAudit                    SecurityAuditAppender
 	RuntimeStatus                    DeploymentRuntimeStatusProvider
 	TechnicalMetrics                 TechnicalMetricsProvider

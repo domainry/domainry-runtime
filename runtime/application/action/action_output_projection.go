@@ -20,6 +20,21 @@ func ProjectBusinessHandlerOutput(_ context.Context, principal principalmodel.Pr
 		projected[key] = value
 	}
 	for _, resultField := range action.OutputFields {
+		if strings.TrimSpace(resultField.Type) == "store_organization_snapshot" {
+			value, exists := projected[resultField.Key]
+			if !exists {
+				if resultField.Required {
+					return nil, apperror.New(apperror.KindInternal, "backend.action.output_field_contract_invalid", nil, map[string]string{"action": action.Key, "field": resultField.Key})
+				}
+				continue
+			}
+			projectedValue, err := projectStoreOrganizationSnapshotOutput(principal, action.Key, resultField, value, objectForKey)
+			if err != nil {
+				return nil, err
+			}
+			projected[resultField.Key] = projectedValue
+			continue
+		}
 		objectKey, fieldKey := strings.TrimSpace(resultField.SourceObjectKey), strings.TrimSpace(resultField.SourceFieldKey)
 		if objectKey == "" && fieldKey == "" {
 			continue

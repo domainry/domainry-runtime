@@ -110,6 +110,27 @@ func TestStringBackedIdentityAndTemporalLiteralsMatchRuntimeValues(t *testing.T)
 	}
 }
 
+func TestExactDecimalDefaultsAndInputsRemainCanonicalStrings(t *testing.T) {
+	fields := []definitionmodel.ActionPayloadField{
+		{Key: "rate", Type: "percent", DefaultValue: "0.1"},
+		{Key: "amount", Type: "currency"},
+		{Key: "ratio", Type: "decimal"},
+	}
+	if issues := ValidateDefaults(fields, map[string]any{"amount": "123.40"}); len(issues) != 0 {
+		t.Fatalf("canonical exact decimal defaults issues=%#v", issues)
+	}
+	action := definitionmodel.ActionSchema{Key: "store.provision", ObjectKey: "store_config", PayloadFields: fields}
+	if issues := ValidateAction(action, "store_config", map[string]any{"amount": "123.40", "ratio": "-0.125"}, nil); len(issues) != 0 {
+		t.Fatalf("canonical exact decimal invocation issues=%#v", issues)
+	}
+	for _, value := range []string{"01.0", "+1", "1e2", "", " 0.1"} {
+		issues := ValidateDefaults([]definitionmodel.ActionPayloadField{{Key: "rate", Type: "percent", DefaultValue: value}}, nil)
+		if len(issues) != 1 || issues[0].Code != "invocation.default_type_mismatch" || issues[0].Expected != "number" || issues[0].Actual != "text" {
+			t.Fatalf("non-canonical exact decimal %q issues=%#v", value, issues)
+		}
+	}
+}
+
 func TestSharedInvocationPermissionContractFailsClosed(t *testing.T) {
 	action := definitionmodel.ActionSchema{
 		Key:       "document.reject",

@@ -2,6 +2,7 @@ package runtimehost
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -13,12 +14,17 @@ import (
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 )
 
-func projectIdentityDatabaseHandle(database *bootstrap.ProjectDatabase, filePath string, profile *runtimeBusinessProfileProjection) identitysdk.DatabaseHandle {
+func projectIdentityDatabaseHandle(database *bootstrap.ProjectDatabase, filePath string, profile *runtimeBusinessProfileProjection, usageOptions ...projectIdentityUsageOptions) identitysdk.DatabaseHandle {
 	var profileResolver identitysdk.BusinessProfileResolver
 	if profile != nil {
 		profileResolver = profile.Resolve
 	}
-	return identitysdk.DatabaseHandle{Pool: database.DB(), Driver: database.Driver(), Schema: database.DatabaseSchema(), FilePath: filePath, BusinessProfileResolver: profileResolver, Migrations: database, ModuleMigrations: database}
+	handle := identitysdk.DatabaseHandle{Pool: database.DB(), Driver: database.Driver(), Schema: database.DatabaseSchema(), FilePath: filePath, BusinessProfileResolver: profileResolver, Migrations: database, ModuleMigrations: database}
+	if len(usageOptions) > 0 && strings.TrimSpace(usageOptions[0].ApplicationKey) != "" && strings.TrimSpace(usageOptions[0].CursorSecret) != "" {
+		handle.WorkspaceIdentityUsageAuthority = newRuntimeWorkspaceIdentityUsageAuthority(database, usageOptions[0].ApplicationKey)
+		handle.WorkspaceIdentityUsageCursorKey = workspaceIdentityUsageCursorKey(usageOptions[0].CursorSecret)
+	}
+	return handle
 }
 
 type runtimeBusinessProfileProjection struct {

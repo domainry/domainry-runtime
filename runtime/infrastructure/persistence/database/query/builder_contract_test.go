@@ -5,8 +5,32 @@ import (
 	"strings"
 	"testing"
 
+	ormquery "github.com/domainry/domainry-orm/query"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
+
+func TestWorkspaceSetPredicateRequiresAnExplicitValidatedSet(t *testing.T) {
+	store := fuzzQueryStore{}
+	empty, err := BuildWorkspaceSetPredicate(store, nil, recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	where, args, err := ormquery.PreparePredicate(storeRenderer{store}, empty, 0)
+	if err != nil || !strings.Contains(where, "1 = 0") || len(args) != 0 {
+		t.Fatalf("empty where=%s args=%#v err=%v", where, args, err)
+	}
+	set, err := BuildWorkspaceSetPredicate(store, []string{"workspace-b", "workspace-a", "workspace-b"}, recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"workspace_id": "outside", "status": "paid"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	where, args, err = ormquery.PreparePredicate(storeRenderer{store}, set, 0)
+	if err != nil || strings.Count(where, "workspace_id") != 1 || !reflect.DeepEqual(args, []any{"workspace-b", "workspace-a", "paid"}) {
+		t.Fatalf("set where=%s args=%#v err=%v", where, args, err)
+	}
+	if _, err := BuildWorkspaceSetPredicate(store, []string{" "}, recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}); err == nil {
+		t.Fatal("invalid Workspace ID was accepted")
+	}
+}
 
 func TestTenantWhereScopeAndFilterContract(t *testing.T) {
 	store := fuzzQueryStore{}
@@ -50,6 +74,23 @@ func TestTenantWhereAllKeepsTenantAndBusinessFiltersWithoutScopePredicate(t *tes
 	}
 	if !reflect.DeepEqual(args, []any{"workspace-a", "candidate", "open"}) {
 		t.Fatalf("all args=%#v", args)
+	}
+}
+
+func TestTenantWhereCatalogOwnedRecordLookupOnlyNarrowsWorkspaceAndDataScope(t *testing.T) {
+	where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{
+		AuthorizationMode:        recordmodel.RecordQueryAuthorizationUnrestricted,
+		OwnerOrganizationScopeID: "store-north",
+		Filters:                  map[string]any{"status": "active"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(where, `"workspace_id" = $1`) || !strings.Contains(where, `"owner_org_id" = $2`) || !strings.Contains(where, `"status" = $3`) {
+		t.Fatalf("catalog owner scope did not remain conjunctive: where=%s", where)
+	}
+	if !reflect.DeepEqual(args, []any{"workspace-a", "store-north", "active"}) {
+		t.Fatalf("args=%#v", args)
 	}
 }
 

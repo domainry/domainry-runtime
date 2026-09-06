@@ -785,7 +785,6 @@ func bootstrapTestConfigForManifest(t *testing.T, manifestName string) config.Co
 		AppLocale:                  "en-US",
 		IdentityWorkspaceID:        "workspace-primary",
 		IdentityAudience:           "domainry-runtime",
-		NotificationTenantID:       "tenant-primary",
 		NotificationWorkspaceID:    "workspace-primary",
 		NotificationApplicationKey: "domainry-runtime",
 

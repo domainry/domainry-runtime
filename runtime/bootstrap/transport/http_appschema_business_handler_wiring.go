@@ -46,8 +46,9 @@ func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
 	})
 	a.handlers.OpenAPI = openapihttp.NewOpenAPIHandler(openapihttp.OpenAPIDependencies{
 		Schema: records.Applications().Schema, WriteJSON: a.callbacks.WriteJSON,
-		ProductBrandName: a.dependencies.Config.EffectiveProductBrandName(),
-		ModuleAdapters:   a.dependencies.ModuleHTTPAdapters,
+		ProductBrandName:   a.dependencies.Config.EffectiveProductBrandName(),
+		ModuleAdapters:     a.dependencies.ModuleHTTPAdapters,
+		WorkspaceBootstrap: a.workspaceBootstrapParticipant(),
 	})
 	a.handlers.Operations = operationshttp.NewOperationsHandler(operationshttp.OperationsDependencies{
 		Service: operationsService, Controls: operationsapplication.NewOperationsControlApplicationService(operationsStore, operationsService, operationsStore, nil), Leases: operationsapplication.NewOperationsLeaseApplicationService(operationsStore, operationsService, nil), Principal: a.callbacks.Principal,

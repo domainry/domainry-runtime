@@ -54,6 +54,21 @@ type ActionExecution interface {
 	AcquireSynchronousConnectorCall(ActionConnectorCapability) (SynchronousConnectorCallLease, error)
 }
 
+// ConditionalUpdateManyExecution is optional so older handwritten Runtimeext
+// test doubles do not accidentally acquire set-mutation authority. Generated
+// Action bindings expose it only for an authored conditional_update_many grant.
+type ConditionalUpdateManyExecution interface {
+	ConditionalUpdateMany(context.Context, ConditionalUpdateManyRequest) (ConditionalUpdateManyResult, error)
+}
+
+func ApplyConditionalUpdateMany(ctx context.Context, execution ActionExecution, request ConditionalUpdateManyRequest) (ConditionalUpdateManyResult, error) {
+	capability, ok := execution.(ConditionalUpdateManyExecution)
+	if !ok {
+		return ConditionalUpdateManyResult{}, &BusinessError{Code: "backend.action.conditional_update_many_unavailable", Message: "Runtime conditional update-many execution is unavailable"}
+	}
+	return capability.ConditionalUpdateMany(ctx, request)
+}
+
 type FileVerificationExecution interface {
 	VerifyFileClean(context.Context, FileVerificationRequest) (FileVerificationEvidence, error)
 }

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	identityhttpapi "github.com/domainry/domainry-identity-sdk/httpapi"
 	identitymodule "github.com/domainry/domainry-identity/module"
 	integrationmodule "github.com/domainry/domainry-integration/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
@@ -55,6 +56,14 @@ func TestManagedIdentityCompositionProjectsApplicationFieldPermissionsEverywhere
 	}
 	session, err = binding.Credentials().ChangePassword(t.Context(), identitysdk.ChangePasswordRequest{
 		AccessToken: session.AccessToken, CurrentPassword: "Domainry@2026", NewPassword: "ManagedAccess@2026", IdempotencyKey: "managed-access-password-change",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	managedIdentityAssignHeadquartersRole(t, binding, session.AccessToken)
+	session, err = binding.Authentication().LoginWithPassword(t.Context(), identitysdk.PasswordLoginRequest{
+		WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience),
+		Login: "admin@example.com", Password: "ManagedAccess@2026",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -144,9 +153,12 @@ func managedIdentityFieldAccessManifest(t *testing.T, dir string) string {
 			object["config"] = map[string]any{"field_access_mode": "default_deny"}
 		}
 	}
+	var headquartersRole map[string]any
 	for _, value := range manifest["roles"].([]any) {
 		role := value.(map[string]any)
 		if role["key"] == "admin" {
+			role["key"] = identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin
+			role["name"] = "Headquarters administrator"
 			for _, permissionValue := range role["permissions"].([]any) {
 				permission := permissionValue.(map[string]any)
 				switch permission["permission_key"] {
@@ -163,7 +175,17 @@ func managedIdentityFieldAccessManifest(t *testing.T, dir string) string {
 				map[string]any{"object_key": "customer", "field_key": "owner", "read": false, "write": false, "export": false},
 			}
 			delete(role, "export_rules")
+			headquartersRole = role
 		}
+	}
+	if headquartersRole == nil {
+		t.Fatal("source manifest has no administrator role to adapt")
+	}
+	manifest["roles"] = []any{
+		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleTenantAdmin, "name": "Platform administrator", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+		headquartersRole,
+		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleStoreManager, "name": "Store manager", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleStaff, "name": "Staff", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
 	}
 	for _, value := range manifest["seed_records"].([]any) {
 		seed := value.(map[string]any)
@@ -191,6 +213,32 @@ func managedIdentityFieldAccessManifest(t *testing.T, dir string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func managedIdentityAssignHeadquartersRole(t *testing.T, binding identitysdk.Binding, accessToken string) {
+	t.Helper()
+	provider, ok := binding.(identityhttpapi.Provider)
+	if !ok {
+		t.Fatal("Identity module exposes no HTTP adapter provider")
+	}
+	for _, adapter := range provider.HTTPAdapters() {
+		for _, route := range adapter.Routes() {
+			if route.Pattern() != "PUT /identity/users/{userID}/account-and-roles" {
+				continue
+			}
+			body := bytes.NewBufferString(`{"user":{"name":"Admin","email":"admin@example.com","status":"active"},"assignments":[{"role_id":"headquarters_admin"}]}`)
+			request := httptest.NewRequest(http.MethodPut, "/identity/users/admin/account-and-roles", body)
+			request.Header.Set("Authorization", "Bearer "+accessToken)
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			adapter.Handler().ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("assign headquarters role status=%d body=%s", response.Code, response.Body.String())
+			}
+			return
+		}
+	}
+	t.Fatal("Identity module exposes no account-and-roles route")
 }
 
 func managedIdentityFieldReport(key, field string) map[string]any {

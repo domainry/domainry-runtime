@@ -3,6 +3,7 @@
 package runtimehost
 
 import (
+	"context"
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
@@ -49,10 +50,44 @@ type Options struct {
 	// ConnectorProcesses is an explicit host policy for optional Provider
 	// subprocesses. The zero value denies every executable.
 	ConnectorProcesses ConnectorProcessPolicy
+	// InitialWorkspaceCredentialDelivery is the process-local, one-shot sink
+	// used only while creating the first Workspace. It never becomes a Runtime
+	// HTTP, manifest, audit, receipt, or logging surface.
+	InitialWorkspaceCredentialDelivery InitialWorkspaceCredentialDelivery
+	// InstallationAdministratorCredentialDelivery is a startup-only seam for
+	// private acceptance environments. Production normally selects the
+	// create-only file sink through explicit process configuration.
+	InstallationAdministratorCredentialDelivery InstallationAdministratorCredentialDelivery
 	// ProjectConfigFile and ProjectI18nDir point to optional Git-owned
 	// extension files relative to the backend working directory.
 	ProjectConfigFile string
 	ProjectI18nDir    string
+}
+
+type InitialWorkspaceCredential struct {
+	CanonicalCode      string `json:"-"`
+	LoginID            string `json:"-"`
+	InitialPassword    string `json:"-"`
+	MustChangePassword bool   `json:"-"`
+}
+
+type InitialWorkspaceCredentialDeliveryAcknowledgment struct{ Accepted bool }
+
+type InitialWorkspaceCredentialDelivery interface {
+	DeliverInitialWorkspaceCredential(context.Context, InitialWorkspaceCredential) (InitialWorkspaceCredentialDeliveryAcknowledgment, error)
+}
+
+type InstallationAdministratorCredential struct {
+	CanonicalWorkspaceCode string `json:"-"`
+	LoginID                string `json:"-"`
+	InitialPassword        string `json:"-"`
+	MustChangePassword     bool   `json:"-"`
+}
+
+type InstallationAdministratorCredentialDeliveryAcknowledgment struct{ Accepted bool }
+
+type InstallationAdministratorCredentialDelivery interface {
+	DeliverInstallationAdministratorCredential(context.Context, InstallationAdministratorCredential) (InstallationAdministratorCredentialDeliveryAcknowledgment, error)
 }
 
 type ConnectorProcessPolicy struct {

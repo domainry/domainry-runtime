@@ -27,6 +27,13 @@ type RecordMutationCommit struct {
 	WorkflowIntents    []workflowmodel.WorkflowExecution          `json:"workflow_intents,omitempty"`
 	NotificationEvents []notificationmodel.NotificationEvent      `json:"notification_events,omitempty"`
 	LocalizedValues    []recordmodel.RecordLocalizedValueMutation `json:"localized_values,omitempty"`
+	// Set fields are Runtime-internal authority for one conditional update-many
+	// statement. They are assembled only from a locked, authorized record page
+	// and never accepted from project Handler JSON.
+	SetRecordIDs              []string                            `json:"set_record_ids,omitempty"`
+	SetFilterExpression       *recordmodel.RecordFilterExpression `json:"-"`
+	SetExpectedAffected       int                                 `json:"set_expected_affected,omitempty"`
+	SetOwnerOrganizationScope string                              `json:"-"`
 }
 
 // MutationPredicate is a storage-neutral compare-and-set condition evaluated

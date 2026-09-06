@@ -5,13 +5,37 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workspaceprovisionmodel "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/model"
 )
 
+func workspaceProvisionTenantAdministrator(t *testing.T) principalmodel.Principal {
+	t.Helper()
+	previous := principalmodel.InstallationWorkspaceID
+	principalmodel.InstallationWorkspaceID = "workspace-primary"
+	t.Cleanup(func() { principalmodel.InstallationWorkspaceID = previous })
+	bundle := &identitysdk.AccessBundle{
+		ContractVersion: identitysdk.CurrentPolicyBundleVersion,
+		FunctionGrants:  []identitysdk.FunctionGrant{{Resource: "runtime.workspaceprovision", Action: "provision_workspace", Effect: identitysdk.EffectAllow}},
+		DataPolicies:    []identitysdk.DataPolicy{{Key: "workspace-provision", Resource: "runtime.workspaceprovision", Action: "provision_workspace", Effect: identitysdk.EffectAllow}},
+	}
+	return principalmodel.NewPrincipalFromIdentity(identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "platform-admin", RoleKey: WorkspaceAdministratorRoleKey, AccessBundle: bundle}, "")
+}
+
+func validWorkspaceProvisionApplicationRequest() workspaceprovisionmodel.Request {
+	return workspaceprovisionmodel.Request{
+		RequestID: "request-1", WorkspaceCode: "workspace-a", WorkspaceName: "Workspace A", FirstStoreCode: "store-a", FirstStoreName: "Store A",
+		AdminLoginID: "admin@example.test", AdminName: "Admin",
+		CommercialConfiguration: workspaceprovisionmodel.CommercialConfiguration{
+			Plan: "standard", IncludedUserLimit: 1, MaxUserLimit: 2, IncludedCustomerLimit: 1, MaxCustomerLimit: 2,
+			IncludedStoreLimit: 1, MaxStores: 2, ContractDate: "2026-09-06", BillingDay: 1,
+		},
+	}
+}
+
 type workspaceProvisionRepositoryProbe struct {
 	provisionCalls int
-	reconcileCalls int
 	provisionErr   error
 }
 
@@ -23,39 +47,29 @@ func (repository *workspaceProvisionRepositoryProbe) Provision(context.Context, 
 func TestWorkspaceProvisionApplicationServiceMapsAcceptanceFailureToStableCode(t *testing.T) {
 	repository := &workspaceProvisionRepositoryProbe{provisionErr: workspaceprovisionmodel.ErrAcceptanceFailure}
 	service := NewWorkspaceProvisionApplicationService(repository)
-	principal := principalmodel.NewSystemPrincipal("platform-admin", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "workspace provisioning"), ProvisionActionKey)
-	result, err := service.Provision(t.Context(), principal, workspaceprovisionmodel.Request{RequestID: "secret-request"})
-	if result.WorkspaceID != "" || result.TenantRegistryID != "" || result.InitialPassword != "" || len(result.ProjectionIDs) != 0 || apperror.CodeOf(err) != "workspace.provision_failed" || apperror.KindOf(err) != apperror.KindInternal {
+	principal := workspaceProvisionTenantAdministrator(t)
+	request := validWorkspaceProvisionApplicationRequest()
+	request.RequestID = "secret-request"
+	result, err := service.Provision(t.Context(), principal, request)
+	if result.WorkspaceID != "" || result.InitialPassword != "" || apperror.CodeOf(err) != "workspace.provision_failed" || apperror.KindOf(err) != apperror.KindInternal {
 		t.Fatalf("result=%#v code=%q kind=%q error=%v", result, apperror.CodeOf(err), apperror.KindOf(err), err)
 	}
-}
-
-func (repository *workspaceProvisionRepositoryProbe) ReconcileWorkspaceRoles(context.Context, string) (workspaceprovisionmodel.RoleReconciliationResult, error) {
-	repository.reconcileCalls++
-	return workspaceprovisionmodel.RoleReconciliationResult{WorkspaceID: "workspace-new"}, nil
 }
 
 func TestWorkspaceProvisionApplicationServiceAuthorizesBeforeRepositoryAccess(t *testing.T) {
 	repository := &workspaceProvisionRepositoryProbe{}
 	service := NewWorkspaceProvisionApplicationService(repository)
-	request := workspaceprovisionmodel.Request{RequestID: "request-1"}
+	request := validWorkspaceProvisionApplicationRequest()
 
 	if _, err := service.Provision(t.Context(), principalmodel.Principal{}, request); apperror.CodeOf(err) != "auth.permission_denied" {
 		t.Fatalf("provision denial=%v", err)
 	}
-	if _, err := service.ReconcileWorkspaceRoles(t.Context(), principalmodel.Principal{}, "workspace-new"); apperror.CodeOf(err) != "auth.permission_denied" {
-		t.Fatalf("reconcile denial=%v", err)
-	}
-	if repository.provisionCalls != 0 || repository.reconcileCalls != 0 {
-		t.Fatalf("denied request reached repository: provision=%d reconcile=%d", repository.provisionCalls, repository.reconcileCalls)
+	if repository.provisionCalls != 0 {
+		t.Fatalf("denied request reached repository: provision=%d", repository.provisionCalls)
 	}
 
-	provisioner := principalmodel.NewSystemPrincipal("platform-admin", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "workspace provisioning"), ProvisionActionKey)
+	provisioner := workspaceProvisionTenantAdministrator(t)
 	if _, err := service.Provision(t.Context(), provisioner, request); err != nil || repository.provisionCalls != 1 {
 		t.Fatalf("authorized provision calls=%d err=%v", repository.provisionCalls, err)
-	}
-	reconciler := principalmodel.NewSystemPrincipal("platform-admin", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "role reconciliation"), ReconcileRolesActionKey)
-	if _, err := service.ReconcileWorkspaceRoles(t.Context(), reconciler, "workspace-new"); err != nil || repository.reconcileCalls != 1 {
-		t.Fatalf("authorized reconcile calls=%d err=%v", repository.reconcileCalls, err)
 	}
 }

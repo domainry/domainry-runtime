@@ -17,8 +17,9 @@ var (
 )
 
 var (
-	handlerContractHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	handlerTypeIdentityPattern = regexp.MustCompile(`^[A-Za-z0-9._~\-/]+\.[A-Za-z_][A-Za-z0-9_]*$`)
+	handlerContractHashPattern  = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	handlerTypeIdentityPattern  = regexp.MustCompile(`^[A-Za-z0-9._~\-/]+\.[A-Za-z_][A-Za-z0-9_]*$`)
+	handlerFieldIdentityPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
 // ActionObjectCapability is the generated, Action-scoped object authority
@@ -83,16 +84,22 @@ type Handler[Capabilities, Input, Output any] func(context.Context, Capabilities
 // HandlerDescriptor is the Runtime-readable identity of a generated typed
 // Handler wrapper.
 type HandlerDescriptor struct {
-	ActionKey              string
-	InputType              string
-	OutputType             string
-	InputContractSHA256    string
-	OutputContractSHA256   string
-	HandlerRevision        string
-	ObjectCapabilities     []ActionObjectCapability
-	ConnectorCapabilities  []ActionConnectorCapability
-	FileCapabilities       []string
-	NotificationEventTypes []string
+	ActionKey                 string
+	InputType                 string
+	OutputType                string
+	InputContractSHA256       string
+	OutputContractSHA256      string
+	HandlerRevision           string
+	ObjectCapabilities        []ActionObjectCapability
+	ConnectorCapabilities     []ActionConnectorCapability
+	FileCapabilities          []string
+	NotificationEventTypes    []string
+	CrossWorkspaceAggregates  []CrossWorkspaceAggregateCapability
+	TargetOrganization        *ActionTargetOrganizationCapability
+	IdentityHandlerDelivery   *IdentityHandlerDeliveryCapability
+	StoreOrganizationCatalog  *StoreOrganizationCatalogCapability
+	StoreOrganizationMutation *ActionStoreOrganizationMutationCapability
+	WorkspaceIdentityUsage    *WorkspaceIdentityUsageCapability
 }
 
 func (d HandlerDescriptor) Validate() error {
@@ -114,6 +121,7 @@ func (d HandlerDescriptor) Validate() error {
 	allowed := map[string]bool{
 		"get": true, "get_for_update": true, "optional": true, "list": true, "exists": true, "count": true,
 		"create": true, "update": true, "conditional_update": true, "delete": true, "restore": true,
+		"conditional_update_many":            true,
 		RecordNotificationRecipientOperation: true,
 	}
 	for _, capability := range d.ObjectCapabilities {
@@ -161,7 +169,42 @@ func (d HandlerDescriptor) Validate() error {
 		}
 		notifications[key] = true
 	}
+	aggregates := map[string]bool{}
+	for _, capability := range d.CrossWorkspaceAggregates {
+		key := strings.TrimSpace(capability.Key)
+		if key == "" || aggregates[key] || !capability.Valid() {
+			return ErrHandlerCapabilityInvalid
+		}
+		aggregates[key] = true
+	}
+	if d.TargetOrganization != nil && !d.TargetOrganization.Valid() {
+		return ErrHandlerCapabilityInvalid
+	}
+	if d.IdentityHandlerDelivery != nil && !d.IdentityHandlerDelivery.Valid() {
+		return ErrHandlerCapabilityInvalid
+	}
+	if d.IdentityHandlerDelivery != nil && handlerDeliveryMutatesIdentity(d.IdentityHandlerDelivery.Operations) && d.TargetOrganization == nil {
+		return ErrHandlerCapabilityInvalid
+	}
+	if d.StoreOrganizationCatalog != nil && !d.StoreOrganizationCatalog.Valid() {
+		return ErrHandlerCapabilityInvalid
+	}
+	if d.StoreOrganizationMutation != nil && (!d.StoreOrganizationMutation.Valid() || d.TargetOrganization == nil || d.TargetOrganization.Source != TargetOrganizationSourceRecordOwner) {
+		return ErrHandlerCapabilityInvalid
+	}
+	if d.WorkspaceIdentityUsage != nil && !d.WorkspaceIdentityUsage.Valid() {
+		return ErrHandlerCapabilityInvalid
+	}
 	return nil
+}
+
+func handlerDeliveryMutatesIdentity(operations []IdentityHandlerOperation) bool {
+	for _, operation := range operations {
+		if operation == IdentityHandlerCreate || operation == IdentityHandlerUpdate || operation == IdentityHandlerDisable {
+			return true
+		}
+	}
+	return false
 }
 
 // BusinessHandler is implemented by generated wrappers. It is the erased

@@ -10,7 +10,7 @@ var ErrWorkspaceIDReserved = errors.New("default workspace id is reserved")
 var ErrSystemScopeRequired = errors.New("valid system scope is required")
 var ErrPrincipalScopeRequired = errors.New("authenticated principal scope is required")
 
-// InstallationWorkspaceID is populated from the durable tenant installation
+// InstallationWorkspaceID is populated from the durable Workspace installation
 // marker before Runtime assembles any tenant-bound service or worker.
 var InstallationWorkspaceID string
 

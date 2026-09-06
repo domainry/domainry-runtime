@@ -3,45 +3,64 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"slices"
 	"testing"
 
-	actioncontract "github.com/domainry/domainry-foundation/action"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
 
-func TestRuntimeProjectRolesAddsExplicitBootstrapAdministratorFromCompleteRegistry(t *testing.T) {
-	original := []manifestmodel.RoleSchema{{Key: "operator", Name: "Operator"}}
-	roles := runtimeProjectRolesWithBootstrapAdministrator(original, []actioncontract.PermissionDefinition{
-		{Key: "orders.read"},
-		{Key: "scheduler.definitions.list"},
-	})
-	if len(original) != 1 || len(roles) != 2 {
-		t.Fatalf("roles=%+v original=%+v", roles, original)
+func TestRuntimeWorkspaceRoleCatalogIsExactFourAndIdenticalAcrossLifecycle(t *testing.T) {
+	roles := runtimeWorkspaceRolesForTest()
+	objects := []definitionmodel.ObjectSchema{{Key: "course", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}}
+	bootstrapCatalog, err := RuntimeWorkspaceBootstrapRoleCatalog(objects, roles, "runtime")
+	if err != nil {
+		t.Fatal(err)
 	}
-	admin := roles[1]
-	if admin.Key != "admin" || admin.RiskLevel != "privileged" || !slices.Equal(admin.GrantableRoleKeys, []string{"*"}) {
-		t.Fatalf("admin=%+v", admin)
+	boundCatalog, err := RuntimeWorkspaceProjectRoleCatalog(objects, roles, "workspace-primary", "runtime")
+	if err != nil {
+		t.Fatal(err)
 	}
-	keys := make([]string, 0, len(admin.Permissions))
-	for _, permission := range admin.Permissions {
-		if permission.DataScope != identitysdk.DataScopeAll {
-			t.Fatalf("permission=%+v", permission)
+	if bootstrapCatalog.Application.WorkspaceID != "" || boundCatalog.Application.WorkspaceID != "workspace-primary" {
+		t.Fatalf("catalog scopes bootstrap=%#v bound=%#v", bootstrapCatalog.Application, boundCatalog.Application)
+	}
+	if !reflect.DeepEqual(bootstrapCatalog.Objects, boundCatalog.Objects) || !reflect.DeepEqual(bootstrapCatalog.Roles, boundCatalog.Roles) {
+		t.Fatalf("bootstrap and bound policy differ:\nbootstrap=%#v\nbound=%#v", bootstrapCatalog, boundCatalog)
+	}
+	keys := make([]string, 0, len(boundCatalog.Roles))
+	for _, role := range boundCatalog.Roles {
+		keys = append(keys, role.Key)
+		if role.Key == "admin" {
+			t.Fatal("legacy admin role was synthesized")
 		}
-		keys = append(keys, permission.PermissionKey)
 	}
-	if !slices.Equal(keys, []string{"orders.read", "scheduler.definitions.list"}) {
-		t.Fatalf("permissions=%v", keys)
+	if !slices.Equal(keys, runtimeWorkspaceRoleKeys[:]) {
+		t.Fatalf("published role keys=%v want=%v", keys, runtimeWorkspaceRoleKeys)
+	}
+	headquarters := boundCatalog.Roles[1]
+	if len(headquarters.Permissions) != 1 || headquarters.Permissions[0].PermissionKey != "course.read" || headquarters.Permissions[0].DataScope != identitysdk.DataScopeOrgChild {
+		t.Fatalf("headquarters permissions=%#v", headquarters.Permissions)
+	}
+	var fieldPermissions []manifestmodel.RoleFieldPermission
+	if err := json.Unmarshal(headquarters.FieldPermissions, &fieldPermissions); err != nil || !reflect.DeepEqual(fieldPermissions, roles[0].FieldPermissions) {
+		t.Fatalf("headquarters field permissions=%#v err=%v", fieldPermissions, err)
 	}
 }
 
-func TestRuntimeProjectRolesHonorsExplicitApplicationAdmin(t *testing.T) {
-	explicit := manifestmodel.RoleSchema{Key: " admin ", Name: "Restricted admin", Permissions: []manifestmodel.RolePermission{{PermissionKey: "orders.read", DataScope: identitysdk.DataScopeOwner}}}
-	roles := runtimeProjectRolesWithBootstrapAdministrator([]manifestmodel.RoleSchema{explicit}, []actioncontract.PermissionDefinition{{Key: "orders.read"}})
-	if len(roles) != 1 || roles[0].Name != explicit.Name || !slices.Equal(roles[0].Permissions, explicit.Permissions) {
-		t.Fatalf("explicit admin was changed: %+v", roles)
+func TestRuntimeWorkspaceRoleCatalogRejectsMissingDuplicateAndAdditionalRoles(t *testing.T) {
+	valid := runtimeWorkspaceRolesForTest()
+	for name, roles := range map[string][]manifestmodel.RoleSchema{
+		"missing":    append([]manifestmodel.RoleSchema(nil), valid[:3]...),
+		"duplicate":  append(append([]manifestmodel.RoleSchema(nil), valid...), valid[0]),
+		"additional": append(append([]manifestmodel.RoleSchema(nil), valid...), manifestmodel.RoleSchema{Key: "admin", Name: "Admin"}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := RuntimeWorkspaceBootstrapRoleCatalog(nil, roles, "runtime"); err == nil {
+				t.Fatalf("invalid roles accepted: %#v", roles)
+			}
+		})
 	}
 }
 
@@ -94,11 +113,11 @@ func TestRuntimeRolePermissionsKeepsOnlyExactDeclaredKeys(t *testing.T) {
 
 func TestPublishRuntimeProjectRolesUsesOptionalBindingCapability(t *testing.T) {
 	binding := &runtimeProjectRolePublisherBinding{runtimeIdentityBindingStub: runtimeIdentityBindingStub{}}
-	err := publishRuntimeProjectRoles(t.Context(), binding, []definitionmodel.ObjectSchema{{Key: "member", Fields: []definitionmodel.FieldSchema{{Key: "name"}}}}, []manifestmodel.RoleSchema{{Key: "member_onboarding", Name: "Member onboarding", Audience: "any", AssignmentMode: "manual", RiskLevel: "normal"}}, "workspace-primary", "runtime")
+	err := publishRuntimeProjectRoles(t.Context(), binding, []definitionmodel.ObjectSchema{{Key: "member", Fields: []definitionmodel.FieldSchema{{Key: "name"}}}}, runtimeWorkspaceRolesForTest(), "workspace-primary", "runtime")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(binding.catalog.Roles) != 1 || binding.catalog.Roles[0].Key != "member_onboarding" {
+	if len(binding.catalog.Roles) != len(runtimeWorkspaceRoleKeys) || binding.catalog.Roles[0].Key != identitysdk.WorkspaceBootstrapRoleTenantAdmin {
 		t.Fatalf("published catalog = %#v", binding.catalog)
 	}
 	if len(binding.catalog.Objects) == 0 {
@@ -106,6 +125,22 @@ func TestPublishRuntimeProjectRolesUsesOptionalBindingCapability(t *testing.T) {
 	}
 	if err := publishRuntimeProjectRoles(t.Context(), &binding.runtimeIdentityBindingStub, nil, nil, "workspace-primary", "runtime"); err != nil {
 		t.Fatalf("binding without optional publisher failed: %v", err)
+	}
+}
+
+func runtimeWorkspaceRolesForTest() []manifestmodel.RoleSchema {
+	return []manifestmodel.RoleSchema{
+		{
+			Key: identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin, Name: "Headquarters administrator",
+			Permissions:          []manifestmodel.RolePermission{{PermissionKey: "course.read", DataScope: identitysdk.DataScopeOrgChild, AuditDenial: true}},
+			FieldPermissions:     []manifestmodel.RoleFieldPermission{{ObjectKey: "course", FieldKey: "name", Read: true, Write: true}},
+			ReferencePermissions: []manifestmodel.RoleReferencePermission{{SourceObjectKey: "course", RelationFieldKey: "owner", TargetObjectKey: "identity_user", DisplayFields: []string{"name"}}},
+			ExportRules:          []manifestmodel.RoleExportRule{{ObjectKey: "course", Mode: "selected_fields", Fields: []string{"name"}}},
+			Audience:             "user", AssignmentMode: "manual", RiskLevel: "privileged", GrantableRoleKeys: []string{identitysdk.WorkspaceBootstrapRoleStoreManager},
+		},
+		{Key: identitysdk.WorkspaceBootstrapRoleStaff, Name: "Staff", Permissions: []manifestmodel.RolePermission{{PermissionKey: "course.read", DataScope: identitysdk.DataScopeOwner}}, Audience: "user", AssignmentMode: "manual"},
+		{Key: identitysdk.WorkspaceBootstrapRoleTenantAdmin, Name: "Platform administrator", Permissions: []manifestmodel.RolePermission{{PermissionKey: "runtime.admin", DataScope: identitysdk.DataScopeAll}}, Audience: "user", AssignmentMode: "manual", RiskLevel: "privileged"},
+		{Key: identitysdk.WorkspaceBootstrapRoleStoreManager, Name: "Store manager", Permissions: []manifestmodel.RolePermission{{PermissionKey: "course.read", DataScope: identitysdk.DataScopeOrg}}, Audience: "user", AssignmentMode: "manual"},
 	}
 }
 

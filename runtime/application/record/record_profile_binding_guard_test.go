@@ -31,7 +31,7 @@ func TestGovernedProfileIdentityFieldRequiresBindingCommand(t *testing.T) {
 		{name: "unknown object", object: "other", values: map[string]any{"identity_user": "user-1"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			err := service.validateProfileBindingMutation(test.object, test.values, test.creating)
+			err := service.validateProfileBindingMutation(t.Context(), test.object, "profile-1", test.values, test.creating)
 			if test.denied {
 				if apperror.CodeOf(err) != "backend.identity.profile_binding_command_required" {
 					t.Fatalf("error=%v", err)
@@ -41,7 +41,7 @@ func TestGovernedProfileIdentityFieldRequiresBindingCommand(t *testing.T) {
 			}
 		})
 	}
-	if err := (*RecordApplicationService)(nil).validateProfileBindingMutation("member_profile", map[string]any{"identity_user": "user-1"}, false); err != nil {
+	if err := (*RecordApplicationService)(nil).validateProfileBindingMutation(t.Context(), "member_profile", "profile-1", map[string]any{"identity_user": "user-1"}, false); err != nil {
 		t.Fatal(err)
 	}
 }

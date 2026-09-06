@@ -53,13 +53,13 @@ func TestRecordMutationFacadesRejectGovernedProfileBindingChanges(t *testing.T) 
 	_, err = service.ConditionalUpdateRecord(t.Context(), "member_profile", "profile-1", transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"identity_user": "user-2"}}, principal)
 	assertDenied(err)
 
-	if err := service.validateProfileBindingMutation("blank_relation", map[string]any{"identity_user": "user-1"}, false); err != nil {
+	if err := service.validateProfileBindingMutation(t.Context(), "blank_relation", "profile-1", map[string]any{"identity_user": "user-1"}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.validateProfileBindingMutation("member_profile", map[string]any{"identity_user": " "}, true); err != nil {
+	if err := service.validateProfileBindingMutation(t.Context(), "member_profile", "", map[string]any{"identity_user": " "}, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.validateProfileBindingMutation("member_profile", nil, false); err != nil {
+	if err := service.validateProfileBindingMutation(t.Context(), "member_profile", "profile-1", nil, false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -72,7 +72,7 @@ func TestRecordMutationFacadeConditionalAuthorizationEdge(t *testing.T) {
 	if _, err := service.UpdateRecordIdempotent(t.Context(), "customer", "customer-1", nil, "key", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("idempotent update authorization err=%v", err)
 	}
-	if err := service.validateProfileBindingMutation("customer", nil, false); err != nil {
+	if err := service.validateProfileBindingMutation(t.Context(), "customer", "customer-1", nil, false); err != nil {
 		t.Fatal(err)
 	}
 	plannerFacade := &RecordApplicationService{

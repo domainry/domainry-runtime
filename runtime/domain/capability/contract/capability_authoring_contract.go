@@ -17,7 +17,7 @@ const (
 	RuntimeAuthoringContractVersion = "runtime-authoring-v1"
 	// RuntimeAuthoringContractHash identifies the published, canonical authoring catalog.
 	// The Application catalog test fails whenever catalog content changes without updating it.
-	RuntimeAuthoringContractHash = "d6ebe80011aa5e0772fc6cbf1bdf325191cf80b63e6cb02855540b47ac97e301"
+	RuntimeAuthoringContractHash = "38c3757babecf62f04f860c3b9a488bd2732f0c92d2ce9fe8a017ce95accdd91"
 )
 
 type CapabilityRuntimeAuthoringContract struct {
@@ -140,10 +140,15 @@ type CapabilityAuthoringSchema struct {
 	Required             []string                             `json:"required,omitempty"`
 	Items                *CapabilityAuthoringSchema           `json:"items,omitempty"`
 	OneOf                []CapabilityAuthoringSchema          `json:"oneOf,omitempty"`
+	If                   *CapabilityAuthoringSchema           `json:"if,omitempty"`
+	Then                 *CapabilityAuthoringSchema           `json:"then,omitempty"`
+	Else                 *CapabilityAuthoringSchema           `json:"else,omitempty"`
+	Contains             *CapabilityAuthoringSchema           `json:"contains,omitempty"`
 	Enum                 []any                                `json:"enum,omitempty"`
 	Const                any                                  `json:"const,omitempty"`
 	Default              any                                  `json:"default,omitempty"`
 	Format               string                               `json:"format,omitempty"`
+	Pattern              string                               `json:"pattern,omitempty"`
 	Minimum              *float64                             `json:"minimum,omitempty"`
 	Maximum              *float64                             `json:"maximum,omitempty"`
 	MinLength            *int                                 `json:"minLength,omitempty"`
@@ -323,6 +328,11 @@ func sortAuthoringSchema(schema *CapabilityAuthoringSchema) {
 	sort.Strings(schema.Required)
 	if schema.Items != nil {
 		sortAuthoringSchema(schema.Items)
+	}
+	for _, conditional := range []*CapabilityAuthoringSchema{schema.If, schema.Then, schema.Else, schema.Contains} {
+		if conditional != nil {
+			sortAuthoringSchema(conditional)
+		}
 	}
 	for key, property := range schema.Properties {
 		sortAuthoringSchema(&property)

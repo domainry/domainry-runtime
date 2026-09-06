@@ -18,9 +18,6 @@ func RecordNormalizeListQuery(object definitionmodel.ObjectSchema, query recordm
 	if query.PageSize <= 0 {
 		query.PageSize = 25
 	}
-	if query.PageSize <= 0 {
-		query.PageSize = 25
-	}
 	if query.PageSize > 200 {
 		query.PageSize = 200
 	}

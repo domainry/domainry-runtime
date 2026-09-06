@@ -102,6 +102,9 @@ type RecordListQuery struct {
 	FallbackLocale          string                         `json:"-"`
 	SkipTotal               bool                           `json:"-"`
 	AfterID                 string                         `json:"-"`
+	// OwnerOrganizationScopeID is a Runtime-internal, narrowing predicate.
+	// External record query DTOs and project Handlers cannot populate it.
+	OwnerOrganizationScopeID string `json:"-"`
 }
 
 type RecordPageResult struct {

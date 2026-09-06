@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v19"
-	ContractSHA256  = "4fb75c9d97abd1a10e016a6b7996cd647b62612824e620586880f6b166664940"
+	ContractVersion = "runtimeext-v28"
+	ContractSHA256  = "f56dd05897d1e3b1e174035ba1ced3066437a7b10b68b58d8c007bcb8afee60c"
 )
 
-const contractDefinitionV19 = `runtimeext-v19
+const contractDefinitionV28 = `runtimeext-v28
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -25,6 +25,9 @@ ActionExecution.QueryRecords(context.Context,RecordQuery)(RecordQueryResult,erro
 ActionExecution.ApplyRecordMutation(context.Context,RecordMutation)(RecordMutationResult,error)
 ActionExecution.StageDurableIntent(context.Context,DurableIntent)(DurableIntentReceipt,error)
 ActionExecution.AcquireSynchronousConnectorCall(ActionConnectorCapability)(SynchronousConnectorCallLease,error)
+ConditionalUpdateManyExecution.ConditionalUpdateMany(context.Context,ConditionalUpdateManyRequest)(ConditionalUpdateManyResult,error)
+ApplyConditionalUpdateMany(context.Context,ActionExecution,ConditionalUpdateManyRequest)(ConditionalUpdateManyResult,error)
+ConditionalUpdateManySemantics=one_scoped_select_for_update|one_conditional_update|expected_affected_exact|same_action_transaction|no_owner_input|max_200
 ResolveRecordNotificationRecipient(context.Context,ActionExecution,RecordNotificationRecipientRequest)(string,error)
 RecordNotificationRecipientOperation=notification_recipient
 VerifyFileClean(context.Context,ActionExecution,FileVerificationRequest)(FileVerificationEvidence,error)
@@ -48,20 +51,59 @@ BusinessHandlerRegistry.Binding(string)(BusinessHandlerBinding,bool)
 BusinessHandlerRegistry.Descriptors()[]HandlerDescriptor
 QueryOperation=get,get_for_update,list,exists,count
 RecordQueryPagination=after_id
+RecordQuery.StoreOrganization=execution_scoped_catalog_reference|list_only
+ExecuteCrossWorkspaceAggregate(context.Context,ActionExecution,CrossWorkspaceAggregateRequest)(CrossWorkspaceAggregateResult,error)
+CrossWorkspaceDimensionWorkspace=$workspace
+AggregateOperation=count,sum,min,max,avg
+ResolveTargetOrganization(ActionExecution)(TargetOrganization,error)
+ProvisionStoreOrganization(context.Context,ActionExecution,StoreOrganizationProvisionRequest)(StoreOrganizationProvisionResult,error)
+RenameStoreOrganization(context.Context,ActionExecution,StoreOrganizationRenameRequest)(StoreOrganizationMutationResult,error)
+DisableStoreOrganization(context.Context,ActionExecution,StoreOrganizationDisableRequest)(StoreOrganizationMutationResult,error)
+TargetOrganizationSource=explicit,explicit_or_sole_authorized_store,record_owner,provisioned_store
+ExplicitOrSoleAuthorizedStore=explicit_identity_resolve_and_action_scope|omitted_exactly_one_complete_active_authorized_catalog|zero_multiple_disabled_or_continuation_denied
+DeliverIdentity(context.Context,ActionExecution,IdentityHandlerDeliveryRequest)(IdentityHandlerDeliveryResult,error)
+ResolveBoundIdentity(context.Context,ActionExecution,string)(IdentityBoundIdentity,error)
+ResolveBoundIdentityProfile(context.Context,ActionExecution,string,IdentityHandlerProfileBindingSelector)(IdentityBoundIdentity,error)
+IdentityHandlerProfileResolution=generated_static_binding_key_and_object|caller_profile_id|identity_owned_cas_version|active_exact_user
+IdentityHandlerOperation=create,update,disable,resolve
+IdentityHandlerLoginMode=none,password
+ExecuteStoreOrganizationCatalog(context.Context,ActionExecution,StoreOrganizationCatalogRequest)(StoreOrganizationCatalogPage,error)
+IssueStoreOrganizationCatalogItem(StoreOrganizationCatalogItem)(StoreOrganizationCatalogItem,string,error)
+StoreOrganizationCatalogOwnedRecordLookup=generated_ListForStore|issued_current_action_reference|record_read_effect|workspace_and_identity_scope|read_only
+ExecuteWorkspaceIdentityUsage(context.Context,ActionExecution,WorkspaceIdentityUsageRequest)(WorkspaceIdentityUsagePage,error)
+ExecuteWorkspaceIdentityUsageResolve(context.Context,ActionExecution,WorkspaceIdentityUsageResolveRequest)(WorkspaceIdentityUsageResolveResult,error)
+WorkspaceIdentityUsageMaximumPageSize=100
+WorkspaceIdentityUsageProjection=canonical_code,display_name,commercial_plan,included_user_limit,max_user_limit,identity_account_counts|physical_workspace_id_withheld
+WorkspaceIdentityUsageResolve=canonical_workspace_code,expected_top_level_workspace_revision|active_workspace_locked_and_rechecked|typed_commercial_configuration|identity_account_counts|same_action_uow|physical_workspace_id_withheld
+ExtensionSet.WorkspaceBootstrapParticipant=WorkspaceBootstrapParticipant
+WorkspaceBootstrapParticipant.Descriptor()WorkspaceBootstrapDescriptor
+WorkspaceBootstrapParticipant.BuildWorkspaceBootstrap(context.Context,WorkspaceBootstrapContext,map[string]any)([]WorkspaceBootstrapRecord,error)
+WorkspaceBootstrapInputExactDecimal=canonical_decimal_string|no_binary_float|exact_range_validation
+WorkspaceBootstrapRuntimeOwnedFields=workspace_id,id,owner_org_id,created_at,updated_at
+RuntimeWorkspaceRoleCatalog=tenant_admin,headquarters_admin,store_manager,staff|exact_manifest_definitions|initial_admin=headquarters_admin
+WorkspaceProvisioningVocabulary=workspace_name,workspace_code
+AcceptanceFixtureContract=runtime-acceptance-fixture-v2|workspace_code
 `
 
 // ComputedContractSHA256 returns the canonical public contract identity used
 // by generated project code and Runtime readiness checks.
 func ComputedContractSHA256() string {
 	structs := []any{
-		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, RecordNotificationRecipientRequest{}, HandlerDescriptor{}, BusinessHandlerBinding{},
+		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, RecordNotificationRecipientRequest{},
+		CrossWorkspaceAggregateDimension{}, CrossWorkspaceAggregateDimensionTransform{}, CrossWorkspaceAggregateDateBucketTransform{}, CrossWorkspaceAggregateMeasure{}, CrossWorkspaceAggregateFilterCapability{}, CrossWorkspaceAggregateCapability{}, CrossWorkspaceAggregateFilter{}, CrossWorkspaceAggregateRequest{}, CrossWorkspaceAggregateRow{}, CrossWorkspaceAggregateResult{},
+		ActionTargetOrganizationCapability{}, TargetOrganization{}, StoreOrganizationProvisionRequest{}, StoreOrganizationProvisionResult{}, StoreOrganizationRenameRequest{}, StoreOrganizationDisableRequest{}, StoreOrganizationMutationResult{}, ActionStoreOrganizationMutationCapability{},
+		IdentityProfileBindingCapability{}, IdentityHandlerDeliveryCapability{}, IdentityUser{}, IdentityHandlerUserMutation{}, IdentityHandlerProfileBindingMutation{}, IdentityHandlerDeliveryRequest{}, IdentityHandlerProfileBinding{}, IdentityHandlerProfileBindingSelector{}, IdentityHandlerDeliveryResult{}, IdentityBoundIdentity{},
+		StoreOrganizationCatalogCapability{}, StoreOrganizationCatalogRequest{}, StoreOrganizationCatalogItem{}, StoreOrganizationCatalogPage{},
+		WorkspaceIdentityUsageCapability{}, WorkspaceIdentityUsageRequest{}, WorkspaceIdentityUsageResolveRequest{}, WorkspaceIdentityAccountCounts{}, WorkspaceCommercialTerms{}, WorkspaceCommercialConfiguration{}, WorkspaceIdentityUsageItem{}, WorkspaceIdentityUsagePage{}, WorkspaceIdentityUsageResolveResult{},
+		WorkspaceBootstrapInputField{}, WorkspaceBootstrapRecordCapability{}, WorkspaceBootstrapDescriptor{}, WorkspaceBootstrapContext{}, WorkspaceBootstrapRecord{},
+		HandlerDescriptor{}, BusinessHandlerBinding{},
 		Record{}, Filter{}, Sort{}, RecordQuery{}, RecordQueryResult{},
-		Predicate{}, Arithmetic{}, RecordMutation{}, RecordMutationResult{},
+		Predicate{}, Arithmetic{}, RecordMutation{}, RecordMutationResult{}, ConditionalUpdateManyRequest{}, ConditionalUpdateManyResult{},
 		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ExtensionSet{},
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV19)
+	definition.WriteString(contractDefinitionV28)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

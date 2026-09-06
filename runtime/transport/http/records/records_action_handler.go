@@ -49,21 +49,25 @@ func (h *RecordsHandler) executeObjectAction(w http.ResponseWriter, r *http.Requ
 	}
 	invoked, err := h.actions.Invoke(r.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
 		ActionKey: strings.TrimSpace(r.PathValue("actionKey")), ObjectKey: strings.TrimSpace(r.PathValue("objectKey")),
-		Input: req.Data, IdempotencyKey: key, AssuranceToken: req.AssuranceToken, Principal: h.principal(r),
+		Input: req.Data, IdempotencyKey: key, TargetOrganizationID: req.TargetOrganizationID, AssuranceToken: req.AssuranceToken, Principal: h.principal(r),
 	})
 	if err != nil {
 		h.writeActionServiceError(w, r, err)
 		return
 	}
 	result := *invoked.Object
+	if result.NoStore || invoked.NoStore {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	recordsMarkActionReplay(w, result.Message)
 	h.writeJSON(w, http.StatusOK, result)
 }
 
 func (h *RecordsHandler) executeAction(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Data           map[string]any `json:"data"`
-		AssuranceToken string         `json:"assurance_token,omitempty"`
+		Data                 map[string]any `json:"data"`
+		TargetOrganizationID string         `json:"target_organization_id,omitempty"`
+		AssuranceToken       string         `json:"assurance_token,omitempty"`
 	}
 	if r.Body != nil && r.ContentLength != 0 && !h.decodeJSON(w, r, &req) {
 		return
@@ -82,13 +86,16 @@ func (h *RecordsHandler) executeAction(w http.ResponseWriter, r *http.Request) {
 	}
 	invoked, err := h.actions.Invoke(r.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
 		ActionKey: strings.TrimSpace(r.PathValue("actionKey")), ObjectKey: objectKey, RecordID: strings.TrimSpace(r.PathValue("recordID")),
-		Input: req.Data, IdempotencyKey: key, AssuranceToken: req.AssuranceToken, Principal: h.principal(r),
+		Input: req.Data, IdempotencyKey: key, TargetOrganizationID: req.TargetOrganizationID, AssuranceToken: req.AssuranceToken, Principal: h.principal(r),
 	})
 	if err != nil {
 		h.writeActionServiceError(w, r, err)
 		return
 	}
 	result := *invoked.Record
+	if result.NoStore || invoked.NoStore {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	recordsMarkActionReplay(w, result.Message)
 	h.writeJSON(w, http.StatusOK, result)
 }

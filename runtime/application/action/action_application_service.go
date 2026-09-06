@@ -202,6 +202,9 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 	if invocation.RecordID != "" && !actionpolicy.ActionIsRecordKind(action.Kind) {
 		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.record_action_required", nil, map[string]string{"action": action.Key})
 	}
+	if err := validateActionTargetOrganizationInvocation(action, invocation); err != nil {
+		return actionmodel.ActionInvocationResult{}, err
+	}
 	if err := s.dependencies.Authorization.Validate(invocation.Principal, action); err != nil {
 		return actionmodel.ActionInvocationResult{}, err
 	}
@@ -280,7 +283,45 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 	if err != nil {
 		return s.failOwnedInvocation(context.WithoutCancel(ctx), unitOfWork, result, err, nil)
 	}
+	if executed.PostCommit != nil {
+		executed.PostCommit(&result)
+	}
 	return result, nil
+}
+
+func validateActionTargetOrganizationInvocation(action definitionmodel.ActionSchema, invocation actionmodel.ActionInvocation) error {
+	targetID := strings.TrimSpace(invocation.TargetOrganizationID)
+	if invocation.RecordID != "" {
+		if targetID != "" {
+			return apperror.New(apperror.KindBadRequest, "backend.action.target_organization_forbidden", nil, nil)
+		}
+		return nil
+	}
+	if action.TargetOrganization == nil {
+		if targetID != "" {
+			return apperror.New(apperror.KindBadRequest, "backend.action.target_organization_forbidden", nil, nil)
+		}
+		return nil
+	}
+	switch strings.TrimSpace(action.TargetOrganization.Source) {
+	case definitionmodel.ActionTargetOrganizationSourceExplicit:
+		if targetID == "" {
+			return apperror.New(apperror.KindBadRequest, "backend.action.target_organization_required", nil, nil)
+		}
+	case definitionmodel.ActionTargetOrganizationSourceExplicitOrSoleAuthorizedStore:
+		// An explicit store remains caller-selectable for multi-store roles. When
+		// omitted, Runtime resolves only an unambiguous authorized store; project
+		// input and browser code never infer or write ownership.
+	case definitionmodel.ActionTargetOrganizationSourceProvisionedStore:
+		if targetID != "" {
+			return apperror.New(apperror.KindBadRequest, "backend.action.target_organization_forbidden", nil, nil)
+		}
+	case definitionmodel.ActionTargetOrganizationSourceRecordOwner:
+		return apperror.New(apperror.KindInternal, "backend.action.target_organization_contract_invalid", nil, map[string]string{"action": action.Key})
+	default:
+		return apperror.New(apperror.KindInternal, "backend.action.target_organization_contract_invalid", nil, map[string]string{"action": action.Key})
+	}
+	return nil
 }
 
 func (s *ActionApplicationService) execute(ctx context.Context, governed governedActionExecution) (ActionExecutionResult, error) {

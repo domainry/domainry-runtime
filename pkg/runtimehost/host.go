@@ -410,14 +410,16 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 		_ = projectDatabase.CloseContext(context.WithoutCancel(lifecycleCtx))
 	}()
 	businessProfileProjection := newRuntimeBusinessProfileProjection(projectDatabase)
-	tenantManager, err := newProjectTenantManager(context.WithoutCancel(lifecycleCtx), cfg, identityFactory, projectDatabase, projectIdentityDatabaseHandle(projectDatabase, cfg.DBPath, businessProfileProjection))
+	workspaceManager, err := newProjectWorkspaceManager(context.WithoutCancel(lifecycleCtx), cfg, identityFactory, projectDatabase, projectIdentityDatabaseHandle(projectDatabase, cfg.DBPath, businessProfileProjection, projectIdentityUsageOptions{
+		ApplicationKey: cfg.IdentityAudience, CursorSecret: cfg.AuditExportTokenKey,
+	}), options.InitialWorkspaceCredentialDelivery, options.InstallationAdministratorCredentialDelivery)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(lifecycleCtx), cfg.HTTPShutdownTimeout)
 		defer cancel()
-		if err := tenantManager.Close(closeCtx); err != nil {
+		if err := workspaceManager.Close(closeCtx); err != nil {
 			zap.L().Error("close Identity integration", zap.Error(err))
 		}
 	}()
@@ -429,7 +431,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	}
 	identityRouters := make(map[runtimehttp.ListenerRouteGroup]*identityAdapterRouter, len(handlers))
 	var initialModuleGuard moduleRouteGuard
-	if binding := tenantManager.Binding(); binding != nil {
+	if binding := workspaceManager.Binding(); binding != nil {
 		initialModuleGuard, err = newModuleHTTPRouteGuard(binding, principalResolverOptions)
 		if err != nil {
 			return err
@@ -437,7 +439,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	}
 	for group, handler := range handlers {
 		identityRouters[group] = newIdentityAdapterRouter(group, handler)
-		if err := identityRouters[group].Bind(tenantManager.Adapters(), initialModuleGuard); err != nil {
+		if err := identityRouters[group].Bind(workspaceManager.Adapters(), initialModuleGuard); err != nil {
 			return fmt.Errorf("mount initialized Identity HTTP adapters: %w", err)
 		}
 	}
@@ -463,27 +465,27 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			if err := validateDomainSDKTarget(options.Identity.DomainSDK, manifest.GeneratedDomainSDK); err != nil {
 				return nil, err
 			}
-			if err := tenantManager.Activate(context.WithoutCancel(lifecycleCtx), manifest); err != nil {
+			if err := workspaceManager.Activate(context.WithoutCancel(lifecycleCtx), manifest, businessHandlers.WorkspaceBootstrapParticipant()); err != nil {
 				return nil, err
 			}
-			businessSeedReferences, err := tenantManager.BusinessSeedReferenceCandidates()
+			businessSeedReferences, err := workspaceManager.BusinessSeedReferenceCandidates()
 			if err != nil {
 				return nil, fmt.Errorf("prepare Runtime baseline reference candidates: %w", err)
 			}
-			identityBinding := tenantManager.Binding()
+			identityBinding := workspaceManager.Binding()
 			if identityBinding == nil {
-				return nil, errors.New("initialized tenant returned no Identity binding")
+				return nil, errors.New("initialized Workspace returned no Identity binding")
 			}
 			moduleGuard, err := newModuleHTTPRouteGuard(identityBinding, principalResolverOptions)
 			if err != nil {
 				return nil, err
 			}
 			for group, router := range identityRouters {
-				if err := router.Bind(tenantManager.Adapters(), moduleGuard); err != nil {
+				if err := router.Bind(workspaceManager.Adapters(), moduleGuard); err != nil {
 					return nil, fmt.Errorf("mount Identity HTTP adapters on %s listener: %w", group, err)
 				}
 			}
-			runtimeConfig := tenantManager.Config()
+			runtimeConfig := workspaceManager.Config()
 			if manifest.SourceBlueprintID == provision.DirectAuthoringSourceID && len(manifest.Objects) == 0 {
 				runtimeConfig.AllowEmptyAuthoringManifest = true
 			}
@@ -491,7 +493,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			if runtime == nil {
 				return nil, errors.New("Runtime bootstrap returned no process")
 			}
-			moduleAdapters := append([]modulehttp.Adapter(nil), tenantManager.Adapters()...)
+			moduleAdapters := append([]modulehttp.Adapter(nil), workspaceManager.Adapters()...)
 			if provider, ok := runtime.(runtimeModuleAdapterProcess); ok {
 				moduleAdapters = append(moduleAdapters, provider.ModuleHTTPAdapters()...)
 			}

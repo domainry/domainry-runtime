@@ -21,7 +21,6 @@ func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
 	cfg := config.Config{
 		AppLocale:               "en-US",
 		IdentityWorkspaceID:     "workspace-primary",
-		NotificationTenantID:    "tenant-primary",
 		NotificationWorkspaceID: "workspace-primary",
 
 		DatabaseDriver:             "sqlite",
@@ -59,7 +58,7 @@ func TestBootstrapEntrypointsAssembleRunnableGraphs(t *testing.T) {
 func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
 	base := config.Config{
 		AppLocale: "en-US", DatabaseDriver: "sqlite", ManifestPath: filepath.Join("..", "domain", "manifest", "testdata", "manifests", "domain-only-minimal.json"), UploadDir: t.TempDir(), HTTPShutdownTimeout: time.Second,
-		IdentityWorkspaceID: "workspace-primary", NotificationTenantID: "tenant-primary", NotificationWorkspaceID: "workspace-primary",
+		IdentityWorkspaceID: "workspace-primary", NotificationWorkspaceID: "workspace-primary",
 
 		AuditExportTokenKey: "test-audit-export-signing-key",
 	}

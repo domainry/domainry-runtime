@@ -16,21 +16,22 @@ const (
 )
 
 type ActionInvocation struct {
-	ActionKey          string
-	ObjectKey          string
-	RecordID           string
-	Input              map[string]any
-	Principal          principalmodel.Principal
-	Actor              principalmodel.Principal
-	RunAs              principalmodel.Principal
-	Source             ActionSource
-	ProcessID          string
-	NodeID             string
-	RequestID          string
-	IdempotencyKey     string
-	AssuranceToken     string
-	AssuranceEvidence  map[string]string
-	AssuranceValidated bool
+	ActionKey            string
+	ObjectKey            string
+	RecordID             string
+	Input                map[string]any
+	Principal            principalmodel.Principal
+	Actor                principalmodel.Principal
+	RunAs                principalmodel.Principal
+	Source               ActionSource
+	ProcessID            string
+	NodeID               string
+	RequestID            string
+	IdempotencyKey       string
+	TargetOrganizationID string
+	AssuranceToken       string
+	AssuranceEvidence    map[string]string
+	AssuranceValidated   bool
 }
 
 type ActionInvocationResult struct {
@@ -46,4 +47,5 @@ type ActionInvocationResult struct {
 	AuditEvidence  map[string]string   `json:"audit_evidence,omitempty"`
 	Record         *ActionResult       `json:"record,omitempty"`
 	Object         *ActionObjectResult `json:"object,omitempty"`
+	NoStore        bool                `json:"-"`
 }

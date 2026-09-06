@@ -5,7 +5,7 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (54)
+## HTTP mutation routes (56)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -62,9 +62,11 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workflows` | `POST /workflow/tasks/{taskID}/reject` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
 | `workflows` | `POST /workflow/tasks/{taskID}/return` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
 | `workspaceprovision` | `POST /workspaces` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
-| `workspaceprovision` | `POST /workspaces/{workspaceID}/role-reconciliations` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
+| `workspaceprovision` | `POST /workspaces/{workspaceCode}/reactivate` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
+| `workspaceprovision` | `POST /workspaces/{workspaceCode}/suspend` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
+| `workspaceprovision` | `PUT /workspaces/{workspaceCode}/commercial-configuration` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 
-## Application mutation commands (122)
+## Application mutation commands (123)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -190,6 +192,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workflow` | `RunAutomationWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
 | `workflow` | `RunIntegrationWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
 | `workflow` | `RunWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
+| `workspaceprovision` | `UpdateCommercialConfiguration` | `caller_key_required` | use-case key propagated from transport | `runtime/application/workspaceprovision/workspace_administration_application_service.go` |
 
 ## Process-owned workers (11)
 

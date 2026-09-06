@@ -34,7 +34,7 @@ var validationAuthoringKeys = stringSet(
 )
 
 var actionAuthoringKeys = stringSet(
-	"assurance_policy", "audit_event", "authorization", "concurrency_field", "defaults", "handler", "i18n", "key", "kind", "module_key", "name", "object_key", "optimistic_concurrency", "payload_fields", "preconditions", "risk_level",
+	"assurance_policy", "audit_event", "authorization", "concurrency_field", "defaults", "handler", "i18n", "key", "kind", "module_key", "name", "object_key", "optimistic_concurrency", "payload_fields", "preconditions", "risk_level", "target_organization",
 )
 
 var workflowAuthoringKeys = stringSet(

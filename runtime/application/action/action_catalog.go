@@ -180,6 +180,21 @@ func normalizePublishedActionContract(definition definitionmodel.ActionSchema) d
 	definition.OutputType = strings.TrimSpace(definition.OutputType)
 	definition.InputContractSHA256 = strings.TrimSpace(definition.InputContractSHA256)
 	definition.OutputContractSHA256 = strings.TrimSpace(definition.OutputContractSHA256)
+	if definition.TargetOrganization != nil {
+		policy := *definition.TargetOrganization
+		policy.Source = strings.TrimSpace(policy.Source)
+		policy.Input = strings.TrimSpace(policy.Input)
+		definition.TargetOrganization = &policy
+	}
+	if definition.StoreOrganizationMutation != nil {
+		policy := *definition.StoreOrganizationMutation
+		policy.Operations = append([]string(nil), policy.Operations...)
+		for index := range policy.Operations {
+			policy.Operations[index] = strings.TrimSpace(policy.Operations[index])
+		}
+		sort.Strings(policy.Operations)
+		definition.StoreOrganizationMutation = &policy
+	}
 	return definition
 }
 
@@ -196,6 +211,9 @@ func validatePublishedActionContract(entry ActionCatalogEntry) error {
 		{name: "output_contract_sha256", catalog: definition.OutputContractSHA256, registry: entry.HandlerBinding.Descriptor.OutputContractSHA256},
 	}
 	if entry.Owner == ActionOwnerSystemOperation {
+		if definition.TargetOrganization != nil || definition.StoreOrganizationMutation != nil {
+			return fmt.Errorf("system action %s must not declare business Handler organization capability", definition.Key)
+		}
 		for _, field := range fields {
 			if field.catalog != "" {
 				return fmt.Errorf("system action %s must not declare business handler contract field %s", definition.Key, field.name)
@@ -214,7 +232,102 @@ func validatePublishedActionContract(entry ActionCatalogEntry) error {
 			return fmt.Errorf("published action %s %s mismatch: catalog=%q registry=%q", definition.Key, field.name, field.catalog, field.registry)
 		}
 	}
+	if !actionTargetOrganizationCapabilityMatches(definition.TargetOrganization, entry.HandlerBinding.Descriptor.TargetOrganization) {
+		return fmt.Errorf("published action %s target organization capability mismatch", definition.Key)
+	}
+	if !actionStoreOrganizationMutationCapabilityMatches(definition.StoreOrganizationMutation, entry.HandlerBinding.Descriptor.StoreOrganizationMutation) {
+		return fmt.Errorf("published action %s store organization mutation capability mismatch", definition.Key)
+	}
+	if err := validateIdentityInitialCredentialOutput(definition, entry.HandlerBinding.Descriptor.IdentityHandlerDelivery); err != nil {
+		return err
+	}
+	if err := validateStoreOrganizationSnapshotOutput(definition, entry.HandlerBinding.Descriptor); err != nil {
+		return err
+	}
 	return nil
+}
+
+func validateStoreOrganizationSnapshotOutput(action definitionmodel.ActionSchema, descriptor runtimeext.HandlerDescriptor) error {
+	listGrants := map[string]bool{}
+	for _, capability := range descriptor.ObjectCapabilities {
+		for _, operation := range capability.Operations {
+			if strings.TrimSpace(operation) == "list" {
+				listGrants[strings.TrimSpace(capability.ObjectKey)] = true
+			}
+		}
+	}
+	count := 0
+	for _, field := range action.OutputFields {
+		if strings.TrimSpace(field.Type) != "store_organization_snapshot" {
+			continue
+		}
+		count++
+		if strings.TrimSpace(action.Kind) != definitionmodel.ActionKindObjectOperation {
+			return fmt.Errorf("published action %s store Organization snapshot output requires object_operation", action.Key)
+		}
+		if descriptor.StoreOrganizationCatalog == nil || !field.Required || field.Repeated || len(field.StoreOrganizationSnapshotObjectKeys) == 0 {
+			return fmt.Errorf("published action %s store Organization snapshot output %s is not closed over a catalog and required singleton Objects", action.Key, field.Key)
+		}
+		if descriptor.TargetOrganization != nil || descriptor.StoreOrganizationMutation != nil || descriptor.WorkspaceIdentityUsage != nil || descriptor.IdentityHandlerDelivery != nil || len(descriptor.CrossWorkspaceAggregates) != 0 || len(descriptor.ConnectorCapabilities) != 0 || len(descriptor.NotificationEventTypes) != 0 || len(descriptor.FileCapabilities) != 0 {
+			return fmt.Errorf("published action %s store Organization snapshot output may grant only read-only record access and the store Organization catalog", action.Key)
+		}
+		for _, objectKey := range field.StoreOrganizationSnapshotObjectKeys {
+			if !listGrants[strings.TrimSpace(objectKey)] {
+				return fmt.Errorf("published action %s store Organization snapshot output %s requires %s.list", action.Key, field.Key, objectKey)
+			}
+		}
+		for _, capability := range descriptor.ObjectCapabilities {
+			for _, operation := range capability.Operations {
+				switch strings.TrimSpace(operation) {
+				case "create", "update", "conditional_update", "conditional_update_many", "delete", "restore":
+					return fmt.Errorf("published action %s store Organization snapshot output must not grant record writes", action.Key)
+				}
+			}
+		}
+	}
+	if count > 1 {
+		return fmt.Errorf("published action %s declares more than one store Organization snapshot output", action.Key)
+	}
+	return nil
+}
+
+func actionStoreOrganizationMutationCapabilityMatches(policy *definitionmodel.ActionStoreOrganizationMutationPolicy, capability *runtimeext.ActionStoreOrganizationMutationCapability) bool {
+	if policy == nil || capability == nil {
+		return policy == nil && capability == nil
+	}
+	if len(policy.Operations) != len(capability.Operations) {
+		return false
+	}
+	for index := range policy.Operations {
+		if strings.TrimSpace(policy.Operations[index]) != strings.TrimSpace(string(capability.Operations[index])) {
+			return false
+		}
+	}
+	return true
+}
+
+func validateIdentityInitialCredentialOutput(action definitionmodel.ActionSchema, capability *runtimeext.IdentityHandlerDeliveryCapability) error {
+	if capability == nil || strings.TrimSpace(capability.InitialCredentialOutputField) == "" {
+		return nil
+	}
+	key := strings.TrimSpace(capability.InitialCredentialOutputField)
+	for _, field := range action.OutputFields {
+		if strings.TrimSpace(field.Key) != key {
+			continue
+		}
+		if strings.TrimSpace(field.Type) != "object" || strings.TrimSpace(field.SourceObjectKey) != "" || strings.TrimSpace(field.SourceFieldKey) != "" || field.Repeated {
+			return fmt.Errorf("published action %s initial credential output field %s must be a generated non-repeated object without source lineage", action.Key, key)
+		}
+		return nil
+	}
+	return fmt.Errorf("published action %s requires generated initial credential output field %s", action.Key, key)
+}
+
+func actionTargetOrganizationCapabilityMatches(policy *definitionmodel.ActionTargetOrganizationPolicy, capability *runtimeext.ActionTargetOrganizationCapability) bool {
+	if policy == nil || capability == nil {
+		return policy == nil && capability == nil
+	}
+	return strings.TrimSpace(policy.Source) == strings.TrimSpace(string(capability.Source)) && strings.TrimSpace(policy.Input) == strings.TrimSpace(capability.Input)
 }
 
 func (c *ActionCatalog) Entry(actionKey string) (ActionCatalogEntry, bool) {

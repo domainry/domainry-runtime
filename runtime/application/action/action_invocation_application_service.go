@@ -44,6 +44,7 @@ func ActionNormalizeInvocation(invocation actionmodel.ActionInvocation) actionmo
 	invocation.NodeID = strings.TrimSpace(invocation.NodeID)
 	invocation.RequestID = strings.TrimSpace(invocation.RequestID)
 	invocation.IdempotencyKey = strings.TrimSpace(invocation.IdempotencyKey)
+	invocation.TargetOrganizationID = strings.TrimSpace(invocation.TargetOrganizationID)
 	invocation.AssuranceToken = strings.TrimSpace(invocation.AssuranceToken)
 	if !invocation.Actor.Known {
 		invocation.Actor = invocation.Principal

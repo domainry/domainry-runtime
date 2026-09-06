@@ -7,17 +7,15 @@ import (
 )
 
 const (
-	FailureAfterWorkspace              = "after_workspace"
-	FailureAfterTenantRegistry         = "after_tenant_registry"
-	FailureAfterInstallation           = "after_tenant_initialization"
-	FailureAfterIdentityUser           = "after_identity_user"
-	FailureAfterIdentityRole           = "after_identity_role"
-	FailureAfterRoleAssignment         = "after_role_assignment"
-	FailureAfterCredential             = "after_credential"
-	FailureAfterWorkspaceConfiguration = "after_workspace_configuration"
-	FailureAfterApplicationProjection  = "after_application_projection:"
-	FailureAfterApplicationProjections = "after_application_projections"
-	FailureAfterReceipt                = "after_receipt"
+	FailureAfterWorkspace                  = "after_workspace"
+	FailureAfterIdentityUser               = "after_identity_user"
+	FailureAfterIdentityRole               = "after_identity_role"
+	FailureAfterRoleAssignment             = "after_role_assignment"
+	FailureAfterCredential                 = "after_credential"
+	FailureAfterWorkspaceConfiguration     = "after_workspace_configuration"
+	FailureAfterApplicationBootstrapRecord = "after_application_bootstrap_record:"
+	FailureAfterApplicationBootstrap       = "after_application_bootstrap"
+	FailureAfterReceipt                    = "after_receipt"
 )
 
 type FailureInjector interface {

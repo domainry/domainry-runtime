@@ -153,12 +153,8 @@ func newIntegrationIdentityBinding(t *testing.T, cfg config.Config) identitysdk.
 	if applicationKey == "" {
 		applicationKey = "domainry-runtime"
 	}
-	tenantID := strings.TrimSpace(cfg.NotificationTenantID)
-	if tenantID == "" {
-		tenantID = "tenant-primary"
-	}
 	binding, err := newIntegrationIdentityFactory().Open(t.Context(), identitysdk.ApplicationRef{
-		TenantID: identitysdk.TenantID(tenantID), WorkspaceID: identitysdk.WorkspaceID(workspaceID), ApplicationKey: identitysdk.ApplicationKey(applicationKey),
+		TenantID: identitysdk.TenantID(workspaceID), WorkspaceID: identitysdk.WorkspaceID(workspaceID), ApplicationKey: identitysdk.ApplicationKey(applicationKey),
 	})
 	if err != nil {
 		t.Fatal(err)

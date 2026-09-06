@@ -8,6 +8,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
+	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
@@ -33,6 +34,7 @@ import (
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
+	workspaceaggregatecontract "github.com/domainry/domainry-runtime/runtime/domain/workspaceaggregate/contract"
 )
 
 // RuntimeServices is the immutable facade exported by the composition root.
@@ -128,10 +130,19 @@ type RuntimeServicesDependencies struct {
 	AgentTaskRunner                     agentsdk.TaskRunner
 	BusinessHandlers                    *runtimeext.BusinessHandlerRegistry
 	VerifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
+	WorkspaceAggregateCatalog           workspaceaggregatecontract.Catalog
+	WorkspaceActiveResolver             workspaceaggregatecontract.ActiveResolver
+	WorkspaceUsageResolver              workspaceaggregatecontract.UsageResolver
+	WorkspaceAggregateRepository        workspaceaggregatecontract.Repository
 	PrepareOutboxPayload                publicationhandoff.PayloadPreparer
 	RuntimeStatus                       deploymentrepository.DeploymentRuntimeStatusRepository
 	Notifications                       NotificationRenderer
 	IdentityProjection                  identitysdk.Projection
+	IdentityHandlerDeliveryBinder       identitysdk.HandlerDeliveryUnitOfWorkBinder
+	StoreOrganizationDeliveryBinder     identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
+	WorkspaceIdentityUsageBinder        identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
+	WorkspaceIdentityUsageCursor        actionapplication.WorkspaceIdentityUsageCursorCodec
+	WorkspaceCommercialConfiguration    actionapplication.WorkspaceCommercialConfigurationLocker
 	Worker                              workerplatform.Dependencies
 }
 

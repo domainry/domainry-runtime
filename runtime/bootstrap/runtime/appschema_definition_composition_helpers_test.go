@@ -132,7 +132,7 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
-	application := NewProjectWithIdentity(t.Context(), config.Config{AppLocale: "en-US", IdentityWorkspaceID: "workspace-primary", IdentityAudience: "domainry-runtime", NotificationTenantID: "tenant-primary", NotificationWorkspaceID: "workspace-primary", NotificationApplicationKey: "domainry-runtime", AuditExportTokenKey: "test-audit-export-signing-key", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), name+".db"), ManifestPath: manifestPath, UploadDir: filepath.Join(t.TempDir(), "uploads")}, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
+	application := NewProjectWithIdentity(t.Context(), config.Config{AppLocale: "en-US", IdentityWorkspaceID: "workspace-primary", IdentityAudience: "domainry-runtime", NotificationWorkspaceID: "workspace-primary", NotificationApplicationKey: "domainry-runtime", AuditExportTokenKey: "test-audit-export-signing-key", DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), name+".db"), ManifestPath: manifestPath, UploadDir: filepath.Join(t.TempDir(), "uploads")}, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 	adminRole := roles[0]
 	for _, role := range roles {
 		if role.Key == "admin" {

@@ -146,9 +146,6 @@ func initializedIntegrationRuntimeConfig(cfg config.Config) config.Config {
 	if strings.TrimSpace(cfg.IdentityWorkspaceID) == "" {
 		cfg.IdentityWorkspaceID = "workspace-primary"
 	}
-	if strings.TrimSpace(cfg.NotificationTenantID) == "" {
-		cfg.NotificationTenantID = "tenant-primary"
-	}
 	if strings.TrimSpace(cfg.NotificationWorkspaceID) == "" {
 		cfg.NotificationWorkspaceID = cfg.IdentityWorkspaceID
 	}

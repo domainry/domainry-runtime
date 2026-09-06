@@ -1,7 +1,7 @@
 package manifestmodel
 
 // WorkspaceProvisionProjection is application-authored data created in the
-// same transaction as a managed tenant workspace.
+// same transaction as its owning Workspace.
 type WorkspaceProvisionProjection struct {
 	Key       string         `json:"key"`
 	ObjectKey string         `json:"object_key"`

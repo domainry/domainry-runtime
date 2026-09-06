@@ -188,6 +188,9 @@ func TestAuthoringSchemaReferenceTraversalAcceptsResolvedGenericShapes(t *testin
 		},
 		Items:                &CapabilityAuthoringSchema{Type: "string"},
 		OneOf:                []CapabilityAuthoringSchema{{Type: "string"}},
+		If:                   &CapabilityAuthoringSchema{Properties: map[string]CapabilityAuthoringSchema{"values": {Contains: &CapabilityAuthoringSchema{Const: "required"}}}},
+		Then:                 &CapabilityAuthoringSchema{Required: []string{"required"}},
+		Else:                 &CapabilityAuthoringSchema{Properties: map[string]CapabilityAuthoringSchema{"required": {Pattern: `^\\s*$`}}},
 		AdditionalProperties: &closed,
 	}
 	if err := validateAuthoringSchemaReferences(root, root); err != nil {
@@ -239,6 +242,15 @@ func TestAuthoringSchemaReferenceTraversalRejectsUnresolvedNestedShapes(t *testi
 				OneOf: []CapabilityAuthoringSchema{{Ref: "#/$defs/missing"}},
 			},
 			want: "oneOf[0]",
+		},
+		{
+			name: "conditional",
+			schema: CapabilityAuthoringSchema{
+				If: &CapabilityAuthoringSchema{Properties: map[string]CapabilityAuthoringSchema{
+					"values": {Contains: &CapabilityAuthoringSchema{Ref: "#/$defs/missing"}},
+				}},
+			},
+			want: "contains: local definition",
 		},
 	}
 	for _, test := range tests {

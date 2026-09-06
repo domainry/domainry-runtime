@@ -5,15 +5,20 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strings"
 
-	actioncontract "github.com/domainry/domainry-foundation/action"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
 
-const runtimeBootstrapAdministratorRoleKey = "admin"
+var runtimeWorkspaceRoleKeys = [...]string{
+	identitysdk.WorkspaceBootstrapRoleTenantAdmin,
+	identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin,
+	identitysdk.WorkspaceBootstrapRoleStoreManager,
+	identitysdk.WorkspaceBootstrapRoleStaff,
+}
 
 // publishRuntimeProjectRoles projects application-owned authorization roles
 // through Identity's deployment-neutral port. Older/remote bindings may omit
@@ -26,45 +31,12 @@ func publishRuntimeProjectRoles(ctx context.Context, binding identitysdk.Binding
 	if !ok {
 		return nil
 	}
-	_, err := publisher.PublishProjectRoles(ctx, RuntimeProjectRoleCatalog(objects, roles, workspaceID, applicationKey))
+	catalog, err := RuntimeWorkspaceProjectRoleCatalog(objects, roles, workspaceID, applicationKey)
+	if err != nil {
+		return err
+	}
+	_, err = publisher.PublishProjectRoles(ctx, catalog)
 	return err
-}
-
-// runtimeProjectRolesWithBootstrapAdministrator gives the Identity-owned
-// bootstrap administrator the complete, explicit Runtime permission set when
-// the application manifest does not define its own admin role. Identity owns
-// the bootstrap user and assignment; Runtime owns the complete application
-// Action registry. Keeping the composition here avoids teaching Identity about
-// optional modules and avoids a wildcard permission that could outlive the
-// installed module cohort.
-func runtimeProjectRolesWithBootstrapAdministrator(roles []manifestmodel.RoleSchema, definitions []actioncontract.PermissionDefinition) []manifestmodel.RoleSchema {
-	result := append([]manifestmodel.RoleSchema(nil), roles...)
-	for _, role := range result {
-		if strings.TrimSpace(role.Key) == runtimeBootstrapAdministratorRoleKey {
-			return result
-		}
-	}
-	permissions := make([]manifestmodel.RolePermission, 0, len(definitions))
-	for _, definition := range definitions {
-		if key := strings.TrimSpace(definition.Key); key != "" {
-			permissions = append(permissions, manifestmodel.RolePermission{
-				PermissionKey: key,
-				DataScope:     identitysdk.DataScopeAll,
-			})
-		}
-	}
-	if len(permissions) == 0 {
-		return result
-	}
-	return append(result, manifestmodel.RoleSchema{
-		Key:               runtimeBootstrapAdministratorRoleKey,
-		Name:              "Admin",
-		Permissions:       permissions,
-		Audience:          "any",
-		AssignmentMode:    "manual",
-		RiskLevel:         "privileged",
-		GrantableRoleKeys: []string{"*"},
-	})
 }
 
 // RuntimeProjectRoleCatalog converts the compiler-bound Runtime manifest into
@@ -109,6 +81,52 @@ func RuntimeProjectRoleCatalog(objects []definitionmodel.ObjectSchema, roles []m
 		catalog.Roles = append(catalog.Roles, definition)
 	}
 	return catalog
+}
+
+// RuntimeWorkspaceProjectRoleCatalog projects the one canonical Workspace
+// role catalog used both before initialization and by the ordinary bound
+// Identity publication. The legacy-looking tenant_admin value is only a
+// stable role key from the Identity protocol; it does not identify a Tenant.
+func RuntimeWorkspaceProjectRoleCatalog(objects []definitionmodel.ObjectSchema, roles []manifestmodel.RoleSchema, workspaceID, applicationKey string) (identitysdk.ProjectRoleCatalog, error) {
+	ordered, err := exactRuntimeWorkspaceRoles(roles)
+	if err != nil {
+		return identitysdk.ProjectRoleCatalog{}, err
+	}
+	return RuntimeProjectRoleCatalog(objects, ordered, workspaceID, applicationKey), nil
+}
+
+// RuntimeWorkspaceBootstrapRoleCatalog is the unbound form of the same exact
+// catalog published after the initial Workspace has been committed.
+func RuntimeWorkspaceBootstrapRoleCatalog(objects []definitionmodel.ObjectSchema, roles []manifestmodel.RoleSchema, applicationKey string) (identitysdk.ProjectRoleCatalog, error) {
+	return RuntimeWorkspaceProjectRoleCatalog(objects, roles, "", applicationKey)
+}
+
+func exactRuntimeWorkspaceRoles(roles []manifestmodel.RoleSchema) ([]manifestmodel.RoleSchema, error) {
+	allowed := make(map[string]bool, len(runtimeWorkspaceRoleKeys))
+	for _, key := range runtimeWorkspaceRoleKeys {
+		allowed[key] = true
+	}
+	byKey := make(map[string]manifestmodel.RoleSchema, len(roles))
+	for _, role := range roles {
+		key := strings.TrimSpace(role.Key)
+		if !allowed[key] {
+			return nil, fmt.Errorf("Runtime Workspace role catalog contains unsupported role %q", key)
+		}
+		if _, duplicate := byKey[key]; duplicate {
+			return nil, fmt.Errorf("Runtime Workspace role catalog contains duplicate role %q", key)
+		}
+		role.Key = key
+		byKey[key] = role
+	}
+	ordered := make([]manifestmodel.RoleSchema, 0, len(runtimeWorkspaceRoleKeys))
+	for _, key := range runtimeWorkspaceRoleKeys {
+		role, found := byKey[key]
+		if !found {
+			return nil, fmt.Errorf("Runtime Workspace role catalog is missing required role %q", key)
+		}
+		ordered = append(ordered, role)
+	}
+	return ordered, nil
 }
 
 func runtimeRolePermissions(source []manifestmodel.RolePermission) []identitysdk.ProjectRolePermission {

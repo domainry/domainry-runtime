@@ -17,6 +17,8 @@ func ActionDefinitionAuthoringCapability() capabilitycontract.CapabilityAuthorin
 			{Key: "kind", Type: "string", Required: true, Enum: actionAuthoringKinds()},
 			{Key: "risk_level", Type: "string", Enum: []string{"low", "medium", "high", "critical"}},
 			{Key: "assurance_policy", Type: "object"},
+			{Key: "target_organization", Type: "object"},
+			{Key: "store_organization_mutation", Type: "object"},
 			{Key: "expected_schema_hash", Type: "string", Required: true},
 		},
 		Permissions:        []string{"runtime.appschema.validate_application_definition"},
@@ -61,6 +63,25 @@ func actionAuthoringRequestSchema() *capabilitycontract.CapabilityAuthoringSchem
 			"recent_reauth_max_age_seconds": {Type: "integer"}, "approval_version_field": {Type: "string"},
 			"approval_hash_field": {Type: "string"}, "maker_field": {Type: "string"},
 		},
+		If: &capabilitycontract.CapabilityAuthoringSchema{
+			Required: []string{"required_methods"},
+			Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+				"required_methods": {Contains: &capabilitycontract.CapabilityAuthoringSchema{Const: definitionmodel.ActionAssuranceWorkflowApproval}},
+			},
+		},
+		Then: &capabilitycontract.CapabilityAuthoringSchema{
+			Required: []string{"approval_version_field", "approval_hash_field"},
+			Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+				"approval_version_field": {Type: "string", Pattern: `\S`},
+				"approval_hash_field":    {Type: "string", Pattern: `\S`},
+			},
+		},
+		Else: &capabilitycontract.CapabilityAuthoringSchema{
+			Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+				"approval_version_field": {Type: "string", Pattern: `^\s*$`},
+				"approval_hash_field":    {Type: "string", Pattern: `^\s*$`},
+			},
+		},
 	}
 	payloadField := capabilitycontract.CapabilityAuthoringSchema{
 		Type: "object", AdditionalProperties: &closed, Required: []string{"key", "type"},
@@ -78,6 +99,24 @@ func actionAuthoringRequestSchema() *capabilitycontract.CapabilityAuthoringSchem
 			"preconditions":  {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}},
 			"payload_fields": {Type: "array", Items: &payloadField}, "defaults": {Type: "object"},
 			"optimistic_concurrency": {Type: "boolean", Default: false}, "concurrency_field": {Type: "string"}, "assurance_policy": assurancePolicy,
+			"target_organization": {
+				Type: "object", AdditionalProperties: &closed, Required: []string{"source"},
+				Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+					"source": {Type: "string", Enum: actionStringEnums([]string{
+						definitionmodel.ActionTargetOrganizationSourceExplicit,
+						definitionmodel.ActionTargetOrganizationSourceExplicitOrSoleAuthorizedStore,
+						definitionmodel.ActionTargetOrganizationSourceRecordOwner,
+						definitionmodel.ActionTargetOrganizationSourceProvisionedStore,
+					})},
+					"input": {Type: "string"},
+				},
+			},
+			"store_organization_mutation": {
+				Type: "object", AdditionalProperties: &closed, Required: []string{"operations"},
+				Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+					"operations": {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string", Enum: actionStringEnums([]string{"rename", "disable"})}},
+				},
+			},
 		},
 	}
 	return &capabilitycontract.CapabilityAuthoringSchema{

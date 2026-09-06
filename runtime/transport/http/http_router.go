@@ -56,6 +56,7 @@ type HTTPRouter struct {
 	authorizationActions             func() *actioncontract.Registry
 	identityAuthorization            identitysdk.PrincipalResolver
 	businessPrincipal                BusinessPrincipalResolver
+	workspaceAdmission               WorkspaceAdmission
 	identityAuthentication           IdentityRequestMiddleware
 	identityPrincipal                IdentityPrincipalProjection
 	integrationAuth                  IntegrationAuthenticationPrincipalProvider
@@ -117,7 +118,7 @@ func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRo
 		authorizationActions = func() *actioncontract.Registry { return registry }
 	}
 	router := &HTTPRouter{
-		identityAuthorization: deps.IdentityAuthorization, businessPrincipal: deps.BusinessPrincipal,
+		identityAuthorization: deps.IdentityAuthorization, businessPrincipal: deps.BusinessPrincipal, workspaceAdmission: deps.WorkspaceAdmission,
 		authorizationActions:   authorizationActions,
 		identityAuthentication: deps.IdentityAuthentication, identityPrincipal: deps.IdentityPrincipal, integrationAuth: deps.IntegrationAuthentication,
 		securityAudit: deps.SecurityAudit, runtimeStatus: deps.RuntimeStatus,

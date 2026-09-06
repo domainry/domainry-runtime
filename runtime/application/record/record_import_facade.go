@@ -10,6 +10,7 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/telemetry"
+	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
@@ -20,14 +21,14 @@ import (
 )
 
 func (s *RecordApplicationService) PlanCreateMutation(ctx context.Context, objectKey string, data map[string]any, recordID string, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
-	if err := s.validateProfileBindingMutation(objectKey, data, true); err != nil {
+	if err := s.validateProfileBindingMutation(ctx, objectKey, recordID, data, true); err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
 	return s.create.PlanCreateMutation(ctx, objectKey, data, recordID, principal)
 }
 
 func (s *RecordApplicationService) PlanUpdateMutation(ctx context.Context, objectKey, recordID string, patch map[string]any, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
-	if err := s.validateProfileBindingMutation(objectKey, patch, false); err != nil {
+	if err := s.validateProfileBindingMutation(ctx, objectKey, recordID, patch, false); err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
 	return s.update.PlanUpdateMutation(ctx, objectKey, recordID, patch, principal)
@@ -120,7 +121,7 @@ func (s *RecordApplicationService) CreateRecord(ctx context.Context, objectKey s
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.Record{}, err
 	}
-	if err := s.validateProfileBindingMutation(objectKey, data, true); err != nil {
+	if err := s.validateProfileBindingMutation(ctx, objectKey, "", data, true); err != nil {
 		return recordmodel.Record{}, err
 	}
 	return s.create.Create(ctx, objectKey, data, principal)
@@ -130,7 +131,7 @@ func (s *RecordApplicationService) CreateRecordIdempotent(ctx context.Context, o
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.Record{}, err
 	}
-	if err := s.validateProfileBindingMutation(objectKey, data, true); err != nil {
+	if err := s.validateProfileBindingMutation(ctx, objectKey, "", data, true); err != nil {
 		return recordmodel.Record{}, err
 	}
 	return s.create.CreateIdempotent(ctx, objectKey, data, idempotencyKey, principal)
@@ -140,7 +141,7 @@ func (s *RecordApplicationService) CreateRecordIdempotentResult(ctx context.Cont
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.Record{}, false, err
 	}
-	if err := s.validateProfileBindingMutation(objectKey, data, true); err != nil {
+	if err := s.validateProfileBindingMutation(ctx, objectKey, "", data, true); err != nil {
 		return recordmodel.Record{}, false, err
 	}
 	object, err := s.queryPolicy.ObjectForAction(principal, objectKey, "create")
@@ -168,7 +169,7 @@ func (s *RecordApplicationService) CreateLocalizedRecordIdempotentResult(ctx con
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.Record{}, false, err
 	}
-	if err := s.validateProfileBindingMutation(objectKey, data, true); err != nil {
+	if err := s.validateProfileBindingMutation(ctx, objectKey, "", data, true); err != nil {
 		return recordmodel.Record{}, false, err
 	}
 	object, err := s.queryPolicy.ObjectForAction(principal, objectKey, "create")
@@ -201,7 +202,7 @@ func (s *RecordApplicationService) UpdateRecord(ctx context.Context, objectKey, 
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.Record{}, err
 	}
-	if err := s.validateProfileBindingMutation(objectKey, patch, false); err != nil {
+	if err := s.validateProfileBindingMutation(ctx, objectKey, recordID, patch, false); err != nil {
 		return recordmodel.Record{}, err
 	}
 	return s.update.Update(ctx, objectKey, recordID, patch, principal)
@@ -213,7 +214,7 @@ func (s *RecordApplicationService) UpdateRecordIdempotent(ctx context.Context, o
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.Record{}, err
 	}
-	if err := s.validateProfileBindingMutation(objectKey, patch, false); err != nil {
+	if err := s.validateProfileBindingMutation(ctx, objectKey, recordID, patch, false); err != nil {
 		return recordmodel.Record{}, err
 	}
 	return s.update.UpdateIdempotent(ctx, objectKey, recordID, patch, idempotencyKey, principal)
@@ -226,7 +227,7 @@ func (s *RecordApplicationService) UpdateLocalizedRecord(ctx context.Context, ob
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.Record{}, err
 	}
-	if err := s.validateProfileBindingMutation(objectKey, patch, false); err != nil {
+	if err := s.validateProfileBindingMutation(ctx, objectKey, recordID, patch, false); err != nil {
 		return recordmodel.Record{}, err
 	}
 	return s.update.UpdateLocalized(ctx, objectKey, recordID, patch, translations, principal)
@@ -239,7 +240,7 @@ func (s *RecordApplicationService) UpdateLocalizedRecordIdempotent(ctx context.C
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.Record{}, err
 	}
-	if err := s.validateProfileBindingMutation(objectKey, patch, false); err != nil {
+	if err := s.validateProfileBindingMutation(ctx, objectKey, recordID, patch, false); err != nil {
 		return recordmodel.Record{}, err
 	}
 	return s.update.UpdateLocalizedIdempotent(ctx, objectKey, recordID, patch, translations, idempotencyKey, principal)
@@ -249,13 +250,13 @@ func (s *RecordApplicationService) ConditionalUpdateRecord(ctx context.Context, 
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.Record{}, err
 	}
-	if err := s.validateProfileBindingMutation(objectKey, input.Patch, false); err != nil {
+	if err := s.validateProfileBindingMutation(ctx, objectKey, recordID, input.Patch, false); err != nil {
 		return recordmodel.Record{}, err
 	}
 	return s.update.ConditionalUpdate(ctx, objectKey, recordID, input, principal)
 }
 
-func (s *RecordApplicationService) validateProfileBindingMutation(objectKey string, values map[string]any, creating bool) error {
+func (s *RecordApplicationService) validateProfileBindingMutation(ctx context.Context, objectKey, recordID string, values map[string]any, creating bool) error {
 	if s == nil || s.identityProfileExtensions == nil || len(values) == 0 {
 		return nil
 	}
@@ -270,6 +271,16 @@ func (s *RecordApplicationService) validateProfileBindingMutation(objectKey stri
 		}
 		if creating && (value == nil || strings.TrimSpace(fmt.Sprint(value)) == "") {
 			continue
+		}
+		if invocation, ok := recordmutation.MutationInvocationFromContext(ctx); ok && invocation.Source == transactionmodel.MutationSourceAction {
+			for _, authority := range invocation.ProfileBindingAuthorities {
+				if strings.TrimSpace(authority.ObjectKey) == strings.TrimSpace(objectKey) &&
+					strings.TrimSpace(authority.ProfileID) == strings.TrimSpace(recordID) &&
+					strings.TrimSpace(authority.FieldKey) == field &&
+					strings.TrimSpace(authority.IdentityUserID) == strings.TrimSpace(fmt.Sprint(value)) {
+					return nil
+				}
+			}
 		}
 		return apperror.New(apperror.KindForbidden, "backend.identity.profile_binding_command_required", nil, map[string]string{
 			"object_key": objectKey,

@@ -66,8 +66,38 @@ func BuildTenantPredicate(s Store, workspace string, queryValue recordmodel.Reco
 		return nil, fmt.Errorf("tenant query workspace: %w", err)
 	}
 	workspace = workspaceID.String()
-	predicates := []query.Predicate{query.Equal("workspace_id", workspace)}
+	return buildScopedPredicate(s, query.Equal("workspace_id", workspace), queryValue)
+}
+
+// BuildWorkspaceSetPredicate is the only cross-Workspace record predicate.
+// Callers must supply an explicit, validated installation-owned set; an empty
+// set is always false and can never mean unrestricted database access.
+func BuildWorkspaceSetPredicate(s Store, workspaces []string, queryValue recordmodel.RecordListQuery) (query.Predicate, error) {
+	values := make([]any, 0, len(workspaces))
+	seen := map[string]bool{}
+	for _, workspace := range workspaces {
+		workspaceID, err := principalmodel.NewWorkspaceID(workspace)
+		if err != nil {
+			return nil, fmt.Errorf("aggregate query workspace: %w", err)
+		}
+		value := workspaceID.String()
+		if !seen[value] {
+			seen[value] = true
+			values = append(values, value)
+		}
+	}
+	if len(values) == 0 {
+		return query.AlwaysFalse(), nil
+	}
+	return buildScopedPredicate(s, query.In("workspace_id", values...), queryValue)
+}
+
+func buildScopedPredicate(s Store, scope query.Predicate, queryValue recordmodel.RecordListQuery) (query.Predicate, error) {
+	predicates := []query.Predicate{scope}
 	appendPredicate := func(predicate query.Predicate) { predicates = append(predicates, predicate) }
+	if ownerOrganizationID := strings.TrimSpace(queryValue.OwnerOrganizationScopeID); ownerOrganizationID != "" {
+		appendPredicate(query.Equal("owner_org_id", ownerOrganizationID))
+	}
 	authorizationMode := queryValue.AuthorizationMode
 	if authorizationMode != recordmodel.RecordQueryAuthorizationUnrestricted && authorizationMode != recordmodel.RecordQueryAuthorizationPredicate && authorizationMode != recordmodel.RecordQueryAuthorizationDeny {
 		return nil, fmt.Errorf("unsupported record query authorization mode %q", authorizationMode)
