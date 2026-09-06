@@ -175,22 +175,40 @@ const (
 	ConditionalUpdateManyMaxSize = 200
 )
 
+// ConditionalUpdateManyExactCoverage declares the business identity whose
+// values must be covered exactly once by the locked record set. It is explicit
+// authority, not a predicate inferred from Filters: every ExpectedValue must
+// identify one and only one selected record, and selected records may not
+// introduce another value.
+type ConditionalUpdateManyExactCoverage struct {
+	Field          string
+	ExpectedValues []any
+}
+
 // ConditionalUpdateManyRequest is one closed set mutation. Runtime selects and
-// locks the matching rows once, validates ExpectedCount, and commits one
-// conditional UPDATE in the same Action transaction. Project code cannot
-// supply storage ownership or SQL.
+// locks the matching rows once, validates ExpectedCount and ExactCoverage, and
+// commits one conditional UPDATE in the same Action transaction. Project code
+// cannot supply storage ownership or SQL.
 type ConditionalUpdateManyRequest struct {
 	ObjectKey     string
 	Filters       []Filter
 	Fields        map[string]any
 	ExpectedCount int
+	ExactCoverage ConditionalUpdateManyExactCoverage
 }
 
 func (request ConditionalUpdateManyRequest) Valid() bool {
 	if strings.TrimSpace(request.ObjectKey) == "" || len(request.Filters) == 0 || len(request.Fields) == 0 ||
 		request.ExpectedCount < ConditionalUpdateManyMinSize || request.ExpectedCount > ConditionalUpdateManyMaxSize ||
-		recordQueryContainsRuntimeOwnedFilter(request.Filters) {
+		recordQueryContainsRuntimeOwnedFilter(request.Filters) ||
+		strings.TrimSpace(request.ExactCoverage.Field) == "" ||
+		len(request.ExactCoverage.ExpectedValues) != request.ExpectedCount {
 		return false
+	}
+	for _, value := range request.ExactCoverage.ExpectedValues {
+		if value == nil {
+			return false
+		}
 	}
 	for key := range request.Fields {
 		switch strings.ToLower(strings.TrimSpace(key)) {

@@ -272,7 +272,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 }
 
 func (r RecordStore) applyConditionalUpdateManyTx(ctx context.Context, tx TransactionExecutor, workspaceID string, commit transactionmodel.RecordMutationCommit) error {
-	if commit.SetExpectedAffected < 1 || commit.SetExpectedAffected > 200 || len(commit.SetRecordIDs) != commit.SetExpectedAffected || len(commit.Record.Data) == 0 || commit.SetFilterExpression == nil {
+	if commit.SetExpectedAffected < 1 || commit.SetExpectedAffected > 200 || len(commit.SetRecordIDs) != commit.SetExpectedAffected || len(commit.Record.Data) == 0 || commit.SetFilterExpression == nil || len(commit.SetExactCoverageValues) != commit.SetExpectedAffected {
 		return fmt.Errorf("conditional update-many commit is invalid")
 	}
 	ids := make([]any, 0, len(commit.SetRecordIDs))
@@ -309,9 +309,13 @@ func (r RecordStore) applyConditionalUpdateManyTx(ctx context.Context, tx Transa
 		builder.Set("update_by", userID)
 	}
 	fields := make([]string, 0, len(commit.Record.Data))
-	fieldCatalog := map[string]definitionmodel.FieldSchema{}
+	fieldCatalog := map[string]definitionmodel.FieldSchema{"id": {Key: "id", Type: "text"}}
 	for _, field := range commit.Object.Fields {
 		fieldCatalog[field.Key] = field
+	}
+	coverageFieldKey, coverageValues, err := r.conditionalUpdateManyCoverageDBValues(commit)
+	if err != nil {
+		return err
 	}
 	for key := range commit.Record.Data {
 		if _, ok := fieldCatalog[key]; !ok || recordFieldIsSystemOwned(key) {
@@ -323,6 +327,7 @@ func (r RecordStore) applyConditionalUpdateManyTx(ctx context.Context, tx Transa
 	for _, key := range fields {
 		builder.Set(key, dbFieldValue(r.store.RuntimeEngine, fieldCatalog[key], commit.Record.Data[key]))
 	}
+	predicate = query.And(predicate, query.In(coverageFieldKey, coverageValues...))
 	statement, args, err := builder.Where(predicate).Build()
 	if err != nil {
 		return err

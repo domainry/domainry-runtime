@@ -49,6 +49,7 @@ func TestConditionalUpdateManyUsesOneLockedSelectAndOneUpdate(t *testing.T) {
 		Record:       recordmodel.Record{ID: "shift-1", OwnerOrgID: "store-a", UpdatedAt: "v2", UpdateBy: "manager", Data: map[string]any{"status": "finished", "clock_out": "2026-09-06T23:00:00Z"}},
 		SetRecordIDs: []string{"shift-1", "shift-2"}, SetFilterExpression: filter,
 		SetExpectedAffected: 2, SetOwnerOrganizationScope: "store-a",
+		SetExactCoverageField: "staff_id", SetExactCoverageValues: []any{"staff-1", "staff-2"},
 	}
 	if err := store.ApplyRecordMutationTx(ctx, store.database(), "workspace-a", commit); err != nil {
 		t.Fatal(err)
@@ -57,7 +58,7 @@ func TestConditionalUpdateManyUsesOneLockedSelectAndOneUpdate(t *testing.T) {
 		t.Fatalf("queries=%d execs=%d\nqueries=%v\nexecs=%v", len(state.queryStatements), len(state.execStatements), state.queryStatements, state.execStatements)
 	}
 	if !strings.Contains(state.queryStatements[0], "staff_id") || !strings.Contains(state.queryStatements[0], "owner_org_id") || !strings.HasSuffix(state.queryStatements[0], " FOR UPDATE") ||
-		!strings.HasPrefix(state.execStatements[0], `UPDATE "shift"`) || !strings.Contains(state.execStatements[0], `"id" IN`) || !strings.Contains(state.execStatements[0], `"staff_id" IN`) {
+		!strings.HasPrefix(state.execStatements[0], `UPDATE "shift"`) || !strings.Contains(state.execStatements[0], `"id" IN`) || strings.Count(state.execStatements[0], `"staff_id" IN`) < 2 {
 		t.Fatalf("locked SELECT=%s\nconditional UPDATE=%s", state.queryStatements[0], state.execStatements[0])
 	}
 }
@@ -71,6 +72,7 @@ func TestConditionalUpdateManyAffectedMismatchFailsClosed(t *testing.T) {
 		Operation: "conditional_update_many", Object: object,
 		Record:       recordmodel.Record{ID: "shift-1", UpdatedAt: "v2", Data: map[string]any{"status": "finished"}},
 		SetRecordIDs: []string{"shift-1", "shift-2"}, SetFilterExpression: filter, SetExpectedAffected: 2,
+		SetExactCoverageField: "id", SetExactCoverageValues: []any{"shift-1", "shift-2"},
 	}
 	err := store.ApplyRecordMutationTx(t.Context(), store.database(), "workspace-a", commit)
 	var conflict *mutation.PolicyConflictError
@@ -79,6 +81,25 @@ func TestConditionalUpdateManyAffectedMismatchFailsClosed(t *testing.T) {
 	}
 	if len(state.execStatements) != 1 {
 		t.Fatalf("exec statements=%v", state.execStatements)
+	}
+}
+
+func TestConditionalUpdateManyPersistenceRejectsNonDistinctExactCoverageWithoutWrite(t *testing.T) {
+	state := &recordSQLState{}
+	store := scriptedRecordStore(t, state)
+	object := definitionmodel.ObjectSchema{Key: "shift", Fields: []definitionmodel.FieldSchema{{Key: "staff_id", Type: "text"}, {Key: "status", Type: "text"}}}
+	filter := &recordmodel.RecordFilterExpression{Field: "status", Operator: "eq", Value: "working"}
+	commit := transactionmodel.RecordMutationCommit{
+		Operation: "conditional_update_many", Object: object,
+		Record:       recordmodel.Record{ID: "shift-1", UpdatedAt: "v2", Data: map[string]any{"status": "finished"}},
+		SetRecordIDs: []string{"shift-1", "shift-2"}, SetFilterExpression: filter, SetExpectedAffected: 2,
+		SetExactCoverageField: "staff_id", SetExactCoverageValues: []any{"staff-1", "staff-1"},
+	}
+	if err := store.ApplyRecordMutationTx(t.Context(), store.database(), "workspace-a", commit); err == nil || !strings.Contains(err.Error(), "not distinct") {
+		t.Fatalf("non-distinct coverage error=%v", err)
+	}
+	if len(state.execStatements) != 0 {
+		t.Fatalf("invalid coverage reached write: %v", state.execStatements)
 	}
 }
 
@@ -97,6 +118,7 @@ func TestConditionalUpdateManyAffectedMismatchRollsBackTransaction(t *testing.T)
 		Operation: "conditional_update_many", Object: object,
 		Record:       recordmodel.Record{ID: "shift-1", UpdatedAt: "v2", Data: map[string]any{"status": "finished"}},
 		SetRecordIDs: []string{"shift-1", "missing-shift"}, SetFilterExpression: filter, SetExpectedAffected: 2,
+		SetExactCoverageField: "id", SetExactCoverageValues: []any{"shift-1", "missing-shift"},
 	}
 	err := store.CommitRecordMutationBatch(t.Context(), "workspace-a", []transactionmodel.RecordMutationCommit{commit})
 	var conflict *mutation.PolicyConflictError

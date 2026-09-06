@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v28"
-	ContractSHA256  = "f56dd05897d1e3b1e174035ba1ced3066437a7b10b68b58d8c007bcb8afee60c"
+	ContractVersion = "runtimeext-v29"
+	ContractSHA256  = "7dc2a69d6ccc7770d1baf05b4c7280d2164883c4532846e3e2cd0249aa8863a4"
 )
 
-const contractDefinitionV28 = `runtimeext-v28
+const contractDefinitionV29 = `runtimeext-v29
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -27,7 +27,7 @@ ActionExecution.StageDurableIntent(context.Context,DurableIntent)(DurableIntentR
 ActionExecution.AcquireSynchronousConnectorCall(ActionConnectorCapability)(SynchronousConnectorCallLease,error)
 ConditionalUpdateManyExecution.ConditionalUpdateMany(context.Context,ConditionalUpdateManyRequest)(ConditionalUpdateManyResult,error)
 ApplyConditionalUpdateMany(context.Context,ActionExecution,ConditionalUpdateManyRequest)(ConditionalUpdateManyResult,error)
-ConditionalUpdateManySemantics=one_scoped_select_for_update|one_conditional_update|expected_affected_exact|same_action_transaction|no_owner_input|max_200
+ConditionalUpdateManySemantics=one_scoped_select_for_update|explicit_exact_distinct_coverage_field_and_values|every_expected_value_exactly_one_locked_row|no_in_filter_inference|one_conditional_update|expected_affected_exact|same_action_transaction|no_owner_input|max_200
 ResolveRecordNotificationRecipient(context.Context,ActionExecution,RecordNotificationRecipientRequest)(string,error)
 RecordNotificationRecipientOperation=notification_recipient
 VerifyFileClean(context.Context,ActionExecution,FileVerificationRequest)(FileVerificationEvidence,error)
@@ -98,12 +98,12 @@ func ComputedContractSHA256() string {
 		WorkspaceBootstrapInputField{}, WorkspaceBootstrapRecordCapability{}, WorkspaceBootstrapDescriptor{}, WorkspaceBootstrapContext{}, WorkspaceBootstrapRecord{},
 		HandlerDescriptor{}, BusinessHandlerBinding{},
 		Record{}, Filter{}, Sort{}, RecordQuery{}, RecordQueryResult{},
-		Predicate{}, Arithmetic{}, RecordMutation{}, RecordMutationResult{}, ConditionalUpdateManyRequest{}, ConditionalUpdateManyResult{},
+		Predicate{}, Arithmetic{}, RecordMutation{}, RecordMutationResult{}, ConditionalUpdateManyExactCoverage{}, ConditionalUpdateManyRequest{}, ConditionalUpdateManyResult{},
 		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ExtensionSet{},
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV28)
+	definition.WriteString(contractDefinitionV29)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

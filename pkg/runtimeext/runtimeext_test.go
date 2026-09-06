@@ -73,7 +73,7 @@ func TestHandlerDescriptorRequiresStableIdentityAndContracts(t *testing.T) {
 }
 
 func TestRuntimeextContractIdentityIsCurrent(t *testing.T) {
-	if ContractVersion != "runtimeext-v28" {
+	if ContractVersion != "runtimeext-v29" {
 		t.Fatalf("contract version = %q", ContractVersion)
 	}
 	if got := ComputedContractSHA256(); got != ContractSHA256 {
@@ -95,8 +95,9 @@ func TestRecordOwnershipRemainsRuntimeOwned(t *testing.T) {
 func TestConditionalUpdateManyIsBoundedAndCannotAcceptRuntimeOwnership(t *testing.T) {
 	valid := ConditionalUpdateManyRequest{
 		ObjectKey: "shift", ExpectedCount: 2,
-		Filters: []Filter{{Field: "staff_id", Operator: "in", Values: []any{"staff-1", "staff-2"}}},
-		Fields:  map[string]any{"status": "finished", "clock_out": "2026-09-06T23:00:00Z"},
+		Filters:       []Filter{{Field: "staff_id", Operator: "in", Values: []any{"staff-1", "staff-2"}}},
+		Fields:        map[string]any{"status": "finished", "clock_out": "2026-09-06T23:00:00Z"},
+		ExactCoverage: ConditionalUpdateManyExactCoverage{Field: "staff_id", ExpectedValues: []any{"staff-1", "staff-2"}},
 	}
 	if !valid.Valid() {
 		t.Fatal("bounded filter-only set mutation was rejected")
@@ -106,6 +107,9 @@ func TestConditionalUpdateManyIsBoundedAndCannotAcceptRuntimeOwnership(t *testin
 		func(request *ConditionalUpdateManyRequest) { request.ExpectedCount = ConditionalUpdateManyMaxSize + 1 },
 		func(request *ConditionalUpdateManyRequest) { request.Filters = nil },
 		func(request *ConditionalUpdateManyRequest) { request.Fields = nil },
+		func(request *ConditionalUpdateManyRequest) { request.ExactCoverage.Field = "" },
+		func(request *ConditionalUpdateManyRequest) { request.ExactCoverage.ExpectedValues = []any{"staff-1"} },
+		func(request *ConditionalUpdateManyRequest) { request.ExactCoverage.ExpectedValues[0] = nil },
 		func(request *ConditionalUpdateManyRequest) {
 			request.Filters = []Filter{{Field: "owner_org_id", Operator: "eq", Value: "forged"}}
 		},

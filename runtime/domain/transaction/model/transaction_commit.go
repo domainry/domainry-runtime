@@ -34,6 +34,8 @@ type RecordMutationCommit struct {
 	SetFilterExpression       *recordmodel.RecordFilterExpression `json:"-"`
 	SetExpectedAffected       int                                 `json:"set_expected_affected,omitempty"`
 	SetOwnerOrganizationScope string                              `json:"-"`
+	SetExactCoverageField     string                              `json:"set_exact_coverage_field,omitempty"`
+	SetExactCoverageValues    []any                               `json:"set_exact_coverage_values,omitempty"`
 }
 
 // MutationPredicate is a storage-neutral compare-and-set condition evaluated

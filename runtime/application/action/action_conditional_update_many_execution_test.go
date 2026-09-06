@@ -2,11 +2,14 @@ package action
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -22,6 +25,7 @@ func TestConditionalUpdateManyIsOneSetCallWithoutPerRecordLookupOrMutation(t *te
 	}
 	execution := &businessActionExecution{
 		dependencies: BusinessHandlerExecutionDependencies{
+			ObjectForKey: func(key string) (definitionmodel.ObjectSchema, bool) { return object, key == object.Key },
 			ListRecords: func(ctx context.Context, objectKey string, query recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 				listCalls++
 				if objectKey != "shift" || query.LockIntent != recordmodel.RecordQueryLockForUpdate || query.PageSize != 2 || !query.SkipTotal || query.FilterExpression == nil {
@@ -56,8 +60,9 @@ func TestConditionalUpdateManyIsOneSetCallWithoutPerRecordLookupOrMutation(t *te
 	}
 	request := runtimeext.ConditionalUpdateManyRequest{
 		ObjectKey: "shift", ExpectedCount: 2,
-		Filters: []runtimeext.Filter{{Field: "staff_id", Operator: "in", Values: []any{"staff-1", "staff-2"}}, {Field: "status", Operator: "eq", Value: "working"}},
-		Fields:  map[string]any{"status": "finished", "clock_out": "2026-09-06T23:00:00Z"},
+		Filters:       []runtimeext.Filter{{Field: "staff_id", Operator: "in", Values: []any{"staff-1", "staff-2"}}, {Field: "status", Operator: "eq", Value: "working"}},
+		Fields:        map[string]any{"status": "finished", "clock_out": "2026-09-06T23:00:00Z"},
+		ExactCoverage: runtimeext.ConditionalUpdateManyExactCoverage{Field: "staff_id", ExpectedValues: []any{"staff-1", "staff-2"}},
 	}
 	result, err := execution.ConditionalUpdateMany(t.Context(), request)
 	if err != nil {
@@ -70,8 +75,76 @@ func TestConditionalUpdateManyIsOneSetCallWithoutPerRecordLookupOrMutation(t *te
 		t.Fatalf("per-record plans=%d set commits=%d", len(execution.plans), len(execution.setCommits))
 	}
 	commit := execution.setCommits[0]
-	if commit.Operation != "conditional_update_many" || commit.SetExpectedAffected != 2 || !reflect.DeepEqual(commit.SetRecordIDs, []string{"shift-1", "shift-2"}) || !reflect.DeepEqual(commit.Record.Data, request.Fields) {
+	if commit.Operation != "conditional_update_many" || commit.SetExpectedAffected != 2 || !reflect.DeepEqual(commit.SetRecordIDs, []string{"shift-1", "shift-2"}) || !reflect.DeepEqual(commit.Record.Data, request.Fields) || commit.SetExactCoverageField != "staff_id" || !reflect.DeepEqual(commit.SetExactCoverageValues, []any{"staff-1", "staff-2"}) {
 		t.Fatalf("set commit=%+v", commit)
 	}
 	execution.unitOfWork.rollBack(t.Context())
+}
+
+func TestConditionalUpdateManyRejectsMissingAndDuplicateExactCoverageBeforePlanning(t *testing.T) {
+	listCalls, planCalls := 0, 0
+	object := definitionmodel.ObjectSchema{Key: "shift", Fields: []definitionmodel.FieldSchema{{Key: "staff_id", Type: "text"}, {Key: "status", Type: "text"}}}
+	uowStore := &actionUnitOfWorkStoreProbe{}
+	execution := &businessActionExecution{
+		dependencies: BusinessHandlerExecutionDependencies{
+			ObjectForKey: func(key string) (definitionmodel.ObjectSchema, bool) { return object, key == object.Key },
+			ListRecords: func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error) {
+				listCalls++
+				return recordmodel.RecordPageResult{Items: []recordmodel.Record{
+					{ID: "shift-1", Data: map[string]any{"staff_id": "staff-1", "status": "working"}},
+					{ID: "shift-2", Data: map[string]any{"staff_id": "staff-1", "status": "working"}},
+				}}, nil
+			},
+			PlanConditionalUpdateLockedRecord: func(context.Context, string, recordmodel.Record, transactionmodel.ConditionalUpdateInput, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
+				planCalls++
+				return transactionmodel.MutationPlan{}, recordmodel.Record{}, nil
+			},
+		},
+		action: definitionmodel.ActionSchema{Key: "shift.bulk_clock_out", ObjectKey: "shift", EffectSet: &definitionmodel.ActionEffectSet{
+			Read: []definitionmodel.ActionObjectEffect{{ObjectKey: "shift", Operations: []string{"conditional_update_many"}}}, Write: []definitionmodel.ActionObjectEffect{{ObjectKey: "shift", Operations: []string{"conditional_update_many"}}},
+		}},
+		unitOfWork: &actionUnitOfWork{manager: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(uowStore)), phases: newActionExecutionPhaseMachine()}, objectGrants: []runtimeext.ActionObjectCapability{{ObjectKey: "shift", Operations: []string{"conditional_update_many"}}},
+	}
+	request := runtimeext.ConditionalUpdateManyRequest{
+		ObjectKey: "shift", ExpectedCount: 2,
+		Filters:       []runtimeext.Filter{{Field: "staff_id", Operator: "in", Values: []any{"staff-1", "staff-2"}}},
+		Fields:        map[string]any{"status": "finished"},
+		ExactCoverage: runtimeext.ConditionalUpdateManyExactCoverage{Field: "staff_id", ExpectedValues: []any{"staff-1", "staff-2"}},
+	}
+	_, err := execution.ConditionalUpdateMany(t.Context(), request)
+	var appError *apperror.AppError
+	if !errors.As(err, &appError) || appError.Code != "backend.action.conditional_update_many_coverage_mismatch" {
+		t.Fatalf("coverage mismatch error=%v", err)
+	}
+	if listCalls != 1 || planCalls != 0 || len(execution.setCommits) != 0 {
+		t.Fatalf("list=%d plans=%d commits=%d", listCalls, planCalls, len(execution.setCommits))
+	}
+	execution.unitOfWork.rollBack(t.Context())
+	if uowStore.beginTransactionCalls != 1 || uowStore.rollbackCalls != 1 || len(uowStore.commits) != 0 {
+		t.Fatalf("transaction begins=%d rollbacks=%d commits=%d", uowStore.beginTransactionCalls, uowStore.rollbackCalls, len(uowStore.commits))
+	}
+}
+
+func TestConditionalUpdateManyRejectsDuplicateExpectedCoverageBeforeDatabase(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "shift", Fields: []definitionmodel.FieldSchema{{Key: "staff_id", Type: "text"}}}
+	execution := &businessActionExecution{
+		dependencies: BusinessHandlerExecutionDependencies{
+			ObjectForKey: func(string) (definitionmodel.ObjectSchema, bool) { return object, true },
+			ListRecords: func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error) {
+				t.Fatal("duplicate expected coverage reached database")
+				return recordmodel.RecordPageResult{}, nil
+			},
+			PlanConditionalUpdateLockedRecord: func(context.Context, string, recordmodel.Record, transactionmodel.ConditionalUpdateInput, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
+				return transactionmodel.MutationPlan{}, recordmodel.Record{}, nil
+			},
+		},
+		action:     definitionmodel.ActionSchema{EffectSet: &definitionmodel.ActionEffectSet{Read: []definitionmodel.ActionObjectEffect{{ObjectKey: "shift", Operations: []string{"conditional_update_many"}}}, Write: []definitionmodel.ActionObjectEffect{{ObjectKey: "shift", Operations: []string{"conditional_update_many"}}}}},
+		unitOfWork: newActionTestUnitOfWork(), objectGrants: []runtimeext.ActionObjectCapability{{ObjectKey: "shift", Operations: []string{"conditional_update_many"}}},
+	}
+	request := runtimeext.ConditionalUpdateManyRequest{ObjectKey: "shift", ExpectedCount: 2, Filters: []runtimeext.Filter{{Field: "staff_id", Operator: "in", Values: []any{"staff-1"}}}, Fields: map[string]any{"status": "finished"}, ExactCoverage: runtimeext.ConditionalUpdateManyExactCoverage{Field: "staff_id", ExpectedValues: []any{"staff-1", "staff-1"}}}
+	_, err := execution.ConditionalUpdateMany(t.Context(), request)
+	var appError *apperror.AppError
+	if !errors.As(err, &appError) || appError.Code != "backend.action.conditional_update_many_coverage_invalid" {
+		t.Fatalf("duplicate expected coverage error=%v", err)
+	}
 }

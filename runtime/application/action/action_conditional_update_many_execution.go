@@ -2,6 +2,7 @@ package action
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 )
 
@@ -25,9 +27,18 @@ func (e *businessActionExecution) ConditionalUpdateMany(ctx context.Context, req
 	if e.targetGrant != nil && !e.targetResolved {
 		return runtimeext.ConditionalUpdateManyResult{}, apperror.New(apperror.KindBadRequest, "backend.action.target_organization_unresolved", nil, nil)
 	}
-	if e.dependencies.ListRecords == nil || e.dependencies.PlanConditionalUpdateLockedRecord == nil {
+	if e.dependencies.ListRecords == nil || e.dependencies.PlanConditionalUpdateLockedRecord == nil || e.dependencies.ObjectForKey == nil {
 		return runtimeext.ConditionalUpdateManyResult{}, missingExecutorPort("conditional_update_many")
 	}
+	object, ok := e.dependencies.ObjectForKey(request.ObjectKey)
+	if !ok || strings.TrimSpace(object.Key) != strings.TrimSpace(request.ObjectKey) {
+		return runtimeext.ConditionalUpdateManyResult{}, apperror.New(apperror.KindBadRequest, "backend.action.conditional_update_many_coverage_invalid", nil, map[string]string{"object": request.ObjectKey})
+	}
+	normalizedCoverage, err := normalizeConditionalUpdateManyCoverage(object, request.ExactCoverage, request.ExpectedCount)
+	if err != nil {
+		return runtimeext.ConditionalUpdateManyResult{}, err
+	}
+	request.ExactCoverage = normalizedCoverage
 	txCtx, err := e.unitOfWork.beginWriting(ctx)
 	if err != nil {
 		return runtimeext.ConditionalUpdateManyResult{}, err
@@ -51,6 +62,9 @@ func (e *businessActionExecution) ConditionalUpdateMany(ctx context.Context, req
 		return runtimeext.ConditionalUpdateManyResult{}, apperror.New(apperror.KindConflict, "backend.action.conditional_update_many_cardinality_mismatch", nil, map[string]string{
 			"expected": fmt.Sprint(request.ExpectedCount), "actual": fmt.Sprint(len(page.Items)),
 		})
+	}
+	if err := validateConditionalUpdateManyExactCoverage(object, normalizedCoverage, page.Items); err != nil {
+		return runtimeext.ConditionalUpdateManyResult{}, err
 	}
 	commit, ids, err := e.planConditionalUpdateMany(txCtx, request, filterExpression, page.Items)
 	if err != nil {
@@ -115,6 +129,8 @@ func (e *businessActionExecution) planConditionalUpdateMany(ctx context.Context,
 				AuthorizationScope:  member.AuthorizationScope,
 				SetFilterExpression: filter, SetExpectedAffected: request.ExpectedCount,
 				SetOwnerOrganizationScope: e.targetOrganization.ID,
+				SetExactCoverageField:     request.ExactCoverage.Field,
+				SetExactCoverageValues:    append([]any(nil), request.ExactCoverage.ExpectedValues...),
 			}
 		} else if before.OwnerOrgID != result.Record.OwnerOrgID || !reflect.DeepEqual(member.AuthorizationScope, result.AuthorizationScope) {
 			return result, nil, apperror.New(apperror.KindForbidden, "backend.action.conditional_update_many_scope_mismatch", nil, nil)
@@ -133,6 +149,95 @@ func (e *businessActionExecution) planConditionalUpdateMany(ctx context.Context,
 	sort.Strings(ids)
 	sort.Strings(result.SetRecordIDs)
 	return result, ids, nil
+}
+
+func normalizeConditionalUpdateManyCoverage(object definitionmodel.ObjectSchema, coverage runtimeext.ConditionalUpdateManyExactCoverage, expectedCount int) (runtimeext.ConditionalUpdateManyExactCoverage, error) {
+	field, ok := conditionalUpdateManyCoverageField(object, coverage.Field)
+	if !ok || len(coverage.ExpectedValues) != expectedCount {
+		return runtimeext.ConditionalUpdateManyExactCoverage{}, apperror.New(apperror.KindBadRequest, "backend.action.conditional_update_many_coverage_invalid", nil, map[string]string{"object": object.Key, "field": strings.TrimSpace(coverage.Field)})
+	}
+	normalized := runtimeext.ConditionalUpdateManyExactCoverage{Field: field.Key, ExpectedValues: make([]any, len(coverage.ExpectedValues))}
+	seen := map[string]bool{}
+	for index, value := range coverage.ExpectedValues {
+		current, err := conditionalUpdateManyCoverageValue(field, value)
+		if err != nil || current == nil {
+			return runtimeext.ConditionalUpdateManyExactCoverage{}, apperror.New(apperror.KindBadRequest, "backend.action.conditional_update_many_coverage_invalid", err, map[string]string{"object": object.Key, "field": field.Key})
+		}
+		key, err := conditionalUpdateManyCoverageValueKey(current)
+		if err != nil || seen[key] {
+			return runtimeext.ConditionalUpdateManyExactCoverage{}, apperror.New(apperror.KindBadRequest, "backend.action.conditional_update_many_coverage_invalid", err, map[string]string{"object": object.Key, "field": field.Key})
+		}
+		seen[key] = true
+		normalized.ExpectedValues[index] = current
+	}
+	return normalized, nil
+}
+
+func validateConditionalUpdateManyExactCoverage(object definitionmodel.ObjectSchema, coverage runtimeext.ConditionalUpdateManyExactCoverage, records []recordmodel.Record) error {
+	field, ok := conditionalUpdateManyCoverageField(object, coverage.Field)
+	if !ok {
+		return apperror.New(apperror.KindConflict, "backend.action.conditional_update_many_coverage_mismatch", nil, map[string]string{"object": object.Key, "field": coverage.Field})
+	}
+	expected := map[string]bool{}
+	for _, value := range coverage.ExpectedValues {
+		key, err := conditionalUpdateManyCoverageValueKey(value)
+		if err != nil || expected[key] {
+			return apperror.New(apperror.KindConflict, "backend.action.conditional_update_many_coverage_mismatch", err, map[string]string{"object": object.Key, "field": field.Key})
+		}
+		expected[key] = true
+	}
+	actual := map[string]bool{}
+	for _, record := range records {
+		value := record.Data[field.Key]
+		if field.Key == "id" {
+			value = record.ID
+		}
+		normalized, err := conditionalUpdateManyCoverageValue(field, value)
+		if err != nil || normalized == nil {
+			return apperror.New(apperror.KindConflict, "backend.action.conditional_update_many_coverage_mismatch", err, map[string]string{"object": object.Key, "field": field.Key})
+		}
+		key, err := conditionalUpdateManyCoverageValueKey(normalized)
+		if err != nil || !expected[key] || actual[key] {
+			return apperror.New(apperror.KindConflict, "backend.action.conditional_update_many_coverage_mismatch", err, map[string]string{"object": object.Key, "field": field.Key})
+		}
+		actual[key] = true
+	}
+	if len(actual) != len(expected) {
+		return apperror.New(apperror.KindConflict, "backend.action.conditional_update_many_coverage_mismatch", nil, map[string]string{"object": object.Key, "field": field.Key})
+	}
+	return nil
+}
+
+func conditionalUpdateManyCoverageField(object definitionmodel.ObjectSchema, raw string) (definitionmodel.FieldSchema, bool) {
+	key := strings.TrimSpace(raw)
+	if key == "id" {
+		return definitionmodel.FieldSchema{Key: "id", Type: "text"}, true
+	}
+	for _, field := range object.Fields {
+		if strings.TrimSpace(field.Key) == key {
+			return field, true
+		}
+	}
+	return definitionmodel.FieldSchema{}, false
+}
+
+func conditionalUpdateManyCoverageValue(field definitionmodel.FieldSchema, value any) (any, error) {
+	if field.Key == "id" {
+		text := strings.TrimSpace(fmt.Sprint(value))
+		if value == nil || text == "" {
+			return nil, fmt.Errorf("coverage identity is empty")
+		}
+		return text, nil
+	}
+	return recordvalidation.RecordNormalizeFieldValue(field, value)
+}
+
+func conditionalUpdateManyCoverageValueKey(value any) (string, error) {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%T:%s", value, payload), nil
 }
 
 func changedRecordFields(object definitionmodel.ObjectSchema, before, after map[string]any) map[string]any {
