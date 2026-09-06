@@ -34,6 +34,7 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 		AgentRepositories:        agentRepositories,
 		AgentBinding:             runtime.agentBinding,
 		Manifest:                 runtime.manifest,
+		WorkspaceRolePolicy:      runtime.workspaceRolePolicy,
 		WorkerControl:            runtime.worker.Control,
 		Clock:                    runtime.worker.Clock,
 		RuntimeInstanceID:        runtime.worker.WorkerID.String(),

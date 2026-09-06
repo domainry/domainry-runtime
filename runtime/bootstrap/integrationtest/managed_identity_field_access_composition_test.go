@@ -157,7 +157,7 @@ func managedIdentityFieldAccessManifest(t *testing.T, dir string) string {
 	for _, value := range manifest["roles"].([]any) {
 		role := value.(map[string]any)
 		if role["key"] == "admin" {
-			role["key"] = identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin
+			role["key"] = "headquarters_admin"
 			role["name"] = "Headquarters administrator"
 			for _, permissionValue := range role["permissions"].([]any) {
 				permission := permissionValue.(map[string]any)
@@ -182,10 +182,10 @@ func managedIdentityFieldAccessManifest(t *testing.T, dir string) string {
 		t.Fatal("source manifest has no administrator role to adapt")
 	}
 	manifest["roles"] = []any{
-		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleTenantAdmin, "name": "Platform administrator", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+		map[string]any{"key": "tenant_admin", "name": "Platform administrator", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
 		headquartersRole,
-		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleStoreManager, "name": "Store manager", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
-		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleStaff, "name": "Staff", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+		map[string]any{"key": "store_manager", "name": "Store manager", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+		map[string]any{"key": "staff", "name": "Staff", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
 	}
 	for _, value := range manifest["seed_records"].([]any) {
 		seed := value.(map[string]any)

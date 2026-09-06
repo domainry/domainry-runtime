@@ -93,18 +93,23 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, manifest m
 	if err != nil {
 		return err
 	}
-	// Bootstrap and ordinary publication use the same compiler-bound exact-four
-	// role definitions. Identity assigns the initial user only to
-	// headquarters_admin inside the host-owned transaction.
-	roleCatalog, err := runtimebootstrap.RuntimeWorkspaceBootstrapRoleCatalog(manifest.Objects, manifest.Roles, manager.cfg.IdentityAudience)
+	// Bootstrap receives only the validated Workspace-login subset. Ordinary
+	// publication later receives the complete catalog, including validated
+	// internal service roles.
+	roleCatalog, err := runtimebootstrap.RuntimeWorkspaceBootstrapRoleCatalog(manifest.Objects, manifest.Roles, manifest.InitialWorkspaceAdministratorRole, manager.cfg.IdentityAudience)
 	if err != nil {
-		return fmt.Errorf("compile fixed roles for initial Workspace: %w", err)
+		return fmt.Errorf("compile roles for initial Workspace: %w", err)
+	}
+	rolePolicy, err := workspaceprovision.NewWorkspaceBootstrapRolePolicyEvidence(roleCatalog)
+	if err != nil {
+		return fmt.Errorf("compile role-policy evidence for initial Workspace: %w", err)
 	}
 	if err := manager.bootstrap.BindBootstrapProjectRoleCatalog(ctx, roleCatalog); err != nil {
-		return fmt.Errorf("bind fixed roles for initial Workspace: %w", err)
+		return fmt.Errorf("bind roles for initial Workspace: %w", err)
 	}
-	initialization := workspaceprovision.NewWorkspaceInitializationStoreWithParticipant(manager.database, manager.bootstrap, manifest, participant)
-	result, err := initialization.InitializeV2(ctx, request)
+	manifest.InitialWorkspaceAdministratorRole = roleCatalog.InitialWorkspaceAdministratorRoleKey
+	initialization := workspaceprovision.NewWorkspaceInitializationStoreWithParticipant(manager.database, manager.bootstrap, manifest, participant, rolePolicy)
+	result, err := initialization.Initialize(ctx, request)
 	if err != nil {
 		return fmt.Errorf("initialize first Workspace atomically: %w", err)
 	}
@@ -259,7 +264,7 @@ func (manager *projectWorkspaceManager) ensureInstallationAdministrator(ctx cont
 	}
 	if receipt.ContractVersion != identitymodulehost.CurrentInstallationAdministratorBootstrapContractVersion ||
 		receipt.ContractHash != identitymodulehost.CurrentInstallationAdministratorBootstrapContractHash ||
-		receipt.WorkspaceID != strings.TrimSpace(installation.WorkspaceID) || receipt.RoleKey != identitysdk.WorkspaceBootstrapRoleTenantAdmin ||
+		receipt.WorkspaceID != strings.TrimSpace(installation.WorkspaceID) || receipt.RoleKey != identitymodulehost.InstallationAdministratorRoleKey ||
 		strings.TrimSpace(receipt.ReceiptID) == "" || strings.TrimSpace(receipt.UserID) == "" || strings.TrimSpace(receipt.LoginID) == "" {
 		return fmt.Errorf("Identity returned an invalid installation administrator receipt")
 	}

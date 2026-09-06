@@ -92,3 +92,50 @@ func TestManifestRolePoliciesResolveAgainstCurrentRuntimeObjectSchema(t *testing
 		})
 	}
 }
+
+func TestInitialWorkspaceAdministratorRoleIsExplicitAndProvisionable(t *testing.T) {
+	human := manifestmodel.RoleSchema{Key: "sales_director", Name: "Sales director", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true}
+	service := manifestmodel.RoleSchema{Key: "conversion_workflow_service", Name: "Conversion workflow service", Audience: "service", AssignmentMode: "system_managed"}
+	validate := func(manifest manifestmodel.ManifestSchema) error {
+		state := newValidationState(manifest, nil)
+		state.validateRoles()
+		if len(state.errs) == 0 {
+			return nil
+		}
+		return state.errs
+	}
+	if err := validate(manifestmodel.ManifestSchema{Roles: []manifestmodel.RoleSchema{human, service}, InitialWorkspaceAdministratorRole: human.Key}); err != nil {
+		t.Fatalf("valid initial Workspace administrator role rejected: %v", err)
+	}
+
+	for name, manifest := range map[string]manifestmodel.ManifestSchema{
+		"missing":          {Roles: []manifestmodel.RoleSchema{human, service}},
+		"unknown":          {Roles: []manifestmodel.RoleSchema{human, service}, InitialWorkspaceAdministratorRole: "missing"},
+		"service":          {Roles: []manifestmodel.RoleSchema{human, service}, InitialWorkspaceAdministratorRole: service.Key},
+		"not provisioned":  {Roles: []manifestmodel.RoleSchema{human, {Key: "viewer", Name: "Viewer", Audience: "user", AssignmentMode: "manual"}}, InitialWorkspaceAdministratorRole: "viewer"},
+		"system managed":   {Roles: []manifestmodel.RoleSchema{human, {Key: "profile", Name: "Profile", Audience: "business_profile", AssignmentMode: "system_managed"}}, InitialWorkspaceAdministratorRole: "profile"},
+		"request only":     {Roles: []manifestmodel.RoleSchema{human, {Key: "requester", Name: "Requester", Audience: "user", AssignmentMode: "request_only", ProvisionToWorkspaces: true}}, InitialWorkspaceAdministratorRole: "requester"},
+		"business profile": {Roles: []manifestmodel.RoleSchema{human, {Key: "profile", Name: "Profile", Audience: "business_profile", RequiredBindingKey: "sales_profile", AssignmentMode: "manual", ProvisionToWorkspaces: true}}, InitialWorkspaceAdministratorRole: "profile"},
+		"binding required": {Roles: []manifestmodel.RoleSchema{human, {Key: "bound", Name: "Bound", Audience: "user", RequiredBindingKey: "sales_profile", AssignmentMode: "manual", ProvisionToWorkspaces: true}}, InitialWorkspaceAdministratorRole: "bound"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validate(manifest); err == nil || !strings.Contains(err.Error(), "initial_workspace_administrator_role") {
+				t.Fatalf("invalid initial Workspace administrator role accepted: manifest=%#v error=%v", manifest, err)
+			}
+		})
+	}
+}
+
+func TestInitialWorkspaceAdministratorRoleDoesNotInferProductSpecificRoles(t *testing.T) {
+	roles := []manifestmodel.RoleSchema{
+		{Key: "tenant_admin", Name: "Platform administrator", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true},
+		{Key: "headquarters_admin", Name: "Headquarters administrator", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true},
+		{Key: "store_manager", Name: "Store manager", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true},
+		{Key: "staff", Name: "Staff", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true},
+	}
+	state := newValidationState(manifestmodel.ManifestSchema{Roles: roles}, nil)
+	state.validateRoles()
+	if err := state.errs; err == nil || !strings.Contains(err.Error(), "initial_workspace_administrator_role") {
+		t.Fatalf("product-specific role keys inferred an initial administrator: %v", err)
+	}
+}

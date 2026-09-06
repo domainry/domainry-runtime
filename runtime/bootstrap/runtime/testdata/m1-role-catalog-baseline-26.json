@@ -1,0 +1,82 @@
+{
+  "schema_version": "2",
+  "template_id": "domainry-m1-crm-baseline-26-role-gate",
+  "version": "0.1.0",
+  "name": "M1 CRM baseline 26 role gate",
+  "objects": [],
+  "initial_workspace_administrator_role": "crm_acceptance_admin",
+  "roles": [
+    {
+      "key": "conversion_workflow_service",
+      "name": "Conversion Workflow Service",
+      "permissions": [
+        {
+          "permission_key": "conversion_request.approve",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "conversion_request.reject",
+          "data_scope": "all"
+        }
+      ],
+      "audience": "service",
+      "assignment_mode": "system_managed"
+    },
+    {
+      "key": "crm_acceptance_admin",
+      "name": "Crm Acceptance Admin",
+      "permissions": [],
+      "audience": "any",
+      "assignment_mode": "manual",
+      "provision_to_workspaces": true
+    },
+    {
+      "key": "followup_reminder_service",
+      "name": "Followup Reminder Service",
+      "permissions": [
+        {
+          "permission_key": "lead.send_overdue_reminders",
+          "data_scope": "all"
+        }
+      ],
+      "audience": "service",
+      "assignment_mode": "system_managed"
+    },
+    {
+      "key": "sales_director",
+      "name": "Sales Director",
+      "permissions": [],
+      "audience": "any",
+      "assignment_mode": "manual",
+      "provision_to_workspaces": true
+    },
+    {
+      "key": "sales_rep",
+      "name": "Sales Rep",
+      "permissions": [],
+      "audience": "any",
+      "assignment_mode": "manual",
+      "provision_to_workspaces": true
+    }
+  ],
+  "workflows": [
+    {
+      "key": "lead_conversion_approval",
+      "name": "Lead Conversion Approval",
+      "trigger": {},
+      "condition": {},
+      "action": {},
+      "enabled": true,
+      "run_as": "conversion_workflow_service"
+    },
+    {
+      "key": "lead_followup_reminder",
+      "name": "Lead Followup Reminder",
+      "trigger": {},
+      "condition": {},
+      "action": {},
+      "enabled": true,
+      "run_as": "followup_reminder_service"
+    }
+  ]
+}

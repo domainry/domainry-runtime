@@ -27,9 +27,18 @@ func (state *validationState) validateRoles() {
 		if audience == "" {
 			audience = "any"
 		}
+		if audience != "any" && audience != "user" && audience != "business_profile" && audience != "service" {
+			state.add(path+".audience", "must be one of any, user, business_profile, service")
+		}
 		assignmentMode := strings.TrimSpace(role.AssignmentMode)
 		if assignmentMode == "" {
 			assignmentMode = "manual"
+		}
+		if assignmentMode != "manual" && assignmentMode != "request_only" && assignmentMode != "system_managed" {
+			state.add(path+".assignment_mode", "must be one of manual, request_only, system_managed")
+		}
+		if audience == "service" && assignmentMode != "system_managed" {
+			state.add(path+".assignment_mode", "service roles must use system_managed")
 		}
 		if role.ProvisionToWorkspaces && audience != "any" && audience != "user" && audience != "business_profile" {
 			state.add(path+".provision_to_workspaces", "Workspace login roles must use any, user, or business_profile audience")
@@ -103,6 +112,38 @@ func (state *validationState) validateRoles() {
 			}
 		}
 	}
+	state.validateInitialWorkspaceAdministratorRole()
+}
+
+func (state *validationState) validateInitialWorkspaceAdministratorRole() {
+	key := strings.TrimSpace(state.manifest.InitialWorkspaceAdministratorRole)
+	if key == "" {
+		for _, role := range state.manifest.Roles {
+			if role.ProvisionToWorkspaces {
+				state.add("initial_workspace_administrator_role", "is required when Workspace login roles are declared")
+				return
+			}
+		}
+		return
+	}
+	for _, role := range state.manifest.Roles {
+		if strings.TrimSpace(role.Key) != key {
+			continue
+		}
+		audience := strings.TrimSpace(role.Audience)
+		if audience == "" {
+			audience = "any"
+		}
+		assignmentMode := strings.TrimSpace(role.AssignmentMode)
+		if assignmentMode == "" {
+			assignmentMode = "manual"
+		}
+		if !role.ProvisionToWorkspaces || (audience != "any" && audience != "user") || assignmentMode != "manual" || strings.TrimSpace(role.RequiredBindingKey) != "" {
+			state.add("initial_workspace_administrator_role", "must reference a provisioned any/user manual role without required_binding_key")
+		}
+		return
+	}
+	state.add("initial_workspace_administrator_role", "references unknown role %q", key)
 }
 
 func (state *validationState) validateRoleReferencePermission(path string, permission manifestmodel.RoleReferencePermission) {

@@ -31,6 +31,7 @@ import (
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
+	workspaceprovision "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
@@ -55,6 +56,7 @@ type Runtime struct {
 	dataExchangeBinding  dataexchangesdk.Binding
 	lifecycleBinding     lifecyclesdk.Binding
 	manifest             manifestmodel.ManifestSchema
+	workspaceRolePolicy  workspaceprovision.WorkspaceBootstrapRolePolicyEvidence
 	recordRepo           recordrepository.RecordRepository
 	rateLimiter          ratelimit.Limiter
 	notificationHTTP     *notificationfacade.NotificationApplicationService

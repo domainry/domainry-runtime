@@ -2,7 +2,7 @@ package runtimehost
 
 import (
 	"path/filepath"
-	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -40,7 +40,7 @@ func TestInitialWorkspaceRequestUsesTypedCommercialConfiguration(t *testing.T) {
 	}
 }
 
-func TestWorkspaceManagerV3PublishesExactFixedRolesAndNoLegacyFixtureGraph(t *testing.T) {
+func TestWorkspaceManagerInitializesM1HumanRolesAndPublishesInternalRoles(t *testing.T) {
 	cfg := serverTestConfig()
 	cfg.DatabaseDriver = "sqlite"
 	cfg.DBPath = filepath.Join(t.TempDir(), "workspace-bootstrap.db")
@@ -57,54 +57,48 @@ func TestWorkspaceManagerV3PublishesExactFixedRolesAndNoLegacyFixtureGraph(t *te
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = manager.Close(t.Context()) })
-	manifest := manifestmodel.ManifestSchema{Roles: workspaceRolesForTest()}
+	manifest := manifestmodel.ManifestSchema{
+		Roles:                             m1WorkspaceRolesForTest(),
+		InitialWorkspaceAdministratorRole: "crm_acceptance_admin",
+	}
 	if err := manager.Activate(t.Context(), manifest, nil); err != nil {
 		t.Fatal(err)
 	}
 	workspaceID := manager.Config().IdentityWorkspaceID
+	bootstrapRoleKeys := workspaceIdentityRoleKeys(t, database, workspaceID)
+	wantBootstrapRoles := []string{
+		"crm_acceptance_admin",
+		"sales_director",
+		"sales_rep",
+	}
+	sort.Strings(wantBootstrapRoles)
+	for _, roleKey := range wantBootstrapRoles {
+		if !slices.Contains(bootstrapRoleKeys, roleKey) {
+			t.Fatalf("bootstrap role keys=%v missing provisioned human role=%q", bootstrapRoleKeys, roleKey)
+		}
+	}
+	for _, roleKey := range []string{"conversion_workflow_service", "followup_reminder_service"} {
+		if slices.Contains(bootstrapRoleKeys, roleKey) {
+			t.Fatalf("internal service role %q was provisioned into initial Workspace login roles: %v", roleKey, bootstrapRoleKeys)
+		}
+	}
 	boundCatalog, err := runtimebootstrap.RuntimeWorkspaceProjectRoleCatalog(manifest.Objects, manifest.Roles, workspaceID, cfg.IdentityAudience)
 	if err != nil {
 		t.Fatal(err)
 	}
 	publisher, ok := manager.Binding().(identitysdk.ProjectRoleCatalogPublisher)
 	if !ok {
-		t.Fatal("initialized Identity binding cannot publish the exact-four role catalog")
+		t.Fatal("initialized Identity binding cannot publish the complete project role catalog")
 	}
 	receipt, err := publisher.PublishProjectRoles(t.Context(), boundCatalog)
-	if err != nil || receipt.Published != len(workspaceRolesForTest()) {
+	if err != nil || receipt.Published != len(manifest.Roles) {
 		t.Fatalf("post-bind role publication receipt=%+v err=%v", receipt, err)
 	}
-	rows, err := database.DB().QueryContext(t.Context(), `SELECT "role_key" FROM "_identity_roles" WHERE "workspace_id" = ?`, workspaceID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	var roleKeys []string
-	for rows.Next() {
-		var roleKey string
-		if err := rows.Scan(&roleKey); err != nil {
-			t.Fatal(err)
+	roleKeys := workspaceIdentityRoleKeys(t, database, workspaceID)
+	for _, roleKey := range append(wantBootstrapRoles, "conversion_workflow_service", "followup_reminder_service") {
+		if !slices.Contains(roleKeys, roleKey) {
+			t.Fatalf("published role keys=%v missing=%q", roleKeys, roleKey)
 		}
-		roleKeys = append(roleKeys, roleKey)
-	}
-	sort.Strings(roleKeys)
-	wantBootstrapRoles := []string{
-		identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin,
-		identitysdk.WorkspaceBootstrapRoleStaff,
-		identitysdk.WorkspaceBootstrapRoleStoreManager,
-		identitysdk.WorkspaceBootstrapRoleTenantAdmin,
-	}
-	sort.Strings(wantBootstrapRoles)
-	var actualBootstrapRoles []string
-	for _, roleKey := range roleKeys {
-		for _, expected := range wantBootstrapRoles {
-			if roleKey == expected {
-				actualBootstrapRoles = append(actualBootstrapRoles, roleKey)
-			}
-		}
-	}
-	if !reflect.DeepEqual(actualBootstrapRoles, wantBootstrapRoles) {
-		t.Fatalf("bootstrap role keys=%v want=%v all=%v", actualBootstrapRoles, wantBootstrapRoles, roleKeys)
 	}
 	for table, want := range map[string]int{"_identity_organization_units": 2} {
 		var count int
@@ -123,17 +117,45 @@ func TestWorkspaceManagerV3PublishesExactFixedRolesAndNoLegacyFixtureGraph(t *te
 		t.Fatalf("initial administrator reference=%+v err=%v", references, err)
 	}
 	initialAdministratorID := references[0].RecordID
-	var platformAssignments int
-	if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM "_identity_user_role_assignments" a JOIN "_identity_roles" r ON r."workspace_id" = a."workspace_id" AND r."id" = a."role_id" WHERE a."workspace_id" = ? AND a."user_id" = ? AND r."role_key" = ?`, workspaceID, initialAdministratorID, identitysdk.WorkspaceBootstrapRoleTenantAdmin).Scan(&platformAssignments); err != nil || platformAssignments != 0 {
-		t.Fatalf("platform administrator assignments=%d err=%v", platformAssignments, err)
+	var administratorAssignments, otherAssignments int
+	if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM "_identity_user_role_assignments" a JOIN "_identity_roles" r ON r."workspace_id" = a."workspace_id" AND r."id" = a."role_id" WHERE a."workspace_id" = ? AND a."user_id" = ? AND r."role_key" = ?`, workspaceID, initialAdministratorID, manifest.InitialWorkspaceAdministratorRole).Scan(&administratorAssignments); err != nil || administratorAssignments != 1 {
+		t.Fatalf("initial administrator assignments=%d role=%q initial_admin=%q err=%v", administratorAssignments, manifest.InitialWorkspaceAdministratorRole, initialAdministratorID, err)
 	}
-	var headquartersAssignments, otherAssignments int
-	if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM "_identity_user_role_assignments" a JOIN "_identity_roles" r ON r."workspace_id" = a."workspace_id" AND r."id" = a."role_id" WHERE a."workspace_id" = ? AND a."user_id" = ? AND r."role_key" = ?`, workspaceID, initialAdministratorID, identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin).Scan(&headquartersAssignments); err != nil || headquartersAssignments != 1 {
-		t.Fatalf("headquarters administrator assignments=%d initial_admin=%q err=%v", headquartersAssignments, initialAdministratorID, err)
-	}
-	if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM "_identity_user_role_assignments" a JOIN "_identity_roles" r ON r."workspace_id" = a."workspace_id" AND r."id" = a."role_id" WHERE a."workspace_id" = ? AND a."user_id" = ? AND r."role_key" <> ?`, workspaceID, initialAdministratorID, identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin).Scan(&otherAssignments); err != nil || otherAssignments != 0 {
+	if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM "_identity_user_role_assignments" a JOIN "_identity_roles" r ON r."workspace_id" = a."workspace_id" AND r."id" = a."role_id" WHERE a."workspace_id" = ? AND a."user_id" = ? AND r."role_key" <> ?`, workspaceID, initialAdministratorID, manifest.InitialWorkspaceAdministratorRole).Scan(&otherAssignments); err != nil || otherAssignments != 0 {
 		t.Fatalf("initial administrator received another role: count=%d err=%v", otherAssignments, err)
 	}
+}
+
+func m1WorkspaceRolesForTest() []manifestmodel.RoleSchema {
+	return []manifestmodel.RoleSchema{
+		workspaceInternalServiceRoleForTest(),
+		{Key: "crm_acceptance_admin", Name: "Crm Acceptance Admin", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true},
+		{Key: "followup_reminder_service", Name: "Followup Reminder Service", Audience: "service", AssignmentMode: "system_managed", Permissions: []manifestmodel.RolePermission{{PermissionKey: "lead.send_overdue_reminders", DataScope: identitysdk.DataScopeAll}}},
+		{Key: "sales_director", Name: "Sales Director", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true},
+		{Key: "sales_rep", Name: "Sales Rep", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true},
+	}
+}
+
+func workspaceIdentityRoleKeys(t *testing.T, database *bootstrap.ProjectDatabase, workspaceID string) []string {
+	t.Helper()
+	rows, err := database.DB().QueryContext(t.Context(), `SELECT "role_key" FROM "_identity_roles" WHERE "workspace_id" = ?`, workspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var roleKeys []string
+	for rows.Next() {
+		var roleKey string
+		if err := rows.Scan(&roleKey); err != nil {
+			t.Fatal(err)
+		}
+		roleKeys = append(roleKeys, roleKey)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(roleKeys)
+	return roleKeys
 }
 
 func TestWorkspaceManagerAuthoritySurvivesRestart(t *testing.T) {
@@ -148,7 +170,7 @@ func TestWorkspaceManagerAuthoritySurvivesRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := manager.Activate(t.Context(), manifestmodel.ManifestSchema{Roles: workspaceRolesForTest()}, nil); err != nil {
+	if err := manager.Activate(t.Context(), manifestmodel.ManifestSchema{Roles: workspaceRolesForTest(), InitialWorkspaceAdministratorRole: "headquarters_admin"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	installation, found, err := workspaceprovision.LoadInstallation(t.Context(), database)

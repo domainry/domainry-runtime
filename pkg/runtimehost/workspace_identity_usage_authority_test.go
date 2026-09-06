@@ -93,7 +93,7 @@ func TestRuntimeWorkspaceIdentityUsageAuthorityDeniesStaffAndHeadquartersAdminis
 	t.Cleanup(func() { _ = store.CloseContext(t.Context()) })
 	seedWorkspaceIdentityUsageAuthorityWorkspace(t, store, "workspace-installation", "primary", true)
 	authority := newRuntimeWorkspaceIdentityUsageAuthority(store, "nightpos")
-	for index, roleKey := range []string{identitysdk.WorkspaceBootstrapRoleStaff, identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin} {
+	for index, roleKey := range []string{"staff", "headquarters_admin"} {
 		if err := authority.BindAuthenticator(workspaceIdentityUsageAuthenticatorStub{principal: identitysdk.Principal{
 			Known: true, WorkspaceID: "workspace-installation", UserID: roleKey + "-user", RoleKey: roleKey, AuthorizationRevision: fmt.Sprintf("authz-%d", index+2),
 		}}); err != nil {

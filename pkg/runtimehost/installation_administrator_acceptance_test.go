@@ -51,7 +51,7 @@ func TestExplicitInstallationAdministratorAuthenticatesAndReachesCommercialCatal
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = manager.Close(context.Background()) })
-	if err := manager.Activate(t.Context(), manifestmodel.ManifestSchema{Roles: workspaceRolesForTest()}, nil); err != nil {
+	if err := manager.Activate(t.Context(), manifestmodel.ManifestSchema{Roles: workspaceRolesForTest(), InitialWorkspaceAdministratorRole: "headquarters_admin"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if installationDelivery.credential.LoginID != cfg.InstallationAdministratorLoginID || installationDelivery.credential.InitialPassword == "" {
@@ -90,8 +90,8 @@ func TestExplicitInstallationAdministratorAuthenticatesAndReachesCommercialCatal
 		WorkspaceID: application.WorkspaceID, ApplicationKey: application.ApplicationKey,
 		Login: installationDelivery.credential.LoginID, Password: installationDelivery.credential.InitialPassword,
 	})
-	if err != nil || session.AccessToken == "" || session.DefaultRole != identitysdk.WorkspaceBootstrapRoleTenantAdmin ||
-		!slices.ContainsFunc(session.Roles, func(role identitysdk.Role) bool { return role.Key == identitysdk.WorkspaceBootstrapRoleTenantAdmin }) ||
+	if err != nil || session.AccessToken == "" || session.DefaultRole != "tenant_admin" ||
+		!slices.ContainsFunc(session.Roles, func(role identitysdk.Role) bool { return role.Key == "tenant_admin" }) ||
 		!slices.Contains(session.Permissions, workspaceprovisionapplication.ListWorkspacesActionKey) {
 		t.Fatalf("session=%+v error=%v", session, err)
 	}
@@ -100,7 +100,7 @@ func TestExplicitInstallationAdministratorAuthenticatesAndReachesCommercialCatal
 		t.Fatal(err)
 	}
 	authenticated, err := resolver.Authenticate(t.Context(), session.AccessToken)
-	if err != nil || authenticated.RoleKey != identitysdk.WorkspaceBootstrapRoleTenantAdmin || authenticated.AuthorizationRevision == "" ||
+	if err != nil || authenticated.RoleKey != "tenant_admin" || authenticated.AuthorizationRevision == "" ||
 		!authenticated.HasPermission(workspaceprovisionapplication.ListWorkspacesActionKey) {
 		t.Fatalf("authenticated principal=%+v error=%v", authenticated, err)
 	}

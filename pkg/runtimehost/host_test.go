@@ -75,10 +75,12 @@ func (factory identityFactoryStub) OpenBootstrapWithDatabase(context.Context, id
 	if factory.err != nil {
 		return nil, factory.err
 	}
-	return identityBootstrapBindingStub{}, nil
+	return &identityBootstrapBindingStub{}, nil
 }
 
-type identityBootstrapBindingStub struct{}
+type identityBootstrapBindingStub struct {
+	roleCatalog identitysdk.ProjectRoleCatalog
+}
 
 type acceptingCredentialDelivery struct{}
 
@@ -86,28 +88,35 @@ func (acceptingCredentialDelivery) DeliverInitialWorkspaceCredential(context.Con
 	return InitialWorkspaceCredentialDeliveryAcknowledgment{Accepted: true}, nil
 }
 
-func (identityBootstrapBindingStub) BindBootstrapProjectRoleCatalog(context.Context, identitysdk.ProjectRoleCatalog) error {
+func (stub *identityBootstrapBindingStub) BindBootstrapProjectRoleCatalog(_ context.Context, catalog identitysdk.ProjectRoleCatalog) error {
+	stub.roleCatalog = catalog
 	return nil
 }
 
-func (identityBootstrapBindingStub) BootstrapWorkspaceIdentityV2(_ context.Context, request identitysdk.WorkspaceIdentityBootstrapV2Request, _ identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceIdentityBootstrapV2Receipt, error) {
-	return identitysdk.WorkspaceIdentityBootstrapV2Receipt{
+func (stub *identityBootstrapBindingStub) BootstrapWorkspaceIdentity(_ context.Context, request identitysdk.WorkspaceIdentityBootstrapRequest, _ identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceIdentityBootstrapReceipt, error) {
+	roleCatalogSHA256, err := identitysdk.WorkspaceBootstrapProjectRoleCatalogSHA256(stub.roleCatalog)
+	if err != nil {
+		return identitysdk.WorkspaceIdentityBootstrapReceipt{}, err
+	}
+	return identitysdk.WorkspaceIdentityBootstrapReceipt{
 		ContractVersion: request.ContractVersion, ContractHash: request.ContractHash,
 		ReceiptID: "identity-bootstrap-receipt", InvocationID: request.InvocationID,
 		WorkspaceID: request.WorkspaceID, CompanyID: request.CompanyID, FirstStoreID: request.FirstStoreID,
 		InitialAdminUserID: request.InitialAdminUserID, InitialAdminLoginID: request.InitialAdminLoginID,
+		RoleCatalogSHA256:                    roleCatalogSHA256,
+		InitialWorkspaceAdministratorRoleKey: stub.roleCatalog.InitialWorkspaceAdministratorRoleKey,
 	}, nil
 }
 
-func (identityBootstrapBindingStub) ClaimWorkspaceIdentityBootstrapCredentialV2(context.Context, identitysdk.WorkspaceIdentityBootstrapCredentialClaim) (identitysdk.WorkspaceIdentityBootstrapOneTimeCredential, error) {
+func (*identityBootstrapBindingStub) ClaimWorkspaceIdentityBootstrapCredential(context.Context, identitysdk.WorkspaceIdentityBootstrapCredentialClaim) (identitysdk.WorkspaceIdentityBootstrapOneTimeCredential, error) {
 	return identitysdk.WorkspaceIdentityBootstrapOneTimeCredential{LoginID: "admin@example.test", InitialPassword: "GeneratedBootstrap1!", MustChangePassword: true}, nil
 }
 
-func (identityBootstrapBindingStub) CompleteWorkspaceIdentityBootstrapV2(context.Context, identitysdk.WorkspaceIdentityBootstrapCompletion) error {
+func (*identityBootstrapBindingStub) CompleteWorkspaceIdentityBootstrap(context.Context, identitysdk.WorkspaceIdentityBootstrapCompletion) error {
 	return nil
 }
 
-func (identityBootstrapBindingStub) Close(context.Context) error { return nil }
+func (*identityBootstrapBindingStub) Close(context.Context) error { return nil }
 
 type identityBindingStub struct {
 	runtimetestkit.IdentityBindingStub
@@ -186,8 +195,10 @@ func serverManifestJSON(t *testing.T, target *manifestmodel.GeneratedDomainSDKId
 	t.Helper()
 	manifest := manifestmodel.ManifestSchema{
 		SchemaVersion: manifestmodel.CurrentManifestSchemaVersion, TemplateID: "server-test", Version: "1.0.0", Name: "Server Test",
-		SourceBlueprintID: provision.DirectAuthoringSourceID, Objects: []definitionmodel.ObjectSchema{}, Roles: workspaceRolesForTest(), GeneratedDomainSDK: target,
+		SourceBlueprintID: provision.DirectAuthoringSourceID, Objects: []definitionmodel.ObjectSchema{}, Roles: workspaceRolesForTest(),
+		InitialWorkspaceAdministratorRole: "headquarters_admin", GeneratedDomainSDK: target,
 	}
+	manifest.Roles = append(manifest.Roles, workspaceInternalServiceRoleForTest())
 	payload, err := json.Marshal(manifest)
 	if err != nil {
 		t.Fatal(err)
@@ -197,10 +208,17 @@ func serverManifestJSON(t *testing.T, target *manifestmodel.GeneratedDomainSDKId
 
 func workspaceRolesForTest() []manifestmodel.RoleSchema {
 	return []manifestmodel.RoleSchema{
-		{Key: identitysdk.WorkspaceBootstrapRoleTenantAdmin, Name: "Platform administrator", Audience: "user", AssignmentMode: "manual", RiskLevel: "privileged"},
-		{Key: identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin, Name: "Headquarters administrator", Audience: "user", AssignmentMode: "manual", RiskLevel: "privileged"},
-		{Key: identitysdk.WorkspaceBootstrapRoleStoreManager, Name: "Store manager", Audience: "user", AssignmentMode: "manual"},
-		{Key: identitysdk.WorkspaceBootstrapRoleStaff, Name: "Staff", Audience: "user", AssignmentMode: "manual"},
+		{Key: "tenant_admin", Name: "Platform administrator", Audience: "user", AssignmentMode: "manual", RiskLevel: "privileged", ProvisionToWorkspaces: true},
+		{Key: "headquarters_admin", Name: "Headquarters administrator", Audience: "user", AssignmentMode: "manual", RiskLevel: "privileged", ProvisionToWorkspaces: true},
+		{Key: "store_manager", Name: "Store manager", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true},
+		{Key: "staff", Name: "Staff", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true},
+	}
+}
+
+func workspaceInternalServiceRoleForTest() manifestmodel.RoleSchema {
+	return manifestmodel.RoleSchema{
+		Key: "conversion_workflow_service", Name: "Conversion Workflow Service", Audience: "service", AssignmentMode: "system_managed",
+		Permissions: []manifestmodel.RolePermission{{PermissionKey: "conversion_request.approve", DataScope: identitysdk.DataScopeAll}},
 	}
 }
 

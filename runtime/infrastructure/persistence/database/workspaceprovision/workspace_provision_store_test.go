@@ -19,10 +19,11 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-type identityBootstrapV2Probe struct {
+type identityBootstrapProbe struct {
 	db            *sql.DB
-	request       identitysdk.WorkspaceIdentityBootstrapV2Request
-	receipt       identitysdk.WorkspaceIdentityBootstrapV2Receipt
+	rolePolicy    WorkspaceBootstrapRolePolicyEvidence
+	request       identitysdk.WorkspaceIdentityBootstrapRequest
+	receipt       identitysdk.WorkspaceIdentityBootstrapReceipt
 	completions   []identitysdk.WorkspaceIdentityBootstrapCompletion
 	credential    identitysdk.WorkspaceIdentityBootstrapOneTimeCredential
 	fixtureCalls  int
@@ -32,30 +33,32 @@ type identityBootstrapV2Probe struct {
 	claimErr      error
 }
 
-func (*identityBootstrapV2Probe) BindBootstrapProjectRoleCatalog(context.Context, identitysdk.ProjectRoleCatalog) error {
+func (*identityBootstrapProbe) BindBootstrapProjectRoleCatalog(context.Context, identitysdk.ProjectRoleCatalog) error {
 	return nil
 }
 
-func (probe *identityBootstrapV2Probe) BootstrapWorkspaceIdentityV2(ctx context.Context, request identitysdk.WorkspaceIdentityBootstrapV2Request, transaction identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceIdentityBootstrapV2Receipt, error) {
+func (probe *identityBootstrapProbe) BootstrapWorkspaceIdentity(ctx context.Context, request identitysdk.WorkspaceIdentityBootstrapRequest, transaction identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceIdentityBootstrapReceipt, error) {
 	tx, ok := transaction.Executor.(*sql.Tx)
 	if !ok {
-		return identitysdk.WorkspaceIdentityBootstrapV2Receipt{}, errors.New("host transaction unavailable")
+		return identitysdk.WorkspaceIdentityBootstrapReceipt{}, errors.New("host transaction unavailable")
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO "identity_provision_probe" ("workspace_id", "admin_login_id") VALUES (?, ?)`, request.WorkspaceID, request.InitialAdminLoginID); err != nil {
-		return identitysdk.WorkspaceIdentityBootstrapV2Receipt{}, err
+		return identitysdk.WorkspaceIdentityBootstrapReceipt{}, err
 	}
 	probe.request = request
 	probe.pending = true
-	probe.receipt = identitysdk.WorkspaceIdentityBootstrapV2Receipt{
+	probe.receipt = identitysdk.WorkspaceIdentityBootstrapReceipt{
 		ContractVersion: request.ContractVersion, ContractHash: request.ContractHash,
 		ReceiptID: "identity-receipt-" + request.InvocationID, InvocationID: request.InvocationID,
 		WorkspaceID: request.WorkspaceID, CompanyID: request.CompanyID, FirstStoreID: request.FirstStoreID,
 		InitialAdminUserID: request.InitialAdminUserID, InitialAdminLoginID: request.InitialAdminLoginID,
+		RoleCatalogSHA256:                    probe.rolePolicy.RoleCatalogSHA256,
+		InitialWorkspaceAdministratorRoleKey: probe.rolePolicy.InitialWorkspaceAdministratorRoleKey,
 	}
 	return probe.receipt, nil
 }
 
-func (probe *identityBootstrapV2Probe) CompleteWorkspaceIdentityBootstrapV2(ctx context.Context, completion identitysdk.WorkspaceIdentityBootstrapCompletion) error {
+func (probe *identityBootstrapProbe) CompleteWorkspaceIdentityBootstrap(ctx context.Context, completion identitysdk.WorkspaceIdentityBootstrapCompletion) error {
 	probe.completions = append(probe.completions, completion)
 	if completion.Outcome == identitysdk.WorkspaceIdentityBootstrapTransactionRolledBack {
 		probe.pending = false
@@ -71,7 +74,7 @@ func (probe *identityBootstrapV2Probe) CompleteWorkspaceIdentityBootstrapV2(ctx 
 	return nil
 }
 
-func (probe *identityBootstrapV2Probe) ClaimWorkspaceIdentityBootstrapCredentialV2(context.Context, identitysdk.WorkspaceIdentityBootstrapCredentialClaim) (identitysdk.WorkspaceIdentityBootstrapOneTimeCredential, error) {
+func (probe *identityBootstrapProbe) ClaimWorkspaceIdentityBootstrapCredential(context.Context, identitysdk.WorkspaceIdentityBootstrapCredentialClaim) (identitysdk.WorkspaceIdentityBootstrapOneTimeCredential, error) {
 	if probe.claimErr != nil {
 		return identitysdk.WorkspaceIdentityBootstrapOneTimeCredential{}, probe.claimErr
 	}
@@ -98,16 +101,16 @@ func TestWorkspaceInitializationPostCommitFailuresReturnCanonicalResetRequiredRe
 		t.Run(test.name, func(t *testing.T) {
 			store, probe := newWorkspaceProvisionTestStore(t)
 			probe.completionErr, probe.claimErr = test.completion, test.claim
-			repository := NewWorkspaceInitializationStore(store, probe, manifestmodel.ManifestSchema{})
+			repository := NewWorkspaceInitializationStore(store, probe, manifestmodel.ManifestSchema{}, probe.rolePolicy)
 			request := validWorkspaceRequest("postcommit-" + test.name)
-			result, err := repository.InitializeV2(t.Context(), request)
+			result, err := repository.Initialize(t.Context(), request)
 			if err != nil || result.WorkspaceID == "" || result.CanonicalCode != request.WorkspaceCode || result.InitialPassword != "" || result.CredentialDelivery != workspaceprovisionmodel.CredentialUnavailableResetRequired {
 				t.Fatalf("result=%+v error=%v", result, err)
 			}
 			if count := len(probe.completions); count != 1 {
 				t.Fatalf("completion calls=%d", count)
 			}
-			replay, err := repository.InitializeV2(t.Context(), request)
+			replay, err := repository.Initialize(t.Context(), request)
 			if err != nil || !replay.Replayed || replay.InitialPassword != "" || replay.CredentialDelivery != workspaceprovisionmodel.CredentialUnavailableResetRequired || len(probe.completions) != 1 {
 				t.Fatalf("replay=%+v completions=%d error=%v", replay, len(probe.completions), err)
 			}
@@ -115,19 +118,19 @@ func TestWorkspaceInitializationPostCommitFailuresReturnCanonicalResetRequiredRe
 	}
 }
 
-func (probe *identityBootstrapV2Probe) WorkspaceAcceptanceFixtureProvisioner() identitysdk.EmbeddedWorkspaceAcceptanceFixtureProvisioner {
+func (probe *identityBootstrapProbe) WorkspaceAcceptanceFixtureProvisioner() identitysdk.EmbeddedWorkspaceAcceptanceFixtureProvisioner {
 	return probe
 }
 
-func (probe *identityBootstrapV2Probe) ProvisionWorkspaceAcceptanceFixtures(context.Context, identitysdk.WorkspaceAcceptanceFixtureRequest, identitysdk.EmbeddedTransaction) error {
+func (probe *identityBootstrapProbe) ProvisionWorkspaceAcceptanceFixtures(context.Context, identitysdk.WorkspaceAcceptanceFixtureRequest, identitysdk.EmbeddedTransaction) error {
 	probe.fixtureCalls++
 	return nil
 }
 
-func (*identityBootstrapV2Probe) Close(context.Context) error { return nil }
+func (*identityBootstrapProbe) Close(context.Context) error { return nil }
 
-var _ identitysdk.BootstrapBinding = (*identityBootstrapV2Probe)(nil)
-var _ identitysdk.EmbeddedWorkspaceAcceptanceFixtureProvisionerBinding = (*identityBootstrapV2Probe)(nil)
+var _ identitysdk.BootstrapBinding = (*identityBootstrapProbe)(nil)
+var _ identitysdk.EmbeddedWorkspaceAcceptanceFixtureProvisionerBinding = (*identityBootstrapProbe)(nil)
 
 type failureInjectorFunc func(string) error
 
@@ -153,11 +156,11 @@ func (probe *workspaceBootstrapParticipantProbe) BuildWorkspaceBootstrap(_ conte
 	return []runtimeext.WorkspaceBootstrapRecord{{CapabilityKey: "first_store_configuration", Data: map[string]any{"currency": input["currency"]}}}, nil
 }
 
-func TestWorkspaceInitializationV2CompletesThenClaimsOnceAndReplayHasNoSecret(t *testing.T) {
+func TestWorkspaceInitializationCompletesThenClaimsOnceAndReplayHasNoSecret(t *testing.T) {
 	store, probe := newWorkspaceProvisionTestStore(t)
-	repository := NewWorkspaceInitializationStore(store, probe, manifestmodel.ManifestSchema{})
-	request := validWorkspaceRequest("bootstrap-v2")
-	result, err := repository.InitializeV2(t.Context(), request)
+	repository := NewWorkspaceInitializationStore(store, probe, manifestmodel.ManifestSchema{}, probe.rolePolicy)
+	request := validWorkspaceRequest("bootstrap")
+	result, err := repository.Initialize(t.Context(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,16 +168,16 @@ func TestWorkspaceInitializationV2CompletesThenClaimsOnceAndReplayHasNoSecret(t 
 		t.Fatalf("result=%#v claimed=%t", result, probe.claimed)
 	}
 	if probe.fixtureCalls != 0 {
-		t.Fatalf("V3 reached legacy acceptance provisioner %d times", probe.fixtureCalls)
+		t.Fatalf("Workspace bootstrap reached acceptance fixture provisioner %d times", probe.fixtureCalls)
 	}
-	if probe.request.ContractVersion != "domainry-workspace-identity-bootstrap-v2" || probe.request.ContractHash != "5011287354029d67c64e1f9dedf3767234c9af8d7ec7e29886a9b4b419ccc9c8" {
+	if probe.request.ContractVersion != identitysdk.WorkspaceIdentityBootstrapContractVersion || probe.request.ContractHash != identitysdk.WorkspaceIdentityBootstrapContractHash {
 		t.Fatalf("bootstrap contract=%q hash=%q", probe.request.ContractVersion, probe.request.ContractHash)
 	}
 	if len(probe.completions) != 1 || probe.completions[0].Outcome != identitysdk.WorkspaceIdentityBootstrapTransactionCommitted {
 		t.Fatalf("completions=%#v", probe.completions)
 	}
 
-	replay, err := repository.InitializeV2(t.Context(), request)
+	replay, err := repository.Initialize(t.Context(), request)
 	if err != nil || !replay.Replayed || replay.InitialPassword != "" || replay.CredentialDelivery != workspaceprovisionmodel.CredentialUnavailableResetRequired || replay.WorkspaceID != result.WorkspaceID {
 		t.Fatalf("replay=%#v err=%v", replay, err)
 	}
@@ -192,11 +195,60 @@ func TestWorkspaceInitializationV2CompletesThenClaimsOnceAndReplayHasNoSecret(t 
 	assertRowCount(t, store, workspaceProvisioningReceiptTable, 1)
 }
 
-func TestWorkspaceInitializationV2RollbackCompletesAndLeavesNoAuthorityRows(t *testing.T) {
+func TestWorkspaceBootstrapReceiptBindsRoleCatalogAndAdministratorEvidence(t *testing.T) {
+	result := workspaceprovisionmodel.Result{WorkspaceID: "workspace", CompanyID: "company", FirstStoreID: "store", InitialAdminUserID: "user"}
+	rolePolicy := workspaceBootstrapRolePolicyForTest(t)
+	receipt := identitysdk.WorkspaceIdentityBootstrapReceipt{
+		ContractVersion: identitysdk.WorkspaceIdentityBootstrapContractVersion,
+		ContractHash:    identitysdk.WorkspaceIdentityBootstrapContractHash,
+		ReceiptID:       "receipt", InvocationID: "invocation", WorkspaceID: result.WorkspaceID,
+		CompanyID: result.CompanyID, FirstStoreID: result.FirstStoreID,
+		InitialAdminUserID: result.InitialAdminUserID, InitialAdminLoginID: "admin@example.test",
+		RoleCatalogSHA256:                    rolePolicy.RoleCatalogSHA256,
+		InitialWorkspaceAdministratorRoleKey: rolePolicy.InitialWorkspaceAdministratorRoleKey,
+	}
+	if err := validateIdentityReceipt(result, receipt.InvocationID, rolePolicy, receipt); err != nil {
+		t.Fatalf("valid role-policy receipt rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*identitysdk.WorkspaceIdentityBootstrapReceipt){
+		"missing catalog digest": func(value *identitysdk.WorkspaceIdentityBootstrapReceipt) { value.RoleCatalogSHA256 = "" },
+		"wrong catalog digest": func(value *identitysdk.WorkspaceIdentityBootstrapReceipt) {
+			value.RoleCatalogSHA256 = strings.Repeat("b", 64)
+		},
+		"catalog digest whitespace": func(value *identitysdk.WorkspaceIdentityBootstrapReceipt) {
+			value.RoleCatalogSHA256 = " " + value.RoleCatalogSHA256
+		},
+		"invalid catalog digest": func(value *identitysdk.WorkspaceIdentityBootstrapReceipt) {
+			value.RoleCatalogSHA256 = strings.Repeat("z", 64)
+		},
+		"missing administrator": func(value *identitysdk.WorkspaceIdentityBootstrapReceipt) {
+			value.InitialWorkspaceAdministratorRoleKey = ""
+		},
+		"wrong administrator": func(value *identitysdk.WorkspaceIdentityBootstrapReceipt) {
+			value.InitialWorkspaceAdministratorRoleKey = "sales_rep"
+		},
+		"administrator whitespace": func(value *identitysdk.WorkspaceIdentityBootstrapReceipt) {
+			value.InitialWorkspaceAdministratorRoleKey += " "
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := receipt
+			mutate(&candidate)
+			if err := validateIdentityReceipt(result, receipt.InvocationID, rolePolicy, candidate); err == nil {
+				t.Fatalf("invalid role-policy receipt accepted: %#v", candidate)
+			}
+		})
+	}
+	if err := validateIdentityReceipt(result, receipt.InvocationID, WorkspaceBootstrapRolePolicyEvidence{}, receipt); err == nil {
+		t.Fatal("receipt accepted without host-side role-policy evidence")
+	}
+}
+
+func TestWorkspaceInitializationRollbackCompletesAndLeavesNoAuthorityRows(t *testing.T) {
 	store, probe := newWorkspaceProvisionTestStore(t)
-	repository := NewWorkspaceInitializationStore(store, probe, manifestmodel.ManifestSchema{})
+	repository := NewWorkspaceInitializationStore(store, probe, manifestmodel.ManifestSchema{}, probe.rolePolicy)
 	repository.failures = NewAcceptanceFailureInjector(FailureAfterWorkspaceConfiguration)
-	result, err := repository.InitializeV2(t.Context(), validWorkspaceRequest("rollback"))
+	result, err := repository.Initialize(t.Context(), validWorkspaceRequest("rollback"))
 	if !errors.Is(err, workspaceprovisionmodel.ErrAcceptanceFailure) || !reflect.DeepEqual(result, workspaceprovisionmodel.Result{}) {
 		t.Fatalf("result=%#v err=%v", result, err)
 	}
@@ -212,7 +264,7 @@ func TestWorkspaceProvisionValidationRejectsUntypedOrInvalidCommercialLimits(t *
 	store, probe := newWorkspaceProvisionTestStore(t)
 	request := validWorkspaceRequest("invalid")
 	request.CommercialConfiguration.MaxStores = 0
-	if _, err := NewWorkspaceInitializationStore(store, probe, manifestmodel.ManifestSchema{}).InitializeV2(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrInvalid) {
+	if _, err := NewWorkspaceInitializationStore(store, probe, manifestmodel.ManifestSchema{}, probe.rolePolicy).Initialize(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrInvalid) {
 		t.Fatalf("error=%v", err)
 	}
 }
@@ -226,7 +278,7 @@ func TestWorkspaceBootstrapParticipantCreatesFirstStoreOwnedAggregateInHostTrans
 	manifest := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "store_configuration", Fields: []definitionmodel.FieldSchema{{Key: "currency", Type: "text", Required: true}, {Key: "label", Type: "text", Required: true, DefaultValue: "Default Store"}}}}}
 	request := validWorkspaceRequest("participant")
 	request.ApplicationBootstrap = map[string]any{"currency": "CNY"}
-	result, err := NewWorkspaceInitializationStoreWithParticipant(store, probe, manifest, participant).InitializeV2(t.Context(), request)
+	result, err := NewWorkspaceInitializationStoreWithParticipant(store, probe, manifest, participant, probe.rolePolicy).Initialize(t.Context(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +295,7 @@ func TestWorkspaceBootstrapParticipantCreatesFirstStoreOwnedAggregateInHostTrans
 	request.RequestID = "participant-unknown"
 	request.WorkspaceCode = "other"
 	request.ApplicationBootstrap["object_key"] = "users"
-	if _, err := NewWorkspaceInitializationStoreWithParticipant(store, probe, manifest, participant).Provision(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrInvalid) {
+	if _, err := NewWorkspaceInitializationStoreWithParticipant(store, probe, manifest, participant, probe.rolePolicy).Provision(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrInvalid) {
 		t.Fatalf("browser-selected bootstrap shape error=%v", err)
 	}
 }
@@ -252,7 +304,7 @@ func TestWorkspaceBootstrapInputRequiresParticipantAndPerRecordFailureRollsBackE
 	store, probe := newWorkspaceProvisionTestStore(t)
 	request := validWorkspaceRequest("missing-participant")
 	request.ApplicationBootstrap = map[string]any{"currency": "CNY"}
-	if _, err := NewWorkspaceInitializationStore(store, probe, manifestmodel.ManifestSchema{}).InitializeV2(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrInvalid) {
+	if _, err := NewWorkspaceInitializationStore(store, probe, manifestmodel.ManifestSchema{}, probe.rolePolicy).Initialize(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrInvalid) {
 		t.Fatalf("missing participant error=%v", err)
 	}
 	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE "store_configuration" ("workspace_id" TEXT NOT NULL,"id" TEXT NOT NULL,"owner_org_id" TEXT NOT NULL,"created_at" TEXT NOT NULL,"updated_at" TEXT NOT NULL,"currency" TEXT NOT NULL,PRIMARY KEY("workspace_id","id"))`); err != nil {
@@ -260,10 +312,10 @@ func TestWorkspaceBootstrapInputRequiresParticipantAndPerRecordFailureRollsBackE
 	}
 	participant := &workspaceBootstrapParticipantProbe{}
 	manifest := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "store_configuration", Fields: []definitionmodel.FieldSchema{{Key: "currency", Type: "text", Required: true}}}}}
-	repository := NewWorkspaceInitializationStoreWithParticipant(store, probe, manifest, participant)
+	repository := NewWorkspaceInitializationStoreWithParticipant(store, probe, manifest, participant, probe.rolePolicy)
 	repository.failures = NewAcceptanceFailureInjector(FailureAfterApplicationBootstrapRecord + "first_store_configuration")
 	request.RequestID, request.WorkspaceCode = "participant-rollback", "participant-rollback"
-	if _, err := repository.InitializeV2(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrAcceptanceFailure) {
+	if _, err := repository.Initialize(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrAcceptanceFailure) {
 		t.Fatalf("per-record failure=%v", err)
 	}
 	for _, table := range []string{"_workspaces", "_workspace_commercial_configuration", workspaceProvisioningReceiptTable, "store_configuration", "identity_provision_probe"} {
@@ -274,7 +326,7 @@ func TestWorkspaceBootstrapInputRequiresParticipantAndPerRecordFailureRollsBackE
 	}
 }
 
-func newWorkspaceProvisionTestStore(t *testing.T) (*database.RuntimeStore, *identityBootstrapV2Probe) {
+func newWorkspaceProvisionTestStore(t *testing.T) (*database.RuntimeStore, *identityBootstrapProbe) {
 	t.Helper()
 	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "workspace.db"), IntegrationSecretKey: "workspace-provisioning-test"})
 	if err != nil {
@@ -287,10 +339,25 @@ func newWorkspaceProvisionTestStore(t *testing.T) (*database.RuntimeStore, *iden
 	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE "identity_provision_probe" ("workspace_id" TEXT PRIMARY KEY, "admin_login_id" TEXT NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	probe := &identityBootstrapV2Probe{db: store.DB(), credential: identitysdk.WorkspaceIdentityBootstrapOneTimeCredential{
+	probe := &identityBootstrapProbe{db: store.DB(), rolePolicy: workspaceBootstrapRolePolicyForTest(t), credential: identitysdk.WorkspaceIdentityBootstrapOneTimeCredential{
 		LoginID: "owner@example.test", InitialPassword: "GeneratedOneTime1!", MustChangePassword: true,
 	}}
 	return store, probe
+}
+
+func workspaceBootstrapRolePolicyForTest(t *testing.T) WorkspaceBootstrapRolePolicyEvidence {
+	t.Helper()
+	policy, err := NewWorkspaceBootstrapRolePolicyEvidence(identitysdk.ProjectRoleCatalog{
+		InitialWorkspaceAdministratorRoleKey: "crm_acceptance_admin",
+		Roles: []identitysdk.ProjectRoleDefinition{{
+			Key: "crm_acceptance_admin", Name: "CRM acceptance administrator",
+			Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return policy
 }
 
 func validWorkspaceRequest(requestID string) workspaceprovisionmodel.Request {

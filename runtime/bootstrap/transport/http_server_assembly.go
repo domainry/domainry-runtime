@@ -64,6 +64,7 @@ type HTTPServerDependencies struct {
 	LifecycleBinding         lifecyclesdk.Binding
 	RateLimiter              ratelimit.Limiter
 	Manifest                 manifestmodel.ManifestSchema
+	WorkspaceRolePolicy      workspaceprovisionpersistence.WorkspaceBootstrapRolePolicyEvidence
 	WorkerControl            *workerplatform.Controller
 	Clock                    identitysdk.Clock
 	RuntimeInstanceID        string
@@ -213,6 +214,7 @@ func (a *httpServerAssembly) wireWorkspaceProvisioning(ctx context.Context) {
 		a.dependencies.Manifest,
 		a.workspaceBootstrapParticipant(),
 		workspaceprovisionpersistence.NewAcceptanceFailureInjector(a.dependencies.Config.WorkspaceProvisionFailurePoint),
+		a.dependencies.WorkspaceRolePolicy,
 	)
 	service := workspaceprovisionapplication.NewWorkspaceProvisionApplicationService(repository)
 	installationIdentity, err := a.dependencies.Store.InstallationIdentity(ctx)

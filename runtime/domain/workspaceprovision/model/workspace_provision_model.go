@@ -7,7 +7,7 @@ var (
 	ErrIdempotencyConflict        = errors.New("workspace provisioning idempotency conflict")
 	ErrCodeConflict               = errors.New("workspace canonical code conflict")
 	ErrWorkspaceNotFound          = errors.New("workspace not found")
-	ErrIdentityUnavailable        = errors.New("embedded Identity workspace bootstrap V2 is unavailable")
+	ErrIdentityUnavailable        = errors.New("embedded Identity workspace bootstrap is unavailable")
 	ErrInitializationRequired     = errors.New("initial Workspace must be initialized before workspace provisioning")
 	ErrAlreadyInitialized         = errors.New("initial Workspace is already initialized")
 	ErrLegacyAdjudicationRequired = errors.New("retired workspace provisioning receipt requires Identity graph adjudication")

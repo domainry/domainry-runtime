@@ -25,6 +25,7 @@ import (
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
+	workspaceprovision "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
@@ -47,6 +48,7 @@ type runtimeConstructionInput struct {
 	dataExchangeBinding  dataexchangesdk.Binding
 	lifecycleBinding     lifecyclesdk.Binding
 	manifest             manifestmodel.ManifestSchema
+	workspaceRolePolicy  workspaceprovision.WorkspaceBootstrapRolePolicyEvidence
 	recordRepository     recordrepository.RecordRepository
 	rateLimiter          ratelimit.Limiter
 	notificationHTTP     *notificationfacade.NotificationApplicationService
@@ -87,6 +89,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		dataExchangeBinding:  input.dataExchangeBinding,
 		lifecycleBinding:     input.lifecycleBinding,
 		manifest:             input.manifest,
+		workspaceRolePolicy:  input.workspaceRolePolicy,
 		recordRepo:           input.recordRepository,
 		rateLimiter:          input.rateLimiter,
 		notificationHTTP:     input.notificationHTTP,

@@ -61,7 +61,7 @@ func TestWorkspaceAdministrationApplicationServiceRequiresInstallationTenantAdmi
 	service := NewWorkspaceAdministrationApplicationService(probe, codec)
 	for _, principal := range []principalmodel.Principal{
 		workspaceAdministrationPrincipal(t, "staff", "workspace-initial", ListWorkspacesActionKey),
-		workspaceAdministrationPrincipal(t, identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin, "workspace-initial", ListWorkspacesActionKey),
+		workspaceAdministrationPrincipal(t, "headquarters_admin", "workspace-initial", ListWorkspacesActionKey),
 		workspaceAdministrationPrincipal(t, WorkspaceAdministratorRoleKey, "workspace-other", ListWorkspacesActionKey),
 		workspaceAdministrationPrincipal(t, WorkspaceAdministratorRoleKey, "workspace-initial"),
 	} {

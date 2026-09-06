@@ -5,6 +5,7 @@ import "testing"
 func TestDecodeManifestAcceptsScopedRolePermissionsAndActionDefinition(t *testing.T) {
 	raw := []byte(`{
 		"schema_version":"2","template_id":"gym","version":"1","objects":[],
+		"initial_workspace_administrator_role":"member",
 		"roles":[{"key":"member","name":"Member","permissions":[{"permission_key":"booking.read","data_scope":"owner"},{"permission_key":"booking.book","data_scope":"org"}]}],
 		"actions":[{"key":"booking.book","object_key":"booking","label":"Book","kind":"record_operation","preconditions":[],"audit_event":"booking.booked"}]
 	}`)
@@ -12,7 +13,7 @@ func TestDecodeManifestAcceptsScopedRolePermissionsAndActionDefinition(t *testin
 	if err != nil {
 		t.Fatalf("strict Runtime manifest rejected RoleSchema authorization contract: %v", err)
 	}
-	if len(manifest.Roles) != 1 || len(manifest.Roles[0].Permissions) != 2 || manifest.Roles[0].Permissions[0].PermissionKey != "booking.read" || manifest.Roles[0].Permissions[0].DataScope != "owner" || manifest.Roles[0].Permissions[1].DataScope != "org" {
+	if manifest.InitialWorkspaceAdministratorRole != "member" || len(manifest.Roles) != 1 || len(manifest.Roles[0].Permissions) != 2 || manifest.Roles[0].Permissions[0].PermissionKey != "booking.read" || manifest.Roles[0].Permissions[0].DataScope != "owner" || manifest.Roles[0].Permissions[1].DataScope != "org" {
 		t.Fatalf("scoped role permissions were not preserved: %#v", manifest.Roles)
 	}
 	if len(manifest.Actions) != 1 || manifest.Actions[0].Key != "booking.book" {

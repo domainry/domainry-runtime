@@ -1,6 +1,6 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "01a14d1a898bf2c818cd7a12ddd8e34343f45539e26c5bd8f461959fcf0b8a24",
+  "set_sha256": "ccff33db53168e68389367ac179c271902271d9653c8855b139baa22017dff2d",
   "modules": [
     {
       "key": "agent",
@@ -35,11 +35,11 @@
     {
       "key": "identity",
       "implementation": "github.com/domainry/domainry-identity",
-      "implementation_version": "v0.2.0-dev37",
-      "implementation_sum": "h1:GZbyDNP1iDW++fAh0zzGryEUP9xGAIBxzX/YrmLFYc8=",
+      "implementation_version": "v0.2.0-dev38",
+      "implementation_sum": "h1:fMoSs3eCL0V1RxwZcR/ZRSg3LSMge+aOx07XItwIjls=",
       "sdk": "github.com/domainry/domainry-identity-sdk",
-      "sdk_version": "v0.1.1-dev9",
-      "sdk_sum": "h1:hU5qoGdxUCFKf0NvYjWqr5Lquey3DzYoCiwLAYJ9F3k=",
+      "sdk_version": "v0.1.2-dev.1",
+      "sdk_sum": "h1:U2LOJ4JEY2xls/JMfePYfUShG3XeFQDZ4DjTZlz/N2w=",
       "capability_contract_sha256": "f15a5e62e27542e8d086656f9da256dfb4cdce40927f39ad5715ce6685fa9f21"
     },
     {

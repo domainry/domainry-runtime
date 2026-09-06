@@ -408,10 +408,10 @@ func moduleSetTestConfig(t *testing.T) config.Config {
 		"tools": []any{"createRecord"},
 	}}
 	manifest["roles"] = []any{
-		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleTenantAdmin, "name": "Platform administrator", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
-		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleHeadquartersAdmin, "name": "Headquarters administrator", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
-		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleStoreManager, "name": "Store manager", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
-		map[string]any{"key": identitysdk.WorkspaceBootstrapRoleStaff, "name": "Staff", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+		map[string]any{"key": "tenant_admin", "name": "Platform administrator", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+		map[string]any{"key": "headquarters_admin", "name": "Headquarters administrator", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+		map[string]any{"key": "store_manager", "name": "Store manager", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
+		map[string]any{"key": "staff", "name": "Staff", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
 	}
 	raw, err = json.Marshal(manifest)
 	if err != nil {

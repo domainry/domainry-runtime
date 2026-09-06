@@ -50,6 +50,7 @@ import (
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
+	workspaceprovisionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	principalcache "github.com/domainry/domainry-runtime/runtime/infrastructure/principalcache"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
@@ -480,6 +481,18 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		mustCompleteRuntimeStartup(actionsErr)
 		authorizationModuleActions = append(authorizationModuleActions, identityAuthorizationActions...)
 	}
+	workspaceRolePolicy := workspaceprovisionpersistence.WorkspaceBootstrapRolePolicyEvidence{}
+	for _, role := range manifest.Roles {
+		if !role.ProvisionToWorkspaces {
+			continue
+		}
+		bootstrapRoleCatalog, catalogErr := RuntimeWorkspaceBootstrapRoleCatalog(records.Schema().Objects, manifest.Roles, manifest.InitialWorkspaceAdministratorRole, cfg.IdentityAudience)
+		mustCompleteRuntimeStartup(catalogErr)
+		workspaceRolePolicy, catalogErr = workspaceprovisionpersistence.NewWorkspaceBootstrapRolePolicyEvidence(bootstrapRoleCatalog)
+		mustCompleteRuntimeStartup(catalogErr)
+		manifest.InitialWorkspaceAdministratorRole = bootstrapRoleCatalog.InitialWorkspaceAdministratorRoleKey
+		break
+	}
 	authorizationRegistry, err := reconcileRuntimeIdentityAuthorization(ctx, identityBinding, records.Schema(), authorizationModuleActions, nil, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs)
 	mustCompleteRuntimeStartup(err)
 	authorizationRegistrySnapshot := &runtimeAuthorizationRegistrySnapshot{}
@@ -573,6 +586,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		dataExchangeBinding:  serviceAssembly.dataExchangeBinding,
 		lifecycleBinding:     serviceAssembly.lifecycleBinding,
 		manifest:             manifest,
+		workspaceRolePolicy:  workspaceRolePolicy,
 		recordRepository:     recordRepository,
 		rateLimiter:          sharedRateLimiter,
 		notificationHTTP:     notificationHTTP,
