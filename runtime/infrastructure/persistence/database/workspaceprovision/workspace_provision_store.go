@@ -43,10 +43,11 @@ type WorkspaceProvisionStore struct {
 // canonicalization function.
 type WorkspaceBootstrapRolePolicyEvidence struct {
 	RoleCatalogSHA256                    string
+	NavigationCatalogSHA256              string
 	InitialWorkspaceAdministratorRoleKey string
 }
 
-func NewWorkspaceBootstrapRolePolicyEvidence(catalog identitysdk.ProjectRoleCatalog) (WorkspaceBootstrapRolePolicyEvidence, error) {
+func NewWorkspaceBootstrapRolePolicyEvidence(catalog identitysdk.ProjectRoleCatalog, navigation ...identitysdk.ProjectNavigationCatalog) (WorkspaceBootstrapRolePolicyEvidence, error) {
 	digest, err := identitysdk.WorkspaceBootstrapProjectRoleCatalogSHA256(catalog)
 	if err != nil {
 		return WorkspaceBootstrapRolePolicyEvidence{}, err
@@ -55,8 +56,17 @@ func NewWorkspaceBootstrapRolePolicyEvidence(catalog identitysdk.ProjectRoleCata
 	if administratorRoleKey == "" {
 		return WorkspaceBootstrapRolePolicyEvidence{}, fmt.Errorf("Workspace bootstrap initial administrator role is required")
 	}
+	navigationCatalog := identitysdk.ProjectNavigationCatalog{ContractVersion: identitysdk.ProjectNavigationContractVersion, Menus: []identitysdk.ProjectMenuDefinition{}}
+	if len(navigation) > 0 {
+		navigationCatalog = navigation[0]
+	}
+	navigationDigest, err := identitysdk.ProjectNavigationCatalogSHA256(navigationCatalog)
+	if err != nil {
+		return WorkspaceBootstrapRolePolicyEvidence{}, err
+	}
 	return WorkspaceBootstrapRolePolicyEvidence{
-		RoleCatalogSHA256: digest, InitialWorkspaceAdministratorRoleKey: administratorRoleKey,
+		RoleCatalogSHA256: digest, NavigationCatalogSHA256: navigationDigest,
+		InitialWorkspaceAdministratorRoleKey: administratorRoleKey,
 	}, nil
 }
 
@@ -258,6 +268,9 @@ func validateIdentityReceipt(result workspaceprovisionmodel.Result, invocationID
 	}
 	if rolePolicy.RoleCatalogSHA256 == "" || receipt.RoleCatalogSHA256 != rolePolicy.RoleCatalogSHA256 {
 		return fmt.Errorf("Identity workspace bootstrap returned a role catalog digest that does not match the catalog sent by Runtime")
+	}
+	if rolePolicy.NavigationCatalogSHA256 == "" || receipt.NavigationCatalogSHA256 != rolePolicy.NavigationCatalogSHA256 {
+		return fmt.Errorf("Identity workspace bootstrap returned a navigation catalog digest that does not match the template sent by Runtime")
 	}
 	if rolePolicy.InitialWorkspaceAdministratorRoleKey == "" || receipt.InitialWorkspaceAdministratorRoleKey != rolePolicy.InitialWorkspaceAdministratorRoleKey {
 		return fmt.Errorf("Identity workspace bootstrap returned an initial administrator role that does not match the catalog sent by Runtime")

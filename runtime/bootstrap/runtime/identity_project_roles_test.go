@@ -10,9 +10,173 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
+
+func TestRuntimeWorkspaceRoleCatalogClosesFrozenHandlerCapabilitiesWithExactActionScope(t *testing.T) {
+	descriptors := []runtimeext.HandlerDescriptor{
+		runtimeRoleCapabilityDescriptor("department.provision", func(value *runtimeext.HandlerDescriptor) {
+			value.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceProvisionedStore}
+		}),
+		runtimeRoleCapabilityDescriptor("department.catalog", func(value *runtimeext.HandlerDescriptor) {
+			value.StoreOrganizationCatalog = &runtimeext.StoreOrganizationCatalogCapability{MaxPageSize: 25}
+		}),
+		runtimeRoleCapabilityDescriptor("department.select", func(value *runtimeext.HandlerDescriptor) {
+			value.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceExplicit, Input: runtimeext.TargetOrganizationInputInvocation}
+		}),
+		runtimeRoleCapabilityDescriptor("department.select_or_sole", func(value *runtimeext.HandlerDescriptor) {
+			value.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceExplicitOrSoleAuthorizedStore, Input: runtimeext.TargetOrganizationInputInvocation}
+		}),
+		runtimeRoleCapabilityDescriptor("department.maintain", func(value *runtimeext.HandlerDescriptor) {
+			value.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceRecordOwner}
+			value.StoreOrganizationMutation = &runtimeext.ActionStoreOrganizationMutationCapability{Operations: []runtimeext.StoreOrganizationMutationOperation{runtimeext.StoreOrganizationMutationRename, runtimeext.StoreOrganizationMutationDisable}}
+		}),
+		runtimeRoleCapabilityDescriptor("staff.resolve", func(value *runtimeext.HandlerDescriptor) {
+			value.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceRecordOwner}
+			value.IdentityHandlerDelivery = &runtimeext.IdentityHandlerDeliveryCapability{
+				Operations:      []runtimeext.IdentityHandlerOperation{runtimeext.IdentityHandlerCreate, runtimeext.IdentityHandlerUpdate, runtimeext.IdentityHandlerDisable, runtimeext.IdentityHandlerResolve},
+				ProfileBindings: []runtimeext.IdentityProfileBindingCapability{{BindingKey: "employee", ObjectKey: "employee_profile"}},
+			}
+		}),
+		runtimeRoleCapabilityDescriptor("installation.measure", func(value *runtimeext.HandlerDescriptor) {
+			value.WorkspaceIdentityUsage = &runtimeext.WorkspaceIdentityUsageCapability{MaxPageSize: 20}
+		}),
+		runtimeRoleCapabilityDescriptor("department.no_capability", nil),
+	}
+	businessActions := []string{
+		"department.provision", "department.catalog", "department.select", "department.select_or_sole", "department.maintain",
+		"staff.resolve", "installation.measure", "department.no_capability",
+	}
+	permissions := make([]manifestmodel.RolePermission, 0, len(businessActions))
+	for _, actionKey := range businessActions {
+		permissions = append(permissions, manifestmodel.RolePermission{PermissionKey: actionKey, DataScope: identitysdk.DataScopeOrgChild, AuditDenial: true})
+	}
+	roles := []manifestmodel.RoleSchema{
+		{Key: "operator", Name: "Operator", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true, Permissions: permissions},
+		{Key: "observer", Name: "Observer", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true, Permissions: []manifestmodel.RolePermission{{PermissionKey: "unrelated.read", DataScope: identitysdk.DataScopeOwner}}},
+	}
+	catalog, err := RuntimeWorkspaceProjectRoleCatalog(nil, roles, "workspace-primary", "runtime", descriptors...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	operator, found := projectRoleByKey(catalog.Roles, "operator")
+	if !found {
+		t.Fatal("operator role was not published")
+	}
+	wantCapabilities := []string{
+		identitysdk.HandlerDeliveryCreatePermission,
+		identitysdk.HandlerDeliveryDisablePermission,
+		identitysdk.HandlerDeliveryResolvePermission,
+		identitysdk.HandlerDeliveryUpdatePermission,
+		identitysdk.StoreOrganizationDeliveryCreatePermission,
+		identitysdk.StoreOrganizationDeliveryDisablePermission,
+		identitysdk.StoreOrganizationDeliveryListPermission,
+		identitysdk.StoreOrganizationDeliveryRenamePermission,
+		identitysdk.StoreOrganizationDeliveryResolvePermission,
+		identitysdk.WorkspaceIdentityUsageAggregatePermission,
+	}
+	for _, permissionKey := range wantCapabilities {
+		permission, found := projectRolePermissionByKey(operator.Permissions, permissionKey)
+		if !found || permission.DataScope != identitysdk.DataScopeOrgChild || !permission.AuditDenial {
+			t.Fatalf("derived capability %q=%+v found=%t permissions=%#v", permissionKey, permission, found, operator.Permissions)
+		}
+	}
+	if len(operator.Permissions) != len(businessActions)+len(wantCapabilities) {
+		t.Fatalf("operator permissions=%#v", operator.Permissions)
+	}
+	observer, found := projectRoleByKey(catalog.Roles, "observer")
+	if !found || len(observer.Permissions) != 1 || observer.Permissions[0].PermissionKey != "unrelated.read" {
+		t.Fatalf("role without a descriptor-owned business Action received capability permissions: %#v", observer)
+	}
+}
+
+func TestRuntimeWorkspaceCapabilityClosureIsSharedStableAndFailClosed(t *testing.T) {
+	descriptors := []runtimeext.HandlerDescriptor{
+		runtimeRoleCapabilityDescriptor("department.provision", func(value *runtimeext.HandlerDescriptor) {
+			value.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceProvisionedStore}
+		}),
+		runtimeRoleCapabilityDescriptor("department.catalog", func(value *runtimeext.HandlerDescriptor) {
+			value.StoreOrganizationCatalog = &runtimeext.StoreOrganizationCatalogCapability{MaxPageSize: 25}
+		}),
+	}
+	roles := []manifestmodel.RoleSchema{{
+		Key: "workspace_admin", Name: "Workspace administrator", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true,
+		Permissions: []manifestmodel.RolePermission{
+			{PermissionKey: "department.provision", DataScope: identitysdk.DataScopeAll},
+			{PermissionKey: "department.catalog", DataScope: identitysdk.DataScopeAll},
+		},
+	}}
+	bootstrap, err := RuntimeWorkspaceBootstrapRoleCatalog(nil, roles, "workspace_admin", "runtime", descriptors...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	published, err := RuntimeWorkspaceProjectRoleCatalog(nil, roles, "workspace-primary", "runtime", descriptors...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(bootstrap.Roles[0], published.Roles[0]) {
+		t.Fatalf("bootstrap and ordinary publication capability closures differ:\nbootstrap=%#v\npublished=%#v", bootstrap.Roles[0], published.Roles[0])
+	}
+	reordered, err := RuntimeWorkspaceProjectRoleCatalog(nil, roles, "workspace-primary", "runtime", descriptors[1], descriptors[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(published.Roles, reordered.Roles) || published.Roles[0].SchemaHash == "" {
+		t.Fatalf("descriptor order changed role identity:\nfirst=%#v\nreordered=%#v", published.Roles, reordered.Roles)
+	}
+	conflicting := append([]manifestmodel.RoleSchema(nil), roles...)
+	conflicting[0].Permissions = append([]manifestmodel.RolePermission(nil), roles[0].Permissions...)
+	conflicting[0].Permissions[0].DataScope = identitysdk.DataScopeOwner
+	conflicting[0].Permissions[1].DataScope = identitysdk.DataScopeOrg
+	if _, err := RuntimeWorkspaceProjectRoleCatalog(nil, conflicting, "workspace-primary", "runtime", descriptors...); err == nil || !strings.Contains(err.Error(), "incompatible data scopes") {
+		t.Fatalf("incompatible capability scopes error=%v", err)
+	}
+	comparable := append([]manifestmodel.RoleSchema(nil), roles...)
+	comparable[0].Permissions = []manifestmodel.RolePermission{
+		{PermissionKey: "department.provision", DataScope: identitysdk.DataScopeOrg},
+		{PermissionKey: "department.catalog", DataScope: identitysdk.DataScopeOrgChild},
+	}
+	comparableCatalog, err := RuntimeWorkspaceProjectRoleCatalog(nil, comparable, "workspace-primary", "runtime", descriptors...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listGrant, found := projectRolePermissionByKey(comparableCatalog.Roles[0].Permissions, identitysdk.StoreOrganizationDeliveryListPermission)
+	if !found || listGrant.DataScope != identitysdk.DataScopeOrgChild {
+		t.Fatalf("comparable org scope join=%+v found=%t", listGrant, found)
+	}
+	comparable[0].Permissions[0], comparable[0].Permissions[1] = comparable[0].Permissions[1], comparable[0].Permissions[0]
+	reversedComparable, err := RuntimeWorkspaceProjectRoleCatalog(nil, comparable, "workspace-primary", "runtime", descriptors...)
+	if err != nil || !reflect.DeepEqual(comparableCatalog.Roles, reversedComparable.Roles) {
+		t.Fatalf("scope join depends on Action grant order: first=%#v reversed=%#v err=%v", comparableCatalog.Roles, reversedComparable.Roles, err)
+	}
+	declaredInternal := append([]manifestmodel.RoleSchema(nil), roles...)
+	declaredInternal[0].Permissions = append(append([]manifestmodel.RolePermission(nil), roles[0].Permissions...), manifestmodel.RolePermission{PermissionKey: identitysdk.StoreOrganizationDeliveryCreatePermission, DataScope: identitysdk.DataScopeAll})
+	if _, err := RuntimeWorkspaceProjectRoleCatalog(nil, declaredInternal, "workspace-primary", "runtime", descriptors...); err == nil || !strings.Contains(err.Error(), "Runtime-managed downstream capability") {
+		t.Fatalf("project-declared internal capability error=%v", err)
+	}
+}
+
+func runtimeRoleCapabilityDescriptor(actionKey string, mutate func(*runtimeext.HandlerDescriptor)) runtimeext.HandlerDescriptor {
+	descriptor := runtimeext.HandlerDescriptor{
+		ActionKey: actionKey, InputType: "generated." + strings.ReplaceAll(actionKey, ".", "_") + "Input", OutputType: "generated." + strings.ReplaceAll(actionKey, ".", "_") + "Output",
+		InputContractSHA256: strings.Repeat("a", 64), OutputContractSHA256: strings.Repeat("b", 64), HandlerRevision: "revision-1",
+	}
+	if mutate != nil {
+		mutate(&descriptor)
+	}
+	return descriptor
+}
+
+func projectRolePermissionByKey(permissions []identitysdk.ProjectRolePermission, key string) (identitysdk.ProjectRolePermission, bool) {
+	for _, permission := range permissions {
+		if permission.PermissionKey == key {
+			return permission, true
+		}
+	}
+	return identitysdk.ProjectRolePermission{}, false
+}
 
 func TestM1Baseline26InternalWorkflowRoleCrossesWorkspaceBootstrapBoundary(t *testing.T) {
 	raw, err := os.ReadFile("testdata/m1-role-catalog-baseline-26.json")

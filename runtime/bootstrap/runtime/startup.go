@@ -482,13 +482,14 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		authorizationModuleActions = append(authorizationModuleActions, identityAuthorizationActions...)
 	}
 	workspaceRolePolicy := workspaceprovisionpersistence.WorkspaceBootstrapRolePolicyEvidence{}
+	handlerDescriptors := businessHandlers.Descriptors()
 	for _, role := range manifest.Roles {
 		if !role.ProvisionToWorkspaces {
 			continue
 		}
-		bootstrapRoleCatalog, catalogErr := RuntimeWorkspaceBootstrapRoleCatalog(records.Schema().Objects, manifest.Roles, manifest.InitialWorkspaceAdministratorRole, cfg.IdentityAudience)
+		bootstrapRoleCatalog, catalogErr := RuntimeWorkspaceBootstrapRoleCatalog(records.Schema().Objects, manifest.Roles, manifest.InitialWorkspaceAdministratorRole, cfg.IdentityAudience, handlerDescriptors...)
 		mustCompleteRuntimeStartup(catalogErr)
-		workspaceRolePolicy, catalogErr = workspaceprovisionpersistence.NewWorkspaceBootstrapRolePolicyEvidence(bootstrapRoleCatalog)
+		workspaceRolePolicy, catalogErr = workspaceprovisionpersistence.NewWorkspaceBootstrapRolePolicyEvidence(bootstrapRoleCatalog, startupOptions.ProjectNavigationCatalog)
 		mustCompleteRuntimeStartup(catalogErr)
 		manifest.InitialWorkspaceAdministratorRole = bootstrapRoleCatalog.InitialWorkspaceAdministratorRoleKey
 		break
@@ -500,7 +501,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if binder, embedded := identityBinding.(identitysdk.PermissionUsageProviderBinder); embedded {
 		mustCompleteRuntimeStartup(binder.BindPermissionUsageProvider(authorizationRegistrySnapshot))
 	}
-	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, records.Schema().Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience))
+	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, records.Schema().Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, handlerDescriptors...))
 	mustCompleteRuntimeStartup(publishRuntimeProjectProfileExtensions(ctx, identityBinding, records.Schema().IdentityProfileExtensions))
 	startupCallbacks.records = records
 	notificationWakeup := func(message publicationmodel.Message) {
@@ -543,7 +544,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 			rollbackIdentityPublication := func(rollbackCtx context.Context) error {
 				return errors.Join(
 					reconcileRuntimePermissionRegistries(rollbackCtx, identityBinding.Permissions(), application, candidateRegistry, previousRegistry),
-					publishRuntimeProjectRoles(rollbackCtx, identityBinding, previousSnapshot.Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience),
+					publishRuntimeProjectRoles(rollbackCtx, identityBinding, previousSnapshot.Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, handlerDescriptors...),
 					publishRuntimeProjectProfileExtensions(rollbackCtx, identityBinding, previousSnapshot.IdentityProfileExtensions),
 				)
 			}
@@ -552,7 +553,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 				defer rollbackCancel()
 				return rollbackIdentityPublication(rollbackCtx)
 			}
-			if err := publishRuntimeProjectRoles(publishCtx, identityBinding, snapshot.Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience); err != nil {
+			if err := publishRuntimeProjectRoles(publishCtx, identityBinding, snapshot.Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, handlerDescriptors...); err != nil {
 				return appschemaapplication.ApplicationSchemaReloadPreparation{}, errors.Join(
 					fmt.Errorf("publish Runtime project roles and objects to Identity: %w", err),
 					fmt.Errorf("rollback Runtime Identity publication after project catalog failure: %w", rollbackIdentityPublication(publishCtx)),

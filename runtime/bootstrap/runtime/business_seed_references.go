@@ -24,6 +24,7 @@ type BusinessSeedReferenceCandidate struct {
 // do not belong in public or persisted Runtime configuration.
 type ProjectStartupOptions struct {
 	BusinessSeedReferenceCandidates []BusinessSeedReferenceCandidate
+	ProjectNavigationCatalog        identitysdk.ProjectNavigationCatalog
 }
 
 type identityBusinessSeedReferenceResolver struct {

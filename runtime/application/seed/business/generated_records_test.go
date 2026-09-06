@@ -1,6 +1,7 @@
 package businessseed
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -101,6 +102,24 @@ func TestBuildManifestBusinessSeedRowsRejectsUnsafeRequiredValues(t *testing.T) 
 	}
 }
 
+func TestBuildManifestBusinessSeedRowsSupportsBoundedMonthAndClockPatterns(t *testing.T) {
+	manifest := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{
+		Key: "business_period",
+		Fields: []definitionmodel.FieldSchema{
+			{Key: "billing_month", Type: "text", Required: true, Validation: definitionmodel.FieldValidation{Pattern: `^[0-9]{4}-(0[1-9]|1[0-2])$`}},
+			{Key: "open_time", Type: "text", Required: true, Validation: definitionmodel.FieldValidation{Pattern: `^([01]\d|2[0-3]):[0-5]\d$`}},
+		},
+	}}}
+	rows, err := BuildManifestBusinessSeedRows(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := generatedSeedTestData(t, rows[0])
+	if data["billing_month"] != "2000-01" || data["open_time"] != "09:00" {
+		t.Fatalf("structured text baseline=%#v", data)
+	}
+}
+
 func TestSyncManifestBusinessSeedsIsPerTableAndRestartIdempotent(t *testing.T) {
 	manifest := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{
 		{Key: "parent", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text", Required: true}}},
@@ -131,6 +150,29 @@ func TestSyncManifestBusinessSeedsIsPerTableAndRestartIdempotent(t *testing.T) {
 	}
 	if len(repository.inserted) != 0 {
 		t.Fatalf("restart inserted duplicates: %#v", repository.inserted)
+	}
+}
+
+func TestSyncManifestBusinessSeedsWithReferenceResolverSkipsExistingExternalReferencesOnRestart(t *testing.T) {
+	manifest := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{
+		Key: "employee_profile",
+		Fields: []definitionmodel.FieldSchema{{
+			Key: "identity_user_id", Type: "user", Required: true,
+		}},
+	}}}
+	repository := &businessSeedRecordProbe{existing: map[string][]recordmodel.Record{
+		"employee_profile": {{ID: "employee-existing", Data: map[string]any{"identity_user_id": "admin"}}},
+	}}
+	resolverCalls := 0
+	resolver := BaselineReferenceResolverFunc(func(context.Context, BaselineReferenceRequest) (string, error) {
+		resolverCalls++
+		return "", errBusinessSeedProbe
+	})
+	if err := SyncManifestBusinessSeedsWithReferenceResolver(t.Context(), repository, manifest, "workspace-a", resolver); err != nil {
+		t.Fatal(err)
+	}
+	if resolverCalls != 0 || len(repository.inserted) != 0 {
+		t.Fatalf("resolver_calls=%d inserted=%#v", resolverCalls, repository.inserted)
 	}
 }
 

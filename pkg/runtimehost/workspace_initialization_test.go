@@ -1,6 +1,7 @@
 package runtimehost
 
 import (
+	"context"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -9,12 +10,67 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identitymodule "github.com/domainry/domainry-identity/module"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	runtimebootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/runtime"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
+
+type hostWorkspaceBootstrapParticipant struct{}
+
+type initializedWorkspaceBootstrapBindingProbe struct {
+	identityBindingStub
+	roleCatalog       identitysdk.ProjectRoleCatalog
+	navigationCatalog identitysdk.ProjectNavigationCatalog
+}
+
+func (probe *initializedWorkspaceBootstrapBindingProbe) BindBootstrapProjectRoleCatalog(_ context.Context, catalog identitysdk.ProjectRoleCatalog) error {
+	probe.roleCatalog = catalog
+	return nil
+}
+
+func (probe *initializedWorkspaceBootstrapBindingProbe) BindBootstrapProjectNavigationCatalog(_ context.Context, catalog identitysdk.ProjectNavigationCatalog) error {
+	probe.navigationCatalog = catalog
+	return nil
+}
+
+func (*initializedWorkspaceBootstrapBindingProbe) BootstrapWorkspaceIdentity(context.Context, identitysdk.WorkspaceIdentityBootstrapRequest, identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceIdentityBootstrapReceipt, error) {
+	return identitysdk.WorkspaceIdentityBootstrapReceipt{}, nil
+}
+
+func (*initializedWorkspaceBootstrapBindingProbe) CompleteWorkspaceIdentityBootstrap(context.Context, identitysdk.WorkspaceIdentityBootstrapCompletion) error {
+	return nil
+}
+
+func (*initializedWorkspaceBootstrapBindingProbe) ClaimWorkspaceIdentityBootstrapCredential(context.Context, identitysdk.WorkspaceIdentityBootstrapCredentialClaim) (identitysdk.WorkspaceIdentityBootstrapOneTimeCredential, error) {
+	return identitysdk.WorkspaceIdentityBootstrapOneTimeCredential{}, nil
+}
+
+func (hostWorkspaceBootstrapParticipant) Descriptor() runtimeext.WorkspaceBootstrapDescriptor {
+	descriptor := runtimeext.WorkspaceBootstrapDescriptor{
+		Key:                 "store_configuration",
+		InputType:           "runtimehost.StoreConfigurationInput",
+		ParticipantRevision: "revision-1",
+		InputFields: []runtimeext.WorkspaceBootstrapInputField{
+			{Key: "currency", Type: runtimeext.WorkspaceBootstrapInputString, Required: true},
+		},
+		Records: []runtimeext.WorkspaceBootstrapRecordCapability{
+			{Key: "initial_store_configuration", ObjectKey: "store_configuration", Fields: []string{"currency"}},
+		},
+	}
+	descriptor.InputContractSHA256 = descriptor.ComputedInputContractSHA256()
+	return descriptor
+}
+
+func (hostWorkspaceBootstrapParticipant) BuildWorkspaceBootstrap(_ context.Context, _ runtimeext.WorkspaceBootstrapContext, input map[string]any) ([]runtimeext.WorkspaceBootstrapRecord, error) {
+	return []runtimeext.WorkspaceBootstrapRecord{{
+		CapabilityKey: "initial_store_configuration",
+		Data:          map[string]any{"currency": input["currency"]},
+	}}, nil
+}
 
 func TestInitialWorkspaceRequestUsesTypedCommercialConfiguration(t *testing.T) {
 	cfg := serverTestConfig()
@@ -40,10 +96,11 @@ func TestInitialWorkspaceRequestUsesTypedCommercialConfiguration(t *testing.T) {
 	}
 }
 
-func TestWorkspaceManagerInitializesM1HumanRolesAndPublishesInternalRoles(t *testing.T) {
+func TestWorkspaceManagerMaterializesApplicationSchemaBeforeAtomicBootstrap(t *testing.T) {
 	cfg := serverTestConfig()
 	cfg.DatabaseDriver = "sqlite"
-	cfg.DBPath = filepath.Join(t.TempDir(), "workspace-bootstrap.db")
+	cfg.DBPath = filepath.Join(t.TempDir(), "workspace-application-bootstrap.db")
+	cfg.InitialWorkspaceApplicationBootstrapJSON = `{"currency":"JPY"}`
 	database, err := bootstrap.PrepareProjectDatabase(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -58,13 +115,83 @@ func TestWorkspaceManagerInitializesM1HumanRolesAndPublishesInternalRoles(t *tes
 	}
 	t.Cleanup(func() { _ = manager.Close(t.Context()) })
 	manifest := manifestmodel.ManifestSchema{
+		Objects: []definitionmodel.ObjectSchema{{
+			Key: "store_configuration",
+			Fields: []definitionmodel.FieldSchema{
+				{Key: "currency", Type: "text", Required: true},
+				{Key: "label", Type: "text", Required: true, DefaultValue: "Default Store"},
+			},
+		}},
+		Roles:                             workspaceRolesForTest(),
+		InitialWorkspaceAdministratorRole: "headquarters_admin",
+	}
+	if err := manager.Activate(t.Context(), manifest, hostWorkspaceBootstrapParticipant{}); err != nil {
+		t.Fatal(err)
+	}
+	var workspaceID, ownerOrganizationID, currency, label string
+	if err := database.DB().QueryRowContext(t.Context(), `SELECT "workspace_id","owner_org_id","currency","label" FROM "store_configuration"`).Scan(&workspaceID, &ownerOrganizationID, &currency, &label); err != nil {
+		t.Fatal(err)
+	}
+	if workspaceID == "" || ownerOrganizationID == "" || currency != "JPY" || label != "Default Store" {
+		t.Fatalf("application bootstrap workspace=%q owner=%q currency=%q label=%q", workspaceID, ownerOrganizationID, currency, label)
+	}
+}
+
+func TestWorkspaceManagerInitializesM1HumanRolesAndPublishesInternalRoles(t *testing.T) {
+	cfg := serverTestConfig()
+	cfg.DatabaseDriver = "sqlite"
+	cfg.DBPath = filepath.Join(t.TempDir(), "workspace-bootstrap.db")
+	database, err := bootstrap.PrepareProjectDatabase(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = database.CloseContext(t.Context()) })
+	credentialDelivery := &initialCredentialDeliveryProbe{accepted: true}
+	manager, err := newProjectWorkspaceManager(
+		t.Context(), cfg, identitymodule.NewFactory(identitymodule.Options{IdentityVersion: "test", DatabaseDriver: "sqlite", DatabasePath: cfg.DBPath}),
+		database, projectIdentityDatabaseHandle(database, cfg.DBPath, nil), credentialDelivery,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.Close(t.Context()) })
+	if err := manager.SetProjectNavigationCatalog(identitysdk.ProjectNavigationCatalog{
+		ContractVersion: identitysdk.ProjectNavigationContractVersion,
+		Menus: []identitysdk.ProjectMenuDefinition{
+			{Key: "business.crm", Label: map[string]string{"en": "CRM"}, Route: "/crm", SortOrder: 10},
+			{Key: "business.crm.leads", Label: map[string]string{"en": "Leads"}, Route: "/crm/leads", ParentKey: "business.crm", SortOrder: 20},
+		},
+		RoleMenuSets: []identitysdk.ProjectRoleMenuSet{{RoleKey: "crm_acceptance_admin", MenuKeys: []string{"business.crm.leads"}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	manifest := manifestmodel.ManifestSchema{
 		Roles:                             m1WorkspaceRolesForTest(),
 		InitialWorkspaceAdministratorRole: "crm_acceptance_admin",
 	}
-	if err := manager.Activate(t.Context(), manifest, nil); err != nil {
+	provisionDescriptor := runtimeext.HandlerDescriptor{
+		ActionKey: "department_anchor.provision", InputType: "runtimehost.DepartmentAnchorProvisionInput", OutputType: "runtimehost.DepartmentAnchorProvisionOutput",
+		InputContractSHA256: strings.Repeat("a", 64), OutputContractSHA256: strings.Repeat("b", 64), HandlerRevision: "revision-1",
+		TargetOrganization: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceProvisionedStore},
+	}
+	if err := manager.Activate(t.Context(), manifest, nil, provisionDescriptor); err != nil {
 		t.Fatal(err)
 	}
 	workspaceID := manager.Config().IdentityWorkspaceID
+	var navigationRootID, navigationChildID, navigationParentID string
+	if err := database.DB().QueryRowContext(t.Context(), `SELECT "id" FROM "_identity_menus" WHERE "workspace_id" = ? AND "menu_key" = ?`, workspaceID, "business.crm").Scan(&navigationRootID); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.DB().QueryRowContext(t.Context(), `SELECT "id","parent_id" FROM "_identity_menus" WHERE "workspace_id" = ? AND "menu_key" = ?`, workspaceID, "business.crm.leads").Scan(&navigationChildID, &navigationParentID); err != nil {
+		t.Fatal(err)
+	}
+	if navigationRootID == "" || navigationChildID == "" || navigationParentID != navigationRootID {
+		t.Fatalf("project navigation root=%q child=%q parent=%q", navigationRootID, navigationChildID, navigationParentID)
+	}
+	var navigationAssignments int
+	if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM "_identity_role_menu_assignments" a JOIN "_identity_roles" r ON r."workspace_id" = a."workspace_id" AND r."id" = a."role_id" JOIN "_identity_menus" m ON m."workspace_id" = a."workspace_id" AND m."id" = a."menu_id" WHERE a."workspace_id" = ? AND r."role_key" = ? AND m."menu_key" = ?`, workspaceID, "crm_acceptance_admin", "business.crm.leads").Scan(&navigationAssignments); err != nil || navigationAssignments != 1 {
+		t.Fatalf("project navigation assignments=%d err=%v", navigationAssignments, err)
+	}
 	bootstrapRoleKeys := workspaceIdentityRoleKeys(t, database, workspaceID)
 	wantBootstrapRoles := []string{
 		"crm_acceptance_admin",
@@ -82,7 +209,7 @@ func TestWorkspaceManagerInitializesM1HumanRolesAndPublishesInternalRoles(t *tes
 			t.Fatalf("internal service role %q was provisioned into initial Workspace login roles: %v", roleKey, bootstrapRoleKeys)
 		}
 	}
-	boundCatalog, err := runtimebootstrap.RuntimeWorkspaceProjectRoleCatalog(manifest.Objects, manifest.Roles, workspaceID, cfg.IdentityAudience)
+	boundCatalog, err := runtimebootstrap.RuntimeWorkspaceProjectRoleCatalog(manifest.Objects, manifest.Roles, workspaceID, cfg.IdentityAudience, provisionDescriptor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,12 +251,27 @@ func TestWorkspaceManagerInitializesM1HumanRolesAndPublishesInternalRoles(t *tes
 	if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM "_identity_user_role_assignments" a JOIN "_identity_roles" r ON r."workspace_id" = a."workspace_id" AND r."id" = a."role_id" WHERE a."workspace_id" = ? AND a."user_id" = ? AND r."role_key" <> ?`, workspaceID, initialAdministratorID, manifest.InitialWorkspaceAdministratorRole).Scan(&otherAssignments); err != nil || otherAssignments != 0 {
 		t.Fatalf("initial administrator received another role: count=%d err=%v", otherAssignments, err)
 	}
+	application := identitysdk.ApplicationRef{WorkspaceID: identitysdk.WorkspaceID(workspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)}
+	if _, err := manager.Binding().Applications().Register(t.Context(), identitysdk.ApplicationRegistration{
+		Application: application, RedirectURLs: []string{"http://localhost:3100/auth/callback"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	session, err := manager.Binding().Authentication().LoginWithPassword(t.Context(), identitysdk.PasswordLoginRequest{
+		WorkspaceID: application.WorkspaceID, ApplicationKey: application.ApplicationKey,
+		Login: credentialDelivery.credential.LoginID, Password: credentialDelivery.credential.InitialPassword,
+	})
+	if err != nil || session.AccessToken == "" ||
+		!slices.Contains(session.Permissions, identitysdk.StoreOrganizationDeliveryListPermission) ||
+		!slices.Contains(session.Permissions, identitysdk.StoreOrganizationDeliveryCreatePermission) {
+		t.Fatalf("initial administrator capability permissions=%v token_present=%t error=%v", session.Permissions, session.AccessToken != "", err)
+	}
 }
 
 func m1WorkspaceRolesForTest() []manifestmodel.RoleSchema {
 	return []manifestmodel.RoleSchema{
 		workspaceInternalServiceRoleForTest(),
-		{Key: "crm_acceptance_admin", Name: "Crm Acceptance Admin", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true},
+		{Key: "crm_acceptance_admin", Name: "Crm Acceptance Admin", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true, Permissions: []manifestmodel.RolePermission{{PermissionKey: "department_anchor.provision", DataScope: identitysdk.DataScopeAll}}},
 		{Key: "followup_reminder_service", Name: "Followup Reminder Service", Audience: "service", AssignmentMode: "system_managed", Permissions: []manifestmodel.RolePermission{{PermissionKey: "lead.send_overdue_reminders", DataScope: identitysdk.DataScopeAll}}},
 		{Key: "sales_director", Name: "Sales Director", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true},
 		{Key: "sales_rep", Name: "Sales Rep", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true},
@@ -189,13 +331,28 @@ func TestWorkspaceManagerAuthoritySurvivesRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = reopened.CloseContext(t.Context()) })
-	restarted, err := newProjectWorkspaceManager(t.Context(), cfg, identityFactoryStub{}, reopened, projectIdentityDatabaseHandle(reopened, cfg.DBPath, nil), nil)
+	initializedBinding := &initializedWorkspaceBootstrapBindingProbe{}
+	restarted, err := newProjectWorkspaceManager(t.Context(), cfg, identityFactoryStub{binding: initializedBinding}, reopened, projectIdentityDatabaseHandle(reopened, cfg.DBPath, nil), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = restarted.Close(t.Context()) })
 	if restarted.Binding() == nil || restarted.Config().IdentityWorkspaceID != installation.WorkspaceID {
 		t.Fatalf("restart config=%+v", restarted.Config())
+	}
+	navigation := identitysdk.ProjectNavigationCatalog{
+		ContractVersion: identitysdk.ProjectNavigationContractVersion,
+		Menus:           []identitysdk.ProjectMenuDefinition{{Key: "business.orders", Label: map[string]string{"en": "Orders"}, Route: "/orders", SortOrder: 10}},
+		RoleMenuSets:    []identitysdk.ProjectRoleMenuSet{{RoleKey: "headquarters_admin", MenuKeys: []string{"business.orders"}}},
+	}
+	if err := restarted.SetProjectNavigationCatalog(navigation); err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.Activate(t.Context(), manifestmodel.ManifestSchema{Roles: workspaceRolesForTest(), InitialWorkspaceAdministratorRole: "headquarters_admin"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(initializedBinding.navigationCatalog.Menus) != 1 || initializedBinding.navigationCatalog.Menus[0].Key != "business.orders" || len(initializedBinding.roleCatalog.Roles) == 0 {
+		t.Fatalf("restart catalogs role=%+v navigation=%+v", initializedBinding.roleCatalog, initializedBinding.navigationCatalog)
 	}
 }
 

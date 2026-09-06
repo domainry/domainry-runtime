@@ -19,7 +19,9 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	runtimebootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/runtime"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workspaceprovisionmodel "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/model"
+	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -34,12 +36,18 @@ type projectWorkspaceManager struct {
 	binding                         identitysdk.Binding
 	adapters                        []identityhttpapi.Adapter
 	businessSeedReferenceCandidates []bootstrap.BusinessSeedReferenceCandidate
+	bootstrapRoleCatalog            identitysdk.ProjectRoleCatalog
+	projectNavigationCatalog        identitysdk.ProjectNavigationCatalog
 	credentialDelivery              InitialWorkspaceCredentialDelivery
 	installationAdminDelivery       InstallationAdministratorCredentialDelivery
 }
 
 func newProjectWorkspaceManager(ctx context.Context, cfg config.Config, factory identitysdk.Factory, database *bootstrap.ProjectDatabase, handle identitysdk.DatabaseHandle, delivery InitialWorkspaceCredentialDelivery, installationAdminDelivery ...InstallationAdministratorCredentialDelivery) (*projectWorkspaceManager, error) {
-	manager := &projectWorkspaceManager{cfg: cfg, factory: factory, database: database, handle: handle, credentialDelivery: delivery}
+	emptyNavigation, err := loadProjectNavigationCatalog("", nil)
+	if err != nil {
+		return nil, err
+	}
+	manager := &projectWorkspaceManager{cfg: cfg, factory: factory, database: database, handle: handle, credentialDelivery: delivery, projectNavigationCatalog: emptyNavigation}
 	if len(installationAdminDelivery) > 0 {
 		manager.installationAdminDelivery = installationAdminDelivery[0]
 	}
@@ -74,11 +82,35 @@ func newProjectWorkspaceManager(ctx context.Context, cfg config.Config, factory 
 	return manager, nil
 }
 
-func (manager *projectWorkspaceManager) Activate(ctx context.Context, manifest manifestmodel.ManifestSchema, participant runtimeext.WorkspaceBootstrapParticipant) error {
+func (manager *projectWorkspaceManager) SetProjectNavigationCatalog(catalog identitysdk.ProjectNavigationCatalog) error {
+	normalized, err := identitysdk.NormalizeProjectNavigationCatalog(catalog)
+	if err != nil {
+		return err
+	}
+	manager.mu.Lock()
+	manager.projectNavigationCatalog = normalized
+	manager.mu.Unlock()
+	return nil
+}
+
+func (manager *projectWorkspaceManager) Activate(ctx context.Context, manifest manifestmodel.ManifestSchema, participant runtimeext.WorkspaceBootstrapParticipant, handlerDescriptors ...runtimeext.HandlerDescriptor) error {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
+	// Bootstrap receives only the validated Workspace-login subset. Ordinary
+	// publication later receives the complete catalog, including validated
+	// internal service roles.
+	roleCatalog, err := runtimebootstrap.RuntimeWorkspaceBootstrapRoleCatalog(manifest.Objects, manifest.Roles, manifest.InitialWorkspaceAdministratorRole, manager.cfg.IdentityAudience, handlerDescriptors...)
+	if err != nil {
+		return fmt.Errorf("compile roles for initial Workspace: %w", err)
+	}
+	rolePolicy, err := workspaceprovision.NewWorkspaceBootstrapRolePolicyEvidence(roleCatalog, manager.projectNavigationCatalog)
+	if err != nil {
+		return fmt.Errorf("compile role-policy evidence for initial Workspace: %w", err)
+	}
+	manager.bootstrapRoleCatalog = roleCatalog
+	manifest.InitialWorkspaceAdministratorRole = roleCatalog.InitialWorkspaceAdministratorRoleKey
 	if manager.binding != nil {
-		return nil
+		return manager.bindWorkspaceBootstrapCatalogs(ctx, manager.binding)
 	}
 	if manager.bootstrap == nil {
 		return fmt.Errorf("initial Workspace bootstrap is unavailable")
@@ -86,28 +118,21 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, manifest m
 	if manager.credentialDelivery == nil {
 		return fmt.Errorf("initial Workspace credential delivery is required before initialization")
 	}
+	if err := manager.bindWorkspaceBootstrapCatalogs(ctx, manager.bootstrap); err != nil {
+		return err
+	}
 	if err := manager.database.EnsureRuntimeSchema(ctx); err != nil {
 		return fmt.Errorf("prepare application schema before initial Workspace: %w", err)
+	}
+	applicationSchema := appschemapersistence.NewApplicationSchemaStore(manager.database)
+	applicationSchemaScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "prepare application object storage before initial Workspace")
+	if err := applicationSchema.SyncManifest(ctx, applicationSchemaScope, manifest); err != nil {
+		return fmt.Errorf("materialize application object storage before initial Workspace: %w", err)
 	}
 	request, err := initialWorkspaceRequest(manager.cfg)
 	if err != nil {
 		return err
 	}
-	// Bootstrap receives only the validated Workspace-login subset. Ordinary
-	// publication later receives the complete catalog, including validated
-	// internal service roles.
-	roleCatalog, err := runtimebootstrap.RuntimeWorkspaceBootstrapRoleCatalog(manifest.Objects, manifest.Roles, manifest.InitialWorkspaceAdministratorRole, manager.cfg.IdentityAudience)
-	if err != nil {
-		return fmt.Errorf("compile roles for initial Workspace: %w", err)
-	}
-	rolePolicy, err := workspaceprovision.NewWorkspaceBootstrapRolePolicyEvidence(roleCatalog)
-	if err != nil {
-		return fmt.Errorf("compile role-policy evidence for initial Workspace: %w", err)
-	}
-	if err := manager.bootstrap.BindBootstrapProjectRoleCatalog(ctx, roleCatalog); err != nil {
-		return fmt.Errorf("bind roles for initial Workspace: %w", err)
-	}
-	manifest.InitialWorkspaceAdministratorRole = roleCatalog.InitialWorkspaceAdministratorRoleKey
 	initialization := workspaceprovision.NewWorkspaceInitializationStoreWithParticipant(manager.database, manager.bootstrap, manifest, participant, rolePolicy)
 	result, err := initialization.Initialize(ctx, request)
 	if err != nil {
@@ -145,6 +170,27 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, manifest m
 		return err
 	}
 	return deliveryErr
+}
+
+func (manager *projectWorkspaceManager) bindWorkspaceBootstrapCatalogs(ctx context.Context, target any) error {
+	if _, supportsWorkspaceBootstrap := target.(identitysdk.WorkspaceIdentityBootstrap); !supportsWorkspaceBootstrap {
+		return nil
+	}
+	roleBinder, ok := target.(identitysdk.BootstrapProjectRoleCatalogBinder)
+	if !ok {
+		return fmt.Errorf("embedded Identity binding does not accept the trusted Workspace role catalog")
+	}
+	if err := roleBinder.BindBootstrapProjectRoleCatalog(ctx, manager.bootstrapRoleCatalog); err != nil {
+		return fmt.Errorf("bind roles for Workspace bootstrap: %w", err)
+	}
+	navigationBinder, ok := target.(identitysdk.BootstrapProjectNavigationCatalogBinder)
+	if !ok {
+		return fmt.Errorf("embedded Identity binding does not accept the trusted project navigation template")
+	}
+	if err := navigationBinder.BindBootstrapProjectNavigationCatalog(ctx, manager.projectNavigationCatalog); err != nil {
+		return fmt.Errorf("bind project navigation for Workspace bootstrap: %w", err)
+	}
+	return nil
 }
 
 func (manager *projectWorkspaceManager) BusinessSeedReferenceCandidates() ([]bootstrap.BusinessSeedReferenceCandidate, error) {
@@ -206,6 +252,12 @@ func (manager *projectWorkspaceManager) bindInitializedIdentity(ctx context.Cont
 	if err := manager.ensureInstallationAdministrator(ctx, binding, installation); err != nil {
 		_ = binding.Close(context.WithoutCancel(ctx))
 		return err
+	}
+	if len(manager.bootstrapRoleCatalog.Roles) != 0 {
+		if err := manager.bindWorkspaceBootstrapCatalogs(ctx, binding); err != nil {
+			_ = binding.Close(context.WithoutCancel(ctx))
+			return err
+		}
 	}
 	if authority, ok := manager.handle.WorkspaceIdentityUsageAuthority.(*runtimeWorkspaceIdentityUsageAuthority); ok {
 		authenticator, resolverErr := identityprincipal.NewResolver(binding, identityprincipal.Options{})

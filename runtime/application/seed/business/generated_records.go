@@ -555,7 +555,12 @@ func generatedSeedFitText(field definitionmodel.FieldSchema, preferred string) (
 		expression = compiled
 	}
 	candidates := []string{
-		preferred, "sample", "example", "alpha", "A12", "ABC-001", "ITEM-001", "10001",
+		preferred,
+		// Common structured business values remain deterministic while covering
+		// bounded calendar and clock patterns that cannot be satisfied by the
+		// generic word/code candidates below.
+		"2000-01", "2000-01-01", "09:00", "00:00", "23:59",
+		"sample", "example", "alpha", "A12", "ABC-001", "ITEM-001", "10001",
 		"13800138000", "00000000-0000-4000-8000-000000000001", strings.Repeat("a", max(1, minimum)), strings.Repeat("a", 64),
 	}
 	for _, candidate := range candidates {

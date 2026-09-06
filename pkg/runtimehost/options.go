@@ -58,10 +58,13 @@ type Options struct {
 	// private acceptance environments. Production normally selects the
 	// create-only file sink through explicit process configuration.
 	InstallationAdministratorCredentialDelivery InstallationAdministratorCredentialDelivery
-	// ProjectConfigFile and ProjectI18nDir point to optional Git-owned
-	// extension files relative to the backend working directory.
-	ProjectConfigFile string
-	ProjectI18nDir    string
+	// ProjectConfigFile and ProjectI18nDir point to Git-owned extensions.
+	// ProjectNavigationFile points to the finalizer-produced template compiled
+	// from frontend navigation source plus backend role-menu relations. Paths are
+	// relative to the backend working directory.
+	ProjectConfigFile     string
+	ProjectI18nDir        string
+	ProjectNavigationFile string
 }
 
 type InitialWorkspaceCredential struct {

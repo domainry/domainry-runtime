@@ -125,6 +125,51 @@ func BuildManifestBusinessSeedRowsWithReferenceResolver(ctx context.Context, man
 	return append(rows, generated...), nil
 }
 
+// SyncManifestBusinessSeedsWithReferenceResolver checks persisted object
+// coverage before generating missing baselines. A restart must not need to
+// re-resolve external Identity references for an object whose baseline already
+// exists, while a partially initialized database still receives baselines for
+// every uncovered object and can reference the first persisted target record.
+func SyncManifestBusinessSeedsWithReferenceResolver(ctx context.Context, records recordrepository.RecordBusinessSeedRepository, manifest manifestmodel.ManifestSchema, workspaceID string, resolver BaselineReferenceResolver) error {
+	if records == nil {
+		return nil
+	}
+	workspaceID = strings.TrimSpace(workspaceID)
+	if len(workspaceID) == 0 {
+		return fmt.Errorf("sync generated business seeds: workspace authority is required")
+	}
+	rows := ManifestBusinessSeedRowsFromManifest(manifest)
+	covered := map[string]bool{}
+	for _, row := range rows {
+		covered[strings.TrimSpace(row.ObjectKey)] = true
+	}
+	probeRows := append([]manifestBusinessSeedRow(nil), rows...)
+	for _, object := range manifest.Objects {
+		objectKey := strings.TrimSpace(object.Key)
+		if objectKey == "" || covered[objectKey] {
+			continue
+		}
+		probeRows = append(probeRows, manifestBusinessSeedRow{Key: runtimeGeneratedBusinessSeedKey(objectKey), ObjectKey: objectKey})
+	}
+	targets, err := manifestBusinessSeedTargetStates(ctx, records, workspaceID, manifestBusinessSeedObjects(manifest), probeRows)
+	if err != nil {
+		return err
+	}
+	for _, row := range probeRows {
+		objectKey := strings.TrimSpace(row.ObjectKey)
+		if covered[objectKey] || !targets[objectKey].HasRecords {
+			continue
+		}
+		rows = append(rows, row)
+		covered[objectKey] = true
+	}
+	generated, err := generateManifestBusinessSeedRows(ctx, manifest, rows, workspaceID, resolver)
+	if err != nil {
+		return err
+	}
+	return SyncManifestBusinessSeeds(ctx, records, manifest, append(rows, generated...))
+}
+
 func ManifestBusinessSeedRowsFromManifest(manifest manifestmodel.ManifestSchema) []manifestBusinessSeedRow {
 	rows := []manifestBusinessSeedRow{}
 	seen := map[string]struct{}{}

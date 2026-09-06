@@ -79,7 +79,8 @@ func (factory identityFactoryStub) OpenBootstrapWithDatabase(context.Context, id
 }
 
 type identityBootstrapBindingStub struct {
-	roleCatalog identitysdk.ProjectRoleCatalog
+	roleCatalog       identitysdk.ProjectRoleCatalog
+	navigationCatalog identitysdk.ProjectNavigationCatalog
 }
 
 type acceptingCredentialDelivery struct{}
@@ -93,8 +94,17 @@ func (stub *identityBootstrapBindingStub) BindBootstrapProjectRoleCatalog(_ cont
 	return nil
 }
 
+func (stub *identityBootstrapBindingStub) BindBootstrapProjectNavigationCatalog(_ context.Context, catalog identitysdk.ProjectNavigationCatalog) error {
+	stub.navigationCatalog = catalog
+	return nil
+}
+
 func (stub *identityBootstrapBindingStub) BootstrapWorkspaceIdentity(_ context.Context, request identitysdk.WorkspaceIdentityBootstrapRequest, _ identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceIdentityBootstrapReceipt, error) {
 	roleCatalogSHA256, err := identitysdk.WorkspaceBootstrapProjectRoleCatalogSHA256(stub.roleCatalog)
+	if err != nil {
+		return identitysdk.WorkspaceIdentityBootstrapReceipt{}, err
+	}
+	navigationCatalogSHA256, err := identitysdk.ProjectNavigationCatalogSHA256(stub.navigationCatalog)
 	if err != nil {
 		return identitysdk.WorkspaceIdentityBootstrapReceipt{}, err
 	}
@@ -104,6 +114,7 @@ func (stub *identityBootstrapBindingStub) BootstrapWorkspaceIdentity(_ context.C
 		WorkspaceID: request.WorkspaceID, CompanyID: request.CompanyID, FirstStoreID: request.FirstStoreID,
 		InitialAdminUserID: request.InitialAdminUserID, InitialAdminLoginID: request.InitialAdminLoginID,
 		RoleCatalogSHA256:                    roleCatalogSHA256,
+		NavigationCatalogSHA256:              navigationCatalogSHA256,
 		InitialWorkspaceAdministratorRoleKey: stub.roleCatalog.InitialWorkspaceAdministratorRoleKey,
 	}, nil
 }
@@ -268,7 +279,7 @@ func serverTestDependencies(t *testing.T, cfg config.Config, runtime runtimeProc
 			databaseConfig.DBPath = databasePath
 			return bootstrap.PrepareProjectDatabase(ctx, databaseConfig)
 		},
-		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ agentsdk.Factory, _ integrationsdk.Factory, _ reportsdk.Factory, _ *bootstrap.ProjectDatabase, _ []bootstrap.BusinessSeedReferenceCandidate) runtimeProcess {
+		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ agentsdk.Factory, _ integrationsdk.Factory, _ reportsdk.Factory, _ *bootstrap.ProjectDatabase, _ bootstrap.ProjectStartupOptions) runtimeProcess {
 			if handlers == nil || !handlers.Frozen() {
 				panic("host passed an unfrozen registry")
 			}
@@ -477,7 +488,7 @@ func TestRunWithDependenciesRejectsManifestSDKTargetBeforeRuntimeCreation(t *tes
 			created := 0
 			deps := serverTestDependencies(t, serverTestConfig(), &serverRuntimeFake{})
 			deps.readFile = func(string) ([]byte, error) { return serverManifestJSON(t, test.target), nil }
-			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, []bootstrap.BusinessSeedReferenceCandidate) runtimeProcess {
+			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, bootstrap.ProjectStartupOptions) runtimeProcess {
 				created++
 				return &serverRuntimeFake{}
 			}
@@ -582,7 +593,7 @@ func TestRunWithDependenciesCoversConfigurationActivationAndServeOutcomes(t *tes
 		return runtimeext.ExtensionSet{}, nil
 	}
 	deps = serverTestDependencies(t, cfg, &serverRuntimeFake{})
-	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, []bootstrap.BusinessSeedReferenceCandidate) runtimeProcess {
+	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, bootstrap.ProjectStartupOptions) runtimeProcess {
 		return nil
 	}
 	if err := runWithDependencies(options, deps); err == nil || !strings.Contains(err.Error(), "returned no process") {

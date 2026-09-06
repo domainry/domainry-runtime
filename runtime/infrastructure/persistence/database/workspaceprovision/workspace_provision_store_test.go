@@ -37,6 +37,10 @@ func (*identityBootstrapProbe) BindBootstrapProjectRoleCatalog(context.Context, 
 	return nil
 }
 
+func (*identityBootstrapProbe) BindBootstrapProjectNavigationCatalog(context.Context, identitysdk.ProjectNavigationCatalog) error {
+	return nil
+}
+
 func (probe *identityBootstrapProbe) BootstrapWorkspaceIdentity(ctx context.Context, request identitysdk.WorkspaceIdentityBootstrapRequest, transaction identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceIdentityBootstrapReceipt, error) {
 	tx, ok := transaction.Executor.(*sql.Tx)
 	if !ok {
@@ -53,6 +57,7 @@ func (probe *identityBootstrapProbe) BootstrapWorkspaceIdentity(ctx context.Cont
 		WorkspaceID: request.WorkspaceID, CompanyID: request.CompanyID, FirstStoreID: request.FirstStoreID,
 		InitialAdminUserID: request.InitialAdminUserID, InitialAdminLoginID: request.InitialAdminLoginID,
 		RoleCatalogSHA256:                    probe.rolePolicy.RoleCatalogSHA256,
+		NavigationCatalogSHA256:              probe.rolePolicy.NavigationCatalogSHA256,
 		InitialWorkspaceAdministratorRoleKey: probe.rolePolicy.InitialWorkspaceAdministratorRoleKey,
 	}
 	return probe.receipt, nil
@@ -205,6 +210,7 @@ func TestWorkspaceBootstrapReceiptBindsRoleCatalogAndAdministratorEvidence(t *te
 		CompanyID: result.CompanyID, FirstStoreID: result.FirstStoreID,
 		InitialAdminUserID: result.InitialAdminUserID, InitialAdminLoginID: "admin@example.test",
 		RoleCatalogSHA256:                    rolePolicy.RoleCatalogSHA256,
+		NavigationCatalogSHA256:              rolePolicy.NavigationCatalogSHA256,
 		InitialWorkspaceAdministratorRoleKey: rolePolicy.InitialWorkspaceAdministratorRoleKey,
 	}
 	if err := validateIdentityReceipt(result, receipt.InvocationID, rolePolicy, receipt); err != nil {
