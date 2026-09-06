@@ -81,6 +81,12 @@ type StoreOrganizationCatalogPage struct {
 
 type StoreOrganizationCatalogExecution interface {
 	ListStoreOrganizations(context.Context, StoreOrganizationCatalogRequest) (StoreOrganizationCatalogPage, error)
+}
+
+// StoreOrganizationCatalogResolutionExecution is separate from the original
+// paged catalog interface so existing list-only Runtime embeddings remain
+// source compatible.
+type StoreOrganizationCatalogResolutionExecution interface {
 	ResolveStoreOrganization(context.Context, string) (StoreOrganizationCatalogItem, error)
 }
 
@@ -93,7 +99,7 @@ func ExecuteStoreOrganizationCatalog(ctx context.Context, execution ActionExecut
 }
 
 func ExecuteStoreOrganizationCatalogResolve(ctx context.Context, execution ActionExecution, organizationID string) (StoreOrganizationCatalogItem, error) {
-	catalog, ok := execution.(StoreOrganizationCatalogExecution)
+	catalog, ok := execution.(StoreOrganizationCatalogResolutionExecution)
 	if !ok {
 		return StoreOrganizationCatalogItem{}, &BusinessError{Code: "backend.action.store_organization_catalog_unavailable", Message: "Runtime store Organization catalog is unavailable"}
 	}
