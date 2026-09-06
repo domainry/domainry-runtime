@@ -55,6 +55,7 @@ func (request StoreOrganizationProvisionRequest) Valid() bool {
 
 type StoreOrganizationProvisionResult struct {
 	Target   TargetOrganization
+	Version  int64
 	Replayed bool
 }
 

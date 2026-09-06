@@ -250,7 +250,7 @@ func (e *businessActionExecution) ProvisionStoreOrganization(ctx context.Context
 	}
 	e.setTargetOrganization(organizationID, true)
 	e.storeProvisionRequest = &request
-	e.storeProvisionResult = runtimeext.StoreOrganizationProvisionResult{Target: e.targetOrganization, Replayed: result.Replayed}
+	e.storeProvisionResult = runtimeext.StoreOrganizationProvisionResult{Target: e.targetOrganization, Version: result.Organization.Version, Replayed: result.Replayed}
 	return e.storeProvisionResult, nil
 }
 

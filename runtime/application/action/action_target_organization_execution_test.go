@@ -111,13 +111,13 @@ func TestProvisionStoreOrganizationUsesRuntimeStableIDAndFixesAllWritesToNewTarg
 		requestIdentity: identitysdk.RequestIdentity{AccessToken: "trusted-token"},
 	}
 	wantID := stableStoreOrganizationID("workspace-a", "execution-store-1")
-	delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{ID: wantID}}
+	delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{ID: wantID, Version: 7}}
 	request := runtimeext.StoreOrganizationProvisionRequest{Code: "TOKYO", Name: "Tokyo", SortOrder: 2}
 	result, err := execution.ProvisionStoreOrganization(t.Context(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Target.ID != wantID || len(delivery.requests) != 1 || delivery.requests[0].Organization.OrganizationID != wantID || delivery.requests[0].Organization.ParentOrganizationID != "company-hq" {
+	if result.Target.ID != wantID || result.Version != 7 || result.Replayed || len(delivery.requests) != 1 || delivery.requests[0].Organization.OrganizationID != wantID || delivery.requests[0].Organization.ParentOrganizationID != "company-hq" {
 		t.Fatalf("result=%#v requests=%#v", result, delivery.requests)
 	}
 	// No Runtime parent-Organization authorization was available or evaluated;
@@ -147,7 +147,7 @@ func TestProvisionStoreOrganizationUsesRuntimeStableIDAndFixesAllWritesToNewTarg
 	if _, err := execution.ApplyRecordMutation(t.Context(), runtimeext.RecordMutation{Operation: runtimeext.MutationCreate, ObjectKey: "store_profile", Fields: map[string]any{"name": "Tokyo"}}); err != nil {
 		t.Fatal(err)
 	}
-	if replayed, err := execution.ProvisionStoreOrganization(t.Context(), request); err != nil || replayed.Target.ID != wantID || len(delivery.requests) != 1 {
+	if replayed, err := execution.ProvisionStoreOrganization(t.Context(), request); err != nil || replayed.Target.ID != wantID || replayed.Version != 7 || len(delivery.requests) != 1 {
 		t.Fatalf("same-call replay=%#v requests=%d err=%v", replayed, len(delivery.requests), err)
 	}
 	changed := request
@@ -156,6 +156,20 @@ func TestProvisionStoreOrganizationUsesRuntimeStableIDAndFixesAllWritesToNewTarg
 		t.Fatalf("changed provision request error=%v", err)
 	}
 	execution.unitOfWork.rollBack(t.Context())
+
+	delivery.requests = nil
+	delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{ID: wantID, Version: 7}, Replayed: true}
+	recovered := *execution
+	recovered.unitOfWork = newActionTestUnitOfWork()
+	recovered.targetResolved = false
+	recovered.targetOrganization = runtimeext.TargetOrganization{}
+	recovered.storeProvisionRequest = nil
+	recovered.storeProvisionResult = runtimeext.StoreOrganizationProvisionResult{}
+	replayed, err := recovered.ProvisionStoreOrganization(t.Context(), request)
+	if err != nil || replayed.Target.ID != wantID || replayed.Version != 7 || !replayed.Replayed || len(delivery.requests) != 1 {
+		t.Fatalf("delivery replay=%#v requests=%d err=%v", replayed, len(delivery.requests), err)
+	}
+	recovered.unitOfWork.rollBack(t.Context())
 }
 
 func TestStoreOrganizationRenameRequiresExactGrantAndUsesFixedRecordOwner(t *testing.T) {
@@ -210,7 +224,7 @@ func TestProvisionStoreOrganizationEnforcesWorkspaceQuotaAndCompanyScope(t *test
 			delivery := &targetOrganizationDeliveryStub{page: identitysdk.StoreOrganizationPage{Items: test.items}}
 			executionID := "execution-" + strings.ReplaceAll(test.name, " ", "-")
 			wantID := stableStoreOrganizationID("workspace-a", executionID)
-			delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{ID: wantID}}
+			delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{ID: wantID, Version: 1}}
 			execution := &businessActionExecution{
 				dependencies: BusinessHandlerExecutionDependencies{
 					BindStoreOrganizationDelivery: func(context.Context) (identitysdk.StoreOrganizationDelivery, error) { return delivery, nil },

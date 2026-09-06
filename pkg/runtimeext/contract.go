@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v29"
-	ContractSHA256  = "7dc2a69d6ccc7770d1baf05b4c7280d2164883c4532846e3e2cd0249aa8863a4"
+	ContractVersion = "runtimeext-v30"
+	ContractSHA256  = "213986dd45ea7bd0e78526a8c19641f8a60fd815077444195ebcde7583e0859d"
 )
 
-const contractDefinitionV29 = `runtimeext-v29
+const contractDefinitionV30 = `runtimeext-v30
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -57,6 +57,7 @@ CrossWorkspaceDimensionWorkspace=$workspace
 AggregateOperation=count,sum,min,max,avg
 ResolveTargetOrganization(ActionExecution)(TargetOrganization,error)
 ProvisionStoreOrganization(context.Context,ActionExecution,StoreOrganizationProvisionRequest)(StoreOrganizationProvisionResult,error)
+StoreOrganizationProvisionResult=runtime_authoritative_target_id|organization_version|replayed
 RenameStoreOrganization(context.Context,ActionExecution,StoreOrganizationRenameRequest)(StoreOrganizationMutationResult,error)
 DisableStoreOrganization(context.Context,ActionExecution,StoreOrganizationDisableRequest)(StoreOrganizationMutationResult,error)
 TargetOrganizationSource=explicit,explicit_or_sole_authorized_store,record_owner,provisioned_store
@@ -103,7 +104,7 @@ func ComputedContractSHA256() string {
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV29)
+	definition.WriteString(contractDefinitionV30)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())
