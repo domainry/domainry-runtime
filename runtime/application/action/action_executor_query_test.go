@@ -82,6 +82,43 @@ func TestBusinessActionQueryPreservesTypedFilterSortAndProjection(t *testing.T) 
 	}
 }
 
+func TestBusinessActionQueryReadsCanonicalRecordCreatedEarlierInSameUnitOfWork(t *testing.T) {
+	created := recordmodel.Record{
+		ID: "employee-profile-1", OwnerOrgID: "store-north", UpdatedAt: "2026-09-07T00:00:00Z",
+		Data: map[string]any{"identity_user_id": "identity-user-1", "employment_status": "active"},
+	}
+	execution := &businessActionExecution{
+		dependencies: BusinessHandlerExecutionDependencies{GetRecord: func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
+			t.Fatal("staged create fell through to the physical repository")
+			return recordmodel.Record{}, nil
+		}},
+		invocation: actionmodel.ActionInvocation{Principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}},
+		action: definitionmodel.ActionSchema{
+			Key: "employee.create", ObjectKey: "employee_profile",
+			EffectSet: &definitionmodel.ActionEffectSet{Read: []definitionmodel.ActionObjectEffect{{ObjectKey: "employee_profile"}}},
+		},
+		unitOfWork: newActionTestUnitOfWork(),
+		mutatedRecords: map[string]recordmodel.Record{
+			"employee_profile\x00employee-profile-1": created,
+		},
+		created: []actionmodel.ActionObjectRecordRef{{ObjectKey: "employee_profile", RecordID: "employee-profile-1"}},
+	}
+
+	result, err := execution.QueryRecords(t.Context(), runtimeext.RecordQuery{
+		Operation: runtimeext.QueryGet, ObjectKey: "employee_profile", RecordID: "employee-profile-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Exists || result.Count != 1 || len(result.Records) != 1 || result.Records[0].ID != created.ID ||
+		result.Records[0].UpdatedAt != created.UpdatedAt || result.Records[0].Fields["identity_user_id"] != "identity-user-1" {
+		t.Fatalf("result=%+v", result)
+	}
+	if observed, ok := execution.observedRecords["employee_profile\x00employee-profile-1"]; !ok || observed.ID != created.ID {
+		t.Fatalf("observed=%#v", execution.observedRecords)
+	}
+}
+
 func TestBusinessActionQueryRejectsMalformedPublicAST(t *testing.T) {
 	execution := &businessActionExecution{
 		dependencies: BusinessHandlerExecutionDependencies{ListRecords: func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error) {

@@ -290,6 +290,13 @@ func (e *businessActionExecution) QueryRecords(ctx context.Context, query runtim
 	}
 	switch query.Operation {
 	case runtimeext.QueryGet:
+		// A create is only a canonical plan until the outer Action Unit of Work
+		// commits. Let the same Handler read that exact staged record without
+		// falling through to the physical repository, which cannot observe it yet.
+		if record, found := e.stagedCreatedRecord(query.ObjectKey, query.RecordID); found {
+			e.observeRecord(query.ObjectKey, record)
+			return runtimeext.RecordQueryResult{Records: []runtimeext.Record{toRuntimeextRecord(query.ObjectKey, record)}, Exists: true, Count: 1}, nil
+		}
 		if e.dependencies.GetRecord == nil {
 			return runtimeext.RecordQueryResult{}, missingExecutorPort("get_record")
 		}
@@ -360,6 +367,19 @@ func (e *businessActionExecution) QueryRecords(ctx context.Context, query runtim
 		}
 		return result, nil
 	}
+}
+
+func (e *businessActionExecution) stagedCreatedRecord(objectKey, recordID string) (recordmodel.Record, bool) {
+	if e == nil {
+		return recordmodel.Record{}, false
+	}
+	objectKey, recordID = strings.TrimSpace(objectKey), strings.TrimSpace(recordID)
+	for _, ref := range e.created {
+		if strings.TrimSpace(ref.ObjectKey) == objectKey && strings.TrimSpace(ref.RecordID) == recordID {
+			return e.mutatedRecord(objectKey, recordID)
+		}
+	}
+	return recordmodel.Record{}, false
 }
 
 func (e *businessActionExecution) authorizeStoreOrganizationRecordQuery(item runtimeext.StoreOrganizationCatalogItem) (string, error) {
