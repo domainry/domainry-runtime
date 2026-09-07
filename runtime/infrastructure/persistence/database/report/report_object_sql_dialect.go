@@ -240,6 +240,9 @@ func (e *reportObjectSQLEmitter) functionExpression(expression reportmodel.Repor
 	if expression.Name == "date_bucket" {
 		return e.dateBucket(expression)
 	}
+	if expression.Name == "contains" {
+		return e.containsExpression(expression)
+	}
 	arguments := make([]string, len(expression.Arguments))
 	for index, argument := range expression.Arguments {
 		value, err := e.expression(argument)

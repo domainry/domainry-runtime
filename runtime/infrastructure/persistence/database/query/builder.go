@@ -243,7 +243,7 @@ func recordFilterPredicate(expression recordmodel.RecordFilterExpression, depth 
 		if !ok {
 			return nil, fmt.Errorf("record filter contains requires a string value")
 		}
-		return query.LikeValueEscaped(query.Column(expression.Field), "%"+escapeLikePattern(value)+"%"), nil
+		return LiteralContainsPredicate(query.Column(expression.Field), value), nil
 	case "in", "not_in":
 		values := make([]any, 0, len(expression.Values))
 		for _, value := range expression.Values {
@@ -440,6 +440,12 @@ func splitFilterKey(key string) (string, string, bool) {
 		}
 	}
 	return key, "", false
+}
+
+// LiteralContainsPredicate gives record lists and Object SQL reports the same
+// substring semantics. Callers must validate the field against published metadata.
+func LiteralContainsPredicate(column query.Expression, value string) query.Predicate {
+	return query.LikeValueEscaped(column, "%"+escapeLikePattern(value)+"%")
 }
 
 func escapeLikePattern(value string) string {
