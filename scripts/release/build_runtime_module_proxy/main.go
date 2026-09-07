@@ -267,6 +267,14 @@ func mergeGoSum(content []byte, additions string) []byte {
 }
 
 func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDependencyModule, map[string]string, error) {
+	// Traversing requirements can visit both a direct SDK version and an older
+	// transitive version. Keep that graph in a private staging proxy; the release
+	// manifest and its proxy must publish the same selected version per module.
+	stagingProxy, err := os.MkdirTemp("", "domainry-dependency-graph-*")
+	if err != nil {
+		return nil, nil, err
+	}
+	defer os.RemoveAll(stagingProxy)
 	goMod, err := os.ReadFile(filepath.Join(repository, "go.mod"))
 	if err != nil {
 		return nil, nil, err
@@ -325,7 +333,7 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		if packageErr != nil {
 			return nil, nil, packageErr
 		}
-		identity, copyErr := copyDownloadedModule(proxy, downloaded)
+		identity, copyErr := copyDownloadedModule(stagingProxy, downloaded)
 		if copyErr != nil {
 			return nil, nil, copyErr
 		}
@@ -363,7 +371,7 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 			if err != nil {
 				return nil, nil, err
 			}
-			moduleIdentity, err := copyDownloadedModule(proxy, downloaded)
+			moduleIdentity, err := copyDownloadedModule(stagingProxy, downloaded)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -390,11 +398,49 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		}
 		versions = next
 	}
-	selected, err := finalizePublishedDependencyModules(proxy, result)
+	selected, err := finalizePublishedDependencyModules(stagingProxy, result)
 	if err != nil {
 		return nil, nil, err
 	}
+	selected, err = copySelectedDependencyModules(stagingProxy, proxy, selected)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Pin the complete selected graph in the distributed Runtime go.mod. An
+	// external consumer must resolve the same versions as the sealed manifest.
+	for _, dependency := range selected {
+		versionOverrides[dependency.Path] = dependency.Version
+	}
 	return selected, versionOverrides, nil
+}
+
+func copySelectedDependencyModules(sourceProxy, outputProxy string, selected []publishedDependencyModule) ([]publishedDependencyModule, error) {
+	result := make([]publishedDependencyModule, 0, len(selected))
+	for _, dependency := range selected {
+		if err := validatePublishedModuleTuple(sourceProxy, dependency); err != nil {
+			return nil, fmt.Errorf("validate selected dependency %s@%s: %w", dependency.Path, dependency.Version, err)
+		}
+		root, err := publishedModuleVersionRoot(sourceProxy, dependency.Path)
+		if err != nil {
+			return nil, err
+		}
+		version, err := module.EscapeVersion(dependency.Version)
+		if err != nil {
+			return nil, err
+		}
+		identity, err := copyDownloadedModule(outputProxy, downloadedModule{
+			Path: dependency.Path, Version: dependency.Version,
+			Info: filepath.Join(root, version+".info"), GoMod: filepath.Join(root, version+".mod"), Zip: filepath.Join(root, version+".zip"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		if err := validatePublishedModuleTuple(outputProxy, identity); err != nil {
+			return nil, fmt.Errorf("validate sealed dependency %s@%s: %w", identity.Path, identity.Version, err)
+		}
+		result = append(result, identity)
+	}
+	return result, nil
 }
 
 func dependencyModule(repository, path, version string) (downloadedModule, error) {

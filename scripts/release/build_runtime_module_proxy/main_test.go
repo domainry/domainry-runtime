@@ -342,10 +342,13 @@ func TestPublishedModuleTupleFailsClosedOnEachArtifactIdentity(t *testing.T) {
 	}
 }
 
-func downloadedModuleFixture(t *testing.T, path, version string) downloadedModule {
+func downloadedModuleFixture(t *testing.T, path, version string, requirements ...string) downloadedModule {
 	t.Helper()
 	source := t.TempDir()
 	goMod := []byte("module " + path + "\n\ngo 1.26.0\n")
+	if len(requirements) != 0 {
+		goMod = append(goMod, []byte("\nrequire (\n"+strings.Join(requirements, "\n")+"\n)\n")...)
+	}
 	if err := os.WriteFile(filepath.Join(source, "go.mod"), goMod, 0o644); err != nil {
 		t.Fatal(err)
 	}
