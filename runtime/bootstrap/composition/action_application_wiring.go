@@ -65,15 +65,10 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 		Catalog:          catalog,
 		SystemOperations: systemExecutor,
 		BusinessHandlers: actionapplication.NewBusinessHandlerExecutor(actionapplication.BusinessHandlerExecutionDependencies{
-			RuntimeRevision:           records.actionRuntimeRevision,
-			ProjectRevision:           records.actionProjectRevision,
-			ApplicationSchemaRevision: records.actionMetadataRevision,
-			ResolveMetadataRevision: func(ctx context.Context, _ principalmodel.Principal) (string, error) {
-				if records.applicationSchemaRepo == nil {
-					return records.actionMetadataRevision, nil
-				}
-				return records.applicationSchemaRepo.SnapshotRevision(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "resolve Action execution identity"))
-			},
+			RuntimeRevision:                   records.actionRuntimeRevision,
+			ProjectRevision:                   records.actionProjectRevision,
+			ApplicationSchemaRevision:         records.actionMetadataRevision,
+			ResolveApplicationConfiguration:   resolveActionApplicationConfiguration(records),
 			GetRecord:                         records.recordApplicationService.GetRecordForAction,
 			GetRecordForUpdate:                records.recordApplicationService.GetRecordForUpdateForAction,
 			ListRecords:                       records.recordApplicationService.ListRecordsForAction,

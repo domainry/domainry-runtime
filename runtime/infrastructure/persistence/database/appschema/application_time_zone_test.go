@@ -34,6 +34,10 @@ func TestApplicationTimeZonePersistsAndInvalidatesMetadataRevision(t *testing.T)
 		if revision == "" || revision == lastRevision {
 			t.Fatalf("time-zone-only change did not invalidate revision: %q", revision)
 		}
+		configuration, err := repository.ExecutionConfiguration(t.Context(), metadataTestInstallationScope())
+		if err != nil || configuration.SchemaRevision != revision || configuration.TimeZone != loaded.TimeZone {
+			t.Fatalf("Action configuration=%+v revision=%q error=%v", configuration, revision, err)
+		}
 		lastRevision = revision
 	}
 	manifest.TimeZone = "Not/AZone"

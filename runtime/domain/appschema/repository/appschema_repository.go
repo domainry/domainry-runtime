@@ -14,3 +14,9 @@ type ApplicationSchemaRepository interface {
 	SyncManifest(ctx context.Context, scope principalmodel.SystemScope, manifest manifestmodel.ManifestSchema) error
 	MigrationPlan(ctx context.Context, scope principalmodel.SystemScope, manifest manifestmodel.ManifestSchema) ([]appschemamodel.ApplicationSchemaMigrationStep, error)
 }
+
+// ApplicationExecutionConfigurationReader reads the immutable configuration
+// needed by an Action without loading the full metadata definition catalog.
+type ApplicationExecutionConfigurationReader interface {
+	ExecutionConfiguration(context.Context, principalmodel.SystemScope) (appschemamodel.ApplicationExecutionConfiguration, error)
+}

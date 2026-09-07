@@ -22,7 +22,7 @@ func (e *BusinessHandlerExecutor) ValidationErrors() []error {
 	if e.dependencies.ProjectRevision == "" {
 		errors = append(errors, fmt.Errorf("business handler Project revision is required"))
 	}
-	if e.dependencies.ApplicationSchemaRevision == "" && e.dependencies.ResolveMetadataRevision == nil {
+	if e.dependencies.ApplicationSchemaRevision == "" && e.dependencies.ResolveMetadataRevision == nil && e.dependencies.ResolveApplicationConfiguration == nil {
 		errors = append(errors, fmt.Errorf("business handler Metadata revision resolver is required"))
 	}
 	return errors
@@ -37,6 +37,11 @@ func (e *BusinessHandlerExecutor) executionIdentity(ctx context.Context, invocat
 		}
 		metadataRevision = strings.TrimSpace(resolved)
 	}
+	return e.executionIdentityWithRevision(invocation, action, descriptor, executionID, metadataRevision)
+}
+
+func (e *BusinessHandlerExecutor) executionIdentityWithRevision(invocation actionmodel.ActionInvocation, action definitionmodel.ActionSchema, descriptor runtimeext.HandlerDescriptor, executionID, metadataRevision string) (runtimeext.ExecutionIdentity, error) {
+	metadataRevision = strings.TrimSpace(metadataRevision)
 	if e.dependencies.RuntimeRevision == "" || e.dependencies.ProjectRevision == "" || metadataRevision == "" {
 		return runtimeext.ExecutionIdentity{}, apperror.New(apperror.KindInternal, "backend.action.execution_identity_incomplete", nil, map[string]string{"action": action.Key})
 	}

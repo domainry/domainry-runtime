@@ -325,11 +325,16 @@ type actionWiringAssuranceStore struct {
 type actionWiringMetadataRepository struct {
 	appschemarepository.ApplicationSchemaRepository
 	revision string
+	timeZone string
 	err      error
 }
 
 func (r actionWiringMetadataRepository) SnapshotRevision(context.Context, principalmodel.SystemScope) (string, error) {
 	return r.revision, r.err
+}
+
+func (r actionWiringMetadataRepository) ExecutionConfiguration(context.Context, principalmodel.SystemScope) (connectormodel.ApplicationExecutionConfiguration, error) {
+	return connectormodel.ApplicationExecutionConfiguration{SchemaRevision: r.revision, TimeZone: r.timeZone}, r.err
 }
 
 type actionWiringBusinessHandler struct {
@@ -351,7 +356,11 @@ func (h actionWiringBusinessHandler) Invoke(ctx context.Context, execution runti
 			return nil, err
 		}
 	}
-	return json.RawMessage(`{}`), nil
+	zone, err := runtimeext.ResolveApplicationTimeZone(execution)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]string{"revision": execution.Identity().ApplicationSchemaRevision, "time_zone": zone})
 }
 
 func (s *actionWiringAssuranceStore) SaveActionAssuranceGrant(_ context.Context, grant actionmodel.ActionAssuranceGrant) error {
@@ -584,11 +593,11 @@ func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *test
 	}
 
 	withoutMetadata := newService(t, nil, false)
-	if result, err := invoke(withoutMetadata); err != nil || result.Object == nil {
+	if result, err := invoke(withoutMetadata); err != nil || result.Object == nil || result.Object.Output["revision"] != "metadata-fallback" || result.Object.Output["time_zone"] != "UTC" {
 		t.Fatalf("fallback metadata revision result=%#v err=%v", result, err)
 	}
-	withMetadata := newService(t, actionWiringMetadataRepository{revision: "metadata-live"}, false)
-	if result, err := invoke(withMetadata); err != nil || result.Object == nil {
+	withMetadata := newService(t, actionWiringMetadataRepository{revision: "metadata-live", timeZone: "Asia/Tokyo"}, false)
+	if result, err := invoke(withMetadata); err != nil || result.Object == nil || result.Object.Output["revision"] != "metadata-live" || result.Object.Output["time_zone"] != "Asia/Tokyo" {
 		t.Fatalf("live metadata revision result=%#v err=%v", result, err)
 	}
 	metadataFailure := errors.New("metadata snapshot failed")

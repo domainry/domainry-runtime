@@ -9,7 +9,9 @@ chmod 0755 "$probe_dir"
 cd "$project_root"
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c \
   -o "$probe_dir/runtimehost.test" ./pkg/runtimehost
-chmod 0555 "$probe_dir/runtimehost.test"
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c \
+  -o "$probe_dir/runtimeext.test" ./pkg/runtimeext
+chmod 0555 "$probe_dir/runtimehost.test" "$probe_dir/runtimeext.test"
 
 docker run --rm --platform linux/amd64 --network none --read-only \
   --cap-drop ALL --security-opt no-new-privileges --user 65534:65534 \
@@ -17,5 +19,6 @@ docker run --rm --platform linux/amd64 --network none --read-only \
   alpine:latest sh -ec '
     test ! -e /usr/share/zoneinfo/Asia/Tokyo
     test ! -d /usr/local/go
-    exec /probe/runtimehost.test -test.run "^TestRuntimeHostApplicationTimeZones$" -test.v
+    /probe/runtimehost.test -test.run "^TestRuntimeHostApplicationTimeZones$" -test.v
+    exec /probe/runtimeext.test -test.run "^TestApplicationTimeZoneDoesNotUseHostDefaults$" -test.v
   '

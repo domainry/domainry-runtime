@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v31"
-	ContractSHA256  = "3e509688262502b1f7601deb94c144580bda517925428170dda4c47e72cecd8f"
+	ContractVersion = "runtimeext-v32"
+	ContractSHA256  = "424150dce26d6d3496bc08c7ffe963633372037eca4d006e829574fea9f18069"
 )
 
-const contractDefinitionV31 = `runtimeext-v31
+const contractDefinitionV32 = `runtimeext-v32
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -21,6 +21,8 @@ ActionExecution.Identity()ExecutionIdentity
 ActionExecution.Principal()Principal
 ActionExecution.Workspace()Workspace
 ActionExecution.Phase()ExecutionPhase
+ApplicationTimeZoneExecution.ApplicationTimeZone()(string,error)
+ResolveApplicationTimeZone(ActionExecution)(string,error){Source:InvocationApplicationSchemaRevision,Empty:Unavailable,Invalid:Rejected,ServerOrBrowserFallback:Forbidden}
 ActionExecution.QueryRecords(context.Context,RecordQuery)(RecordQueryResult,error)
 ActionExecution.ApplyRecordMutation(context.Context,RecordMutation)(RecordMutationResult,error)
 ActionExecution.StageDurableIntent(context.Context,DurableIntent)(DurableIntentReceipt,error)
@@ -114,7 +116,7 @@ func ComputedContractSHA256() string {
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV31)
+	definition.WriteString(contractDefinitionV32)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

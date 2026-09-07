@@ -42,6 +42,8 @@ type BusinessHandlerExecutionDependencies struct {
 	RuntimeRevision                   string
 	ProjectRevision                   string
 	ApplicationSchemaRevision         string
+	ApplicationTimeZone               string
+	ResolveApplicationConfiguration   func(context.Context, principalmodel.Principal) (ApplicationExecutionConfiguration, error)
 	ResolveMetadataRevision           func(context.Context, principalmodel.Principal) (string, error)
 	GetRecord                         func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)
 	GetRecordForUpdate                func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)
@@ -102,13 +104,14 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 	if governed.unitOfWork == nil {
 		return ActionExecutionResult{}, apperror.New(apperror.KindInternal, "backend.action.execution_phase_required", nil, map[string]string{"action": action.Key})
 	}
-	identity, err := e.executionIdentity(ctx, invocation, action, descriptor, executionID)
+	identity, timeZone, err := e.executionConfiguration(governed.unitOfWork.executionContext(ctx), invocation, action, descriptor, executionID)
 	if err != nil {
 		return ActionExecutionResult{}, err
 	}
 	session := &businessActionExecution{
 		dependencies:          e.dependencies,
 		identity:              identity,
+		applicationTimeZone:   timeZone,
 		principal:             toRuntimeextPrincipal(invocation.Principal),
 		workspace:             runtimeext.Workspace{ID: invocation.Principal.WorkspaceID},
 		invocation:            invocation,
@@ -187,6 +190,7 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 type businessActionExecution struct {
 	dependencies             BusinessHandlerExecutionDependencies
 	identity                 runtimeext.ExecutionIdentity
+	applicationTimeZone      string
 	principal                runtimeext.Principal
 	workspace                runtimeext.Workspace
 	invocation               actionmodel.ActionInvocation
