@@ -64,6 +64,26 @@ func normalizeRecordFilterNode(expression recordmodel.RecordFilterExpression, fi
 		if err != nil {
 			return recordmodel.RecordFilterExpression{}, fmt.Errorf("record filter %s value: %w", path, err)
 		}
+	case "contains":
+		field, err := recordFilterField(fields, expression.Field, path)
+		if err != nil {
+			return recordmodel.RecordFilterExpression{}, err
+		}
+		value, ok := expression.Value.(string)
+		if !ok || len(expression.Children) != 0 || len(expression.Values) != 0 {
+			return recordmodel.RecordFilterExpression{}, fmt.Errorf("record filter %s contains requires one string value", path)
+		}
+		switch field.Type {
+		case "text", "long_text", "email", "phone", "url":
+		default:
+			return recordmodel.RecordFilterExpression{}, fmt.Errorf("record filter %s contains requires a text field", path)
+		}
+		if field.Key == "created_at" || field.Key == "updated_at" {
+			return recordmodel.RecordFilterExpression{}, fmt.Errorf("record filter %s contains does not accept timestamp metadata", path)
+		}
+		// Substrings are literals, not complete field values: preserve spaces,
+		// wildcard characters and partial email/URL values without normalization.
+		expression.Field, expression.Value = field.Key, value
 	case "in", "not_in":
 		field, err := recordFilterField(fields, expression.Field, path)
 		if err != nil {

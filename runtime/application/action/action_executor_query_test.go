@@ -44,6 +44,7 @@ func TestBusinessActionQueryPreservesTypedFilterSortAndProjection(t *testing.T) 
 		Operation: runtimeext.QueryList, ObjectKey: "class_booking",
 		Filters: []runtimeext.Filter{
 			{Field: "status", Operator: "eq", Value: "booked"},
+			{Field: "name", Operator: "contains", Value: " 50%_off~猫 "},
 			{Operator: "or", Children: []runtimeext.Filter{
 				{Field: "member_id", Operator: "eq", Value: "member-1"},
 				{Operator: "not", Children: []runtimeext.Filter{{Field: "member_id", Operator: "eq", Value: "member-2"}}},
@@ -57,6 +58,7 @@ func TestBusinessActionQueryPreservesTypedFilterSortAndProjection(t *testing.T) 
 	}
 	wantFilter := &recordmodel.RecordFilterExpression{Operator: "and", Children: []recordmodel.RecordFilterExpression{
 		{Operator: "eq", Field: "status", Value: "booked"},
+		{Operator: "contains", Field: "name", Value: " 50%_off~猫 "},
 		{Operator: "or", Children: []recordmodel.RecordFilterExpression{
 			{Operator: "eq", Field: "member_id", Value: "member-1"},
 			{Operator: "not", Children: []recordmodel.RecordFilterExpression{{Operator: "eq", Field: "member_id", Value: "member-2"}}},
@@ -132,7 +134,11 @@ func TestBusinessActionQueryRejectsMalformedPublicAST(t *testing.T) {
 		query runtimeext.RecordQuery
 		code  string
 	}{
-		{name: "operator", query: runtimeext.RecordQuery{Operation: runtimeext.QueryList, ObjectKey: "member", Filters: []runtimeext.Filter{{Field: "name", Operator: "contains", Value: "x"}}}, code: "backend.action.query_operator_unsupported"},
+		{name: "operator", query: runtimeext.RecordQuery{Operation: runtimeext.QueryList, ObjectKey: "member", Filters: []runtimeext.Filter{{Field: "name", Operator: "regex", Value: "x"}}}, code: "backend.action.query_operator_unsupported"},
+		{name: "contains numeric", query: runtimeext.RecordQuery{Operation: runtimeext.QueryList, ObjectKey: "member", Filters: []runtimeext.Filter{{Field: "name", Operator: "contains", Value: 1}}}, code: "backend.action.query_filter_invalid"},
+		{name: "contains missing field", query: runtimeext.RecordQuery{Operation: runtimeext.QueryList, ObjectKey: "member", Filters: []runtimeext.Filter{{Operator: "contains", Value: "x"}}}, code: "backend.action.query_filter_invalid"},
+		{name: "contains extra values", query: runtimeext.RecordQuery{Operation: runtimeext.QueryList, ObjectKey: "member", Filters: []runtimeext.Filter{{Field: "name", Operator: "contains", Value: "x", Values: []any{"y"}}}}, code: "backend.action.query_filter_invalid"},
+		{name: "contains children", query: runtimeext.RecordQuery{Operation: runtimeext.QueryList, ObjectKey: "member", Filters: []runtimeext.Filter{{Field: "name", Operator: "contains", Value: "x", Children: []runtimeext.Filter{{Field: "name", Value: "y"}}}}}, code: "backend.action.query_filter_invalid"},
 		{name: "in without values", query: runtimeext.RecordQuery{Operation: runtimeext.QueryList, ObjectKey: "member", Filters: []runtimeext.Filter{{Field: "id", Operator: "in"}}}, code: "backend.action.query_filter_invalid"},
 		{name: "or without children", query: runtimeext.RecordQuery{Operation: runtimeext.QueryList, ObjectKey: "member", Filters: []runtimeext.Filter{{Operator: "or"}}}, code: "backend.action.query_filter_invalid"},
 		{name: "sort direction", query: runtimeext.RecordQuery{Operation: runtimeext.QueryList, ObjectKey: "member", Sorts: []runtimeext.Sort{{Field: "name", Direction: "sideways"}}}, code: "backend.action.query_sort_invalid"},

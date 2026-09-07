@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v32"
-	ContractSHA256  = "424150dce26d6d3496bc08c7ffe963633372037eca4d006e829574fea9f18069"
+	ContractVersion = "runtimeext-v33"
+	ContractSHA256  = "3f2dc220b6a6a6a2434367b4792e65dc2c741219575267138c531aad3b955fb4"
 )
 
-const contractDefinitionV32 = `runtimeext-v32
+const contractDefinitionV33 = `runtimeext-v33
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -53,6 +53,7 @@ BusinessHandlerRegistry.Binding(string)(BusinessHandlerBinding,bool)
 BusinessHandlerRegistry.Descriptors()[]HandlerDescriptor
 QueryOperation=get,get_for_update,list,exists,count
 RecordQueryPagination=after_id
+RecordQueryFilterContains=literal_substring|text_long_text_email_phone_url_and_record_id|string_value|preserve_spaces|escape_percent_underscore_tilde|database_collation|null_does_not_match
 RecordQuery.StoreOrganization=execution_scoped_catalog_reference|list_only
 ExecuteCrossWorkspaceAggregate(context.Context,ActionExecution,CrossWorkspaceAggregateRequest)(CrossWorkspaceAggregateResult,error)
 CrossWorkspaceDimensionWorkspace=$workspace
@@ -116,7 +117,7 @@ func ComputedContractSHA256() string {
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV32)
+	definition.WriteString(contractDefinitionV33)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

@@ -436,6 +436,12 @@ func actionRecordFilterNode(filter runtimeext.Filter) (recordmodel.RecordFilterE
 			return recordmodel.RecordFilterExpression{}, actionQueryFilterInvalid(field, operator)
 		}
 		expression.Field, expression.Value = field, filter.Value
+	case "contains":
+		value, ok := filter.Value.(string)
+		if !ok || field == "" || len(filter.Values) != 0 || len(filter.Children) != 0 {
+			return recordmodel.RecordFilterExpression{}, actionQueryFilterInvalid(field, operator)
+		}
+		expression.Field, expression.Value = field, value
 	case "in", "not_in":
 		if field == "" || filter.Value != nil || len(filter.Values) == 0 || len(filter.Children) != 0 {
 			return recordmodel.RecordFilterExpression{}, actionQueryFilterInvalid(field, operator)

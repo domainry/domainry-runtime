@@ -238,6 +238,12 @@ func recordFilterPredicate(expression recordmodel.RecordFilterExpression, depth 
 		default:
 			return query.LessThanOrEqual(expression.Field, value), nil
 		}
+	case "contains":
+		value, ok := expression.Value.(string)
+		if !ok {
+			return nil, fmt.Errorf("record filter contains requires a string value")
+		}
+		return query.LikeValueEscaped(query.Column(expression.Field), "%"+escapeLikePattern(value)+"%"), nil
 	case "in", "not_in":
 		values := make([]any, 0, len(expression.Values))
 		for _, value := range expression.Values {

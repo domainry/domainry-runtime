@@ -23,6 +23,10 @@ const (
 	QueryCount        QueryOperation = "count"
 )
 
+// Filter is a typed-query transport node. The contains operator takes one string
+// literal on a text-like field or record ID. Spaces and wildcard characters are
+// preserved; Runtime escapes the SQL pattern. Case comparison follows database
+// collation and NULL does not match. Use a not node to negate a filter.
 type Filter struct {
 	Field    string
 	Operator string
