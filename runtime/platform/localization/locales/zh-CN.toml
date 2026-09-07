@@ -275,6 +275,8 @@
 "backend.scheduler.timeout_invalid" = "定时任务超时时间超出允许范围。"
 "backend.workflow.approval_resolver_invalid" = "工作流审批人解析规则无效。"
 "backend.workflow.graph_approval_mode_invalid" = "工作流审批模式不受支持。"
+"backend.workflow.approval_required_approvals_invalid" = "指定通过人数必须是正整数，不能超过实际审批人数，且只能用于人数阈值审批模式。"
+"backend.workflow.task_decision_conflict" = "审批状态已被其他操作更新，请重试。"
 "backend.workflow.graph_node_invalid" = "工作流节点定义无效。"
 "identity.data_scope_invalid" = "角色数据范围不受支持。"
 

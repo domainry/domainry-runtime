@@ -38,7 +38,9 @@ func NewInitialWorkspaceCredentialFileDelivery(path string) (InitialWorkspaceCre
 }
 
 func (delivery *initialWorkspaceCredentialFileDelivery) DeliverInitialWorkspaceCredential(ctx context.Context, credential InitialWorkspaceCredential) (InitialWorkspaceCredentialDeliveryAcknowledgment, error) {
-	if delivery == nil || strings.TrimSpace(delivery.path) == "" || ctx == nil || strings.TrimSpace(credential.InitialPassword) == "" {
+	workspaceID := strings.TrimSpace(credential.WorkspaceID)
+	if delivery == nil || strings.TrimSpace(delivery.path) == "" || ctx == nil || workspaceID == "" || strings.EqualFold(workspaceID, "default") ||
+		strings.TrimSpace(credential.CanonicalCode) == "" || strings.TrimSpace(credential.LoginID) == "" || strings.TrimSpace(credential.InitialPassword) == "" || !credential.MustChangePassword {
 		return InitialWorkspaceCredentialDeliveryAcknowledgment{}, fmt.Errorf("initial Workspace credential delivery is invalid")
 	}
 	select {
@@ -47,7 +49,7 @@ func (delivery *initialWorkspaceCredentialFileDelivery) DeliverInitialWorkspaceC
 	default:
 	}
 	payload, err := json.Marshal(map[string]any{
-		"workspace_code": credential.CanonicalCode, "login_id": credential.LoginID,
+		"workspace_id": workspaceID, "workspace_code": credential.CanonicalCode, "login_id": credential.LoginID,
 		"initial_password": credential.InitialPassword, "must_change_password": credential.MustChangePassword,
 	})
 	if err != nil {

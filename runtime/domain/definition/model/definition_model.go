@@ -394,6 +394,7 @@ type WorkflowTimerNodeContract struct {
 
 type WorkflowApprovalNodeContract struct {
 	Mode                string                     `json:"mode"`
+	RequiredApprovals   int                        `json:"required_approvals,omitempty"`
 	Title               string                     `json:"title,omitempty"`
 	Resolvers           []WorkflowAssigneeResolver `json:"resolvers"`
 	ResolverMode        string                     `json:"resolver_mode,omitempty"`

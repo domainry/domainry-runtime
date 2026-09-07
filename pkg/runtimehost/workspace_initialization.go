@@ -143,7 +143,7 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, manifest m
 		deliveryErr = &InitialWorkspaceCredentialDeliveryError{CanonicalCode: result.CanonicalCode}
 	} else {
 		acknowledgment, credentialErr := manager.credentialDelivery.DeliverInitialWorkspaceCredential(context.WithoutCancel(ctx), InitialWorkspaceCredential{
-			CanonicalCode: result.CanonicalCode, LoginID: result.AdminLoginID,
+			WorkspaceID: result.WorkspaceID, CanonicalCode: result.CanonicalCode, LoginID: result.AdminLoginID,
 			InitialPassword: result.InitialPassword, MustChangePassword: result.MustChangePassword,
 		})
 		if credentialErr != nil || !acknowledgment.Accepted {

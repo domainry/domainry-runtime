@@ -275,6 +275,8 @@
 "backend.scheduler.timeout_invalid" = "Das Scheduler-Zeitlimit liegt außerhalb des zulässigen Bereichs."
 "backend.workflow.approval_resolver_invalid" = "Die Genehmigungsauflösung des Workflows ist ungültig."
 "backend.workflow.graph_approval_mode_invalid" = "Der Genehmigungsmodus des Workflows wird nicht unterstützt."
+"backend.workflow.approval_required_approvals_invalid" = "Die erforderliche Anzahl an Genehmigungen muss eine positive ganze Zahl sein, darf die Anzahl der ermittelten Genehmiger nicht überschreiten und ist nur im Quorummodus zulässig."
+"backend.workflow.task_decision_conflict" = "Die Genehmigung wurde gleichzeitig geändert. Bitte erneut versuchen."
 "backend.workflow.graph_node_invalid" = "Die Definition des Workflow-Knotens ist ungültig."
 "identity.data_scope_invalid" = "Der Datenbereich der Rolle wird nicht unterstützt."
 

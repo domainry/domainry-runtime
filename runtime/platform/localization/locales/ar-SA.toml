@@ -275,6 +275,8 @@
 "backend.scheduler.timeout_invalid" = "مهلة المجدول خارج النطاق المسموح."
 "backend.workflow.approval_resolver_invalid" = "محدد جهة الموافقة في سير العمل غير صالح."
 "backend.workflow.graph_approval_mode_invalid" = "وضع الموافقة في سير العمل غير مدعوم."
+"backend.workflow.approval_required_approvals_invalid" = "يجب أن يكون عدد الموافقات المطلوبة عدداً صحيحاً موجباً لا يتجاوز عدد المعتمدين المحددين، ولا يمكن تعيينه إلا في وضع النصاب."
+"backend.workflow.task_decision_conflict" = "تم تغيير حالة الموافقة بالتزامن. يرجى إعادة المحاولة."
 "backend.workflow.graph_node_invalid" = "تعريف عقدة سير العمل غير صالح."
 "identity.data_scope_invalid" = "نطاق بيانات الدور غير مدعوم."
 

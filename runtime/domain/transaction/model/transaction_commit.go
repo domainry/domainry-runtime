@@ -81,20 +81,21 @@ func (c RecordMutationCommit) OptimisticUpdatedAt() string {
 // decision. Service code describes the final durable state; storage owns the
 // transaction and never exposes database/sql types above the repository layer.
 type WorkflowDecisionCommit struct {
-	WorkspaceID        string                                 `json:"workspace_id"`
-	DecidedTask        workflowmodel.WorkflowTask             `json:"decided_task"`
-	ExpectedTaskStatus string                                 `json:"expected_task_status"`
-	ExpectedAssigneeID string                                 `json:"expected_assignee_id"`
-	Process            *workflowmodel.WorkflowProcessInstance `json:"process,omitempty"`
-	InsertNodes        []workflowmodel.WorkflowNodeInstance   `json:"insert_nodes,omitempty"`
-	UpdateNodes        []workflowmodel.WorkflowNodeInstance   `json:"update_nodes,omitempty"`
-	InsertTasks        []workflowmodel.WorkflowTask           `json:"insert_tasks,omitempty"`
-	UpdateTasks        []workflowmodel.WorkflowTask           `json:"update_tasks,omitempty"`
-	Events             []workflowmodel.WorkflowProcessEvent   `json:"events,omitempty"`
-	RecordMutations    []RecordMutationCommit                 `json:"record_mutations,omitempty"`
-	WorkflowExecution  *workflowmodel.WorkflowExecution       `json:"workflow_execution,omitempty"`
-	InsertExecutions   []workflowmodel.WorkflowExecution      `json:"insert_executions,omitempty"`
-	NotificationEvents []notificationmodel.NotificationEvent  `json:"notification_events,omitempty"`
+	WorkspaceID              string                                 `json:"workspace_id"`
+	DecidedTask              workflowmodel.WorkflowTask             `json:"decided_task"`
+	ExpectedTaskStatus       string                                 `json:"expected_task_status"`
+	ExpectedAssigneeID       string                                 `json:"expected_assignee_id"`
+	ExpectedProcessUpdatedAt string                                 `json:"expected_process_updated_at,omitempty"`
+	Process                  *workflowmodel.WorkflowProcessInstance `json:"process,omitempty"`
+	InsertNodes              []workflowmodel.WorkflowNodeInstance   `json:"insert_nodes,omitempty"`
+	UpdateNodes              []workflowmodel.WorkflowNodeInstance   `json:"update_nodes,omitempty"`
+	InsertTasks              []workflowmodel.WorkflowTask           `json:"insert_tasks,omitempty"`
+	UpdateTasks              []workflowmodel.WorkflowTask           `json:"update_tasks,omitempty"`
+	Events                   []workflowmodel.WorkflowProcessEvent   `json:"events,omitempty"`
+	RecordMutations          []RecordMutationCommit                 `json:"record_mutations,omitempty"`
+	WorkflowExecution        *workflowmodel.WorkflowExecution       `json:"workflow_execution,omitempty"`
+	InsertExecutions         []workflowmodel.WorkflowExecution      `json:"insert_executions,omitempty"`
+	NotificationEvents       []notificationmodel.NotificationEvent  `json:"notification_events,omitempty"`
 }
 
 // WorkflowStateCommit atomically persists a process state transition that is

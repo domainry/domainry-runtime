@@ -275,6 +275,8 @@
 "backend.scheduler.timeout_invalid" = "排程任務逾時時間超出允許範圍。"
 "backend.workflow.approval_resolver_invalid" = "工作流程核准者解析規則無效。"
 "backend.workflow.graph_approval_mode_invalid" = "不支援此工作流程核准模式。"
+"backend.workflow.approval_required_approvals_invalid" = "指定通過人數必須是正整數，不能超過實際核准人數，且只能用於人數門檻核准模式。"
+"backend.workflow.task_decision_conflict" = "核准狀態已被其他操作更新，請重試。"
 "backend.workflow.graph_node_invalid" = "工作流程節點定義無效。"
 "identity.data_scope_invalid" = "不支援此角色資料範圍。"
 

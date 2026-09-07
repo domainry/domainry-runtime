@@ -35,7 +35,7 @@ func TestInitialWorkspaceCredentialFileDeliveryIsPrivateCreateOnlyAndNeverOverwr
 	if err != nil {
 		t.Fatal(err)
 	}
-	credential := InitialWorkspaceCredential{CanonicalCode: "primary", LoginID: "owner@example.test", InitialPassword: "OneTimeSecret!", MustChangePassword: true}
+	credential := InitialWorkspaceCredential{WorkspaceID: "workspace-primary", CanonicalCode: "primary", LoginID: "owner@example.test", InitialPassword: "OneTimeSecret!", MustChangePassword: true}
 	acknowledgment, err := delivery.DeliverInitialWorkspaceCredential(t.Context(), credential)
 	if err != nil || !acknowledgment.Accepted {
 		t.Fatalf("ack=%+v error=%v", acknowledgment, err)
@@ -49,7 +49,7 @@ func TestInitialWorkspaceCredentialFileDeliveryIsPrivateCreateOnlyAndNeverOverwr
 		t.Fatal(err)
 	}
 	var payload map[string]any
-	if err := json.Unmarshal(raw, &payload); err != nil || payload["initial_password"] != credential.InitialPassword || payload["workspace_code"] != "primary" {
+	if err := json.Unmarshal(raw, &payload); err != nil || payload["workspace_id"] != credential.WorkspaceID || payload["initial_password"] != credential.InitialPassword || payload["workspace_code"] != "primary" {
 		t.Fatalf("payload=%#v error=%v", payload, err)
 	}
 	if _, err := delivery.DeliverInitialWorkspaceCredential(t.Context(), InitialWorkspaceCredential{InitialPassword: "ReplacementSecret!"}); err == nil || strings.Contains(err.Error(), "ReplacementSecret") {
@@ -94,7 +94,7 @@ func TestWorkspaceManagerDeliversCredentialOnceAndDeliveryFailureKeepsCommittedW
 			if test.wantErr != errors.As(activateErr, &deliveryErr) {
 				t.Fatalf("activate error=%v", activateErr)
 			}
-			if probe.calls != 1 || strings.TrimSpace(probe.credential.InitialPassword) == "" || manager.Binding() == nil {
+			if probe.calls != 1 || strings.TrimSpace(probe.credential.WorkspaceID) == "" || strings.TrimSpace(probe.credential.InitialPassword) == "" || manager.Binding() == nil {
 				t.Fatalf("delivery calls=%d credential=%+v binding=%v", probe.calls, probe.credential, manager.Binding())
 			}
 			if err := manager.Activate(t.Context(), manifest, nil); err != nil || probe.calls != 1 {
@@ -103,6 +103,9 @@ func TestWorkspaceManagerDeliversCredentialOnceAndDeliveryFailureKeepsCommittedW
 			installation, found, err := workspaceprovision.LoadInstallation(t.Context(), database)
 			if err != nil || !found || installation.WorkspaceID == "" {
 				t.Fatalf("committed installation=%+v found=%t error=%v", installation, found, err)
+			}
+			if probe.credential.WorkspaceID != installation.WorkspaceID {
+				t.Fatalf("delivered Workspace ID=%q committed=%q", probe.credential.WorkspaceID, installation.WorkspaceID)
 			}
 			if err := manager.Close(t.Context()); err != nil {
 				t.Fatal(err)

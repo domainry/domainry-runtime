@@ -34,7 +34,14 @@ func TestWorkflowActionContinuePolicyRecordsFailureAndContinues(t *testing.T) {
 		t.Fatalf("expected continue policy to finish process, process=%#v err=%v", process, err)
 	}
 	nodes, _ := workflowProcessStore(store).ListNodes(t.Context(), "workspace-primary", process.ID)
-	if len(nodes) != 2 || nodes[1].Status != "failed" || nodes[1].ErrorCode != "backend.action.not_found" {
+	failedActionIndex := -1
+	for index := range nodes {
+		if nodes[index].NodeID == "notify" {
+			failedActionIndex = index
+			break
+		}
+	}
+	if len(nodes) != 2 || failedActionIndex < 0 || nodes[failedActionIndex].Status != "failed" || nodes[failedActionIndex].ErrorCode != "backend.action.not_found" {
 		t.Fatalf("expected failed action evidence, got %#v", nodes)
 	}
 }

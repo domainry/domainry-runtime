@@ -63,12 +63,23 @@ func workflowGraphSchemaDefinitions(nodeTypes []string) map[string]capabilitycon
 func workflowGraphApprovalSchema() capabilitycontract.CapabilityAuthoringSchema {
 	closed := false
 	resolver := capabilitycontract.CapabilityAuthoringSchema{Ref: "#/$defs/workflow_assignee_resolver"}
-	return capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"mode", "resolvers"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-		"mode": {Type: "string", Enum: []any{"all", "any", "sequential"}}, "title": {Type: "string"}, "resolvers": {Type: "array", Items: &resolver, MinItems: workflowAuthoringIntPointer(1)},
-		"resolver_mode": {Type: "string", Enum: []any{"first_match", "union"}}, "empty_assignee_policy": {Type: "string", Enum: []any{"admin", "fail", "skip"}},
+	schema := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"mode", "resolvers"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+		"mode": {Type: "string", Enum: []any{"all", "any", "sequential", "quorum"}}, "title": {Type: "string"}, "resolvers": {Type: "array", Items: &resolver, MinItems: workflowAuthoringIntPointer(1)},
+		"required_approvals": {Type: "integer", Minimum: workflowAuthoringFloatPointer(1)},
+		"resolver_mode":      {Type: "string", Enum: []any{"first_match", "union"}}, "empty_assignee_policy": {Type: "string", Enum: []any{"admin", "fail", "skip"}},
 		"due_seconds": {Type: "integer", Minimum: workflowAuthoringFloatPointer(0)}, "reminder_action_key": {Type: "string"}, "reminder_input": workflowGraphOpenObjectSchema(),
 		"escalation_seconds": {Type: "integer", Minimum: workflowAuthoringFloatPointer(0)}, "escalation_resolvers": {Type: "array", Items: &resolver},
 	}}
+	workflowApprovalQuorumSchemaCondition(&schema)
+	return schema
+}
+
+func workflowApprovalQuorumSchemaCondition(schema *capabilitycontract.CapabilityAuthoringSchema) {
+	schema.If = &capabilitycontract.CapabilityAuthoringSchema{Required: []string{"mode"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{"mode": {Const: "quorum"}}}
+	schema.Then = &capabilitycontract.CapabilityAuthoringSchema{Required: []string{"required_approvals"}}
+	// Other modes have no quorum setting. Combined with the positive property
+	// minimum this rejects a supplied threshold outside quorum mode.
+	schema.Else = &capabilitycontract.CapabilityAuthoringSchema{Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{"required_approvals": {Maximum: workflowAuthoringFloatPointer(0)}}}
 }
 
 func workflowGraphActionSchema() capabilitycontract.CapabilityAuthoringSchema {

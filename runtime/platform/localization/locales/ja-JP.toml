@@ -275,6 +275,8 @@
 "backend.scheduler.timeout_invalid" = "スケジューラのタイムアウトが許可範囲外です。"
 "backend.workflow.approval_resolver_invalid" = "ワークフローの承認担当者リゾルバーが無効です。"
 "backend.workflow.graph_approval_mode_invalid" = "ワークフローの承認モードはサポートされていません。"
+"backend.workflow.approval_required_approvals_invalid" = "必要承認数は実際の承認者数以下の正の整数で、定足数モードでのみ指定できます。"
+"backend.workflow.task_decision_conflict" = "承認状態が同時に更新されました。再試行してください。"
 "backend.workflow.graph_node_invalid" = "ワークフローノードの定義が無効です。"
 "identity.data_scope_invalid" = "このロールのデータ範囲はサポートされていません。"
 

@@ -275,6 +275,8 @@
 "backend.scheduler.timeout_invalid" = "Le délai d’expiration du planificateur est hors de la plage autorisée."
 "backend.workflow.approval_resolver_invalid" = "Le résolveur d’approbation du workflow est invalide."
 "backend.workflow.graph_approval_mode_invalid" = "Le mode d’approbation du workflow n’est pas pris en charge."
+"backend.workflow.approval_required_approvals_invalid" = "Le nombre requis doit être un entier positif ne dépassant pas le nombre d’approbateurs déterminés, uniquement en mode quorum."
+"backend.workflow.task_decision_conflict" = "L’approbation a été modifiée simultanément. Veuillez réessayer."
 "backend.workflow.graph_node_invalid" = "La définition du nœud de workflow est invalide."
 "identity.data_scope_invalid" = "La portée des données du rôle n’est pas prise en charge."
 

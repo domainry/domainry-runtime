@@ -73,7 +73,7 @@ func WorkflowTerminalApprovalOutcome(process workflowmodel.WorkflowProcessInstan
 	}
 	nodeTasks := []workflowmodel.WorkflowTask{}
 	for _, task := range tasks {
-		if task.NodeID != decided.NodeID {
+		if task.NodeID != decided.NodeID || task.NodeInstanceID != decided.NodeInstanceID {
 			continue
 		}
 		if task.ID == decided.ID {
@@ -91,12 +91,26 @@ func WorkflowTerminalApprovalOutcome(process workflowmodel.WorkflowProcessInstan
 		}
 	}
 	node, _ := WorkflowGraphNode(process.DefinitionSnapshot.Graph, decided.NodeID)
-	mode := strings.TrimSpace(WorkflowApprovalNodeContract(node).Mode)
+	contract := WorkflowApprovalNodeContract(node)
+	mode := strings.TrimSpace(contract.Mode)
 	if mode == "" {
 		mode = "any"
 	}
 	if mode == "any" {
 		return "approved", approved > 0
 	}
+	if mode == "quorum" {
+		return "approved", contract.RequiredApprovals > 0 && approved >= contract.RequiredApprovals
+	}
 	return "approved", approved == len(nodeTasks)
+}
+
+// WorkflowValidateApprovalAssigneeCount checks the resolved, deduplicated
+// electorate before any tasks are created. A quorum cannot be silently skipped.
+func WorkflowValidateApprovalAssigneeCount(node definitionmodel.WorkflowGraphNode, count int) error {
+	contract := WorkflowApprovalNodeContract(node)
+	if strings.TrimSpace(contract.Mode) == "quorum" && (contract.RequiredApprovals < 1 || contract.RequiredApprovals > count) {
+		return badRequest("backend.workflow.approval_required_approvals_invalid", "node", node.ID)
+	}
+	return nil
 }

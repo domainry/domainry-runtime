@@ -44,6 +44,8 @@ func workflowValidationFieldPath(code, nodeID, edgeID string) string {
 	}
 	prefix := "graph.nodes[" + nodeID + "]"
 	switch {
+	case strings.Contains(code, "required_approvals"):
+		return prefix + ".contract.approval.required_approvals"
 	case strings.Contains(code, "resolver"):
 		return prefix + ".contract.approval.resolvers"
 	case strings.Contains(code, "approval_mode"):

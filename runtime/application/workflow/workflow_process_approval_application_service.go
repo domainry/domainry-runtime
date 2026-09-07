@@ -134,7 +134,13 @@ func (e *WorkflowProcessEngine) resolveApprovalAssignees(ctx context.Context, pr
 	resolved = workflowpolicy.WorkflowUniqueAssignees(resolved)
 	if len(resolved) == 0 && valueOrDefault(strings.TrimSpace(contract.EmptyAssigneePolicy), "fail") == "admin" {
 		admins, err := e.usersForApprovalRole(ctx, "admin")
-		return admins, "admin", err
+		if err != nil {
+			return nil, "", err
+		}
+		resolved, roleKey = admins, "admin"
+	}
+	if err := workflowpolicy.WorkflowValidateApprovalAssigneeCount(node, len(resolved)); err != nil {
+		return nil, "", err
 	}
 	return resolved, roleKey, nil
 }
@@ -261,6 +267,11 @@ func (e *WorkflowProcessEngine) aggregateApproval(ctx context.Context, process w
 		}
 	}
 	switch mode {
+	case "quorum":
+		if required := workflowpolicy.WorkflowApprovalNodeContract(node).RequiredApprovals; required > 0 && approved >= required {
+			e.cancelUnfinishedApprovalTasks(ctx, nodeTasks, "", principal.UserID)
+			return "approved", true, nil
+		}
 	case "any":
 		if approved > 0 {
 			e.cancelUnfinishedApprovalTasks(ctx, nodeTasks, "", principal.UserID)

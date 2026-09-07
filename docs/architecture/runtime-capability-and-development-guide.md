@@ -92,7 +92,7 @@ LIMIT 100
 | 为 Action 编写强类型 Handler 和业务判断 | 输入输出合同、Handler revision、精确 Object/Connector/File/Notification grant、Registry freeze、事务阶段和输出字段安全 | “批准、取消、结算”等业务动作有稳定边界，不能借业务代码越权 |
 | 提交 create/update/delete/restore/conditional update 意图 | 统一授权、验证、事务、乐观并发、条件谓词、原子算术、Audit、Event/Outbox 和幂等 Receipt | 重复点击、并发修改和后台执行得到相同的业务结果 |
 | 为高风险 Action 声明 assurance policy | Runtime 验证并消费与用户、Workspace、Action、Record 和 payload 绑定的 recent re-auth/OTP/maker-checker/workflow approval 证据 | 普通登录态不能直接完成敏感导出、审批或资金类动作 |
-| 声明 Workflow 节点、边、审批人规则和超时 | 定义校验与快照、Process/Task/Event、any/all/sequential 审批、提醒升级、Timer、重试、幂等、Lease/Fencing 和人工恢复 | 用户能查看稳定的流程进度，即使定义升级或进程重启也不会丢失原流程语义 |
+| 声明 Workflow 节点、边、审批人规则和超时 | 定义校验与快照、Process/Task/Event、any/all/sequential/quorum 审批、提醒升级、Timer、重试、幂等、Lease/Fencing 和人工恢复 | 用户能查看稳定的流程进度，即使定义升级或进程重启也不会丢失原流程语义 |
 | 声明 Automation trigger、condition 和 instruction | before/after 阶段、变更字段/状态匹配、durable lifecycle event、correlation/causation、最大深度、幂等和失败处理 | 简单自动规则可靠执行，不会因为递归触发形成无限循环 |
 
 #### 报表、异步任务与外部能力

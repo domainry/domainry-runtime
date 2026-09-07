@@ -275,6 +275,8 @@
 "backend.scheduler.timeout_invalid" = "O tempo limite do agendador está fora do intervalo permitido."
 "backend.workflow.approval_resolver_invalid" = "O resolvedor de aprovação do fluxo de trabalho é inválido."
 "backend.workflow.graph_approval_mode_invalid" = "O modo de aprovação do fluxo de trabalho não é suportado."
+"backend.workflow.approval_required_approvals_invalid" = "O número de aprovações exigidas deve ser um inteiro positivo que não exceda o número de aprovadores definidos, apenas no modo quórum."
+"backend.workflow.task_decision_conflict" = "A aprovação foi alterada simultaneamente. Tente novamente."
 "backend.workflow.graph_node_invalid" = "A definição do nó do fluxo de trabalho é inválida."
 "identity.data_scope_invalid" = "O escopo de dados da função não é compatível."
 

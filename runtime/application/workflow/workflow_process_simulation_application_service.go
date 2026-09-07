@@ -74,6 +74,11 @@ func (e *WorkflowProcessEngine) simulateNode(ctx context.Context, process workfl
 		}
 		preview.ResolvedAssignees = assignees
 		preview.Details = map[string]any{"resolver_mode": workflowpolicy.WorkflowApprovalNodeContract(node).ResolverMode, "role_key": roleKey, "empty_assignee_policy": workflowpolicy.WorkflowApprovalNodeContract(node).EmptyAssigneePolicy}
+		contract := workflowpolicy.WorkflowApprovalNodeContract(node)
+		preview.Details["mode"] = contract.Mode
+		if contract.Mode == "quorum" {
+			preview.Details["required_approvals"] = contract.RequiredApprovals
+		}
 		return preview, []string{"approved", "rejected"}, nil
 	case "action":
 		contract := workflowpolicy.WorkflowBusinessActionNodeContract(node)

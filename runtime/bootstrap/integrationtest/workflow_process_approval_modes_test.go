@@ -78,7 +78,7 @@ func TestWorkflowApprovalModesAggregateTasks(t *testing.T) {
 	}
 }
 
-func approvalModeTestRuntime(t *testing.T, mode string) (*persistence.RuntimeStore, *RuntimeServices) {
+func approvalModeTestRuntime(t *testing.T, mode string, configure ...func(*definitionmodel.WorkflowSchema)) (*persistence.RuntimeStore, *RuntimeServices) {
 	t.Helper()
 	store, err := persistence.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "approval-mode.db")})
 	if err != nil {
@@ -91,9 +91,19 @@ func approvalModeTestRuntime(t *testing.T, mode string) (*persistence.RuntimeSto
 		Nodes: []definitionmodel.WorkflowGraphNode{{ID: "trigger", Type: "trigger", Name: "Trigger"}, {ID: "approval", Type: "approval", Name: "Approval", Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{Mode: mode, ResolverMode: "union", EmptyAssigneePolicy: "fail", Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"approver_a", "approver_b"}}}}}}},
 		Edges: []definitionmodel.WorkflowGraphEdge{{ID: "trigger-approval", Source: "trigger", Target: "approval"}},
 	}}
+	for _, apply := range configure {
+		apply(&workflow)
+	}
 	identity := newIntegrationTestIdentityProjection()
-	for _, userID := range []string{"approver_a", "approver_b"} {
-		identity.upsertUser(identitysdk.User{ID: userID, Status: identitysdk.UserStatusActive})
+	for _, node := range workflow.Graph.Nodes {
+		if node.Contract == nil || node.Contract.Approval == nil {
+			continue
+		}
+		for _, resolver := range node.Contract.Approval.Resolvers {
+			for _, userID := range resolver.UserIDs {
+				identity.upsertUser(identitysdk.User{ID: userID, Status: identitysdk.UserStatusActive})
+			}
+		}
 	}
 	records := newWorkflowProcessTestService(t, store, workflow, identity)
 	return store, records

@@ -35,7 +35,12 @@ func (r WorkflowDecisionStore) database() workflowDatabase {
 	return r.store.DB()
 }
 
-func (r WorkflowDecisionStore) CommitWorkflowDecision(ctx context.Context, commit transactionmodel.WorkflowDecisionCommit) (bool, error) {
+func (r WorkflowDecisionStore) CommitWorkflowDecision(ctx context.Context, commit transactionmodel.WorkflowDecisionCommit) (committed bool, err error) {
+	defer func() {
+		if err != nil && commit.ExpectedProcessUpdatedAt != "" {
+			err = r.approvalSnapshotError(err)
+		}
+	}()
 	workspaceID, err := requireWorkflowWorkspaceID(commit.WorkspaceID)
 	if err != nil {
 		return false, err
@@ -46,6 +51,9 @@ func (r WorkflowDecisionStore) CommitWorkflowDecision(ctx context.Context, commi
 		return false, fmt.Errorf("begin workflow decision: %w", err)
 	}
 	defer tx.Rollback()
+	if err := r.guardApprovalSnapshotTx(ctx, tx, commit); err != nil {
+		return false, err
+	}
 	decided, err := r.decideTaskTx(ctx, tx, commit)
 	if err != nil || !decided {
 		return decided, err

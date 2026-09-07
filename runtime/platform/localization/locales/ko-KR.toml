@@ -275,6 +275,8 @@
 "backend.scheduler.timeout_invalid" = "스케줄러 제한 시간이 허용 범위를 벗어났습니다."
 "backend.workflow.approval_resolver_invalid" = "워크플로 승인 담당자 해석기가 올바르지 않습니다."
 "backend.workflow.graph_approval_mode_invalid" = "지원되지 않는 워크플로 승인 모드입니다."
+"backend.workflow.approval_required_approvals_invalid" = "필요 승인 수는 실제 승인자 수 이하의 양의 정수여야 하며 정족수 모드에서만 설정할 수 있습니다."
+"backend.workflow.task_decision_conflict" = "승인 상태가 동시에 변경되었습니다. 다시 시도하세요."
 "backend.workflow.graph_node_invalid" = "워크플로 노드 정의가 올바르지 않습니다."
 "identity.data_scope_invalid" = "이 역할의 데이터 범위는 지원되지 않습니다."
 

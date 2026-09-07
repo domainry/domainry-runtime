@@ -25,6 +25,7 @@ func WorkflowAuthoringDomain() capabilitycontract.CapabilityAuthoringDomain {
 		Errors: []capabilitycontract.CapabilityAuthoringError{
 			{Code: "backend.workflow.graph_node_invalid", FieldPath: "graph.nodes", ParameterKeys: []string{"node"}, MessageKey: "backend.workflow.graph_node_invalid"},
 			{Code: "backend.workflow.graph_approval_mode_invalid", FieldPath: "graph.nodes[].contract.approval.mode", ParameterKeys: []string{"node"}, MessageKey: "backend.workflow.graph_approval_mode_invalid"},
+			{Code: "backend.workflow.approval_required_approvals_invalid", FieldPath: "graph.nodes[].contract.approval.required_approvals", ParameterKeys: []string{"node"}, MessageKey: "backend.workflow.approval_required_approvals_invalid"},
 			{Code: "backend.workflow.approval_resolver_invalid", FieldPath: "graph.nodes[].contract.approval.resolvers", ParameterKeys: []string{"node", "resolver"}, MessageKey: "backend.workflow.approval_resolver_invalid"},
 		}, Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/workflow/policy/workflow_graph_policy.go", Symbol: "WorkflowValidateGraph"}, {Kind: "validation", Path: "runtime/domain/workflow/policy/workflow_node_contract_policy.go", Symbol: "WorkflowAssigneeResolverIsValid"}},
 	}
@@ -70,7 +71,8 @@ func workflowAuthoringComponentCapabilities() []capabilitycontract.CapabilityAut
 		{
 			Key: "workflow.node.approval", Status: "supported", Lifecycle: "workflow_node",
 			Parameters: []capabilitycontract.CapabilityAuthoringParameter{
-				{Key: "mode", Type: "string", Required: true, Enum: []string{"all", "any", "sequential"}},
+				{Key: "mode", Type: "string", Required: true, Enum: []string{"all", "any", "sequential", "quorum"}},
+				{Key: "required_approvals", Type: "integer", Minimum: workflowAuthoringFloatPointer(1), RequiredWhen: map[string]any{"mode": "quorum"}},
 				{Key: "resolvers", Type: "array", Required: true, ItemSchema: "workflow_assignee_resolver"}, {Key: "resolver_mode", Type: "string", Default: "first_match", Enum: []string{"first_match", "union"}},
 				{Key: "empty_assignee_policy", Type: "string", Default: "fail", Enum: []string{"admin", "fail", "skip"}},
 				{Key: "due_seconds", Type: "integer", Minimum: workflowAuthoringFloatPointer(0)}, {Key: "reminder_action_key", Type: "action_key"}, {Key: "reminder_input", Type: "object"},
@@ -123,6 +125,12 @@ func workflowCompleteComponentAuthoringContract(capability *capabilitycontract.C
 		capability.Permissions = []string{workflowAuthoringFragmentAction}
 	}
 	capability.InputSchema = workflowComponentInputSchema(capability.Parameters)
+	if capability.Key == "workflow.node.approval" {
+		workflowApprovalQuorumSchemaCondition(capability.InputSchema)
+		capability.Errors = append(capability.Errors, capabilitycontract.CapabilityAuthoringError{
+			Code: "backend.workflow.approval_required_approvals_invalid", FieldPath: "required_approvals", ParameterKeys: []string{"node"}, MessageKey: "backend.workflow.approval_required_approvals_invalid",
+		})
+	}
 	capability.ValidationEndpoint = workflowAuthoringFragmentValidationEndpoint
 	capability.OutputSchema = workflowValidationOutputSchema()
 	capability.OutputVariables = workflowValidationOutputVariables()
@@ -268,9 +276,16 @@ func workflowComponentExamples(capabilityKey string) []capabilitycontract.Capabi
 	}
 	examples := values[capabilityKey]
 	errorCode := workflowComponentError(capabilityKey).Code
-	return []capabilitycontract.CapabilityAuthoringExample{
+	result := []capabilitycontract.CapabilityAuthoringExample{
 		{Name: "minimal_valid", Value: examples[0]}, {Name: "representative", Value: examples[1]}, {Name: "invalid_with_repair", Value: examples[2], ExpectedErrorCodes: []string{errorCode}},
 	}
+	if capabilityKey == "workflow.node.approval" {
+		result[1] = capabilitycontract.CapabilityAuthoringExample{Name: "representative", Value: map[string]any{
+			"mode": "quorum", "required_approvals": 2,
+			"resolvers": []any{map[string]any{"type": "users", "user_ids": []any{"user-1", "user-2", "user-3"}}},
+		}}
+	}
+	return result
 }
 
 func workflowAuthoringIntPointer(value int) *int { return &value }

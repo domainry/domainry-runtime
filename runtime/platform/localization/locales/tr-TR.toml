@@ -275,6 +275,8 @@
 "backend.scheduler.timeout_invalid" = "Zamanlayıcı zaman aşımı izin verilen aralığın dışında."
 "backend.workflow.approval_resolver_invalid" = "İş Akışı onay çözümleyicisi geçersiz."
 "backend.workflow.graph_approval_mode_invalid" = "İş Akışı onay modu desteklenmiyor."
+"backend.workflow.approval_required_approvals_invalid" = "Gerekli onay sayısı, belirlenen onaylayıcı sayısını aşmayan pozitif bir tam sayı olmalı ve yalnızca yeter sayı modunda ayarlanmalıdır."
+"backend.workflow.task_decision_conflict" = "Onay durumu eş zamanlı olarak değişti. Lütfen yeniden deneyin."
 "backend.workflow.graph_node_invalid" = "İş Akışı düğüm tanımı geçersiz."
 "identity.data_scope_invalid" = "Rol veri kapsamı desteklenmiyor."
 

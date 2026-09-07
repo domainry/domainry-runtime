@@ -275,6 +275,8 @@
 "backend.scheduler.timeout_invalid" = "The Scheduler timeout is outside the allowed range."
 "backend.workflow.approval_resolver_invalid" = "The Workflow approval resolver is invalid."
 "backend.workflow.graph_approval_mode_invalid" = "The Workflow approval mode is not supported."
+"backend.workflow.approval_required_approvals_invalid" = "Required approvals must be a positive integer no greater than the resolved approver count, and can only be set in quorum mode."
+"backend.workflow.task_decision_conflict" = "The approval changed concurrently. Please retry."
 "backend.workflow.graph_node_invalid" = "The Workflow node definition is invalid."
 "identity.data_scope_invalid" = "The role data scope is not supported."
 

@@ -20,7 +20,7 @@ func WorkflowValidateGraph(graph *definitionmodel.WorkflowGraphSchema) error {
 		return badRequest("backend.workflow.graph_invalid")
 	}
 	allowedTypes := map[string]bool{"trigger": true, "condition": true, "approval": true, "cc": true, "action": true, "agent_task": true, "wait_until": true, "wait_duration": true, "timer": true}
-	allowedApprovalModes := map[string]bool{"all": true, "any": true, "sequential": true}
+	allowedApprovalModes := map[string]bool{"all": true, "any": true, "sequential": true, "quorum": true}
 	nodes := make(map[string]definitionmodel.WorkflowGraphNode, len(graph.Nodes))
 	triggerID := ""
 	for _, node := range graph.Nodes {
@@ -43,6 +43,9 @@ func WorkflowValidateGraph(graph *definitionmodel.WorkflowGraphSchema) error {
 			mode := strings.TrimSpace(contract.Mode)
 			if !allowedApprovalModes[mode] {
 				return badRequest("backend.workflow.graph_approval_mode_invalid", "node", id)
+			}
+			if mode == "quorum" && contract.RequiredApprovals < 1 || mode != "quorum" && contract.RequiredApprovals != 0 {
+				return badRequest("backend.workflow.approval_required_approvals_invalid", "node", id)
 			}
 			if len(contract.Resolvers) == 0 {
 				return badRequest("backend.workflow.approval_resolver_required", "node", id)

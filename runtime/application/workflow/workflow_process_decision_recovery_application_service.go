@@ -122,11 +122,16 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 	if task.AssigneeUserID != principal.UserID {
 		return workflowmodel.WorkflowProcessInstance{}, true, forbidden("backend.workflow.task_assignee_required")
 	}
-	if task.Status != "open" {
-		return workflowmodel.WorkflowProcessInstance{}, true, conflict("backend.workflow.task_already_decided")
-	}
 	if err := workflowAuthorizeTaskDecision(principal, decision); err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, true, err
+	}
+	if task.Status != "open" {
+		if req.IdempotencyKey != "" {
+			if replay, found := workflowDecisionReplay(ctx, principal.WorkspaceID, records.dependencies.Processes, task, req); found {
+				return replay, true, nil
+			}
+		}
+		return workflowmodel.WorkflowProcessInstance{}, true, conflict("backend.workflow.task_already_decided")
 	}
 	process, ok, err := records.dependencies.Processes.GetProcess(ctx, principal.WorkspaceID, task.ProcessID)
 	if err != nil || !ok {
@@ -136,7 +141,7 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 		key := workflowCommandKey("task.decision", task.ID, req.IdempotencyKey, map[string]any{"decision": decision, "comment": strings.TrimSpace(req.Comment)})
 		workflowRecordCommand(&process, "task.decision:"+task.ID, key)
 	}
-	tasks, err := records.dependencies.Processes.ListTasks(ctx, principal.WorkspaceID, process.ID, "", "", 500)
+	tasks, err := workflowApprovalDecisionTasks(ctx, records.dependencies.Processes, process, task)
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, true, internalError("list workflow tasks", err)
 	}
@@ -146,11 +151,19 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 	}
 	processSnapshot, taskSnapshot := process, task
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if now == process.UpdatedAt {
+		at, _ := time.Parse(time.RFC3339Nano, now)
+		now = at.Add(time.Nanosecond).Format(time.RFC3339Nano)
+	}
 	task.Status, task.Decision, task.Comment = decision, decision, strings.TrimSpace(req.Comment)
 	task.CompletedBy, task.CompletedAt, task.UpdatedAt = principal.UserID, now, now
+	commit := workflowApprovalDecisionCommit(process, task)
+	if commit.ExpectedProcessUpdatedAt != "" {
+		process.UpdatedAt = now
+		commit.Process = &process
+	}
 	outcome, complete := workflowpolicy.WorkflowTerminalApprovalOutcome(process, tasks, task)
 	if !complete {
-		commit := transactionmodel.WorkflowDecisionCommit{WorkspaceID: principal.WorkspaceID, DecidedTask: task, ExpectedTaskStatus: "open", ExpectedAssigneeID: principal.UserID}
 		if strings.TrimSpace(req.IdempotencyKey) != "" {
 			commit.Process = &process
 		}
@@ -187,10 +200,9 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 		return process, true, nil
 	}
 	nextNodeIDs := records.processEngine.nextNodeIDs(process.DefinitionSnapshot.Graph, task.NodeID, outcome)
-	commit := transactionmodel.WorkflowDecisionCommit{WorkspaceID: principal.WorkspaceID, DecidedTask: task, ExpectedTaskStatus: "open", ExpectedAssigneeID: principal.UserID}
 	commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, task.NodeID, task.ID, "task_"+decision, principal.UserID, "workflow.event.task."+decision, map[string]any{"comment": task.Comment}, now))
 	for _, sibling := range tasks {
-		if sibling.ID == task.ID || sibling.NodeID != task.NodeID || (sibling.Status != "open" && sibling.Status != "pending") {
+		if sibling.ID == task.ID || sibling.NodeID != task.NodeID || sibling.NodeInstanceID != task.NodeInstanceID || (sibling.Status != "open" && sibling.Status != "pending") {
 			continue
 		}
 		sibling.Status, sibling.UpdatedAt = "cancelled", now
@@ -199,7 +211,7 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 	}
 	nodeFound := false
 	for _, node := range nodes {
-		if node.NodeID != task.NodeID || node.Status != "waiting" {
+		if node.NodeID != task.NodeID || node.Status != "waiting" || (task.NodeInstanceID != "" && node.ID != task.NodeInstanceID) {
 			continue
 		}
 		nodeFound = true
@@ -344,5 +356,21 @@ func (r *WorkflowProcessRuntime) DecideTerminalTask(ctx context.Context, taskID 
 	if err := workflowAuthorizeCommand(principal); err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, true, err
 	}
-	return decideTerminalWorkflowTaskWithContext(ctx, r, taskID, req, principal)
+	for attempt := 0; attempt < 5; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return workflowmodel.WorkflowProcessInstance{}, true, err
+		}
+		process, handled, err := decideTerminalWorkflowTaskWithContext(ctx, r, taskID, req, principal)
+		if !errors.Is(err, workflowcontract.ErrWorkflowDecisionSnapshotChanged) {
+			return process, handled, err
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 5 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return workflowmodel.WorkflowProcessInstance{}, true, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return workflowmodel.WorkflowProcessInstance{}, true, conflict("backend.workflow.task_decision_conflict")
 }

@@ -68,6 +68,7 @@ type Options struct {
 }
 
 type InitialWorkspaceCredential struct {
+	WorkspaceID        string `json:"-"`
 	CanonicalCode      string `json:"-"`
 	LoginID            string `json:"-"`
 	InitialPassword    string `json:"-"`

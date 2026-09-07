@@ -75,6 +75,9 @@ func workflowNodeBusinessSummary(node definitionmodel.WorkflowGraphNode, actions
 	case "approval":
 		contract := workflowpolicy.WorkflowApprovalNodeContract(node)
 		summary["approval_mode"], summary["assignee_summary_keys"] = contract.Mode, workflowAssigneeBusinessSummaryKeys(contract.Resolvers)
+		if contract.Mode == "quorum" {
+			summary["required_approvals"] = contract.RequiredApprovals
+		}
 	case "action":
 		contract := workflowpolicy.WorkflowBusinessActionNodeContract(node)
 		summary["action_key"] = contract.ActionKey

@@ -275,6 +275,8 @@
 "backend.scheduler.timeout_invalid" = "Il timeout dello scheduler non rientra nell’intervallo consentito."
 "backend.workflow.approval_resolver_invalid" = "Il risolutore dell’approvazione del workflow non è valido."
 "backend.workflow.graph_approval_mode_invalid" = "La modalità di approvazione del workflow non è supportata."
+"backend.workflow.approval_required_approvals_invalid" = "Le approvazioni richieste devono essere un intero positivo non superiore al numero di approvatori individuati e sono consentite solo in modalità quorum."
+"backend.workflow.task_decision_conflict" = "L’approvazione è stata modificata contemporaneamente. Riprovare."
 "backend.workflow.graph_node_invalid" = "La definizione del nodo del workflow non è valida."
 "identity.data_scope_invalid" = "L’ambito dati del ruolo non è supportato."
 
