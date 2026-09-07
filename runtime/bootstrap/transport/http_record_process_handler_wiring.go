@@ -8,6 +8,7 @@ import (
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
+	dispatchpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/dispatch"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
 	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
@@ -67,9 +68,11 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 		DecodeJSON: a.callbacks.DecodeJSON,
 	})
 	a.handlers.Dispatch = dispatchhttp.NewExecutionHandler(dispatchhttp.TargetExecutionDependencies{
-		WriteJSON:     a.callbacks.WriteJSON,
-		Executor:      composition.NewTargetExecutionDispatcher(records.Applications().TargetExecutions, records.Applications().PublicationHandoff, composition.IntegrationConnectionRequirements(a.dependencies.Manifest.Integrations.Connections)),
-		RuntimeID:     a.dependencies.RuntimeInstanceID,
-		SigningSecret: []byte(a.dependencies.Config.IntegrationSecretKey),
+		WriteJSON:         a.callbacks.WriteJSON,
+		WriteServiceError: a.callbacks.WriteServiceError,
+		Executor:          composition.NewTargetExecutionDispatcher(records.Applications().TargetExecutions, records.Applications().PublicationHandoff, composition.IntegrationConnectionRequirements(a.dependencies.Manifest.Integrations.Connections)),
+		Receipts:          dispatchpersistence.NewCallbackReceiptStore(a.dependencies.Store),
+		RuntimeID:         a.dependencies.RuntimeInstanceID,
+		SigningSecret:     []byte(a.dependencies.Config.IntegrationSecretKey),
 	})
 }

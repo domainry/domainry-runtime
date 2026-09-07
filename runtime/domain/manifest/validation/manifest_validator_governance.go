@@ -144,6 +144,44 @@ func (state *validationState) validateReportExportRecordMapping(path string, con
 	if len(mapping.AuditPreparedStatuses) == 0 {
 		state.add(path+".audit_prepared_statuses", "at least one accepted audit status is required")
 	}
+	preparedStatus := strings.TrimSpace(mapping.AuditPreparedStatus)
+	downloadedStatus := strings.TrimSpace(mapping.AuditDownloadedStatus)
+	deniedStatus := strings.TrimSpace(mapping.AuditDeniedStatus)
+	expiredStatus := strings.TrimSpace(mapping.AuditExpiredStatus)
+	// Existing manifests may intentionally collapse prepared and downloaded into
+	// one completed status. Denied and expired form the protected terminal group:
+	// neither may overlap a success state. They may alias each other because the
+	// Report contract does not require separate status values for those outcomes.
+	for _, terminal := range []struct {
+		field string
+		value string
+	}{
+		{field: "audit_denied_status", value: deniedStatus},
+		{field: "audit_expired_status", value: expiredStatus},
+	} {
+		if terminal.value == "" {
+			continue
+		}
+		for _, success := range []struct {
+			field string
+			value string
+		}{
+			{field: "audit_prepared_status", value: preparedStatus},
+			{field: "audit_downloaded_status", value: downloadedStatus},
+		} {
+			if success.value != "" && terminal.value == success.value {
+				state.add(path+"."+terminal.field, "must differ from %s; both use status %q", success.field, terminal.value)
+			}
+		}
+	}
+	terminalStatuses := map[string]string{
+		deniedStatus:  "audit_denied_status",
+		expiredStatus: "audit_expired_status",
+	}
+	if downloadedStatus != preparedStatus {
+		terminalStatuses[downloadedStatus] = "audit_downloaded_status"
+	}
+	delete(terminalStatuses, "")
 	auditObject, downloadObject := strings.TrimSpace(control.AuditObject), strings.TrimSpace(control.DownloadObject)
 	state.validateReportExportMappedField(path+".audit_report_key_field", auditObject, mapping.AuditReportKeyField, []string{"text", "select"}, "")
 	state.validateReportExportMappedField(path+".audit_requester_field", auditObject, mapping.AuditRequesterField, []string{"user"}, "")
@@ -168,6 +206,9 @@ func (state *validationState) validateReportExportRecordMapping(path string, con
 			state.add(fmt.Sprintf("%s.audit_prepared_statuses[%d]", path, index), "is required")
 		} else if len(allowed) > 0 && !allowed[value] {
 			state.add(fmt.Sprintf("%s.audit_prepared_statuses[%d]", path, index), "unknown status %q for %s.%s", value, auditObject, mapping.AuditStatusField)
+		}
+		if terminalField, overlaps := terminalStatuses[value]; overlaps {
+			state.add(fmt.Sprintf("%s.audit_prepared_statuses[%d]", path, index), "must not overlap terminal %s status %q", terminalField, value)
 		}
 	}
 	for key, raw := range map[string]string{

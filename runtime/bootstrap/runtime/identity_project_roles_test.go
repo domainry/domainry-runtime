@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	organizationunit "github.com/domainry/domainry-identity/organizationunit"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -19,6 +20,21 @@ func TestRuntimeWorkspaceRoleCatalogClosesFrozenHandlerCapabilitiesWithExactActi
 	descriptors := []runtimeext.HandlerDescriptor{
 		runtimeRoleCapabilityDescriptor("department.provision", func(value *runtimeext.HandlerDescriptor) {
 			value.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceProvisionedStore}
+		}),
+		runtimeRoleCapabilityDescriptor("organization_unit.create", func(value *runtimeext.HandlerDescriptor) {
+			value.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit}
+			value.OrganizationUnitDelivery = &runtimeext.OrganizationUnitDeliveryCapability{
+				Operations:   []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryCreate},
+				NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
+				ParentSource: runtimeext.OrganizationUnitParentSourceWorkspaceCompany,
+			}
+		}),
+		runtimeRoleCapabilityDescriptor("organization_unit.resolve", func(value *runtimeext.HandlerDescriptor) {
+			value.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceExplicit, Input: runtimeext.TargetOrganizationInputInvocation}
+			value.OrganizationUnitDelivery = &runtimeext.OrganizationUnitDeliveryCapability{
+				Operations: []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryResolve},
+				NodeTypes:  []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
+			}
 		}),
 		runtimeRoleCapabilityDescriptor("department.catalog", func(value *runtimeext.HandlerDescriptor) {
 			value.StoreOrganizationCatalog = &runtimeext.StoreOrganizationCatalogCapability{MaxPageSize: 25}
@@ -46,7 +62,7 @@ func TestRuntimeWorkspaceRoleCatalogClosesFrozenHandlerCapabilitiesWithExactActi
 		runtimeRoleCapabilityDescriptor("department.no_capability", nil),
 	}
 	businessActions := []string{
-		"department.provision", "department.catalog", "department.select", "department.select_or_sole", "department.maintain",
+		"department.provision", "organization_unit.create", "organization_unit.resolve", "department.catalog", "department.select", "department.select_or_sole", "department.maintain",
 		"staff.resolve", "installation.measure", "department.no_capability",
 	}
 	permissions := make([]manifestmodel.RolePermission, 0, len(businessActions))
@@ -76,6 +92,8 @@ func TestRuntimeWorkspaceRoleCatalogClosesFrozenHandlerCapabilitiesWithExactActi
 		identitysdk.StoreOrganizationDeliveryRenamePermission,
 		identitysdk.StoreOrganizationDeliveryResolvePermission,
 		identitysdk.WorkspaceIdentityUsageAggregatePermission,
+		organizationunit.DeliveryCreatePermission,
+		organizationunit.DeliveryResolvePermission,
 	}
 	for _, permissionKey := range wantCapabilities {
 		permission, found := projectRolePermissionByKey(operator.Permissions, permissionKey)
@@ -89,6 +107,30 @@ func TestRuntimeWorkspaceRoleCatalogClosesFrozenHandlerCapabilitiesWithExactActi
 	observer, found := projectRoleByKey(catalog.Roles, "observer")
 	if !found || len(observer.Permissions) != 1 || observer.Permissions[0].PermissionKey != "unrelated.read" {
 		t.Fatalf("role without a descriptor-owned business Action received capability permissions: %#v", observer)
+	}
+}
+
+func TestRuntimeOrganizationUnitTargetDoesNotDeriveStoreResolvePermission(t *testing.T) {
+	organizationUnit := runtimeRoleCapabilityDescriptor("organization_unit.resolve", func(value *runtimeext.HandlerDescriptor) {
+		value.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceExplicit, Input: runtimeext.TargetOrganizationInputInvocation}
+		value.OrganizationUnitDelivery = &runtimeext.OrganizationUnitDeliveryCapability{
+			Operations: []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryResolve},
+			NodeTypes:  []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
+		}
+	})
+	ordinaryTarget := runtimeRoleCapabilityDescriptor("department.select", func(value *runtimeext.HandlerDescriptor) {
+		value.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceExplicit, Input: runtimeext.TargetOrganizationInputInvocation}
+	})
+
+	permissions, err := runtimeDownstreamCapabilityPermissions([]runtimeext.HandlerDescriptor{organizationUnit, ordinaryTarget})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(permissions[organizationUnit.ActionKey], []string{organizationunit.DeliveryResolvePermission}) {
+		t.Fatalf("Organization Unit permissions=%v", permissions[organizationUnit.ActionKey])
+	}
+	if !slices.Equal(permissions[ordinaryTarget.ActionKey], []string{identitysdk.StoreOrganizationDeliveryResolvePermission}) {
+		t.Fatalf("ordinary target permissions=%v", permissions[ordinaryTarget.ActionKey])
 	}
 }
 

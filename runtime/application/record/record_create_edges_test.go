@@ -9,10 +9,12 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
+	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
@@ -221,6 +223,21 @@ func TestPlanCreateMutationCoversInputAuthorizationReplayAndPlannerEdges(t *test
 		_, candidate, err := NewRecordCreateApplicationService(dependencies).PlanCreateMutation(t.Context(), "customer", map[string]any{"name": "Acme"}, "", principal)
 		if err != nil || candidate.Data["name"] != "Acme" {
 			t.Fatalf("candidate=%#v err=%v", candidate, err)
+		}
+	})
+	t.Run("action target organization becomes canonical owner", func(t *testing.T) {
+		dependencies := recordCreateEdgeDependencies(&createRepositoryProbe{})
+		ctx := recordmutation.WithMutationInvocation(t.Context(), recordmutation.MutationInvocation{
+			Source: transactionmodel.MutationSourceAction, ActionKey: "customer.create_profile_guarded",
+			TargetOrganizationID: "store-a",
+		})
+		plan, candidate, err := NewRecordCreateApplicationService(dependencies).PlanCreateMutation(ctx, "customer", map[string]any{"name": "Acme"}, "", principal)
+		if err != nil {
+			t.Fatal(err)
+		}
+		committed := plan.CanonicalCommit().Record
+		if candidate.OwnerOrgID != "store-a" || committed.OwnerOrgID != "store-a" || committed.OwnerUserID != principal.UserID {
+			t.Fatalf("candidate owner=%q committed owner=%q user=%q", candidate.OwnerOrgID, committed.OwnerOrgID, committed.OwnerUserID)
 		}
 	})
 	t.Run("planning dependency", func(t *testing.T) {

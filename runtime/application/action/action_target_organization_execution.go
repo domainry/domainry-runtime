@@ -27,6 +27,16 @@ func cloneTargetOrganizationCapability(value *runtimeext.ActionTargetOrganizatio
 	return &cloned
 }
 
+func cloneOrganizationUnitDeliveryCapability(value *runtimeext.OrganizationUnitDeliveryCapability) *runtimeext.OrganizationUnitDeliveryCapability {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	cloned.Operations = append([]runtimeext.OrganizationUnitDeliveryOperation(nil), value.Operations...)
+	cloned.NodeTypes = append([]runtimeext.OrganizationUnitNodeType(nil), value.NodeTypes...)
+	return &cloned
+}
+
 func cloneIdentityHandlerDeliveryCapability(value *runtimeext.IdentityHandlerDeliveryCapability) *runtimeext.IdentityHandlerDeliveryCapability {
 	if value == nil {
 		return nil
@@ -63,6 +73,16 @@ func (e *businessActionExecution) initializeTargetOrganization(ctx context.Conte
 		targetID := strings.TrimSpace(e.invocation.TargetOrganizationID)
 		if targetID == "" {
 			return apperror.New(apperror.KindBadRequest, "backend.action.target_organization_required", nil, nil)
+		}
+		if e.organizationUnitGrant != nil {
+			if err := e.authorizeTargetOrganization(targetID); err != nil {
+				return err
+			}
+			e.organizationUnitTargetID = targetID
+			if e.organizationUnitGrant.Operations[0] == runtimeext.OrganizationUnitDeliveryCreate {
+				e.setTargetOrganization(targetID, false)
+			}
+			return nil
 		}
 		txCtx, err := e.unitOfWork.beginWriting(ctx)
 		if err != nil {
@@ -135,9 +155,18 @@ func (e *businessActionExecution) initializeTargetOrganization(ctx context.Conte
 		if strings.TrimSpace(targetID) == "" {
 			return apperror.New(apperror.KindForbidden, "backend.action.target_organization_denied", nil, nil)
 		}
+		if e.organizationUnitGrant != nil {
+			e.organizationUnitTargetID = strings.TrimSpace(targetID)
+			if e.organizationUnitGrant.Operations[0] == runtimeext.OrganizationUnitDeliveryCreate {
+				e.setTargetOrganization(targetID, false)
+			}
+			return nil
+		}
 		e.setTargetOrganization(targetID, false)
 		return nil
 	case runtimeext.TargetOrganizationSourceProvisionedStore:
+		return nil
+	case runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit:
 		return nil
 	default:
 		return apperror.New(apperror.KindInternal, "backend.action.target_organization_contract_invalid", nil, map[string]string{"action": e.action.Key})
@@ -385,8 +414,12 @@ func (e *businessActionExecution) setTargetOrganization(targetID string, provisi
 	principal := e.invocation.Principal
 	bundle := *principal.AccessBundle
 	resource, operation := definitionmodel.ActionPermissionSubject(e.action)
+	policyKey := "runtime.provisioned_store." + e.identity.ExecutionID
+	if e.targetGrant.Source == runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit {
+		policyKey = "runtime.delivered_organization_unit." + e.identity.ExecutionID
+	}
 	bundle.DataPolicies = append(append([]identitysdk.DataPolicy(nil), bundle.DataPolicies...), identitysdk.DataPolicy{
-		Key:      "runtime.provisioned_store." + e.identity.ExecutionID,
+		Key:      policyKey,
 		Resource: identitysdk.ResourceType(resource),
 		Action:   identitysdk.Action(operation),
 		Effect:   identitysdk.EffectAllow,

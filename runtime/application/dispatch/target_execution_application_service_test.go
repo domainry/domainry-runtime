@@ -13,13 +13,14 @@ import (
 )
 
 type windowedWorkflowRuntime struct {
-	target string
-	dueAt  time.Time
-	limit  int
+	target         string
+	idempotencyKey string
+	dueAt          time.Time
+	limit          int
 }
 
 func (w *windowedWorkflowRuntime) ExecuteWorkflowTarget(_ context.Context, request WorkflowTargetRequest) (workflowmodel.WorkflowProcessResult, error) {
-	w.target, w.dueAt, w.limit = request.Operation, request.EffectiveAt, request.Limit
+	w.target, w.idempotencyKey, w.dueAt, w.limit = request.Operation, request.IdempotencyKey, request.EffectiveAt, request.Limit
 	return workflowmodel.WorkflowProcessResult{Executions: []workflowmodel.WorkflowExecution{{ID: "workflow-execution-1"}}}, nil
 }
 
@@ -35,7 +36,7 @@ func TestExecuteRoutesResolvedWorkflowTargetWithoutScheduleDefinitionLookup(t *t
 	service := NewTargetExecutionApplicationService(workflows)
 	dueAt := time.Date(2026, time.September, 1, 2, 3, 4, 0, time.FixedZone("test", 8*60*60))
 	receipt, err := service.Execute(t.Context(), ExecutionRequest{ExecutionID: "execution-1", IdempotencyKey: "key-1", DueAt: dueAt, Target: Target{Owner: "workflow", Operation: "scheduled:orders.sync"}, Principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}})
-	if err != nil || receipt.ID != "workflow-execution-1" || workflows.target != "scheduled:orders.sync" || !workflows.dueAt.Equal(dueAt.UTC()) || workflows.limit != 25 {
+	if err != nil || receipt.ID != "workflow-execution-1" || workflows.target != "scheduled:orders.sync" || workflows.idempotencyKey != "key-1" || !workflows.dueAt.Equal(dueAt.UTC()) || workflows.limit != 25 {
 		t.Fatalf("receipt=%#v workflows=%#v err=%v", receipt, workflows, err)
 	}
 }

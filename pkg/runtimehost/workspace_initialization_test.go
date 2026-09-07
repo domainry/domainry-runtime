@@ -10,6 +10,7 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identitymodule "github.com/domainry/domainry-identity/module"
+	organizationunit "github.com/domainry/domainry-identity/organizationunit"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	runtimebootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/runtime"
@@ -275,6 +276,65 @@ func m1WorkspaceRolesForTest() []manifestmodel.RoleSchema {
 		{Key: "followup_reminder_service", Name: "Followup Reminder Service", Audience: "service", AssignmentMode: "system_managed", Permissions: []manifestmodel.RolePermission{{PermissionKey: "lead.send_overdue_reminders", DataScope: identitysdk.DataScopeAll}}},
 		{Key: "sales_director", Name: "Sales Director", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true},
 		{Key: "sales_rep", Name: "Sales Rep", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true},
+	}
+}
+
+func TestWorkspaceManagerPublishesOrganizationUnitDeliveryPermissionWithoutReplacingStoreDelivery(t *testing.T) {
+	cfg := serverTestConfig()
+	cfg.DatabaseDriver = "sqlite"
+	cfg.DBPath = filepath.Join(t.TempDir(), "workspace-organization-capabilities.db")
+	database, err := bootstrap.PrepareProjectDatabase(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = database.CloseContext(t.Context()) })
+	credentialDelivery := &initialCredentialDeliveryProbe{accepted: true}
+	manager, err := newProjectWorkspaceManager(
+		t.Context(), cfg, identitymodule.NewFactory(identitymodule.Options{IdentityVersion: "test", DatabaseDriver: "sqlite", DatabasePath: cfg.DBPath}),
+		database, projectIdentityDatabaseHandle(database, cfg.DBPath, nil), credentialDelivery,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.Close(t.Context()) })
+	manifest := manifestmodel.ManifestSchema{
+		Roles: []manifestmodel.RoleSchema{{
+			Key: "organization_operator", Name: "Organization operator", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true,
+			Permissions: []manifestmodel.RolePermission{
+				{PermissionKey: "store.provision", DataScope: identitysdk.DataScopeAll},
+				{PermissionKey: "department.provision", DataScope: identitysdk.DataScopeAll},
+			},
+		}},
+		InitialWorkspaceAdministratorRole: "organization_operator",
+	}
+	storeDescriptor := runtimeext.HandlerDescriptor{
+		ActionKey: "store.provision", InputType: "runtimehost.StoreProvisionInput", OutputType: "runtimehost.StoreProvisionOutput",
+		InputContractSHA256: strings.Repeat("a", 64), OutputContractSHA256: strings.Repeat("b", 64), HandlerRevision: "revision-1",
+		TargetOrganization: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceProvisionedStore},
+	}
+	departmentDescriptor := runtimeext.HandlerDescriptor{
+		ActionKey: "department.provision", InputType: "runtimehost.DepartmentProvisionInput", OutputType: "runtimehost.DepartmentProvisionOutput",
+		InputContractSHA256: strings.Repeat("c", 64), OutputContractSHA256: strings.Repeat("d", 64), HandlerRevision: "revision-1",
+		TargetOrganization: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit},
+		OrganizationUnitDelivery: &runtimeext.OrganizationUnitDeliveryCapability{
+			Operations:   []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryCreate},
+			NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
+			ParentSource: runtimeext.OrganizationUnitParentSourceWorkspaceCompany,
+		},
+	}
+	if err := manager.Activate(t.Context(), manifest, nil, storeDescriptor, departmentDescriptor); err != nil {
+		t.Fatal(err)
+	}
+	application := identitysdk.ApplicationRef{WorkspaceID: identitysdk.WorkspaceID(manager.Config().IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)}
+	if _, err := manager.Binding().Applications().Register(t.Context(), identitysdk.ApplicationRegistration{Application: application}); err != nil {
+		t.Fatal(err)
+	}
+	session, err := manager.Binding().Authentication().LoginWithPassword(t.Context(), identitysdk.PasswordLoginRequest{
+		WorkspaceID: application.WorkspaceID, ApplicationKey: application.ApplicationKey,
+		Login: credentialDelivery.credential.LoginID, Password: credentialDelivery.credential.InitialPassword,
+	})
+	if err != nil || !slices.Contains(session.Permissions, identitysdk.StoreOrganizationDeliveryCreatePermission) || !slices.Contains(session.Permissions, organizationunit.DeliveryCreatePermission) {
+		t.Fatalf("published capability permissions=%v error=%v", session.Permissions, err)
 	}
 }
 

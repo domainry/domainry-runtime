@@ -170,6 +170,13 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	if repository.updated.ID != "audit-1" || repository.updated.Data["status"] != "denied" || repository.updateConditions["status"] != "prepared" {
 		t.Fatalf("updated=%#v conditions=%#v", repository.updated, repository.updateConditions)
 	}
+	won, err := adapter.TransitionReportExportAudit(t.Context(), "workspace-a", "customer", "audit-1", "status", "approved", map[string]any{"status": "prepared", "name": "scope-hash"})
+	if err != nil || !won || repository.updated.Data["status"] != "prepared" || repository.updated.Data["name"] != "scope-hash" || repository.updateConditions["status"] != "approved" {
+		t.Fatalf("CAS transition won=%v updated=%#v conditions=%#v err=%v", won, repository.updated, repository.updateConditions, err)
+	}
+	if _, err := adapter.TransitionReportExportAudit(t.Context(), "workspace-a", "customer", "audit-1", "status", "approved", map[string]any{"status": "prepared", "missing": 1}); err == nil {
+		t.Fatal("CAS transition accepted a field outside the compiled audit object")
+	}
 	for name, candidate := range map[string]func() error{
 		"missing object": func() error {
 			return adapter.TransitionReportExportAuditStatus(t.Context(), "workspace-a", "missing", "audit-1", "status", "prepared", "denied")

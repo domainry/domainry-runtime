@@ -238,6 +238,21 @@ func normalizeHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor 
 		capability.Input = strings.TrimSpace(capability.Input)
 		result.TargetOrganization = &capability
 	}
+	if result.OrganizationUnitDelivery != nil {
+		capability := *result.OrganizationUnitDelivery
+		capability.Operations = append([]OrganizationUnitDeliveryOperation(nil), capability.Operations...)
+		for index := range capability.Operations {
+			capability.Operations[index] = OrganizationUnitDeliveryOperation(strings.TrimSpace(string(capability.Operations[index])))
+		}
+		sort.Slice(capability.Operations, func(i, j int) bool { return capability.Operations[i] < capability.Operations[j] })
+		capability.NodeTypes = append([]OrganizationUnitNodeType(nil), capability.NodeTypes...)
+		for index := range capability.NodeTypes {
+			capability.NodeTypes[index] = OrganizationUnitNodeType(strings.TrimSpace(string(capability.NodeTypes[index])))
+		}
+		sort.Slice(capability.NodeTypes, func(i, j int) bool { return capability.NodeTypes[i] < capability.NodeTypes[j] })
+		capability.ParentSource = OrganizationUnitParentSource(strings.TrimSpace(string(capability.ParentSource)))
+		result.OrganizationUnitDelivery = &capability
+	}
 	if result.IdentityHandlerDelivery != nil {
 		capability := *result.IdentityHandlerDelivery
 		capability.InitialCredentialOutputField = strings.TrimSpace(capability.InitialCredentialOutputField)
@@ -312,6 +327,12 @@ func cloneHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor {
 	if descriptor.TargetOrganization != nil {
 		capability := *descriptor.TargetOrganization
 		result.TargetOrganization = &capability
+	}
+	if descriptor.OrganizationUnitDelivery != nil {
+		capability := *descriptor.OrganizationUnitDelivery
+		capability.Operations = append([]OrganizationUnitDeliveryOperation(nil), capability.Operations...)
+		capability.NodeTypes = append([]OrganizationUnitNodeType(nil), capability.NodeTypes...)
+		result.OrganizationUnitDelivery = &capability
 	}
 	if descriptor.IdentityHandlerDelivery != nil {
 		capability := *descriptor.IdentityHandlerDelivery

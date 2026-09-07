@@ -130,7 +130,7 @@ func discoverApplicationCommands() []inventoryEntry {
 		owner = inventoryBusinessOwner(strings.Split(filepath.ToSlash(owner), "/")[0])
 		for _, declaration := range file.Decls {
 			method, ok := declaration.(*ast.FuncDecl)
-			if !ok || method.Recv == nil || !method.Name.IsExported() || !isApplicationServiceReceiver(method.Recv.List[0].Type) || !hasContextFirst(method.Type.Params) || !isMutationMethod(method.Name.Name) {
+			if !ok || method.Recv == nil || !method.Name.IsExported() || !isApplicationServiceReceiver(method.Recv.List[0].Type) || !hasContextFirst(method.Type.Params) || !isApplicationMutationMethod(owner, method.Name.Name) {
 				continue
 			}
 			decision, keySource := classifyApplicationCommand(owner, method.Name.Name)
@@ -143,6 +143,13 @@ func discoverApplicationCommands() []inventoryEntry {
 	}
 	sortEntries(entries)
 	return entries
+}
+
+func isApplicationMutationMethod(owner, name string) bool {
+	if owner == "report" && name == "PrepareResolvedExport" {
+		return true
+	}
+	return isMutationMethod(name)
 }
 
 func inventoryBusinessOwner(owner string) string {
@@ -180,6 +187,9 @@ func isMutationMethod(name string) bool {
 }
 
 func classifyApplicationCommand(owner, name string) (string, string) {
+	if owner == "report" && name == "PrepareResolvedExport" {
+		return "caller_key_required", "Report prepare caller key scoped by workspace, requester, report object, and audit"
+	}
 	if owner == "dispatch" && name == "Execute" {
 		return "system_key_required", "upstream operation and resolved target identity"
 	}

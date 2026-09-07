@@ -15,13 +15,15 @@ import (
 
 type workflowExecutionWorkerStub struct {
 	workflowcontract.WorkflowWorkerStore
-	executions map[string]workflowmodel.WorkflowExecution
-	getErr     error
-	getErrors  map[string]error
-	updateErr  error
-	insertErr  error
-	updated    []workflowmodel.WorkflowExecution
-	inserted   []workflowmodel.WorkflowExecution
+	executions    map[string]workflowmodel.WorkflowExecution
+	claim         workflowmodel.WorkflowExecutionClaimResult
+	claimRequests []workflowmodel.WorkflowExecutionClaimRequest
+	getErr        error
+	getErrors     map[string]error
+	updateErr     error
+	insertErr     error
+	updated       []workflowmodel.WorkflowExecution
+	inserted      []workflowmodel.WorkflowExecution
 }
 
 func (s *workflowExecutionWorkerStub) GetExecution(_ context.Context, _, id string) (workflowmodel.WorkflowExecution, bool, error) {
@@ -50,8 +52,9 @@ func (s *workflowExecutionWorkerStub) InsertExecution(_ context.Context, _ strin
 	s.inserted = append(s.inserted, execution)
 	return nil
 }
-func (s *workflowExecutionWorkerStub) TryBeginExecution(context.Context, workflowmodel.WorkflowExecutionClaimRequest) (workflowmodel.WorkflowExecutionClaimResult, error) {
-	return workflowmodel.WorkflowExecutionClaimResult{}, nil
+func (s *workflowExecutionWorkerStub) TryBeginExecution(_ context.Context, request workflowmodel.WorkflowExecutionClaimRequest) (workflowmodel.WorkflowExecutionClaimResult, error) {
+	s.claimRequests = append(s.claimRequests, request)
+	return s.claim, nil
 }
 func (s *workflowExecutionWorkerStub) CompleteExecutionReceipt(context.Context, workflowmodel.WorkflowExecutionReceiptCompletion) error {
 	return nil

@@ -6,6 +6,7 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	organizationunit "github.com/domainry/domainry-identity/organizationunit"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
@@ -93,6 +94,7 @@ type RuntimeServicesDependencies struct {
 	Records                             recordrepository.RecordRepository
 	ReportObjectSQL                     reportcontract.ReportObjectSQLExecutor
 	ReportSnapshotSources               reportcontract.ReportSnapshotSourceVersionReader
+	ReportExportPrepareReceipts         reportcontract.ReportExportPrepareReceiptStore
 	RecordExecutions                    recordcontract.RecordMutationExecutionStore
 	DataExchange                        dataexchange.Binding
 	DataExchangeProviders               *recordapplication.DataExchangeProviders
@@ -139,6 +141,7 @@ type RuntimeServicesDependencies struct {
 	Notifications                       NotificationRenderer
 	IdentityProjection                  identitysdk.Projection
 	IdentityHandlerDeliveryBinder       identitysdk.HandlerDeliveryUnitOfWorkBinder
+	OrganizationUnitDeliveryBinder      organizationunit.UnitOfWorkBinder
 	StoreOrganizationDeliveryBinder     identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
 	WorkspaceIdentityUsageBinder        identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
 	WorkspaceIdentityUsageCursor        actionapplication.WorkspaceIdentityUsageCursorCodec

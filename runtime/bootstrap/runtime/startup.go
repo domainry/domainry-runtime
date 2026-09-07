@@ -18,6 +18,7 @@ import (
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	organizationunit "github.com/domainry/domainry-identity/organizationunit"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	metadatamodule "github.com/domainry/domainry-metadata/module"
@@ -238,6 +239,10 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if embedded, ok := identityBinding.(identitysdk.EmbeddedHandlerDeliveryBinding); ok {
 		identityHandlerDeliveryBinder = embedded.HandlerDeliveryUnitOfWorkBinder()
 	}
+	var organizationUnitDeliveryBinder organizationunit.UnitOfWorkBinder
+	if embedded, ok := identityBinding.(organizationunit.EmbeddedBinding); ok {
+		organizationUnitDeliveryBinder = embedded.OrganizationUnitDeliveryUnitOfWorkBinder()
+	}
 	var storeOrganizationDeliveryBinder identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
 	if embedded, ok := identityBinding.(identitysdk.EmbeddedStoreOrganizationDeliveryBinding); ok {
 		storeOrganizationDeliveryBinder = embedded.StoreOrganizationDeliveryUnitOfWorkBinder()
@@ -401,6 +406,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		agentBinding:                    agentBinding,
 		reportBinding:                   reportBinding,
 		identityHandlerDeliveryBinder:   identityHandlerDeliveryBinder,
+		organizationUnitDeliveryBinder:  organizationUnitDeliveryBinder,
 		storeOrganizationDeliveryBinder: storeOrganizationDeliveryBinder,
 		workspaceIdentityUsageBinder:    workspaceIdentityUsageBinder,
 	})

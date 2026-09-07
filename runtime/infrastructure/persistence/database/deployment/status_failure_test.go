@@ -202,10 +202,10 @@ func TestCleanupLeaseAndDeleteStages(t *testing.T) {
 		state *deploymentDBState
 	}{
 		{name: "query", state: &deploymentDBState{querySteps: []deploymentQueryStep{{err: wantErr}}}},
-		{name: "scan", state: &deploymentDBState{querySteps: []deploymentQueryStep{{columns: []string{"id", "extra"}, rows: [][]driver.Value{{"id", "extra"}}}}}},
-		{name: "close", state: &deploymentDBState{querySteps: []deploymentQueryStep{{columns: []string{"id"}, closeErr: wantErr}}}},
-		{name: "delete", state: &deploymentDBState{querySteps: []deploymentQueryStep{{columns: []string{"id"}, rows: [][]driver.Value{{"id"}}}}, execSteps: []deploymentExecStep{{err: wantErr}}}},
-		{name: "delete rows", state: &deploymentDBState{querySteps: []deploymentQueryStep{{columns: []string{"id"}, rows: [][]driver.Value{{"id"}}}}, execSteps: []deploymentExecStep{{rowsErr: wantErr}}}},
+		{name: "scan", state: &deploymentDBState{querySteps: []deploymentQueryStep{{columns: []string{"id", "workspace_id", "extra"}, rows: [][]driver.Value{{"id", "workspace", "extra"}}}}}},
+		{name: "close", state: &deploymentDBState{querySteps: []deploymentQueryStep{{columns: []string{"id", "workspace_id"}, closeErr: wantErr}}}},
+		{name: "delete", state: &deploymentDBState{querySteps: []deploymentQueryStep{{columns: []string{"id", "workspace_id"}, rows: [][]driver.Value{{"id", "workspace"}}}}, execSteps: []deploymentExecStep{{err: wantErr}}}},
+		{name: "delete rows", state: &deploymentDBState{querySteps: []deploymentQueryStep{{columns: []string{"id", "workspace_id"}, rows: [][]driver.Value{{"id", "workspace"}}}}, execSteps: []deploymentExecStep{{rowsErr: wantErr}}}},
 	} {
 		store, closeDB := scriptedDeploymentStore(base, test.state)
 		if _, err := store.deleteExpiredReceiptBatch(t.Context(), "receipts", "worker", 1, "now", 1); err == nil {
@@ -213,7 +213,7 @@ func TestCleanupLeaseAndDeleteStages(t *testing.T) {
 		}
 		closeDB()
 	}
-	store, closeDB := scriptedDeploymentStore(base, &deploymentDBState{querySteps: []deploymentQueryStep{{columns: []string{"id"}}}})
+	store, closeDB := scriptedDeploymentStore(base, &deploymentDBState{querySteps: []deploymentQueryStep{{columns: []string{"id", "workspace_id"}}}})
 	deleted, err := store.deleteExpiredReceiptBatch(t.Context(), "receipts", "worker", 1, "now", 1)
 	closeDB()
 	if err != nil || deleted != 0 {
@@ -225,7 +225,7 @@ func TestCleanupRunLoopAndCompletionStages(t *testing.T) {
 	base := openDeploymentFailureStore(t)
 	wantErr := errors.New("injected cleanup run failure")
 	token := deploymentQueryStep{columns: []string{"fencing_token"}, rows: [][]driver.Value{{int64(7)}}}
-	empty := deploymentQueryStep{columns: []string{"id"}}
+	empty := deploymentQueryStep{columns: []string{"id", "workspace_id"}}
 
 	for _, batchSize := range []int{0, 5001} {
 		queries := []deploymentQueryStep{token, empty, empty, empty, empty, empty}
@@ -241,7 +241,7 @@ func TestCleanupRunLoopAndCompletionStages(t *testing.T) {
 	}
 
 	store, closeDB := scriptedDeploymentStore(base, &deploymentDBState{
-		querySteps: []deploymentQueryStep{token, {columns: []string{"id"}, rows: [][]driver.Value{{"receipt"}}}},
+		querySteps: []deploymentQueryStep{token, {columns: []string{"id", "workspace_id"}, rows: [][]driver.Value{{"receipt", "workspace-primary"}}}},
 		execSteps:  []deploymentExecStep{{rows: 1}, {rows: 1}, {rows: 1}, {rows: 1}},
 	})
 	result, err := store.RunIdempotencyCleanup(t.Context(), deploymentmodel.IdempotencyCleanupRequest{LeaseOwner: "worker", BatchSize: 1})

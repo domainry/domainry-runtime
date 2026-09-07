@@ -8,6 +8,7 @@ import (
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	organizationunit "github.com/domainry/domainry-identity/organizationunit"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
@@ -147,6 +148,16 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 					return "", apperror.New(apperror.KindNotFound, "backend.record.not_found", nil, nil)
 				}
 				return strings.TrimSpace(page.Items[0].OwnerOrgID), nil
+			},
+			BindOrganizationUnitDelivery: func(ctx context.Context) (organizationunit.Delivery, error) {
+				if records.organizationUnitDeliveryBinder == nil {
+					return nil, apperror.New(apperror.KindInternal, "identity.organization_unit_delivery_transaction_required", nil, nil)
+				}
+				executor := database.ActionExecutionTransaction(ctx)
+				if executor == nil {
+					return nil, apperror.New(apperror.KindInternal, "identity.organization_unit_delivery_transaction_required", nil, nil)
+				}
+				return records.organizationUnitDeliveryBinder.BindOrganizationUnitDeliveryUnitOfWork(identitysdk.EmbeddedTransaction{Executor: executor})
 			},
 			BindStoreOrganizationDelivery: func(ctx context.Context) (identitysdk.StoreOrganizationDelivery, error) {
 				if records.storeOrganizationDeliveryBinder == nil {

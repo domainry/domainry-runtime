@@ -16,16 +16,16 @@ import (
 	reportexport "github.com/domainry/domainry-runtime/runtime/application/report/export"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	runtimereportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 )
 
 type ReportExportRecordStore interface {
 	GetReportRecord(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)
-	ListReportRecordsForPrincipal(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error)
 	CreateReportRecord(context.Context, string, map[string]any, string, principalmodel.Principal) (recordmodel.Record, error)
-	UpdateReportRecord(context.Context, string, string, map[string]any, string, principalmodel.Principal) (recordmodel.Record, error)
 	TransitionReportExportAuditStatus(context.Context, string, string, string, string, string, string) error
+	TransitionReportExportAudit(context.Context, string, string, string, string, string, map[string]any) (bool, error)
 }
 
 func reportApplicationError(err error) error {
@@ -43,6 +43,7 @@ type ReportExportApplicationDependencies struct {
 	Clock                 func() time.Time
 	DataExchange          dataexchange.Binding
 	DataExchangeProviders *recordapplication.DataExchangeProviders
+	PrepareReceipts       runtimereportcontract.ReportExportPrepareReceiptStore
 }
 
 // ReportExportApplicationService owns governed export preparation, audit
@@ -54,6 +55,7 @@ type ReportExportApplicationService struct {
 	clock                func() time.Time
 	dataExchange         dataexchange.Binding
 	dataExchangeProvider *reportexport.DataExchangeProvider
+	prepareReceipts      runtimereportcontract.ReportExportPrepareReceiptStore
 }
 
 func NewReportExportApplicationService(dependencies ReportExportApplicationDependencies) *ReportExportApplicationService {
@@ -63,11 +65,11 @@ func NewReportExportApplicationService(dependencies ReportExportApplicationDepen
 	}
 	service := &ReportExportApplicationService{
 		productBrandName: productbrand.ResolveName(dependencies.ProductBrandName),
-		exportRecords:    dependencies.Records, clock: clock, dataExchange: dependencies.DataExchange,
+		exportRecords:    dependencies.Records, clock: clock, dataExchange: dependencies.DataExchange, prepareReceipts: dependencies.PrepareReceipts,
 	}
 	if dependencies.DataExchangeProviders != nil {
 		service.dataExchangeProvider = reportexport.NewDataExchangeProvider(reportexport.DataExchangeDependencies{
-			Binding: dependencies.DataExchange, Records: dependencies.Records, Audit: dependencies.Audit,
+			Binding: dependencies.DataExchange, Records: dependencies.Records, Receipts: dependencies.PrepareReceipts, Audit: dependencies.Audit,
 			ResolvePrincipal: dependencies.DataExchangeProviders.ResolvePrincipal, ResolveExecution: service.resolveReportExportExecution,
 			ReadPage: service.readReportExportPage, SourceVersion: service.readReportExportSourceVersion,
 			Watermark: service.reportExportWatermark, Clock: clock,

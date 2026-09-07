@@ -17,7 +17,11 @@ import (
 )
 
 func (s *WorkflowApplicationService) ProcessDueWorkflowExecutionsForScheduledWindow(ctx context.Context, targetKey string, scheduledFor time.Time, limit int, principal principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {
-	return s.processDueWorkflowExecutions(ctx, targetKey, scheduledFor.UTC(), limit, principal, true, "")
+	return s.ProcessDueWorkflowExecutionsForScheduledWindowWithKey(ctx, targetKey, scheduledFor, limit, principal, "")
+}
+
+func (s *WorkflowApplicationService) ProcessDueWorkflowExecutionsForScheduledWindowWithKey(ctx context.Context, targetKey string, scheduledFor time.Time, limit int, principal principalmodel.Principal, callbackIdempotencyKey string) (workflowmodel.WorkflowProcessResult, error) {
+	return s.processDueWorkflowExecutions(ctx, targetKey, scheduledFor.UTC(), limit, principal, true, "", strings.TrimSpace(callbackIdempotencyKey))
 }
 
 func (s *WorkflowApplicationService) processScheduledWorkflowExecutionsForTarget(ctx context.Context, targetKey string, limit int, principal principalmodel.Principal, now time.Time) ([]workflowmodel.WorkflowExecution, error) {
@@ -25,6 +29,10 @@ func (s *WorkflowApplicationService) processScheduledWorkflowExecutionsForTarget
 }
 
 func (s *WorkflowApplicationService) processScheduledWorkflowExecutionsForTargetWindow(ctx context.Context, targetKey string, limit int, principal principalmodel.Principal, _ time.Time, scheduledFor time.Time) ([]workflowmodel.WorkflowExecution, error) {
+	return s.processScheduledWorkflowExecutionsForTargetWindowWithKey(ctx, targetKey, limit, principal, time.Time{}, scheduledFor, "")
+}
+
+func (s *WorkflowApplicationService) processScheduledWorkflowExecutionsForTargetWindowWithKey(ctx context.Context, targetKey string, limit int, principal principalmodel.Principal, _ time.Time, scheduledFor time.Time, callbackIdempotencyKey string) ([]workflowmodel.WorkflowExecution, error) {
 	processed := make([]workflowmodel.WorkflowExecution, 0)
 	if limit <= 0 {
 		return processed, nil
@@ -48,7 +56,7 @@ func (s *WorkflowApplicationService) processScheduledWorkflowExecutionsForTarget
 	for _, workflow := range workflows {
 		objectKeys := workflowpolicy.WorkflowTriggerObjectKeys(workflow)
 		if len(objectKeys) == 0 {
-			execution, completed, err := s.executeGlobalScheduledWorkflow(ctx, workflow, principal, scheduledFor)
+			execution, completed, err := s.executeGlobalScheduledWorkflowWithKey(ctx, workflow, principal, scheduledFor, callbackIdempotencyKey)
 			if err != nil {
 				return processed, err
 			}
@@ -87,14 +95,15 @@ func (s *WorkflowApplicationService) processScheduledWorkflowExecutionsForTarget
 					}
 					payload := workflowPayloadForRecord(objectKey, record)
 					payload["scheduled_at"] = scheduledFor.UTC().Format(time.RFC3339Nano)
-					execution, err := s.executeWorkflowAttempt(ctx, workflow, payload, principal, "scheduled:"+workflow.Key, 1, false)
+					key := scheduledWorkflowExecutionKey(workflow, payload, callbackIdempotencyKey, record.ID)
+					execution, err := s.executeWorkflowAttemptWithIdempotencyKey(ctx, workflow, payload, principal, "scheduled:"+workflow.Key, key, 1, false)
 					if err != nil {
 						if code := apperror.CodeOf(err); code == idempotency.ErrorCodeKeyReused || code == idempotency.ErrorCodeInProgress {
 							continue
 						}
 						return processed, err
 					}
-					if execution.Status != "duplicate" {
+					if execution.Status != "duplicate" || strings.TrimSpace(callbackIdempotencyKey) != "" {
 						processed = append(processed, execution)
 					}
 				}

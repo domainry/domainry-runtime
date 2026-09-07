@@ -184,15 +184,15 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 	if err := os.WriteFile(filepath.Join(versionRoot, version+".info"), info, 0o644); err != nil {
 		return publishResult{}, err
 	}
-	list := []byte(version + "\n")
-	if err := os.WriteFile(filepath.Join(versionRoot, "list"), list, 0o644); err != nil {
+	list, err := writeModuleVersionList(versionRoot)
+	if err != nil {
 		return publishResult{}, err
 	}
 	zipContent, err := os.ReadFile(zipPath)
 	if err != nil {
 		return publishResult{}, err
 	}
-	return publishResult{
+	result := publishResult{
 		ContractVersion:       "domainry-runtime-module-build-closure-v1",
 		ModulePath:            runtimeModulePath,
 		Version:               version,
@@ -203,7 +203,16 @@ func publish(repositoryValue, proxyValue string) (publishResult, error) {
 		FileCount:             len(files),
 		ClosureManifestSHA256: hex.EncodeToString(closureHash.Sum(nil)),
 		DependencyModules:     dependencies,
-	}, nil
+	}
+	runtimeIdentity := publishedDependencyModule{
+		Path: result.ModulePath, Version: result.Version,
+		ZipSHA256: result.ZipSHA256, GoModSHA256: result.GoModSHA256,
+		InfoSHA256: result.InfoSHA256, ListSHA256: result.ListSHA256,
+	}
+	if err := validatePublishedModuleTuple(proxy, runtimeIdentity); err != nil {
+		return publishResult{}, fmt.Errorf("validate published Runtime module: %w", err)
+	}
+	return result, nil
 }
 
 func publishedDependencyGoSums(proxy string, dependencies []publishedDependencyModule) (string, error) {
@@ -381,22 +390,11 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		}
 		versions = next
 	}
-	// The graph walk may encounter an older transitive version after the
-	// Runtime's direct requirement. Publish only the version selected by Go's
-	// Minimal Version Selection for each module path in the closure manifest.
-	selected := make(map[string]publishedDependencyModule, len(result))
-	for _, dependency := range result {
-		current, ok := selected[dependency.Path]
-		if !ok || semver.Compare(dependency.Version, current.Version) > 0 {
-			selected[dependency.Path] = dependency
-		}
+	selected, err := finalizePublishedDependencyModules(proxy, result)
+	if err != nil {
+		return nil, nil, err
 	}
-	result = result[:0]
-	for _, dependency := range selected {
-		result = append(result, dependency)
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
-	return result, versionOverrides, nil
+	return selected, versionOverrides, nil
 }
 
 func dependencyModule(repository, path, version string) (downloadedModule, error) {
@@ -638,12 +636,173 @@ func copyDownloadedModule(proxy string, downloaded downloadedModule) (publishedD
 			identity.ZipSHA256 = sha256Hex(content)
 		}
 	}
-	list := []byte(downloaded.Version + "\n")
-	if err := os.WriteFile(filepath.Join(root, "list"), list, 0o644); err != nil {
+	list, err := writeModuleVersionList(root)
+	if err != nil {
 		return publishedDependencyModule{}, err
 	}
 	identity.ListSHA256 = sha256Hex(list)
 	return identity, nil
+}
+
+// writeModuleVersionList derives @v/list from the complete immutable tuples
+// already present in one module directory. A proxy output directory may be
+// reused across releases, and a single dependency graph may visit multiple
+// versions of the same module. Overwriting list with the last visited version
+// leaves otherwise valid .info/.mod/.zip artifacts undiscoverable.
+func writeModuleVersionList(root string) ([]byte, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	const completeTuple = uint8(1 | 2 | 4)
+	artifacts := make(map[string]uint8)
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+		var suffix string
+		var bit uint8
+		switch {
+		case strings.HasSuffix(entry.Name(), ".info"):
+			suffix, bit = ".info", 1
+		case strings.HasSuffix(entry.Name(), ".mod"):
+			suffix, bit = ".mod", 2
+		case strings.HasSuffix(entry.Name(), ".zip"):
+			suffix, bit = ".zip", 4
+		default:
+			continue
+		}
+		escapedVersion := strings.TrimSuffix(entry.Name(), suffix)
+		version, err := module.UnescapeVersion(escapedVersion)
+		if err != nil || !semver.IsValid(version) {
+			return nil, fmt.Errorf("invalid module proxy artifact version %q", escapedVersion)
+		}
+		artifacts[version] |= bit
+	}
+	versions := make([]string, 0, len(artifacts))
+	for version, mask := range artifacts {
+		if mask == completeTuple {
+			versions = append(versions, version)
+		}
+	}
+	if len(versions) == 0 {
+		return nil, errors.New("module proxy directory has no complete .info/.mod/.zip tuple")
+	}
+	semver.Sort(versions)
+	content := []byte(strings.Join(versions, "\n") + "\n")
+	if err := os.WriteFile(filepath.Join(root, "list"), content, 0o644); err != nil {
+		return nil, err
+	}
+	return content, nil
+}
+
+// finalizePublishedDependencyModules applies Minimal Version Selection to the
+// manifest and then refreshes list hashes after every version has been copied.
+// This prevents a selected version from retaining the singleton list hash that
+// existed before another version of the same module was published.
+func finalizePublishedDependencyModules(proxy string, candidates []publishedDependencyModule) ([]publishedDependencyModule, error) {
+	selected := make(map[string]publishedDependencyModule, len(candidates))
+	for _, dependency := range candidates {
+		current, ok := selected[dependency.Path]
+		if !ok || semver.Compare(dependency.Version, current.Version) > 0 {
+			selected[dependency.Path] = dependency
+		}
+	}
+	paths := make([]string, 0, len(selected))
+	for path := range selected {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	result := make([]publishedDependencyModule, 0, len(paths))
+	for _, path := range paths {
+		dependency := selected[path]
+		root, err := publishedModuleVersionRoot(proxy, dependency.Path)
+		if err != nil {
+			return nil, err
+		}
+		list, err := os.ReadFile(filepath.Join(root, "list"))
+		if err != nil {
+			return nil, err
+		}
+		dependency.ListSHA256 = sha256Hex(list)
+		if err := validatePublishedModuleTuple(proxy, dependency); err != nil {
+			return nil, fmt.Errorf("validate published dependency %s@%s: %w", dependency.Path, dependency.Version, err)
+		}
+		result = append(result, dependency)
+	}
+	return result, nil
+}
+
+func validatePublishedModuleTuple(proxy string, identity publishedDependencyModule) error {
+	root, err := publishedModuleVersionRoot(proxy, identity.Path)
+	if err != nil {
+		return err
+	}
+	escapedVersion, err := module.EscapeVersion(identity.Version)
+	if err != nil {
+		return err
+	}
+	paths := map[string]string{
+		".info": filepath.Join(root, escapedVersion+".info"),
+		".mod":  filepath.Join(root, escapedVersion+".mod"),
+		".zip":  filepath.Join(root, escapedVersion+".zip"),
+		"list":  filepath.Join(root, "list"),
+	}
+	contents := make(map[string][]byte, len(paths))
+	for artifact, path := range paths {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read %s artifact: %w", artifact, err)
+		}
+		contents[artifact] = content
+	}
+	if sha256Hex(contents[".info"]) != identity.InfoSHA256 ||
+		sha256Hex(contents[".mod"]) != identity.GoModSHA256 ||
+		sha256Hex(contents[".zip"]) != identity.ZipSHA256 ||
+		sha256Hex(contents["list"]) != identity.ListSHA256 {
+		return errors.New("four-artifact hashes differ from the published manifest")
+	}
+	var info struct {
+		Version string `json:"Version"`
+	}
+	if err := json.Unmarshal(contents[".info"], &info); err != nil || info.Version != identity.Version {
+		return fmt.Errorf(".info identity differs: version=%q error=%v", info.Version, err)
+	}
+	parsed, err := modfile.Parse(identity.Path+"@"+identity.Version+".mod", contents[".mod"], nil)
+	if err != nil || parsed.Module == nil || parsed.Module.Mod.Path != identity.Path {
+		actual := ""
+		if parsed != nil && parsed.Module != nil {
+			actual = parsed.Module.Mod.Path
+		}
+		return fmt.Errorf(".mod identity differs: module=%q error=%v", actual, err)
+	}
+	version := module.Version{Path: identity.Path, Version: identity.Version}
+	if _, err := modzip.CheckZip(version, paths[".zip"]); err != nil {
+		return fmt.Errorf(".zip identity or contents differ: %w", err)
+	}
+	found := false
+	for _, listed := range strings.Split(string(contents["list"]), "\n") {
+		if strings.TrimSpace(listed) == identity.Version {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("list does not contain exact version %s", identity.Version)
+	}
+	return nil
+}
+
+func publishedModuleVersionRoot(proxy, path string) (string, error) {
+	escapedPath, err := module.EscapePath(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(proxy, filepath.FromSlash(escapedPath), "@v"), nil
 }
 
 func runtimeBuildClosure(repository string) ([]string, error) {
@@ -727,6 +886,7 @@ func moduleBuildClosure(repository string, patterns ...string) ([]string, error)
 func localDependencyModFile(repository string) (string, func(), error) {
 	replacements := []struct{ path, environment string }{
 		{path: "github.com/domainry/domainry-foundation", environment: "DOMAINRY_FOUNDATION_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-identity", environment: "DOMAINRY_IDENTITY_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-identity-sdk", environment: "DOMAINRY_IDENTITY_SDK_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-agent-sdk", environment: "DOMAINRY_AGENT_SDK_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-agent", environment: "DOMAINRY_AGENT_REPO_ROOT"},

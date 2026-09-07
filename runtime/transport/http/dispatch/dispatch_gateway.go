@@ -11,8 +11,8 @@ import (
 )
 
 func (h *ExecutionHandler) acceptExecution(w http.ResponseWriter, r *http.Request) {
-	runtimeID := strings.TrimSpace(r.Header.Get("X-Domainry-Runtime-ID"))
-	if h.executor == nil || runtimeID == "" || runtimeID != h.runtimeID {
+	runtimeID := r.Header.Get(schedulergateway.RuntimeIDHeader)
+	if h.executor == nil || !h.targetAvailable || runtimeID == "" || runtimeID != strings.TrimSpace(runtimeID) || runtimeID != h.runtimeID {
 		h.writeDispatchError(w, http.StatusUnauthorized, "dispatch.signature_invalid")
 		return
 	}
@@ -26,24 +26,37 @@ func (h *ExecutionHandler) acceptExecution(w http.ResponseWriter, r *http.Reques
 		h.writeDispatchError(w, http.StatusBadRequest, "dispatch.request_invalid")
 		return
 	}
-	signature := schedulerSignature(r)
-	if signature.ClientID != schedulergateway.SchedulerClientID || schedulergateway.Verify(body, request.ExecutionID, signature, h.signingSecret, h.now().UTC()) != nil {
-		h.writeDispatchError(w, http.StatusUnauthorized, "dispatch.signature_invalid")
-		return
-	}
 	if request.RuntimeID != runtimeID || strings.TrimSpace(request.ExecutionID) == "" || strings.TrimSpace(request.IdempotencyKey) == "" || !validExecutionTarget(request.Target) {
 		h.writeDispatchError(w, http.StatusBadRequest, "dispatch.request_invalid")
 		return
 	}
-	receipt, err := h.executor.Execute(r.Context(), dispatchapplication.ExecutionRequest{
-		ExecutionID: request.ExecutionID, IdempotencyKey: request.IdempotencyKey, DueAt: request.DueAt,
-		Target: dispatchapplication.Target{Type: request.Target.Type, Owner: request.Target.Owner, Operation: request.Target.Operation, ConnectionKey: request.Target.ConnectionKey, Payload: append([]byte(nil), request.Target.Payload...)},
+	signedRequest := schedulergateway.SignedRequest{
+		Method: r.Method, Path: r.URL.EscapedPath(), RuntimeID: runtimeID, IdempotencyKey: request.IdempotencyKey,
+	}
+	if schedulergateway.VerifyRequest(body, signedRequest, schedulerSignature(r), h.signingSecret, h.now().UTC()) != nil {
+		h.writeDispatchError(w, http.StatusUnauthorized, "dispatch.signature_invalid")
+		return
+	}
+	identity, err := schedulergateway.NewCallbackRequestIdentity(body, signedRequest)
+	if err != nil {
+		h.writeDispatchError(w, http.StatusBadRequest, "dispatch.request_invalid")
+		return
+	}
+	result, err := h.executor.Execute(r.Context(), dispatchapplication.CallbackExecutionRequest{
+		Identity: dispatchapplication.CallbackIdentity{
+			Method: identity.Method, Path: identity.Path, RuntimeID: identity.RuntimeID,
+			IdempotencyKey: identity.IdempotencyKey, BodySHA256: identity.BodySHA256,
+		},
+		Execution: dispatchapplication.ExecutionRequest{
+			ExecutionID: request.ExecutionID, IdempotencyKey: request.IdempotencyKey, DueAt: request.DueAt,
+			Target: dispatchapplication.Target{Type: request.Target.Type, Owner: request.Target.Owner, Operation: request.Target.Operation, ConnectionKey: request.Target.ConnectionKey, Payload: append([]byte(nil), request.Target.Payload...)},
+		},
 	})
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
 	}
-	h.writeJSON(w, http.StatusOK, executionReceipt{ExecutionID: request.ExecutionID, ID: receipt.ID, Owner: receipt.Owner, Status: receipt.Status})
+	h.writeJSON(w, http.StatusOK, executionReceipt{ExecutionID: result.ExecutionID, ID: result.Receipt.ID, Owner: result.Receipt.Owner, Status: result.Receipt.Status, Replay: result.Replay})
 }
 
 func validExecutionTarget(target executionTarget) bool {

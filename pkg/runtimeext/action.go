@@ -96,6 +96,7 @@ type HandlerDescriptor struct {
 	NotificationEventTypes    []string
 	CrossWorkspaceAggregates  []CrossWorkspaceAggregateCapability
 	TargetOrganization        *ActionTargetOrganizationCapability
+	OrganizationUnitDelivery  *OrganizationUnitDeliveryCapability
 	IdentityHandlerDelivery   *IdentityHandlerDeliveryCapability
 	StoreOrganizationCatalog  *StoreOrganizationCatalogCapability
 	StoreOrganizationMutation *ActionStoreOrganizationMutationCapability
@@ -180,6 +181,12 @@ func (d HandlerDescriptor) Validate() error {
 	if d.TargetOrganization != nil && !d.TargetOrganization.Valid() {
 		return ErrHandlerCapabilityInvalid
 	}
+	if d.OrganizationUnitDelivery != nil && (!d.OrganizationUnitDelivery.Valid() || !organizationUnitDeliveryTargetMatches(d.TargetOrganization, *d.OrganizationUnitDelivery)) {
+		return ErrHandlerCapabilityInvalid
+	}
+	if d.TargetOrganization != nil && d.TargetOrganization.Source == TargetOrganizationSourceDeliveredOrganizationUnit && d.OrganizationUnitDelivery == nil {
+		return ErrHandlerCapabilityInvalid
+	}
 	if d.IdentityHandlerDelivery != nil && !d.IdentityHandlerDelivery.Valid() {
 		return ErrHandlerCapabilityInvalid
 	}
@@ -196,6 +203,24 @@ func (d HandlerDescriptor) Validate() error {
 		return ErrHandlerCapabilityInvalid
 	}
 	return nil
+}
+
+func organizationUnitDeliveryTargetMatches(target *ActionTargetOrganizationCapability, capability OrganizationUnitDeliveryCapability) bool {
+	if target == nil || !capability.Valid() {
+		return false
+	}
+	operation := capability.Operations[0]
+	if operation == OrganizationUnitDeliveryResolve {
+		return target.Source == TargetOrganizationSourceExplicit || target.Source == TargetOrganizationSourceRecordOwner
+	}
+	switch capability.ParentSource {
+	case OrganizationUnitParentSourceWorkspaceCompany:
+		return target.Source == TargetOrganizationSourceDeliveredOrganizationUnit
+	case OrganizationUnitParentSourceTargetOrganization:
+		return target.Source == TargetOrganizationSourceExplicit || target.Source == TargetOrganizationSourceRecordOwner
+	default:
+		return false
+	}
 }
 
 func handlerDeliveryMutatesIdentity(operations []IdentityHandlerOperation) bool {

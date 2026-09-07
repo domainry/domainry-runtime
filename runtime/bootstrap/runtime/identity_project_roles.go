@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	organizationunit "github.com/domainry/domainry-identity/organizationunit"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -174,6 +175,8 @@ func runtimeProjectRoleDefinition(role manifestmodel.RoleSchema, permissions []i
 }
 
 var runtimeManagedDownstreamPermissions = map[string]bool{
+	organizationunit.DeliveryCreatePermission:              true,
+	organizationunit.DeliveryResolvePermission:             true,
 	identitysdk.StoreOrganizationDeliveryCreatePermission:  true,
 	identitysdk.StoreOrganizationDeliveryRenamePermission:  true,
 	identitysdk.StoreOrganizationDeliveryDisablePermission: true,
@@ -198,7 +201,20 @@ func runtimeDownstreamCapabilityPermissions(descriptors []runtimeext.HandlerDesc
 		}
 		permissions := map[string]bool{}
 		add := func(permission string) { permissions[permission] = true }
-		if descriptor.TargetOrganization != nil {
+		if descriptor.OrganizationUnitDelivery != nil {
+			for _, operation := range descriptor.OrganizationUnitDelivery.Operations {
+				switch operation {
+				case runtimeext.OrganizationUnitDeliveryCreate:
+					add(organizationunit.DeliveryCreatePermission)
+				case runtimeext.OrganizationUnitDeliveryResolve:
+					add(organizationunit.DeliveryResolvePermission)
+				}
+			}
+		}
+		// Organization Unit delivery resolves/creates its trusted target through
+		// the transaction-bound organizationunit port. Only the ordinary target
+		// execution path calls StoreOrganizationDelivery.
+		if descriptor.TargetOrganization != nil && descriptor.OrganizationUnitDelivery == nil {
 			switch descriptor.TargetOrganization.Source {
 			case runtimeext.TargetOrganizationSourceExplicit:
 				add(identitysdk.StoreOrganizationDeliveryResolvePermission)

@@ -316,6 +316,10 @@ func validateActionTargetOrganizationInvocation(action definitionmodel.ActionSch
 		if targetID != "" {
 			return apperror.New(apperror.KindBadRequest, "backend.action.target_organization_forbidden", nil, nil)
 		}
+	case definitionmodel.ActionTargetOrganizationSourceDeliveredOrganizationUnit:
+		if targetID != "" {
+			return apperror.New(apperror.KindBadRequest, "backend.action.target_organization_forbidden", nil, nil)
+		}
 	case definitionmodel.ActionTargetOrganizationSourceRecordOwner:
 		return apperror.New(apperror.KindInternal, "backend.action.target_organization_contract_invalid", nil, map[string]string{"action": action.Key})
 	default:

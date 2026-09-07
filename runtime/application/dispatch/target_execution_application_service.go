@@ -38,11 +38,12 @@ type ExecutionReceipt struct {
 }
 
 type WorkflowTargetRequest struct {
-	ExecutionID string
-	Operation   string
-	EffectiveAt time.Time
-	Limit       int
-	Principal   principalmodel.Principal
+	ExecutionID    string
+	IdempotencyKey string
+	Operation      string
+	EffectiveAt    time.Time
+	Limit          int
+	Principal      principalmodel.Principal
 }
 
 type WorkflowTargetRuntime interface {
@@ -82,7 +83,7 @@ func (s *TargetExecutionApplicationService) Execute(ctx context.Context, request
 
 	switch strings.TrimSpace(request.Target.Owner) {
 	case "workflow":
-		result, err := s.workflows.ExecuteWorkflowTarget(ctx, WorkflowTargetRequest{ExecutionID: executionID, Operation: strings.TrimSpace(request.Target.Operation), EffectiveAt: request.DueAt.UTC(), Limit: limit, Principal: principal})
+		result, err := s.workflows.ExecuteWorkflowTarget(ctx, WorkflowTargetRequest{ExecutionID: executionID, IdempotencyKey: strings.TrimSpace(request.IdempotencyKey), Operation: strings.TrimSpace(request.Target.Operation), EffectiveAt: request.DueAt.UTC(), Limit: limit, Principal: principal})
 		if err != nil {
 			return ExecutionReceipt{}, err
 		}

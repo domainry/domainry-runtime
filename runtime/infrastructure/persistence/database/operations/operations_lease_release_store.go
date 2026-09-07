@@ -20,6 +20,7 @@ type operationsLeaseReleaseSpec struct {
 }
 
 var operationsLeaseReleaseSpecs = map[string]operationsLeaseReleaseSpec{
+	"dispatch_callback":          {table: "_dispatch_callback_receipts", idColumn: "id", workspaceColumn: "workspace_id"},
 	"workflow":                   {table: "_workflow_execution_receipts", idColumn: "id", workspaceColumn: "workspace_id"},
 	"workflow_execution":         {table: "_workflow_executions", idColumn: "id", workspaceColumn: "workspace_id"},
 	"workflow_deadline":          {table: "_workflow_tasks", idColumn: "id", workspaceColumn: "workspace_id"},

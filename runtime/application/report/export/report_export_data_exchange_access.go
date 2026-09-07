@@ -59,6 +59,9 @@ func (p *DataExchangeProvider) ProjectJob(ctx context.Context, job dataexchange.
 	if status != "completed" {
 		return projection, nil
 	}
+	if err = p.verifyCompletedReportExportReceipt(ctx, payload, job.ID, job.ArtifactID); err != nil {
+		return ExchangeJob{}, err
+	}
 	artifact, err := p.dependencies.Binding.Download(ctx, dataexchange.JobRequest{Scope: Scope(principal), JobID: job.ID, Provider: DataExchangeProviderKey, Operation: "export"})
 	if err != nil {
 		return ExchangeJob{}, err
@@ -80,6 +83,9 @@ func (p *DataExchangeProvider) openDataExchangeArtifact(ctx context.Context, job
 	}
 	payload, err := exchangePayload(job.Options, job.ReferenceID)
 	if err != nil {
+		return dataexchange.Artifact{}, err
+	}
+	if err = p.verifyCompletedReportExportReceipt(ctx, payload, job.ID, job.ArtifactID); err != nil {
 		return dataexchange.Artifact{}, err
 	}
 	prepared, err := p.prepare(ctx, payload, principal, false)
@@ -129,8 +135,21 @@ func (p *DataExchangeProvider) openDataExchangeArtifact(ctx context.Context, job
 		return dataexchange.Artifact{}, deny("backend.report.export_audit_status_invalid", "audit_status_changed")
 	}
 	if status != mapping.AuditDownloadedStatus {
-		if _, err = p.dependencies.Records.UpdateReportRecord(ctx, prepared.control.AuditObject, auditRecord.ID, map[string]any{mapping.AuditStatusField: mapping.AuditDownloadedStatus}, "report-export-complete:"+auditRecord.ID, principal); err != nil {
-			return dataexchange.Artifact{}, err
+		won, transitionErr := p.dependencies.Records.TransitionReportExportAudit(ctx, payload.WorkspaceID, prepared.control.AuditObject, auditRecord.ID,
+			mapping.AuditStatusField, mapping.AuditPreparedStatus, map[string]any{mapping.AuditStatusField: mapping.AuditDownloadedStatus})
+		if transitionErr != nil {
+			return dataexchange.Artifact{}, transitionErr
+		}
+		if !won {
+			auditRecord, err = p.dependencies.Records.GetReportRecord(ctx, prepared.control.AuditObject, payload.AuditID, principal)
+			if err != nil {
+				return dataexchange.Artifact{}, err
+			}
+			status = strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditStatusField]))
+			if strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditReportKeyField])) != payload.ReportKey ||
+				strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditRequesterField])) != payload.RequesterUserID || status != mapping.AuditDownloadedStatus {
+				return dataexchange.Artifact{}, deny("backend.report.export_audit_status_invalid", "audit_status_changed")
+			}
 		}
 	}
 	parametersHash, _ := reportcontract.CanonicalJSONSHA256(prepared.normalizedScope.Parameters)

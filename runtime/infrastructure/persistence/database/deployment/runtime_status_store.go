@@ -17,8 +17,9 @@ import (
 )
 
 type RuntimeStatusStore struct {
-	store *database.RuntimeStore
-	db    *sql.DB
+	store                       *database.RuntimeStore
+	db                          *sql.DB
+	beforeDeleteExpiredReceipts func()
 }
 
 func NewRuntimeStatusStore(store *database.RuntimeStore) RuntimeStatusStore {
@@ -142,9 +143,11 @@ type idempotencyReceiptTable struct {
 }
 
 var idempotencyReceiptTables = []idempotencyReceiptTable{
+	{owner: "dispatch", table: "_dispatch_callback_receipts", scopeColumn: "runtime_id", targetColumn: "path"},
 	{owner: "record", table: "_record_mutation_executions", scopeColumn: "operation"},
 	{owner: "action", table: "_action_executions", targetColumn: "record_id"},
 	{owner: "workflow", table: "_workflow_execution_receipts"},
+	{owner: "report", table: "_report_export_prepare_receipts", scopeColumn: "use_case", targetColumn: "audit_id"},
 }
 
 func (r RuntimeStatusStore) ListIdempotencyReceipts(ctx context.Context, workspaceID, status string, limit int) ([]idempotency.ReceiptSummary, error) {
@@ -201,6 +204,8 @@ func (r RuntimeStatusStore) ListIdempotencyReceipts(ctx context.Context, workspa
 
 func idempotencyReceiptScope(owner, value, target string) string {
 	switch owner {
+	case "dispatch":
+		return "dispatch.callback.execute"
 	case "record":
 		return "record." + strings.TrimSpace(value)
 	case "action":
@@ -210,6 +215,8 @@ func idempotencyReceiptScope(owner, value, target string) string {
 		return "action.execute_record"
 	case "workflow":
 		return "workflow.execute"
+	case "report":
+		return strings.TrimSpace(value)
 	case "changeplan":
 		return "change_plan." + strings.TrimSpace(value)
 	case "auth":

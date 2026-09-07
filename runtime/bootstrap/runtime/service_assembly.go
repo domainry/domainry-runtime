@@ -22,6 +22,7 @@ import (
 	dataexchangemodulehost "github.com/domainry/domainry-data-exchange-sdk/modulehost"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	organizationunit "github.com/domainry/domainry-identity/organizationunit"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
@@ -93,6 +94,7 @@ type runtimeExtensionRegistries struct {
 	agentBinding                    agentsdk.Binding
 	reportBinding                   reportsdk.Binding
 	identityHandlerDeliveryBinder   identitysdk.HandlerDeliveryUnitOfWorkBinder
+	organizationUnitDeliveryBinder  organizationunit.UnitOfWorkBinder
 	storeOrganizationDeliveryBinder identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
 	workspaceIdentityUsageBinder    identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
 }
@@ -115,6 +117,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	var agentBinding agentsdk.Binding
 	var reportBinding reportsdk.Binding
 	var identityHandlerDeliveryBinder identitysdk.HandlerDeliveryUnitOfWorkBinder
+	var organizationUnitDeliveryBinder organizationunit.UnitOfWorkBinder
 	var storeOrganizationDeliveryBinder identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
 	var workspaceIdentityUsageBinder identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
 	var dataExchangeProviderKey string
@@ -150,6 +153,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		agentBinding = extensionRegistries[0].agentBinding
 		reportBinding = extensionRegistries[0].reportBinding
 		identityHandlerDeliveryBinder = extensionRegistries[0].identityHandlerDeliveryBinder
+		organizationUnitDeliveryBinder = extensionRegistries[0].organizationUnitDeliveryBinder
 		storeOrganizationDeliveryBinder = extensionRegistries[0].storeOrganizationDeliveryBinder
 		workspaceIdentityUsageBinder = extensionRegistries[0].workspaceIdentityUsageBinder
 		dataExchangeProviderKey = extensionRegistries[0].dataExchangeProviderKey
@@ -264,6 +268,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	fileScans := uploadapplication.NewFileScanReceiptVerifier(lifecycleFileArtifacts, fileScanKey[:])
 	recordSubjectLifecycle := recordapplication.NewRecordSubjectLifecycleApplicationService(records, manifest.Objects, lifecycleArtifacts, manifest.IdentityProfileExtensions)
 	reportSQLStore := reportpersistence.NewReportSQLStore(store)
+	reportExportPrepareReceipts := reportpersistence.NewReportExportPrepareReceiptStore(store)
 	var agentTaskRunner agentsdk.TaskRunner
 	if agentBinding != nil {
 		agentTaskRunner = agentBinding.TaskRunner()
@@ -296,6 +301,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			Records:                             records,
 			ReportObjectSQL:                     reportSQLStore,
 			ReportSnapshotSources:               reportSQLStore,
+			ReportExportPrepareReceipts:         reportExportPrepareReceipts,
 			RecordExecutions:                    records,
 			DataExchange:                        dataExchangeBinding,
 			DataExchangeProviders:               dataExchangeProviders,
@@ -374,6 +380,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			Notifications:                   notifications,
 			IdentityProjection:              identityProjection,
 			IdentityHandlerDeliveryBinder:   identityHandlerDeliveryBinder,
+			OrganizationUnitDeliveryBinder:  organizationUnitDeliveryBinder,
 			StoreOrganizationDeliveryBinder: storeOrganizationDeliveryBinder,
 			WorkspaceIdentityUsageBinder:    workspaceIdentityUsageBinder,
 			WorkspaceIdentityUsageCursor:    workspaceIdentityUsageCursor,

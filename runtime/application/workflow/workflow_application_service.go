@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"github.com/domainry/domainry-foundation/idempotency"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -97,7 +98,7 @@ func (s *WorkflowApplicationService) ProcessWorkflowContinuation(ctx context.Con
 		return workflowmodel.WorkflowProcessResult{}, apperror.New(apperror.KindBadRequest, "backend.workflow.continuation_invalid", err, nil)
 	}
 	principal.WorkspaceID = workspace.String()
-	return s.processDueWorkflowExecutions(ctx, "", time.Time{}, 1, principal, false, strings.TrimSpace(locator.ExecutionID))
+	return s.processDueWorkflowExecutions(ctx, "", time.Time{}, 1, principal, false, strings.TrimSpace(locator.ExecutionID), "")
 }
 
 func (s *WorkflowApplicationService) ResumeTimerNode(ctx context.Context, workspaceID, processID, nodeID string, principal principalmodel.Principal) (workflowmodel.WorkflowProcessInstance, error) {
@@ -193,22 +194,33 @@ func (s *WorkflowApplicationService) ProcessWorkflowExecutions(ctx context.Conte
 }
 
 func (s *WorkflowApplicationService) RunWorkflow(ctx context.Context, workflowKey string, payload map[string]any, principal principalmodel.Principal) (workflowmodel.WorkflowRunResult, error) {
-	return s.runInvokedWorkflow(ctx, workflowKey, payload, principal, invocationcontract.WorkflowEntryManual, "manual")
+	return s.runInvokedWorkflow(ctx, workflowKey, payload, principal, invocationcontract.WorkflowEntryManual, "manual", "")
+}
+
+// RunWorkflowWithKey executes a caller-initiated manual workflow under the
+// caller's logical operation key. Internal callers that rely on authored
+// workflow idempotency continue to use RunWorkflow.
+func (s *WorkflowApplicationService) RunWorkflowWithKey(ctx context.Context, workflowKey string, payload map[string]any, callerKey string, principal principalmodel.Principal) (workflowmodel.WorkflowRunResult, error) {
+	callerKey = strings.TrimSpace(callerKey)
+	if callerKey == "" {
+		return workflowmodel.WorkflowRunResult{}, badRequest(idempotency.ErrorCodeMissingKey)
+	}
+	return s.runInvokedWorkflow(ctx, workflowKey, payload, principal, invocationcontract.WorkflowEntryManual, "manual", callerKey)
 }
 
 func (s *WorkflowApplicationService) RunAutomationWorkflow(ctx context.Context, workflowKey string, payload map[string]any, principal principalmodel.Principal) (workflowmodel.WorkflowRunResult, error) {
-	return s.runInvokedWorkflow(ctx, workflowKey, payload, principal, invocationcontract.WorkflowEntryAutomation, "automation")
+	return s.runInvokedWorkflow(ctx, workflowKey, payload, principal, invocationcontract.WorkflowEntryAutomation, "automation", "")
 }
 
 func (s *WorkflowApplicationService) RunAgentWorkflow(ctx context.Context, workflowKey string, payload map[string]any, principal principalmodel.Principal) (workflowmodel.WorkflowRunResult, error) {
-	return s.runInvokedWorkflow(ctx, workflowKey, payload, principal, invocationcontract.WorkflowEntryAgent, "agent")
+	return s.runInvokedWorkflow(ctx, workflowKey, payload, principal, invocationcontract.WorkflowEntryAgent, "agent", "")
 }
 
 func (s *WorkflowApplicationService) RunIntegrationWorkflow(ctx context.Context, workflowKey string, payload map[string]any, principal principalmodel.Principal) (workflowmodel.WorkflowRunResult, error) {
-	return s.runInvokedWorkflow(ctx, workflowKey, payload, principal, invocationcontract.WorkflowEntryIntegrationEvent, "integration_event")
+	return s.runInvokedWorkflow(ctx, workflowKey, payload, principal, invocationcontract.WorkflowEntryIntegrationEvent, "integration_event", "")
 }
 
-func (s *WorkflowApplicationService) runInvokedWorkflow(ctx context.Context, workflowKey string, payload map[string]any, principal principalmodel.Principal, mode invocationcontract.WorkflowEntryMode, trigger string) (workflowmodel.WorkflowRunResult, error) {
+func (s *WorkflowApplicationService) runInvokedWorkflow(ctx context.Context, workflowKey string, payload map[string]any, principal principalmodel.Principal, mode invocationcontract.WorkflowEntryMode, trigger, callerKey string) (workflowmodel.WorkflowRunResult, error) {
 	if err := workflowAuthorizeCommand(principal); err != nil {
 		return workflowmodel.WorkflowRunResult{}, err
 	}
@@ -225,14 +237,39 @@ func (s *WorkflowApplicationService) runInvokedWorkflow(ctx context.Context, wor
 	if issues := invocationcontract.ValidateWorkflowTarget(workflow, mode); len(issues) > 0 {
 		return workflowmodel.WorkflowRunResult{}, workflowInvocationError(issues[0])
 	}
-	execution, err := s.executeWorkflow(ctx, workflow, payload, principal, trigger)
+	executionPayload := payload
+	if mode == invocationcontract.WorkflowEntryManual {
+		executionPayload = manualWorkflowPayload(payload, principal)
+	}
+	var execution workflowmodel.WorkflowExecution
+	var err error
+	if strings.TrimSpace(callerKey) == "" {
+		execution, err = s.executeWorkflow(ctx, workflow, executionPayload, principal, trigger)
+	} else {
+		execution, err = s.executeWorkflowWithIdempotencyKey(ctx, workflow, executionPayload, principal, trigger, callerKey)
+	}
 	if err != nil {
 		return workflowmodel.WorkflowRunResult{}, err
 	}
 	return workflowmodel.WorkflowRunResult{
 		WorkflowKey: workflow.Key, Name: workflow.Name, Status: execution.Status,
-		Action: workflow.Action, Payload: payload, Execution: execution,
+		Action: workflow.Action, Payload: executionPayload, Execution: execution,
 	}, nil
+}
+
+func manualWorkflowPayload(payload map[string]any, principal principalmodel.Principal) map[string]any {
+	trusted := workflowpolicy.WorkflowCloneMap(payload)
+	if userID := strings.TrimSpace(principal.UserID); userID != "" {
+		trusted["initiating_user_id"] = userID
+	} else {
+		delete(trusted, "initiating_user_id")
+	}
+	if roleKey := strings.TrimSpace(principal.RoleKey); roleKey != "" {
+		trusted["initiating_role_key"] = roleKey
+	} else {
+		delete(trusted, "initiating_role_key")
+	}
+	return trusted
 }
 
 func workflowInvocationError(issue invocationcontract.Issue) error {

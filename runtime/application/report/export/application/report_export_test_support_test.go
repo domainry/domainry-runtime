@@ -3,7 +3,10 @@ package application
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
+	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -14,12 +17,18 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
+	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
+	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
-type reportAuditAppenderStub struct{}
+type reportAuditAppenderStub struct {
+	calls atomic.Int64
+}
 
-func (*reportAuditAppenderStub) AppendAudit(context.Context, auditcontract.AuditAppendRequest) error {
+func (s *reportAuditAppenderStub) AppendAudit(context.Context, auditcontract.AuditAppendRequest) error {
+	s.calls.Add(1)
 	return nil
 }
 
@@ -99,10 +108,12 @@ func (s *reportExportObjectSQLExecutorStub) ExecuteReportObjectSQL(_ context.Con
 }
 
 type reportExportStoreStub struct {
-	audit                                 recordmodel.Record
-	download                              recordmodel.Record
-	getErr, listErr, createErr, updateErr error
-	transitionErr                         error
+	audit                        recordmodel.Record
+	download                     recordmodel.Record
+	getErr, createErr, updateErr error
+	getHook                      func()
+	transitionErr                error
+	createCalls                  atomic.Int64
 }
 
 func (s *reportExportStoreStub) TransitionReportExportAuditStatus(_ context.Context, _, _, recordID, statusField, fromStatus, toStatus string) error {
@@ -115,7 +126,38 @@ func (s *reportExportStoreStub) TransitionReportExportAuditStatus(_ context.Cont
 	return nil
 }
 
+func (s *reportExportStoreStub) TransitionReportExportAudit(_ context.Context, _, _, recordID, statusField, fromStatus string, patch map[string]any) (bool, error) {
+	if s.transitionErr != nil {
+		return false, s.transitionErr
+	}
+	if s.audit.ID != recordID || strings.TrimSpace(fmt.Sprint(s.audit.Data[statusField])) != fromStatus {
+		return false, nil
+	}
+	for key, value := range patch {
+		s.audit.Data[key] = value
+	}
+	return true, nil
+}
+
+func newReportPrepareReceiptStore(t testing.TB) *reportpersistence.ReportExportPrepareReceiptStore {
+	t.Helper()
+	store, err := database.OpenContext(t.Context(), config.Config{
+		DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "report-export-receipts.db"), IntegrationSecretKey: "report-export-receipt-tests",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err = store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	return reportpersistence.NewReportExportPrepareReceiptStore(store)
+}
+
 func (s *reportExportStoreStub) GetReportRecord(_ context.Context, objectKey, recordID string, _ principalmodel.Principal) (recordmodel.Record, error) {
+	if s.getHook != nil {
+		s.getHook()
+	}
 	if s.getErr != nil {
 		return recordmodel.Record{}, s.getErr
 	}
@@ -128,17 +170,8 @@ func (s *reportExportStoreStub) GetReportRecord(_ context.Context, objectKey, re
 	return recordmodel.Record{}, &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.record.not_found"}
 }
 
-func (s *reportExportStoreStub) ListReportRecordsForPrincipal(_ context.Context, objectKey string, query recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
-	if s.listErr != nil {
-		return recordmodel.RecordPageResult{}, s.listErr
-	}
-	if objectKey == "report_export_download" && s.download.ID != "" && query.Filters["file_reference"] == s.download.Data["file_reference"] {
-		return recordmodel.RecordPageResult{Items: []recordmodel.Record{s.download}, Total: 1}, nil
-	}
-	return recordmodel.RecordPageResult{}, nil
-}
-
 func (s *reportExportStoreStub) CreateReportRecord(_ context.Context, _ string, data map[string]any, _ string, _ principalmodel.Principal) (recordmodel.Record, error) {
+	s.createCalls.Add(1)
 	if s.createErr != nil {
 		return recordmodel.Record{}, s.createErr
 	}
@@ -175,4 +208,12 @@ func reportExportTestRecordMapping() reportmodel.ReportExportRecordMappingSchema
 
 func reportExportEdgeControl() reportmodel.ReportExportControlSchema {
 	return reportmodel.ReportExportControlSchema{ReportKey: "revenue", SourceObjects: []string{"customer"}, AuditObject: "report_export_audit", DownloadObject: "report_export_download", MaxRows: 1000, RecordMapping: reportExportTestRecordMapping()}
+}
+
+func reportExportLifecycleControl() reportmodel.ReportExportControlSchema {
+	control := reportExportEdgeControl()
+	control.RecordMapping.AuditPreparedStatuses = []string{"approved"}
+	control.RecordMapping.AuditPreparedStatus = "prepared"
+	control.RecordMapping.AuditDownloadedStatus = "downloaded"
+	return control
 }

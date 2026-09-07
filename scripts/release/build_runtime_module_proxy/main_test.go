@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
+	modzip "golang.org/x/mod/zip"
 )
 
 func TestPublishContainsOnlyRuntimeBuildClosureAndCompilesConsumer(t *testing.T) {
@@ -28,7 +29,12 @@ func TestPublishContainsOnlyRuntimeBuildClosureAndCompilesConsumer(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(result, secondResult) {
+	// Adjacent content-addressed dependency checkouts are legitimate publish
+	// inputs and may be edited by another task between these two integration
+	// publishes. Enforce byte determinism only when that dependency snapshot is
+	// unchanged; a changed snapshot must instead produce a changed Runtime
+	// identity and is verified below through the frozen proxy consumer.
+	if reflect.DeepEqual(result.DependencyModules, secondResult.DependencyModules) && !reflect.DeepEqual(result, secondResult) {
 		firstJSON, _ := json.MarshalIndent(result, "", "  ")
 		secondJSON, _ := json.MarshalIndent(secondResult, "", "  ")
 		t.Fatalf("consecutive source-identical publishes were not byte-deterministic:\nfirst=%s\nsecond=%s", firstJSON, secondJSON)
@@ -250,4 +256,122 @@ func TestDistributionGoModAddsVersionOverridesInPathOrder(t *testing.T) {
 	if !reflect.DeepEqual(paths, want) {
 		t.Fatalf("require order=%v want=%v\n%s", paths, want, content)
 	}
+}
+
+func TestPublishedModuleListContainsEveryCompleteTupleAndSelectedHash(t *testing.T) {
+	const path = "example.com/dependency"
+	proxy := t.TempDir()
+	newer, err := copyDownloadedModule(proxy, downloadedModuleFixture(t, path, "v1.1.0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Reproduce the real graph order: a lower transitive version is visited
+	// after the higher direct requirement selected by Minimal Version Selection.
+	older, err := copyDownloadedModule(proxy, downloadedModuleFixture(t, path, "v1.0.0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, err := finalizePublishedDependencyModules(proxy, []publishedDependencyModule{newer, older})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selected) != 1 || selected[0].Version != "v1.1.0" {
+		t.Fatalf("selected dependencies=%+v", selected)
+	}
+	root, err := publishedModuleVersionRoot(proxy, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := os.ReadFile(filepath.Join(root, "list"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(list), "v1.0.0\nv1.1.0\n"; got != want {
+		t.Fatalf("list=%q want=%q", got, want)
+	}
+	if selected[0].ListSHA256 != sha256Hex(list) {
+		t.Fatalf("selected list hash=%s want=%s", selected[0].ListSHA256, sha256Hex(list))
+	}
+}
+
+func TestPublishedModuleTupleFailsClosedOnEachArtifactIdentity(t *testing.T) {
+	const path = "example.com/dependency"
+	const version = "v1.2.3"
+	for _, test := range []struct {
+		artifact string
+		content  []byte
+		want     string
+	}{
+		{artifact: ".info", content: []byte("{\"Version\":\"v1.2.4\"}\n"), want: ".info identity differs"},
+		{artifact: ".mod", content: []byte("module example.com/other\n\ngo 1.26.0\n"), want: ".mod identity differs"},
+		{artifact: ".zip", content: []byte("not a module zip"), want: ".zip identity or contents differ"},
+		{artifact: "list", content: []byte("v1.2.4\n"), want: "list does not contain exact version"},
+	} {
+		t.Run(test.artifact, func(t *testing.T) {
+			proxy := t.TempDir()
+			identity, err := copyDownloadedModule(proxy, downloadedModuleFixture(t, path, version))
+			if err != nil {
+				t.Fatal(err)
+			}
+			root, err := publishedModuleVersionRoot(proxy, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := "list"
+			if test.artifact != "list" {
+				name = version + test.artifact
+			}
+			if err := os.WriteFile(filepath.Join(root, name), test.content, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			switch test.artifact {
+			case ".info":
+				identity.InfoSHA256 = sha256Hex(test.content)
+			case ".mod":
+				identity.GoModSHA256 = sha256Hex(test.content)
+			case ".zip":
+				identity.ZipSHA256 = sha256Hex(test.content)
+			case "list":
+				identity.ListSHA256 = sha256Hex(test.content)
+			}
+			err = validatePublishedModuleTuple(proxy, identity)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("validation error=%v want containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+func downloadedModuleFixture(t *testing.T, path, version string) downloadedModule {
+	t.Helper()
+	source := t.TempDir()
+	goMod := []byte("module " + path + "\n\ngo 1.26.0\n")
+	if err := os.WriteFile(filepath.Join(source, "go.mod"), goMod, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "dependency.go"), []byte("package dependency\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	artifacts := t.TempDir()
+	infoPath := filepath.Join(artifacts, "module.info")
+	modPath := filepath.Join(artifacts, "module.mod")
+	zipPath := filepath.Join(artifacts, "module.zip")
+	if err := os.WriteFile(infoPath, []byte("{\"Version\":\""+version+"\",\"Time\":\"2026-09-06T00:00:00Z\"}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(modPath, goMod, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	archive, err := os.Create(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := modzip.CreateFromDir(archive, module.Version{Path: path, Version: version}, source); err != nil {
+		_ = archive.Close()
+		t.Fatal(err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return downloadedModule{Path: path, Version: version, Info: infoPath, GoMod: modPath, Zip: zipPath}
 }

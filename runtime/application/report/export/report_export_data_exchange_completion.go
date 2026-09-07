@@ -2,6 +2,7 @@ package export
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -9,8 +10,10 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	reportcontract "github.com/domainry/domainry-report-sdk/contract"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	runtimereportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 )
 
 func (p *DataExchangeProvider) CompleteExport(ctx context.Context, completion dataexchange.ExportCompletion) error {
@@ -22,7 +25,7 @@ func (p *DataExchangeProvider) CompleteExport(ctx context.Context, completion da
 	if err != nil {
 		return err
 	}
-	prepared, err := p.prepare(ctx, payload, principal, true)
+	prepared, err := p.prepare(ctx, payload, principal, false)
 	if err != nil {
 		return err
 	}
@@ -32,8 +35,29 @@ func (p *DataExchangeProvider) CompleteExport(ctx context.Context, completion da
 	if !prepared.control.Watermark && strings.TrimSpace(payload.CSVContentSHA256) != "" && completion.Artifact.SHA256 != payload.CSVContentSHA256 {
 		return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_result_changed"}
 	}
-	if p.dependencies.Records == nil {
+	if p.dependencies.Records == nil || p.dependencies.Receipts == nil {
 		return internalError(nil)
+	}
+	completionFingerprint, err := reportExportCompletionFingerprint(completion)
+	if err != nil {
+		return internalError(err)
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return internalError(err)
+	}
+	now := p.dependencies.Clock().UTC()
+	binding, err := p.dependencies.Receipts.BindReportExportCompletion(ctx, runtimereportmodel.ReportExportCompletionBinding{
+		ReceiptID: payload.PrepareReceiptID, WorkspaceID: payload.WorkspaceID, RequesterUserID: payload.RequesterUserID,
+		ReportKey: payload.ReportKey, ObjectKey: payload.ObjectKey, AuditID: payload.AuditID,
+		JobID: completion.JobID, ArtifactID: completion.Artifact.ID, PayloadJSON: string(payloadJSON), CompletionFingerprint: completionFingerprint,
+		Now: now, ExpiresAt: now.Add(90 * 24 * time.Hour),
+	})
+	if err != nil {
+		return internalError(err)
+	}
+	if binding.Decision == runtimereportmodel.ReportExportCompletionConflict {
+		return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_completion_conflict"}
 	}
 	auditRecord, err := p.dependencies.Records.GetReportRecord(ctx, prepared.control.AuditObject, payload.AuditID, principal)
 	if err != nil {
@@ -41,16 +65,54 @@ func (p *DataExchangeProvider) CompleteExport(ctx context.Context, completion da
 	}
 	mapping := prepared.control.RecordMapping
 	status := strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditStatusField]))
-	if strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditReportKeyField])) != payload.ReportKey ||
-		strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditRequesterField])) != payload.RequesterUserID ||
+	if reportExportProtectedTerminalAuditStatus(status, mapping) || !reportExportAuditBindingMatches(auditRecord.Data, mapping, payload) ||
 		(!StatusAllowed(status, mapping.AuditPreparedStatuses) && status != mapping.AuditPreparedStatus && status != mapping.AuditDownloadedStatus) {
 		return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_scope_changed"}
 	}
 	scopeHash, _ := reportcontract.CanonicalJSONSHA256(prepared.normalizedScope)
-	if _, err = p.dependencies.Records.UpdateReportRecord(ctx, prepared.control.AuditObject, auditRecord.ID, map[string]any{
-		mapping.AuditStatusField: mapping.AuditPreparedStatus, mapping.AuditRowCountField: completion.Rows, mapping.AuditScopeHashField: "sha256:" + scopeHash,
-	}, "report-export-prepared:"+completion.Artifact.ID, principal); err != nil {
-		return err
+	expectedScopeHash := "sha256:" + scopeHash
+	preparedStatus, downloadedStatus := strings.TrimSpace(mapping.AuditPreparedStatus), strings.TrimSpace(mapping.AuditDownloadedStatus)
+	transitionAudit := status != downloadedStatus
+	if status == downloadedStatus {
+		switch {
+		case preparedStatus != downloadedStatus:
+			// A distinct downloaded state is valid only for an exact late replay.
+			// Matching completion metadata proves the replay follows a legitimate
+			// prepare transition. Without it, a first rejected binding could turn
+			// its own retry into authority to manufacture a download record.
+			if binding.Decision != runtimereportmodel.ReportExportCompletionReplay ||
+				!reportExportAuditCompletionMetadataMatches(auditRecord.Data, mapping, completion.Rows, expectedScopeHash) {
+				return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_scope_changed"}
+			}
+		default:
+			// Historical manifests collapse prepared and downloaded into one
+			// completed status, so the audit status cannot prove which phase ran.
+			// The receipt's exact job/artifact/completion binding is authoritative:
+			// reapply the same-status metadata transition to recover any crash
+			// between durable binding and source-owned audit persistence.
+			transitionAudit = true
+		}
+	}
+	if transitionAudit {
+		won, transitionErr := p.dependencies.Records.TransitionReportExportAudit(ctx, payload.WorkspaceID, prepared.control.AuditObject, auditRecord.ID,
+			mapping.AuditStatusField, status, map[string]any{
+				mapping.AuditStatusField: mapping.AuditPreparedStatus, mapping.AuditRowCountField: completion.Rows, mapping.AuditScopeHashField: expectedScopeHash,
+			})
+		if transitionErr != nil {
+			return transitionErr
+		}
+		if !won {
+			auditRecord, err = p.dependencies.Records.GetReportRecord(ctx, prepared.control.AuditObject, payload.AuditID, principal)
+			if err != nil {
+				return err
+			}
+			status = strings.TrimSpace(fmt.Sprint(auditRecord.Data[mapping.AuditStatusField]))
+			if reportExportProtectedTerminalAuditStatus(status, mapping) || !reportExportAuditBindingMatches(auditRecord.Data, mapping, payload) ||
+				(status != preparedStatus && status != downloadedStatus) ||
+				!reportExportAuditCompletionMetadataMatches(auditRecord.Data, mapping, completion.Rows, expectedScopeHash) {
+				return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_scope_changed"}
+			}
+		}
 	}
 	downloadData := map[string]any{
 		mapping.DownloadAuditField: payload.AuditID, mapping.DownloadFilenameField: completion.Artifact.Filename,
@@ -80,6 +142,45 @@ func (p *DataExchangeProvider) CompleteExport(ctx context.Context, completion da
 		"expires_at": completion.Artifact.ExpiresAt.UTC().Format(time.RFC3339Nano), "watermarked": prepared.control.Watermark,
 		"content_sha256": completion.Artifact.SHA256, "row_count": completion.Rows, "scope_sha256": scopeHash, "parameters_sha256": parametersHash,
 	}, true)
+}
+
+func reportExportAuditCompletionMetadataMatches(data map[string]any, mapping reportmodel.ReportExportRecordMappingSchema, rows int, scopeHash string) bool {
+	return strings.TrimSpace(fmt.Sprint(data[mapping.AuditRowCountField])) == fmt.Sprint(rows) &&
+		strings.TrimSpace(fmt.Sprint(data[mapping.AuditScopeHashField])) == strings.TrimSpace(scopeHash)
+}
+
+func reportExportProtectedTerminalAuditStatus(status string, mapping reportmodel.ReportExportRecordMappingSchema) bool {
+	status = strings.TrimSpace(status)
+	for _, terminal := range []string{mapping.AuditDeniedStatus, mapping.AuditExpiredStatus} {
+		if value := strings.TrimSpace(terminal); value != "" && status == value {
+			return true
+		}
+	}
+	return false
+}
+
+func reportExportCompletionFingerprint(completion dataexchange.ExportCompletion) (string, error) {
+	return reportcontract.CanonicalJSONSHA256(struct {
+		JobID        string `json:"job_id"`
+		ArtifactID   string `json:"artifact_id"`
+		Filename     string `json:"filename"`
+		ContentType  string `json:"content_type"`
+		SHA256       string `json:"sha256"`
+		Size         int64  `json:"size"`
+		ExpiresAt    string `json:"expires_at"`
+		Rows         int    `json:"rows"`
+		ResultChunks int    `json:"result_chunks"`
+	}{
+		JobID: strings.TrimSpace(completion.JobID), ArtifactID: strings.TrimSpace(completion.Artifact.ID),
+		Filename: strings.TrimSpace(completion.Artifact.Filename), ContentType: strings.TrimSpace(completion.Artifact.ContentType),
+		SHA256: strings.TrimSpace(completion.Artifact.SHA256), Size: completion.Artifact.Size,
+		ExpiresAt: completion.Artifact.ExpiresAt.UTC().Format(time.RFC3339Nano), Rows: completion.Rows, ResultChunks: completion.ResultChunks,
+	})
+}
+
+func reportExportAuditBindingMatches(data map[string]any, mapping reportmodel.ReportExportRecordMappingSchema, payload ExportPayload) bool {
+	return strings.TrimSpace(fmt.Sprint(data[mapping.AuditReportKeyField])) == payload.ReportKey &&
+		strings.TrimSpace(fmt.Sprint(data[mapping.AuditRequesterField])) == payload.RequesterUserID
 }
 
 func (p *DataExchangeProvider) audit(ctx context.Context, key, event, objectKey string, principal principalmodel.Principal, auditID string, metadata map[string]any, required bool) error {

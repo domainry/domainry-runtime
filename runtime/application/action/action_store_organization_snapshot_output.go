@@ -1,6 +1,7 @@
 package action
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -135,6 +136,9 @@ func snapshotNonEmptyString(value any) bool {
 
 func snapshotInteger(value any) bool {
 	switch typed := value.(type) {
+	case json.Number:
+		_, err := typed.Int64()
+		return err == nil
 	case float64:
 		return !math.IsNaN(typed) && !math.IsInf(typed, 0) && math.Trunc(typed) == typed
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
@@ -149,6 +153,9 @@ func snapshotPositiveInteger(value any) bool {
 		return false
 	}
 	switch typed := value.(type) {
+	case json.Number:
+		number, err := typed.Int64()
+		return err == nil && number > 0
 	case float64:
 		return typed > 0
 	case int:

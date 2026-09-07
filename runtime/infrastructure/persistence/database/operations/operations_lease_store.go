@@ -20,6 +20,7 @@ type operationsLeaseSpec struct {
 }
 
 var operationsLeaseSpecs = []operationsLeaseSpec{
+	{owner: "dispatch_callback", table: "_dispatch_callback_receipts"},
 	{owner: "workflow", table: "_workflow_execution_receipts"},
 	{owner: "workflow_execution", table: "_workflow_executions"},
 	{owner: "workflow_deadline", table: "_workflow_tasks"},

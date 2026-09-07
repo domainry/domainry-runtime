@@ -102,6 +102,10 @@ func (s *WorkflowApplicationService) executeWorkflow(ctx context.Context, workfl
 	return s.executeWorkflowAttempt(ctx, workflow, payload, principal, trigger, 1, false)
 }
 
+func (s *WorkflowApplicationService) executeWorkflowWithIdempotencyKey(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal, trigger, idempotencyKey string) (workflowmodel.WorkflowExecution, error) {
+	return s.executeWorkflowAttemptWithIdempotencyKey(ctx, workflow, payload, principal, trigger, idempotencyKey, 1, false)
+}
+
 func (s *WorkflowApplicationService) ExecuteWorkflow(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal, trigger string) (workflowmodel.WorkflowExecution, error) {
 	if err := workflowAuthorizeCommand(principal); err != nil {
 		return workflowmodel.WorkflowExecution{}, err
@@ -110,17 +114,26 @@ func (s *WorkflowApplicationService) ExecuteWorkflow(ctx context.Context, workfl
 }
 
 func (s *WorkflowApplicationService) executeWorkflowAttempt(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal, trigger string, attempt int, ignoreIdempotency bool) (execution workflowmodel.WorkflowExecution, err error) {
+	return s.executeWorkflowAttemptWithIdempotencyKey(ctx, workflow, payload, principal, trigger, workflowpolicy.WorkflowIdempotencyKey(workflow, payload), attempt, ignoreIdempotency)
+}
+
+func (s *WorkflowApplicationService) executeWorkflowAttemptWithIdempotencyKey(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal, trigger, idempotencyKey string, attempt int, ignoreIdempotency bool) (execution workflowmodel.WorkflowExecution, err error) {
 	ctx, span := telemetry.StartUseCase(ctx, "workflow.execute", attribute.String("workflow.key", workflow.Key), attribute.String("workflow.trigger", trigger))
 	defer func() { telemetry.EndUseCase(span, err, execution.Status) }()
 	if workflow.Graph == nil || workflow.Graph.Version != 2 || len(workflow.Graph.Nodes) == 0 {
 		return workflowmodel.WorkflowExecution{}, badRequest("backend.workflow.graph_v2_required", "workflow", strings.TrimSpace(workflow.Key))
 	}
-	return s.executeWorkflowGraphProcess(ctx, workflow, payload, principal, trigger, attempt, ignoreIdempotency)
+	return s.executeWorkflowGraphProcessWithIdempotencyKey(ctx, workflow, payload, principal, trigger, idempotencyKey, attempt, ignoreIdempotency)
 }
 
 func (s *WorkflowApplicationService) executeGlobalScheduledWorkflow(ctx context.Context, workflow definitionmodel.WorkflowSchema, principal principalmodel.Principal, scheduledFor time.Time) (workflowmodel.WorkflowExecution, bool, error) {
+	return s.executeGlobalScheduledWorkflowWithKey(ctx, workflow, principal, scheduledFor, "")
+}
+
+func (s *WorkflowApplicationService) executeGlobalScheduledWorkflowWithKey(ctx context.Context, workflow definitionmodel.WorkflowSchema, principal principalmodel.Principal, scheduledFor time.Time, callbackIdempotencyKey string) (workflowmodel.WorkflowExecution, bool, error) {
 	payload := map[string]any{"scheduled_at": scheduledFor.UTC().Format(time.RFC3339Nano)}
-	execution, err := s.executeWorkflowAttempt(ctx, workflow, payload, principal, "scheduled:"+workflow.Key, 1, false)
+	key := scheduledWorkflowExecutionKey(workflow, payload, callbackIdempotencyKey, "")
+	execution, err := s.executeWorkflowAttemptWithIdempotencyKey(ctx, workflow, payload, principal, "scheduled:"+workflow.Key, key, 1, false)
 	if err != nil {
 		switch apperror.CodeOf(err) {
 		case idempotency.ErrorCodeKeyReused, idempotency.ErrorCodeInProgress:
@@ -128,7 +141,15 @@ func (s *WorkflowApplicationService) executeGlobalScheduledWorkflow(ctx context.
 		}
 		return workflowmodel.WorkflowExecution{}, false, err
 	}
-	return execution, execution.Status != "duplicate", nil
+	return execution, execution.Status != "duplicate" || strings.TrimSpace(callbackIdempotencyKey) != "", nil
+}
+
+func scheduledWorkflowExecutionKey(workflow definitionmodel.WorkflowSchema, payload map[string]any, callbackIdempotencyKey, recordID string) string {
+	callbackIdempotencyKey = strings.TrimSpace(callbackIdempotencyKey)
+	if callbackIdempotencyKey == "" {
+		return workflowpolicy.WorkflowIdempotencyKey(workflow, payload)
+	}
+	return workflowCommandKey("scheduled.callback", strings.TrimSpace(workflow.Key)+":"+strings.TrimSpace(recordID), callbackIdempotencyKey, map[string]any{"record_id": strings.TrimSpace(recordID)})
 }
 
 type scheduledWorkflowCheckpoint struct {

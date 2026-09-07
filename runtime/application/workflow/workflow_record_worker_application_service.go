@@ -23,7 +23,7 @@ func (s *WorkflowApplicationService) ProcessDueWorkflowExecutions(ctx context.Co
 }
 
 func (s *WorkflowApplicationService) ProcessDueWorkflowExecutionsForTarget(ctx context.Context, targetKey string, limit int, principal principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {
-	return s.processDueWorkflowExecutions(ctx, targetKey, time.Time{}, limit, principal, true, "")
+	return s.processDueWorkflowExecutions(ctx, targetKey, time.Time{}, limit, principal, true, "", "")
 }
 
 // ProcessDueWorkflowContinuations consumes durable retry and Agent-task resume
@@ -48,7 +48,7 @@ func (s *WorkflowApplicationService) ProcessDueWorkflowContinuations(ctx context
 			}
 			workspacePrincipal := principal
 			workspacePrincipal.WorkspaceID = workspaceID
-			result, err := s.processDueWorkflowExecutions(ctx, "", time.Time{}, limit-combined.Processed, workspacePrincipal, false, "")
+			result, err := s.processDueWorkflowExecutions(ctx, "", time.Time{}, limit-combined.Processed, workspacePrincipal, false, "", "")
 			if err != nil {
 				return workflowmodel.WorkflowProcessResult{}, err
 			}
@@ -57,10 +57,10 @@ func (s *WorkflowApplicationService) ProcessDueWorkflowContinuations(ctx context
 		}
 		return combined, nil
 	}
-	return s.processDueWorkflowExecutions(ctx, "", time.Time{}, limit, principal, false, "")
+	return s.processDueWorkflowExecutions(ctx, "", time.Time{}, limit, principal, false, "", "")
 }
 
-func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Context, targetKey string, scheduledFor time.Time, limit int, principal principalmodel.Principal, includeScheduled bool, exactExecutionID string) (workflowmodel.WorkflowProcessResult, error) {
+func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Context, targetKey string, scheduledFor time.Time, limit int, principal principalmodel.Principal, includeScheduled bool, exactExecutionID, callbackIdempotencyKey string) (workflowmodel.WorkflowProcessResult, error) {
 	if err := workflowAuthorizeCommand(principal); err != nil {
 		return workflowmodel.WorkflowProcessResult{}, err
 	}
@@ -77,7 +77,7 @@ func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Co
 		if scheduledFor.IsZero() {
 			scheduledFor = now
 		}
-		processed, err = s.processScheduledWorkflowExecutionsForTargetWindow(ctx, targetKey, limit, principal, now, scheduledFor)
+		processed, err = s.processScheduledWorkflowExecutionsForTargetWindowWithKey(ctx, targetKey, limit, principal, now, scheduledFor, callbackIdempotencyKey)
 		if err != nil {
 			return workflowmodel.WorkflowProcessResult{}, err
 		}

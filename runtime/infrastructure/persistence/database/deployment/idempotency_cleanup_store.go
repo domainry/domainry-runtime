@@ -99,7 +99,7 @@ func (r RuntimeStatusStore) ensureIdempotencyCleanupLease(ctx context.Context, n
 
 func (r RuntimeStatusStore) deleteExpiredReceiptBatch(ctx context.Context, table, owner string, fencingToken int64, now string, limit int) (int, error) {
 	lease := cleanupLeaseGuard(r.store.SQLRenderer, owner, fencingToken, now)
-	selectQuery, selectArgs, err := query.NewSelectBuilder(r.store.SQLRenderer, table).Columns("id").Where(query.And(query.ExistsSubquery(lease), query.NotEqual("expires_at", ""), query.LessThanOrEqual("expires_at", now), query.NotEqual("status", string(idempotency.StatusProcessing)))).OrderBy(query.Ascending("expires_at"), query.Ascending("id")).Limit(limit).Build()
+	selectQuery, selectArgs, err := query.NewSelectBuilder(r.store.SQLRenderer, table).Columns("id", "workspace_id").Where(query.And(query.ExistsSubquery(lease), expiredReceiptEligibility(now))).OrderBy(query.Ascending("expires_at"), query.Ascending("id")).Limit(limit).Build()
 	if err != nil {
 		return 0, err
 	}
@@ -107,37 +107,65 @@ func (r RuntimeStatusStore) deleteExpiredReceiptBatch(ctx context.Context, table
 	if err != nil {
 		return 0, err
 	}
-	ids := []string{}
+	type receiptLocator struct{ id, workspaceID string }
+	locators := []receiptLocator{}
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		var locator receiptLocator
+		if err := rows.Scan(&locator.id, &locator.workspaceID); err != nil {
 			_ = rows.Close()
 			return 0, err
 		}
-		ids = append(ids, id)
+		locators = append(locators, locator)
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
 		return 0, err
 	}
 	_ = rows.Close()
-	if len(ids) == 0 {
+	if len(locators) == 0 {
 		return 0, nil
 	}
-	idValues := make([]any, 0, len(ids))
-	for _, id := range ids {
-		idValues = append(idValues, id)
+	if r.beforeDeleteExpiredReceipts != nil {
+		r.beforeDeleteExpiredReceipts()
 	}
-	deleteQuery, deleteArgs, err := query.NewDeleteBuilder(r.store.SQLRenderer, table).Where(query.And(query.ExistsSubquery(cleanupLeaseGuard(r.store.SQLRenderer, owner, fencingToken, now)), query.In("id", idValues...))).Build()
-	if err != nil {
-		return 0, err
+	workspaceOrder := make([]string, 0)
+	idsByWorkspace := make(map[string][]any)
+	for _, locator := range locators {
+		if _, exists := idsByWorkspace[locator.workspaceID]; !exists {
+			workspaceOrder = append(workspaceOrder, locator.workspaceID)
+		}
+		idsByWorkspace[locator.workspaceID] = append(idsByWorkspace[locator.workspaceID], locator.id)
 	}
-	deleted, err := r.db.ExecContext(ctx, deleteQuery, deleteArgs...)
-	if err != nil {
-		return 0, err
+	total := 0
+	for _, workspaceID := range workspaceOrder {
+		deleteQuery, deleteArgs, buildErr := query.NewDeleteBuilder(r.store.SQLRenderer, table).Where(query.And(
+			query.ExistsSubquery(cleanupLeaseGuard(r.store.SQLRenderer, owner, fencingToken, now)),
+			query.Equal("workspace_id", workspaceID),
+			query.In("id", idsByWorkspace[workspaceID]...),
+			expiredReceiptEligibility(now),
+		)).Build()
+		if buildErr != nil {
+			return total, buildErr
+		}
+		deleted, deleteErr := r.db.ExecContext(ctx, deleteQuery, deleteArgs...)
+		if deleteErr != nil {
+			return total, deleteErr
+		}
+		count, rowsErr := deleted.RowsAffected()
+		if rowsErr != nil {
+			return total, rowsErr
+		}
+		total += int(count)
 	}
-	count, err := deleted.RowsAffected()
-	return int(count), err
+	return total, nil
+}
+
+func expiredReceiptEligibility(now string) query.Predicate {
+	return query.And(
+		query.NotEqual("expires_at", ""),
+		query.LessThanOrEqual("expires_at", now),
+		query.NotEqual("status", string(idempotency.StatusProcessing)),
+	)
 }
 
 func (r RuntimeStatusStore) failIdempotencyCleanup(ctx context.Context, owner string, fencingToken int64, now string, cause error) {

@@ -294,7 +294,12 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 		CreateBy:    principal.UserID,
 		UpdateBy:    principal.UserID,
 	}
-	recordpolicy.RecordApplyOwnerDefault(&record, principal)
+	// Persist the exact ownership candidate that was authorized above. Action
+	// creates may target an authorized store different from the actor's own
+	// Organization; re-defaulting from the principal here would silently move
+	// the canonical commit back to the actor Organization.
+	record.OwnerUserID = candidate.OwnerUserID
+	record.OwnerOrgID = candidate.OwnerOrgID
 	commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: record, LocalizedValues: localizedValues}
 	if s.dependencies.BuildAudit != nil {
 		var metadata map[string]any

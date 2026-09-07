@@ -147,12 +147,16 @@ type scheduledWorkflowRuntimeAdapter struct {
 	processExecutions                  func(context.Context, int, principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error)
 	processTargetedExecutions          func(context.Context, string, int, principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error)
 	processTargetedExecutionsForWindow func(context.Context, string, time.Time, int, principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error)
+	processTargetedWindowWithKey       func(context.Context, string, time.Time, int, principalmodel.Principal, string) (workflowmodel.WorkflowProcessResult, error)
 }
 
 var _ dispatchapplication.WorkflowTargetRuntime = scheduledWorkflowRuntimeAdapter{}
 
 func (adapter scheduledWorkflowRuntimeAdapter) ExecuteWorkflowTarget(ctx context.Context, request dispatchapplication.WorkflowTargetRequest) (workflowmodel.WorkflowProcessResult, error) {
 	if !request.EffectiveAt.IsZero() {
+		if adapter.processTargetedWindowWithKey != nil {
+			return adapter.processTargetedWindowWithKey(ctx, request.Operation, request.EffectiveAt, request.Limit, request.Principal, request.IdempotencyKey)
+		}
 		return adapter.ProcessDueWorkflowExecutionsForScheduledWindow(ctx, request.Operation, request.EffectiveAt, request.Limit, request.Principal)
 	}
 	return adapter.ProcessDueWorkflowExecutionsForTarget(ctx, request.Operation, request.Limit, request.Principal)

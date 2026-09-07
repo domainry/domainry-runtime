@@ -13,6 +13,7 @@ const (
 	TargetOrganizationSourceExplicitOrSoleAuthorizedStore TargetOrganizationSource = "explicit_or_sole_authorized_store"
 	TargetOrganizationSourceRecordOwner                   TargetOrganizationSource = "record_owner"
 	TargetOrganizationSourceProvisionedStore              TargetOrganizationSource = "provisioned_store"
+	TargetOrganizationSourceDeliveredOrganizationUnit     TargetOrganizationSource = "delivered_organization_unit"
 	TargetOrganizationInputInvocation                     string                   = "target_organization_id"
 )
 
@@ -28,7 +29,7 @@ func (value ActionTargetOrganizationCapability) Valid() bool {
 	switch value.Source {
 	case TargetOrganizationSourceExplicit, TargetOrganizationSourceExplicitOrSoleAuthorizedStore:
 		return strings.TrimSpace(value.Input) == TargetOrganizationInputInvocation
-	case TargetOrganizationSourceRecordOwner, TargetOrganizationSourceProvisionedStore:
+	case TargetOrganizationSourceRecordOwner, TargetOrganizationSourceProvisionedStore, TargetOrganizationSourceDeliveredOrganizationUnit:
 		return strings.TrimSpace(value.Input) == ""
 	default:
 		return false

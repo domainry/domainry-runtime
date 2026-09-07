@@ -77,6 +77,10 @@ func (e *WorkflowProcessEngine) cancelUnfinishedApprovalTasks(ctx context.Contex
 
 func (s *WorkflowApplicationService) executeWorkflowGraphProcess(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal, trigger string, attempt int, ignoreIdempotency bool) (workflowmodel.WorkflowExecution, error) {
 	idempotencyKey := workflowpolicy.WorkflowIdempotencyKey(workflow, payload)
+	return s.executeWorkflowGraphProcessWithIdempotencyKey(ctx, workflow, payload, principal, trigger, idempotencyKey, attempt, ignoreIdempotency)
+}
+
+func (s *WorkflowApplicationService) executeWorkflowGraphProcessWithIdempotencyKey(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal, trigger, idempotencyKey string, attempt int, ignoreIdempotency bool) (workflowmodel.WorkflowExecution, error) {
 	claim, replay, found, err := s.beginWorkflowExecution(ctx, workflow, payload, principal, trigger, idempotencyKey, attempt, ignoreIdempotency)
 	if err != nil {
 		return workflowmodel.WorkflowExecution{}, err

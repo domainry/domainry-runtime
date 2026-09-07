@@ -229,6 +229,7 @@ type ReconciliationAction struct {
 func RestoreReconciliationPlan() []ReconciliationAction {
 	return []ReconciliationAction{
 		{Table: "_automation_instruction_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
+		{Table: "_dispatch_callback_receipts", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
 		{Table: "_workflow_execution_receipts", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
 		{Table: "_action_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
 		{Table: "_record_mutation_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},

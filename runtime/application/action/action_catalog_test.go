@@ -190,6 +190,36 @@ func TestActionCatalogRequiresExactStoreOrganizationMutationGrant(t *testing.T) 
 	}
 }
 
+func TestActionCatalogRequiresExactOrganizationUnitDeliveryGrant(t *testing.T) {
+	descriptor := actionTestHandlerDescriptor("department_profile.provision", nil)
+	descriptor.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit}
+	descriptor.OrganizationUnitDelivery = &runtimeext.OrganizationUnitDeliveryCapability{
+		Operations:   []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryCreate},
+		NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
+		ParentSource: runtimeext.OrganizationUnitParentSourceWorkspaceCompany,
+	}
+	registry := runtimeext.NewBusinessHandlerRegistry()
+	if err := registry.Register(&catalogHandler{descriptor: descriptor}); err != nil {
+		t.Fatal(err)
+	}
+	registry.Freeze()
+	base := actionTestPublishedContract(definitionmodel.ActionSchema{
+		Key: "department_profile.provision", ObjectKey: "department_profile", Kind: definitionmodel.ActionKindObjectOperation,
+		TargetOrganization: &definitionmodel.ActionTargetOrganizationPolicy{Source: definitionmodel.ActionTargetOrganizationSourceDeliveredOrganizationUnit},
+	})
+	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 1 || !strings.Contains(errors[0].Error(), "organization unit delivery capability mismatch") {
+		t.Fatalf("missing manifest policy errors=%v", errors)
+	}
+	base.OrganizationUnitDelivery = &definitionmodel.ActionOrganizationUnitDeliveryPolicy{Operations: []string{"create"}, NodeTypes: []string{"team"}, ParentSource: "workspace_company"}
+	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 1 || !strings.Contains(errors[0].Error(), "organization unit delivery capability mismatch") {
+		t.Fatalf("wrong manifest node type errors=%v", errors)
+	}
+	base.OrganizationUnitDelivery.NodeTypes = []string{"department"}
+	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 0 {
+		t.Fatalf("matching manifest policy errors=%v", errors)
+	}
+}
+
 func TestActionCatalogRejectsEmptyAndDuplicatePublishedActionKeys(t *testing.T) {
 	actions := []definitionmodel.ActionSchema{
 		{Key: " ", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectCreate},

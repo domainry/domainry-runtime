@@ -11,11 +11,11 @@ require (
 	github.com/domainry/domainry-audit v0.1.5
 	github.com/domainry/domainry-audit-sdk v0.1.2
 	github.com/domainry/domainry-connector-sdk v0.1.0-dev.14
-	github.com/domainry/domainry-data-exchange v0.3.6
-	github.com/domainry/domainry-data-exchange-sdk v0.3.3
+	github.com/domainry/domainry-data-exchange v0.3.7
+	github.com/domainry/domainry-data-exchange-sdk v0.3.4
 	github.com/domainry/domainry-foundation v0.1.0-dev.9
-	github.com/domainry/domainry-identity v0.2.0-dev38
-	github.com/domainry/domainry-identity-sdk v0.1.2-dev.1
+	github.com/domainry/domainry-identity v0.2.0-dev39
+	github.com/domainry/domainry-identity-sdk v0.1.2-dev.2
 	github.com/domainry/domainry-integration v0.1.10
 	github.com/domainry/domainry-integration-sdk v0.1.3
 	github.com/domainry/domainry-lifecycle v0.1.8
@@ -28,8 +28,8 @@ require (
 	github.com/domainry/domainry-notification-sdk v0.1.0-dev.8
 	github.com/domainry/domainry-report v0.1.6
 	github.com/domainry/domainry-report-sdk v0.1.2
-	github.com/domainry/domainry-scheduler v0.1.6
-	github.com/domainry/domainry-scheduler-sdk v0.1.3
+	github.com/domainry/domainry-scheduler v0.1.7
+	github.com/domainry/domainry-scheduler-sdk v0.1.4
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/microsoft/go-mssqldb v1.10.0

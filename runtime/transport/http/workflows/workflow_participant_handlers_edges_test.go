@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
@@ -158,19 +159,22 @@ func TestParticipantWorkflowWithdrawAndRunEdges(t *testing.T) {
 		t.Fatal("retry service error not propagated")
 	}
 
-	handler, _, _, _, response = newWorkflowHTTPRuntimeFixture()
+	handler, _, runWorkers, _, response := newWorkflowHTTPRuntimeFixture()
 	writer, request = workflowHTTPRequest(http.MethodPost, "/workflows/order.approve/run", `{"payload":{"order_id":"order-1"}}`, map[string]string{"workflowKey": " order.approve "})
 	request.Header.Set("Idempotency-Key", "run-1")
 	handler.runParticipantWorkflow(writer, request)
 	if response.status != http.StatusOK || response.err != nil {
 		t.Fatalf("run status=%d value=%#v err=%v", response.status, response.value, response.err)
 	}
+	if len(runWorkers.claimRequests) != 1 || runWorkers.claimRequests[0].Receipt.IdempotencyKey != "run-1" {
+		t.Fatalf("run caller key was not claimed: %#v", runWorkers.claimRequests)
+	}
 
 	resetWorkflowHTTPResponse(response)
 	writer, request = workflowHTTPRequest(http.MethodPost, "/workflows/order.approve/run", "", map[string]string{"workflowKey": "order.approve"})
 	handler.runParticipantWorkflow(writer, request)
-	if response.status != http.StatusBadRequest {
-		t.Fatalf("run missing key status=%d", response.status)
+	if response.status != http.StatusBadRequest || response.code != idempotency.ErrorCodeMissingKey {
+		t.Fatalf("run missing key status=%d code=%q", response.status, response.code)
 	}
 
 	resetWorkflowHTTPResponse(response)

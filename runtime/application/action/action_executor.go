@@ -10,6 +10,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/mutation"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	organizationunit "github.com/domainry/domainry-identity/organizationunit"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -65,6 +66,7 @@ type BusinessHandlerExecutionDependencies struct {
 	WorkspaceIdentityUsageCursor      WorkspaceIdentityUsageCursorCodec
 	AuthorizeWorkspaceIdentityUsage   func(context.Context, string) (identitysdk.WorkspaceIdentityUsageAuthorization, error)
 	ResolveRecordTargetOrganization   func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation) (string, error)
+	BindOrganizationUnitDelivery      func(context.Context) (organizationunit.Delivery, error)
 	BindStoreOrganizationDelivery     func(context.Context) (identitysdk.StoreOrganizationDelivery, error)
 	BindIdentityHandlerDelivery       func(context.Context) (identitysdk.HandlerDelivery, error)
 	BindWorkspaceIdentityUsage        func(context.Context) (identitysdk.WorkspaceIdentityUsageAggregate, error)
@@ -105,23 +107,24 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 		return ActionExecutionResult{}, err
 	}
 	session := &businessActionExecution{
-		dependencies:        e.dependencies,
-		identity:            identity,
-		principal:           toRuntimeextPrincipal(invocation.Principal),
-		workspace:           runtimeext.Workspace{ID: invocation.Principal.WorkspaceID},
-		invocation:          invocation,
-		action:              action,
-		unitOfWork:          governed.unitOfWork,
-		connectorGrants:     append([]runtimeext.ActionConnectorCapability(nil), descriptor.ConnectorCapabilities...),
-		notificationGrants:  append([]string(nil), descriptor.NotificationEventTypes...),
-		fileGrants:          append([]string(nil), descriptor.FileCapabilities...),
-		objectGrants:        append([]runtimeext.ActionObjectCapability(nil), descriptor.ObjectCapabilities...),
-		aggregateGrants:     append([]runtimeext.CrossWorkspaceAggregateCapability(nil), descriptor.CrossWorkspaceAggregates...),
-		targetGrant:         cloneTargetOrganizationCapability(descriptor.TargetOrganization),
-		identityGrant:       cloneIdentityHandlerDeliveryCapability(descriptor.IdentityHandlerDelivery),
-		storeCatalogGrant:   cloneStoreOrganizationCatalogCapability(descriptor.StoreOrganizationCatalog),
-		storeMutationGrant:  cloneStoreOrganizationMutationCapability(descriptor.StoreOrganizationMutation),
-		workspaceUsageGrant: cloneWorkspaceIdentityUsageCapability(descriptor.WorkspaceIdentityUsage),
+		dependencies:          e.dependencies,
+		identity:              identity,
+		principal:             toRuntimeextPrincipal(invocation.Principal),
+		workspace:             runtimeext.Workspace{ID: invocation.Principal.WorkspaceID},
+		invocation:            invocation,
+		action:                action,
+		unitOfWork:            governed.unitOfWork,
+		connectorGrants:       append([]runtimeext.ActionConnectorCapability(nil), descriptor.ConnectorCapabilities...),
+		notificationGrants:    append([]string(nil), descriptor.NotificationEventTypes...),
+		fileGrants:            append([]string(nil), descriptor.FileCapabilities...),
+		objectGrants:          append([]runtimeext.ActionObjectCapability(nil), descriptor.ObjectCapabilities...),
+		aggregateGrants:       append([]runtimeext.CrossWorkspaceAggregateCapability(nil), descriptor.CrossWorkspaceAggregates...),
+		targetGrant:           cloneTargetOrganizationCapability(descriptor.TargetOrganization),
+		organizationUnitGrant: cloneOrganizationUnitDeliveryCapability(descriptor.OrganizationUnitDelivery),
+		identityGrant:         cloneIdentityHandlerDeliveryCapability(descriptor.IdentityHandlerDelivery),
+		storeCatalogGrant:     cloneStoreOrganizationCatalogCapability(descriptor.StoreOrganizationCatalog),
+		storeMutationGrant:    cloneStoreOrganizationMutationCapability(descriptor.StoreOrganizationMutation),
+		workspaceUsageGrant:   cloneWorkspaceIdentityUsageCapability(descriptor.WorkspaceIdentityUsage),
 	}
 	if requestIdentity, ok := identitysdk.RequestIdentityFromContext(ctx); ok {
 		session.requestIdentity = requestIdentity
@@ -182,48 +185,53 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 }
 
 type businessActionExecution struct {
-	dependencies          BusinessHandlerExecutionDependencies
-	identity              runtimeext.ExecutionIdentity
-	principal             runtimeext.Principal
-	workspace             runtimeext.Workspace
-	invocation            actionmodel.ActionInvocation
-	action                definitionmodel.ActionSchema
-	unitOfWork            *actionUnitOfWork
-	connectorGrants       []runtimeext.ActionConnectorCapability
-	notificationGrants    []string
-	fileGrants            []string
-	objectGrants          []runtimeext.ActionObjectCapability
-	aggregateGrants       []runtimeext.CrossWorkspaceAggregateCapability
-	targetGrant           *runtimeext.ActionTargetOrganizationCapability
-	identityGrant         *runtimeext.IdentityHandlerDeliveryCapability
-	storeCatalogGrant     *runtimeext.StoreOrganizationCatalogCapability
-	storeMutationGrant    *runtimeext.ActionStoreOrganizationMutationCapability
-	workspaceUsageGrant   *runtimeext.WorkspaceIdentityUsageCapability
-	requestIdentity       identitysdk.RequestIdentity
-	targetOrganization    runtimeext.TargetOrganization
-	targetResolved        bool
-	mutationPrincipal     *principalmodel.Principal
-	storeProvisionRequest *runtimeext.StoreOrganizationProvisionRequest
-	storeProvisionResult  runtimeext.StoreOrganizationProvisionResult
-	storeRenameRequest    *runtimeext.StoreOrganizationRenameRequest
-	storeRenameResult     runtimeext.StoreOrganizationMutationResult
-	storeDisableRequest   *runtimeext.StoreOrganizationDisableRequest
-	storeDisableResult    runtimeext.StoreOrganizationMutationResult
-	storeCatalogClaims    map[string]string
-	identityDeliveryCalls int
-	identityDeliveryOK    bool
-	boundIdentityCalls    int
-	initialCredential     *identitysdk.HandlerInitialCredential
-	plans                 []transactionmodel.MutationPlan
-	setCommits            []transactionmodel.RecordMutationCommit
-	intents               []runtimeext.DurableIntent
-	notifications         []notificationmodel.NotificationEvent
-	mutatedRecords        map[string]recordmodel.Record
-	observedRecords       map[string]recordmodel.Record
-	created               []actionmodel.ActionObjectRecordRef
-	updated               []actionmodel.ActionObjectRecordRef
-	deleted               []actionmodel.ActionObjectRecordRef
-	restored              []actionmodel.ActionObjectRecordRef
+	dependencies             BusinessHandlerExecutionDependencies
+	identity                 runtimeext.ExecutionIdentity
+	principal                runtimeext.Principal
+	workspace                runtimeext.Workspace
+	invocation               actionmodel.ActionInvocation
+	action                   definitionmodel.ActionSchema
+	unitOfWork               *actionUnitOfWork
+	connectorGrants          []runtimeext.ActionConnectorCapability
+	notificationGrants       []string
+	fileGrants               []string
+	objectGrants             []runtimeext.ActionObjectCapability
+	aggregateGrants          []runtimeext.CrossWorkspaceAggregateCapability
+	targetGrant              *runtimeext.ActionTargetOrganizationCapability
+	organizationUnitGrant    *runtimeext.OrganizationUnitDeliveryCapability
+	identityGrant            *runtimeext.IdentityHandlerDeliveryCapability
+	storeCatalogGrant        *runtimeext.StoreOrganizationCatalogCapability
+	storeMutationGrant       *runtimeext.ActionStoreOrganizationMutationCapability
+	workspaceUsageGrant      *runtimeext.WorkspaceIdentityUsageCapability
+	requestIdentity          identitysdk.RequestIdentity
+	targetOrganization       runtimeext.TargetOrganization
+	targetResolved           bool
+	organizationUnitTargetID string
+	organizationUnitRequest  *runtimeext.OrganizationUnitDeliveryRequest
+	organizationUnitResolve  *runtimeext.OrganizationUnitResolveRequest
+	organizationUnitResult   runtimeext.OrganizationUnitDeliveryResult
+	mutationPrincipal        *principalmodel.Principal
+	storeProvisionRequest    *runtimeext.StoreOrganizationProvisionRequest
+	storeProvisionResult     runtimeext.StoreOrganizationProvisionResult
+	storeRenameRequest       *runtimeext.StoreOrganizationRenameRequest
+	storeRenameResult        runtimeext.StoreOrganizationMutationResult
+	storeDisableRequest      *runtimeext.StoreOrganizationDisableRequest
+	storeDisableResult       runtimeext.StoreOrganizationMutationResult
+	storeCatalogClaims       map[string]string
+	identityDeliveryCalls    int
+	identityDeliveryOK       bool
+	boundIdentityCalls       int
+	initialCredential        *identitysdk.HandlerInitialCredential
+	plans                    []transactionmodel.MutationPlan
+	setCommits               []transactionmodel.RecordMutationCommit
+	intents                  []runtimeext.DurableIntent
+	notifications            []notificationmodel.NotificationEvent
+	mutatedRecords           map[string]recordmodel.Record
+	observedRecords          map[string]recordmodel.Record
+	created                  []actionmodel.ActionObjectRecordRef
+	updated                  []actionmodel.ActionObjectRecordRef
+	deleted                  []actionmodel.ActionObjectRecordRef
+	restored                 []actionmodel.ActionObjectRecordRef
 }
 
 var _ runtimeext.ActionExecution = (*businessActionExecution)(nil)
@@ -231,6 +239,7 @@ var _ runtimeext.RecordNotificationRecipientExecution = (*businessActionExecutio
 var _ runtimeext.CrossWorkspaceAggregateExecution = (*businessActionExecution)(nil)
 var _ runtimeext.TargetOrganizationExecution = (*businessActionExecution)(nil)
 var _ runtimeext.StoreOrganizationProvisionExecution = (*businessActionExecution)(nil)
+var _ runtimeext.OrganizationUnitDeliveryExecution = (*businessActionExecution)(nil)
 var _ runtimeext.StoreOrganizationMutationExecution = (*businessActionExecution)(nil)
 var _ runtimeext.IdentityHandlerDeliveryExecution = (*businessActionExecution)(nil)
 var _ runtimeext.StoreOrganizationCatalogExecution = (*businessActionExecution)(nil)

@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v30"
-	ContractSHA256  = "f8bd4942a2ffa10628d887ad36a03eca4e989a5c14b6133be2124df5c88ed97b"
+	ContractVersion = "runtimeext-v31"
+	ContractSHA256  = "3e509688262502b1f7601deb94c144580bda517925428170dda4c47e72cecd8f"
 )
 
-const contractDefinitionV30 = `runtimeext-v30
+const contractDefinitionV31 = `runtimeext-v31
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -60,8 +60,14 @@ ProvisionStoreOrganization(context.Context,ActionExecution,StoreOrganizationProv
 StoreOrganizationProvisionResult=runtime_authoritative_target_id|organization_version|replayed
 RenameStoreOrganization(context.Context,ActionExecution,StoreOrganizationRenameRequest)(StoreOrganizationMutationResult,error)
 DisableStoreOrganization(context.Context,ActionExecution,StoreOrganizationDisableRequest)(StoreOrganizationMutationResult,error)
-TargetOrganizationSource=explicit,explicit_or_sole_authorized_store,record_owner,provisioned_store
+TargetOrganizationSource=explicit,explicit_or_sole_authorized_store,record_owner,provisioned_store,delivered_organization_unit
 ExplicitOrSoleAuthorizedStore=explicit_identity_resolve_and_action_scope|omitted_exactly_one_complete_active_authorized_catalog|zero_multiple_disabled_or_continuation_denied
+CreateOrganizationUnit(context.Context,ActionExecution,OrganizationUnitDeliveryRequest)(OrganizationUnitDeliveryResult,error)
+ResolveOrganizationUnit(context.Context,ActionExecution,OrganizationUnitResolveRequest)(OrganizationUnitDeliveryResult,error)
+OrganizationUnitDeliveryOperation=create,resolve
+OrganizationUnitDeliveryNodeType=region,department,team,warehouse|company_and_store_forbidden
+OrganizationUnitDeliveryParentSource=workspace_company,target_organization
+OrganizationUnitDeliveryAuthority=published_manifest_and_handler_descriptor_exact_match|runtime_workspace_and_bearer|runtime_parent_resolution|same_action_uow|opaque_result|no_workspace_bearer_parent_or_owner_input
 DeliverIdentity(context.Context,ActionExecution,IdentityHandlerDeliveryRequest)(IdentityHandlerDeliveryResult,error)
 ResolveBoundIdentity(context.Context,ActionExecution,string)(IdentityBoundIdentity,error)
 ResolveBoundIdentities(context.Context,ActionExecution,[]string)([]IdentityBoundIdentity,error)
@@ -96,7 +102,7 @@ func ComputedContractSHA256() string {
 	structs := []any{
 		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, RecordNotificationRecipientRequest{},
 		CrossWorkspaceAggregateDimension{}, CrossWorkspaceAggregateDimensionTransform{}, CrossWorkspaceAggregateDateBucketTransform{}, CrossWorkspaceAggregateMeasure{}, CrossWorkspaceAggregateFilterCapability{}, CrossWorkspaceAggregateCapability{}, CrossWorkspaceAggregateFilter{}, CrossWorkspaceAggregateRequest{}, CrossWorkspaceAggregateRow{}, CrossWorkspaceAggregateResult{},
-		ActionTargetOrganizationCapability{}, TargetOrganization{}, StoreOrganizationProvisionRequest{}, StoreOrganizationProvisionResult{}, StoreOrganizationRenameRequest{}, StoreOrganizationDisableRequest{}, StoreOrganizationMutationResult{}, ActionStoreOrganizationMutationCapability{},
+		ActionTargetOrganizationCapability{}, TargetOrganization{}, OrganizationUnitDeliveryCapability{}, OrganizationUnitDeliveryRequest{}, OrganizationUnitResolveRequest{}, OrganizationUnit{}, OrganizationUnitDeliveryResult{}, StoreOrganizationProvisionRequest{}, StoreOrganizationProvisionResult{}, StoreOrganizationRenameRequest{}, StoreOrganizationDisableRequest{}, StoreOrganizationMutationResult{}, ActionStoreOrganizationMutationCapability{},
 		IdentityProfileBindingCapability{}, IdentityHandlerDeliveryCapability{}, IdentityUser{}, IdentityHandlerUserMutation{}, IdentityHandlerProfileBindingMutation{}, IdentityHandlerDeliveryRequest{}, IdentityHandlerProfileBinding{}, IdentityHandlerProfileBindingSelector{}, IdentityHandlerDeliveryResult{}, IdentityBoundIdentity{},
 		StoreOrganizationCatalogCapability{}, StoreOrganizationCatalogRequest{}, StoreOrganizationCatalogItem{}, StoreOrganizationCatalogPage{},
 		WorkspaceIdentityUsageCapability{}, WorkspaceIdentityUsageRequest{}, WorkspaceIdentityUsageResolveRequest{}, WorkspaceIdentityAccountCounts{}, WorkspaceCommercialTerms{}, WorkspaceCommercialConfiguration{}, WorkspaceIdentityUsageItem{}, WorkspaceIdentityUsagePage{}, WorkspaceIdentityUsageResolveResult{},
@@ -108,7 +114,7 @@ func ComputedContractSHA256() string {
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV30)
+	definition.WriteString(contractDefinitionV31)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

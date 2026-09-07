@@ -73,7 +73,7 @@ func TestHandlerDescriptorRequiresStableIdentityAndContracts(t *testing.T) {
 }
 
 func TestRuntimeextContractIdentityIsCurrent(t *testing.T) {
-	if ContractVersion != "runtimeext-v30" {
+	if ContractVersion != "runtimeext-v31" {
 		t.Fatalf("contract version = %q", ContractVersion)
 	}
 	if got := ComputedContractSHA256(); got != ContractSHA256 {
@@ -181,6 +181,59 @@ func TestStoreOrganizationMutationCapabilityRequiresRecordOwnerAndExposesNoTarge
 		for _, forbidden := range []string{"OrganizationID", "ParentOrganizationID", "OwnerOrganizationID", "WorkspaceID"} {
 			if _, found := typeOf.FieldByName(forbidden); found {
 				t.Fatalf("%s exposes caller-selected %s", typeOf.Name(), forbidden)
+			}
+		}
+	}
+}
+
+func TestOrganizationUnitDeliveryCapabilityClosesTypeParentAndTarget(t *testing.T) {
+	base := validTestBusinessHandler("department.provision").Descriptor()
+	base.TargetOrganization = &ActionTargetOrganizationCapability{Source: TargetOrganizationSourceDeliveredOrganizationUnit}
+	base.OrganizationUnitDelivery = &OrganizationUnitDeliveryCapability{
+		Operations:   []OrganizationUnitDeliveryOperation{OrganizationUnitDeliveryCreate},
+		NodeTypes:    []OrganizationUnitNodeType{OrganizationUnitNodeTypeDepartment},
+		ParentSource: OrganizationUnitParentSourceWorkspaceCompany,
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, mutate := range []func(*HandlerDescriptor){
+		func(value *HandlerDescriptor) {
+			value.OrganizationUnitDelivery.NodeTypes = []OrganizationUnitNodeType{"store"}
+		},
+		func(value *HandlerDescriptor) {
+			value.OrganizationUnitDelivery.NodeTypes = []OrganizationUnitNodeType{"company"}
+		},
+		func(value *HandlerDescriptor) {
+			value.OrganizationUnitDelivery.Operations = []OrganizationUnitDeliveryOperation{OrganizationUnitDeliveryCreate, OrganizationUnitDeliveryResolve}
+		},
+		func(value *HandlerDescriptor) {
+			value.OrganizationUnitDelivery.ParentSource = OrganizationUnitParentSourceTargetOrganization
+		},
+		func(value *HandlerDescriptor) {
+			value.TargetOrganization = &ActionTargetOrganizationCapability{Source: TargetOrganizationSourceProvisionedStore}
+		},
+	} {
+		candidate := cloneHandlerDescriptor(base)
+		mutate(&candidate)
+		if err := candidate.Validate(); !errors.Is(err, ErrHandlerCapabilityInvalid) {
+			t.Fatalf("invalid descriptor accepted: %#v error=%v", candidate, err)
+		}
+	}
+	resolve := cloneHandlerDescriptor(base)
+	resolve.TargetOrganization = &ActionTargetOrganizationCapability{Source: TargetOrganizationSourceExplicit, Input: TargetOrganizationInputInvocation}
+	resolve.OrganizationUnitDelivery = &OrganizationUnitDeliveryCapability{
+		Operations: []OrganizationUnitDeliveryOperation{OrganizationUnitDeliveryResolve},
+		NodeTypes:  []OrganizationUnitNodeType{OrganizationUnitNodeTypeDepartment, OrganizationUnitNodeTypeTeam},
+	}
+	if err := resolve.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []any{OrganizationUnitDeliveryRequest{}, OrganizationUnitResolveRequest{}} {
+		typeOf := reflect.TypeOf(value)
+		for _, forbidden := range []string{"WorkspaceID", "AccessToken", "OrganizationID", "ParentOrganizationID", "OwnerOrgID"} {
+			if _, found := typeOf.FieldByName(forbidden); found {
+				t.Fatalf("%s exposes %s", typeOf.Name(), forbidden)
 			}
 		}
 	}

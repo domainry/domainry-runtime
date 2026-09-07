@@ -19,5 +19,8 @@ func newScheduledWorkflowRuntimeAdapter(s *runtimeAssembly) scheduledWorkflowRun
 		processTargetedExecutionsForWindow: func(ctx context.Context, targetKey string, scheduledFor time.Time, limit int, principal principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {
 			return s.workflowApplicationService.ProcessDueWorkflowExecutionsForScheduledWindow(ctx, targetKey, scheduledFor, limit, principal)
 		},
+		processTargetedWindowWithKey: func(ctx context.Context, targetKey string, scheduledFor time.Time, limit int, principal principalmodel.Principal, idempotencyKey string) (workflowmodel.WorkflowProcessResult, error) {
+			return s.workflowApplicationService.ProcessDueWorkflowExecutionsForScheduledWindowWithKey(ctx, targetKey, scheduledFor, limit, principal, idempotencyKey)
+		},
 	}
 }

@@ -11,11 +11,13 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-data-exchange-sdk/modulehost"
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
 	reportcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	runtimereportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 )
 
@@ -25,6 +27,7 @@ const dataExchangeDownloadTTL = 15 * time.Minute
 type ExportPayload struct {
 	WorkspaceID              string                                  `json:"workspace_id"`
 	RequesterUserID          string                                  `json:"requester_user_id"`
+	PrepareReceiptID         string                                  `json:"prepare_receipt_id"`
 	ReportKey                string                                  `json:"report_key"`
 	ObjectKey                string                                  `json:"object_key"`
 	AuditID                  string                                  `json:"audit_id"`
@@ -46,13 +49,14 @@ type ExportPayload struct {
 type DataExchangeRecordStore interface {
 	GetReportRecord(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error)
 	CreateReportRecord(context.Context, string, map[string]any, string, principalmodel.Principal) (recordmodel.Record, error)
-	UpdateReportRecord(context.Context, string, string, map[string]any, string, principalmodel.Principal) (recordmodel.Record, error)
 	TransitionReportExportAuditStatus(context.Context, string, string, string, string, string, string) error
+	TransitionReportExportAudit(context.Context, string, string, string, string, string, map[string]any) (bool, error)
 }
 
 type DataExchangeDependencies struct {
 	Binding          dataexchange.Binding
 	Records          DataExchangeRecordStore
+	Receipts         runtimereportcontract.ReportExportPrepareReceiptStore
 	Audit            auditcontract.AuditAppender
 	ResolvePrincipal func(context.Context, dataexchange.Scope) principalmodel.Principal
 	ResolveExecution func(context.Context, reportmodel.ReportExportExecutionRequest, principalmodel.Principal) (reportmodel.ReportExportExecution, error)
@@ -98,7 +102,27 @@ func exchangePayload(options []byte, referenceID string) (ExportPayload, error) 
 		return payload, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_audit_binding_changed"}
 	}
 	payload.AuditID = referenceID
+	if strings.TrimSpace(payload.PrepareReceiptID) == "" {
+		return payload, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_receipt_invalid"}
+	}
 	return payload, nil
+}
+
+func (p *DataExchangeProvider) verifyCompletedReportExportReceipt(ctx context.Context, payload ExportPayload, jobID, artifactID string) error {
+	if p == nil || p.dependencies.Receipts == nil {
+		return internalError(nil)
+	}
+	receipt, found, err := p.dependencies.Receipts.GetReportExportPrepareReceipt(ctx, payload.WorkspaceID, payload.PrepareReceiptID)
+	if err != nil {
+		return internalError(err)
+	}
+	if !found || receipt.Status != string(idempotency.StatusSucceeded) || receipt.WorkspaceID != payload.WorkspaceID ||
+		receipt.RequesterUserID != payload.RequesterUserID || receipt.ReportKey != payload.ReportKey || receipt.ObjectKey != payload.ObjectKey ||
+		receipt.AuditID != payload.AuditID || receipt.JobID != strings.TrimSpace(jobID) ||
+		receipt.CompletionArtifactID == "" || receipt.CompletionArtifactID != strings.TrimSpace(artifactID) {
+		return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_receipt_invalid"}
+	}
+	return nil
 }
 
 func (p *DataExchangeProvider) principal(ctx context.Context, scope dataexchange.Scope) (principalmodel.Principal, error) {

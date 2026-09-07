@@ -132,30 +132,48 @@ func (a *ReportRecordAdapter) UpdateReportRecord(ctx context.Context, objectKey,
 // patched, and the conditional update cannot overwrite a concurrent terminal
 // transition.
 func (a *ReportRecordAdapter) TransitionReportExportAuditStatus(ctx context.Context, workspaceID, objectKey, recordID, statusField, fromStatus, toStatus string) error {
+	_, err := a.TransitionReportExportAudit(ctx, workspaceID, objectKey, recordID, statusField, fromStatus, map[string]any{statusField: toStatus})
+	return err
+}
+
+// TransitionReportExportAudit applies a compiler-validated audit patch only
+// while the record still has the observed status. Returning false lets the
+// caller re-read and distinguish an idempotent terminal state from a conflict.
+func (a *ReportRecordAdapter) TransitionReportExportAudit(ctx context.Context, workspaceID, objectKey, recordID, statusField, fromStatus string, patch map[string]any) (bool, error) {
 	if a == nil || a.repository == nil || a.schemaMap == nil {
-		return reportApplicationError(nil)
+		return false, reportApplicationError(nil)
 	}
 	object, ok := a.schemaMap()[strings.TrimSpace(objectKey)]
 	if !ok {
-		return &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.report.export_audit_not_found"}
+		return false, &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.report.export_audit_not_found"}
 	}
-	statusField = strings.TrimSpace(statusField)
-	validStatusField := false
+	fields := make(map[string]struct{}, len(object.Fields))
 	for _, field := range object.Fields {
-		if field.Key == statusField && field.DisabledAt == "" {
-			validStatusField = true
-			break
+		if field.DisabledAt == "" {
+			fields[field.Key] = struct{}{}
 		}
 	}
-	if !validStatusField || strings.TrimSpace(recordID) == "" || strings.TrimSpace(fromStatus) == "" || strings.TrimSpace(toStatus) == "" {
-		return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.export_control_invalid"}
+	if strings.TrimSpace(recordID) == "" || strings.TrimSpace(fromStatus) == "" || len(patch) == 0 {
+		return false, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.export_control_invalid"}
 	}
-	_, err := a.repository.UpdateRecordWhere(ctx, workspaceID, object, recordmodel.Record{
+	normalizedPatch := make(map[string]any, len(patch))
+	for key, value := range patch {
+		key = strings.TrimSpace(key)
+		if _, valid := fields[key]; !valid {
+			return false, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.export_control_invalid"}
+		}
+		normalizedPatch[key] = value
+	}
+	statusField = strings.TrimSpace(statusField)
+	toStatus, statusIsText := normalizedPatch[statusField].(string)
+	if _, valid := fields[statusField]; !valid || !statusIsText || strings.TrimSpace(toStatus) == "" {
+		return false, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.export_control_invalid"}
+	}
+	return a.repository.UpdateRecordWhere(ctx, strings.TrimSpace(workspaceID), object, recordmodel.Record{
 		ID:        strings.TrimSpace(recordID),
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
-		Data:      map[string]any{statusField: strings.TrimSpace(toStatus)},
+		Data:      normalizedPatch,
 	}, map[string]any{statusField: strings.TrimSpace(fromStatus)})
-	return err
 }
 
 func (a *ReportRecordAdapter) ListReportRecords(ctx context.Context, workspaceID string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {

@@ -77,7 +77,7 @@ func initializeRecordApplications(s *runtimeAssembly) {
 	s.reportModuleSnapshotHost = reportModuleSnapshotHost{compile: s.reportNotificationCompiler, committer: s.reportSnapshotNotificationCommitter}
 	s.reportExportsService = reportexportapplication.NewReportExportApplicationService(reportexportapplication.ReportExportApplicationDependencies{
 		ProductBrandName: s.productBrandName, Records: reportRecords, Audit: s.auditApplicationService,
-		DataExchange: s.dataExchange, DataExchangeProviders: s.dataExchangeProviders,
+		DataExchange: s.dataExchange, DataExchangeProviders: s.dataExchangeProviders, PrepareReceipts: s.reportExportPrepareReceipts,
 	})
 	s.reportModuleExportHost = reportModuleExportHost{service: s.reportExportsService}
 }

@@ -1,6 +1,7 @@
 package action
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -38,6 +39,17 @@ func TestProjectStoreOrganizationSnapshotOutputIsStrictAndReappliesFieldSecurity
 	}
 	if !reflect.DeepEqual(item["organization"], input["stores"].(map[string]any)["items"].([]any)[0].(map[string]any)["organization"]) {
 		t.Fatalf("organization changed: %#v", item["organization"])
+	}
+	payload, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := decodeBusinessHandlerOutput(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ProjectBusinessHandlerOutput(t.Context(), principal, action, decoded, func(key string) (definitionmodel.ObjectSchema, bool) { return object, key == object.Key }); err != nil {
+		t.Fatalf("snapshot decoded with UseNumber was rejected: %v", err)
 	}
 
 	broken := map[string]any{"stores": map[string]any{"items": []any{map[string]any{

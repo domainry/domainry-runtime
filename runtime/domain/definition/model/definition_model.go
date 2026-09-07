@@ -150,7 +150,14 @@ type ActionSchema struct {
 	EffectSet                 *ActionEffectSet                       `json:"effect_set,omitempty"`
 	FileOperations            []string                               `json:"file_operations,omitempty"`
 	TargetOrganization        *ActionTargetOrganizationPolicy        `json:"target_organization,omitempty"`
+	OrganizationUnitDelivery  *ActionOrganizationUnitDeliveryPolicy  `json:"organization_unit_delivery,omitempty"`
 	StoreOrganizationMutation *ActionStoreOrganizationMutationPolicy `json:"store_organization_mutation,omitempty"`
+}
+
+type ActionOrganizationUnitDeliveryPolicy struct {
+	Operations   []string `json:"operations"`
+	NodeTypes    []string `json:"node_types"`
+	ParentSource string   `json:"parent_source,omitempty"`
 }
 
 type ActionStoreOrganizationMutationPolicy struct {
@@ -236,6 +243,7 @@ const (
 	ActionTargetOrganizationSourceExplicitOrSoleAuthorizedStore = "explicit_or_sole_authorized_store"
 	ActionTargetOrganizationSourceRecordOwner                   = "record_owner"
 	ActionTargetOrganizationSourceProvisionedStore              = "provisioned_store"
+	ActionTargetOrganizationSourceDeliveredOrganizationUnit     = "delivered_organization_unit"
 	ActionTargetOrganizationInputInvocation                     = "target_organization_id"
 )
 
@@ -266,6 +274,7 @@ func ObjectExportAssuranceActionKey(objectKey string) string {
 type ActionPayloadField struct {
 	Key             string                             `json:"key"`
 	Name            string                             `json:"name,omitempty"`
+	Description     string                             `json:"description,omitempty"`
 	Type            string                             `json:"type,omitempty"`
 	Options         []string                           `json:"options,omitempty"`
 	I18n            localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`

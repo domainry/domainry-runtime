@@ -66,7 +66,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workspaceprovision` | `POST /workspaces/{workspaceCode}/suspend` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 | `workspaceprovision` | `PUT /workspaces/{workspaceCode}/commercial-configuration` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 
-## Application mutation commands (123)
+## Application mutation commands (127)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -89,6 +89,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `deployment` | `ProcessIdempotencyCleanup` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/deployment/deployment_runtime_status_application_service.go` |
 | `deployment` | `ResetIdempotencyReceipt` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/deployment/deployment_runtime_status_application_service.go` |
 | `deployment` | `RetryIdempotencyReceipt` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/deployment/deployment_runtime_status_application_service.go` |
+| `dispatch` | `Execute` | `system_key_required` | upstream operation and resolved target identity | `runtime/application/dispatch/callback_execution_application_service.go` |
 | `dispatch` | `Execute` | `system_key_required` | upstream operation and resolved target identity | `runtime/application/dispatch/target_execution_application_service.go` |
 | `notificationfacade` | `ApprovePublication` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notificationfacade/notification_application_service.go` |
 | `notificationfacade` | `CancelPublication` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/notificationfacade/notification_application_service.go` |
@@ -167,6 +168,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `recordtimer` | `ProcessDueRecordTimers` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/recordtimer/record_timer_processing.go` |
 | `recordtimer` | `ResolveFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_recovery.go` |
 | `recordtimer` | `RetryFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_recovery.go` |
+| `report` | `PrepareResolvedExport` | `caller_key_required` | Report prepare caller key scoped by workspace, requester, report object, and audit | `runtime/application/report/export/application/report_export_data_exchange_application.go` |
 | `upload` | `RecordUploaded` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/upload/upload_access_application_service.go` |
 | `workflow` | `CancelWorkflowProcess` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_process_application_service.go` |
 | `workflow` | `CancelWorkflowProcessWithKey` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_process_application_service.go` |
@@ -176,6 +178,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workflow` | `ProcessDueWorkflowContinuations` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_record_worker_application_service.go` |
 | `workflow` | `ProcessDueWorkflowExecutions` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_record_worker_application_service.go` |
 | `workflow` | `ProcessDueWorkflowExecutionsForScheduledWindow` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_execution_application_service.go` |
+| `workflow` | `ProcessDueWorkflowExecutionsForScheduledWindowWithKey` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_execution_application_service.go` |
 | `workflow` | `ProcessDueWorkflowExecutionsForTarget` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_record_worker_application_service.go` |
 | `workflow` | `ProcessScheduledWorkflowWindowPage` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_record_execution_application_service.go` |
 | `workflow` | `ProcessWorkflowContinuation` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_application_service.go` |
@@ -192,6 +195,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workflow` | `RunAutomationWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
 | `workflow` | `RunIntegrationWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
 | `workflow` | `RunWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
+| `workflow` | `RunWorkflowWithKey` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
 | `workspaceprovision` | `UpdateCommercialConfiguration` | `caller_key_required` | use-case key propagated from transport | `runtime/application/workspaceprovision/workspace_administration_application_service.go` |
 
 ## Process-owned workers (11)

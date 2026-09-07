@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/idempotency"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -163,9 +164,10 @@ func (s *workflowHTTPProcessStore) CommitWorkflowState(_ context.Context, commit
 
 type workflowHTTPWorkerStore struct {
 	workflowcontract.WorkflowWorkerStore
-	processes  *workflowHTTPProcessStore
-	executions map[string]workflowmodel.WorkflowExecution
-	err        error
+	processes     *workflowHTTPProcessStore
+	executions    map[string]workflowmodel.WorkflowExecution
+	claimRequests []workflowmodel.WorkflowExecutionClaimRequest
+	err           error
 }
 
 func (s *workflowHTTPWorkerStore) InsertExecution(_ context.Context, _ string, execution workflowmodel.WorkflowExecution) error {
@@ -174,8 +176,14 @@ func (s *workflowHTTPWorkerStore) InsertExecution(_ context.Context, _ string, e
 	}
 	return s.err
 }
-func (s *workflowHTTPWorkerStore) TryBeginExecution(context.Context, workflowmodel.WorkflowExecutionClaimRequest) (workflowmodel.WorkflowExecutionClaimResult, error) {
-	return workflowmodel.WorkflowExecutionClaimResult{}, s.err
+func (s *workflowHTTPWorkerStore) TryBeginExecution(_ context.Context, request workflowmodel.WorkflowExecutionClaimRequest) (workflowmodel.WorkflowExecutionClaimResult, error) {
+	s.claimRequests = append(s.claimRequests, request)
+	receipt := request.Receipt
+	receipt.ID = "workflow-http-receipt"
+	receipt.RequestFingerprint = request.RequestFingerprint
+	receipt.LeaseOwner = request.LeaseOwner
+	receipt.FencingToken = 1
+	return workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: receipt}, s.err
 }
 func (s *workflowHTTPWorkerStore) CompleteExecutionReceipt(context.Context, workflowmodel.WorkflowExecutionReceiptCompletion) error {
 	return s.err

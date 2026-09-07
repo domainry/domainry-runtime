@@ -160,7 +160,8 @@ func (h *WorkflowsHandler) retryParticipantWorkflowProcess(w http.ResponseWriter
 }
 
 func (h *WorkflowsHandler) runParticipantWorkflow(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.requireIdempotencyKey(w, r); !ok {
+	key, ok := h.requireIdempotencyKey(w, r)
+	if !ok {
 		return
 	}
 	var request struct {
@@ -169,7 +170,7 @@ func (h *WorkflowsHandler) runParticipantWorkflow(w http.ResponseWriter, r *http
 	if r.Body != nil && r.ContentLength != 0 && !h.decodeJSON(w, r, &request) {
 		return
 	}
-	result, err := h.executions.RunWorkflow(r.Context(), strings.TrimSpace(r.PathValue("workflowKey")), request.Payload, h.principal(r))
+	result, err := h.executions.RunWorkflowWithKey(r.Context(), strings.TrimSpace(r.PathValue("workflowKey")), request.Payload, key, h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return

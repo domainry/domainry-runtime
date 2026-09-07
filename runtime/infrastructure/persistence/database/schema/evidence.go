@@ -3,6 +3,12 @@ package schema
 import "context"
 
 func EnsureEvidenceSchema(ctx context.Context, s Store) error {
+	if err := EnsureDispatchCallbackReceiptSchema(ctx, s); err != nil {
+		return err
+	}
+	if err := EnsureReportExportPrepareReceiptSchema(ctx, s); err != nil {
+		return err
+	}
 	text := s.ApplicationSchemaIDColumnType()
 	types := s.RuntimeProfile().EvidenceSchemaTypes(text)
 	idempotencyScopeText := types.IdempotencyScope

@@ -1,6 +1,6 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "9500b259a95dd749e521b6775dd5551a804c81c51f36b37ebc42dd43d5411967",
+  "set_sha256": "6d657ed48b9363b8c641041b723e4b11f153080da48e70f7ee0604acd9c45ea5",
   "modules": [
     {
       "key": "agent",
@@ -25,21 +25,21 @@
     {
       "key": "data_exchange",
       "implementation": "github.com/domainry/domainry-data-exchange",
-      "implementation_version": "v0.3.6",
-      "implementation_sum": "h1:Ad7vCaVdiW/38gzuNpkNP8BFToahOn/6zMD7WqK1fdI=",
+      "implementation_version": "v0.3.7",
+      "implementation_sum": "h1:uL9KBFHu2Giu0oWs2r80j5SLuGXE7kEONCA/5xKhy4M=",
       "sdk": "github.com/domainry/domainry-data-exchange-sdk",
-      "sdk_version": "v0.3.3",
-      "sdk_sum": "h1:I0ZavMgDZRIVJ5QUUqYkIBoMF12bU40hYcrjTJW/wJk=",
+      "sdk_version": "v0.3.4",
+      "sdk_sum": "h1:QjjpuHUShw/dWUNvG5Syk7lxHSFn2GnjmGMKzO+hf6M=",
       "capability_contract_sha256": "77320bfee8672be5587bf29f82865a9e144ed315479f4b173e4993549bdec218"
     },
     {
       "key": "identity",
       "implementation": "github.com/domainry/domainry-identity",
-      "implementation_version": "v0.2.0-dev38",
-      "implementation_sum": "h1:fMoSs3eCL0V1RxwZcR/ZRSg3LSMge+aOx07XItwIjls=",
+      "implementation_version": "v0.2.0-dev39",
+      "implementation_sum": "h1:0yeCMbBqgTtFWlvhP2vTrfQ2cECkHdFGVfe52EjvzdI=",
       "sdk": "github.com/domainry/domainry-identity-sdk",
-      "sdk_version": "v0.1.2-dev.1",
-      "sdk_sum": "h1:U2LOJ4JEY2xls/JMfePYfUShG3XeFQDZ4DjTZlz/N2w=",
+      "sdk_version": "v0.1.2-dev.2",
+      "sdk_sum": "h1:gPmIl2ihIqUks4bebuG8733ACUhZMMeJICF9bXEb4aE=",
       "capability_contract_sha256": "f15a5e62e27542e8d086656f9da256dfb4cdce40927f39ad5715ce6685fa9f21"
     },
     {
@@ -105,12 +105,12 @@
     {
       "key": "scheduler",
       "implementation": "github.com/domainry/domainry-scheduler",
-      "implementation_version": "v0.1.6",
-      "implementation_sum": "h1:m+HW1ZUC7J3SUEshZjYbncrImv6Qna59Wbb3u4Jk6ow=",
+      "implementation_version": "v0.1.7",
+      "implementation_sum": "h1:3YCfisy9l9XqgxCS5phm7+7Mi7nN6Y6exGEZs5rgiHM=",
       "sdk": "github.com/domainry/domainry-scheduler-sdk",
-      "sdk_version": "v0.1.3",
-      "sdk_sum": "h1:YUdO2v2dxyKMmCBLW4x9ffVsrWN8OQ4tWc8bZ/HcN9A=",
-      "capability_contract_sha256": "2a62640fe8bd0665ba55246fc0e60ec9c0762e06546d02a0af2b819dafbcd3e5"
+      "sdk_version": "v0.1.4",
+      "sdk_sum": "h1:vZO9IO9kNcsAmIemfYShzR06MUUWGdqWPlMBvGBrce0=",
+      "capability_contract_sha256": "55e860519d291d7d544fd48f4f405d2a9a48391188c7de3e4b9d7623d145129c"
     }
   ]
 }

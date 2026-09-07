@@ -10,6 +10,7 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	organizationunit "github.com/domainry/domainry-identity/organizationunit"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 
@@ -82,6 +83,7 @@ type runtimeAssembly struct {
 	dataExchangeProviders             *recordapplication.DataExchangeProviders
 	reportObjectSQL                   reportcontract.ReportObjectSQLExecutor
 	reportSnapshotSources             reportcontract.ReportSnapshotSourceVersionReader
+	reportExportPrepareReceipts       reportcontract.ReportExportPrepareReceiptStore
 	auditRepo                         auditrepository.AuditRepository
 	auditApplicationService           *auditapplication.AuditApplicationService
 	auditExportTokenKey               []byte
@@ -131,6 +133,7 @@ type runtimeAssembly struct {
 	runtimeStatusRepo                   deploymentrepository.DeploymentRuntimeStatusRepository
 	identityProjection                  identitysdk.Projection
 	identityHandlerDeliveryBinder       identitysdk.HandlerDeliveryUnitOfWorkBinder
+	organizationUnitDeliveryBinder      organizationunit.UnitOfWorkBinder
 	storeOrganizationDeliveryBinder     identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
 	workspaceIdentityUsageBinder        identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
 	workspaceIdentityUsageCursor        actionapplication.WorkspaceIdentityUsageCursorCodec

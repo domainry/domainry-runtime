@@ -1,13 +1,13 @@
 package dispatch
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
 
 	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
+	dispatchcontract "github.com/domainry/domainry-runtime/runtime/domain/dispatch/contract"
 	schedulergateway "github.com/domainry/domainry-scheduler-sdk/dispatchgateway"
 )
 
@@ -17,7 +17,8 @@ import (
 type ExecutionHandler struct {
 	writeJSON         func(http.ResponseWriter, int, any)
 	writeServiceError func(http.ResponseWriter, *http.Request, error)
-	executor          TargetExecutor
+	executor          *dispatchapplication.CallbackExecutionApplicationService
+	targetAvailable   bool
 	runtimeID         string
 	signingSecret     []byte
 	now               func() time.Time
@@ -27,6 +28,7 @@ type TargetExecutionDependencies struct {
 	WriteJSON         func(http.ResponseWriter, int, any)
 	WriteServiceError func(http.ResponseWriter, *http.Request, error)
 	Executor          TargetExecutor
+	Receipts          dispatchcontract.CallbackReceiptStore
 	RuntimeID         string
 	SigningSecret     []byte
 	Now               func() time.Time
@@ -37,18 +39,34 @@ func NewExecutionHandler(deps TargetExecutionDependencies) *ExecutionHandler {
 	if now == nil {
 		now = time.Now
 	}
+	writeJSON := deps.WriteJSON
+	if writeJSON == nil {
+		writeJSON = func(w http.ResponseWriter, status int, value any) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			_ = json.NewEncoder(w).Encode(value)
+		}
+	}
+	writeServiceError := deps.WriteServiceError
+	if writeServiceError == nil {
+		writeServiceError = func(w http.ResponseWriter, _ *http.Request, _ error) {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"status_code": http.StatusInternalServerError, "code": "dispatch.execution_failed"})
+		}
+	}
 	return &ExecutionHandler{
-		writeJSON: deps.WriteJSON, writeServiceError: deps.WriteServiceError,
-		executor: deps.Executor, runtimeID: strings.TrimSpace(deps.RuntimeID), signingSecret: append([]byte(nil), deps.SigningSecret...), now: now,
+		writeJSON: writeJSON, writeServiceError: writeServiceError,
+		executor: dispatchapplication.NewCallbackExecutionApplicationService(dispatchapplication.CallbackExecutionDependencies{
+			Executor: deps.Executor, Receipts: deps.Receipts, LeaseOwner: "dispatch-callback:" + strings.TrimSpace(deps.RuntimeID), Now: now,
+		}),
+		targetAvailable: deps.Executor != nil, runtimeID: strings.TrimSpace(deps.RuntimeID), signingSecret: append([]byte(nil), deps.SigningSecret...), now: now,
 	}
 }
 
-type TargetExecutor interface {
-	Execute(context.Context, dispatchapplication.ExecutionRequest) (dispatchapplication.ExecutionReceipt, error)
-}
+type TargetExecutor = dispatchapplication.CallbackTargetExecutor
 
 func schedulerSignature(r *http.Request) schedulergateway.Signature {
 	return schedulergateway.Signature{
+		Version:   r.Header.Get(schedulergateway.SignatureVersionHeader),
 		ClientID:  r.Header.Get(schedulergateway.ClientIDHeader),
 		Timestamp: r.Header.Get(schedulergateway.TimestampHeader),
 		Value:     r.Header.Get(schedulergateway.SignatureHeader),
@@ -76,4 +94,5 @@ type executionReceipt struct {
 	ID          string `json:"id"`
 	Owner       string `json:"owner"`
 	Status      string `json:"status"`
+	Replay      bool   `json:"replay,omitempty"`
 }
