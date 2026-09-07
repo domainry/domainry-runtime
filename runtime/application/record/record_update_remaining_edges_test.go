@@ -49,7 +49,7 @@ func TestPlanRecordUpdateReturnsPersistedScopeFailure(t *testing.T) {
 	}
 }
 
-func TestRecordUpdateFieldValidationAndTriggerDeduplication(t *testing.T) {
+func TestRecordUpdateTriggerDeduplication(t *testing.T) {
 	principal := recordUpdateFinalPrincipal()
 	newService := func() (*RecordUpdateApplicationService, *updateEdgeRepository, *int) {
 		repository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Before", "status": "open", "age": float64(20), "version": float64(1)}}}
@@ -69,21 +69,6 @@ func TestRecordUpdateFieldValidationAndTriggerDeduplication(t *testing.T) {
 	}
 	if *workflowCalls != 2 || len(repository.commit.WorkflowIntents) != 2 {
 		t.Fatalf("workflow=%d commit=%+v", *workflowCalls, repository.commit)
-	}
-	service, _, _ = newService()
-	service.dependencies.ValidateFields = func(context.Context, definitionmodel.ObjectSchema, recordmodel.Record, map[string]any, principalmodel.Principal) error {
-		return errors.New("field validation failed")
-	}
-	if _, err := service.Update(t.Context(), "customer", "customer-1", map[string]any{"name": "After"}, principal); err == nil {
-		t.Fatal("field validation failure ignored")
-	}
-	repository = &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Before", "status": "open", "age": float64(20), "version": float64(1)}}}
-	dependencies := recordUpdateEdgeDependencies(repository)
-	dependencies.ValidateFields = func(context.Context, definitionmodel.ObjectSchema, recordmodel.Record, map[string]any, principalmodel.Principal) error {
-		return nil
-	}
-	if _, err := NewRecordUpdateApplicationService(dependencies).Update(t.Context(), "customer", "customer-1", map[string]any{"name": "After"}, principal); err != nil {
-		t.Fatalf("successful field validation err=%v", err)
 	}
 }
 

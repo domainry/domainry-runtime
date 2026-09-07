@@ -69,8 +69,8 @@ func TestRestoreNormalizationWritableAndValidationFailures(t *testing.T) {
 
 	restricted := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "customer", FieldKey: "status", Write: false}}})
 	service = restoreFinalService(object, restoreFinalRepository(map[string]any{"status": "deleted", "deleted_at": "now", "deleted_by": "user-1"}))
-	if _, err := service.Restore(t.Context(), "customer", "customer-1", restricted); apperror.CodeOf(err) != "backend.validation.field_not_writable" {
-		t.Fatalf("writable err=%v", err)
+	if _, err := service.Restore(t.Context(), "customer", "customer-1", restricted); err != nil {
+		t.Fatalf("field policy blocked an authorized restore: %v", err)
 	}
 
 	object = restoreFinalObject(definitionmodel.FieldSchema{Key: "name", Type: "text", Required: true})

@@ -53,8 +53,8 @@ func TestRecordCreateAuthorizationSchedulerNilPayloadAndWritableEdges(t *testing
 	}
 	denied := principal
 	accessfixture.Set(&denied, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: object.Key, FieldKey: "name", Read: true, Write: false}}})
-	if _, err := NewRecordCreateApplicationService(dependencies).Create(t.Context(), object.Key, map[string]any{"name": "Acme"}, denied); apperror.CodeOf(err) != "backend.validation.field_not_writable" {
-		t.Fatalf("writable field error = %v", err)
+	if _, err := NewRecordCreateApplicationService(dependencies).Create(t.Context(), object.Key, map[string]any{"name": "Acme"}, denied); err != nil || repository.commit.Record.Data["name"] != "Acme" {
+		t.Fatalf("field policy blocked an authorized create: err=%v commit=%#v", err, repository.commit)
 	}
 }
 

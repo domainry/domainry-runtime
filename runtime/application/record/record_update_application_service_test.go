@@ -305,7 +305,7 @@ func TestUpdateServiceMapsIdempotencyCommitFailureToStableConflict(t *testing.T)
 	}
 }
 
-func TestUpdateServiceRejectsReadOnlyFieldAndAuditsDenial(t *testing.T) {
+func TestUpdateServiceIgnoresFieldWritePolicyAfterObjectAndRowAuthorization(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "employee_profile", Fields: []definitionmodel.FieldSchema{{Key: "identity_user", Type: "relation"}}}
 	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "profile-1", Data: map[string]any{"identity_user": "u1"}}}
 	deniedReason := ""
@@ -322,9 +322,8 @@ func TestUpdateServiceRejectsReadOnlyFieldAndAuditsDenial(t *testing.T) {
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "employee_profile", FieldKey: "identity_user", Read: true, Write: false}}})
 	_, err := service.Update(t.Context(), "employee_profile", "profile-1", map[string]any{"identity_user": "u2"}, principal)
-	assertRecordUpdateApplicationError(t, err, apperror.KindForbidden, "backend.validation.field_not_writable", map[string]string{"field": "identity_user", "role": ""})
-	if deniedReason != "field_permission" || repository.commit.Operation != "" {
-		t.Fatalf("deniedReason=%q commit=%#v", deniedReason, repository.commit)
+	if err != nil || deniedReason != "" || repository.commit.Operation != "update" || repository.commit.Record.Data["identity_user"] != "u2" {
+		t.Fatalf("err=%v deniedReason=%q commit=%#v", err, deniedReason, repository.commit)
 	}
 }
 

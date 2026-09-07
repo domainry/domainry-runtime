@@ -215,11 +215,8 @@ func TestPlanCreateMutationCoversInputAuthorizationReplayAndPlannerEdges(t *test
 			t.Fatalf("candidate=%#v err=%v", candidate, err)
 		}
 	})
-	t.Run("non nil data and successful field authorization", func(t *testing.T) {
+	t.Run("non nil data", func(t *testing.T) {
 		dependencies := recordCreateEdgeDependencies(&createRepositoryProbe{})
-		dependencies.ValidateFields = func(context.Context, definitionmodel.ObjectSchema, recordmodel.Record, map[string]any, principalmodel.Principal) error {
-			return nil
-		}
 		_, candidate, err := NewRecordCreateApplicationService(dependencies).PlanCreateMutation(t.Context(), "customer", map[string]any{"name": "Acme"}, "", principal)
 		if err != nil || candidate.Data["name"] != "Acme" {
 			t.Fatalf("candidate=%#v err=%v", candidate, err)
@@ -267,16 +264,6 @@ func TestPlanCreateMutationCoversInputAuthorizationReplayAndPlannerEdges(t *test
 		}
 		_, _, err := NewRecordCreateApplicationService(dependencies).PlanCreateMutation(t.Context(), "customer", nil, "", principal)
 		if !errors.Is(err, failure) {
-			t.Fatalf("err=%v", err)
-		}
-	})
-	t.Run("field authorization error", func(t *testing.T) {
-		dependencies := recordCreateEdgeDependencies(&createRepositoryProbe{})
-		dependencies.ValidateFields = func(context.Context, definitionmodel.ObjectSchema, recordmodel.Record, map[string]any, principalmodel.Principal) error {
-			return failure
-		}
-		_, _, err := NewRecordCreateApplicationService(dependencies).PlanCreateMutation(t.Context(), "customer", nil, "", principal)
-		if apperror.CodeOf(err) == "" || !errors.Is(err, failure) {
 			t.Fatalf("err=%v", err)
 		}
 	})

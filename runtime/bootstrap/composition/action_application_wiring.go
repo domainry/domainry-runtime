@@ -208,7 +208,7 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 			if !ok {
 				return recordmodel.Record{}, apperror.New(apperror.KindInternal, "backend.action.output_object_missing", nil, map[string]string{"object": objectKey})
 			}
-			projected, err := records.recordApplicationService.ProjectRecordFields(ctx, principal, object, []recordmodel.Record{record}, "action_output")
+			projected, err := records.recordApplicationService.ProjectRecordFields(ctx, principal, object, []recordmodel.Record{record}, "read")
 			if err != nil {
 				return recordmodel.Record{}, err
 			}

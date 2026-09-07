@@ -270,10 +270,6 @@ func (s *RecordImportApplicationService) appendPreviewRow(ctx context.Context, o
 			row.Issues = append(row.Issues, importRowIssue(fieldKey, "error", "backend.import.unknown_field"))
 			continue
 		}
-		if !recordpolicy.RecordCanWriteFieldForPrincipal(principal, object.Key, fieldKey) {
-			row.Issues = append(row.Issues, importRowIssue(fieldKey, "error", "backend.import.field_not_writable"))
-			continue
-		}
 		value := strings.TrimSpace(rawRow[columnIndex])
 		if value == "" {
 			continue
@@ -292,9 +288,6 @@ func (s *RecordImportApplicationService) appendPreviewRow(ctx context.Context, o
 		row.Data = normalized
 	}
 	if err := recordvalidation.RecordValidateData(object, row.Data, false); err != nil {
-		row.Issues = append(row.Issues, importRowIssueFromError("", err))
-	}
-	if err := recordpolicy.RecordValidateWritableFields(principal, object, row.Data); err != nil {
 		row.Issues = append(row.Issues, importRowIssueFromError("", err))
 	}
 	authorizationRecord := recordmodel.Record{Data: row.Data}

@@ -246,7 +246,7 @@ func TestImportPreviewHeaderFieldPermissionAndShortRowEdges(t *testing.T) {
 		FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "customer", FieldKey: "name", Read: true, Write: false}},
 	})
 	preview, err := service.Preview(t.Context(), "customer", []byte("name\nAcme\n"), restricted)
-	if err != nil || preview.InvalidRows != 1 || preview.ErrorRows[0].Issues[0].Code != "backend.import.field_not_writable" {
+	if err != nil || !preview.CanApply || preview.ValidRows != 1 || preview.Rows[0].Data["name"] != "Acme" {
 		t.Fatalf("restricted preview=%#v err=%v", preview, err)
 	}
 

@@ -171,7 +171,7 @@ func managedIdentityFieldAccessManifest(t *testing.T, dir string) string {
 				map[string]any{"permission_key": "report.summary.get", "data_scope": "all"},
 			)
 			role["field_permissions"] = []any{
-				map[string]any{"object_key": "customer", "field_key": "name", "read": true, "write": true, "export": true},
+				map[string]any{"object_key": "customer", "field_key": "name", "read": true, "write": false, "export": true},
 				map[string]any{"object_key": "customer", "field_key": "owner", "read": false, "write": false, "export": false},
 			}
 			delete(role, "export_rules")
@@ -289,7 +289,7 @@ func assertManagedIdentityCustomerFields(t *testing.T, policies []identitysdk.Fi
 		}
 		switch policy.Field {
 		case "name":
-			foundName = policy.Read && policy.Write && policy.Export
+			foundName = policy.Read && !policy.Write && policy.Export
 		case "owner":
 			foundOwner = !policy.Read && !policy.Write && !policy.Export
 		}

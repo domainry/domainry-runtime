@@ -153,13 +153,6 @@ func (s *RecordRestoreApplicationService) planRestore(ctx context.Context, objec
 	if err != nil {
 		return recordRestorePlannedMutation{}, recordRestoreErrorFrom(apperror.KindBadRequest, err)
 	}
-	restorePatch := map[string]any{"status": nextData["status"], "deleted_at": nextData["deleted_at"], "deleted_by": nextData["deleted_by"]}
-	if recordvalidation.RecordFieldExists(object, "version") {
-		restorePatch["version"] = nextData["version"]
-	}
-	if err := recordpolicy.RecordValidateWritableFields(principal, object, restorePatch); err != nil {
-		return recordRestorePlannedMutation{}, recordRestoreErrorFrom(apperror.KindForbidden, err)
-	}
 	if err := recordvalidation.RecordValidateDataWithPrev(object, nextData, beforeData, false); err != nil {
 		return recordRestorePlannedMutation{}, recordRestoreErrorFrom(apperror.KindBadRequest, err)
 	}

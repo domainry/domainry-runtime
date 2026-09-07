@@ -2,6 +2,7 @@ package record
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -33,6 +34,11 @@ func TestRecordEffectAuthorizationPrincipalRequiresActionOwnedObjectAuthority(t 
 		Key: "approver", Permissions: []string{"order.approve"}, DataPolicies: accessfixture.DataPoliciesForPermissions([]string{"order.approve"}, identitysdk.DataScopeAll),
 		FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "order", FieldKey: "status", Write: false}},
 	})
+	// SDK cloning normalizes empty rule slices to nil; compare the same shape.
+	expectedFields := append([]identitysdk.FieldPolicy(nil), principal.AccessBundle.FieldPolicies...)
+	for index := range expectedFields {
+		expectedFields[index].Rules = append([]identitysdk.FieldRule(nil), expectedFields[index].Rules...)
+	}
 	assertUnchanged := func(name string, ctx context.Context) {
 		t.Helper()
 		got := recordEffectAuthorizationPrincipal(ctx, principal, "order", "update")
@@ -46,14 +52,14 @@ func TestRecordEffectAuthorizationPrincipalRequiresActionOwnedObjectAuthority(t 
 	assertUnchanged("non Action source", recordmutation.WithMutationInvocation(t.Context(), recordmutation.MutationInvocation{Source: transactionmodel.MutationSourceWorkflow, EffectAuthority: map[string][]string{"order": {"status"}}}))
 	mixedCtx := recordmutation.WithMutationInvocation(t.Context(), recordmutation.MutationInvocation{Source: transactionmodel.MutationSourceAction, ActionKey: "order.approve", ActionResource: "order", ActionOperation: "approve", EffectAuthority: map[string][]string{"order": {"status", " "}}})
 	mixed := recordEffectAuthorizationPrincipal(mixedCtx, principal, "order", "update")
-	if !recordTestHasWritableSDKField(mixed, "order", "status") || recordTestHasWritableSDKField(mixed, "order", " ") {
-		t.Fatalf("blank authority field was not skipped: %#v", mixed.AccessBundle.FieldPolicies)
+	if !reflect.DeepEqual(mixed.AccessBundle.FieldPolicies, expectedFields) {
+		t.Fatalf("Action authorization changed field policies: %#v", mixed.AccessBundle.FieldPolicies)
 	}
 
 	ctx := recordmutation.WithMutationInvocation(t.Context(), recordmutation.MutationInvocation{Source: transactionmodel.MutationSourceAction, ActionKey: "order.approve", ActionResource: "order", ActionOperation: "approve", EffectAuthority: map[string][]string{"order": {"status"}}})
 	got := recordEffectAuthorizationPrincipal(ctx, principal, " order ", "update")
 	if got.RoleKey != principal.RoleKey || !got.HasPermission("order.update") ||
-		!recordTestHasWritableSDKField(got, "order", "status") || principal.HasPermission("order.update") {
+		!reflect.DeepEqual(got.AccessBundle.FieldPolicies, expectedFields) || principal.HasPermission("order.update") {
 		t.Fatalf("authorized=%#v original=%#v", got, principal)
 	}
 	for _, permission := range got.PermissionKeys() {
@@ -181,7 +187,7 @@ func TestActionEffectAuthorityAllowsGovernedInternalCreateWithoutObjectCreatePer
 	dependencies.CanWriteCandidate = func(_ context.Context, got principalmodel.Principal, _ definitionmodel.ObjectSchema, candidate recordmodel.Record) (bool, error) {
 		hasCreate := got.HasPermission("customer.create")
 		hasStatusWrite := recordTestHasWritableSDKField(got, "customer", "status")
-		if !hasCreate || !hasStatusWrite || candidate.Data["status"] != "pending" {
+		if !hasCreate || hasStatusWrite || candidate.Data["status"] != "pending" {
 			t.Fatalf("Action authorization or server-owned candidate was not preserved: principal=%#v candidate=%#v", got, candidate)
 		}
 		return true, nil

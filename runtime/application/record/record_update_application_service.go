@@ -41,7 +41,6 @@ type RecordUpdateDependencies struct {
 	RunBefore             func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error
 	ValidateRelations     func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
 	ValidatePolicies      func(context.Context, definitionmodel.ObjectSchema, map[string]any, map[string]any, string, string, principalmodel.Principal) error
-	ValidateFields        func(context.Context, definitionmodel.ObjectSchema, recordmodel.Record, map[string]any, principalmodel.Principal) error
 	ApplySelfEffects      func(context.Context, definitionmodel.ObjectSchema, map[string]any, map[string]any, string, principalmodel.Principal) (bool, error)
 	ValidateUnique        func(context.Context, string, string, definitionmodel.ObjectSchema, string, map[string]any) error
 	ValidateDuplicate     func(context.Context, string, definitionmodel.ObjectSchema, string, map[string]any) error
@@ -232,18 +231,7 @@ func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectK
 		return recordUpdatePlannedMutation{}, recordUpdateErrorFrom(apperror.KindBadRequest, err)
 	}
 	patch = normalized
-	if err := recordpolicy.RecordValidateWritableFields(authorizationPrincipal, object, patch); err != nil {
-		denied := recordUpdateErrorFrom(apperror.KindForbidden, err)
-		s.denied(ctx, objectKey, record.ID, principal, denied, "field_permission", patch)
-		return recordUpdatePlannedMutation{}, denied
-	}
-	if s.dependencies.ValidateFields != nil {
-		if err := s.dependencies.ValidateFields(ctx, object, record, patch, authorizationPrincipal); err != nil {
-			denied := recordUpdateErrorFrom(apperror.KindForbidden, err)
-			s.denied(ctx, objectKey, record.ID, principal, denied, "contextual_field_policy", patch)
-			return recordUpdatePlannedMutation{}, denied
-		}
-	}
+	// Write authorization is the approved object/Action and row scope, not CLS.
 	beforeData := recordvalidation.RecordCloneData(record.Data)
 	nextData := recordvalidation.RecordCloneData(record.Data)
 	for key, value := range patch {

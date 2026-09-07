@@ -88,7 +88,6 @@ func TestRecordApplicationCompositionForwardsEveryOwnedClosure(t *testing.T) {
 	_ = service.create.dependencies.RunBefore(ctx, object.Key, "create", record.ID, nil, nil, record.Data, principal)
 	_ = service.create.dependencies.ValidateRelations(ctx, object, record.Data, principal)
 	_ = service.create.dependencies.ValidatePolicies(ctx, object, nil, record.Data, record.ID, "create", principal)
-	_ = service.create.dependencies.ValidateFields(ctx, object, record, map[string]any{"name": "Acme"}, principal)
 	_, _ = service.create.dependencies.PrepareWorkflow(ctx, object.Key, record, nil, principal, "record_created:customer")
 	_ = service.restore.dependencies.ValidateRelations(ctx, object, record.Data, principal)
 	_ = service.restore.dependencies.ValidatePolicies(ctx, object, record.Data, record.Data, record.ID, "restore", principal)
@@ -99,7 +98,6 @@ func TestRecordApplicationCompositionForwardsEveryOwnedClosure(t *testing.T) {
 	_ = service.update.dependencies.RunBefore(ctx, object.Key, "update", record.ID, nil, record.Data, record.Data, principal)
 	_ = service.update.dependencies.ValidateRelations(ctx, object, record.Data, principal)
 	_ = service.update.dependencies.ValidatePolicies(ctx, object, record.Data, record.Data, record.ID, "update", principal)
-	_ = service.update.dependencies.ValidateFields(ctx, object, record, map[string]any{"name": "Acme"}, principal)
 	_, _ = service.update.dependencies.PrepareWorkflow(ctx, object.Key, record, record.Data, principal, "record_updated:customer")
 
 	_ = service.delete.dependencies.RunBefore(ctx, object.Key, "delete", record.ID, nil, record.Data, record.Data, principal)

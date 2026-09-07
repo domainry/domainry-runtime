@@ -44,7 +44,6 @@ type RecordCreateDependencies struct {
 	RunBefore             func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error
 	ValidateRelations     func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
 	ValidatePolicies      func(context.Context, definitionmodel.ObjectSchema, map[string]any, map[string]any, string, string, principalmodel.Principal) error
-	ValidateFields        func(context.Context, definitionmodel.ObjectSchema, recordmodel.Record, map[string]any, principalmodel.Principal) error
 	ValidateUnique        func(context.Context, string, string, definitionmodel.ObjectSchema, string, map[string]any) error
 	ValidateDuplicate     func(context.Context, string, definitionmodel.ObjectSchema, string, map[string]any) error
 	AfterOutbox           func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message
@@ -227,16 +226,8 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 	} else if s.dependencies.CanWrite != nil && !s.dependencies.CanWrite(authorizationPrincipal, object, recordpolicy.RecordDataWithOwnerFacts(candidate)) {
 		return recordCreatePlannedMutation{}, recordCreateError(apperror.KindForbidden, "backend.record.owner_write_denied", nil)
 	}
-	if err := recordpolicy.RecordValidateWritableFields(authorizationPrincipal, object, inputData); err != nil {
-		return recordCreatePlannedMutation{}, recordCreateErrorFrom(apperror.KindForbidden, err)
-	}
-	if s.dependencies.ValidateFields != nil {
-		fieldCandidate := candidate
-		fieldCandidate.Data = recordvalidation.RecordCloneData(data)
-		if err := s.dependencies.ValidateFields(ctx, object, fieldCandidate, inputData, authorizationPrincipal); err != nil {
-			return recordCreatePlannedMutation{}, recordCreateErrorFrom(apperror.KindForbidden, err)
-		}
-	}
+	// Object/Action and row scope authorize this write; field permissions only
+	// affect read-side projection. Schema and business validation follow below.
 	if s.dependencies.FindReplay != nil {
 		replay, found, err := s.dependencies.FindReplay(ctx, object, inputData, principal)
 		if err != nil {

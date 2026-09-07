@@ -175,9 +175,6 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		ValidatePolicies: func(ctx context.Context, object definitionmodel.ObjectSchema, before, next map[string]any, recordID, operation string, principal principalmodel.Principal) error {
 			return dependencies.Validation.ValidateDomainPolicies(ctx, object, before, next, recordID, operation, principal)
 		},
-		ValidateFields: func(ctx context.Context, object definitionmodel.ObjectSchema, record recordmodel.Record, data map[string]any, principal principalmodel.Principal) error {
-			return contextualFieldPolicy.ValidateWrite(ctx, principal, object, record, data)
-		},
 		ValidateUnique:    dependencies.Validation.ValidateUnique,
 		ValidateDuplicate: dependencies.Validation.ValidateDuplicateIdentity,
 		AfterOutbox:       dependencies.AfterOutbox,
@@ -240,9 +237,6 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		},
 		ValidatePolicies: func(ctx context.Context, object definitionmodel.ObjectSchema, before, next map[string]any, recordID, operation string, principal principalmodel.Principal) error {
 			return dependencies.Validation.ValidateDomainPolicies(ctx, object, before, next, recordID, operation, principal)
-		},
-		ValidateFields: func(ctx context.Context, object definitionmodel.ObjectSchema, record recordmodel.Record, data map[string]any, principal principalmodel.Principal) error {
-			return contextualFieldPolicy.ValidateWrite(ctx, principal, object, record, data)
 		},
 		ApplySelfEffects:  dependencies.ApplyStateMachineSelfEffects,
 		ValidateUnique:    dependencies.Validation.ValidateUnique,

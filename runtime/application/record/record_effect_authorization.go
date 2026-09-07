@@ -13,9 +13,9 @@ import (
 
 // recordEffectAuthorizationPrincipal allows the canonical Record use case to
 // resolve and policy-check an Action-owned internal write without granting the
-// caller broad object CRUD/CLS permissions. The original principal remains the
-// actor used by validation, audit, workflow and the Mutation Planner; the
-// compiler-owned EffectAuthority is still the final field-level write cap.
+// caller broad object CRUD permissions. Only the object operation is derived;
+// field permissions do not govern writes. The original principal remains the
+// actor used by validation, audit, workflow and the Mutation Planner.
 func recordEffectAuthorizationPrincipal(ctx context.Context, principal principalmodel.Principal, objectKey, action string) principalmodel.Principal {
 	action = strings.TrimSpace(action)
 	if action != "create" && action != "update" && action != "delete" && action != "restore" {
@@ -42,7 +42,7 @@ func recordEffectAuthorizationPrincipal(ctx context.Context, principal principal
 	authorized := principal
 	if principal.AccessBundle != nil {
 		bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{
-			Resource: identitysdk.ResourceType(strings.TrimSpace(objectKey)), Action: identitysdk.Action(action), Fields: append([]string(nil), fields...),
+			Resource: identitysdk.ResourceType(strings.TrimSpace(objectKey)), Action: identitysdk.Action(action),
 			SourceResource: identitysdk.ResourceType(strings.TrimSpace(invocation.ActionResource)), SourceAction: identitysdk.Action(strings.TrimSpace(invocation.ActionOperation)),
 		}, time.Now().UTC())
 		if err == nil {

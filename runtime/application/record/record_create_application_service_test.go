@@ -152,7 +152,7 @@ func TestCreateUserFieldOmissionAndDefaults(t *testing.T) {
 	}
 }
 
-func TestCreateValidatesOnlyCallerSubmittedFieldsAsWritable(t *testing.T) {
+func TestCreateUsesObjectAndRowAuthorizationWhilePreservingDataValidation(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "ticket", Fields: []definitionmodel.FieldSchema{
 		{Key: "title", Type: "text"},
 		{Key: "status", Type: "text", DefaultValue: "new"},
@@ -171,18 +171,9 @@ func TestCreateValidatesOnlyCallerSubmittedFieldsAsWritable(t *testing.T) {
 			CanWriteCandidate: func(_ context.Context, _ principalmodel.Principal, _ definitionmodel.ObjectSchema, _ recordmodel.Record) (bool, error) {
 				return true, nil
 			},
-			ValidateFields: func(_ context.Context, _ definitionmodel.ObjectSchema, candidate recordmodel.Record, submitted map[string]any, _ principalmodel.Principal) error {
-				if _, hasStatus := candidate.Data["status"]; !hasStatus {
-					t.Fatalf("contextual policy candidate = %#v", candidate.Data)
-				}
-				if _, submittedStatus := submitted["status"]; submittedStatus {
-					return &apperror.CodedError{Code: "backend.validation.field_not_writable", Params: map[string]string{"field": "status"}}
-				}
-				return nil
-			},
 			ValidatePolicies: func(_ context.Context, _ definitionmodel.ObjectSchema, _ map[string]any, candidate map[string]any, _, _ string, _ principalmodel.Principal) error {
-				if candidate["status"] != "new" {
-					t.Fatalf("full validation candidate = %#v", candidate)
+				if candidate["status"] != "new" && candidate["status"] != "closed" {
+					return &apperror.AppError{Kind: apperror.KindBadRequest, Code: "ticket.status_invalid"}
 				}
 				return nil
 			},
@@ -205,23 +196,18 @@ func TestCreateValidatesOnlyCallerSubmittedFieldsAsWritable(t *testing.T) {
 		}
 	})
 
-	t.Run("caller submitted unwritable field is rejected", func(t *testing.T) {
+	t.Run("field write policy does not block authorized creation", func(t *testing.T) {
 		repository := &createRepositoryProbe{}
 		_, err := newService(repository, nil).Create(t.Context(), object.Key, map[string]any{"title": "Printer offline", "status": "closed"}, principal)
-		if apperror.CodeOf(err) != "backend.validation.field_not_writable" || repository.commit.Operation != "" {
+		if err != nil || repository.commit.Operation != "create" || repository.commit.Record.Data["status"] != "closed" {
 			t.Fatalf("err=%v commit=%#v", err, repository.commit)
 		}
 	})
 
-	t.Run("contextual field policy still rejects a submitted field", func(t *testing.T) {
+	t.Run("business validation still rejects invalid state", func(t *testing.T) {
 		repository := &createRepositoryProbe{}
-		contextualPrincipal := principal
-		accessfixture.Set(&contextualPrincipal, accessfixture.Bundle{Key: "agent", FieldPolicies: []accessfixture.FieldPolicyFixture{
-			{ObjectKey: object.Key, FieldKey: "title", Write: true},
-			{ObjectKey: object.Key, FieldKey: "status", Write: true},
-		}})
-		_, err := newService(repository, nil).Create(t.Context(), object.Key, map[string]any{"title": "Printer offline", "status": "closed"}, contextualPrincipal)
-		if apperror.CodeOf(err) != "backend.validation.field_not_writable" || repository.commit.Operation != "" {
+		_, err := newService(repository, nil).Create(t.Context(), object.Key, map[string]any{"title": "Printer offline", "status": "invalid"}, principal)
+		if apperror.CodeOf(err) != "ticket.status_invalid" || repository.commit.Operation != "" {
 			t.Fatalf("err=%v commit=%#v", err, repository.commit)
 		}
 	})

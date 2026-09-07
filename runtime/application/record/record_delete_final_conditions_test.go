@@ -51,8 +51,8 @@ func TestRecordDeleteAuthorizationSchedulerAndSoftValidationEdges(t *testing.T) 
 	dependencies = recordDeleteEdgeDependencies(repository, writableObject)
 	denied := principal
 	accessfixture.Set(&denied, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "customer", FieldKey: "status", Read: true, Write: false}}})
-	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), "customer", "customer-1", denied); apperror.CodeOf(err) != "backend.validation.field_not_writable" {
-		t.Fatalf("soft-delete writable error = %v", err)
+	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), "customer", "customer-1", denied); err != nil || len(repository.commits) != 1 || !repository.commits[0].Record.Deleted {
+		t.Fatalf("field policy blocked an authorized delete: err=%v commits=%#v", err, repository.commits)
 	}
 }
 

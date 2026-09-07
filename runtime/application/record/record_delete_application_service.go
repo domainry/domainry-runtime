@@ -259,13 +259,6 @@ func (s *RecordDeleteApplicationService) planSoftDelete(ctx context.Context, obj
 	if err != nil {
 		return recordDeleteErrorFrom(apperror.KindBadRequest, err)
 	}
-	patch := map[string]any{"status": nextData["status"], "deleted_at": nextData["deleted_at"], "deleted_by": nextData["deleted_by"]}
-	if recordvalidation.RecordFieldExists(object, "version") {
-		patch["version"] = nextData["version"]
-	}
-	if err := recordpolicy.RecordValidateWritableFields(principal, object, patch); err != nil {
-		return recordDeleteErrorFrom(apperror.KindForbidden, err)
-	}
 	if err := recordvalidation.RecordValidateDataWithPrev(object, nextData, beforeData, false); err != nil {
 		return recordDeleteErrorFrom(apperror.KindBadRequest, err)
 	}

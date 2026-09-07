@@ -50,7 +50,8 @@ func ActionAllowed(principal principalmodel.Principal, action definitionmodel.Ac
 }
 
 // ActionPersistencePrincipal preserves an already-approved Action as the
-// write authority for its own object. Record scope and field rules still apply.
+// write authority for its own object. Record scope still applies; field
+// permissions do not authorize or reject persistence.
 
 func ActionPersistencePrincipal(principal principalmodel.Principal, action definitionmodel.ActionSchema, operation string) principalmodel.Principal {
 	resourceKey, operationKey := definitionmodel.ActionPermissionSubject(action)
