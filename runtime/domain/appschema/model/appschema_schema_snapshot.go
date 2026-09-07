@@ -12,6 +12,7 @@ type ApplicationSchemaSnapshot struct {
 	TemplateID                string                                  `json:"template_id"`
 	TemplateVersion           string                                  `json:"template_version"`
 	Name                      string                                  `json:"name,omitempty"`
+	TimeZone                  string                                  `json:"time_zone"`
 	SchemaHash                string                                  `json:"schema_hash"`
 	SnapshotVersion           string                                  `json:"snapshot_version"`
 	Objects                   []definitionmodel.ObjectSchema          `json:"objects"`

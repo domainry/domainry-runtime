@@ -30,7 +30,7 @@ func (s ApplicationSchemaStore) loadProjectedManifest(ctx context.Context) (mani
 	}
 	result := manifestmodel.ManifestSchema{
 		SchemaVersion: catalog["schema_version"], TemplateID: catalog["template_id"], Version: catalog["template_version"],
-		DefaultLocale: catalog["default_locale"], Name: catalog["name"],
+		DefaultLocale: catalog["default_locale"], TimeZone: catalog["time_zone"], Name: catalog["name"],
 	}
 	fields := []definitionmodel.FieldSchema{}
 	validations := []definitionmodel.ValidationSchema{}
@@ -159,18 +159,19 @@ func (s ApplicationSchemaStore) loadProjectedManifest(ctx context.Context) (mani
 
 func (s ApplicationSchemaStore) loadMetadataCatalog(ctx context.Context) (map[string]string, error) {
 	queryValue, args, err := query.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_projection").
-		Columns("template_id", "artifact_version", "default_locale", "name", "contract_version", "schema_hash", "source_hash").
+		Columns("template_id", "artifact_version", "default_locale", "time_zone", "name", "contract_version", "schema_hash", "source_hash").
 		Where(query.Equal("id", "current")).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build metadata catalog load: %w", err)
 	}
-	var templateID, artifactVersion, defaultLocale, name, contractVersion, schemaHash, sourceHash string
-	if err := s.database().QueryRowContext(ctx, queryValue, args...).Scan(&templateID, &artifactVersion, &defaultLocale, &name, &contractVersion, &schemaHash, &sourceHash); err != nil {
+	var templateID, artifactVersion, defaultLocale, timeZone, name, contractVersion, schemaHash, sourceHash string
+	if err := s.database().QueryRowContext(ctx, queryValue, args...).Scan(&templateID, &artifactVersion, &defaultLocale, &timeZone, &name, &contractVersion, &schemaHash, &sourceHash); err != nil {
 		return nil, fmt.Errorf("load metadata projection: %w", err)
 	}
 	result := map[string]string{
 		"template_id": templateID, "template_version": artifactVersion, "default_locale": defaultLocale,
-		"name": name, "schema_version": contractVersion, "schema_hash": schemaHash, "source_hash": sourceHash,
+		"time_zone": timeZone,
+		"name":      name, "schema_version": contractVersion, "schema_hash": schemaHash, "source_hash": sourceHash,
 	}
 	if strings.TrimSpace(templateID) == "" || strings.TrimSpace(artifactVersion) == "" {
 		return nil, fmt.Errorf("metadata projection is missing template identity")

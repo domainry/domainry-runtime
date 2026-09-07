@@ -14,7 +14,7 @@ type upsertMetadataRuntime struct {
 	snapshot appschemamodel.ApplicationSchemaSnapshot
 }
 
-func (*upsertMetadataRuntime) ApplyManifestMetadata(string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []appschemamodel.DictionarySchema, connectormodel.IntegrationSchema, []reportmodel.ReportSchema, []agentsdk.SkillSchema, []agentsdk.AgentSchema, []profilebindingmodel.Binding) {
+func (*upsertMetadataRuntime) ApplyManifestMetadata(string, string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []appschemamodel.DictionarySchema, connectormodel.IntegrationSchema, []reportmodel.ReportSchema, []agentsdk.SkillSchema, []agentsdk.AgentSchema, []profilebindingmodel.Binding) {
 }
 
 func (r *upsertMetadataRuntime) Schema() appschemamodel.ApplicationSchemaSnapshot { return r.snapshot }

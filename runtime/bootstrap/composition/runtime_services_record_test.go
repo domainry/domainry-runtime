@@ -808,14 +808,21 @@ func TestMetadataProjectionReplacesRuntimeOwnedSchemaState(t *testing.T) {
 	actions := []definitionmodel.ActionSchema{{Key: " "}, {Key: "customer.activate"}}
 	workflows := []definitionmodel.WorkflowSchema{{Key: " "}, {Key: "customer.approval"}}
 	rules := []automationmodel.AutomationRuleSchema{{Key: " "}, {Key: "customer.created"}}
-	runtime.applyManifestMetadata(" template ", " 1 ", " Runtime ", objects, actions, workflows, rules, nil, connectormodel.IntegrationSchema{}, nil, nil, nil, nil)
+	runtime.applyManifestMetadata(" template ", " 1 ", " Runtime ", "Asia/Tokyo", objects, actions, workflows, rules, nil, connectormodel.IntegrationSchema{}, nil, nil, nil, nil)
+	firstZoneSnapshot := recordSchemaSnapshot(runtime)
+	if firstZoneSnapshot.TimeZone != "Asia/Tokyo" {
+		t.Fatalf("snapshot time zone=%q", firstZoneSnapshot.TimeZone)
+	}
 	if runtime.templateID != "template" || runtime.templateVersion != "1" || runtime.name != "Runtime" || runtime.connectorRegistry == nil {
 		t.Fatalf("runtime identity=%q/%q/%q connector=%#v", runtime.templateID, runtime.templateVersion, runtime.name, runtime.connectorRegistry)
 	}
 	if len(runtime.schema) != 1 || len(runtime.actions) != 1 || len(runtime.workflows) != 1 || len(runtime.automationRules) != 1 {
 		t.Fatalf("projection objects=%d actions=%d workflows=%d rules=%d", len(runtime.schema), len(runtime.actions), len(runtime.workflows), len(runtime.automationRules))
 	}
-	runtime.applyManifestMetadata("template", "2", "Runtime", objects[1:], actions[1:], workflows[1:], rules[1:], []appschemamodel.DictionarySchema{{Key: "status"}}, connectormodel.IntegrationSchema{}, nil, nil, nil, nil)
+	runtime.applyManifestMetadata("template", "2", "Runtime", "Asia/Shanghai", objects[1:], actions[1:], workflows[1:], rules[1:], []appschemamodel.DictionarySchema{{Key: "status"}}, connectormodel.IntegrationSchema{}, nil, nil, nil, nil)
+	if snapshot := recordSchemaSnapshot(runtime); snapshot.TimeZone != "Asia/Shanghai" || snapshot.SchemaHash == firstZoneSnapshot.SchemaHash {
+		t.Fatalf("reloaded time zone snapshot=%+v", snapshot)
+	}
 	if runtime.templateVersion != "2" || len(runtime.dictionaries) != 1 {
 		t.Fatalf("replacement version=%q dictionaries=%#v", runtime.templateVersion, runtime.dictionaries)
 	}

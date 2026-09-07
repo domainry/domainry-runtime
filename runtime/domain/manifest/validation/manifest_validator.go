@@ -394,6 +394,9 @@ func (state *validationState) add(path string, format string, args ...any) {
 }
 
 func (state *validationState) validateRequiredShell() {
+	if err := state.manifest.ValidateTimeZone(); err != nil {
+		state.add("time_zone", "%s", err)
+	}
 	if version := strings.TrimSpace(state.manifest.SchemaVersion); version != "" && version != manifestmodel.CurrentManifestSchemaVersion {
 		state.add("schema_version", "must be %q", manifestmodel.CurrentManifestSchemaVersion)
 	}

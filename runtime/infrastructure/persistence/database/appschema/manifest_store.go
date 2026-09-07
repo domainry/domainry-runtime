@@ -22,6 +22,9 @@ func (s ApplicationSchemaStore) SyncManifestProjection(ctx context.Context, scop
 }
 
 func (s ApplicationSchemaStore) syncManifestProjection(ctx context.Context, manifest manifestmodel.ManifestSchema, operation string) error {
+	if err := manifest.ValidateTimeZone(); err != nil {
+		return err
+	}
 	if len(manifest.Objects) == 0 {
 		return fmt.Errorf("manifest metadata %s has no objects", operation)
 	}
@@ -57,8 +60,8 @@ func (s ApplicationSchemaStore) upsertMetadataProjection(ctx context.Context, tx
 	if contractVersion == "" {
 		contractVersion = "manifest-v1"
 	}
-	columns := []string{"id", "contract_version", "source_hash", "schema_hash", "artifact_version", "materializer_version", "status", "template_id", "default_locale", "name", "materialized_at"}
-	values := []any{"current", contractVersion, sourceHash, "", strings.TrimSpace(manifest.Version), "runtime-materializer-v1", "materialized", strings.TrimSpace(manifest.TemplateID), manifestDefaultLocale(manifest), strings.TrimSpace(manifest.Name), now}
+	columns := []string{"id", "contract_version", "source_hash", "schema_hash", "artifact_version", "materializer_version", "status", "template_id", "default_locale", "time_zone", "name", "materialized_at"}
+	values := []any{"current", contractVersion, sourceHash, "", strings.TrimSpace(manifest.Version), "runtime-materializer-v1", "materialized", strings.TrimSpace(manifest.TemplateID), manifestDefaultLocale(manifest), manifest.EffectiveTimeZone(), strings.TrimSpace(manifest.Name), now}
 	insert := query.NewInsertBuilder(s.store.SQLRenderer, "_application_schema_projection").Columns(columns...).Values(values...)
 	assignments := make([]query.Assignment, 0, len(columns)-1)
 	for _, column := range columns[1:] {

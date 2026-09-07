@@ -181,7 +181,7 @@ func newRuntimeServicesAssembly(ctx context.Context, config RuntimeServicesConfi
 	queryPolicy := initializeSchemaAndRecordFoundation(services, deps)
 	initializeWorkflowAutomationAndGovernance(services, deps)
 	initializeRecordApplications(services)
-	services.applyManifestMetadata(manifest.TemplateID, manifest.Version, manifest.Name, manifest.Objects, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
+	services.applyManifestMetadata(manifest.TemplateID, manifest.Version, manifest.Name, manifest.EffectiveTimeZone(), manifest.Objects, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
 	services.applyManifestAgentMetadata(manifest.AgentTasks, manifest.AgentEntrypoints, manifest.AgentServicePrincipals)
 	initializeIntegrationAndBusinessSystem(ctx, services, manifest, deps, queryPolicy)
 	return services

@@ -17,13 +17,14 @@ import (
 
 // applyManifestMetadata replaces the RuntimeServices-owned schema indexes. It is
 // mutable composition state, not a Metadata application use case.
-func (s *runtimeAssembly) applyManifestMetadata(templateID, templateVersion, name string, objects []definitionmodel.ObjectSchema, actions []definitionmodel.ActionSchema, workflows []definitionmodel.WorkflowSchema, automationRules []automationmodel.AutomationRuleSchema, dictionaries []appschemamodel.DictionarySchema, integrations connectormodel.IntegrationSchema, reports []reportmodel.ReportSchema, skills []agentsdk.SkillSchema, agents []agentsdk.AgentSchema, profileBindings []profilebindingmodel.Binding) {
+func (s *runtimeAssembly) applyManifestMetadata(templateID, templateVersion, name, timeZone string, objects []definitionmodel.ObjectSchema, actions []definitionmodel.ActionSchema, workflows []definitionmodel.WorkflowSchema, automationRules []automationmodel.AutomationRuleSchema, dictionaries []appschemamodel.DictionarySchema, integrations connectormodel.IntegrationSchema, reports []reportmodel.ReportSchema, skills []agentsdk.SkillSchema, agents []agentsdk.AgentSchema, profileBindings []profilebindingmodel.Binding) {
 	objects = appschemaprojection.ApplicationSchemaEnrichObjectsWithFieldValueDomains(objects, dictionaries)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.templateID = strings.TrimSpace(templateID)
 	s.templateVersion = strings.TrimSpace(templateVersion)
 	s.name = strings.TrimSpace(name)
+	s.timeZone = timeZone
 	s.schema = make(map[string]definitionmodel.ObjectSchema, len(objects))
 	s.actions = make(map[string]definitionmodel.ActionSchema, len(actions))
 	s.workflows = make(map[string]definitionmodel.WorkflowSchema, len(workflows))

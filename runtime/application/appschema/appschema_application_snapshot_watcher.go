@@ -32,9 +32,12 @@ func (s *ApplicationSchemaApplicationService) reloadMetadataFromSource(ctx conte
 	if err != nil {
 		return err
 	}
+	if err := manifest.ValidateTimeZone(); err != nil {
+		return err
+	}
 	templateID, version, name := valueOrDefault(manifest.TemplateID, s.templateID), valueOrDefault(manifest.Version, s.version), valueOrDefault(manifest.Name, s.name)
 	candidate := appschemaservice.BuildSchemaSnapshot(appschemaservice.SchemaSnapshotState{
-		TemplateID: templateID, TemplateVersion: version, Name: name,
+		TemplateID: templateID, TemplateVersion: version, Name: name, TimeZone: manifest.EffectiveTimeZone(),
 		Objects: manifest.Objects, Actions: manifest.Actions, Workflows: manifest.Workflows,
 		AutomationRules: manifest.AutomationRules, Dictionaries: manifest.Dictionaries, Integrations: manifest.Integrations,
 		Reports: manifest.Reports, Skills: manifest.Skills, Agents: manifest.Agents,
@@ -49,7 +52,7 @@ func (s *ApplicationSchemaApplicationService) reloadMetadataFromSource(ctx conte
 	if err := s.workflows.InitializePublishedWorkflowDefinitions(ctx, manifest.Workflows, scope); err != nil {
 		return errors.Join(err, abortReloadObservers(context.WithoutCancel(ctx), preparations))
 	}
-	s.runtime.ApplyManifestMetadata(templateID, version, name, candidate.Objects, candidate.Actions, candidate.Workflows, candidate.AutomationRules, candidate.Dictionaries, candidate.Integrations, candidate.Reports, candidate.Skills, candidate.Agents, candidate.IdentityProfileExtensions)
+	s.runtime.ApplyManifestMetadata(templateID, version, name, candidate.TimeZone, candidate.Objects, candidate.Actions, candidate.Workflows, candidate.AutomationRules, candidate.Dictionaries, candidate.Integrations, candidate.Reports, candidate.Skills, candidate.Agents, candidate.IdentityProfileExtensions)
 	applyManifestAgentMetadata(s.runtime, manifest)
 	for _, preparation := range preparations {
 		if preparation.Commit != nil {

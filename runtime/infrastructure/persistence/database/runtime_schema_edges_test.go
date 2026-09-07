@@ -33,7 +33,7 @@ func runtimeSchemaLedgerQueries(count int64, checksum string, dirty bool) []data
 
 func TestRuntimeSchemaHelpersAndDatabaseSelection(t *testing.T) {
 	versions := SupportedRuntimeSchemaUpgradeVersions()
-	if len(versions) != 14 || versions[0] != "001_connector_runtime_lifecycle" || versions[13] != "022_report_export_prepare_receipts" || CurrentRuntimeSchemaVersion != "023_dispatch_callback_receipts" {
+	if len(versions) != 15 || versions[0] != "001_connector_runtime_lifecycle" || versions[14] != "023_dispatch_callback_receipts" || CurrentRuntimeSchemaVersion != "024_application_time_zone" {
 		t.Fatalf("versions=%#v", versions)
 	}
 	for _, version := range versions {

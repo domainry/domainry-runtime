@@ -58,38 +58,38 @@ import (
 
 // runtimeAssembly is the private, constructor-only composition graph.
 type runtimeAssembly struct {
-	templateID, templateVersion, name string
-	productBrandName                  string
-	actionRuntimeRevision             string
-	actionProjectRevision             string
-	actionMetadataRevision            string
-	schema                            map[string]definitionmodel.ObjectSchema
-	actions                           map[string]definitionmodel.ActionSchema
-	workflows                         map[string]definitionmodel.WorkflowSchema
-	schedulerDefinitions              []map[string]any
-	automationRules                   map[string]automationmodel.AutomationRuleSchema
-	dictionaries                      []appschemamodel.DictionarySchema
-	integrations                      connectormodel.IntegrationSchema
-	reports                           []reportmodel.ReportSchema
-	reportObjects                     map[string]struct{}
-	skills                            []agentsdk.SkillSchema
-	agents                            []agentsdk.AgentSchema
-	agentTasks                        []agentsdk.AgentTaskDefinition
-	agentEntrypoints                  []agentsdk.AgentEntrypointAssignment
-	agentServicePrincipals            []agentsdk.AgentServicePrincipalBinding
-	identityProfileExtensions         []profilebindingmodel.Binding
-	recordRepo                        recordrepository.RecordRepository
-	dataExchange                      dataexchange.Binding
-	dataExchangeProviders             *recordapplication.DataExchangeProviders
-	reportObjectSQL                   reportcontract.ReportObjectSQLExecutor
-	reportSnapshotSources             reportcontract.ReportSnapshotSourceVersionReader
-	reportExportPrepareReceipts       reportcontract.ReportExportPrepareReceiptStore
-	auditRepo                         auditrepository.AuditRepository
-	auditApplicationService           *auditapplication.AuditApplicationService
-	auditExportTokenKey               []byte
-	schemaService                     *appschemaapplication.ApplicationSchemaQueryApplicationService
-	actionService                     *actionapplication.ActionApplicationService
-	runtimeStatusService              *deploymentbusiness.DeploymentRuntimeStatusApplicationService
+	templateID, templateVersion, name, timeZone string
+	productBrandName                            string
+	actionRuntimeRevision                       string
+	actionProjectRevision                       string
+	actionMetadataRevision                      string
+	schema                                      map[string]definitionmodel.ObjectSchema
+	actions                                     map[string]definitionmodel.ActionSchema
+	workflows                                   map[string]definitionmodel.WorkflowSchema
+	schedulerDefinitions                        []map[string]any
+	automationRules                             map[string]automationmodel.AutomationRuleSchema
+	dictionaries                                []appschemamodel.DictionarySchema
+	integrations                                connectormodel.IntegrationSchema
+	reports                                     []reportmodel.ReportSchema
+	reportObjects                               map[string]struct{}
+	skills                                      []agentsdk.SkillSchema
+	agents                                      []agentsdk.AgentSchema
+	agentTasks                                  []agentsdk.AgentTaskDefinition
+	agentEntrypoints                            []agentsdk.AgentEntrypointAssignment
+	agentServicePrincipals                      []agentsdk.AgentServicePrincipalBinding
+	identityProfileExtensions                   []profilebindingmodel.Binding
+	recordRepo                                  recordrepository.RecordRepository
+	dataExchange                                dataexchange.Binding
+	dataExchangeProviders                       *recordapplication.DataExchangeProviders
+	reportObjectSQL                             reportcontract.ReportObjectSQLExecutor
+	reportSnapshotSources                       reportcontract.ReportSnapshotSourceVersionReader
+	reportExportPrepareReceipts                 reportcontract.ReportExportPrepareReceiptStore
+	auditRepo                                   auditrepository.AuditRepository
+	auditApplicationService                     *auditapplication.AuditApplicationService
+	auditExportTokenKey                         []byte
+	schemaService                               *appschemaapplication.ApplicationSchemaQueryApplicationService
+	actionService                               *actionapplication.ActionApplicationService
+	runtimeStatusService                        *deploymentbusiness.DeploymentRuntimeStatusApplicationService
 	*recordservice.RecordQueryPolicyDomainService
 	*RecordSchemaSnapshotProvider
 	*pipelineapplication.PipelineApplicationService

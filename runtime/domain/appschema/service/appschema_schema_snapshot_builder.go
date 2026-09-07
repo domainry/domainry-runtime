@@ -17,20 +17,20 @@ import (
 )
 
 type SchemaSnapshotState struct {
-	TemplateID, TemplateVersion, Name string
-	Objects                           []definitionmodel.ObjectSchema
-	Actions                           []definitionmodel.ActionSchema
-	Workflows                         []definitionmodel.WorkflowSchema
-	AutomationRules                   []automationmodel.AutomationRuleSchema
-	Dictionaries                      []appschemamodel.DictionarySchema
-	Integrations                      connectormodel.IntegrationSchema
-	Reports                           []reportmodel.ReportSchema
-	Skills                            []agentsdk.SkillSchema
-	Agents                            []agentsdk.AgentSchema
-	AgentTasks                        []agentsdk.AgentTaskDefinition
-	AgentEntrypoints                  []agentsdk.AgentEntrypointAssignment
-	AgentServicePrincipals            []agentsdk.AgentServicePrincipalBinding
-	IdentityProfileExtensions         []profilebindingmodel.Binding
+	TemplateID, TemplateVersion, Name, TimeZone string
+	Objects                                     []definitionmodel.ObjectSchema
+	Actions                                     []definitionmodel.ActionSchema
+	Workflows                                   []definitionmodel.WorkflowSchema
+	AutomationRules                             []automationmodel.AutomationRuleSchema
+	Dictionaries                                []appschemamodel.DictionarySchema
+	Integrations                                connectormodel.IntegrationSchema
+	Reports                                     []reportmodel.ReportSchema
+	Skills                                      []agentsdk.SkillSchema
+	Agents                                      []agentsdk.AgentSchema
+	AgentTasks                                  []agentsdk.AgentTaskDefinition
+	AgentEntrypoints                            []agentsdk.AgentEntrypointAssignment
+	AgentServicePrincipals                      []agentsdk.AgentServicePrincipalBinding
+	IdentityProfileExtensions                   []profilebindingmodel.Binding
 }
 
 func BuildSchemaSnapshot(state SchemaSnapshotState) appschemamodel.ApplicationSchemaSnapshot {
@@ -47,7 +47,7 @@ func BuildSchemaSnapshot(state SchemaSnapshotState) appschemamodel.ApplicationSc
 	sort.Slice(workflows, func(i, j int) bool { return workflows[i].Key < workflows[j].Key })
 	sort.Slice(automationRules, func(i, j int) bool { return automationRules[i].Key < automationRules[j].Key })
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{
-		TemplateID: state.TemplateID, TemplateVersion: state.TemplateVersion, Name: state.Name,
+		TemplateID: state.TemplateID, TemplateVersion: state.TemplateVersion, Name: state.Name, TimeZone: state.TimeZone,
 		Objects: objects, Actions: actions,
 		GuardedWrites: GuardedWriteContracts(actions), Workflows: workflows, AutomationRules: automationRules,
 		Dictionaries: append([]appschemamodel.DictionarySchema(nil), state.Dictionaries...), Integrations: CloneIntegrationSchema(state.Integrations),

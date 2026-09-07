@@ -16,6 +16,7 @@ type PublishedRuntimeSchemaDTO struct {
 	TemplateID      string                                                 `json:"template_id"`
 	TemplateVersion string                                                 `json:"template_version"`
 	Name            string                                                 `json:"name,omitempty"`
+	TimeZone        string                                                 `json:"time_zone"`
 	SchemaHash      string                                                 `json:"schema_hash"`
 	SnapshotVersion string                                                 `json:"snapshot_version"`
 	Objects         []definitionmodel.ObjectSchema                         `json:"objects"`
@@ -47,7 +48,7 @@ func (s *ApplicationSchemaQueryApplicationService) PublishedRuntimeSchema(ctx co
 		objects[index].UX = sanitizePublishedMap(objects[index].UX)
 	}
 	return PublishedRuntimeSchemaDTO{
-		TemplateID: snapshot.TemplateID, TemplateVersion: snapshot.TemplateVersion, Name: snapshot.Name,
+		TemplateID: snapshot.TemplateID, TemplateVersion: snapshot.TemplateVersion, Name: snapshot.Name, TimeZone: snapshot.TimeZone,
 		SchemaHash: snapshot.SchemaHash, SnapshotVersion: snapshot.SnapshotVersion,
 		Objects: objects, Actions: append([]definitionmodel.ActionSchema(nil), snapshot.Actions...),
 		GuardedWrites: append([]appschemamodel.ApplicationSchemaGuardedWriteContract(nil), snapshot.GuardedWrites...),

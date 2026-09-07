@@ -47,6 +47,7 @@ func TestMetadataSnapshotRevisionBranches(t *testing.T) {
 		}
 	}
 	refreshSteps := []metadataSQLQueryStep{{columns: []string{"source_hash", "schema_hash"}}}
+	refreshSteps = append(refreshSteps, metadataSQLQueryStep{columns: []string{"time_zone"}})
 	refreshSteps = append(refreshSteps, metadataSQLQueryStep{columns: []string{"source_hash", "schema_hash"}, rows: [][]driver.Value{{" source ", " refreshed "}}})
 	repository := scriptedApplicationSchemaStore(t, &metadataSQLState{querySteps: refreshSteps, execSteps: []metadataSQLExecStep{{rows: 1}}}, base)
 	revision, err := repository.SnapshotRevision(t.Context(), metadataInstallScope())

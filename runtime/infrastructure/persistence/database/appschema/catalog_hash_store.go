@@ -3,7 +3,9 @@ package appschema
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -26,6 +28,16 @@ func (r ApplicationSchemaStore) refreshCatalogHashWithExecutorAt(ctx context.Con
 	}
 	hash := sha256.New()
 	hash.Write([]byte("metadata:"))
+	statement, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_application_schema_projection").
+		Columns("time_zone").Where(query.Equal("id", "current")).Build()
+	if err != nil {
+		return err
+	}
+	zone := "UTC"
+	if err := executor.QueryRowContext(ctx, statement, args...).Scan(&zone); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("load application time zone for catalog hash: %w", err)
+	}
+	hash.Write([]byte("time_zone:" + zone + "|"))
 	for _, definition := range snapshot.Definitions {
 		hash.Write([]byte(definition.ResourceType + ":" + definition.ResourceKey + ":" + definition.SchemaHash + "|"))
 	}

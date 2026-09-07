@@ -33,6 +33,7 @@ type ManifestSchema struct {
 	GeneratedDomainSDK       *GeneratedDomainSDKIdentity        `json:"generated_domain_sdk,omitempty"`
 	SourceIntentCoverage     *ManifestSourceIntentCoverage      `json:"source_intent_coverage,omitempty"`
 	DefaultLocale            string                             `json:"default_locale,omitempty"`
+	TimeZone                 string                             `json:"time_zone,omitempty"`
 	Name                     string                             `json:"name,omitempty"`
 	Description              string                             `json:"description,omitempty"`
 	I18n                     localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`

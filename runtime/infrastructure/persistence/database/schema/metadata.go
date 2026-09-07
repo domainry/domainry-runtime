@@ -27,6 +27,9 @@ func EnsureApplicationSchema(ctx context.Context, s Store) error {
 		s.Identifier("materialized_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '')"); err != nil {
 		return fmt.Errorf("create application schema projection: %w", err)
 	}
+	if err := EnsureApplicationTimeZoneSchema(ctx, s); err != nil {
+		return err
+	}
 	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("_application_schema_seed_checkpoints")+" ("+
 		s.Identifier("key")+" "+s.ApplicationSchemaIDColumnType()+" PRIMARY KEY, "+
 		s.Identifier("value")+" "+documentText+" NOT NULL, "+

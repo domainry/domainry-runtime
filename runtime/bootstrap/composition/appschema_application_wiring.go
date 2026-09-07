@@ -12,7 +12,7 @@ import (
 )
 
 type applicationSchemaLifecycleRuntime interface {
-	applyManifestMetadata(string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []appschemamodel.DictionarySchema, connectormodel.IntegrationSchema, []reportmodel.ReportSchema, []agentsdk.SkillSchema, []agentsdk.AgentSchema, []profilebindingmodel.Binding)
+	applyManifestMetadata(string, string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []appschemamodel.DictionarySchema, connectormodel.IntegrationSchema, []reportmodel.ReportSchema, []agentsdk.SkillSchema, []agentsdk.AgentSchema, []profilebindingmodel.Binding)
 	applyManifestAgentMetadata([]agentsdk.AgentTaskDefinition, []agentsdk.AgentEntrypointAssignment, []agentsdk.AgentServicePrincipalBinding)
 	Schema() appschemamodel.ApplicationSchemaSnapshot
 }
@@ -23,8 +23,8 @@ type applicationSchemaLifecycleRuntimeAdapter struct {
 
 var _ appschemaapplication.LifecycleRuntime = applicationSchemaLifecycleRuntimeAdapter{}
 
-func (a applicationSchemaLifecycleRuntimeAdapter) ApplyManifestMetadata(templateID, templateVersion, name string, objects []definitionmodel.ObjectSchema, actions []definitionmodel.ActionSchema, workflows []definitionmodel.WorkflowSchema, automationRules []automationmodel.AutomationRuleSchema, dictionaries []appschemamodel.DictionarySchema, integrations connectormodel.IntegrationSchema, reports []reportmodel.ReportSchema, skills []agentsdk.SkillSchema, agents []agentsdk.AgentSchema, profileBindings []profilebindingmodel.Binding) {
-	a.runtime.applyManifestMetadata(templateID, templateVersion, name, objects, actions, workflows, automationRules, dictionaries, integrations, reports, skills, agents, profileBindings)
+func (a applicationSchemaLifecycleRuntimeAdapter) ApplyManifestMetadata(templateID, templateVersion, name, timeZone string, objects []definitionmodel.ObjectSchema, actions []definitionmodel.ActionSchema, workflows []definitionmodel.WorkflowSchema, automationRules []automationmodel.AutomationRuleSchema, dictionaries []appschemamodel.DictionarySchema, integrations connectormodel.IntegrationSchema, reports []reportmodel.ReportSchema, skills []agentsdk.SkillSchema, agents []agentsdk.AgentSchema, profileBindings []profilebindingmodel.Binding) {
+	a.runtime.applyManifestMetadata(templateID, templateVersion, name, timeZone, objects, actions, workflows, automationRules, dictionaries, integrations, reports, skills, agents, profileBindings)
 }
 
 func (a applicationSchemaLifecycleRuntimeAdapter) ApplyManifestAgentMetadata(tasks []agentsdk.AgentTaskDefinition, entrypoints []agentsdk.AgentEntrypointAssignment, principals []agentsdk.AgentServicePrincipalBinding) {

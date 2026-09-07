@@ -30,4 +30,9 @@ func TestSchemaSnapshotHashCoversAllManifestDomains(t *testing.T) {
 	if reportChanged.SchemaHash == first.SchemaHash {
 		t.Fatal("report change did not invalidate schema snapshot")
 	}
+	zoneChanged := first
+	zoneChanged.TimeZone = "Asia/Tokyo"
+	if SchemaSnapshotHash(zoneChanged) == first.SchemaHash {
+		t.Fatal("application time zone did not invalidate schema snapshot")
+	}
 }

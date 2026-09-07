@@ -18,7 +18,7 @@ import (
 
 func TestPublishedRuntimeSchemaOmitsAdministrationAndInternalConfiguration(t *testing.T) {
 	snapshot := appschemamodel.ApplicationSchemaSnapshot{
-		TemplateID: "template", TemplateVersion: "1", SchemaHash: "hash", SnapshotVersion: "snapshot",
+		TemplateID: "template", TemplateVersion: "1", TimeZone: "Asia/Tokyo", SchemaHash: "hash", SnapshotVersion: "snapshot",
 		Objects: []definitionmodel.ObjectSchema{{
 			Key: "order", Name: "Order",
 			Config: map[string]any{"display": "table", "sql_query": "select secret", "internal_registry": "hidden", "nested": map[string]any{"access_token": "hidden", "safe": "visible"}},
@@ -31,6 +31,9 @@ func TestPublishedRuntimeSchemaOmitsAdministrationAndInternalConfiguration(t *te
 		t.Fatal(err)
 	}
 	payload, _ := json.Marshal(published)
+	if published.TimeZone != "Asia/Tokyo" || !strings.Contains(string(payload), `"time_zone":"Asia/Tokyo"`) {
+		t.Fatalf("published application time zone is missing: %s", payload)
+	}
 	for _, forbidden := range []string{"roles", "permission_sets", "guardrails", "sql_query", "select secret", "internal_registry", "access_token", "password"} {
 		if strings.Contains(string(payload), forbidden) {
 			t.Fatalf("published schema leaked %q: %s", forbidden, payload)
