@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -59,6 +60,25 @@ func (a *ReportRecordAdapter) AuthorizeReportExportField(_ context.Context, prin
 		return false, err
 	}
 	if fieldKey == "id" || fieldKey == "created_at" || fieldKey == "updated_at" {
+		// Identity projects authored business fields only. Envelope fields follow
+		// the object export grant checked above, including compiler-added cursor
+		// ordering on id. Preserve any explicit field or export restriction.
+		if principal.AccessBundle != nil {
+			explicit := false
+			for _, policy := range principal.AccessBundle.FieldPolicies {
+				if (string(policy.Resource) == object.Key || string(policy.Resource) == "*") && (policy.Field == fieldKey || policy.Field == "*") {
+					explicit = true
+					break
+				}
+			}
+			if !explicit {
+				bundle := *principal.AccessBundle
+				bundle.FieldPolicies = append(append([]identitysdk.FieldPolicy(nil), bundle.FieldPolicies...), identitysdk.FieldPolicy{
+					Resource: identitysdk.ResourceType(object.Key), Field: fieldKey, Read: true, Export: true,
+				})
+				principal.AccessBundle = &bundle
+			}
+		}
 		if !recordpolicy.RecordCanExportFieldForPrincipal(principal, object.Key, fieldKey) {
 			return false, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.report.export_field_denied"}
 		}

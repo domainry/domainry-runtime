@@ -10,14 +10,20 @@ import (
 )
 
 // actionReadEffectAuthorizationPrincipal grants only the object read verb
-// declared by the compiler-owned Action EffectSet. Data permissions and
-// guardrails remain those of the caller, so the Action cannot widen record
-// scope or bypass an explicit governance restriction.
+// declared by the compiler-owned Action EffectSet. Read-only references may
+// use the caller's existing read scope. Objects in the write effect retain the
+// source Action's scope, even when the caller has broader generic read access.
 func actionReadEffectAuthorizationPrincipal(principal principalmodel.Principal, set *definitionmodel.ActionEffectSet, action definitionmodel.ActionSchema, objectKey string) principalmodel.Principal {
 	if !actionEffectAllows(set, objectKey, false) {
 		return principal
 	}
 	objectKey = strings.TrimSpace(objectKey)
+	if !actionEffectAllows(set, objectKey, true) && principal.HasPermission(objectKey+".read") {
+		// A member-owned mutation may reference a publicly readable store or
+		// product. Replacing that independent read scope with owner would hide
+		// valid references. This borrows no authority the caller did not have.
+		return principal
+	}
 	authorized := principal
 	if principal.AccessBundle != nil {
 		resourceKey, operationKey := definitionmodel.ActionPermissionSubject(action)

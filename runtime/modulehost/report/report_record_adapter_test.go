@@ -100,6 +100,28 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	if masked, err := adapter.AuthorizeReportExportField(t.Context(), maskedPrincipal, "customer", "name"); err != nil || !masked {
 		t.Fatalf("masked name=%v err=%v", masked, err)
 	}
+	fieldPolicyCount := len(maskedPrincipal.AccessBundle.FieldPolicies)
+	for _, fieldKey := range []string{"id", "created_at", "updated_at"} {
+		if masked, err := adapter.AuthorizeReportExportField(t.Context(), maskedPrincipal, "customer", fieldKey); err != nil || masked {
+			t.Fatalf("envelope field without an authored field policy %s: masked=%v err=%v", fieldKey, masked, err)
+		}
+	}
+	if len(maskedPrincipal.AccessBundle.FieldPolicies) != fieldPolicyCount {
+		t.Fatal("envelope fallback mutated the caller access bundle")
+	}
+	for _, restriction := range []accessfixture.ExportPolicyFixture{
+		{ObjectKey: "customer", Mode: "deny"},
+		{ObjectKey: "customer", Mode: "allow_list", Fields: []string{"name"}},
+	} {
+		restricted := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{
+			Key: "restricted-envelope", Permissions: []string{"customer.read", "customer.export"},
+			DataPolicies:   accessfixture.DataPoliciesForPermissions([]string{"customer.read", "customer.export"}, "all"),
+			ExportPolicies: []accessfixture.ExportPolicyFixture{restriction},
+		})
+		if _, err := adapter.AuthorizeReportExportField(t.Context(), restricted, "customer", "id"); err == nil {
+			t.Fatalf("envelope fallback bypassed export policy %s", restriction.Mode)
+		}
+	}
 	if err := adapter.AuthorizeReportObjectSQLField(t.Context(), maskedPrincipal, object, "name"); apperror.CodeOf(err) != "backend.report.object_sql_field_masked" {
 		t.Fatalf("object SQL masked field err=%v", err)
 	}
@@ -123,6 +145,9 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	}
 	if err := adapter.AuthorizeReportObjectSQLField(t.Context(), readDeniedPrincipal, object, "id"); err != nil {
 		t.Fatalf("object SQL stable system field must follow object read authorization: %v", err)
+	}
+	if _, err := adapter.AuthorizeReportExportField(t.Context(), readDeniedPrincipal, "customer", "id"); err == nil {
+		t.Fatal("envelope fallback bypassed object export authorization")
 	}
 	if err := adapter.AuthorizeReportObjectSQLField(t.Context(), principal, object, "retired"); apperror.CodeOf(err) != "backend.report.object_sql_field_not_found" {
 		t.Fatalf("object SQL disabled field err=%v", err)
