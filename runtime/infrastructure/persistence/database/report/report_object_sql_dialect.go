@@ -145,6 +145,9 @@ func (e *reportObjectSQLEmitter) expression(expression reportmodel.ReportObjectS
 		if e.profile.OrderedDecimalTextStorage() && expression.Kind == "binary" && expression.Operator == "/" && expression.Type == "currency" {
 			return "runtime_currency_divide_minor(" + left + ", " + right + ")", nil
 		}
+		if e.profile.OrderedDecimalTextStorage() && expression.Kind == "binary" && expression.Operator == "*" && expression.Type == "decimal" && expression.Precision > 0 {
+			return "runtime_decimal_multiply_minor(" + left + ", " + right + ")", nil
+		}
 		return "(" + left + " " + strings.ToUpper(expression.Operator) + " " + right + ")", nil
 	case "unary":
 		value, err := e.expression(expression.Arguments[0])
@@ -250,6 +253,12 @@ func (e *reportObjectSQLEmitter) functionExpression(expression reportmodel.Repor
 			return "", err
 		}
 		arguments[index] = value
+	}
+	if e.profile.OrderedDecimalTextStorage() && expression.Name == "floor" && len(expression.Arguments) == 1 {
+		argument := expression.Arguments[0]
+		if argument.Type == "decimal" && argument.Precision > 0 && expression.Type == "integer" {
+			return "runtime_decimal_floor_units(" + arguments[0] + ", " + strconv.Itoa(argument.Scale) + ")", nil
+		}
 	}
 	if e.profile.OrderedDecimalTextStorage() && expression.Type == "currency" {
 		switch expression.Name {

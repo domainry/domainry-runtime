@@ -26,6 +26,12 @@ func init() {
 	if err := modernsqlite.RegisterDeterministicScalarFunction("runtime_currency_divide_minor", 2, sqliteCurrencyDivideMinor); err != nil {
 		panic(err)
 	}
+	if err := modernsqlite.RegisterDeterministicScalarFunction("runtime_decimal_multiply_minor", 2, sqliteDecimalMultiplyMinor); err != nil {
+		panic(err)
+	}
+	if err := modernsqlite.RegisterDeterministicScalarFunction("runtime_decimal_floor_units", 2, sqliteDecimalFloorUnits); err != nil {
+		panic(err)
+	}
 	if err := modernsqlite.RegisterDeterministicScalarFunction("runtime_exact_decimal_encode", 4, sqliteExactDecimalEncode); err != nil {
 		panic(err)
 	}
