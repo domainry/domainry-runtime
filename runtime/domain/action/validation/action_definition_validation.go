@@ -36,6 +36,7 @@ func ActionValidateDefinitionIssuesWithObjects(action definitionmodel.ActionSche
 			issues = append(issues, actionDefinitionValidationIssue("backend.action.definition_invalid", path, map[string]string{"field": path, "reason": "reserved Runtime invocation metadata"}))
 		}
 	}
+	issues = append(issues, ActionPayloadFieldStructureIssues(action, objects)...)
 	issues = append(issues, actionValidatePermissionPolicy(action)...)
 	issues = append(issues, actionValidateAssurancePolicy(action, objects)...)
 	issues = append(issues, actionValidateTargetOrganizationPolicy(action)...)

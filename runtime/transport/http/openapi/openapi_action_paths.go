@@ -1,8 +1,10 @@
 package openapi
 
 import (
+	"sort"
 	"strings"
 
+	actionvalidation "github.com/domainry/domainry-runtime/runtime/domain/action/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
@@ -12,12 +14,117 @@ func addActionOpenAPIPath(paths map[string]any, action definitionmodel.ActionSch
 		return
 	}
 	if openAPIObjectActionKind(action.Kind) {
-		paths["/records/"+objectKey+"/actions/"+actionKey] = map[string]any{"post": openAPIOperation("execute"+openAPIOperationName(objectKey)+openAPIOperationName(actionKey), "Actions", "Execute "+valueOrDefault(action.Label, actionKey), openAPIAdminSecurity(), openAPIJSONRequest(openAPIRef("ObjectActionRequest")), openAPIJSONResponse("Object action result", openAPIActionResultSchema(action, objectSets)))}
+		paths["/records/"+objectKey+"/actions/"+actionKey] = map[string]any{"post": openAPIOperation("execute"+openAPIOperationName(objectKey)+openAPIOperationName(actionKey), "Actions", "Execute "+valueOrDefault(action.Label, actionKey), openAPIAdminSecurity(), openAPIJSONRequest(openAPIActionRequestSchema(action, "ObjectActionRequest")), openAPIJSONResponse("Object action result", openAPIActionResultSchema(action, objectSets)))}
 	}
 	if !openAPIObjectOnlyActionKind(action.Kind) {
-		paths["/records/"+objectKey+"/items/{recordID}/actions/"+actionKey] = map[string]any{"post": openAPIOperation("execute"+openAPIOperationName(objectKey)+openAPIOperationName(actionKey), "Actions", "Execute "+valueOrDefault(action.Label, actionKey), openAPIAdminSecurity(), openAPIPathParameter("recordID", "Record ID"), openAPIJSONRequest(openAPIRef("ActionRequest")), openAPIJSONResponse("Action result", openAPIRef("ActionResult")))}
+		paths["/records/"+objectKey+"/items/{recordID}/actions/"+actionKey] = map[string]any{"post": openAPIOperation("execute"+openAPIOperationName(objectKey)+openAPIOperationName(actionKey), "Actions", "Execute "+valueOrDefault(action.Label, actionKey), openAPIAdminSecurity(), openAPIPathParameter("recordID", "Record ID"), openAPIJSONRequest(openAPIActionRequestSchema(action, "ActionRequest")), openAPIJSONResponse("Action result", openAPIRef("ActionResult")))}
 	}
-	paths["/records/"+objectKey+"/actions/"+actionKey+"/bulk"] = map[string]any{"post": openAPIOperation("executeBulk"+openAPIOperationName(objectKey)+openAPIOperationName(actionKey), "Actions", "Execute "+valueOrDefault(action.Label, actionKey)+" for multiple records", openAPIAdminSecurity(), openAPIJSONRequest(openAPIRef("BulkActionRequest")), openAPIJSONResponse("Bulk action result", openAPIObject(nil)))}
+	paths["/records/"+objectKey+"/actions/"+actionKey+"/bulk"] = map[string]any{"post": openAPIOperation("executeBulk"+openAPIOperationName(objectKey)+openAPIOperationName(actionKey), "Actions", "Execute "+valueOrDefault(action.Label, actionKey)+" for multiple records", openAPIAdminSecurity(), openAPIJSONRequest(openAPIBulkActionRequestSchema(action)), openAPIJSONResponse("Bulk action result", openAPIObject(nil)))}
+}
+
+// openAPIActionRequestSchema returns the per-Action request body. Actions
+// without a published payload contract keep the untyped shared reference;
+// Actions with payload_fields publish a closed data schema derived from the
+// field tree while keeping the Runtime invocation extras optional.
+func openAPIActionRequestSchema(action definitionmodel.ActionSchema, fallback string) map[string]any {
+	if action.PayloadFields == nil {
+		return openAPIRef(fallback)
+	}
+	return map[string]any{"type": "object", "properties": map[string]any{
+		"data": openAPIActionInputSchema(action), "target_organization_id": map[string]any{"type": "string"},
+	}}
+}
+
+func openAPIBulkActionRequestSchema(action definitionmodel.ActionSchema) map[string]any {
+	if action.PayloadFields == nil {
+		return openAPIRef("BulkActionRequest")
+	}
+	return map[string]any{
+		"type":     "object",
+		"required": []string{"record_ids"},
+		"properties": map[string]any{
+			"record_ids": openAPIArray(map[string]any{"type": "string"}), "data": openAPIActionInputSchema(action), "expected_versions": openAPIObject(map[string]any{"type": "integer"}),
+		},
+	}
+}
+
+// openAPIActionInputSchema builds the closed data schema of one Action from its
+// payload_fields, recursing through nested objects and repeated fields.
+// Runtime-owned invocation extras remain optional top-level properties.
+func openAPIActionInputSchema(action definitionmodel.ActionSchema) map[string]any {
+	schema := openAPIActionPayloadObjectSchema(action.PayloadFields)
+	properties := schema["properties"].(map[string]any)
+	for key, extra := range openAPIActionInvocationExtraProperties() {
+		if _, declared := properties[key]; !declared {
+			properties[key] = extra
+		}
+	}
+	return schema
+}
+
+func openAPIActionInvocationExtraProperties() map[string]any {
+	return map[string]any{
+		"expected_version":    map[string]any{"type": "integer"},
+		"expected_updated_at": map[string]any{"type": "string"},
+		"record_id":           map[string]any{"type": "string"},
+		"request_ref":         map[string]any{"type": "string"},
+		"approved":            map[string]any{"type": "boolean"},
+		"approval_id":         map[string]any{"type": "string"},
+		"approval_token":      map[string]any{"type": "string"},
+	}
+}
+
+func openAPIActionPayloadObjectSchema(fields []definitionmodel.ActionPayloadField) map[string]any {
+	properties := map[string]any{}
+	required := []string{}
+	for _, field := range fields {
+		key := strings.TrimSpace(field.Key)
+		if key == "" {
+			continue
+		}
+		properties[key] = openAPIActionPayloadFieldSchema(field)
+		if field.Required {
+			required = append(required, key)
+		}
+	}
+	sort.Strings(required)
+	return strictOpenAPIObject(required, properties)
+}
+
+func openAPIActionPayloadFieldSchema(field definitionmodel.ActionPayloadField) map[string]any {
+	var item map[string]any
+	if field.IsObject() {
+		item = openAPIActionPayloadObjectSchema(field.Fields)
+		openAPISetConstraint(item, "title", field.Name, strings.TrimSpace(field.Name) != "")
+	} else {
+		leaf := field
+		leaf.Repeated, leaf.Fields, leaf.MinItems, leaf.MaxItems = false, nil, nil, nil
+		item = openAPIFieldSchema(actionvalidation.ActionTypedPayloadField(leaf))
+	}
+	if !field.Repeated {
+		openAPISetConstraint(item, "description", field.Description, strings.TrimSpace(field.Description) != "")
+		return item
+	}
+	array := openAPIArray(item)
+	if title, ok := item["title"]; ok {
+		delete(item, "title")
+		array["title"] = title
+	}
+	openAPISetConstraint(array, "description", field.Description, strings.TrimSpace(field.Description) != "")
+	minItems := 0
+	if field.MinItems != nil {
+		minItems = *field.MinItems
+	}
+	if field.Required && minItems < 1 {
+		minItems = 1
+	}
+	maxItems := definitionmodel.ActionPayloadMaxItems
+	if field.MaxItems != nil && *field.MaxItems < maxItems {
+		maxItems = *field.MaxItems
+	}
+	openAPISetConstraint(array, "minItems", minItems, minItems > 0)
+	array["maxItems"] = maxItems
+	return array
 }
 
 func openAPIActionResultSchema(action definitionmodel.ActionSchema, objectSets [][]definitionmodel.ObjectSchema) map[string]any {

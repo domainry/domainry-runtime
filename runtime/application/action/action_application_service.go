@@ -278,6 +278,10 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 		unitOfWork.rollBack(ctx)
 		return s.failOwnedInvocation(context.WithoutCancel(ctx), unitOfWork, result, err, nil)
 	}
+	if actionmodel.AcceptanceFailurePoint(ctx) == actionmodel.AcceptanceFailureBeforeCommit {
+		unitOfWork.rollBack(ctx)
+		return s.failOwnedInvocation(context.WithoutCancel(ctx), unitOfWork, result, apperror.New(apperror.KindInternal, actionmodel.AcceptanceFailureInjectedCode, nil, map[string]string{"action": action.Key, "point": actionmodel.AcceptanceFailureBeforeCommit}), nil)
+	}
 	auditEvent := s.dependencies.Audit.BuildSuccess(ctx, action, invocation, result)
 	err = unitOfWork.commit(ctx, receiptResult, executed.Commits, []auditmodel.AuditEvent{auditEvent})
 	if err != nil {

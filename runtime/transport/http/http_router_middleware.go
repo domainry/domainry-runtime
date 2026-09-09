@@ -13,6 +13,7 @@ import (
 	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	localization "github.com/domainry/domainry-runtime/runtime/platform/localization"
 	"go.opentelemetry.io/otel"
@@ -90,6 +91,11 @@ func (s *HTTPRouter) withMetrics(next http.Handler) http.Handler {
 		ctx = requestcontext.WithCorrelationID(ctx, correlationID)
 		ctx = requestcontext.WithWorkspaceID(ctx, explicitWorkspaceIDFromRequest(r))
 		ctx = requestcontext.WithActorID(ctx, strings.TrimSpace(r.Header.Get("X-User-ID")))
+		if s.allowDevAuthHeaders {
+			// Acceptance failure injection is a development-only control that
+			// shares the same gate as header-based development identities.
+			ctx = actionmodel.WithAcceptanceFailurePoint(ctx, r.Header.Get(actionmodel.AcceptanceFailureHeader))
+		}
 		ctx, span := otel.Tracer("domainry.runtime.http").Start(ctx, "HTTP "+r.Method, trace.WithSpanKind(trace.SpanKindServer), trace.WithAttributes(
 			attribute.String("http.request.method", r.Method),
 		))

@@ -1,6 +1,7 @@
 package validation
 
 import (
+	actionvalidation "github.com/domainry/domainry-runtime/runtime/domain/action/validation"
 	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
@@ -178,6 +179,9 @@ func (state *validationState) validateActions() {
 			state.add(path+".output_fields", "may declare only one store_organization_snapshot page")
 		}
 		state.validateActionAssurancePolicy(path, action)
+		for _, issue := range actionvalidation.ActionValidatePayloadFieldStructure(action, state.manifest.Objects) {
+			state.add(path+"."+issue.Path, "%s: %s", actionvalidation.ActionPayloadFieldInvalidCode, issue.Reason)
+		}
 		for _, issue := range invocationcontract.ValidateDefaults(action.PayloadFields, action.Defaults) {
 			state.add(path+".defaults."+issue.Field, "%s expected=%s actual=%s", issue.Code, issue.Expected, issue.Actual)
 		}

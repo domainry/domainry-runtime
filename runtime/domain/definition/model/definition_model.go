@@ -307,6 +307,25 @@ func ObjectExportAssuranceActionKey(objectKey string) string {
 	return ObjectExportAssuranceActionPrefix + objectKey
 }
 
+const (
+	// ActionPayloadTypeObject is the only composite payload field type. It is
+	// legal only with a non-empty Fields list.
+	ActionPayloadTypeObject = "object"
+	// ActionPayloadMaxDepth bounds nesting; the top-level payload_fields list is
+	// depth 1.
+	ActionPayloadMaxDepth = 4
+	// ActionPayloadMaxLeafFields bounds the total number of scalar leaves in one
+	// Action payload contract, counted across every nesting level.
+	ActionPayloadMaxLeafFields = 200
+	// ActionPayloadMaxItems is the absolute item ceiling of one repeated field
+	// and the default max_items when the definition declares none.
+	ActionPayloadMaxItems = 200
+)
+
+// ActionPayloadField is one node of the Action payload contract. Scalar leaves
+// carry a Runtime field type; Type "object" with Fields declares a nested
+// object; Repeated wraps either shape in an array. Action.Defaults only apply
+// to top-level keys; nested defaults use DefaultValue on the nested field.
 type ActionPayloadField struct {
 	Key             string                             `json:"key"`
 	Name            string                             `json:"name,omitempty"`
@@ -315,10 +334,35 @@ type ActionPayloadField struct {
 	Options         []string                           `json:"options,omitempty"`
 	I18n            localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
 	Required        bool                               `json:"required,omitempty"`
+	Repeated        bool                               `json:"repeated,omitempty"`
+	Fields          []ActionPayloadField               `json:"fields,omitempty"`
+	MinItems        *int                               `json:"min_items,omitempty"`
+	MaxItems        *int                               `json:"max_items,omitempty"`
 	SourceObjectKey string                             `json:"source_object_key,omitempty"`
 	SourceFieldKey  string                             `json:"source_field_key,omitempty"`
 	TargetObjectKey string                             `json:"target_object_key,omitempty"`
 	DefaultValue    any                                `json:"default_value,omitempty"`
+}
+
+// IsObject reports whether the field declares a nested object shape.
+func (f ActionPayloadField) IsObject() bool {
+	return strings.TrimSpace(f.Type) == ActionPayloadTypeObject
+}
+
+// ActionPayloadFieldIsStructured reports whether any payload field, at any
+// nesting level, uses the structured (repeated or nested object) contract.
+// Legacy scalar-only Actions keep the flat Record normalization path.
+func ActionPayloadFieldIsStructured(action ActionSchema) bool {
+	return actionPayloadFieldsStructured(action.PayloadFields)
+}
+
+func actionPayloadFieldsStructured(fields []ActionPayloadField) bool {
+	for _, field := range fields {
+		if field.Repeated || len(field.Fields) > 0 || field.IsObject() {
+			return true
+		}
+	}
+	return false
 }
 
 // ActionOutputField preserves the source-field lineage of a generated Handler

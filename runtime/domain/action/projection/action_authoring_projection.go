@@ -1,6 +1,10 @@
 package projection
 
 import (
+	"sort"
+	"strconv"
+
+	appschemacontract "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
@@ -83,11 +87,25 @@ func actionAuthoringRequestSchema() *capabilitycontract.CapabilityAuthoringSchem
 			},
 		},
 	}
+	// Payload fields are a recursive tree: scalar leaves, type "object" with
+	// nested fields, and repeated variants of either. The tree is published as
+	// one local definition so nested levels share the identical contract.
+	payloadFieldTypes := append(appschemacontract.ApplicationSchemaAuthoringFieldTypes(), definitionmodel.ActionPayloadTypeObject)
+	sort.Strings(payloadFieldTypes)
+	payloadFieldItems := definitionmodel.ActionPayloadMaxItems
+	payloadFieldFloor := 0
 	payloadField := capabilitycontract.CapabilityAuthoringSchema{
 		Type: "object", AdditionalProperties: &closed, Required: []string{"key", "type"},
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-			"key": {Type: "string"}, "name": {Type: "string"}, "type": {Type: "string"}, "required": {Type: "boolean"},
-			"options": {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}}, "default": {},
+			"key": {Type: "string"}, "name": {Type: "string"}, "description": {Type: "string"},
+			"type":     {Type: "string", Enum: actionStringEnums(payloadFieldTypes)},
+			"required": {Type: "boolean"}, "repeated": {Type: "boolean", Default: false},
+			"options":           {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}},
+			"fields":            {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Ref: "#/$defs/" + actionPayloadFieldDefinitionKey}, Description: "Nested fields; required and only valid when type is object. Nesting depth is limited to " + strconv.Itoa(definitionmodel.ActionPayloadMaxDepth) + " levels."},
+			"min_items":         {Type: "integer", Minimum: capabilityAuthoringFloat(payloadFieldFloor), Maximum: capabilityAuthoringFloat(payloadFieldItems), Description: "Only valid with repeated."},
+			"max_items":         {Type: "integer", Minimum: capabilityAuthoringFloat(payloadFieldFloor), Maximum: capabilityAuthoringFloat(payloadFieldItems), Description: "Only valid with repeated; defaults to " + strconv.Itoa(definitionmodel.ActionPayloadMaxItems) + "."},
+			"target_object_key": {Type: "string", Description: "Required for relation fields."},
+			"default":           {}, "default_value": {},
 		},
 	}
 	payload := capabilitycontract.CapabilityAuthoringSchema{
@@ -97,7 +115,7 @@ func actionAuthoringRequestSchema() *capabilitycontract.CapabilityAuthoringSchem
 			"key": {Type: "string"}, "object_key": {Type: "string"}, "label": {Type: "string"},
 			"kind": {Type: "string", Enum: actionStringEnums(actionAuthoringKinds())}, "risk_level": {Type: "string", Enum: actionStringEnums([]string{"low", "medium", "high", "critical"})},
 			"preconditions":  {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}},
-			"payload_fields": {Type: "array", Items: &payloadField}, "defaults": {Type: "object"},
+			"payload_fields": {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Ref: "#/$defs/" + actionPayloadFieldDefinitionKey}}, "defaults": {Type: "object", Description: "Top-level payload keys only; nested defaults use default_value on the nested field."},
 			"optimistic_concurrency": {Type: "boolean", Default: false}, "concurrency_field": {Type: "string"}, "assurance_policy": assurancePolicy,
 			"target_organization": {
 				Type: "object", AdditionalProperties: &closed, Required: []string{"source"},
@@ -125,7 +143,15 @@ func actionAuthoringRequestSchema() *capabilitycontract.CapabilityAuthoringSchem
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 			"expected_schema_hash": {Type: "string"}, "payload": payload,
 		},
+		Definitions: map[string]capabilitycontract.CapabilityAuthoringSchema{actionPayloadFieldDefinitionKey: payloadField},
 	}
+}
+
+const actionPayloadFieldDefinitionKey = "action_payload_field"
+
+func capabilityAuthoringFloat(value int) *float64 {
+	result := float64(value)
+	return &result
 }
 
 func actionAuthoringOutputSchema() *capabilitycontract.CapabilityAuthoringSchema {

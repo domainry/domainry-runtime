@@ -136,7 +136,7 @@ func ValidateInput(contract InputContract) []Issue {
 		}
 		fields[key] = field
 		if field.Required && !inputProvides(contract.Input, key) && !inputProvides(contract.Defaults, key) && field.DefaultValue == nil {
-			issues = append(issues, Issue{Code: "invocation.input_required", Field: key, Expected: string(bindingcontract.NormalizeType(field.Type))})
+			issues = append(issues, Issue{Code: "invocation.input_required", Field: key, Expected: string(payloadFieldValueType(field))})
 		}
 	}
 	keys := make([]string, 0, len(contract.Input))
@@ -202,7 +202,7 @@ func validateInputValue(field definitionmodel.ActionPayloadField, value any, bin
 	if text, ok := value.(string); ok && strings.HasPrefix(strings.TrimSpace(text), "$") && !known {
 		return []Issue{{Code: "invocation.input_reference_unknown", Field: field.Key, Reference: strings.TrimSpace(text), Expected: field.Type}}
 	}
-	expected := bindingcontract.NormalizeType(field.Type)
+	expected := payloadFieldValueType(field)
 	if known && !exactDecimalLiteralCompatible(field.Type, value, actual) && !inputValueCompatible(value, actual, expected) {
 		return []Issue{{Code: "invocation.input_type_mismatch", Field: field.Key, Expected: string(expected), Actual: string(actual)}}
 	}
@@ -226,6 +226,18 @@ func validateInputValue(field definitionmodel.ActionPayloadField, value any, bin
 		}
 	}
 	return nil
+}
+
+// payloadFieldValueType maps one payload field onto the binding lattice.
+// Structured fields (nested objects and repeated values of any type) are JSON
+// values: static binding validation checks their container shape only, while
+// the per-item contract is enforced by Action payload normalization at
+// invocation time.
+func payloadFieldValueType(field definitionmodel.ActionPayloadField) bindingcontract.ValueType {
+	if field.Repeated || field.IsObject() {
+		return bindingcontract.TypeJSON
+	}
+	return bindingcontract.NormalizeType(field.Type)
 }
 
 // Exact decimal values are transported as canonical strings end-to-end. This

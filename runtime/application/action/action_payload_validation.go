@@ -25,6 +25,9 @@ func ActionNormalizePayload(action definitionmodel.ActionSchema, data map[string
 	if !hasContract {
 		return payload, nil
 	}
+	if definitionmodel.ActionPayloadFieldIsStructured(action) {
+		return actionNormalizeStructuredPayload(action, payload, schema, extraKeys)
+	}
 	declaredFields := make(map[string]definitionmodel.FieldSchema, len(schema.Fields))
 	for _, field := range schema.Fields {
 		declaredFields[field.Key] = field
@@ -47,6 +50,38 @@ func ActionNormalizePayload(action definitionmodel.ActionSchema, data map[string
 		return nil, actionPayloadBadRequestFromError(err)
 	}
 	if err := recordvalidation.RecordValidateData(schema, normalized, false); err != nil {
+		return nil, actionPayloadBadRequestFromError(err)
+	}
+	for key, value := range extraPayload {
+		normalized[key] = value
+	}
+	return normalized, nil
+}
+
+// actionNormalizeStructuredPayload is the structured (object / object[] /
+// scalar[]) counterpart of the flat path above. Runtime invocation extras and
+// Action.Defaults are honored at the top level only; nested levels are owned
+// entirely by the recursive payload contract.
+func actionNormalizeStructuredPayload(action definitionmodel.ActionSchema, payload map[string]any, schema definitionmodel.ObjectSchema, extraKeys map[string]bool) (map[string]any, error) {
+	declaredFields := make(map[string]bool, len(schema.Fields))
+	for _, field := range schema.Fields {
+		declaredFields[field.Key] = true
+	}
+	declaredPayload, extraPayload := map[string]any{}, map[string]any{}
+	for key, value := range payload {
+		if declaredFields[key] {
+			declaredPayload[key] = value
+			continue
+		}
+		if extraKeys[key] {
+			extraPayload[key] = value
+			continue
+		}
+		return nil, actionPayloadBadRequest("backend.validation.unknown_field", nil, "field", key, "field_key", key, "object", action.Key)
+	}
+	recordpolicy.RecordApplyFieldDefaults(schema, declaredPayload)
+	normalized, err := actionvalidation.ActionNormalizeStructuredPayload(action, declaredPayload)
+	if err != nil {
 		return nil, actionPayloadBadRequestFromError(err)
 	}
 	for key, value := range extraPayload {
