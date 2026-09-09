@@ -123,12 +123,23 @@ func metadataFieldPayloadSchema(fieldTypes []string) capabilitycontract.Capabili
 			"on_delete": {Type: "string", Enum: []any{"cascade", "restrict", "set_null"}, Default: "restrict"}, "inverse_name": {Type: "string"}, "indexed": {Type: "boolean", Default: true},
 		},
 	}
+	// upgrade declares how rows written before this field existed are treated
+	// when a later definition version adds it to a populated Object: backfill
+	// writes backfill_value into them, exempt leaves them empty and lets them
+	// keep being updated without the field.
+	upgrade := capabilitycontract.CapabilityAuthoringSchema{
+		Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: []string{"existing_rows"},
+		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+			"existing_rows":  {Type: "string", Enum: []any{"backfill", "exempt"}},
+			"backfill_value": {},
+		},
+	}
 	return capabilitycontract.CapabilityAuthoringSchema{
 		Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: []string{"name", "type"},
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 			"key": metadataNonEmptyStringSchema("Compatibility input only; Runtime materializes the authoritative resourceKey path value when omitted."), "name": metadataNonEmptyStringSchema("Human-readable field name."), "description": {Type: "string"},
 			"type": {Type: "string", Enum: values}, "required": {Type: "boolean", Default: false}, "unique": {Type: "boolean", Default: false},
-			"default": {}, "default_value": {}, "config": config,
+			"default": {}, "default_value": {}, "config": config, "upgrade": upgrade,
 		},
 	}
 }
