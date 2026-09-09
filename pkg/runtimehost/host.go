@@ -38,6 +38,14 @@ import (
 // Run validates generated project composition, freezes its Handler registry
 // and owns the complete Runtime process lifecycle until shutdown.
 func Run(options Options) error {
+	// DEFINITION_UPGRADE_MODE=plan makes stdout a data channel: the plan is the
+	// only document written there (command.go). The shared logger writes to
+	// os.Stdout, so it is pointed at stderr for the lifetime of a plan run
+	// before it is initialized. The plan itself is unaffected: cmd/server took
+	// the original stdout file before Run was called.
+	if config.DefinitionUpgradePlanModeRequested() {
+		os.Stdout = os.Stderr
+	}
 	logger, err := logging.Initialize("domainry-domain-runtime")
 	if err != nil {
 		wrapped := fmt.Errorf("initialize logger: %w", err)

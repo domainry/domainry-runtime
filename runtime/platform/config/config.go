@@ -374,6 +374,14 @@ func databaseMigrationModeEnv(environment string) string {
 	}
 }
 
+// DefinitionUpgradePlanModeRequested reports whether this process was started
+// in definition-upgrade plan mode, before any configuration is loaded. Plan
+// mode turns stdout into a data channel, so the caller must know it early
+// enough to keep diagnostics off stdout.
+func DefinitionUpgradePlanModeRequested() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("DEFINITION_UPGRADE_MODE")), "plan")
+}
+
 // DEFINITION_UPGRADE_MODE selects how Runtime treats the physical definition
 // upgrade computed at startup from the previously projected manifest to the
 // installed one: apply executes compatible steps with backup and receipts,
