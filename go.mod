@@ -14,8 +14,8 @@ require (
 	github.com/domainry/domainry-data-exchange v0.3.8
 	github.com/domainry/domainry-data-exchange-sdk v0.3.5
 	github.com/domainry/domainry-foundation v0.1.0
-	github.com/domainry/domainry-identity v0.2.0
-	github.com/domainry/domainry-identity-sdk v0.1.2
+	github.com/domainry/domainry-identity v0.2.1
+	github.com/domainry/domainry-identity-sdk v0.1.3
 	github.com/domainry/domainry-integration v0.1.11
 	github.com/domainry/domainry-integration-sdk v0.1.4
 	github.com/domainry/domainry-lifecycle v0.1.9
@@ -24,7 +24,7 @@ require (
 	github.com/domainry/domainry-metadata-sdk v0.1.3
 	github.com/domainry/domainry-monitoring v0.1.9
 	github.com/domainry/domainry-monitoring-sdk v0.1.3
-	github.com/domainry/domainry-notification v0.1.0
+	github.com/domainry/domainry-notification v0.1.1
 	github.com/domainry/domainry-notification-sdk v0.1.0
 	github.com/domainry/domainry-report v0.1.7
 	github.com/domainry/domainry-report-sdk v0.1.6
@@ -93,7 +93,7 @@ require (
 	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/grpc v1.83.1 // indirect
+	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	modernc.org/libc v1.74.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
