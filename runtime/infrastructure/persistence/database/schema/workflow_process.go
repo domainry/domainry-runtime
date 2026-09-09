@@ -88,5 +88,5 @@ func EnsureWorkflowProcessSchema(ctx context.Context, s Store) error {
 			return fmt.Errorf("create %s: %w", index.name, err)
 		}
 	}
-	return nil
+	return EnsureWorkflowRouteStepsSchema(ctx, s)
 }

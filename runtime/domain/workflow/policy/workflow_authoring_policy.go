@@ -73,7 +73,8 @@ func workflowAuthoringComponentCapabilities() []capabilitycontract.CapabilityAut
 			Parameters: []capabilitycontract.CapabilityAuthoringParameter{
 				{Key: "mode", Type: "string", Required: true, Enum: []string{"all", "any", "sequential", "quorum"}},
 				{Key: "required_approvals", Type: "integer", Minimum: workflowAuthoringFloatPointer(1), RequiredWhen: map[string]any{"mode": "quorum"}},
-				{Key: "resolvers", Type: "array", Required: true, ItemSchema: "workflow_assignee_resolver"}, {Key: "resolver_mode", Type: "string", Default: "first_match", Enum: []string{"first_match", "union"}},
+				{Key: "resolvers", Type: "array", ItemSchema: "workflow_assignee_resolver"}, {Key: "resolver_mode", Type: "string", Default: "first_match", Enum: []string{"first_match", "union"}},
+				{Key: "route", Type: "object"},
 				{Key: "empty_assignee_policy", Type: "string", Default: "fail", Enum: []string{"admin", "fail", "skip"}},
 				{Key: "due_seconds", Type: "integer", Minimum: workflowAuthoringFloatPointer(0)}, {Key: "reminder_action_key", Type: "action_key"}, {Key: "reminder_input", Type: "object"},
 				{Key: "escalation_seconds", Type: "integer", Minimum: workflowAuthoringFloatPointer(0)}, {Key: "escalation_resolvers", Type: "array", ItemSchema: "workflow_assignee_resolver"},

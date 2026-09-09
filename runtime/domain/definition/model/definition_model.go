@@ -484,6 +484,26 @@ type WorkflowApprovalNodeContract struct {
 	ReminderInput       map[string]any             `json:"reminder_input,omitempty"`
 	EscalationSeconds   int                        `json:"escalation_seconds,omitempty"`
 	EscalationResolvers []WorkflowAssigneeResolver `json:"escalation_resolvers,omitempty"`
+	// Route makes the node's electorate a per-instance approval route chosen
+	// when the process starts instead of a template-fixed resolver list. When
+	// it is present the node's Mode and RequiredApprovals are ignored; every
+	// step carries its own mode and threshold.
+	Route *WorkflowApprovalRouteContract `json:"route,omitempty"`
+}
+
+// WorkflowApprovalRouteContract is the definition-time envelope of a
+// per-instance approval route. Source is the only supported authority for the
+// route steps and is currently always "instance": the initiating Action stages
+// the route and the durable route rows are the runtime electorate.
+type WorkflowApprovalRouteContract struct {
+	Source                 string   `json:"source"`
+	MinSteps               int      `json:"min_steps,omitempty"`
+	MaxSteps               int      `json:"max_steps,omitempty"`
+	MaxAssigneesPerStep    int      `json:"max_assignees_per_step,omitempty"`
+	EligibleRoles          []string `json:"eligible_roles,omitempty"`
+	DeferredSteps          string   `json:"deferred_steps,omitempty"`
+	DeferredConfigurer     string   `json:"deferred_configurer,omitempty"`
+	RevalidateOnActivation string   `json:"revalidate_on_activation,omitempty"`
 }
 
 type WorkflowAssigneeResolver struct {

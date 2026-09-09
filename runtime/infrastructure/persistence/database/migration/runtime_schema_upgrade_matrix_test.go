@@ -57,6 +57,12 @@ func TestEverySupportedRuntimeSchemaVersionUpgradesToCurrent(t *testing.T) {
 					t.Fatalf("definition upgrade receipts table after upgrade count=%d err=%v", receipts, err)
 				}
 			}
+			if version == "025_definition_upgrade_receipts" {
+				var steps int
+				if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _workflow_route_steps`).Scan(&steps); err != nil || steps != 0 {
+					t.Fatalf("workflow route step table after upgrade count=%d err=%v", steps, err)
+				}
+			}
 			var currentRows, dirty int
 			if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*), COALESCE(MAX(dirty), 0) FROM _schema_migrations WHERE path = ?`, "runtime_schema_"+CurrentRuntimeSchemaVersion).Scan(&currentRows, &dirty); err != nil || currentRows != 1 || dirty != 0 {
 				t.Fatalf("current ledger version=%s rows=%d dirty=%d err=%v", CurrentRuntimeSchemaVersion, currentRows, dirty, err)

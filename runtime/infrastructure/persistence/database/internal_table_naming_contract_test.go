@@ -74,6 +74,7 @@ func TestFreshRuntimeSchemaUsesOwnedBusinessNamesAndOneHostLedger(t *testing.T) 
 		"_workflow_node_instances",
 		"_workflow_process_events",
 		"_workflow_process_instances",
+		"_workflow_route_steps",
 		"_workflow_tasks",
 		"_workspace_administration_receipts_v1",
 		"_workspace_commercial_configuration",

@@ -102,4 +102,8 @@ type WorkflowTaskDecisionRequest struct {
 	Decision       string `json:"decision"`
 	Comment        string `json:"comment,omitempty"`
 	IdempotencyKey string `json:"idempotency_key,omitempty"`
+	// NextStep configures the route step that follows the one this decision
+	// completes. It is only meaningful for a route-driven approval node and is
+	// rejected on a rejection or a return.
+	NextStep *WorkflowNextStepConfiguration `json:"next_step,omitempty"`
 }

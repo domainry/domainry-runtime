@@ -47,7 +47,16 @@ func WorkflowValidateGraph(graph *definitionmodel.WorkflowGraphSchema) error {
 			if mode == "quorum" && contract.RequiredApprovals < 1 || mode != "quorum" && contract.RequiredApprovals != 0 {
 				return badRequest("backend.workflow.approval_required_approvals_invalid", "node", id)
 			}
-			if len(contract.Resolvers) == 0 {
+			if err := WorkflowValidateApprovalRoute(id, contract.Route); err != nil {
+				return err
+			}
+			// A route-driven node takes its electorate, mode and threshold from
+			// the durable per-instance route rows, so the template resolvers
+			// must be absent instead of silently ignored.
+			if contract.Route != nil && len(contract.Resolvers) > 0 {
+				return badRequest("backend.workflow.approval_resolver_invalid", "node", id, "resolver", "route")
+			}
+			if contract.Route == nil && len(contract.Resolvers) == 0 {
 				return badRequest("backend.workflow.approval_resolver_required", "node", id)
 			}
 			for _, resolver := range contract.Resolvers {

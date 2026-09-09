@@ -8,6 +8,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 )
 
 func (s *ChangePlanReferenceApplicationService) addRuntimeEvidenceReferences(ctx context.Context, builder *changeplanprojection.ChangePlanReferenceGraphBuilder, principal principalmodel.Principal) error {
@@ -19,7 +20,7 @@ func (s *ChangePlanReferenceApplicationService) addRuntimeEvidenceReferences(ctx
 		return err
 	}
 	for _, process := range processes {
-		if process.Status != "running" && process.Status != "waiting" && process.Status != "configuration_error" {
+		if !workflowpolicy.WorkflowProcessStatusActive(process.Status) {
 			continue
 		}
 		builder.Node("workflow_process", process.ID, process.ObjectKey, process.WorkflowName, "runtime")

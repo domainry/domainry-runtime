@@ -16,6 +16,7 @@ func workflowCompleteGraphAuthoringContract(capability *capabilitycontract.Capab
 		{Kind: "action_key", InputJSONPointer: "/nodes/*/contract/action/action_key", ResolverEndpoint: "/discovery/references/action_key"},
 		{Kind: "role_key", InputJSONPointer: "/nodes/*/contract/approval/resolvers/*/role_key", ResolverEndpoint: "/discovery/references/role_key"},
 		{Kind: "user_id", InputJSONPointer: "/nodes/*/contract/approval/resolvers/*/user_ids/*", ResolverEndpoint: "/discovery/references/user_id"},
+		{Kind: "role_key", InputJSONPointer: "/nodes/*/contract/approval/route/eligible_roles/*", ResolverEndpoint: "/discovery/references/role_key"},
 	}
 	capability.Errors = append(capability.Errors,
 		capabilitycontract.CapabilityAuthoringError{Code: "backend.workflow.graph_trigger_required", FieldPath: "nodes", MessageKey: "backend.workflow.graph_trigger_required"},
@@ -63,15 +64,46 @@ func workflowGraphSchemaDefinitions(nodeTypes []string) map[string]capabilitycon
 func workflowGraphApprovalSchema() capabilitycontract.CapabilityAuthoringSchema {
 	closed := false
 	resolver := capabilitycontract.CapabilityAuthoringSchema{Ref: "#/$defs/workflow_assignee_resolver"}
-	schema := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"mode", "resolvers"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-		"mode": {Type: "string", Enum: []any{"all", "any", "sequential", "quorum"}}, "title": {Type: "string"}, "resolvers": {Type: "array", Items: &resolver, MinItems: workflowAuthoringIntPointer(1)},
+	schema := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"mode"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+		"mode": {Type: "string", Enum: []any{"all", "any", "sequential", "quorum"}}, "title": {Type: "string"}, "resolvers": {Type: "array", Items: &resolver},
 		"required_approvals": {Type: "integer", Minimum: workflowAuthoringFloatPointer(1)},
 		"resolver_mode":      {Type: "string", Enum: []any{"first_match", "union"}}, "empty_assignee_policy": {Type: "string", Enum: []any{"admin", "fail", "skip"}},
 		"due_seconds": {Type: "integer", Minimum: workflowAuthoringFloatPointer(0)}, "reminder_action_key": {Type: "string"}, "reminder_input": workflowGraphOpenObjectSchema(),
 		"escalation_seconds": {Type: "integer", Minimum: workflowAuthoringFloatPointer(0)}, "escalation_resolvers": {Type: "array", Items: &resolver},
+		"route": workflowGraphApprovalRouteSchema(),
 	}}
+	workflowApprovalElectorateSchemaCondition(&schema)
 	workflowApprovalQuorumSchemaCondition(&schema)
 	return schema
+}
+
+// workflowApprovalElectorateSchemaCondition keeps the closed contract honest
+// while admitting both electorate authorities: a template-fixed node needs at
+// least one resolver, a route-driven node needs the route and ignores the
+// node-level mode and threshold, and no node may declare both.
+func workflowApprovalElectorateSchemaCondition(schema *capabilitycontract.CapabilityAuthoringSchema) {
+	schema.OneOf = []capabilitycontract.CapabilityAuthoringSchema{
+		{Required: []string{"resolvers"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{"resolvers": {Type: "array", MinItems: workflowAuthoringIntPointer(1)}}},
+		{Required: []string{"route"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{"resolvers": {Type: "array", MaxItems: workflowAuthoringIntPointer(0)}}},
+	}
+}
+
+// workflowGraphApprovalRouteSchema is the per-instance approval route envelope.
+// Only the bounds live in the definition; the concrete steps are staged by the
+// initiating Action and are never authored here.
+func workflowGraphApprovalRouteSchema() capabilitycontract.CapabilityAuthoringSchema {
+	closed := false
+	role := capabilitycontract.CapabilityAuthoringSchema{Type: "string"}
+	return capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"source"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+		"source":                   {Type: "string", Enum: []any{"instance"}},
+		"min_steps":                {Type: "integer", Minimum: workflowAuthoringFloatPointer(1)},
+		"max_steps":                {Type: "integer", Minimum: workflowAuthoringFloatPointer(1)},
+		"max_assignees_per_step":   {Type: "integer", Minimum: workflowAuthoringFloatPointer(1)},
+		"eligible_roles":           {Type: "array", Items: &role},
+		"deferred_steps":           {Type: "string", Enum: []any{"allow", "deny"}, Default: "deny"},
+		"deferred_configurer":      {Type: "string", Enum: []any{"previous_step_approver", "initiator"}, Default: "previous_step_approver"},
+		"revalidate_on_activation": {Type: "string", Enum: []any{"fail", "skip_invalid", "admin"}, Default: "fail"},
+	}}
 }
 
 func workflowApprovalQuorumSchemaCondition(schema *capabilitycontract.CapabilityAuthoringSchema) {

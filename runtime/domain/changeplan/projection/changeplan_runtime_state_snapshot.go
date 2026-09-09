@@ -10,6 +10,7 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 
 	"sort"
 	"strings"
@@ -20,7 +21,7 @@ import (
 func ProjectWorkflowProcesses(processes []workflowmodel.WorkflowProcessInstance) []WorkflowProcessSummary {
 	items := []WorkflowProcessSummary{}
 	for _, process := range processes {
-		if process.Status != "running" && process.Status != "waiting" && process.Status != "configuration_error" {
+		if !workflowpolicy.WorkflowProcessStatusActive(process.Status) {
 			continue
 		}
 		items = append(items, WorkflowProcessSummary{ID: process.ID, WorkflowKey: process.WorkflowKey, DefinitionVersionID: process.DefinitionVersionID, DefinitionVersion: process.DefinitionVersion, DefinitionHash: process.DefinitionHash, ObjectKey: process.ObjectKey, RecordID: process.RecordID, Status: process.Status, CurrentNodeIDs: append([]string(nil), process.CurrentNodeIDs...), UpdatedAt: process.UpdatedAt})

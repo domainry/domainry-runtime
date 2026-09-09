@@ -16,3 +16,12 @@ type WorkflowApprovalTaskReader interface {
 // ErrWorkflowDecisionSnapshotChanged asks the application to recompute an
 // approval decision against the latest durable process and task snapshot.
 var ErrWorkflowDecisionSnapshotChanged = errors.New("workflow decision snapshot changed")
+
+// WorkflowRouteStore owns the durable per-instance approval route. The rows
+// are the electorate authority of a route-driven approval node, so a step is
+// only ever configured through a compare-and-set on its current status.
+type WorkflowRouteStore interface {
+	InsertRouteSteps(context.Context, string, []workflowmodel.WorkflowRouteStep) error
+	ListRouteSteps(context.Context, string, string) ([]workflowmodel.WorkflowRouteStep, error)
+	UpdateRouteStepCAS(context.Context, string, workflowmodel.WorkflowRouteStep, string) (bool, error)
+}
