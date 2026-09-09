@@ -51,6 +51,12 @@ func TestEverySupportedRuntimeSchemaVersionUpgradesToCurrent(t *testing.T) {
 					t.Fatalf("application header upgrade zone=%q name=%q err=%v", zone, name, err)
 				}
 			}
+			if version == "024_application_time_zone" {
+				var receipts int
+				if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _application_schema_upgrade_receipts`).Scan(&receipts); err != nil || receipts != 0 {
+					t.Fatalf("definition upgrade receipts table after upgrade count=%d err=%v", receipts, err)
+				}
+			}
 			var currentRows, dirty int
 			if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*), COALESCE(MAX(dirty), 0) FROM _schema_migrations WHERE path = ?`, "runtime_schema_"+CurrentRuntimeSchemaVersion).Scan(&currentRows, &dirty); err != nil || currentRows != 1 || dirty != 0 {
 				t.Fatalf("current ledger version=%s rows=%d dirty=%d err=%v", CurrentRuntimeSchemaVersion, currentRows, dirty, err)

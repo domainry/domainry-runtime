@@ -46,6 +46,7 @@ func TestFreshRuntimeSchemaUsesOwnedBusinessNamesAndOneHostLedger(t *testing.T) 
 		"_application_schema_exact_decimal_migration_receipts",
 		"_application_schema_projection",
 		"_application_schema_seed_checkpoints",
+		"_application_schema_upgrade_receipts",
 		"_audit_events",
 		"_audit_export_artifacts",
 		"_automation_instruction_executions",

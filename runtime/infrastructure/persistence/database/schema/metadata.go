@@ -49,6 +49,9 @@ func EnsureApplicationSchema(ctx context.Context, s Store) error {
 		s.Identifier("applied_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL)"); err != nil {
 		return fmt.Errorf("create _application_schema_exact_decimal_migration_receipts: %w", err)
 	}
+	if err := EnsureDefinitionUpgradeReceiptsSchema(ctx, s); err != nil {
+		return err
+	}
 	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("_record_localized_values")+" ("+
 		s.Identifier("workspace_id")+" "+s.LocalizedTextKeyColumnType()+" NOT NULL, "+
 		s.Identifier("object_key")+" "+s.LocalizedTextKeyColumnType()+" NOT NULL, "+

@@ -65,6 +65,17 @@ func (s *RuntimeStore) ensureMigrationBackupForExistingData(ctx context.Context,
 	return nil
 }
 
+// EnsureMigrationBackup secures the pre-change backup for a database that
+// already holds application data and returns its id. Definition upgrades call
+// it before executing physical steps; the result is cached per store so the
+// runtime schema migration and the definition upgrade share one backup.
+func (s *RuntimeStore) EnsureMigrationBackup(ctx context.Context) (string, error) {
+	if err := s.ensureMigrationBackupForExistingData(ctx, s.runtimeMigrationConfig()); err != nil {
+		return "", err
+	}
+	return s.migrationBackupID, nil
+}
+
 func (s *RuntimeStore) migrationBackupChecksum(path string) (string, error) {
 	if s.backupChecksum != nil {
 		return s.backupChecksum(path)

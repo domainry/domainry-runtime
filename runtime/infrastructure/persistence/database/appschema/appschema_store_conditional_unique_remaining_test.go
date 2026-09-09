@@ -65,7 +65,7 @@ func TestEnsureObjectStorageConditionalUniqueRemainingBranches(t *testing.T) {
 		repository.createIndex = func(context.Context, string, string, bool, ...string) error {
 			return nil
 		}
-		return repository.ensureObjectStorage(t.Context(), object)
+		return repository.ensureObjectStorage(t.Context(), object, metadataUpgradeExecution{})
 	}
 
 	sqliteQueries := func(indexes ...string) []metadataSQLQueryStep {

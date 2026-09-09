@@ -22,7 +22,7 @@ func TestEnsureObjectStorageReplacesLegacyRecordActorColumns(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := NewApplicationSchemaStore(store)
-	if err := repository.ensureObjectStorage(t.Context(), definitionmodel.ObjectSchema{Key: "actor_migration", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}); err != nil {
+	if err := repository.ensureObjectStorage(t.Context(), definitionmodel.ObjectSchema{Key: "actor_migration", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}, metadataUpgradeExecution{}); err != nil {
 		t.Fatal(err)
 	}
 	columns, err := repository.tableColumns(t.Context(), "actor_migration")

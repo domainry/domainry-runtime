@@ -13,6 +13,7 @@ type ApplicationSchemaRepository interface {
 	LoadManifest(ctx context.Context, scope principalmodel.SystemScope) (manifestmodel.ManifestSchema, error)
 	SyncManifest(ctx context.Context, scope principalmodel.SystemScope, manifest manifestmodel.ManifestSchema) error
 	MigrationPlan(ctx context.Context, scope principalmodel.SystemScope, manifest manifestmodel.ManifestSchema) ([]appschemamodel.ApplicationSchemaMigrationStep, error)
+	UpgradePlan(ctx context.Context, scope principalmodel.SystemScope, previous *manifestmodel.ManifestSchema, next manifestmodel.ManifestSchema) (appschemamodel.ApplicationSchemaUpgradePlan, error)
 }
 
 // ApplicationExecutionConfigurationReader reads the immutable configuration

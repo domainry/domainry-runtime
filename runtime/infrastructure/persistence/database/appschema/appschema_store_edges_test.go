@@ -214,6 +214,11 @@ func TestMetadataRecordStringValuesCoversTypedEmptyAndNilValues(t *testing.T) {
 func TestEnsureObjectStorageReconcilesIndexesDefaultsAndLegacyWorkspace(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	t.Cleanup(func() { _ = store.Close() })
+	// Business DDL always follows the host schema migration, which owns the
+	// upgrade receipt ledger the materializer writes to.
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	repository := NewApplicationSchemaStore(store)
 	object := definitionmodel.ObjectSchema{
 		Key: "account",
@@ -229,21 +234,21 @@ func TestEnsureObjectStorageReconcilesIndexesDefaultsAndLegacyWorkspace(t *testi
 			{Type: "composite_unique", Fields: []string{" ", "code"}},
 		},
 	}
-	if err := repository.ensureObjectStorage(t.Context(), object); err != nil {
+	if err := repository.ensureObjectStorage(t.Context(), object, metadataUpgradeExecution{}); err != nil {
 		t.Fatal(err)
 	}
 	object.Fields = []definitionmodel.FieldSchema{{Key: "name", Type: "text"}, {Key: "code", Type: "text", Config: map[string]any{"indexed": true}}}
-	if err := repository.ensureObjectStorage(t.Context(), object); err != nil {
+	if err := repository.ensureObjectStorage(t.Context(), object, metadataUpgradeExecution{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.ensureObjectStorage(t.Context(), object); err != nil {
+	if err := repository.ensureObjectStorage(t.Context(), object, metadataUpgradeExecution{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repository.MigrationPlan(t.Context(), metadataInstallScope(), manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "account", Fields: []definitionmodel.FieldSchema{{Key: ""}}}}}); err != nil {
 		t.Fatal(err)
 	}
 	object.Fields = []definitionmodel.FieldSchema{{Key: "code", Type: "text"}}
-	if err := repository.ensureObjectStorage(t.Context(), object); err != nil {
+	if err := repository.ensureObjectStorage(t.Context(), object, metadataUpgradeExecution{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE "legacy" ("id" TEXT)`); err != nil {
@@ -252,7 +257,7 @@ func TestEnsureObjectStorageReconcilesIndexesDefaultsAndLegacyWorkspace(t *testi
 	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO "legacy" ("id") VALUES ('one')`); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.ensureObjectStorage(t.Context(), definitionmodel.ObjectSchema{Key: "legacy"}); err != nil {
+	if err := repository.ensureObjectStorage(t.Context(), definitionmodel.ObjectSchema{Key: "legacy"}, metadataUpgradeExecution{}); err != nil {
 		t.Fatal(err)
 	}
 	var workspace string
@@ -321,7 +326,7 @@ func TestEnsureObjectStorageFailureBranches(t *testing.T) {
 			}
 			return nil
 		}
-		return repository.ensureObjectStorage(t.Context(), object)
+		return repository.ensureObjectStorage(t.Context(), object, metadataUpgradeExecution{})
 	}
 	account := definitionmodel.ObjectSchema{Key: "account"}
 	if err := run(t, metadataSQLState{execSteps: []metadataSQLExecStep{{err: errMetadataSQL}}}, account, 0); err == nil {

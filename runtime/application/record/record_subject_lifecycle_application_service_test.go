@@ -35,6 +35,9 @@ func TestRecordSubjectLifecycleExportsRecordsAndFilesThenErasesDeclaredFields(t 
 		{Key: "attachment", Type: "text", Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete"}},
 	}}
 	manifest := manifestmodel.ManifestSchema{TemplateID: "record-subject", Version: "1", Name: "Record Subject", Objects: []definitionmodel.ObjectSchema{object}}
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	if err := appschemapersistence.NewApplicationSchemaStore(store).SyncManifest(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test record subject schema"), manifest); err != nil {
 		t.Fatal(err)
 	}
