@@ -60,6 +60,7 @@ func (state *validationState) validateObjects() {
 				}
 			}
 			state.validateFieldOptions(fieldPath, field)
+			state.validateFieldUpgradeRule(fieldPath, key, field)
 		}
 		for validationIndex, validation := range object.Validations {
 			validationPath := fmt.Sprintf("%s.validations[%d]", path, validationIndex)

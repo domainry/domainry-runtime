@@ -38,5 +38,8 @@ func DecodeManifest(raw []byte) (ManifestSchema, error) {
 		return ManifestSchema{}, fmt.Errorf("manifest_hash %q does not match canonical content hash %q", declared, hash)
 	}
 	manifest.ManifestHash = hash
+	if err := VerifyManifestDefinitionVersion(manifest); err != nil {
+		return ManifestSchema{}, fmt.Errorf("verify manifest definition version: %w", err)
+	}
 	return manifest, nil
 }

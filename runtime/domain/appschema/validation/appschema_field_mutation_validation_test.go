@@ -70,3 +70,16 @@ func assertFieldMutationError(t *testing.T, err error, code, parameter string) {
 		t.Fatalf("error=%#v", err)
 	}
 }
+
+func TestNormalizeFieldMutationRejectsInvalidUpgradeRule(t *testing.T) {
+	objects := []definitionmodel.ObjectSchema{{Key: "customer"}}
+	payload, _ := json.Marshal(definitionmodel.FieldSchema{Key: "region", Type: "text", Upgrade: &definitionmodel.FieldUpgradeRule{ExistingRows: "exempt"}})
+	request := appschemamodel.ApplicationDefinitionUpsertRequest{ObjectKey: "customer", Payload: payload}
+	_, err := ApplicationSchemaNormalizeFieldMutation(request, objects, []string{"text"}, nil, 0)
+	assertFieldMutationError(t, err, "backend.metadata.field_upgrade_rule_invalid", "reason")
+	payload, _ = json.Marshal(definitionmodel.FieldSchema{Key: "region", Type: "text", Required: true, Upgrade: &definitionmodel.FieldUpgradeRule{ExistingRows: "exempt"}})
+	request.Payload = payload
+	if _, err := ApplicationSchemaNormalizeFieldMutation(request, objects, []string{"text"}, nil, 0); err != nil {
+		t.Fatalf("valid exempt rule rejected: %v", err)
+	}
+}

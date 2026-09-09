@@ -2,10 +2,13 @@ package validation
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 )
 
 func (state *validationState) validateDictionaries() {
@@ -139,4 +142,20 @@ func cloneJSONMap(value any) map[string]any {
 		return nil
 	}
 	return out
+}
+
+// validateFieldUpgradeRule surfaces the shared upgrade-rule contract as a
+// coded manifest error so a rejected manifest names the object, field and
+// reason in startup logs.
+func (state *validationState) validateFieldUpgradeRule(path, objectKey string, field definitionmodel.FieldSchema) {
+	err := recordvalidation.RecordValidateFieldUpgradeRule(objectKey, field)
+	if err == nil {
+		return
+	}
+	reason := ""
+	var coded *apperror.CodedError
+	if errors.As(err, &coded) {
+		reason = coded.Params["reason"]
+	}
+	state.add(path+".upgrade", "%s: object=%s field=%s reason=%s", recordvalidation.FieldUpgradeRuleInvalidCode, objectKey, strings.TrimSpace(field.Key), reason)
 }

@@ -32,6 +32,42 @@ type FieldSchema struct {
 	// DisabledAt is set when the field has been soft-disabled.
 	// ensureObjectStorage skips disabled fields (no physical DROP).
 	DisabledAt string `json:"disabled_at,omitempty"`
+	// Upgrade declares how rows that predate this field are treated when a
+	// later definition version adds the field to a populated object.
+	Upgrade *FieldUpgradeRule `json:"upgrade,omitempty"`
+}
+
+const (
+	// FieldUpgradeBackfill writes BackfillValue into every existing row whose
+	// column is still NULL when the field is added.
+	FieldUpgradeBackfill = "backfill"
+	// FieldUpgradeExempt keeps existing rows valid without the field: the
+	// required check is skipped while the stored value stays empty.
+	FieldUpgradeExempt = "exempt"
+)
+
+// FieldUpgradeRule is the definition-time contract for existing rows when a
+// field is introduced by a definition version upgrade.
+type FieldUpgradeRule struct {
+	ExistingRows  string `json:"existing_rows"`
+	BackfillValue any    `json:"backfill_value,omitempty"`
+}
+
+// FieldExemptsExistingRows reports whether the field declares the exempt rule.
+func (f FieldSchema) FieldExemptsExistingRows() bool {
+	return f.Upgrade != nil && strings.TrimSpace(f.Upgrade.ExistingRows) == FieldUpgradeExempt
+}
+
+// FieldBackfillValue returns the value written into rows that predate the
+// field: an explicit backfill rule wins, otherwise the declared default.
+func (f FieldSchema) FieldBackfillValue() any {
+	if f.Upgrade != nil && strings.TrimSpace(f.Upgrade.ExistingRows) == FieldUpgradeBackfill && f.Upgrade.BackfillValue != nil {
+		return f.Upgrade.BackfillValue
+	}
+	if f.DefaultValue != nil {
+		return f.DefaultValue
+	}
+	return f.Default
 }
 
 type ValidationSchema struct {

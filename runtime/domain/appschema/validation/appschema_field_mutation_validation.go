@@ -1,8 +1,10 @@
 package validation
 
 import (
+	"github.com/domainry/domainry-foundation/apperror"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
 	"encoding/json"
 	"fmt"
@@ -28,6 +30,9 @@ func ApplicationSchemaNormalizeFieldMutation(request appschemamodel.ApplicationD
 	}
 	if err := recordmodel.RecordValidateLocalizedFieldContract(definitionmodel.ObjectSchema{Key: request.ObjectKey, Fields: []definitionmodel.FieldSchema{field}}); err != nil {
 		return request, badRequest("backend.metadata.localized_field_invalid", "field", field.Key, "detail", err.Error())
+	}
+	if err := recordvalidation.RecordValidateFieldUpgradeRule(request.ObjectKey, field); err != nil {
+		return request, apperror.FromError(apperror.KindBadRequest, err)
 	}
 	if strings.TrimSpace(field.Type) == "currency" {
 		config, err := recordmodel.RecordNormalizeDecimalConfig(field.Config)

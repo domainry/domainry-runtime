@@ -14,6 +14,9 @@ func RecordValidateData(object definitionmodel.ObjectSchema, data map[string]any
 // RecordValidateDataWithPrev validates data for an update, using prev as the current stored record
 // values. This is required for state_machine validations.
 func RecordValidateDataWithPrev(object definitionmodel.ObjectSchema, data map[string]any, prev map[string]any, partial bool) error {
+	// hasPrev distinguishes an update from a create: exempt upgrade rules only
+	// relax the required check for rows that already existed without the field.
+	hasPrev := prev != nil
 	if data == nil {
 		data = map[string]any{}
 	}
@@ -41,6 +44,9 @@ func RecordValidateDataWithPrev(object definitionmodel.ObjectSchema, data map[st
 	}
 	for _, field := range object.Fields {
 		if field.Required && RecordIsEmptyValue(data[field.Key]) {
+			if hasPrev && field.FieldExemptsExistingRows() && RecordIsEmptyValue(prev[field.Key]) {
+				continue
+			}
 			return validationError("backend.validation.required", "field", field.Key)
 		}
 	}
