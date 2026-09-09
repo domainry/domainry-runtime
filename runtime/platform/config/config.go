@@ -93,6 +93,7 @@ type Config struct {
 	DatabaseDSN                             string
 	DatabaseMigrationDSN                    string
 	DatabaseMigrationMode                   string
+	DefinitionUpgradeMode                   string
 	DatabaseMinSchemaVersion                string
 	DatabaseMaxSchemaVersion                string
 	DatabaseConnectionMode                  string
@@ -262,6 +263,7 @@ func FromEnv() Config {
 		DatabaseDSN:                                 env("DATABASE_DSN", ""),
 		DatabaseMigrationDSN:                        strings.TrimSpace(os.Getenv("DATABASE_MIGRATION_DSN")),
 		DatabaseMigrationMode:                       databaseMigrationModeEnv(environment),
+		DefinitionUpgradeMode:                       definitionUpgradeModeEnv(environment),
 		DatabaseMinSchemaVersion:                    strings.TrimSpace(os.Getenv("DATABASE_MIN_SCHEMA_VERSION")),
 		DatabaseMaxSchemaVersion:                    strings.TrimSpace(os.Getenv("DATABASE_MAX_SCHEMA_VERSION")),
 		DatabaseConnectionMode:                      strings.TrimSpace(os.Getenv("DATABASE_CONNECTION_MODE")),
@@ -370,6 +372,33 @@ func databaseMigrationModeEnv(environment string) string {
 	default:
 		return "apply"
 	}
+}
+
+// DEFINITION_UPGRADE_MODE selects how Runtime treats the physical definition
+// upgrade computed at startup from the previously projected manifest to the
+// installed one: apply executes compatible steps with backup and receipts,
+// verify refuses to start while any non-retained step is pending, and plan
+// prints the plan as JSON and exits without starting HTTP. It defaults to
+// apply, to verify in production, and follows DATABASE_MIGRATION_MODE=verify
+// when unset so a verify-only deployment never mutates business tables.
+func definitionUpgradeModeEnv(environment string) string {
+	if value := strings.ToLower(strings.TrimSpace(os.Getenv("DEFINITION_UPGRADE_MODE"))); value != "" {
+		return value
+	}
+	if databaseMigrationModeEnv(environment) == "verify" {
+		return "verify"
+	}
+	return "apply"
+}
+
+func (c Config) EffectiveDefinitionUpgradeMode() string {
+	if value := strings.ToLower(strings.TrimSpace(c.DefinitionUpgradeMode)); value != "" {
+		return value
+	}
+	if c.EffectiveDatabaseMigrationMode() == "verify" {
+		return "verify"
+	}
+	return "apply"
 }
 
 func (c Config) EffectiveDatabaseMigrationMode() string {

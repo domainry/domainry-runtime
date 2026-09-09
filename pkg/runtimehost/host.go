@@ -46,6 +46,11 @@ func Run(options Options) error {
 	}
 	defer func() { _ = logger.Sync() }()
 	if err := runWithDependencies(options, defaultServerRunDependencies()); err != nil {
+		var planRequested *bootstrap.DefinitionUpgradePlanRequested
+		if errors.As(err, &planRequested) {
+			logger.Info("domain Runtime evaluated the definition upgrade plan without starting", zap.String("from_version", planRequested.Plan.FromVersion), zap.String("to_version", planRequested.Plan.ToVersion), zap.Bool("blocking", planRequested.Plan.Blocking))
+			return err
+		}
 		logger.Error("domain Runtime stopped", logging.StableErrorFields(err)...)
 		return err
 	}
@@ -149,6 +154,12 @@ func (a *runtimeActivator) Activate(manifest manifestmodel.ManifestSchema) (err 
 	}
 	defer func() {
 		if recovered := recover(); recovered != nil {
+			// Bootstrap reports startup failures by panicking with the error;
+			// wrapping keeps typed outcomes such as the plan-mode sentinel visible.
+			if recoveredErr, ok := recovered.(error); ok {
+				err = fmt.Errorf("Runtime bootstrap failed after manifest Provision: %w", recoveredErr)
+				return
+			}
 			err = fmt.Errorf("Runtime bootstrap failed after manifest Provision: %v", recovered)
 		}
 	}()

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	manifestprojection "github.com/domainry/domainry-runtime/runtime/domain/manifest/projection"
@@ -60,6 +61,9 @@ func TestRestoreRuntimeManifestPropagatesEachRepositoryFailure(t *testing.T) {
 	}{
 		{name: "sync published", notifications: runtimeNotificationRepositoryStub{syncErr: failure}},
 		{name: "list published", notifications: runtimeNotificationRepositoryStub{listErr: failure}},
+		{name: "previous manifest", metadata: runtimeMetadataRepositoryStub{previousErr: failure}},
+		{name: "upgrade plan", metadata: runtimeMetadataRepositoryStub{planErr: failure}},
+		{name: "apply upgrade", metadata: runtimeMetadataRepositoryStub{applyErr: failure}},
 		{name: "ensure metadata", metadata: runtimeMetadataRepositoryStub{ensureErr: failure}},
 		{name: "load metadata", metadata: runtimeMetadataRepositoryStub{loadErr: failure}},
 		{name: "sync metadata", metadata: runtimeMetadataRepositoryStub{syncErr: failure}},
@@ -126,10 +130,40 @@ func (s runtimeNotificationRepositoryStub) List(context.Context, principalmodel.
 }
 
 type runtimeMetadataRepositoryStub struct {
-	ensureErr error
-	loadErr   error
-	syncErr   error
-	manifest  manifestmodel.ManifestSchema
+	ensureErr   error
+	loadErr     error
+	syncErr     error
+	previousErr error
+	planErr     error
+	applyErr    error
+	manifest    manifestmodel.ManifestSchema
+	previous    *manifestmodel.ManifestSchema
+	plan        appschemamodel.ApplicationSchemaUpgradePlan
+	applied     *appschemamodel.ApplicationSchemaUpgradePlan
+	synced      *manifestmodel.ManifestSchema
+}
+
+func (s runtimeMetadataRepositoryStub) LoadPreviousManifest(context.Context, principalmodel.SystemScope) (*manifestmodel.ManifestSchema, error) {
+	return s.previous, s.previousErr
+}
+
+func (s runtimeMetadataRepositoryStub) UpgradePlan(_ context.Context, _ principalmodel.SystemScope, previous *manifestmodel.ManifestSchema, next manifestmodel.ManifestSchema) (appschemamodel.ApplicationSchemaUpgradePlan, error) {
+	plan := s.plan
+	if previous != nil {
+		plan.FromVersion = previous.Version
+	}
+	plan.ToVersion = next.Version
+	return plan, s.planErr
+}
+
+func (s runtimeMetadataRepositoryStub) ApplyUpgrade(_ context.Context, _ principalmodel.SystemScope, plan appschemamodel.ApplicationSchemaUpgradePlan, next manifestmodel.ManifestSchema) (appschemamodel.ApplicationSchemaUpgradePlan, error) {
+	if s.applied != nil {
+		*s.applied = plan
+	}
+	if s.synced != nil {
+		*s.synced = next
+	}
+	return plan, s.applyErr
 }
 
 func (s runtimeMetadataRepositoryStub) SyncManifestProjection(context.Context, principalmodel.SystemScope, manifestmodel.ManifestSchema) error {

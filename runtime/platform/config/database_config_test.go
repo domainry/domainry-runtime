@@ -58,3 +58,47 @@ func TestDatabaseMigrationModeDefaultsToVerifyInProduction(t *testing.T) {
 		t.Fatalf("development migration mode = %q, want apply", got)
 	}
 }
+
+func TestDefinitionUpgradeModeFollowsMigrationModeAndProduction(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("DATABASE_MIGRATION_MODE", "")
+	t.Setenv("DEFINITION_UPGRADE_MODE", "")
+	if got := FromEnv().DefinitionUpgradeMode; got != "apply" {
+		t.Fatalf("development definition upgrade mode = %q, want apply", got)
+	}
+	t.Setenv("DATABASE_MIGRATION_MODE", "verify")
+	if got := FromEnv().DefinitionUpgradeMode; got != "verify" {
+		t.Fatalf("verify migration mode definition upgrade mode = %q, want verify", got)
+	}
+	t.Setenv("DEFINITION_UPGRADE_MODE", "Plan")
+	if got := FromEnv().DefinitionUpgradeMode; got != "plan" {
+		t.Fatalf("explicit definition upgrade mode = %q, want plan", got)
+	}
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("DATABASE_MIGRATION_MODE", "")
+	t.Setenv("DEFINITION_UPGRADE_MODE", "")
+	if got := FromEnv().DefinitionUpgradeMode; got != "verify" {
+		t.Fatalf("production definition upgrade mode = %q, want verify", got)
+	}
+	if got := (Config{Environment: "development"}).EffectiveDefinitionUpgradeMode(); got != "apply" {
+		t.Fatalf("effective development mode = %q, want apply", got)
+	}
+	if got := (Config{Environment: "development", DatabaseMigrationMode: "verify"}).EffectiveDefinitionUpgradeMode(); got != "verify" {
+		t.Fatalf("effective verify-migration mode = %q, want verify", got)
+	}
+	if got := (Config{Environment: "production"}).EffectiveDefinitionUpgradeMode(); got != "verify" {
+		t.Fatalf("effective production mode = %q, want verify", got)
+	}
+	if got := (Config{Environment: "production", DefinitionUpgradeMode: " APPLY "}).EffectiveDefinitionUpgradeMode(); got != "apply" {
+		t.Fatalf("effective explicit mode = %q, want apply", got)
+	}
+	found := false
+	for _, definition := range Definitions() {
+		if definition.Name == "DEFINITION_UPGRADE_MODE" {
+			found = definition.Type == TypeString && !definition.Secret
+		}
+	}
+	if !found {
+		t.Fatal("DEFINITION_UPGRADE_MODE is not part of the configuration contract")
+	}
+}

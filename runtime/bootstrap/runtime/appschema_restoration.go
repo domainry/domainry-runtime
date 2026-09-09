@@ -20,9 +20,13 @@ type restoredRuntimeMetadata struct {
 	metadataStore appschemapersistence.ApplicationSchemaStore
 }
 
-func restoreRuntimeMetadata(ctx context.Context, store *persistence.RuntimeStore, seedManifest manifestmodel.ManifestSchema) (restoredRuntimeMetadata, error) {
+// DefinitionUpgradePlanRequested is the plan-mode outcome of metadata
+// restoration: the process prints the plan and exits without serving.
+type DefinitionUpgradePlanRequested = appschemaapplication.DefinitionUpgradePlanRequested
+
+func restoreRuntimeMetadata(ctx context.Context, store *persistence.RuntimeStore, seedManifest manifestmodel.ManifestSchema, definitionUpgradeMode string) (restoredRuntimeMetadata, error) {
 	metadataStore := appschemapersistence.NewApplicationSchemaStore(store)
-	manifest, err := restoreRuntimeManifest(ctx, &installedNotificationTemplateCatalog{}, metadataStore, seedManifest)
+	manifest, err := restoreRuntimeManifest(ctx, &installedNotificationTemplateCatalog{}, metadataStore, seedManifest, definitionUpgradeMode)
 	if err != nil {
 		return restoredRuntimeMetadata{}, err
 	}
@@ -73,7 +77,7 @@ func (c sdkNotificationTemplateCatalog) List(ctx context.Context, _ principalmod
 	return notificationSDKConvert[[]notificationmodel.NotificationTemplateRecord](values)
 }
 
-func restoreRuntimeManifest(ctx context.Context, notifications appschemaapplication.InstalledNotificationTemplateCatalog, metadata manifestrepository.ManifestRuntimeMetadataRepository, seedManifest manifestmodel.ManifestSchema) (manifestmodel.ManifestSchema, error) {
+func restoreRuntimeManifest(ctx context.Context, notifications appschemaapplication.InstalledNotificationTemplateCatalog, metadata manifestrepository.ManifestRuntimeMetadataRepository, seedManifest manifestmodel.ManifestSchema, definitionUpgradeMode string) (manifestmodel.ManifestSchema, error) {
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "restore Runtime metadata")
-	return appschemaapplication.NewApplicationSchemaRuntimeRestorationApplicationService(notifications, metadata).Restore(ctx, seedManifest, scope)
+	return appschemaapplication.NewApplicationSchemaRuntimeRestorationApplicationService(notifications, metadata).WithDefinitionUpgradeMode(definitionUpgradeMode).Restore(ctx, seedManifest, scope)
 }

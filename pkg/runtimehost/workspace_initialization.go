@@ -16,6 +16,7 @@ import (
 	identitymodulehost "github.com/domainry/domainry-identity-sdk/modulehost"
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	runtimebootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/runtime"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -114,6 +115,11 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, manifest m
 	}
 	if manager.bootstrap == nil {
 		return fmt.Errorf("initial Workspace bootstrap is unavailable")
+	}
+	if manager.cfg.EffectiveDefinitionUpgradeMode() == appschemaapplication.DefinitionUpgradeModePlan {
+		// A database without its first Workspace has no previous definition
+		// version: the plan is the fresh install and nothing may be written.
+		return manager.definitionUpgradePlanForFreshDatabase(ctx, manifest)
 	}
 	if manager.credentialDelivery == nil {
 		return fmt.Errorf("initial Workspace credential delivery is required before initialization")
@@ -430,4 +436,16 @@ func (manager *projectWorkspaceManager) Close(ctx context.Context) error {
 		return manager.bootstrap.Close(ctx)
 	}
 	return nil
+}
+
+func (manager *projectWorkspaceManager) definitionUpgradePlanForFreshDatabase(ctx context.Context, manifest manifestmodel.ManifestSchema) error {
+	if manager.database == nil {
+		return fmt.Errorf("definition upgrade plan requires the project database")
+	}
+	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "plan definition upgrade before initial Workspace")
+	plan, err := appschemapersistence.NewApplicationSchemaStore(manager.database).UpgradePlan(ctx, scope, nil, manifest)
+	if err != nil {
+		return fmt.Errorf("plan definition upgrade before initial Workspace: %w", err)
+	}
+	return &appschemaapplication.DefinitionUpgradePlanRequested{Plan: plan}
 }

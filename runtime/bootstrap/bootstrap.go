@@ -30,6 +30,7 @@ type RuntimeReleaseArtifactEvidence = deploymentapplication.RuntimeReleaseArtifa
 type ProjectDatabase = persistence.RuntimeStore
 type BusinessSeedReferenceCandidate = runtimebootstrap.BusinessSeedReferenceCandidate
 type ProjectStartupOptions = runtimebootstrap.ProjectStartupOptions
+type DefinitionUpgradePlanRequested = runtimebootstrap.DefinitionUpgradePlanRequested
 
 func PrepareProjectDatabase(ctx context.Context, cfg config.Config) (*ProjectDatabase, error) {
 	return runtimebootstrap.PrepareProjectDatabase(ctx, cfg)

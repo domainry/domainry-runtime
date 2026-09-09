@@ -2,6 +2,7 @@ package runtimehost
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -422,5 +423,50 @@ func TestWorkspaceBootstrapIsNotPubliclyConfigurableWithLegacyFixtureInputs(t *t
 		if strings.Contains(name, "acceptance_fixture") || strings.Contains(name, "tenant_code") || strings.Contains(name, "tenant_name") {
 			t.Fatalf("legacy bootstrap input remains reachable: %s", definition.Name)
 		}
+	}
+}
+
+func TestWorkspaceManagerPlanModeReturnsFreshDatabasePlanWithoutWriting(t *testing.T) {
+	cfg := serverTestConfig()
+	cfg.DatabaseDriver = "sqlite"
+	cfg.DBPath = filepath.Join(t.TempDir(), "workspace-plan-mode.db")
+	cfg.DefinitionUpgradeMode = "plan"
+	database, err := bootstrap.PrepareProjectDatabase(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = database.CloseContext(t.Context()) })
+	manager, err := newProjectWorkspaceManager(
+		t.Context(), cfg, identitymodule.NewFactory(identitymodule.Options{IdentityVersion: "test", DatabaseDriver: "sqlite", DatabasePath: cfg.DBPath}),
+		database, projectIdentityDatabaseHandle(database, cfg.DBPath, nil), nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.Close(t.Context()) })
+	manifest := manifestmodel.ManifestSchema{
+		Version:                           "0.0.0+manifest.plan",
+		Objects:                           []definitionmodel.ObjectSchema{{Key: "store_configuration", Fields: []definitionmodel.FieldSchema{{Key: "currency", Type: "text", Required: true}}}},
+		Roles:                             workspaceRolesForTest(),
+		InitialWorkspaceAdministratorRole: "headquarters_admin",
+	}
+	err = manager.Activate(t.Context(), manifest, hostWorkspaceBootstrapParticipant{})
+	var requested *bootstrap.DefinitionUpgradePlanRequested
+	if !errors.As(err, &requested) || requested.Plan.FromVersion != "" || requested.Plan.ToVersion != "0.0.0+manifest.plan" || requested.Plan.Blocking || len(requested.Plan.Steps) != 1 || requested.Plan.Steps[0].Operation != "create_table" {
+		t.Fatalf("plan mode err=%v", err)
+	}
+	if manager.Binding() != nil {
+		t.Fatal("plan mode initialized the first Workspace")
+	}
+	var tables int
+	if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('store_configuration', '_workspaces')`).Scan(&tables); err != nil {
+		t.Fatal(err)
+	}
+	var workspaces int
+	if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _workspaces`).Scan(&workspaces); err != nil {
+		t.Fatal(err)
+	}
+	if tables != 1 || workspaces != 0 {
+		t.Fatalf("plan mode touched the database: business/workspace tables=%d workspaces=%d", tables, workspaces)
 	}
 }

@@ -1,9 +1,12 @@
 package runtimehost
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+
+	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 )
 
 // RunCommand validates the stable Runtime process command line before starting
@@ -35,8 +38,31 @@ func runCommand(arguments []string, stdout io.Writer, stderr io.Writer, serve fu
 		return 2
 	}
 	if err := serve(); err != nil {
+		if exitCode, handled := writeDefinitionUpgradePlan(err, stdout, stderr); handled {
+			return exitCode
+		}
 		_, _ = fmt.Fprintf(stderr, "domainry-runtime: %v\n", err)
 		return 1
 	}
 	return 0
+}
+
+// writeDefinitionUpgradePlan handles DEFINITION_UPGRADE_MODE=plan: the plan
+// is the only stdout output, as a single JSON document, and the process exits
+// successfully without having served HTTP.
+func writeDefinitionUpgradePlan(err error, stdout io.Writer, stderr io.Writer) (int, bool) {
+	var planRequested *bootstrap.DefinitionUpgradePlanRequested
+	if !errors.As(err, &planRequested) {
+		return 0, false
+	}
+	payload, encodeErr := planRequested.PlanJSON()
+	if encodeErr != nil {
+		_, _ = fmt.Fprintf(stderr, "domainry-runtime: encode definition upgrade plan: %v\n", encodeErr)
+		return 1, true
+	}
+	if _, writeErr := fmt.Fprintln(stdout, string(payload)); writeErr != nil {
+		_, _ = fmt.Fprintf(stderr, "domainry-runtime: write definition upgrade plan: %v\n", writeErr)
+		return 1, true
+	}
+	return 0, true
 }

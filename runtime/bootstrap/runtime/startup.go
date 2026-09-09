@@ -222,7 +222,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		mustCompleteRuntimeStartup(manifestvalidation.ValidateManifest(ownerProjectedManifest))
 	}
 	mustCompleteRuntimeStartup(SynchronizeReportDefinitions(ctx, reportBinding, seedManifest))
-	restoredMetadata, err := restoreRuntimeMetadata(ctx, store, seedManifest)
+	restoredMetadata, err := restoreRuntimeMetadata(ctx, store, seedManifest, cfg.EffectiveDefinitionUpgradeMode())
 	mustCompleteRuntimeStartup(err)
 	manifest := restoredMetadata.manifest
 	auditBinding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: valueOrDefault(manifest.TemplateID, "domainry-runtime")}, runtimeauditmodule.NewHost(store))
@@ -345,7 +345,10 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if !ok || systemTemplateBinding.SystemTemplates() == nil {
 		mustCompleteRuntimeStartup(errors.New("Notification Binding returned no system template restoration port"))
 	}
-	manifest, err = restoreRuntimeManifest(ctx, sdkNotificationTemplateCatalog{system: systemTemplateBinding.SystemTemplates()}, restoredMetadata.metadataStore, seedManifest)
+	// The second restoration pass reconciles notification templates through the
+	// Notification module; the physical definition upgrade already ran above, so
+	// its plan is now empty and apply mode only rewrites nothing.
+	manifest, err = restoreRuntimeManifest(ctx, sdkNotificationTemplateCatalog{system: systemTemplateBinding.SystemTemplates()}, restoredMetadata.metadataStore, seedManifest, cfg.EffectiveDefinitionUpgradeMode())
 	mustCompleteRuntimeStartup(err)
 	manifest, err = addIntegrationOwnerValidationCatalog(ctx, manifest, integrationOwner.Catalog)
 	mustCompleteRuntimeStartup(err)

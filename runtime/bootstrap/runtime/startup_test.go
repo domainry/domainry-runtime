@@ -769,7 +769,7 @@ func TestRestoreRuntimeMetadataHonorsCancelledContext(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := restoreRuntimeMetadata(ctx, store, manifest); err == nil {
+	if _, err := restoreRuntimeMetadata(ctx, store, manifest, cfg.EffectiveDefinitionUpgradeMode()); err == nil {
 		t.Fatal("cancelled metadata restoration must fail")
 	}
 }
@@ -809,4 +809,35 @@ func assertBootstrapPanic(t *testing.T, run func()) {
 		}
 	}()
 	run()
+}
+
+func TestRestoreRuntimeMetadataPlanModeReturnsPlanWithoutProjecting(t *testing.T) {
+	cfg := bootstrapTestConfig(t)
+	manifest, err := prepareRuntimeManifest(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := prepareRuntimeStore(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	_, err = restoreRuntimeMetadata(t.Context(), store, manifest, "plan")
+	var requested *DefinitionUpgradePlanRequested
+	if !errors.As(err, &requested) || requested.Plan.ToVersion != manifest.Version || len(requested.Plan.Steps) == 0 || requested.Plan.Blocking {
+		t.Fatalf("plan mode err=%v", err)
+	}
+	for _, step := range requested.Plan.Steps {
+		if step.Operation != "create_table" {
+			t.Fatalf("fresh database plan step=%+v", step)
+		}
+	}
+	var projected int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _application_schema_projection WHERE template_id <> ''`).Scan(&projected); err != nil || projected != 0 {
+		t.Fatalf("plan mode projected metadata rows=%d err=%v", projected, err)
+	}
+	var businessTables int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('customer', 'opportunity')`).Scan(&businessTables); err != nil || businessTables != 0 {
+		t.Fatalf("plan mode materialized business tables=%d err=%v", businessTables, err)
+	}
 }
