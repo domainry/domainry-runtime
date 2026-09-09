@@ -113,6 +113,7 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/records/stream", "Business Records", "get")
 	addBuilderPath(paths, "/workflow/processes", "Workflow Business", "get")
 	addBuilderPath(paths, "/workflow/processes/{processID}", "Workflow Business", "get")
+	addBuilderPath(paths, "/workflow/processes/{processID}/route", "Workflow Business", "get")
 	addBuilderPath(paths, "/workflow/team-tasks", "Workflow Business", "get")
 	addBuilderPath(paths, "/workflow/tasks", "Workflow Business", "get")
 	addBuilderPath(paths, "/workflow/processes/{processID}/withdraw", "Workflow Business", "post")

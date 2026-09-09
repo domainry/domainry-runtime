@@ -112,6 +112,7 @@ type RuntimeServicesDependencies struct {
 	WorkflowDefinitions                 workflowcontract.WorkflowDefinitionStore
 	WorkflowProcesses                   workflowcontract.WorkflowProcessStore
 	WorkflowDecisions                   workflowcontract.WorkflowDecisionStore
+	WorkflowRoutes                      workflowcontract.WorkflowRouteStore
 	WorkflowNotificationCompiler        func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	WorkflowTaskNotificationCommitter   workflowapplication.WorkflowTaskNotificationCommitter
 	RecordNotificationCompiler          func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)

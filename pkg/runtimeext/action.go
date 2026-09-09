@@ -101,6 +101,7 @@ type HandlerDescriptor struct {
 	StoreOrganizationCatalog  *StoreOrganizationCatalogCapability
 	StoreOrganizationMutation *ActionStoreOrganizationMutationCapability
 	WorkspaceIdentityUsage    *WorkspaceIdentityUsageCapability
+	Workflows                 []WorkflowGrant
 }
 
 func (d HandlerDescriptor) Validate() error {
@@ -169,6 +170,14 @@ func (d HandlerDescriptor) Validate() error {
 			return ErrHandlerCapabilityInvalid
 		}
 		notifications[key] = true
+	}
+	workflows := map[string]bool{}
+	for _, grant := range d.Workflows {
+		key := strings.TrimSpace(grant.Key)
+		if workflows[key] || !grant.Valid() {
+			return ErrHandlerCapabilityInvalid
+		}
+		workflows[key] = true
 	}
 	aggregates := map[string]bool{}
 	for _, capability := range d.CrossWorkspaceAggregates {

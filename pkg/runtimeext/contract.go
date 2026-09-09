@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v33"
-	ContractSHA256  = "3f2dc220b6a6a6a2434367b4792e65dc2c741219575267138c531aad3b955fb4"
+	ContractVersion = "runtimeext-v34"
+	ContractSHA256  = "af62e772348185bf02284647e6f543500c133b40d65456675f87e2026193a80f"
 )
 
-const contractDefinitionV33 = `runtimeext-v33
+const contractDefinitionV34 = `runtimeext-v34
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -35,6 +35,11 @@ RecordNotificationRecipientOperation=notification_recipient
 VerifyFileClean(context.Context,ActionExecution,FileVerificationRequest)(FileVerificationEvidence,error)
 FileOperationVerifyClean=verify_clean
 FileActionGrantDeniedErrorCode=backend.upload.action_grant_denied
+WorkflowStartExecution.StageWorkflowStart(context.Context,WorkflowStart)(WorkflowStartReceipt,error)
+StageWorkflowStart(context.Context,ActionExecution,WorkflowStart)(WorkflowStartReceipt,error)
+WorkflowGrantOperation=start
+WorkflowGrantDeniedErrorCode=backend.action.workflow_grant_denied
+WorkflowStartSemantics=manifest_workflow_with_instance_approval_route|descriptor_workflow_start_grant|synchronous_route_validation|same_action_uow|starting_process_and_route_steps_and_intent|activation_by_committed_intent
 StageNotification(context.Context,ActionExecution,NotificationIntent)(NotificationReceipt,error)
 StageNotificationBatch(context.Context,ActionExecution,[]NotificationIntent)([]NotificationReceipt,error)
 NotificationDispatchOperationKey=notification.intent.dispatch
@@ -115,9 +120,10 @@ func ComputedContractSHA256() string {
 		Predicate{}, Arithmetic{}, RecordMutation{}, RecordMutationResult{}, ConditionalUpdateManyExactCoverage{}, ConditionalUpdateManyRequest{}, ConditionalUpdateManyResult{},
 		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ExtensionSet{},
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
+		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV33)
+	definition.WriteString(contractDefinitionV34)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

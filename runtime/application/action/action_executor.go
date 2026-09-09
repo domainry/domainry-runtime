@@ -18,6 +18,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
+	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workspaceaggregatecontract "github.com/domainry/domainry-runtime/runtime/domain/workspaceaggregate/contract"
 )
 
@@ -74,6 +75,7 @@ type BusinessHandlerExecutionDependencies struct {
 	BindWorkspaceIdentityUsage        func(context.Context) (identitysdk.WorkspaceIdentityUsageAggregate, error)
 	WorkspaceCommercialConfiguration  WorkspaceCommercialConfigurationLocker
 	ResolveProfileBindingField        func(string, string) (string, bool)
+	StageWorkflowStart                func(context.Context, workflowmodel.WorkflowRouteStartRequest, principalmodel.Principal) (transactionmodel.WorkflowStartCommit, error)
 }
 
 type BusinessHandlerExecutor struct {
@@ -128,6 +130,7 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 		storeCatalogGrant:     cloneStoreOrganizationCatalogCapability(descriptor.StoreOrganizationCatalog),
 		storeMutationGrant:    cloneStoreOrganizationMutationCapability(descriptor.StoreOrganizationMutation),
 		workspaceUsageGrant:   cloneWorkspaceIdentityUsageCapability(descriptor.WorkspaceIdentityUsage),
+		workflowGrants:        cloneWorkflowGrants(descriptor.Workflows),
 	}
 	if requestIdentity, ok := identitysdk.RequestIdentityFromContext(ctx); ok {
 		session.requestIdentity = requestIdentity
@@ -207,6 +210,8 @@ type businessActionExecution struct {
 	storeCatalogGrant        *runtimeext.StoreOrganizationCatalogCapability
 	storeMutationGrant       *runtimeext.ActionStoreOrganizationMutationCapability
 	workspaceUsageGrant      *runtimeext.WorkspaceIdentityUsageCapability
+	workflowGrants           []runtimeext.WorkflowGrant
+	workflowStarts           []transactionmodel.WorkflowStartCommit
 	requestIdentity          identitysdk.RequestIdentity
 	targetOrganization       runtimeext.TargetOrganization
 	targetResolved           bool
@@ -525,6 +530,14 @@ func cloneRuntimeextPrincipal(principal runtimeext.Principal) runtimeext.Princip
 
 func toRuntimeextRecord(objectKey string, record recordmodel.Record) runtimeext.Record {
 	return runtimeext.Record{ID: record.ID, ObjectKey: objectKey, Fields: actionCloneMap(record.Data), UpdatedAt: record.UpdatedAt}
+}
+
+func cloneWorkflowGrants(grants []runtimeext.WorkflowGrant) []runtimeext.WorkflowGrant {
+	cloned := make([]runtimeext.WorkflowGrant, 0, len(grants))
+	for _, grant := range grants {
+		cloned = append(cloned, runtimeext.WorkflowGrant{Key: grant.Key, Operations: append([]string(nil), grant.Operations...)})
+	}
+	return cloned
 }
 
 func missingExecutorPort(operation string) error {

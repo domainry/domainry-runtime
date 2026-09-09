@@ -7,6 +7,7 @@ func (h *WorkflowsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /workflow/team-tasks", h.listBusinessTeamWorkflowTasks)
 	mux.HandleFunc("GET /workflow/processes", h.listParticipantWorkflowProcesses)
 	mux.HandleFunc("GET /workflow/processes/{processID}", h.getParticipantWorkflowProcess)
+	mux.HandleFunc("GET /workflow/processes/{processID}/route", h.getParticipantWorkflowProcessRoute)
 	mux.HandleFunc("POST /workflow/processes/{processID}/withdraw", h.withdrawParticipantWorkflowProcess)
 	mux.HandleFunc("POST /workflow/processes/{processID}/retry", h.retryParticipantWorkflowProcess)
 	mux.HandleFunc("POST /workflow/tasks/{taskID}/approve", h.approveParticipantWorkflowTask)

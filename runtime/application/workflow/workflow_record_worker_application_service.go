@@ -170,6 +170,23 @@ func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Co
 				}
 				continue
 			}
+			if strings.TrimSpace(previous.Trigger) == WorkflowRouteStartTrigger {
+				activated, activateErr := s.processEngine.activateStartingProcess(ctx, process, principal)
+				claimed.Attempt = nextAttempt
+				claimed.UpdatedAt = s.worker.Clock.Now().Format(time.RFC3339)
+				claimed.Result = workflowpolicy.WorkflowCloneMap(claimed.Result)
+				if activateErr != nil {
+					workflowpolicy.WorkflowMarkFailed(&claimed, workflow, activateErr, s.worker.Clock.Now())
+				} else {
+					claimed.Status, claimed.Message, claimed.LastError, claimed.NextRunAt = activated.Status, "workflow.message.continuationCompleted", "", ""
+					claimed.Result["process_status"], claimed.Result["current_node_ids"] = activated.Status, activated.CurrentNodeIDs
+				}
+				if err := s.commitClaimedWorkflowExecution(ctx, claimed); err != nil {
+					return workflowmodel.WorkflowProcessResult{}, internalError("complete staged workflow start", err)
+				}
+				processed = append(processed, claimed)
+				continue
+			}
 			nodeIDs := workflowNodeIDsFromAny(previous.Result["resume_node_ids"])
 			explicitResume, _ := previous.Result["resume_explicit"].(bool)
 			if len(nodeIDs) == 0 {

@@ -52,6 +52,10 @@ func (s *WorkflowApplicationService) executeCommittedWorkflowIntents(ctx context
 		if claimErr != nil || !claimOK {
 			continue
 		}
+		if strings.TrimSpace(intent.Trigger) == WorkflowRouteStartTrigger {
+			s.activateCommittedWorkflowStart(ctx, workflow, claimed, principal)
+			continue
+		}
 		execution, err := s.executeWorkflowAttempt(ctx, workflow, workflowpolicy.WorkflowCloneMap(intent.Payload), principal, intent.Trigger, 1, true)
 		claimed.Result = workflowpolicy.WorkflowCloneMap(claimed.Result)
 		claimed.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -63,6 +67,31 @@ func (s *WorkflowApplicationService) executeCommittedWorkflowIntents(ctx context
 		}
 		_ = s.workerRepo.UpdateExecution(ctx, principal.WorkspaceID, claimed)
 	}
+}
+
+// activateCommittedWorkflowStart runs the trigger and the first route step of
+// a process that an Action staged as "starting". A crash before this point
+// leaves the pending intent for the polling worker, which activates exactly
+// the same process instead of starting a second one.
+func (s *WorkflowApplicationService) activateCommittedWorkflowStart(ctx context.Context, workflow definitionmodel.WorkflowSchema, claimed workflowmodel.WorkflowExecution, principal principalmodel.Principal) {
+	process, found, err := s.workerRepo.GetProcess(ctx, principal.WorkspaceID, claimed.ProcessID)
+	claimed.Result = workflowpolicy.WorkflowCloneMap(claimed.Result)
+	claimed.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	if err != nil || !found {
+		claimed.Status, claimed.LastError, claimed.Message = "dead_letter", "backend.workflow.process_not_found", "workflow.message.processNotFound"
+		_ = s.workerRepo.UpdateExecution(ctx, principal.WorkspaceID, claimed)
+		return
+	}
+	activated, activateErr := s.processEngine.activateStartingProcess(ctx, process, principal)
+	claimed.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	if activateErr != nil {
+		workflowpolicy.WorkflowMarkFailed(&claimed, workflow, activateErr, time.Now().UTC())
+		_ = s.workerRepo.UpdateExecution(ctx, principal.WorkspaceID, claimed)
+		return
+	}
+	claimed.Status, claimed.Message, claimed.LastError, claimed.NextRunAt = activated.Status, "workflow.message.continuationCompleted", "", ""
+	claimed.Result["process_status"], claimed.Result["current_node_ids"] = activated.Status, activated.CurrentNodeIDs
+	_ = s.workerRepo.UpdateExecution(ctx, principal.WorkspaceID, claimed)
 }
 
 func (s *WorkflowApplicationService) ExecuteCommittedWorkflowIntents(ctx context.Context, intents []workflowmodel.WorkflowExecution, principal principalmodel.Principal) {

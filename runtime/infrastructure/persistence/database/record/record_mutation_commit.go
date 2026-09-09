@@ -262,6 +262,11 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			return err
 		}
 	}
+	for _, start := range commit.WorkflowStarts {
+		if err := r.insertWorkflowStartTx(ctx, tx, workspaceID, start); err != nil {
+			return err
+		}
+	}
 	for _, event := range commit.NotificationEvents {
 		event.WorkspaceID = workspaceID
 		if err := notificationpersistence.NewInboxEventWriter(r.store).InsertEventTx(ctx, tx, event); err != nil {

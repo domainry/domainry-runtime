@@ -32,6 +32,7 @@ type WorkflowApplicationService struct {
 	audit                     func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any)
 	auditMetadata             func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	decisions                 workflowcontract.WorkflowDecisionRuntime
+	routes                    workflowcontract.WorkflowRouteStore
 	identity                  identitysdk.Projection
 	principals                identitysdk.PrincipalResolver
 	schema                    WorkflowSchemaProvider
@@ -114,6 +115,7 @@ func newWorkflowApplicationService(dependencies WorkflowDependencies, processEng
 		processEngine:   processEngine,
 		objectForAction: dependencies.ObjectForAction, audit: dependencies.Audit, auditMetadata: dependencies.AuditMetadata,
 		decisions:  processEngine.DecisionRuntime(),
+		routes:     dependencies.Routes,
 		identity:   dependencies.Identity,
 		principals: dependencies.Principals,
 		schema:     dependencies.Schema,

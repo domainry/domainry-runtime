@@ -7,6 +7,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
+	workflowprojection "github.com/domainry/domainry-runtime/runtime/domain/workflow/projection"
 )
 
 // ParticipantWorkflowTaskDTO intentionally omits resolver snapshots and Runtime
@@ -77,10 +78,11 @@ type ParticipantWorkflowEventDTO struct {
 }
 
 type ParticipantWorkflowProcessDetailDTO struct {
-	Process ParticipantWorkflowProcessDTO `json:"process"`
-	Nodes   []ParticipantWorkflowNodeDTO  `json:"nodes"`
-	Tasks   []ParticipantWorkflowTaskDTO  `json:"tasks"`
-	Events  []ParticipantWorkflowEventDTO `json:"events"`
+	Process ParticipantWorkflowProcessDTO         `json:"process"`
+	Nodes   []ParticipantWorkflowNodeDTO          `json:"nodes"`
+	Tasks   []ParticipantWorkflowTaskDTO          `json:"tasks"`
+	Events  []ParticipantWorkflowEventDTO         `json:"events"`
+	Route   *workflowprojection.WorkflowRouteView `json:"route,omitempty"`
 }
 
 type OpsWorkflowExecutionDTO struct {
@@ -185,6 +187,7 @@ func ProjectParticipantWorkflowProcessDetail(detail WorkflowProcessDetail) Parti
 		Nodes:   make([]ParticipantWorkflowNodeDTO, 0, len(detail.Nodes)),
 		Tasks:   make([]ParticipantWorkflowTaskDTO, 0, len(detail.Tasks)),
 		Events:  make([]ParticipantWorkflowEventDTO, 0, len(detail.Events)),
+		Route:   detail.Route,
 	}
 	for _, node := range detail.Nodes {
 		name, actionKey := node.NodeID, ""

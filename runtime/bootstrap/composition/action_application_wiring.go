@@ -21,6 +21,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
+	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -62,6 +63,9 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 	catalog := actionapplication.NewActionCatalog(actions, systemCatalog, handlers)
 	assuranceDomain := actionservice.NewActionAssuranceDomainService(records.actionAssuranceStore, nil)
 	service := actionapplication.NewActionApplication(actionapplication.ActionApplicationDependencies{
+		ExecuteCommittedWorkflows: func(ctx context.Context, intents []workflowmodel.WorkflowExecution, principal principalmodel.Principal) {
+			executeCommittedWorkflowIntents(ctx, records, intents, principal)
+		},
 		Catalog:          catalog,
 		SystemOperations: systemExecutor,
 		BusinessHandlers: actionapplication.NewBusinessHandlerExecutor(actionapplication.BusinessHandlerExecutionDependencies{
@@ -114,6 +118,12 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 						"scope_sha256": value.ScopeSHA256, "workspace_count": value.WorkspaceCount,
 					},
 				})
+			},
+			StageWorkflowStart: func(ctx context.Context, request workflowmodel.WorkflowRouteStartRequest, principal principalmodel.Principal) (transactionmodel.WorkflowStartCommit, error) {
+				if records.workflowApplicationService == nil {
+					return transactionmodel.WorkflowStartCommit{}, apperror.New(apperror.KindInternal, "backend.action.workflow_start_unavailable", nil, nil)
+				}
+				return records.workflowApplicationService.StageWorkflowRouteStart(ctx, request, principal)
 			},
 			WorkspaceIdentityUsageCursor: records.workspaceIdentityUsageCursor,
 			AuthorizeWorkspaceIdentityUsage: func(ctx context.Context, accessToken string) (identitysdk.WorkspaceIdentityUsageAuthorization, error) {

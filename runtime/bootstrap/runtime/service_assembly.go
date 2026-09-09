@@ -318,6 +318,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			WorkflowDefinitions:                 workflowpersistence.NewWorkflowDefinitionStore(store),
 			WorkflowProcesses:                   workflowpersistence.NewWorkflowProcessStore(store),
 			WorkflowDecisions:                   workflowpersistence.NewWorkflowDecisionStore(store),
+			WorkflowRoutes:                      workflowpersistence.NewWorkflowRouteStore(store),
 			WorkflowNotificationCompiler:        notificationCompiler,
 			WorkflowTaskNotificationCommitter:   taskNotificationCommitter,
 			RecordNotificationCompiler:          notificationCompiler,

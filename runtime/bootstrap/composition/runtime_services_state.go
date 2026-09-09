@@ -114,6 +114,7 @@ type runtimeAssembly struct {
 	applicationSchemaService            *appschemaapplication.ApplicationSchemaApplicationService
 	automationApplicationService        *automationapplication.AutomationApplicationService
 	workflowDecisionRepo                workflowcontract.WorkflowDecisionStore
+	workflowRouteRepo                   workflowcontract.WorkflowRouteStore
 	workflowDefinitionRepo              workflowcontract.WorkflowDefinitionStore
 	workflowProcessRepo                 workflowcontract.WorkflowProcessStore
 	workflowNotificationCompiler        func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)

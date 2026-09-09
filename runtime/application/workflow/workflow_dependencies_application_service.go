@@ -22,6 +22,7 @@ type WorkflowDependencies struct {
 	Processes                workflowcontract.WorkflowProcessStore
 	Workers                  workflowcontract.WorkflowWorkerStore
 	Decisions                workflowcontract.WorkflowDecisionStore
+	Routes                   workflowcontract.WorkflowRouteStore
 	WorkflowRegistry         WorkflowRegistry
 	WaitTimers               WorkflowWaitTimerService
 	ApprovalDeadlineTimers   WorkflowApprovalDeadlineTimerService

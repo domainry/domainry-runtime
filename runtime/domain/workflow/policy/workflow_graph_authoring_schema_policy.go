@@ -82,9 +82,10 @@ func workflowGraphApprovalSchema() capabilitycontract.CapabilityAuthoringSchema 
 // least one resolver, a route-driven node needs the route and ignores the
 // node-level mode and threshold, and no node may declare both.
 func workflowApprovalElectorateSchemaCondition(schema *capabilitycontract.CapabilityAuthoringSchema) {
+	resolver := capabilitycontract.CapabilityAuthoringSchema{Ref: "#/$defs/workflow_assignee_resolver"}
 	schema.OneOf = []capabilitycontract.CapabilityAuthoringSchema{
-		{Required: []string{"resolvers"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{"resolvers": {Type: "array", MinItems: workflowAuthoringIntPointer(1)}}},
-		{Required: []string{"route"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{"resolvers": {Type: "array", MaxItems: workflowAuthoringIntPointer(0)}}},
+		{Required: []string{"resolvers"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{"resolvers": {Type: "array", Items: &resolver, MinItems: workflowAuthoringIntPointer(1)}}},
+		{Required: []string{"route"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{"resolvers": {Type: "array", Items: &resolver, MaxItems: workflowAuthoringIntPointer(0)}}},
 	}
 }
 

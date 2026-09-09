@@ -49,6 +49,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		workflowDefinitionRepo:              deps.WorkflowDefinitions,
 		workflowProcessRepo:                 deps.WorkflowProcesses,
 		workflowDecisionRepo:                deps.WorkflowDecisions,
+		workflowRouteRepo:                   deps.WorkflowRoutes,
 		workflowNotificationCompiler:        deps.WorkflowNotificationCompiler,
 		workflowTaskNotificationCommitter:   deps.WorkflowTaskNotificationCommitter,
 		notificationIntentPublisher:         deps.NotificationIntentPublisher,

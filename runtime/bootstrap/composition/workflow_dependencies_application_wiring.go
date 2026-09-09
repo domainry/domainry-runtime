@@ -51,6 +51,7 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 		Processes:              records.workflowProcessRepo,
 		Workers:                records.workflowWorkerRepo,
 		Decisions:              records.workflowDecisionRepo,
+		Routes:                 records.workflowRouteRepo,
 		WorkflowRegistry:       runtimeWorkflowRegistry{records: records},
 		WaitTimers:             runtimeWorkflowRecordTimers{recordTimers: records.recordTimerService},
 		ApprovalDeadlineTimers: runtimeWorkflowRecordTimers{recordTimers: records.recordTimerService},

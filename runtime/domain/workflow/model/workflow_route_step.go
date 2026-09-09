@@ -49,3 +49,29 @@ type WorkflowNextStepConfiguration struct {
 	AssigneeUserIDs   []string `json:"assignee_user_ids,omitempty"`
 	RequiredApprovals int      `json:"required_approvals,omitempty"`
 }
+
+// WorkflowRouteStartRequest is one Action-staged Workflow start. It is the
+// storage-neutral boundary between the Action Unit of Work and the Workflow
+// application service that validates and freezes the per-instance route.
+type WorkflowRouteStartRequest struct {
+	WorkflowKey         string
+	ObjectKey           string
+	RecordID            string
+	Steps               []WorkflowRouteStartStep
+	Variables           map[string]any
+	GrantedWorkflowKeys []string
+	ActionKey           string
+	ExecutionID         string
+	StageIndex          int
+}
+
+// WorkflowRouteStartStep is one authored step of a staged route before
+// Runtime validates it and freezes the assignee snapshot.
+type WorkflowRouteStartStep struct {
+	StepKey           string
+	Title             string
+	Mode              string
+	RequiredApprovals int
+	AssigneeUserIDs   []string
+	Deferred          bool
+}

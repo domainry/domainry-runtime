@@ -16,6 +16,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
+	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	"go.opentelemetry.io/otel/attribute"
 )
 
@@ -54,6 +55,10 @@ type ActionApplicationDependencies struct {
 	Audit            ActionAudit
 	ProjectRecord    func(context.Context, principalmodel.Principal, string, recordmodel.Record) (recordmodel.Record, error)
 	ProjectOutput    func(context.Context, principalmodel.Principal, definitionmodel.ActionSchema, map[string]any) (map[string]any, error)
+	// ExecuteCommittedWorkflows activates the Workflow intents an Action staged
+	// inside its own transaction. It runs only after the commit succeeded, so a
+	// crash here leaves the durable pending intent for the Workflow worker.
+	ExecuteCommittedWorkflows func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
 }
 
 // ActionApplicationService is the single governed invocation boundary used by
@@ -290,7 +295,23 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 	if executed.PostCommit != nil {
 		executed.PostCommit(&result)
 	}
+	s.executeCommittedWorkflowStarts(ctx, executed.Commits, invocation.Principal)
 	return result, nil
+}
+
+func (s *ActionApplicationService) executeCommittedWorkflowStarts(ctx context.Context, commits []transactionmodel.RecordMutationCommit, principal principalmodel.Principal) {
+	if s.dependencies.ExecuteCommittedWorkflows == nil {
+		return
+	}
+	intents := []workflowmodel.WorkflowExecution{}
+	for _, commit := range commits {
+		for _, start := range commit.WorkflowStarts {
+			intents = append(intents, start.Intent)
+		}
+	}
+	if len(intents) > 0 {
+		s.dependencies.ExecuteCommittedWorkflows(ctx, intents, principal)
+	}
 }
 
 func validateActionTargetOrganizationInvocation(action definitionmodel.ActionSchema, invocation actionmodel.ActionInvocation) error {

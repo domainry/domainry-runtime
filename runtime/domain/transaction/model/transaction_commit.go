@@ -25,6 +25,7 @@ type RecordMutationCommit struct {
 	Audits             []auditmodel.AuditEvent                    `json:"audits,omitempty"`
 	Outbox             []publicationmodel.Message                 `json:"outbox,omitempty"`
 	WorkflowIntents    []workflowmodel.WorkflowExecution          `json:"workflow_intents,omitempty"`
+	WorkflowStarts     []WorkflowStartCommit                      `json:"workflow_starts,omitempty"`
 	NotificationEvents []notificationmodel.NotificationEvent      `json:"notification_events,omitempty"`
 	LocalizedValues    []recordmodel.RecordLocalizedValueMutation `json:"localized_values,omitempty"`
 	// Set fields are Runtime-internal authority for one conditional update-many
@@ -36,6 +37,17 @@ type RecordMutationCommit struct {
 	SetOwnerOrganizationScope string                              `json:"-"`
 	SetExactCoverageField     string                              `json:"set_exact_coverage_field,omitempty"`
 	SetExactCoverageValues    []any                               `json:"set_exact_coverage_values,omitempty"`
+}
+
+// WorkflowStartCommit is one Workflow start staged by an Action. The process
+// row, its per-instance approval route and the claiming intent are written in
+// the same transaction as the Action's record mutations, so a rolled back
+// Action leaves no process, no route and no intent behind. The process is
+// durable as "starting" and the committed intent activates its first node.
+type WorkflowStartCommit struct {
+	Process    workflowmodel.WorkflowProcessInstance `json:"process"`
+	RouteSteps []workflowmodel.WorkflowRouteStep     `json:"route_steps,omitempty"`
+	Intent     workflowmodel.WorkflowExecution       `json:"intent"`
 }
 
 // MutationPredicate is a storage-neutral compare-and-set condition evaluated
@@ -91,6 +103,7 @@ type WorkflowDecisionCommit struct {
 	UpdateNodes              []workflowmodel.WorkflowNodeInstance   `json:"update_nodes,omitempty"`
 	InsertTasks              []workflowmodel.WorkflowTask           `json:"insert_tasks,omitempty"`
 	UpdateTasks              []workflowmodel.WorkflowTask           `json:"update_tasks,omitempty"`
+	UpdateRouteSteps         []workflowmodel.WorkflowRouteStep      `json:"update_route_steps,omitempty"`
 	Events                   []workflowmodel.WorkflowProcessEvent   `json:"events,omitempty"`
 	RecordMutations          []RecordMutationCommit                 `json:"record_mutations,omitempty"`
 	WorkflowExecution        *workflowmodel.WorkflowExecution       `json:"workflow_execution,omitempty"`

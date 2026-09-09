@@ -23,6 +23,7 @@ type WorkflowProcessDetail struct {
 	Nodes   []workflowmodel.WorkflowNodeInstance  `json:"nodes"`
 	Tasks   []workflowmodel.WorkflowTask          `json:"tasks"`
 	Events  []workflowmodel.WorkflowProcessEvent  `json:"events"`
+	Route   *workflowprojection.WorkflowRouteView `json:"route,omitempty"`
 }
 
 func (s *WorkflowApplicationService) enrichWorkflowProcessSummary(ctx context.Context, process workflowmodel.WorkflowProcessInstance) workflowmodel.WorkflowProcessInstance {
@@ -211,7 +212,10 @@ func (s *WorkflowApplicationService) workflowProcess(ctx context.Context, proces
 	for index := range events {
 		events[index] = workflowprojection.WorkflowEventForPrincipal(events[index], advanced)
 	}
-	return WorkflowProcessDetail{Process: workflowprojection.WorkflowProcessForPrincipal(process, advanced, s.workflowProjectionActions(ctx, principal)), Nodes: nodes, Tasks: tasks, Events: events}, nil
+	return WorkflowProcessDetail{
+		Process: workflowprojection.WorkflowProcessForPrincipal(process, advanced, s.workflowProjectionActions(ctx, principal)),
+		Nodes:   nodes, Tasks: tasks, Events: events, Route: s.workflowProcessRouteView(ctx, process, tasks, principal),
+	}, nil
 }
 
 func (s *WorkflowApplicationService) CancelWorkflowProcess(ctx context.Context, processID string, principal principalmodel.Principal) (workflowmodel.WorkflowProcessInstance, error) {

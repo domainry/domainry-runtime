@@ -80,6 +80,17 @@ func (h *WorkflowsHandler) listOpsWorkflowExecutions(w http.ResponseWriter, r *h
 	h.writeJSON(w, http.StatusOK, executions)
 }
 
+// getParticipantWorkflowProcessRoute discloses the per-instance approval route
+// to its initiator and to the approvers it names.
+func (h *WorkflowsHandler) getParticipantWorkflowProcessRoute(w http.ResponseWriter, r *http.Request) {
+	route, err := h.processes.ParticipantWorkflowRoute(r.Context(), strings.TrimSpace(r.PathValue("processID")), h.principal(r))
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, route)
+}
+
 func (h *WorkflowsHandler) listOpsWorkflowProcesses(w http.ResponseWriter, r *http.Request) {
 	processes, err := h.processes.OpsWorkflowProcesses(r.Context(), h.principal(r), workflowProcessFilterFromRequest(r))
 	if err != nil {

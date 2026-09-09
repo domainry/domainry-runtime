@@ -229,6 +229,18 @@ func (e *WorkflowProcessEngine) executeNode(ctx context.Context, process *workfl
 		}
 		return outcome, false, e.recordCompletedNode(ctx, *process, node, input, map[string]any{"matched": matched}, principal.UserID)
 	case "approval":
+		// A route-driven node takes its electorate from the durable
+		// per-instance route rows instead of the template resolvers.
+		if route, routed := workflowpolicy.WorkflowApprovalRoute(node); routed {
+			outcome, waiting, err := e.activateRouteApprovalStep(ctx, process, node, route, principal)
+			if err != nil {
+				return "", false, err
+			}
+			if outcome == "skipped" {
+				e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", "approval_skipped", principal.UserID, node.Name, map[string]any{"reason": "assignee_not_found", "policy": "skip"})
+			}
+			return outcome, waiting, nil
+		}
 		nodeInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ID, node, "waiting", input, nil)
 		if err := e.runtime.dependencies.Processes.InsertNode(ctx, process.WorkspaceID, nodeInstance); err != nil {
 			return "", false, internalError("insert approval node", err)
