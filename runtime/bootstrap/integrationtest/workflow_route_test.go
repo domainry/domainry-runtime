@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	bootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	dataexchangefixture "github.com/domainry/domainry-runtime/testsupport/dataexchangefixture"
 	schedulermodule "github.com/domainry/domainry-scheduler/module"
@@ -140,7 +142,10 @@ func routeWorkflowManifest(t *testing.T, directory string, route map[string]any)
 }
 
 func routeWorkflowPermissions() []string {
-	return append([]string{"expense_request.read", "expense_request.create", "expense_request.update", routeSubmitKey}, integrationWorkflowTaskDecisionPermissions()...)
+	return append([]string{
+		"expense_request.read", "expense_request.create", "expense_request.update", routeSubmitKey,
+		"runtime.workflows.process_ops_workflow_executions",
+	}, integrationWorkflowTaskDecisionPermissions()...)
 }
 
 type routeWorkflowUser struct {
@@ -426,4 +431,404 @@ func TestWorkflowInstanceRouteLeavesNothingBehindWhenTheActionAborts(t *testing.
 		t.Fatalf("submit without injection status=%d body=%s", committed.status, committed.raw)
 	}
 	routeAwaitOpenTask(t, handler, "route_user_a")
+}
+
+func routeDecide(t *testing.T, handler http.Handler, userID, taskID, decision string, body map[string]any, key string) routeResponse {
+	t.Helper()
+	headers := map[string]string{}
+	if key != "" {
+		headers["Idempotency-Key"] = key
+	}
+	return routeRequest(t, handler, userID, routeApproverRole, http.MethodPost, "/workflow/tasks/"+taskID+"/"+decision, body, headers)
+}
+
+func routeDeferredSubmit(t *testing.T, handler http.Handler, title string, firstStep map[string]any) routeResponse {
+	t.Helper()
+	steps := []any{firstStep, map[string]any{"step_key": "second", "title": "Second", "deferred": true}}
+	return routeSubmit(t, handler, map[string]any{"title": title, "steps": steps}, nil)
+}
+
+func routeDeferredRuntime(t *testing.T) (http.Handler, string) {
+	t.Helper()
+	temp := t.TempDir()
+	contract := routeDefaultContract()
+	runtime := newRouteWorkflowRuntime(t, config.Config{
+		AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: filepath.Join(temp, "runtime.db"),
+		ManifestPath: routeWorkflowManifest(t, temp, contract), UploadDir: filepath.Join(temp, "uploads"),
+	}, contract, append(routeStandardUsers(), routeWorkflowUser{id: "route_inactive", role: routeApproverRole}))
+	return runtime.Routes(), temp
+}
+
+func TestWorkflowInstanceRouteRefusesAnUnconfiguredNextStepAndKeepsTheTaskOpen(t *testing.T) {
+	handler, _ := routeDeferredRuntime(t)
+	submitted := routeDeferredSubmit(t, handler, "Deferred", map[string]any{"step_key": "first", "assignees": []any{"route_user_a"}})
+	if submitted.status != http.StatusOK {
+		t.Fatalf("submit status=%d body=%s", submitted.status, submitted.raw)
+	}
+	output, _ := submitted.body["output"].(map[string]any)
+	processID, _ := output["process_id"].(string)
+	task := routeAwaitOpenTask(t, handler, "route_user_a")
+	taskID, _ := task["id"].(string)
+
+	for _, test := range []struct {
+		name   string
+		user   string
+		body   map[string]any
+		status int
+		code   string
+	}{
+		{"missing next step", "route_user_a", map[string]any{"comment": "ok"}, http.StatusBadRequest, "backend.workflow.next_step_required"},
+		{"inactive assignee", "route_user_a", map[string]any{"next_step": map[string]any{"assignee_user_ids": []any{"route_ghost"}}}, http.StatusBadRequest, "backend.workflow.route_assignee_not_found"},
+		{"ineligible assignee", "route_user_a", map[string]any{"next_step": map[string]any{"assignee_user_ids": []any{"route_outsider"}}}, http.StatusBadRequest, "backend.workflow.route_assignee_not_eligible"},
+		{"duplicate assignee", "route_user_a", map[string]any{"next_step": map[string]any{"assignee_user_ids": []any{"route_user_b", "route_user_b"}}}, http.StatusBadRequest, "backend.workflow.route_assignee_duplicate"},
+		{"non configurer", "route_user_b", map[string]any{"next_step": map[string]any{"assignee_user_ids": []any{"route_user_c"}}}, http.StatusForbidden, "backend.workflow.task_assignee_required"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := routeDecide(t, handler, test.user, taskID, "approve", test.body, "")
+			if response.status != test.status || response.body["code"] != test.code {
+				t.Fatalf("status=%d body=%s", response.status, response.raw)
+			}
+		})
+	}
+	rejected := routeDecide(t, handler, "route_user_a", taskID, "reject", map[string]any{"next_step": map[string]any{"assignee_user_ids": []any{"route_user_b"}}}, "")
+	if rejected.status != http.StatusBadRequest || rejected.body["code"] != "backend.workflow.next_step_not_applicable" {
+		t.Fatalf("reject with next step status=%d body=%s", rejected.status, rejected.raw)
+	}
+
+	// Nothing above may have advanced the durable state.
+	if len(routeOpenTasks(t, handler, "route_user_a")) != 1 {
+		t.Fatal("a rejected configuration closed the open task")
+	}
+	route := routeRequest(t, handler, "route_user_a", routeApproverRole, http.MethodGet, "/workflow/processes/"+processID+"/route", nil, nil)
+	steps, _ := route.body["steps"].([]any)
+	second, _ := steps[1].(map[string]any)
+	if second["status"] != "configurable" || second["assignee_count"] != float64(0) {
+		t.Fatalf("route step after rejected configurations=%s", route.raw)
+	}
+	pending, _ := route.body["pending_configuration"].([]any)
+	if len(pending) != 1 || pending[0] != "second" || route.body["configurable_by_me"] != true {
+		t.Fatalf("pending configuration=%s", route.raw)
+	}
+	detail := routeRequest(t, handler, routeInitiator, routeApproverRole, http.MethodGet, "/workflow/processes/"+processID, nil, nil)
+	if !strings.Contains(detail.raw, `"route"`) || !strings.Contains(detail.raw, `"pending_configuration"`) {
+		t.Fatalf("process detail lost the route: %s", detail.raw)
+	}
+}
+
+func TestWorkflowInstanceRouteConfiguresTheNextStepOnceAndReplaysTheSameKey(t *testing.T) {
+	handler, _ := routeDeferredRuntime(t)
+	submitted := routeDeferredSubmit(t, handler, "Quorum", map[string]any{
+		"step_key": "first", "mode": "quorum", "required_approvals": 2, "assignees": []any{"route_user_a", "route_user_b", "route_user_c"},
+	})
+	if submitted.status != http.StatusOK {
+		t.Fatalf("submit status=%d body=%s", submitted.status, submitted.raw)
+	}
+	output, _ := submitted.body["output"].(map[string]any)
+	processID, _ := output["process_id"].(string)
+	first := routeAwaitOpenTask(t, handler, "route_user_a")
+	firstID, _ := first["id"].(string)
+	// The next step must name an approver outside the current electorate so an
+	// activated task cannot be confused with a step-1 task.
+	configuration := map[string]any{"next_step": map[string]any{"step_key": "second", "assignee_user_ids": []any{routeInitiator}}}
+
+	// The first of two required approvals carries the configuration and must
+	// not open the next step yet.
+	for range 2 {
+		response := routeDecide(t, handler, "route_user_a", firstID, "approve", configuration, "first-vote")
+		if response.status != http.StatusOK || response.body["status"] != "waiting" {
+			t.Fatalf("first vote/replay status=%d body=%s", response.status, response.raw)
+		}
+	}
+	if tasks := routeOpenTasks(t, handler, routeInitiator); len(tasks) != 0 {
+		t.Fatalf("an unfinished quorum activated the next step: %#v", tasks)
+	}
+	route := routeRequest(t, handler, "route_user_a", routeApproverRole, http.MethodGet, "/workflow/processes/"+processID+"/route", nil, nil)
+	steps, _ := route.body["steps"].([]any)
+	second, _ := steps[1].(map[string]any)
+	if second["status"] != "pending" || second["configured_by"] != "route_user_a" || second["configure_source"] != "decision" || second["assignee_count"] != float64(1) {
+		t.Fatalf("configured step=%s", route.raw)
+	}
+
+	// A different configuration from the second approver is a conflict.
+	conflicting := map[string]any{"next_step": map[string]any{"assignee_user_ids": []any{"route_user_a"}}}
+	response := routeDecide(t, handler, "route_user_b", firstID, "approve", conflicting, "")
+	if response.status != http.StatusForbidden {
+		t.Fatalf("foreign task decision status=%d body=%s", response.status, response.raw)
+	}
+	secondTask := map[string]any{}
+	for _, candidate := range routeOpenTasks(t, handler, "route_user_b") {
+		secondTask, _ = candidate.(map[string]any)
+	}
+	secondID, _ := secondTask["id"].(string)
+	response = routeDecide(t, handler, "route_user_b", secondID, "approve", conflicting, "")
+	if response.status != http.StatusConflict || response.body["code"] != "backend.workflow.next_step_already_configured" {
+		t.Fatalf("conflicting configuration status=%d body=%s", response.status, response.raw)
+	}
+	params, _ := response.body["params"].(map[string]any)
+	if params["assignee_user_ids"] != routeInitiator || params["step_key"] != "second" {
+		t.Fatalf("conflict params=%#v", params)
+	}
+
+	// The identical configuration is idempotent and completes the quorum.
+	response = routeDecide(t, handler, "route_user_b", secondID, "approve", configuration, "second-vote")
+	if response.status != http.StatusOK {
+		t.Fatalf("second vote status=%d body=%s", response.status, response.raw)
+	}
+	activated := routeAwaitOpenTask(t, handler, routeInitiator)
+	if activated["process_id"] != processID {
+		t.Fatalf("activated task=%#v", activated)
+	}
+	if tasks := routeOpenTasks(t, handler, "route_user_a"); len(tasks) != 0 {
+		t.Fatalf("the completed step left tasks open: %#v", tasks)
+	}
+	route = routeRequest(t, handler, routeInitiator, routeApproverRole, http.MethodGet, "/workflow/processes/"+processID+"/route", nil, nil)
+	steps, _ = route.body["steps"].([]any)
+	firstStep, _ := steps[0].(map[string]any)
+	second, _ = steps[1].(map[string]any)
+	if firstStep["status"] != "approved" || firstStep["approved_count"] != float64(2) || second["status"] != "active" {
+		t.Fatalf("route after the completed step=%s", route.raw)
+	}
+}
+
+func TestWorkflowInstanceRouteVisibilityIsLimitedToItsParticipants(t *testing.T) {
+	handler, _ := routeDeferredRuntime(t)
+	submitted := routeSubmit(t, handler, map[string]any{"title": "Visibility", "steps": []any{
+		map[string]any{"step_key": "first", "assignees": []any{"route_user_a"}},
+		map[string]any{"step_key": "second", "assignees": []any{"route_user_b"}},
+	}}, nil)
+	if submitted.status != http.StatusOK {
+		t.Fatalf("submit status=%d body=%s", submitted.status, submitted.raw)
+	}
+	output, _ := submitted.body["output"].(map[string]any)
+	processID, _ := output["process_id"].(string)
+	routeAwaitOpenTask(t, handler, "route_user_a")
+	path := "/workflow/processes/" + processID + "/route"
+
+	initiator := routeRequest(t, handler, routeInitiator, routeApproverRole, http.MethodGet, path, nil, nil)
+	steps, _ := initiator.body["steps"].([]any)
+	if initiator.status != http.StatusOK || len(steps) != 2 {
+		t.Fatalf("initiator route status=%d body=%s", initiator.status, initiator.raw)
+	}
+	for _, raw := range steps {
+		step, _ := raw.(map[string]any)
+		if assignees, _ := step["assignees"].([]any); len(assignees) != 1 {
+			t.Fatalf("the initiator must see every assignee: %s", initiator.raw)
+		}
+	}
+	secondApprover := routeRequest(t, handler, "route_user_b", routeApproverRole, http.MethodGet, path, nil, nil)
+	if secondApprover.status != http.StatusOK {
+		t.Fatalf("step-2 assignee route status=%d body=%s", secondApprover.status, secondApprover.raw)
+	}
+	steps, _ = secondApprover.body["steps"].([]any)
+	firstStep, _ := steps[0].(map[string]any)
+	secondStep, _ := steps[1].(map[string]any)
+	if assignees, _ := firstStep["assignees"].([]any); len(assignees) != 0 {
+		t.Fatalf("a step-2 assignee saw the active step-1 approvers: %s", secondApprover.raw)
+	}
+	if assignees, _ := secondStep["assignees"].([]any); len(assignees) != 1 {
+		t.Fatalf("a step-2 assignee must see its own step: %s", secondApprover.raw)
+	}
+	if firstStep["assignee_count"] != float64(1) {
+		t.Fatalf("assignee counts must stay visible: %s", secondApprover.raw)
+	}
+	outsider := routeRequest(t, handler, "route_outsider", routeAdminRole, http.MethodGet, path, nil, nil)
+	if outsider.status != http.StatusForbidden || outsider.body["code"] != "backend.workflow.process_access_denied" {
+		t.Fatalf("unrelated reader status=%d body=%s", outsider.status, outsider.raw)
+	}
+}
+
+// routeSimulateCrash rewinds the durable state to the moment just after the
+// Action committed: a starting process, an unactivated first route step and a
+// pending intent. It is the exact state a crash between commit and activation
+// leaves behind.
+func routeSimulateCrash(t *testing.T, dbPath, processID string) {
+	t.Helper()
+	store, err := persistence.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: dbPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	for _, statement := range []struct {
+		sql  string
+		args []any
+	}{
+		{"DELETE FROM _workflow_tasks WHERE process_id = ?", []any{processID}},
+		{"DELETE FROM _workflow_node_instances WHERE process_id = ?", []any{processID}},
+		{"UPDATE _workflow_process_instances SET status = 'starting', current_node_ids_json = '[]' WHERE id = ?", []any{processID}},
+		{"UPDATE _workflow_route_steps SET status = 'pending', node_instance_id = '' WHERE process_id = ? AND step_no = 1", []any{processID}},
+		{"UPDATE _workflow_executions SET status = 'pending', attempt = 0, lease_owner = '', lease_expires_at = '', next_run_at = NULL WHERE process_id = ?", []any{processID}},
+	} {
+		if _, err := store.DB().ExecContext(t.Context(), statement.sql, statement.args...); err != nil {
+			t.Fatalf("rewind %q: %v", statement.sql, err)
+		}
+	}
+}
+
+func routeDrainWorker(t *testing.T, handler http.Handler) {
+	t.Helper()
+	response := routeRequest(t, handler, routeInitiator, routeApproverRole, http.MethodPost, "/workflow/recovery/executions/process?limit=25", nil, map[string]string{"X-Operation-Reason": "Activate the staged approval route after a restart"})
+	if response.status != http.StatusOK {
+		t.Fatalf("worker drain status=%d body=%s", response.status, response.raw)
+	}
+}
+
+func TestWorkflowInstanceRouteSurvivesARestartAndKeepsApproving(t *testing.T) {
+	temp := t.TempDir()
+	dbPath := filepath.Join(temp, "runtime.db")
+	manifest := routeWorkflowManifest(t, temp, routeDefaultContract())
+	newRuntime := func(t *testing.T) http.Handler {
+		return newRouteWorkflowRuntime(t, config.Config{
+			AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: dbPath, ManifestPath: manifest, UploadDir: filepath.Join(temp, "uploads"),
+		}, routeDefaultContract(), routeStandardUsers()).Routes()
+	}
+	handler := newRuntime(t)
+	submitted := routeSubmit(t, handler, map[string]any{"title": "Restart", "steps": []any{
+		map[string]any{"step_key": "first", "assignees": []any{"route_user_a"}},
+		map[string]any{"step_key": "second", "assignees": []any{"route_user_b"}},
+	}}, nil)
+	if submitted.status != http.StatusOK {
+		t.Fatalf("submit status=%d body=%s", submitted.status, submitted.raw)
+	}
+	output, _ := submitted.body["output"].(map[string]any)
+	processID, _ := output["process_id"].(string)
+	routeAwaitOpenTask(t, handler, "route_user_a")
+	routeSimulateCrash(t, dbPath, processID)
+
+	restarted := newRuntime(t)
+	if tasks := routeOpenTasks(t, restarted, "route_user_a"); len(tasks) != 0 {
+		t.Fatalf("the rewound process still had tasks: %#v", tasks)
+	}
+	routeDrainWorker(t, restarted)
+	first := routeAwaitOpenTask(t, restarted, "route_user_a")
+	firstID, _ := first["id"].(string)
+	approved := routeDecide(t, restarted, "route_user_a", firstID, "approve", map[string]any{"comment": "after restart"}, "")
+	if approved.status != http.StatusOK || approved.body["status"] != "waiting" {
+		t.Fatalf("approval after restart status=%d body=%s", approved.status, approved.raw)
+	}
+	second := routeAwaitOpenTask(t, restarted, "route_user_b")
+	secondID, _ := second["id"].(string)
+	completed := routeDecide(t, restarted, "route_user_b", secondID, "approve", nil, "")
+	if completed.status != http.StatusOK || completed.body["status"] != "completed" {
+		t.Fatalf("final approval status=%d body=%s", completed.status, completed.raw)
+	}
+	route := routeRequest(t, restarted, routeInitiator, routeApproverRole, http.MethodGet, "/workflow/processes/"+processID+"/route", nil, nil)
+	steps, _ := route.body["steps"].([]any)
+	firstStep, _ := steps[0].(map[string]any)
+	secondStep, _ := steps[1].(map[string]any)
+	if firstStep["status"] != "approved" || secondStep["status"] != "approved" || firstStep["approved_count"] != float64(1) {
+		t.Fatalf("route after the restarted run=%s", route.raw)
+	}
+}
+
+func TestWorkflowInstanceRouteAcceptsExactlyOneOfTwoConcurrentConfigurations(t *testing.T) {
+	handler, _ := routeDeferredRuntime(t)
+	submitted := routeDeferredSubmit(t, handler, "Concurrent", map[string]any{
+		"step_key": "first", "mode": "quorum", "required_approvals": 2, "assignees": []any{"route_user_a", "route_user_b"},
+	})
+	if submitted.status != http.StatusOK {
+		t.Fatalf("submit status=%d body=%s", submitted.status, submitted.raw)
+	}
+	output, _ := submitted.body["output"].(map[string]any)
+	processID, _ := output["process_id"].(string)
+	firstTask, _ := routeAwaitOpenTask(t, handler, "route_user_a")["id"].(string)
+	secondTask, _ := routeAwaitOpenTask(t, handler, "route_user_b")["id"].(string)
+	type attempt struct {
+		user, task, assignee string
+	}
+	results := make(chan routeResponse, 2)
+	start := make(chan struct{})
+	var group sync.WaitGroup
+	for _, candidate := range []attempt{{"route_user_a", firstTask, routeInitiator}, {"route_user_b", secondTask, "route_user_c"}} {
+		group.Go(func() {
+			<-start
+			results <- routeDecide(t, handler, candidate.user, candidate.task, "approve", map[string]any{
+				"next_step": map[string]any{"assignee_user_ids": []any{candidate.assignee}},
+			}, "")
+		})
+	}
+	close(start)
+	group.Wait()
+	close(results)
+	accepted, conflicts := 0, 0
+	for response := range results {
+		switch {
+		case response.status == http.StatusOK:
+			accepted++
+		case response.status == http.StatusConflict && response.body["code"] == "backend.workflow.next_step_already_configured":
+			conflicts++
+		default:
+			t.Fatalf("unexpected concurrent outcome status=%d body=%s", response.status, response.raw)
+		}
+	}
+	if accepted != 1 || conflicts != 1 {
+		t.Fatalf("concurrent configurations accepted=%d conflicts=%d", accepted, conflicts)
+	}
+	route := routeRequest(t, handler, routeInitiator, routeApproverRole, http.MethodGet, "/workflow/processes/"+processID+"/route", nil, nil)
+	steps, _ := route.body["steps"].([]any)
+	second, _ := steps[1].(map[string]any)
+	if second["assignee_count"] != float64(1) {
+		t.Fatalf("exactly one configuration must survive: %s", route.raw)
+	}
+}
+
+func TestWorkflowInstanceRouteRevalidatesAConfiguredApproverAtActivation(t *testing.T) {
+	for _, test := range []struct {
+		policy string
+		status string
+	}{{"fail", "configuration_error"}, {"skip_invalid", "waiting"}} {
+		t.Run(test.policy, func(t *testing.T) {
+			temp := t.TempDir()
+			dbPath := filepath.Join(temp, "runtime.db")
+			contract := routeDefaultContract()
+			contract["revalidate_on_activation"] = test.policy
+			contract["max_assignees_per_step"] = 2
+			manifest := routeWorkflowManifest(t, temp, contract)
+			users := append(routeStandardUsers(), routeWorkflowUser{id: "route_leaver", role: routeApproverRole})
+			newRuntime := func(t *testing.T, users []routeWorkflowUser) http.Handler {
+				return newRouteWorkflowRuntime(t, config.Config{
+					AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: dbPath, ManifestPath: manifest, UploadDir: filepath.Join(temp, "uploads"),
+				}, contract, users).Routes()
+			}
+			handler := newRuntime(t, users)
+			steps := []any{
+				map[string]any{"step_key": "first", "assignees": []any{"route_user_a"}},
+				map[string]any{"step_key": "second", "assignees": []any{"route_leaver", "route_user_b"}},
+			}
+			submitted := routeSubmit(t, handler, map[string]any{"title": "Revalidate", "steps": steps}, nil)
+			if submitted.status != http.StatusOK {
+				t.Fatalf("submit status=%d body=%s", submitted.status, submitted.raw)
+			}
+			output, _ := submitted.body["output"].(map[string]any)
+			processID, _ := output["process_id"].(string)
+			routeAwaitOpenTask(t, handler, "route_user_a")
+
+			// The configured approver leaves the workspace before the step opens.
+			departed := append([]routeWorkflowUser(nil), routeStandardUsers()...)
+			departed = append(departed, routeWorkflowUser{id: "route_leaver", role: routeApproverRole, status: "disabled"})
+			restarted := newRuntime(t, departed)
+			firstID, _ := routeAwaitOpenTask(t, restarted, "route_user_a")["id"].(string)
+			approved := routeDecide(t, restarted, "route_user_a", firstID, "approve", nil, "")
+			if approved.status != http.StatusOK || approved.body["status"] != test.status {
+				t.Fatalf("%s policy status=%d body=%s", test.policy, approved.status, approved.raw)
+			}
+			if test.policy == "fail" {
+				if tasks := routeOpenTasks(t, restarted, "route_user_b"); len(tasks) != 0 {
+					t.Fatalf("a failed revalidation still opened the step: %#v", tasks)
+				}
+			}
+			detail := routeRequest(t, restarted, routeInitiator, routeApproverRole, http.MethodGet, "/workflow/processes/"+processID, nil, nil)
+			if !strings.Contains(detail.raw, "route_step_revalidated") {
+				t.Fatalf("the revalidation was not recorded: %s", detail.raw)
+			}
+			if test.policy == "skip_invalid" {
+				survivor := routeAwaitOpenTask(t, restarted, "route_user_b")
+				if survivor["process_id"] != processID {
+					t.Fatalf("the surviving approver did not receive the step: %#v", survivor)
+				}
+				if tasks := routeOpenTasks(t, restarted, "route_leaver"); len(tasks) != 0 {
+					t.Fatalf("the departed approver received a task: %#v", tasks)
+				}
+			}
+		})
+	}
 }

@@ -138,8 +138,13 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 		return workflowmodel.WorkflowProcessInstance{}, true, internalError("get workflow process", err)
 	}
 	if strings.TrimSpace(req.IdempotencyKey) != "" {
-		key := workflowCommandKey("task.decision", task.ID, req.IdempotencyKey, map[string]any{"decision": decision, "comment": strings.TrimSpace(req.Comment)})
+		key := workflowCommandKey("task.decision", task.ID, req.IdempotencyKey, workflowTaskDecisionCommandPayload(decision, req))
 		workflowRecordCommand(&process, "task.decision:"+task.ID, key)
+	}
+	node, _ := workflowpolicy.WorkflowGraphNode(process.DefinitionSnapshot.Graph, task.NodeID)
+	route, routed := workflowpolicy.WorkflowApprovalRoute(node)
+	if !routed && req.NextStep != nil {
+		return workflowmodel.WorkflowProcessInstance{}, true, badRequest("backend.workflow.next_step_not_configurable", "node", task.NodeID)
 	}
 	tasks, err := workflowApprovalDecisionTasks(ctx, records.dependencies.Processes, process, task)
 	if err != nil {
@@ -155,21 +160,42 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 		at, _ := time.Parse(time.RFC3339Nano, now)
 		now = at.Add(time.Nanosecond).Format(time.RFC3339Nano)
 	}
+	// Every next-step rule is evaluated before the vote is written, so a
+	// rejected configuration leaves the task open and the route untouched.
+	plan := workflowRouteDecisionPlan{}
+	if routed {
+		plan, err = planRouteDecision(ctx, records, process, node, route, task, req, decision, principal, now)
+		if err != nil {
+			return workflowmodel.WorkflowProcessInstance{}, true, err
+		}
+	}
 	task.Status, task.Decision, task.Comment = decision, decision, strings.TrimSpace(req.Comment)
 	task.CompletedBy, task.CompletedAt, task.UpdatedAt = principal.UserID, now, now
 	commit := workflowApprovalDecisionCommit(process, task)
+	if req.NextStep != nil {
+		// A configuration and a vote share one durable revision, so two
+		// approvers cannot both believe they configured the next step.
+		commit.ExpectedProcessUpdatedAt = processSnapshot.UpdatedAt
+	}
 	if commit.ExpectedProcessUpdatedAt != "" {
 		process.UpdatedAt = now
 		commit.Process = &process
 	}
 	outcome, complete := workflowpolicy.WorkflowTerminalApprovalOutcome(process, tasks, task)
+	if routed {
+		outcome, complete = workflowpolicy.WorkflowTerminalRouteApprovalOutcome(plan.current, tasks, task)
+	}
 	if !complete {
 		if strings.TrimSpace(req.IdempotencyKey) != "" {
 			commit.Process = &process
 		}
 		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, task.NodeID, task.ID, "task_"+decision, principal.UserID, "workflow.event.task."+decision, map[string]any{"comment": task.Comment}, now))
-		node, _ := workflowpolicy.WorkflowGraphNode(process.DefinitionSnapshot.Graph, task.NodeID)
-		if valueOrDefault(strings.TrimSpace(workflowpolicy.WorkflowApprovalNodeContract(node).Mode), "any") == "sequential" {
+		if routed {
+			if _, err := applyRouteDecision(ctx, records, &commit, &process, node, plan, outcome, false, principal, now); err != nil {
+				return workflowmodel.WorkflowProcessInstance{}, true, err
+			}
+		}
+		if !routed && valueOrDefault(strings.TrimSpace(workflowpolicy.WorkflowApprovalNodeContract(node).Mode), "any") == "sequential" {
 			pending := []workflowmodel.WorkflowTask{}
 			for _, candidate := range tasks {
 				if candidate.NodeID == task.NodeID && candidate.Status == "pending" {
@@ -225,6 +251,22 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 	}
 	process.Variables = workflowpolicy.WorkflowCloneMap(process.Variables)
 	process.Variables["approval_decision"], process.Variables["approval_comment"] = outcome, task.Comment
+	if routed {
+		activated, routeErr := applyRouteDecision(ctx, records, &commit, &process, node, plan, outcome, true, principal, now)
+		if routeErr != nil {
+			return workflowmodel.WorkflowProcessInstance{}, true, routeErr
+		}
+		if activated {
+			commit.Process = &process
+			return commitRouteApprovalContinuation(ctx, records, commit, process, task, req, principal, now)
+		}
+		if outcome == "approved" && plan.hasNext && plan.next.Status == "configurable" && plan.configured == nil {
+			routeDecisionConfigurationError(&process, plan.next, now)
+			commit.Process = &process
+			commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, task.NodeID, task.ID, "process_failed", principal.UserID, process.ErrorCode, map[string]any{"step_key": plan.next.StepKey}, now))
+			return commitRouteApprovalContinuation(ctx, records, commit, process, task, req, principal, now)
+		}
+	}
 	if len(nextNodeIDs) > 0 {
 		preparedApprovals, prepareErr := prepareNextApprovalNodes(ctx, records, &commit, process, nextNodeIDs, principal, now)
 		if prepareErr != nil {
@@ -373,4 +415,59 @@ func (r *WorkflowProcessRuntime) DecideTerminalTask(ctx context.Context, taskID 
 		}
 	}
 	return workflowmodel.WorkflowProcessInstance{}, true, conflict("backend.workflow.task_decision_conflict")
+}
+
+// workflowTaskDecisionCommandPayload is the exact request identity a decision
+// idempotency key covers. The next-step configuration is part of it, so the
+// same key with the same configuration replays and the same key with a
+// different configuration conflicts.
+func workflowTaskDecisionCommandPayload(decision string, req workflowmodel.WorkflowTaskDecisionRequest) map[string]any {
+	payload := map[string]any{"decision": decision, "comment": strings.TrimSpace(req.Comment)}
+	if req.NextStep != nil {
+		payload["next_step"] = map[string]any{
+			"step_key":           strings.TrimSpace(req.NextStep.StepKey),
+			"assignee_user_ids":  uniqueSortedStrings(req.NextStep.AssigneeUserIDs),
+			"required_approvals": req.NextStep.RequiredApprovals,
+		}
+	}
+	return payload
+}
+
+// commitRouteApprovalContinuation persists a route decision that keeps the
+// process on the same approval node, refreshing the durable execution so a
+// crash resumes the process instead of the workflow payload.
+func commitRouteApprovalContinuation(ctx context.Context, records *WorkflowProcessRuntime, commit transactionmodel.WorkflowDecisionCommit, process workflowmodel.WorkflowProcessInstance, task workflowmodel.WorkflowTask, req workflowmodel.WorkflowTaskDecisionRequest, principal principalmodel.Principal, now string) (workflowmodel.WorkflowProcessInstance, bool, error) {
+	execution, found := workflowmodel.WorkflowExecution{}, false
+	if records.dependencies.Workers != nil {
+		var loadErr error
+		execution, found, loadErr = records.dependencies.Workers.GetExecution(ctx, principal.WorkspaceID, process.ID)
+		if loadErr != nil {
+			return workflowmodel.WorkflowProcessInstance{}, true, internalError("get workflow execution", loadErr)
+		}
+	}
+	if !found {
+		execution = workflowDecisionExecution(process, principal, now)
+	}
+	execution.Status, execution.UpdatedAt, execution.Message = process.Status, now, "workflow.message.approvalWaiting"
+	execution.Result = workflowpolicy.WorkflowCloneMap(execution.Result)
+	execution.Result["process_id"], execution.Result["current_node_ids"], execution.Result["process_status"] = process.ID, process.CurrentNodeIDs, process.Status
+	if found {
+		commit.WorkflowExecution = &execution
+	} else {
+		commit.InsertExecutions = append(commit.InsertExecutions, execution)
+	}
+	if err := prepareWorkflowDecisionNotifications(records, &commit, process, now); err != nil {
+		return workflowmodel.WorkflowProcessInstance{}, true, err
+	}
+	committed, err := records.dependencies.Decisions.CommitWorkflowDecision(ctx, commit)
+	if err != nil {
+		return workflowmodel.WorkflowProcessInstance{}, true, internalError("commit workflow task decision", err)
+	}
+	if !committed {
+		if replay, found := workflowDecisionReplay(ctx, principal.WorkspaceID, records.dependencies.Processes, task, req); found {
+			return replay, true, nil
+		}
+		return workflowmodel.WorkflowProcessInstance{}, true, conflict("backend.workflow.task_already_decided")
+	}
+	return process, true, nil
 }

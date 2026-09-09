@@ -120,9 +120,7 @@ func workflowDecisionReplay(ctx context.Context, workspaceID string, processes i
 	if err != nil || !found {
 		return workflowmodel.WorkflowProcessInstance{}, false
 	}
-	key := workflowCommandKey("task.decision", task.ID, req.IdempotencyKey, map[string]any{
-		"decision": strings.ToLower(strings.TrimSpace(req.Decision)), "comment": strings.TrimSpace(req.Comment),
-	})
+	key := workflowCommandKey("task.decision", task.ID, req.IdempotencyKey, workflowTaskDecisionCommandPayload(strings.ToLower(strings.TrimSpace(req.Decision)), req))
 	return process, workflowProcessHasCommand(process, "task.decision:"+task.ID, key)
 }
 

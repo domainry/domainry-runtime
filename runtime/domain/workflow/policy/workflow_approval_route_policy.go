@@ -154,3 +154,54 @@ func WorkflowProcessStatusActive(status string) bool {
 		return false
 	}
 }
+
+// WorkflowTerminalRouteApprovalOutcome is the route-driven counterpart of
+// WorkflowTerminalApprovalOutcome. The threshold comes from the durable step
+// row, never from the node contract, because every step of a per-instance
+// route carries its own mode and required approvals.
+func WorkflowTerminalRouteApprovalOutcome(step workflowmodel.WorkflowRouteStep, tasks []workflowmodel.WorkflowTask, decided workflowmodel.WorkflowTask) (string, bool) {
+	if decided.Decision == "rejected" || decided.Decision == "returned" {
+		return decided.Decision, true
+	}
+	approved, total := 0, 0
+	for _, task := range tasks {
+		if task.NodeID != decided.NodeID || task.NodeInstanceID != decided.NodeInstanceID {
+			continue
+		}
+		if task.ID == decided.ID {
+			task = decided
+		}
+		total++
+		if task.Status == "approved" {
+			approved++
+		}
+	}
+	if total == 0 {
+		return "", false
+	}
+	return "approved", approved >= WorkflowRouteStepThreshold(step)
+}
+
+// WorkflowRouteStepConfigurationMatches reports whether an incoming next-step
+// configuration is the exact one a durable step already carries, which makes a
+// replayed decision idempotent instead of a conflict.
+func WorkflowRouteStepConfigurationMatches(step workflowmodel.WorkflowRouteStep, userIDs []string, requiredApprovals int) bool {
+	existing := WorkflowRouteStepAssigneeIDs(step)
+	if len(existing) != len(WorkflowUniqueAssignees(userIDs)) {
+		return false
+	}
+	present := map[string]bool{}
+	for _, userID := range existing {
+		present[userID] = true
+	}
+	for _, userID := range WorkflowUniqueAssignees(userIDs) {
+		if !present[userID] {
+			return false
+		}
+	}
+	incoming := requiredApprovals
+	if incoming == 0 {
+		incoming = WorkflowRouteStepThreshold(workflowmodel.WorkflowRouteStep{Mode: step.Mode, AssigneeSnapshot: step.AssigneeSnapshot})
+	}
+	return incoming == step.RequiredApprovals || incoming == WorkflowRouteStepThreshold(step)
+}

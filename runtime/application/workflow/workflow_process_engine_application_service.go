@@ -112,7 +112,7 @@ func (e *WorkflowProcessEngine) DecideTask(ctx context.Context, taskID string, r
 		return workflowmodel.WorkflowProcessInstance{}, internalError("get workflow process", err)
 	}
 	if strings.TrimSpace(req.IdempotencyKey) != "" {
-		key := workflowCommandKey("task.decision", task.ID, req.IdempotencyKey, map[string]any{"decision": decision, "comment": strings.TrimSpace(req.Comment)})
+		key := workflowCommandKey("task.decision", task.ID, req.IdempotencyKey, workflowTaskDecisionCommandPayload(decision, req))
 		workflowRecordCommand(&process, "task.decision:"+task.ID, key)
 	}
 	taskSnapshots, err := e.runtime.dependencies.Processes.ListTasks(ctx, principal.WorkspaceID, process.ID, "", "", 500)

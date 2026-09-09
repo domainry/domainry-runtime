@@ -183,3 +183,20 @@ func insertWorkflowRouteStepTx(ctx context.Context, store *database.RuntimeStore
 }
 
 var _ workflowcontract.WorkflowRouteStore = WorkflowRouteStore{}
+
+// workflowRouteStepExpectedStatus derives the compare-and-set predicate of a
+// route step write from the status it moves to. Every durable transition has
+// exactly one legal predecessor, so a decision computed from a stale snapshot
+// writes nothing instead of overwriting a competing configuration.
+func workflowRouteStepExpectedStatus(step workflowmodel.WorkflowRouteStep) string {
+	switch strings.TrimSpace(step.Status) {
+	case "pending":
+		return "configurable"
+	case "active":
+		return "pending"
+	case "approved", "rejected", "returned", "skipped":
+		return "active"
+	default:
+		return ""
+	}
+}

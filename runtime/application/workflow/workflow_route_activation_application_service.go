@@ -21,6 +21,11 @@ const (
 	WorkflowRouteStepRevalidatedEvent = "route_step_revalidated"
 )
 
+// WorkflowRouteStepRevalidationFailedCode is the durable process error of a
+// route step whose configured approver is no longer eligible when the step
+// would open, under the route's fail activation policy.
+const WorkflowRouteStepRevalidationFailedCode = "backend.workflow.route_step_revalidation_failed"
+
 // activateStartingProcess turns a process staged by an Action into a running
 // one. The trigger node was never executed inside the Action transaction, so
 // the committed intent replays exactly the work Start would have done. It is
@@ -77,10 +82,14 @@ func (e *WorkflowProcessEngine) activateRouteApprovalStep(ctx context.Context, p
 		return "", false, err
 	}
 	if len(assignees) == 0 {
-		if outcome == "skip" {
+		switch outcome {
+		case "skip":
 			return "skipped", false, nil
+		case "fail":
+			return "", false, badRequest(WorkflowRouteStepRevalidationFailedCode, "node", node.ID, "step_key", step.StepKey)
+		default:
+			return "", false, badRequest("backend.workflow.approval_assignee_not_found", "node", node.ID)
 		}
-		return "", false, badRequest("backend.workflow.approval_assignee_not_found", "node", node.ID)
 	}
 	step.AssigneeSnapshot = assignees
 	nodeInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ID, node, "waiting", workflowpolicy.WorkflowCloneMap(process.Variables), nil)
@@ -166,7 +175,9 @@ func (e *WorkflowProcessEngine) revalidateRouteStepAssignees(ctx context.Context
 		}
 		return workflowRouteAdminAssignees(ctx, e.runtime.dependencies.Identity, admins), "", nil
 	default:
-		return nil, "", badRequest("backend.workflow.route_step_revalidation_failed", "node", node.ID, "step_key", step.StepKey, "user_ids", strings.Join(invalid, ","))
+		// fail: the step is not opened with a silently reduced electorate. The
+		// caller turns this into an operator-visible configuration error.
+		return nil, "fail", nil
 	}
 }
 

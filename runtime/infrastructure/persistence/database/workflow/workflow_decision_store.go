@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
+	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 
 	"strings"
 
@@ -88,6 +89,19 @@ func (r WorkflowDecisionStore) CommitWorkflowDecision(ctx context.Context, commi
 		}
 		if err := r.updateTaskTx(ctx, tx, task); err != nil {
 			return false, err
+		}
+	}
+	for _, step := range commit.UpdateRouteSteps {
+		step.WorkspaceID = workspaceID
+		updated, err := updateWorkflowRouteStepTx(ctx, r.store, tx, step, workflowRouteStepExpectedStatus(step))
+		if err != nil {
+			return false, err
+		}
+		// The route rows are the electorate authority. A step that already left
+		// the status this decision computed from was configured or activated by
+		// a competing decision, so the whole decision must be recomputed.
+		if !updated {
+			return false, workflowcontract.ErrWorkflowDecisionSnapshotChanged
 		}
 	}
 	if commit.Process != nil {

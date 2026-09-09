@@ -136,7 +136,34 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/workflow/definitions/{workflowKey}/validate", "Workflow Administration", "post")
 	addBuilderPath(paths, "/workflow/definitions/{workflowKey}/simulate", "Workflow Administration", "post")
 	addBuilderPath(paths, "/automation/fragments/{capabilityKey}/validate", "Automation", "post")
+	annotateWorkflowTaskDecisionRequests(paths)
 
+}
+
+// annotateWorkflowTaskDecisionRequests documents the approval decision body,
+// whose optional next_step configures the following step of a per-instance
+// approval route. It is only meaningful on an approval.
+func annotateWorkflowTaskDecisionRequests(paths map[string]any) {
+	body := openAPIJSONRequest(openAPIObject(map[string]any{
+		"comment": map[string]any{"type": "string", "description": "Decision comment recorded on the task"},
+		"next_step": map[string]any{
+			"type": "object", "additionalProperties": false,
+			"description": "Configuration of the route step that follows the step this approval completes; rejected on a rejection or a return",
+			"properties": map[string]any{
+				"step_key":           map[string]any{"type": "string", "description": "Route step key the configuration is meant for"},
+				"assignee_user_ids":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Approvers of the next route step"},
+				"required_approvals": map[string]any{"type": "integer", "minimum": 1, "description": "Approvals that complete the next route step under quorum"},
+			},
+		},
+	}))
+	for _, path := range []string{"/workflow/tasks/{taskID}/approve", "/workflow/tasks/{taskID}/reject", "/workflow/tasks/{taskID}/return"} {
+		pathSpec, _ := paths[path].(map[string]any)
+		operation, _ := pathSpec["post"].(map[string]any)
+		if operation == nil {
+			continue
+		}
+		operation["requestBody"] = body.Value
+	}
 }
 
 func addNotificationDeliveryOpenAPIPath(paths map[string]any) {
