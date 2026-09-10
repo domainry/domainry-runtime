@@ -120,4 +120,10 @@ type RecordPageResult struct {
 	PageSize int      `json:"page_size"`
 	Total    int      `json:"total"`
 	HasNext  bool     `json:"has_next"`
+	// NextAfterID is the keyset cursor a caller passes back as the after_id
+	// query parameter to read the following page. Record listing is keyset
+	// paged, not offset paged, so a caller that only echoes page=N+1 cannot
+	// advance: it must carry this value forward. Empty when there is no next
+	// page, and omitted from a response that has none.
+	NextAfterID string `json:"next_after_id,omitempty"`
 }

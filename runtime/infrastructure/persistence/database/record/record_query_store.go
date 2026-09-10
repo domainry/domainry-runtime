@@ -1,6 +1,8 @@
 package record
 
 import (
+	"strconv"
+
 	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -86,14 +88,33 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 		return recordmodel.RecordPageResult{}, err
 	}
 	countPredicate := predicate
+	// Record listing is keyset paged. Both refusals below are caller mistakes,
+	// not internal faults: raised as plain errors they were classified
+	// backend.internal, so a caller asking for page 2 without a cursor got a
+	// 500 whose only published detail was {"operation":"list records"} and had
+	// no way to learn that after_id exists. They are client errors with stable
+	// codes and the repair named in params.
 	if afterID := strings.TrimSpace(queryValue.AfterID); afterID != "" {
 		if !recordQueryUsesAscendingIDOrder(queryValue.Sort) {
-			return recordmodel.RecordPageResult{}, fmt.Errorf("record keyset cursor requires ascending id sort")
+			return recordmodel.RecordPageResult{}, &apperror.AppError{
+				Kind: apperror.KindBadRequest,
+				Code: "backend.record.pagination_cursor_sort_invalid",
+				Params: map[string]string{
+					"repair": "send sort=id:asc with after_id, or drop after_id; a keyset cursor is only meaningful in ascending id order",
+				},
+			}
 		}
 		predicate = query.And(predicate, query.GreaterThan("id", afterID))
 	}
 	if queryValue.Page > 1 && strings.TrimSpace(queryValue.AfterID) == "" {
-		return recordmodel.RecordPageResult{}, fmt.Errorf("record deep pagination requires an id cursor")
+		return recordmodel.RecordPageResult{}, &apperror.AppError{
+			Kind: apperror.KindBadRequest,
+			Code: "backend.record.pagination_cursor_required",
+			Params: map[string]string{
+				"page":   strconv.Itoa(queryValue.Page),
+				"repair": "read page 1, then send after_id=<next_after_id from that response> with sort=id:asc; record listing is keyset paged and does not accept an offset page number on its own",
+			},
+		}
 	}
 	var total int
 	if !queryValue.SkipTotal {
@@ -147,6 +168,13 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 			records = records[:queryValue.PageSize]
 		}
 	}
+	// The cursor is the last row of THIS page, so it is read before
+	// localization rewrites values; ids are never localized, but taking it here
+	// keeps it independent of anything that pass may drop.
+	nextAfterID := ""
+	if hasNext && len(records) > 0 && recordQueryUsesAscendingIDOrder(queryValue.Sort) {
+		nextAfterID = records[len(records)-1].ID
+	}
 	records, err = r.applyRecordLocalization(
 		ctx,
 		workspaceID,
@@ -164,7 +192,7 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 			return recordmodel.RecordPageResult{}, fmt.Errorf("commit record scope snapshot: %w", err)
 		}
 	}
-	return recordmodel.RecordPageResult{Items: records, Page: queryValue.Page, PageSize: queryValue.PageSize, Total: total, HasNext: hasNext}, nil
+	return recordmodel.RecordPageResult{Items: records, Page: queryValue.Page, PageSize: queryValue.PageSize, Total: total, HasNext: hasNext, NextAfterID: nextAfterID}, nil
 }
 
 func recordQueryUsesAscendingIDOrder(sortRules []recordmodel.RecordSortRule) bool {

@@ -15,6 +15,7 @@ func parseListQuery(r *http.Request) recordmodel.RecordListQuery {
 	query := recordmodel.RecordListQuery{
 		Page:           intQuery(values.Get("page")),
 		PageSize:       intQuery(values.Get("page_size")),
+		AfterID:        strings.TrimSpace(values.Get("after_id")),
 		Search:         strings.TrimSpace(values.Get("search")),
 		Filters:        map[string]any{},
 		Locale:         recordRequestLocale(r),
