@@ -131,6 +131,16 @@ func businessProfileActive(binding profilebindingmodel.BusinessIdentityBinding, 
 func selectBusinessProfile(profiles []profilebindingmodel.Reference, bindingKey, recordID string) (profilebindingmodel.Reference, bool, error) {
 	bindingKey, recordID = strings.TrimSpace(bindingKey), strings.TrimSpace(recordID)
 	if bindingKey == "" && recordID == "" {
+		// An unselected principal that holds exactly one active profile has
+		// nothing to disambiguate, and requiring a header to say so made the
+		// sole-profile case indistinguishable from having none: every
+		// attribution degraded to a raw user id and profile-gated Actions
+		// refused outright, because a delivered frontend sends no
+		// X-Business-Profile-* header. More than one profile stays unselected -
+		// that is a real ambiguity only the caller can settle.
+		if len(profiles) == 1 {
+			return profiles[0], true, nil
+		}
 		return profilebindingmodel.Reference{}, false, nil
 	}
 	candidates := []profilebindingmodel.Reference{}
