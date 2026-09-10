@@ -8,6 +8,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
 func TestReadRemainingConditionOperands(t *testing.T) {
@@ -21,7 +22,10 @@ func TestReadRemainingConditionOperands(t *testing.T) {
 	if refs, err := service.IdentityProfileReferences(t.Context(), " ", principalmodel.Principal{}); err != nil || len(refs) != 0 {
 		t.Fatalf("empty user refs=%#v err=%v", refs, err)
 	}
-	if refs, err := service.IdentityProfileReferences(t.Context(), "user", principalmodel.Principal{}); err != nil || len(refs) != 0 {
+	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{
+		{ObjectKey: object.Key, FieldKey: "identity_user", Read: true},
+	}})
+	if refs, err := service.IdentityProfileReferences(t.Context(), "user", principal); err != nil || len(refs) != 0 {
 		t.Fatalf("zero refs=%#v err=%v", refs, err)
 	}
 	repository := &readRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "hidden"}}}}

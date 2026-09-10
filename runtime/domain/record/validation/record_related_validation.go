@@ -14,14 +14,8 @@ func RecordDuplicateIdentityFields(object definitionmodel.ObjectSchema) []defini
 			fields = append(fields, field)
 		}
 	}
-	if len(fields) == 0 {
-		for _, field := range object.Fields {
-			if field.Key == "name" || field.Key == "title" {
-				fields = append(fields, field)
-				break
-			}
-		}
-	}
+	// Display names and titles may repeat, including recurring course sessions.
+	// Their uniqueness must be declared by the field contract above.
 	return fields
 }
 

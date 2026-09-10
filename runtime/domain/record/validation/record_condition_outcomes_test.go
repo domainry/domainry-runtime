@@ -95,7 +95,7 @@ func TestRecordRelatedAndStateConditionOutcomes(t *testing.T) {
 		t.Fatalf("%#v", fields)
 	}
 	fields = RecordDuplicateIdentityFields(definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{{Key: "title"}}})
-	if len(fields) != 1 {
+	if len(fields) != 0 {
 		t.Fatalf("%#v", fields)
 	}
 	_ = RecordPolicyValuesEqual(1, "not-number")

@@ -222,7 +222,10 @@ func TestReadServiceBuildsIdentityProfileReferences(t *testing.T) {
 		},
 	})
 
-	references, err := service.IdentityProfileReferences(t.Context(), "u1", principalmodel.Principal{})
+	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{
+		{ObjectKey: object.Key, FieldKey: "identity_user", Read: true},
+	}})
+	references, err := service.IdentityProfileReferences(t.Context(), "u1", principal)
 	if err != nil {
 		t.Fatal(err)
 	}

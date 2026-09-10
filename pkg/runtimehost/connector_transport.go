@@ -191,7 +191,16 @@ func (t *connectorTransport) RoundTripHTTP(ctx context.Context, request connecto
 	if err := injectConnectorSecretHeaders(httpRequest.Header, request.SecretHeaders); err != nil {
 		return connector.HTTPResponse{}, err
 	}
-	response, err := t.httpClient.Do(httpRequest)
+	client := t.httpClient
+	if _, bounded := ctx.Deadline(); bounded {
+		// The operation context already bounds the entire exchange. A second,
+		// fixed client timeout would truncate longer operations such as OCR.
+		// Copy the client so concurrent requests keep their own timeout policy.
+		scoped := *client
+		scoped.Timeout = 0
+		client = &scoped
+	}
+	response, err := client.Do(httpRequest)
 	if err != nil {
 		return connector.HTTPResponse{}, err
 	}

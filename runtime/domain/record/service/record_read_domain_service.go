@@ -109,6 +109,12 @@ func (s *RecordReadDomainService) listRecords(ctx context.Context, objectKey str
 		return recordmodel.RecordPageResult{}, err
 	}
 	query = s.policy.NormalizeListQuery(object, query, principal)
+	if applyFieldPolicy {
+		query, err = recordAuthorizeReadQueryFields(principal, object, query)
+		if err != nil {
+			return recordmodel.RecordPageResult{}, err
+		}
+	}
 	page, err := s.repository.ListRecords(ctx, principal.WorkspaceID, object, query)
 	if err != nil {
 		return recordmodel.RecordPageResult{}, recordInternalError("list records", err)

@@ -97,7 +97,7 @@ func TestRecordContextAndRelatedEdges(t *testing.T) {
 		t.Fatalf("%#v", fields)
 	}
 	fields = RecordDuplicateIdentityFields(definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{{Key: "name"}}})
-	if len(fields) != 1 {
+	if len(fields) != 0 {
 		t.Fatalf("%#v", fields)
 	}
 	if !RecordPolicyAllowsMissingRelatedLookup(definitionmodel.ValidationSchema{Config: map[string]any{"optional": true}}) || RecordPolicyAllowsMissingRelatedLookup(definitionmodel.ValidationSchema{}) {
