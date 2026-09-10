@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"strings"
 	"testing"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
@@ -94,13 +95,36 @@ func TestObjectSQLContractGroupedPlanNeedsOnlyExplicitLimit(t *testing.T) {
 	}
 }
 
-func TestObjectSQLContractSingleRowAggregateNeedsNoBounds(t *testing.T) {
-	report := objectSQLBoundsReport(
+// TestObjectSQLContractSingleRowAggregateNeedsOrderByButNoLimit pins the split
+// the query path forces. A single aggregate row cannot truncate, so LIMIT stays
+// optional; the keyset pager still needs an authored ordering, so ORDER BY does
+// not. Exempting single-row plans from both accepted a definition that passed
+// validation with issue_count 0 and then failed every query with
+// 500 backend.report.object_sql_query_failed, no params, no message and an
+// empty Runtime log.
+func TestObjectSQLContractSingleRowAggregateNeedsOrderByButNoLimit(t *testing.T) {
+	unordered := objectSQLBoundsReport(
 		`SELECT SUM(r.amount) AS revenue FROM repair_order r`,
 		reportmodel.ReportResultColumnSchema{Key: "revenue", Type: "currency", Kind: "measure", Precision: 19, Scale: 2},
 	)
-	if issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), objectSQLBoundsSnapshot(), report); len(issues) != 0 {
-		t.Fatalf("single-row aggregate plans need no authored ORDER BY or LIMIT, issues=%#v", issues)
+	issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), objectSQLBoundsSnapshot(), unordered)
+	params, found := objectSQLBoundsIssueParams(issues, "backend.report.object_sql_order_by_required")
+	if !found {
+		t.Fatalf("a single-row aggregate without ORDER BY cannot be executed and must be rejected, issues=%#v", issues)
+	}
+	if !strings.Contains(params["reason"], "measure alias") {
+		t.Fatalf("the diagnostic must name the repair, got %q", params["reason"])
+	}
+	if _, found := objectSQLBoundsIssueParams(issues, "backend.report.object_sql_limit_required"); found {
+		t.Fatalf("a single aggregate row cannot truncate, so LIMIT must stay optional, issues=%#v", issues)
+	}
+
+	ordered := objectSQLBoundsReport(
+		`SELECT SUM(r.amount) AS revenue FROM repair_order r ORDER BY revenue`,
+		reportmodel.ReportResultColumnSchema{Key: "revenue", Type: "currency", Kind: "measure", Precision: 19, Scale: 2},
+	)
+	if issues := ApplicationSchemaValidateReportDefinitionContract(t.Context(), objectSQLBoundsSnapshot(), ordered); len(issues) != 0 {
+		t.Fatalf("a single-row aggregate ordered by its measure alias is executable and must validate, issues=%#v", issues)
 	}
 }
 

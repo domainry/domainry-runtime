@@ -81,20 +81,34 @@ func reportObjectSQLContainsAggregate(expression reportmodel.ReportObjectSQLExpr
 // LIMIT compiles, but the Runtime then applies the implicit default limit
 // (1000 rows) - exactly the sync/async export threshold - so a growing report
 // silently truncates and pagination order is an unauthored implementation
-// detail. The requirement is skipped for single-row aggregate plans and only
-// enforced on the definition-contract path (model validate / Blueprint
-// authoring); already-published definitions keep executing unchanged.
+// detail. Only enforced on the definition-contract path (model validate /
+// Blueprint authoring); already-published definitions keep executing unchanged.
+//
+// A single-row aggregate plan is exempt from LIMIT - it cannot truncate - but
+// NOT from ORDER BY. The query-time keyset pager needs an authored ordering
+// whatever the row count, so exempting single-row plans from both accepted a
+// definition the Runtime could not execute: every query returned
+// 500 backend.report.object_sql_query_failed, with no params, no message and
+// nothing in the Runtime log. Validation and execution must not disagree.
 func (v *reportDefinitionValidator) validateObjectSQLExplicitBounds(plan reportmodel.ReportObjectSQLPlan) {
-	if !v.requireObjectSQLExplicitBounds || reportobjectsql.ReportObjectSQLPlanSingleRow(plan) {
+	if !v.requireObjectSQLExplicitBounds {
 		return
 	}
+	singleRow := reportobjectsql.ReportObjectSQLPlanSingleRow(plan)
 	// GROUP BY plans inherit a deterministic order from their grouping terms;
-	// every other multi-row plan must author its own ORDER BY.
+	// every other plan must author its own ORDER BY, single-row included.
 	if !plan.ExplicitOrderBy && len(plan.GroupBy) == 0 {
+		reason := "declare a deterministic ORDER BY in the object_sql statement; multi-row reports must not rely on implicit ordering"
+		if singleRow {
+			reason = "declare a deterministic ORDER BY in the object_sql statement; the query-time keyset pager needs an authored ordering even for a single aggregate row, so order it by its own measure alias"
+		}
 		v.issue("backend.report.object_sql_order_by_required", "object_sql_v1.sql.order_by", map[string]string{
 			"missing_clause": "ORDER BY",
-			"reason":         "declare a deterministic ORDER BY in the object_sql statement; multi-row reports must not rely on implicit ordering",
+			"reason":         reason,
 		})
+	}
+	if singleRow {
+		return
 	}
 	if !plan.ExplicitLimit {
 		v.issue("backend.report.object_sql_limit_required", "object_sql_v1.sql.limit", map[string]string{
