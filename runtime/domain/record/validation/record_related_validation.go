@@ -10,12 +10,12 @@ import (
 func RecordDuplicateIdentityFields(object definitionmodel.ObjectSchema) []definitionmodel.FieldSchema {
 	fields := []definitionmodel.FieldSchema{}
 	for _, field := range object.Fields {
-		if field.Unique || field.Key == "email" || field.Key == "phone" {
+		if field.Unique {
 			fields = append(fields, field)
 		}
 	}
-	// Display names and titles may repeat, including recurring course sessions.
-	// Their uniqueness must be declared by the field contract above.
+	// Names and contact details may repeat. Only the model can declare a field
+	// unique; its key or display type does not establish identity semantics.
 	return fields
 }
 

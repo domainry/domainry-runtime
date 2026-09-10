@@ -93,7 +93,7 @@ func TestRecordContextAndRelatedEdges(t *testing.T) {
 	}
 
 	fields := RecordDuplicateIdentityFields(definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{{Key: "name"}, {Key: "email"}, {Key: "custom", Unique: true}}})
-	if len(fields) != 2 {
+	if len(fields) != 1 || fields[0].Key != "custom" {
 		t.Fatalf("%#v", fields)
 	}
 	fields = RecordDuplicateIdentityFields(definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{{Key: "name"}}})

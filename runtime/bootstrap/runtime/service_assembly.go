@@ -395,7 +395,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	lifecycleScope := lifecycleaccess.NewSystemScope(lifecycleaccess.SystemScopeInstallation, "install default lifecycle policies")
 	lifecyclePrincipal := lifecycleaccess.NewSystemPrincipal("runtime-lifecycle", lifecycleScope)
 	services.Applications().RuntimeStatus.ConfigureLifecycleHealth(ctx, lifecycleBinding.System())
-	workflowScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "initialize published workflow definitions")
 	return completeRuntimeServiceAssembly(
 		runtimeServiceAssembly{services: services, records: records, worker: workerDependencies, dataExchangeBinding: dataExchangeBinding, lifecycleBinding: lifecycleBinding},
 		func() error {
@@ -403,9 +402,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		},
 		func() {
 			services.Applications().RecordTimers.ConfigureWorker(recordtimerapplication.WorkerConfig{Enabled: cfg.RecordTimerEnabled, PollInterval: cfg.RecordTimerPollInterval, BatchSize: cfg.RecordTimerBatchSize, LeaseTTL: cfg.RecordTimerLeaseTTL})
-		},
-		func() error {
-			return services.Applications().Workflows.InitializePublishedWorkflowDefinitions(ctx, manifest.Workflows, workflowScope)
 		},
 	)
 }
@@ -424,13 +420,10 @@ func ensureAgentRuntimeSchemas(ctx context.Context, migration agentSchemaOwner, 
 	return nil
 }
 
-func completeRuntimeServiceAssembly(result runtimeServiceAssembly, installLifecycle func() error, configure func(), initializeWorkflows func() error) (runtimeServiceAssembly, error) {
+func completeRuntimeServiceAssembly(result runtimeServiceAssembly, installLifecycle func() error, configure func()) (runtimeServiceAssembly, error) {
 	if err := installLifecycle(); err != nil {
 		return runtimeServiceAssembly{}, fmt.Errorf("install lifecycle policies: %w", err)
 	}
 	configure()
-	if err := initializeWorkflows(); err != nil {
-		return runtimeServiceAssembly{}, fmt.Errorf("initialize workflow definitions: %w", err)
-	}
 	return result, nil
 }

@@ -72,10 +72,10 @@ func TestRelatedRelationFieldRequiresDisambiguation(t *testing.T) {
 	}
 }
 
-func TestDuplicateIdentityFieldsPrefersUniqueAndContactFields(t *testing.T) {
+func TestDuplicateIdentityFieldsRequiresDeclaredUniqueness(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{{Key: "name"}, {Key: "email"}, {Key: "external_id", Unique: true}}}
 	fields := recordvalidation.RecordDuplicateIdentityFields(object)
-	if len(fields) != 2 || fields[0].Key != "email" || fields[1].Key != "external_id" {
+	if len(fields) != 1 || fields[0].Key != "external_id" {
 		t.Fatalf("fields=%#v", fields)
 	}
 }

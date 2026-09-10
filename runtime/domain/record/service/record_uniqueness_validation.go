@@ -21,21 +21,9 @@ func NewRecordUniquenessValidator(repository recordrepository.RecordRepository) 
 }
 
 func (s *RecordUniquenessValidator) ValidateDuplicateIdentity(ctx context.Context, workspaceID string, object definitionmodel.ObjectSchema, currentID string, data map[string]any) error {
-	if object.Key == "document" && !recordvalidation.RecordIsEmptyValue(data["previous_version_id"]) {
-		return nil
-	}
-	for _, field := range recordvalidation.RecordDuplicateIdentityFields(object) {
-		if field.Unique || recordvalidation.RecordIsEmptyValue(data[field.Key]) {
-			continue
-		}
-		exists, err := s.repository.UniqueExists(ctx, workspaceID, object.Key, field.Key, currentID, data[field.Key])
-		if err != nil {
-			return recordInternalError("check duplicate identity", err)
-		}
-		if exists {
-			return recordServiceError(apperror.KindBadRequest, "backend.unique.duplicate_identity", nil, "field", field.Key, "object", object.Key)
-		}
-	}
+	// Retain the legacy validation port for composed consumers. All declared
+	// uniqueness is enforced by ValidateUnique; field names must not add hidden
+	// constraints (or exemptions for particular objects) before that validation.
 	return nil
 }
 

@@ -91,7 +91,7 @@ func TestRecordQueryConditionOutcomes(t *testing.T) {
 
 func TestRecordRelatedAndStateConditionOutcomes(t *testing.T) {
 	fields := RecordDuplicateIdentityFields(definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{{Key: "phone"}, {Key: "title"}}})
-	if len(fields) != 1 || fields[0].Key != "phone" {
+	if len(fields) != 0 {
 		t.Fatalf("%#v", fields)
 	}
 	fields = RecordDuplicateIdentityFields(definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{{Key: "title"}}})

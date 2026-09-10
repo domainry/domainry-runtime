@@ -8,7 +8,6 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 )
 
@@ -71,7 +70,9 @@ func recordsFromRows(profile persistencedriver.EngineProfile, object definitionm
 			case "owner_org_id":
 				record.OwnerOrgID = recordStringValue(value)
 			default:
-				if !recordvalidation.RecordIsEmptyValue(value) {
+				// An empty (or whitespace-only) string is stored data. Only SQL
+				// NULL follows the existing omitted-null projection convention.
+				if value != nil {
 					record.Data[column] = value
 				}
 			}

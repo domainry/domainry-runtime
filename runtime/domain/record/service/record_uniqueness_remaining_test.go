@@ -24,8 +24,8 @@ func TestUniquenessValidatorDuplicateIdentityRemainingEdges(t *testing.T) {
 	validator = NewRecordUniquenessValidator(repository)
 	if err := validator.ValidateDuplicateIdentity(t.Context(), "workspace", definitionmodel.ObjectSchema{
 		Key: "contact", Fields: []definitionmodel.FieldSchema{{Key: "email"}},
-	}, "", map[string]any{"email": "ada@example.com"}); err == nil {
-		t.Fatal("duplicate identity repository error was ignored")
+	}, "", map[string]any{"email": "ada@example.com"}); err != nil {
+		t.Fatalf("undeclared identity must not query uniqueness: %v", err)
 	}
 	repository.uniqueErr = nil
 	if err := validator.ValidateDuplicateIdentity(t.Context(), "workspace", definitionmodel.ObjectSchema{

@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 
 	"context"
 	"strings"
@@ -84,6 +85,14 @@ func (s *RecordUpdateApplicationService) PlanConditionalUpdateMutation(ctx conte
 			operation = "get scoped conditional mutation target"
 		}
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindInternal, "backend.internal", err, "operation", operation)
+	}
+	if !found {
+		// A parent created earlier in this Action is still a canonical plan.
+		// Match ordinary update planning, then apply the same scope, write and
+		// predicate checks below before creating its conditional update plan.
+		if planned := recordservice.RecordPlannedRelations(ctx); planned[objectKey] != nil {
+			record, found = planned[objectKey][recordID]
+		}
 	}
 	if !found {
 		if s.dependencies.LoadTargetForAction == nil {

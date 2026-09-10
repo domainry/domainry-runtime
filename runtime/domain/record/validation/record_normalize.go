@@ -38,9 +38,9 @@ func RecordNormalizeData(object definitionmodel.ObjectSchema, data map[string]an
 		if err != nil {
 			return nil, err
 		}
-		if !RecordIsEmptyValue(normalized) || !partial {
-			out[key] = normalized
-		}
+		// Presence in the input is the PATCH intent. An explicit empty string
+		// replaces the previous value, just as null clears it; neither is omission.
+		out[key] = normalized
 	}
 	return out, nil
 }
@@ -50,6 +50,15 @@ func RecordNormalizeFieldValue(field definitionmodel.FieldSchema, value any) (an
 		return nil, nil
 	}
 	switch field.Type {
+	case "text", "long_text":
+		// Plain text has no implicit whitespace policy. Business normalization
+		// (for example a display name or an identity match key) belongs to the
+		// declared model/Handler and must not alter the original text value.
+		text, ok := literalStringValue(value)
+		if !ok {
+			return nil, validationError("backend.validation.string", "field", field.Key)
+		}
+		return text, nil
 	case "integer":
 		number, ok := integerValue(value)
 		if !ok {

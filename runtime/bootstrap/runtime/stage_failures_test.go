@@ -17,7 +17,7 @@ func TestRuntimeSeedSynchronizationBindsInstallationWorkspace(t *testing.T) {
 	}
 }
 
-func TestAssembleRuntimeServicesReportsWorkflowFailures(t *testing.T) {
+func TestAssembleRuntimeServicesReportsCancelledInitialization(t *testing.T) {
 	cfg := bootstrapTestConfig(t)
 	manifest, err := prepareRuntimeManifest(t.Context(), cfg)
 	if err != nil {
@@ -32,34 +32,19 @@ func TestAssembleRuntimeServicesReportsWorkflowFailures(t *testing.T) {
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	if _, err := assembleRuntimeServices(cancelled, cfg, manifest, nil, store, runtimeIdentityProjectionStub{}, nil, nil, worker.Dependencies{}); err == nil {
-		t.Fatal("cancelled workflow initialization must fail assembly")
+		t.Fatal("cancelled service initialization must fail assembly")
 	}
 }
 
 func TestCompleteRuntimeServiceAssemblyPropagatesEveryCompletionStage(t *testing.T) {
 	failure := errors.New("service assembly failure")
 	success := func() error { return nil }
-	for _, test := range []struct {
-		name                string
-		installLifecycle    func() error
-		initializeWorkflows func() error
-	}{
-		{name: "lifecycle", installLifecycle: func() error { return failure }, initializeWorkflows: success},
-		{name: "workflows", installLifecycle: success, initializeWorkflows: func() error { return failure }},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			configured := false
-			if _, err := completeRuntimeServiceAssembly(runtimeServiceAssembly{}, test.installLifecycle, func() { configured = true }, test.initializeWorkflows); !errors.Is(err, failure) {
-				t.Fatalf("completion error=%v", err)
-			}
-			if configured != (test.name == "workflows") {
-				t.Fatalf("configured=%t", configured)
-			}
-		})
+	configured := false
+	if _, err := completeRuntimeServiceAssembly(runtimeServiceAssembly{}, func() error { return failure }, func() { configured = true }); !errors.Is(err, failure) || configured {
+		t.Fatalf("completion error=%v configured=%t", err, configured)
 	}
 	want := runtimeServiceAssembly{}
-	configured := false
-	if got, err := completeRuntimeServiceAssembly(want, success, func() { configured = true }, success); err != nil || !configured || got.services != want.services {
+	if got, err := completeRuntimeServiceAssembly(want, success, func() { configured = true }); err != nil || !configured || got.services != want.services {
 		t.Fatalf("successful completion=%#v configured=%t error=%v", got, configured, err)
 	}
 }

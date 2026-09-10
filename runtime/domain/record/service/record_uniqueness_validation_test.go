@@ -89,12 +89,14 @@ func TestUniquenessValidatorChecksEveryConditionalStateAndAllowsInactiveHistory(
 	}
 }
 
-func TestUniquenessValidatorRejectsDuplicateIdentityAndSkipsDocumentVersion(t *testing.T) {
+func TestUniquenessValidatorAllowsUndeclaredContactIdentity(t *testing.T) {
 	repository := &uniquenessRepositoryProbe{uniqueExists: true}
 	validator := NewRecordUniquenessValidator(repository)
 	object := definitionmodel.ObjectSchema{Key: "contact", Fields: []definitionmodel.FieldSchema{{Key: "email"}}}
 	err := validator.ValidateDuplicateIdentity(t.Context(), "workspace-primary", object, "", map[string]any{"email": "ada@example.com"})
-	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.unique.duplicate_identity", map[string]string{"field": "email", "object": "contact"})
+	if err != nil {
+		t.Fatalf("ordinary email field rejected: %v", err)
+	}
 
 	document := definitionmodel.ObjectSchema{Key: "document", Fields: []definitionmodel.FieldSchema{{Key: "name"}}}
 	if err := validator.ValidateDuplicateIdentity(t.Context(), "workspace-primary", document, "", map[string]any{"name": "Policy", "previous_version_id": "doc-1"}); err != nil {

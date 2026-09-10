@@ -21,11 +21,11 @@ func TestNormalizeDataAndFieldTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if normalized["amount"] != "12.50" || normalized["active"] != true || normalized["name"] != "Alice" || normalized["optional"] != "" {
+	if normalized["amount"] != "12.50" || normalized["active"] != true || normalized["name"] != " Alice " || normalized["optional"] != " " {
 		t.Fatalf("normalized=%#v", normalized)
 	}
 	partial, err := RecordNormalizeData(object, map[string]any{"optional": nil, "name": " "}, true)
-	if err != nil || len(partial) != 1 || partial["optional"] != nil {
+	if err != nil || len(partial) != 2 || partial["optional"] != nil || partial["name"] != " " {
 		t.Fatalf("partial=%#v err=%v", partial, err)
 	}
 	if empty, err := RecordNormalizeData(object, nil, true); err != nil || len(empty) != 0 {

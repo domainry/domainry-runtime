@@ -526,6 +526,13 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	projectRecordNotificationActions.authorize = newProjectRecordNotificationActionAuthorizer(records.Applications().Records.GetRecordForAction)
 	recordExportNotificationActions.authorize = newRecordExportNotificationActionAuthorizer(serviceAssembly.dataExchangeBinding)
 	mustCompleteRuntimeStartup(validateRuntimeActionReadiness(records.Applications().Actions))
+	// Workflow run_as references are validated against Identity's live role
+	// catalog. Publish the complete project roles and their permissions above
+	// before activating workflows, including on an existing workspace upgrade.
+	workflowScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "initialize published workflow definitions")
+	if err := records.Applications().Workflows.InitializePublishedWorkflowDefinitions(ctx, manifest.Workflows, workflowScope); err != nil {
+		mustCompleteRuntimeStartup(fmt.Errorf("initialize workflow definitions: %w", err))
+	}
 	referenceResolver := newIdentityBusinessSeedReferenceResolver(cfg.IdentityWorkspaceID, cfg.IdentityAudience, identityProjection, startupOptions.BusinessSeedReferenceCandidates)
 	err = synchronizeRuntimeSeeds(ctx, store, manifest, !cfg.BusinessSeedSyncDisabled, referenceResolver)
 	mustCompleteRuntimeStartup(err)

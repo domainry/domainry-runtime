@@ -118,11 +118,16 @@ func boolValue(value any) (bool, bool) {
 }
 
 func stringValue(value any) (string, bool) {
+	text, ok := literalStringValue(value)
+	return strings.TrimSpace(text), ok
+}
+
+func literalStringValue(value any) (string, bool) {
 	switch typed := value.(type) {
 	case string:
-		return strings.TrimSpace(typed), true
+		return typed, true
 	case fmt.Stringer:
-		return strings.TrimSpace(typed.String()), true
+		return typed.String(), true
 	default:
 		return "", false
 	}
