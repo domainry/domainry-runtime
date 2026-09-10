@@ -10,7 +10,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/mutation"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	organizationunit "github.com/domainry/domainry-identity/organizationunit"
+	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"

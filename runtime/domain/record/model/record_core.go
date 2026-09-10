@@ -1,22 +1,26 @@
 package recordmodel
 
 type Record struct {
-	WorkspaceID   string                        `json:"workspace_id"`
-	ID            string                        `json:"id"`
-	Data          map[string]any                `json:"data"`
-	CreatedAt     string                        `json:"created_at"`
-	UpdatedAt     string                        `json:"updated_at"`
-	Deleted       bool                          `json:"deleted"`
-	ExtInfo       map[string]any                `json:"ext_info,omitempty"`
-	CreateBy      string                        `json:"create_by,omitempty"`
-	UpdateBy      string                        `json:"update_by,omitempty"`
-	OwnerUserID   string                        `json:"owner_user_id,omitempty"`
-	OwnerOrgID    string                        `json:"owner_org_id,omitempty"`
-	CreateByName  string                        `json:"create_by_name,omitempty"`
-	UpdateByName  string                        `json:"update_by_name,omitempty"`
-	OwnerUserName string                        `json:"owner_user_name,omitempty"`
-	OwnerOrgName  string                        `json:"owner_org_name,omitempty"`
-	Localization  *RecordLocalizationResolution `json:"localization,omitempty"`
+	// QuerySortValues is an internal cursor projection populated only for
+	// explicitly requested sort fields. It preserves NULL versus empty text;
+	// display Data may omit empty values. It is never serialized to clients.
+	QuerySortValues map[string]any                `json:"-"`
+	WorkspaceID     string                        `json:"workspace_id"`
+	ID              string                        `json:"id"`
+	Data            map[string]any                `json:"data"`
+	CreatedAt       string                        `json:"created_at"`
+	UpdatedAt       string                        `json:"updated_at"`
+	Deleted         bool                          `json:"deleted"`
+	ExtInfo         map[string]any                `json:"ext_info,omitempty"`
+	CreateBy        string                        `json:"create_by,omitempty"`
+	UpdateBy        string                        `json:"update_by,omitempty"`
+	OwnerUserID     string                        `json:"owner_user_id,omitempty"`
+	OwnerOrgID      string                        `json:"owner_org_id,omitempty"`
+	CreateByName    string                        `json:"create_by_name,omitempty"`
+	UpdateByName    string                        `json:"update_by_name,omitempty"`
+	OwnerUserName   string                        `json:"owner_user_name,omitempty"`
+	OwnerOrgName    string                        `json:"owner_org_name,omitempty"`
+	Localization    *RecordLocalizationResolution `json:"localization,omitempty"`
 }
 
 // RecordLocalizedValue is one translated business-record field. Stable facts
@@ -102,6 +106,9 @@ type RecordListQuery struct {
 	FallbackLocale          string                         `json:"-"`
 	SkipTotal               bool                           `json:"-"`
 	AfterID                 string                         `json:"-"`
+	// StableNullsLast opts a trusted query owner into portable ordering when
+	// that owner supplies a typed keyset predicate through FilterExpression.
+	StableNullsLast bool `json:"-"`
 	// OwnerOrganizationScopeID is a Runtime-internal, narrowing predicate.
 	// External record query DTOs and project Handlers cannot populate it.
 	OwnerOrganizationScopeID string `json:"-"`

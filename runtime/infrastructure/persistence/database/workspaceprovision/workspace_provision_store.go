@@ -346,6 +346,10 @@ func (store *WorkspaceProvisionStore) insertApplicationBootstrap(ctx context.Con
 		}
 		columns := []string{"workspace_id", "id", "owner_org_id", "created_at", "updated_at"}
 		values := []any{result.WorkspaceID, stableApplicationBootstrapRecordID(result.WorkspaceID, capabilityKey, object.Key), result.FirstStoreID, now, now}
+		if result.FirstStoreID == "" && result.InitialAdminUserID != "" {
+			columns = append(columns, "owner_user_id")
+			values = append(values, result.InitialAdminUserID)
+		}
 		rawData := make(map[string]any, len(record.Data))
 		keys := make([]string, 0, len(record.Data))
 		for key := range record.Data {

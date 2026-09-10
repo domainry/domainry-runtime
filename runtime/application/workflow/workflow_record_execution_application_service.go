@@ -146,13 +146,13 @@ func (s *WorkflowApplicationService) executeWorkflowAttempt(ctx context.Context,
 	return s.executeWorkflowAttemptWithIdempotencyKey(ctx, workflow, payload, principal, trigger, workflowpolicy.WorkflowIdempotencyKey(workflow, payload), attempt, ignoreIdempotency)
 }
 
-func (s *WorkflowApplicationService) executeWorkflowAttemptWithIdempotencyKey(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal, trigger, idempotencyKey string, attempt int, ignoreIdempotency bool) (execution workflowmodel.WorkflowExecution, err error) {
+func (s *WorkflowApplicationService) executeWorkflowAttemptWithIdempotencyKey(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal, trigger, idempotencyKey string, attempt int, ignoreIdempotency bool, preventReclaim ...bool) (execution workflowmodel.WorkflowExecution, err error) {
 	ctx, span := telemetry.StartUseCase(ctx, "workflow.execute", attribute.String("workflow.key", workflow.Key), attribute.String("workflow.trigger", trigger))
 	defer func() { telemetry.EndUseCase(span, err, execution.Status) }()
 	if workflow.Graph == nil || workflow.Graph.Version != 2 || len(workflow.Graph.Nodes) == 0 {
 		return workflowmodel.WorkflowExecution{}, badRequest("backend.workflow.graph_v2_required", "workflow", strings.TrimSpace(workflow.Key))
 	}
-	return s.executeWorkflowGraphProcessWithIdempotencyKey(ctx, workflow, payload, principal, trigger, idempotencyKey, attempt, ignoreIdempotency)
+	return s.executeWorkflowGraphProcessWithIdempotencyKey(ctx, workflow, payload, principal, trigger, idempotencyKey, attempt, ignoreIdempotency, preventReclaim...)
 }
 
 func (s *WorkflowApplicationService) executeGlobalScheduledWorkflow(ctx context.Context, workflow definitionmodel.WorkflowSchema, principal principalmodel.Principal, scheduledFor time.Time) (workflowmodel.WorkflowExecution, bool, error) {

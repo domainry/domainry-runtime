@@ -299,6 +299,7 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		{path: "github.com/domainry/domainry-foundation", rootEnvironment: "DOMAINRY_FOUNDATION_REPO_ROOT", label: "Foundation", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-connector-sdk", rootEnvironment: "DOMAINRY_CONNECTOR_SDK_REPO_ROOT", label: "Connector SDK", patterns: []string{"."}},
 		{path: "github.com/domainry/domainry-identity-sdk", rootEnvironment: "DOMAINRY_IDENTITY_SDK_REPO_ROOT", label: "Identity SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-identity-bridge", rootEnvironment: "DOMAINRY_IDENTITY_BRIDGE_REPO_ROOT", label: "External Identity", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-agent-sdk", rootEnvironment: "DOMAINRY_AGENT_SDK_REPO_ROOT", label: "Agent SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-agent", rootEnvironment: "DOMAINRY_AGENT_REPO_ROOT", label: "Agent", patterns: []string{"./module", "./remote"}},
 		{path: "github.com/domainry/domainry-audit-sdk", rootEnvironment: "DOMAINRY_AUDIT_SDK_REPO_ROOT", label: "Audit SDK", patterns: []string{"./..."}},
@@ -340,7 +341,7 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 		result = append(result, identity)
 		versionOverrides[local.path] = downloaded.Version
 		published[local.path+"@"+downloaded.Version] = true
-		if local.path == "github.com/domainry/domainry-identity" {
+		if local.path == "github.com/domainry/domainry-identity" || local.path == "github.com/domainry/domainry-identity-bridge" {
 			versions[local.path] = downloaded.Version
 		}
 	}
@@ -453,6 +454,7 @@ func dependencyModule(repository, path, version string) (downloadedModule, error
 		{path: "github.com/domainry/domainry-foundation", rootEnvironment: "DOMAINRY_FOUNDATION_REPO_ROOT", label: "Foundation", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-connector-sdk", rootEnvironment: "DOMAINRY_CONNECTOR_SDK_REPO_ROOT", label: "Connector SDK", patterns: []string{"."}},
 		{path: "github.com/domainry/domainry-identity-sdk", rootEnvironment: "DOMAINRY_IDENTITY_SDK_REPO_ROOT", label: "Identity SDK", patterns: []string{"./..."}},
+		{path: "github.com/domainry/domainry-identity-bridge", rootEnvironment: "DOMAINRY_IDENTITY_BRIDGE_REPO_ROOT", label: "External Identity", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-agent-sdk", rootEnvironment: "DOMAINRY_AGENT_SDK_REPO_ROOT", label: "Agent SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-agent", rootEnvironment: "DOMAINRY_AGENT_REPO_ROOT", label: "Agent", patterns: []string{"./module", "./remote"}},
 		{path: "github.com/domainry/domainry-audit-sdk", rootEnvironment: "DOMAINRY_AUDIT_SDK_REPO_ROOT", label: "Audit SDK", patterns: []string{"./..."}},
@@ -932,8 +934,10 @@ func moduleBuildClosure(repository string, patterns ...string) ([]string, error)
 func localDependencyModFile(repository string) (string, func(), error) {
 	replacements := []struct{ path, environment string }{
 		{path: "github.com/domainry/domainry-foundation", environment: "DOMAINRY_FOUNDATION_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-connectors", environment: "DOMAINRY_CONNECTORS_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-identity", environment: "DOMAINRY_IDENTITY_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-identity-sdk", environment: "DOMAINRY_IDENTITY_SDK_REPO_ROOT"},
+		{path: "github.com/domainry/domainry-identity-bridge", environment: "DOMAINRY_IDENTITY_BRIDGE_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-agent-sdk", environment: "DOMAINRY_AGENT_SDK_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-agent", environment: "DOMAINRY_AGENT_REPO_ROOT"},
 		{path: "github.com/domainry/domainry-audit-sdk", environment: "DOMAINRY_AUDIT_SDK_REPO_ROOT"},

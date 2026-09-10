@@ -30,6 +30,7 @@ type ActionBusinessExecution struct {
 }
 
 type ActionExecutionClaimRequest struct {
+	PreventReclaim     bool
 	Execution          ActionBusinessExecution
 	RequestFingerprint string
 	LeaseOwner         string

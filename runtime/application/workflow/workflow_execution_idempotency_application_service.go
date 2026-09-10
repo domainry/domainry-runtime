@@ -14,14 +14,11 @@ import (
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 )
 
-func (s *WorkflowApplicationService) beginWorkflowExecution(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal, trigger, key string, attempt int, ignore bool) (workflowmodel.WorkflowExecutionClaimResult, workflowmodel.WorkflowExecution, bool, error) {
+func (s *WorkflowApplicationService) beginWorkflowExecution(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal, trigger, key string, attempt int, ignore bool, preventReclaim ...bool) (workflowmodel.WorkflowExecutionClaimResult, workflowmodel.WorkflowExecution, bool, error) {
 	if strings.TrimSpace(key) == "" || ignore {
 		return workflowmodel.WorkflowExecutionClaimResult{}, workflowmodel.WorkflowExecution{}, false, nil
 	}
-	fingerprint, err := idempotency.Fingerprint(idempotency.FingerprintInput{
-		UseCase: "workflow.execute", ResourceType: "workflow", TargetID: workflow.Key, Payload: payload,
-		Preconditions: map[string]any{"definition_hash": workflowpolicy.WorkflowDefinitionHash(workflow), "trigger": trigger, "attempt": attempt},
-	})
+	fingerprint, err := workflowExecutionFingerprint(workflow, payload, trigger, attempt)
 	if err != nil {
 		return workflowmodel.WorkflowExecutionClaimResult{}, workflowmodel.WorkflowExecution{}, false, internalError("fingerprint workflow execution", err)
 	}
@@ -32,6 +29,7 @@ func (s *WorkflowApplicationService) beginWorkflowExecution(ctx context.Context,
 	claim, err := s.workerRepo.TryBeginExecution(ctx, workflowmodel.WorkflowExecutionClaimRequest{
 		Receipt:            workflowmodel.WorkflowExecutionReceipt{WorkspaceID: workflowWorkspaceID(principal.WorkspaceID), WorkflowKey: workflow.Key, IdempotencyKey: key},
 		RequestFingerprint: fingerprint, LeaseOwner: owner, LeaseTTL: 5 * time.Minute, Now: time.Now().UTC(),
+		PreventReclaim: len(preventReclaim) > 0 && preventReclaim[0],
 	})
 	if err != nil {
 		return workflowmodel.WorkflowExecutionClaimResult{}, workflowmodel.WorkflowExecution{}, false, internalError("claim workflow execution", err)
@@ -51,6 +49,9 @@ func (s *WorkflowApplicationService) beginWorkflowExecution(ctx context.Context,
 		if !found {
 			return claim, workflowmodel.WorkflowExecution{}, false, conflict(idempotency.ErrorCodeReceiptUnavailable)
 		}
+		if len(preventReclaim) > 0 && preventReclaim[0] && (execution.ActorID != principal.UserID || execution.WorkspaceID != principal.WorkspaceID || execution.WorkflowKey != workflow.Key || execution.IdempotencyKey != key) {
+			return claim, workflowmodel.WorkflowExecution{}, false, conflict(idempotency.ErrorCodeReceiptUnavailable)
+		}
 		return claim, execution, true, nil
 	case idempotency.DecisionFingerprintConflict:
 		s.auditWorkflowIdempotency(ctx, workflow.Key, principal, claim, "fingerprint_conflict")
@@ -61,6 +62,13 @@ func (s *WorkflowApplicationService) beginWorkflowExecution(ctx context.Context,
 	default:
 		return claim, workflowmodel.WorkflowExecution{}, false, conflict(idempotency.ErrorCodeReceiptUnavailable)
 	}
+}
+
+func workflowExecutionFingerprint(workflow definitionmodel.WorkflowSchema, payload map[string]any, trigger string, attempt int) (string, error) {
+	return idempotency.Fingerprint(idempotency.FingerprintInput{
+		UseCase: "workflow.execute", ResourceType: "workflow", TargetID: workflow.Key, Payload: payload,
+		Preconditions: map[string]any{"definition_hash": workflowpolicy.WorkflowDefinitionHash(workflow), "trigger": trigger, "attempt": attempt},
+	})
 }
 
 func (s *WorkflowApplicationService) completeWorkflowExecutionReceipt(ctx context.Context, claim workflowmodel.WorkflowExecutionClaimResult, execution workflowmodel.WorkflowExecution, principal principalmodel.Principal) error {

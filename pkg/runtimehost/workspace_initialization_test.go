@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	identitymodule "github.com/domainry/domainry-identity/module"
-	organizationunit "github.com/domainry/domainry-identity/organizationunit"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	runtimebootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/runtime"

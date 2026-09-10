@@ -22,7 +22,9 @@ func openProjectIdentity(ctx context.Context, cfg config.Config, factory identit
 	}
 	var binding identitysdk.Binding
 	var err error
-	if databaseFactory, ok := factory.(identitysdk.DatabaseFactory); ok && len(databases) > 0 {
+	if externalFactory, ok := factory.(identitysdk.ExternalDatabaseFactory); ok && len(databases) > 0 {
+		binding, err = externalFactory.OpenExternalWithDatabase(ctx, application, databases[0])
+	} else if databaseFactory, ok := factory.(identitysdk.DatabaseFactory); ok && len(databases) > 0 {
 		binding, err = databaseFactory.OpenWithDatabase(ctx, application, databases[0])
 	} else {
 		binding, err = factory.Open(ctx, application)
@@ -38,6 +40,11 @@ func openProjectIdentity(ctx context.Context, cfg config.Config, factory identit
 		adapters = provider.HTTPAdapters()
 	}
 	switch binding.Descriptor().Mode {
+	case identitysdk.DeploymentModeExternal:
+		if source, ok := binding.(identitysdk.PrincipalAuthenticationBinding); !ok || source.PrincipalAuthenticator() == nil {
+			_ = binding.Close(context.WithoutCancel(ctx))
+			return nil, nil, fmt.Errorf("external Identity binding returned no principal authenticator")
+		}
 	case identitysdk.DeploymentModeModule:
 		if len(adapters) == 0 {
 			_ = binding.Close(context.WithoutCancel(ctx))

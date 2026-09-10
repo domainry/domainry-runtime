@@ -34,7 +34,7 @@ func (r *WorkflowPrincipalResolver) ResolveWorkflowPrincipal(ctx context.Context
 	// account, its role assignment and the resulting AccessBundle; otherwise
 	// workflow execution fails closed.
 	subjectID := "workflow:" + strings.TrimSpace(workflow.Key)
-	resolution, err := r.principals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(subjectID), RoleKey: runAs})
+	resolution, err := r.principals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(initiator.WorkspaceID)}, SubjectID: identitysdk.SubjectID(subjectID), RoleKey: runAs})
 	if err != nil {
 		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workflow.execution_principal_denied", err, map[string]string{"workflow": strings.TrimSpace(workflow.Key), "role": runAs})
 	}

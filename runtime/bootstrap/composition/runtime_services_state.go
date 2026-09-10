@@ -10,7 +10,7 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	organizationunit "github.com/domainry/domainry-identity/organizationunit"
+	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 

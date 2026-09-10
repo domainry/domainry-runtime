@@ -19,7 +19,7 @@ type recordRows interface {
 	Err() error
 }
 
-func recordsFromRows(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, rows recordRows) ([]recordmodel.Record, error) {
+func recordsFromRows(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, rows recordRows, sortFields ...string) ([]recordmodel.Record, error) {
 	columns, err := rows.Columns()
 	if err != nil {
 		return nil, fmt.Errorf("inspect rows: %w", err)
@@ -41,6 +41,14 @@ func recordsFromRows(profile persistencedriver.EngineProfile, object definitionm
 		record := recordmodel.Record{Data: map[string]any{}}
 		for i, column := range columns {
 			value := normalizeDBValue(profile, fields[column], values[i])
+			for _, key := range sortFields {
+				if column == key {
+					if record.QuerySortValues == nil {
+						record.QuerySortValues = map[string]any{}
+					}
+					record.QuerySortValues[key] = value
+				}
+			}
 			switch column {
 			case "id":
 				record.ID = fmt.Sprint(value)
@@ -131,9 +139,9 @@ func dbValue(value any) any {
 	case float32:
 		return float64(typed)
 	case int:
-		return float64(typed)
+		return int64(typed)
 	case int64:
-		return float64(typed)
+		return typed
 	default:
 		return value
 	}

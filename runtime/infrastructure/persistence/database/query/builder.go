@@ -17,9 +17,9 @@ func dbValue(value any) any {
 	case float32:
 		return float64(typed)
 	case int:
-		return float64(typed)
+		return int64(typed)
 	case int64:
-		return float64(typed)
+		return typed
 	default:
 		return value
 	}

@@ -128,7 +128,13 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 	if err != nil {
 		return recordmodel.RecordPageResult{}, fmt.Errorf("list records: %w", err)
 	}
-	records, err := recordsFromRows(s.RuntimeEngine, object, rows)
+	var sortFields []string
+	if queryValue.StableNullsLast {
+		for _, rule := range queryValue.Sort {
+			sortFields = append(sortFields, rule.Field)
+		}
+	}
+	records, err := recordsFromRows(s.RuntimeEngine, object, rows, sortFields...)
 	if err != nil {
 		_ = rows.Close()
 		return recordmodel.RecordPageResult{}, err

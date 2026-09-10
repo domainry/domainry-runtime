@@ -105,7 +105,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		panic("transport.AssembleRuntimeHTTPServer requires an Identity SDK Binding")
 	}
 	publications := records.Applications().PublicationHandoff
-	resolver, err := identityprincipal.NewResolver(dependencies.IdentityBinding, identityprincipal.Options{
+	resolver, err := identityprincipal.NewAuthenticator(dependencies.IdentityBinding, identityprincipal.Options{
 		Clock: dependencies.Clock, MaxCacheTTL: dependencies.Config.EffectivePrincipalCacheTTL(), Cache: dependencies.PrincipalCache,
 		OnCacheError: func(err error) {
 			zap.L().Warn("Identity principal cache operation failed; resolving from authoritative binding", zap.String("error_kind", "identity_principal_cache_operation_failed"), zap.Error(err))
@@ -114,7 +114,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	if err != nil {
 		panic("assemble Identity SDK principal resolver: " + err.Error())
 	}
-	identityAuthentication, err := identityhttpmiddleware.New(resolver, identityhttpmiddleware.WithAuthorization(dependencies.IdentityBinding.Authorization()))
+	identityAuthentication, err := identityhttpmiddleware.New(resolver, identityhttpmiddleware.WithAuthorization(dependencies.IdentityBinding.Authorization()), identityhttpmiddleware.WithBindingCredential(dependencies.IdentityBinding))
 	if err != nil {
 		panic("assemble Identity SDK HTTP middleware: " + err.Error())
 	}

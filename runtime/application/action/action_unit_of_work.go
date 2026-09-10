@@ -8,7 +8,6 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
-	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
@@ -73,24 +72,20 @@ func (m *ActionUnitOfWorkManager) begin(ctx context.Context, invocation actionmo
 	if m == nil {
 		m = NewActionUnitOfWorkManager(nil)
 	}
-	fingerprintPayload := any(invocation.Input)
-	if targetOrganizationID := strings.TrimSpace(invocation.TargetOrganizationID); targetOrganizationID != "" {
-		fingerprintPayload = map[string]any{"input": invocation.Input, "target_organization_id": targetOrganizationID}
-	}
-	fingerprint := idempotency.FingerprintInput{UseCase: "action.invoke", ResourceType: "action", TargetID: action.Key, Payload: fingerprintPayload}
+	fingerprint := actionInvocationFingerprint(invocation, action.Key)
 	var cached actionmodel.ActionInvocationResult
 	var claim actionmodel.ActionExecutionClaimResult
 	var replay bool
 	var err error
 	if invocation.RecordID == "" {
 		var object actionmodel.ActionObjectResult
-		object, claim, replay, err = m.executions.BeginObject(ctx, action.ObjectKey, action.Key, invocation.IdempotencyKey, fingerprint, invocation.Principal)
+		object, claim, replay, err = m.executions.BeginObject(ctx, action.ObjectKey, action.Key, invocation.IdempotencyKey, fingerprint, invocation.Principal, invocation.PreventExecutionReclaim)
 		if replay {
 			cached = invocationResultFromObject(invocation, action, object)
 		}
 	} else {
 		var record actionmodel.ActionResult
-		record, claim, replay, err = m.executions.BeginRecord(ctx, action.ObjectKey, invocation.RecordID, action.Key, invocation.IdempotencyKey, fingerprint, invocation.Principal)
+		record, claim, replay, err = m.executions.BeginRecord(ctx, action.ObjectKey, invocation.RecordID, action.Key, invocation.IdempotencyKey, fingerprint, invocation.Principal, invocation.PreventExecutionReclaim)
 		if replay {
 			cached = invocationResultFromRecord(invocation, action, record)
 		}

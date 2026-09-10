@@ -8,7 +8,7 @@ import (
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	organizationunit "github.com/domainry/domainry-identity/organizationunit"
+	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"

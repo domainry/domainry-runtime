@@ -64,7 +64,7 @@ func TestCurrencyDatabaseCodecIsExactAndSQLiteSortable(t *testing.T) {
 	if got := recordConditionDBValue(testEngineProfile("sqlite"), object, "amount", "1.2"); got != dbFieldValue(testEngineProfile("sqlite"), field, "1.2") {
 		t.Fatalf("condition value=%v", got)
 	}
-	if got := recordConditionDBValue(testEngineProfile("sqlite"), object, "status", 1); got != float64(1) {
+	if got := recordConditionDBValue(testEngineProfile("sqlite"), object, "status", 1); got != int64(1) {
 		t.Fatalf("fallback condition=%v", got)
 	}
 	if got := recordQueryDBValues(testEngineProfile("postgres"), object, recordmodel.RecordListQuery{Filters: map[string]any{"amount": "1.2"}}); got.Filters["amount"] != "1.2" {
@@ -193,7 +193,7 @@ func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
 	if got := dbValue(float32(1.5)); got != float64(1.5) {
 		t.Fatalf("float32 db value=%v", got)
 	}
-	for input, want := range map[any]any{int64(2): float64(2), "plain": "plain"} {
+	for input, want := range map[any]any{int(2): int64(2), int64(9007199254740993): int64(9007199254740993), "plain": "plain"} {
 		if got := dbValue(input); got != want {
 			t.Fatalf("dbValue(%T)=%v", input, got)
 		}

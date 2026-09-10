@@ -279,7 +279,7 @@ func (s *WorkflowApplicationService) agentTaskContinuationPrincipal(ctx context.
 	if s.principals == nil {
 		return principalmodel.Principal{}, apperror.New(apperror.KindUnavailable, "backend.workflow.execution_principal_unavailable", nil, nil)
 	}
-	resolution, err := s.principals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(executionUserID), RoleKey: executionRoleKey})
+	resolution, err := s.principals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(process.WorkspaceID)}, SubjectID: identitysdk.SubjectID(executionUserID), RoleKey: executionRoleKey})
 	if err != nil {
 		return principalmodel.Principal{}, err
 	}

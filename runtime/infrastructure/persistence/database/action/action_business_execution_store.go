@@ -95,6 +95,9 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 		return actionmodel.ActionExecutionClaimResult{}, database.MutationConstraintError(insertErr, "business_action_execution", value.ID, mutation.MutationConflictIdempotency)
 	}
 	decision := idempotency.Classify(idempotency.ReceiptState{Status: idempotency.Status(current.Status), Fingerprint: current.RequestFingerprint, Lease: actionExecutionLease(current)}, value.RequestFingerprint, now)
+	if request.PreventReclaim && decision == idempotency.DecisionAcquired {
+		decision = idempotency.DecisionInProgress
+	}
 	if decision != idempotency.DecisionAcquired {
 		r.store.ObserveIdempotency(ctx, value.WorkspaceID, "action.execute", idempotency.OutcomeForDecision(decision, false))
 		return actionmodel.ActionExecutionClaimResult{Decision: decision, Execution: current}, nil
@@ -130,6 +133,15 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 	r.store.ObserveIdempotency(ctx, value.WorkspaceID, "action.execute", idempotency.OutcomeInProgress)
 	return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionInProgress, Execution: current}, nil
 }
+
+func (r ActionBusinessExecutionStore) FindExecution(ctx context.Context, scope actionmodel.ActionBusinessExecution) (actionmodel.ActionBusinessExecution, bool, error) {
+	if strings.TrimSpace(scope.WorkspaceID) == "" || strings.TrimSpace(scope.ObjectKey) == "" || strings.TrimSpace(scope.ActionKey) == "" || strings.TrimSpace(scope.IdempotencyKey) == "" {
+		return actionmodel.ActionBusinessExecution{}, false, fmt.Errorf("action receipt scope is incomplete")
+	}
+	return r.findExecutionByScope(ctx, scope.WorkspaceID, scope.ObjectKey, scope.RecordID, scope.ActionKey, scope.IdempotencyKey)
+}
+
+var _ actioncontract.ActionExecutionReader = ActionBusinessExecutionStore{}
 
 func (r ActionBusinessExecutionStore) waitForExecutionByScope(ctx context.Context, workspaceID, objectKey, recordID, actionKey, idempotencyKey string) (actionmodel.ActionBusinessExecution, bool, error) {
 	var lastErr error

@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	organizationunit "github.com/domainry/domainry-identity/organizationunit"
+	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"

@@ -69,6 +69,9 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 		return workflowmodel.WorkflowExecutionClaimResult{}, database.MutationConstraintError(insertErr, "workflow_execution_receipt", receipt.ID, mutation.MutationConflictIdempotency)
 	}
 	decision := idempotency.Classify(idempotency.ReceiptState{Status: idempotency.Status(current.Status), Fingerprint: current.RequestFingerprint, Lease: workflowReceiptLease(current)}, receipt.RequestFingerprint, now)
+	if request.PreventReclaim && decision == idempotency.DecisionAcquired {
+		decision = idempotency.DecisionInProgress
+	}
 	if decision != idempotency.DecisionAcquired {
 		r.store.ObserveIdempotency(ctx, receipt.WorkspaceID, "workflow.execute", idempotency.OutcomeForDecision(decision, false))
 		return workflowmodel.WorkflowExecutionClaimResult{Decision: decision, Receipt: current}, nil
@@ -162,6 +165,15 @@ func (r WorkflowWorkerStore) findExecutionReceipt(ctx context.Context, workspace
 		return workflowmodel.WorkflowExecutionReceipt{}, false, nil
 	}
 	return value, err == nil, err
+}
+
+// FindExecutionReceipt only reads a scoped receipt. Unlike TryBeginExecution,
+// it neither creates a claim nor changes an expired lease.
+func (r WorkflowWorkerStore) FindExecutionReceipt(ctx context.Context, workspaceID, workflowKey, key string) (workflowmodel.WorkflowExecutionReceipt, bool, error) {
+	if strings.TrimSpace(workflowKey) == "" || strings.TrimSpace(key) == "" {
+		return workflowmodel.WorkflowExecutionReceipt{}, false, fmt.Errorf("workflow and idempotency key are required")
+	}
+	return r.findExecutionReceipt(ctx, workspaceID, workflowKey, key)
 }
 
 func workflowReceiptColumns() []string {

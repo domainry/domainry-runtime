@@ -22,6 +22,8 @@ type runtimeAgentHost struct {
 	store     *persistence.RuntimeStore
 }
 
+func (runtimeAgentHost) DeferConversationHostBinding() bool { return true }
+
 // runtimeAgentSaaSHost deliberately has no database or migration methods. A
 // remote Agent Binding receives only deployment identity and cannot recover
 // Runtime persistence through a type assertion on the concrete host value.
@@ -136,7 +138,11 @@ func openAgentBinding(ctx context.Context, runtimeID string, store *persistence.
 }
 
 func openManifestAgentBinding(ctx context.Context, runtimeID string, store *persistence.RuntimeStore, factory agentsdk.Factory, manifest manifestmodel.ManifestSchema) (agentsdk.Binding, error) {
-	if !manifestUsesAgent(manifest) {
+	conversations := false
+	if configured, ok := factory.(agentsdk.ConversationFactory); ok {
+		conversations = configured.ConversationEnabled()
+	}
+	if !manifestUsesAgent(manifest) && !conversations {
 		return nil, nil
 	}
 	return openAgentBinding(ctx, runtimeID, store, factory)

@@ -25,6 +25,12 @@ import (
 )
 
 type Runtime = runtimebootstrap.Runtime
+type ConversationWebOptions = runtimebootstrap.ConversationWebOptions
+
+func ConversationWebHandler(runtime *Runtime, options ConversationWebOptions) (http.Handler, error) {
+	return runtimebootstrap.ConversationWebHandler(runtime, options)
+}
+
 type EntrypointMux = transportbootstrap.EntrypointMux
 type RuntimeReleaseArtifactEvidence = deploymentapplication.RuntimeReleaseArtifactEvidence
 type ProjectDatabase = persistence.RuntimeStore

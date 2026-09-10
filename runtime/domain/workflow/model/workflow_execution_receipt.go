@@ -28,6 +28,9 @@ type WorkflowExecutionClaimRequest struct {
 	LeaseOwner         string
 	LeaseTTL           time.Duration
 	Now                time.Time
+	// A conversation recovering an unknown start must never re-run a
+	// previously claimed workflow, even after its lease expires.
+	PreventReclaim bool
 }
 
 type WorkflowExecutionClaimResult struct {

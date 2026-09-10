@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	organizationunit "github.com/domainry/domainry-identity/organizationunit"
+	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 )
 

@@ -77,6 +77,13 @@ import (
 	_ "github.com/domainry/domainry-runtime/pkg/runtimehost"
 )
 `
+	for _, dependency := range result.DependencyModules {
+		if dependency.Path == "github.com/domainry/domainry-identity-bridge" {
+			source = strings.Replace(source, `_ "github.com/domainry/domainry-runtime/pkg/runtimehost"`, `runtimehost "github.com/domainry/domainry-runtime/pkg/runtimehost"`+"\n"+`identitybridge "github.com/domainry/domainry-identity-bridge/module"`, 1)
+			source += "\nvar ExternalRuntime = runtimehost.Options{IdentityFactory:identitybridge.NewFactory(\"config/identity-external.json\",identitybridge.Options{})}\n"
+			break
+		}
+	}
 	if err := os.WriteFile(filepath.Join(consumer, "consumer.go"), []byte(source), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -131,6 +138,12 @@ import (
 		"github.com/domainry/domainry-notification",
 		"github.com/domainry/domainry-connectors",
 	} {
+		// Without a local source checkout the publisher deliberately freezes
+		// the selected released tag; only workspace inputs get a source hash.
+		environment := strings.ToUpper(strings.ReplaceAll(strings.TrimPrefix(path, "github.com/domainry/"), "-", "_")) + "_REPO_ROOT"
+		if localReplacementRoot(repository, path) == "" && strings.TrimSpace(os.Getenv(environment)) == "" {
+			continue
+		}
 		if version := dependencyVersions[path]; !strings.HasPrefix(version, "v0.999.0-domainry.") {
 			t.Fatalf("workspace dependency %s version=%q is not content-addressed", path, version)
 		}

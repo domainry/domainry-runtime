@@ -16,22 +16,26 @@ const (
 )
 
 type ActionInvocation struct {
-	ActionKey            string
-	ObjectKey            string
-	RecordID             string
-	Input                map[string]any
-	Principal            principalmodel.Principal
-	Actor                principalmodel.Principal
-	RunAs                principalmodel.Principal
-	Source               ActionSource
-	ProcessID            string
-	NodeID               string
-	RequestID            string
-	IdempotencyKey       string
-	TargetOrganizationID string
-	AssuranceToken       string
-	AssuranceEvidence    map[string]string
-	AssuranceValidated   bool
+	// Trusted caller policy: create or replay, but never take over an existing
+	// unresolved execution. Used by conversation recovery to avoid repeating
+	// an external effect merely because its local lease expired.
+	PreventExecutionReclaim bool
+	ActionKey               string
+	ObjectKey               string
+	RecordID                string
+	Input                   map[string]any
+	Principal               principalmodel.Principal
+	Actor                   principalmodel.Principal
+	RunAs                   principalmodel.Principal
+	Source                  ActionSource
+	ProcessID               string
+	NodeID                  string
+	RequestID               string
+	IdempotencyKey          string
+	TargetOrganizationID    string
+	AssuranceToken          string
+	AssuranceEvidence       map[string]string
+	AssuranceValidated      bool
 }
 
 type ActionInvocationResult struct {

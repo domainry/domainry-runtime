@@ -171,7 +171,7 @@ func TestQueryBuilderHelperContracts(t *testing.T) {
 	if got := escapeLikePattern(`a~b%c_d`); got != `a~~b~%c~_d` {
 		t.Fatalf("escaped pattern=%q", got)
 	}
-	if dbValue(float32(1)) != float64(1) || dbValue(2) != float64(2) || dbValue(int64(3)) != float64(3) || dbValue("4") != "4" {
+	if dbValue(float32(1)) != float64(1) || dbValue(2) != int64(2) || dbValue(int64(9007199254740993)) != int64(9007199254740993) || dbValue("4") != "4" {
 		t.Fatal("database value normalization mismatch")
 	}
 }
@@ -241,7 +241,7 @@ func TestTenantWhereCompilesCanonicalFilterAST(t *testing.T) {
 		{Operator: "is_not_null", Field: "started_at"},
 	}}
 	where, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, FilterExpression: filter})
-	if err != nil || !strings.Contains(where, `("status" = $2 AND ("priority" >= $3 OR NOT ("owner_id" IN ($4, $5))) AND "started_at" IS NOT NULL)`) || !reflect.DeepEqual(args, []any{"workspace-a", "ready", float64(10), "a", "b"}) {
+	if err != nil || !strings.Contains(where, `("status" = $2 AND ("priority" >= $3 OR NOT ("owner_id" IN ($4, $5))) AND "started_at" IS NOT NULL)`) || !reflect.DeepEqual(args, []any{"workspace-a", "ready", int64(10), "a", "b"}) {
 		t.Fatalf("where=%s args=%#v err=%v", where, args, err)
 	}
 	invalid := &recordmodel.RecordFilterExpression{Operator: "and"}

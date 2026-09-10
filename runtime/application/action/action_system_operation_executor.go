@@ -122,7 +122,7 @@ func NewRecordSystemOperationHandlers(dependencies RecordSystemOperationDependen
 			if dependencies.PlanCreateMutation == nil {
 				return ActionExecutionResult{}, missingExecutorPort("system_operation:plan_create")
 			}
-			plan, record, err := dependencies.PlanCreateMutation(ctx, action.ObjectKey, payload, "", ActionPersistencePrincipal(invocation.Principal, action, "create"))
+			plan, record, err := dependencies.PlanCreateMutation(ctx, action.ObjectKey, actionCloneMap(payload), "", ActionPersistencePrincipal(invocation.Principal, action, "create"))
 			if err != nil {
 				return ActionExecutionResult{}, err
 			}
@@ -199,7 +199,9 @@ func recordUpdateSystemOperation(dependencies RecordSystemOperationDependencies)
 		if dependencies.PlanUpdateMutation == nil {
 			return ActionExecutionResult{}, missingExecutorPort("system_operation:plan_update")
 		}
-		plan, record, err := dependencies.PlanUpdateMutation(ctx, action.ObjectKey, invocation.RecordID, payload, ActionPersistencePrincipal(invocation.Principal, action, "update"))
+		// Record planning consumes concurrency controls from its patch. Keep the
+		// confirmed invocation intact for the Action commit-time version gate.
+		plan, record, err := dependencies.PlanUpdateMutation(ctx, action.ObjectKey, invocation.RecordID, actionCloneMap(payload), ActionPersistencePrincipal(invocation.Principal, action, "update"))
 		if err != nil {
 			return ActionExecutionResult{}, err
 		}

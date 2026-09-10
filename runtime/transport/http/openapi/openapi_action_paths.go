@@ -1,11 +1,10 @@
 package openapi
 
 import (
-	"sort"
 	"strings"
 
-	actionvalidation "github.com/domainry/domainry-runtime/runtime/domain/action/validation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/invocation"
 )
 
 func addActionOpenAPIPath(paths map[string]any, action definitionmodel.ActionSchema, objectSets ...[]definitionmodel.ObjectSchema) {
@@ -52,7 +51,7 @@ func openAPIBulkActionRequestSchema(action definitionmodel.ActionSchema) map[str
 // payload_fields, recursing through nested objects and repeated fields.
 // Runtime-owned invocation extras remain optional top-level properties.
 func openAPIActionInputSchema(action definitionmodel.ActionSchema) map[string]any {
-	schema := openAPIActionPayloadObjectSchema(action.PayloadFields)
+	schema := invocationcontract.PayloadJSONSchema(action.PayloadFields, action.Defaults)
 	properties := schema["properties"].(map[string]any)
 	for key, extra := range openAPIActionInvocationExtraProperties() {
 		if _, declared := properties[key]; !declared {
@@ -72,59 +71,6 @@ func openAPIActionInvocationExtraProperties() map[string]any {
 		"approval_id":         map[string]any{"type": "string"},
 		"approval_token":      map[string]any{"type": "string"},
 	}
-}
-
-func openAPIActionPayloadObjectSchema(fields []definitionmodel.ActionPayloadField) map[string]any {
-	properties := map[string]any{}
-	required := []string{}
-	for _, field := range fields {
-		key := strings.TrimSpace(field.Key)
-		if key == "" {
-			continue
-		}
-		properties[key] = openAPIActionPayloadFieldSchema(field)
-		if field.Required {
-			required = append(required, key)
-		}
-	}
-	sort.Strings(required)
-	return strictOpenAPIObject(required, properties)
-}
-
-func openAPIActionPayloadFieldSchema(field definitionmodel.ActionPayloadField) map[string]any {
-	var item map[string]any
-	if field.IsObject() {
-		item = openAPIActionPayloadObjectSchema(field.Fields)
-		openAPISetConstraint(item, "title", field.Name, strings.TrimSpace(field.Name) != "")
-	} else {
-		leaf := field
-		leaf.Repeated, leaf.Fields, leaf.MinItems, leaf.MaxItems = false, nil, nil, nil
-		item = openAPIFieldSchema(actionvalidation.ActionTypedPayloadField(leaf))
-	}
-	if !field.Repeated {
-		openAPISetConstraint(item, "description", field.Description, strings.TrimSpace(field.Description) != "")
-		return item
-	}
-	array := openAPIArray(item)
-	if title, ok := item["title"]; ok {
-		delete(item, "title")
-		array["title"] = title
-	}
-	openAPISetConstraint(array, "description", field.Description, strings.TrimSpace(field.Description) != "")
-	minItems := 0
-	if field.MinItems != nil {
-		minItems = *field.MinItems
-	}
-	if field.Required && minItems < 1 {
-		minItems = 1
-	}
-	maxItems := definitionmodel.ActionPayloadMaxItems
-	if field.MaxItems != nil && *field.MaxItems < maxItems {
-		maxItems = *field.MaxItems
-	}
-	openAPISetConstraint(array, "minItems", minItems, minItems > 0)
-	array["maxItems"] = maxItems
-	return array
 }
 
 func openAPIActionResultSchema(action definitionmodel.ActionSchema, objectSets [][]definitionmodel.ObjectSchema) map[string]any {

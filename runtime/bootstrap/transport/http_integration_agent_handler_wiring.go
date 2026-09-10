@@ -42,6 +42,8 @@ func (a agentRecordVisibilityAdapter) CanReadAgentRecord(ctx context.Context, ob
 // needed to finish Agent's product Adapter before authorization reconciliation.
 // HTTP mounting remains a later transport step.
 type AgentApplicationHostDependencies struct {
+	RuntimeID            string
+	Application          identitysdk.ApplicationScope
 	Binding              agentsdk.Binding
 	Records              *composition.RuntimeServices
 	Principals           identitysdk.PrincipalResolver
@@ -81,7 +83,16 @@ func BindAgentApplicationHost(dependencies AgentApplicationHostDependencies) err
 	proposal := runtimeAgentProposalHost{records: dependencies.Records, principals: dependencies.Principals}
 	audit := runtimeAgentAuditHost{audit: applications.Audit}
 	analysis := runtimeAgentAnalysisHost{catalog: applications.Schema, records: applications.Records}
-	if err := binder.BindApplicationHost(runtimeAgentApplicationHost{interactive: interactive, task: task, proposal: proposal, audit: audit, analysis: analysis}); err != nil {
+	conversationOptions := []agentapplication.ConversationBusinessHostOption{agentapplication.WithConversationBusinessActions(applications.Actions), agentapplication.WithConversationBusinessWorkflows(applications.Workflows)}
+	if strings.TrimSpace(dependencies.IntegrationSecretKey) != "" {
+		evidenceKey := sha256.Sum256([]byte("domainry-agent-business-evidence-v1:" + dependencies.IntegrationSecretKey))
+		conversationOptions = append(conversationOptions, agentapplication.WithConversationBusinessEvidenceKey(evidenceKey[:]))
+	}
+	conversations, err := agentapplication.NewConversationBusinessHost(dependencies.RuntimeID, dependencies.Application, dependencies.Principals, applications.Schema, applications.Records, conversationOptions...)
+	if err != nil {
+		return err
+	}
+	if err := binder.BindApplicationHost(runtimeAgentApplicationHost{interactive: interactive, task: task, proposal: proposal, audit: audit, analysis: analysis, conversations: conversations}); err != nil {
 		return fmt.Errorf("bind Agent application host: %w", err)
 	}
 	if err := validateAgentAuthorizationProjection(dependencies.Binding); err != nil {
@@ -121,7 +132,9 @@ func (a *httpServerAssembly) bindAgentApplicationHost() {
 		return
 	}
 	if err := BindAgentApplicationHost(AgentApplicationHostDependencies{
-		Binding: a.dependencies.AgentBinding, Records: a.dependencies.Records, Principals: a.principals,
+		RuntimeID:   a.dependencies.RuntimeInstanceID,
+		Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(a.dependencies.Config.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(a.dependencies.Config.IdentityAudience)},
+		Binding:     a.dependencies.AgentBinding, Records: a.dependencies.Records, Principals: a.principals,
 		RateLimiter: a.dependencies.RateLimiter, IntegrationSecretKey: a.dependencies.Config.IntegrationSecretKey,
 	}); err != nil {
 		panic(err.Error())
@@ -141,11 +154,19 @@ func (a *httpServerAssembly) bindAgentApplicationHost() {
 }
 
 type runtimeAgentApplicationHost struct {
-	interactive agentmodulehost.InteractiveHost
-	task        agentmodulehost.TaskHost
-	proposal    agentmodulehost.ProposalHost
-	audit       agentmodulehost.AuditHost
-	analysis    agentmodulehost.AnalysisHost
+	conversations *agentapplication.ConversationBusinessHost
+	interactive   agentmodulehost.InteractiveHost
+	task          agentmodulehost.TaskHost
+	proposal      agentmodulehost.ProposalHost
+	audit         agentmodulehost.AuditHost
+	analysis      agentmodulehost.AnalysisHost
+}
+
+func (h runtimeAgentApplicationHost) ConversationAuthorizer() agentsdk.ConversationToolAuthorizer {
+	return h.conversations
+}
+func (h runtimeAgentApplicationHost) ConversationBusinessSource() agentsdk.ConversationBusinessSource {
+	return h.conversations
 }
 
 func (h runtimeAgentApplicationHost) InteractiveAgent() agentmodulehost.InteractiveHost {

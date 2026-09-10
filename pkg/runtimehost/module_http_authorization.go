@@ -23,11 +23,11 @@ func newModuleHTTPRouteGuard(binding identitysdk.Binding, resolverOptions ...ide
 	if len(resolverOptions) > 0 {
 		options = resolverOptions[0]
 	}
-	resolver, err := identityprincipal.NewResolver(binding, options)
+	resolver, err := identityprincipal.NewAuthenticator(binding, options)
 	if err != nil {
 		return nil, fmt.Errorf("construct module HTTP principal resolver: %w", err)
 	}
-	middleware, err := identityhttpmiddleware.New(resolver, identityhttpmiddleware.WithAuthorization(binding.Authorization()))
+	middleware, err := identityhttpmiddleware.New(resolver, identityhttpmiddleware.WithAuthorization(binding.Authorization()), identityhttpmiddleware.WithBindingCredential(binding))
 	if err != nil {
 		return nil, fmt.Errorf("construct module HTTP identity middleware: %w", err)
 	}

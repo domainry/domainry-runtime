@@ -119,7 +119,7 @@ func (s runtimeIntegrationTriggerSink) principal(ctx context.Context, request in
 	if s.principals == nil {
 		return principalmodel.Principal{}, fmt.Errorf("Identity principal resolver is unavailable for Integration actor %q", actorID)
 	}
-	resolution, err := s.principals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(actorID), RoleKey: strings.TrimSpace(request.Principal.RoleKey)})
+	resolution, err := s.principals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(request.WorkspaceID)}, SubjectID: identitysdk.SubjectID(actorID), RoleKey: strings.TrimSpace(request.Principal.RoleKey)})
 	if err != nil {
 		return principalmodel.Principal{}, fmt.Errorf("resolve Integration actor %q: %w", actorID, err)
 	}

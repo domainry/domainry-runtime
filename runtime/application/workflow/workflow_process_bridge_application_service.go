@@ -80,8 +80,8 @@ func (s *WorkflowApplicationService) executeWorkflowGraphProcess(ctx context.Con
 	return s.executeWorkflowGraphProcessWithIdempotencyKey(ctx, workflow, payload, principal, trigger, idempotencyKey, attempt, ignoreIdempotency)
 }
 
-func (s *WorkflowApplicationService) executeWorkflowGraphProcessWithIdempotencyKey(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal, trigger, idempotencyKey string, attempt int, ignoreIdempotency bool) (workflowmodel.WorkflowExecution, error) {
-	claim, replay, found, err := s.beginWorkflowExecution(ctx, workflow, payload, principal, trigger, idempotencyKey, attempt, ignoreIdempotency)
+func (s *WorkflowApplicationService) executeWorkflowGraphProcessWithIdempotencyKey(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal, trigger, idempotencyKey string, attempt int, ignoreIdempotency bool, preventReclaim ...bool) (workflowmodel.WorkflowExecution, error) {
+	claim, replay, found, err := s.beginWorkflowExecution(ctx, workflow, payload, principal, trigger, idempotencyKey, attempt, ignoreIdempotency, preventReclaim...)
 	if err != nil {
 		return workflowmodel.WorkflowExecution{}, err
 	}

@@ -22,7 +22,7 @@ import (
 	dataexchangemodulehost "github.com/domainry/domainry-data-exchange-sdk/modulehost"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	organizationunit "github.com/domainry/domainry-identity/organizationunit"
+	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"

@@ -18,7 +18,7 @@ import (
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	organizationunit "github.com/domainry/domainry-identity/organizationunit"
+	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	metadatamodule "github.com/domainry/domainry-metadata/module"
@@ -416,7 +416,9 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(err)
 	records, recordRepository := serviceAssembly.services, serviceAssembly.records
 	mustCompleteRuntimeStartup(transportbootstrap.BindAgentApplicationHost(transportbootstrap.AgentApplicationHostDependencies{
-		Binding: agentBinding, Records: records, Principals: identityPrincipals,
+		RuntimeID:   cfg.RuntimeInstanceID,
+		Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)},
+		Binding:     agentBinding, Records: records, Principals: identityPrincipals,
 		RateLimiter: sharedRateLimiter, IntegrationSecretKey: cfg.IntegrationSecretKey,
 	}))
 	auditHostBinder, ok := auditBinding.(auditsdk.ApplicationHostBinder)
@@ -493,7 +495,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	workspaceRolePolicy := workspaceprovisionpersistence.WorkspaceBootstrapRolePolicyEvidence{}
 	handlerDescriptors := businessHandlers.Descriptors()
 	for _, role := range manifest.Roles {
-		if !role.ProvisionToWorkspaces {
+		if !role.ProvisionToWorkspaces || identityBinding.Descriptor().Mode == identitysdk.DeploymentModeExternal {
 			continue
 		}
 		bootstrapRoleCatalog, catalogErr := RuntimeWorkspaceBootstrapRoleCatalog(records.Schema().Objects, manifest.Roles, manifest.InitialWorkspaceAdministratorRole, cfg.IdentityAudience, handlerDescriptors...)

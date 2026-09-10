@@ -105,6 +105,25 @@ func TestOpenManifestAgentBindingSkipsUnusedAgentTopology(t *testing.T) {
 	}
 }
 
+type conversationModuleFactoryStub struct {
+	*agentSDKModuleFactoryStub
+	enabled bool
+}
+
+func (f *conversationModuleFactoryStub) ConversationEnabled() bool { return f.enabled }
+
+func TestOpenManifestAgentBindingSupportsConversationsWithoutLegacyDefinitions(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		runner := &agentSDKRunnerStub{}
+		binding := &agentSDKBindingStub{runner: runner, descriptor: agentsdk.Descriptor{ProtocolVersion: agentsdk.ProtocolVersionV1, Mode: agentsdk.DeploymentModeModule, Capabilities: []string{agentsdk.CapabilityTaskStart, agentsdk.CapabilityTaskPoll, agentsdk.CapabilityTaskCancel, agentsdk.CapabilityInteractiveRun, agentsdk.CapabilityLifecycleExecute}}}
+		factory := &conversationModuleFactoryStub{agentSDKModuleFactoryStub: &agentSDKModuleFactoryStub{binding: binding}, enabled: enabled}
+		opened, err := openManifestAgentBinding(t.Context(), "runtime", openAgentBindingRuntimeStore(t), factory, manifestmodel.ManifestSchema{})
+		if err != nil || (opened != nil) != enabled || (factory.runtimeID != "") != enabled {
+			t.Fatalf("enabled=%v opened=%v err=%v", enabled, opened, err)
+		}
+	}
+}
+
 func TestManifestUsesAgentForEveryOwnedDefinitionCollection(t *testing.T) {
 	cases := []struct {
 		name     string

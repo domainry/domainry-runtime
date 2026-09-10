@@ -14,3 +14,8 @@ type ActionExecutionClaimStore interface {
 	HeartbeatExecution(ctx context.Context, executionID, expectedLeaseOwner string, expectedFencingToken int64, leaseExpiresAt, now time.Time) error
 	CompleteExecution(context.Context, actionmodel.ActionExecutionCompletion) (actionmodel.ActionBusinessExecution, error)
 }
+
+// Optional, read-only receipt lookup. Does not claim, renew or retry execution.
+type ActionExecutionReader interface {
+	FindExecution(context.Context, actionmodel.ActionBusinessExecution) (actionmodel.ActionBusinessExecution, bool, error)
+}

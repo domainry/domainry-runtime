@@ -73,8 +73,8 @@ func (s *ActionExecutionRuntime) TransactionAvailable() bool {
 	return ok
 }
 
-func (s *ActionExecutionRuntime) BeginObject(ctx context.Context, objectKey, actionKey, idempotencyKey string, input idempotency.FingerprintInput, principal principalmodel.Principal) (actionmodel.ActionObjectResult, actionmodel.ActionExecutionClaimResult, bool, error) {
-	claim, replay, err := s.begin(ctx, objectKey, "", actionKey, idempotencyKey, input, principal)
+func (s *ActionExecutionRuntime) BeginObject(ctx context.Context, objectKey, actionKey, idempotencyKey string, input idempotency.FingerprintInput, principal principalmodel.Principal, preventReclaim ...bool) (actionmodel.ActionObjectResult, actionmodel.ActionExecutionClaimResult, bool, error) {
+	claim, replay, err := s.begin(ctx, objectKey, "", actionKey, idempotencyKey, input, principal, preventReclaim...)
 	if err != nil || !replay {
 		return actionmodel.ActionObjectResult{}, claim, replay, err
 	}
@@ -86,8 +86,8 @@ func (s *ActionExecutionRuntime) BeginObject(ctx context.Context, objectKey, act
 	return result, claim, true, nil
 }
 
-func (s *ActionExecutionRuntime) BeginRecord(ctx context.Context, objectKey, recordID, actionKey, idempotencyKey string, input idempotency.FingerprintInput, principal principalmodel.Principal) (actionmodel.ActionResult, actionmodel.ActionExecutionClaimResult, bool, error) {
-	claim, replay, err := s.begin(ctx, objectKey, recordID, actionKey, idempotencyKey, input, principal)
+func (s *ActionExecutionRuntime) BeginRecord(ctx context.Context, objectKey, recordID, actionKey, idempotencyKey string, input idempotency.FingerprintInput, principal principalmodel.Principal, preventReclaim ...bool) (actionmodel.ActionResult, actionmodel.ActionExecutionClaimResult, bool, error) {
+	claim, replay, err := s.begin(ctx, objectKey, recordID, actionKey, idempotencyKey, input, principal, preventReclaim...)
 	if err != nil || !replay {
 		return actionmodel.ActionResult{}, claim, replay, err
 	}
@@ -189,7 +189,7 @@ func actionFailureResponseStatus(kind apperror.ErrorKind) int {
 	}
 }
 
-func (s *ActionExecutionRuntime) begin(ctx context.Context, objectKey, recordID, actionKey, idempotencyKey string, input idempotency.FingerprintInput, principal principalmodel.Principal) (actionmodel.ActionExecutionClaimResult, bool, error) {
+func (s *ActionExecutionRuntime) begin(ctx context.Context, objectKey, recordID, actionKey, idempotencyKey string, input idempotency.FingerprintInput, principal principalmodel.Principal, preventReclaim ...bool) (actionmodel.ActionExecutionClaimResult, bool, error) {
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
 	if idempotencyKey == "" {
 		return actionmodel.ActionExecutionClaimResult{}, false, apperror.New(apperror.KindBadRequest, idempotency.ErrorCodeMissingKey, nil, map[string]string{"action": strings.TrimSpace(actionKey)})
@@ -209,6 +209,7 @@ func (s *ActionExecutionRuntime) begin(ctx context.Context, objectKey, recordID,
 		owner = requestcontext.NewRequestID()
 	}
 	claim, err := s.repository.TryBeginExecution(ctx, actionmodel.ActionExecutionClaimRequest{
+		PreventReclaim: len(preventReclaim) > 0 && preventReclaim[0],
 		Execution: actionmodel.ActionBusinessExecution{
 			WorkspaceID: actionWorkspaceID(principal), ObjectKey: strings.TrimSpace(objectKey), RecordID: strings.TrimSpace(recordID), ActionKey: strings.TrimSpace(actionKey),
 			IdempotencyKey: idempotencyKey, ActorID: principal.UserID, RoleKey: principal.RoleKey,
@@ -217,6 +218,9 @@ func (s *ActionExecutionRuntime) begin(ctx context.Context, objectKey, recordID,
 	})
 	if err != nil {
 		return actionmodel.ActionExecutionClaimResult{}, false, executionServiceError("claim domain action execution", err)
+	}
+	if len(preventReclaim) > 0 && preventReclaim[0] && claim.Execution.ActorID != principal.UserID {
+		return actionmodel.ActionExecutionClaimResult{}, false, apperror.New(apperror.KindForbidden, "backend.action.receipt_owner_mismatch", nil, nil)
 	}
 	switch claim.Decision {
 	case idempotency.DecisionAcquired:

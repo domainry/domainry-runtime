@@ -56,6 +56,13 @@ func newProjectWorkspaceManager(ctx context.Context, cfg config.Config, factory 
 	if err != nil {
 		return nil, err
 	}
+	if _, external := factory.(identitysdk.ExternalDatabaseFactory); external && !found {
+		installation, err = workspaceprovision.InitializeExternalInstallation(ctx, database)
+		if err != nil {
+			return nil, err
+		}
+		found = true
+	}
 	if found {
 		if err := manager.bindInitializedIdentity(ctx, installation); err != nil {
 			return nil, err
@@ -97,6 +104,17 @@ func (manager *projectWorkspaceManager) SetProjectNavigationCatalog(catalog iden
 func (manager *projectWorkspaceManager) Activate(ctx context.Context, manifest manifestmodel.ManifestSchema, participant runtimeext.WorkspaceBootstrapParticipant, handlerDescriptors ...runtimeext.HandlerDescriptor) error {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
+	if manager.binding != nil && manager.binding.Descriptor().Mode == identitysdk.DeploymentModeExternal {
+		for _, handler := range handlerDescriptors {
+			if handler.TargetOrganization != nil || handler.OrganizationUnitDelivery != nil || handler.IdentityHandlerDelivery != nil || handler.StoreOrganizationCatalog != nil || handler.StoreOrganizationMutation != nil || handler.WorkspaceIdentityUsage != nil {
+				return fmt.Errorf("external identity does not provide organization or account administration required by handler %q", handler.ActionKey)
+			}
+		}
+		if host, ok := manager.handle.ExternalWorkspaces.(*runtimeExternalWorkspaceHost); ok {
+			host.configure(manifest, participant)
+		}
+		return nil
+	}
 	// Bootstrap receives only the validated Workspace-login subset. Ordinary
 	// publication later receives the complete catalog, including validated
 	// internal service roles.
@@ -266,7 +284,7 @@ func (manager *projectWorkspaceManager) bindInitializedIdentity(ctx context.Cont
 		}
 	}
 	if authority, ok := manager.handle.WorkspaceIdentityUsageAuthority.(*runtimeWorkspaceIdentityUsageAuthority); ok {
-		authenticator, resolverErr := identityprincipal.NewResolver(binding, identityprincipal.Options{})
+		authenticator, resolverErr := identityprincipal.NewAuthenticator(binding, identityprincipal.Options{})
 		if resolverErr != nil {
 			_ = binding.Close(context.WithoutCancel(ctx))
 			return fmt.Errorf("initialize Workspace identity usage authority: %w", resolverErr)

@@ -18,12 +18,12 @@ func (a *httpServerAssembly) wireIdentityReferences(constructionContext context.
 }
 
 func identitySDKCapabilityReferenceSource(projection identitysdk.Projection) func(context.Context, principalmodel.Principal) (capabilityapplication.CapabilityIdentityReferences, error) {
-	return func(ctx context.Context, _ principalmodel.Principal) (capabilityapplication.CapabilityIdentityReferences, error) {
-		users, err := projection.ListUsers(ctx, identitysdk.ProjectionQuery{})
+	return func(ctx context.Context, principal principalmodel.Principal) (capabilityapplication.CapabilityIdentityReferences, error) {
+		users, err := projection.ListUsers(ctx, identitysdk.ProjectionQuery{Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(principal.WorkspaceID)}})
 		if err != nil {
 			return capabilityapplication.CapabilityIdentityReferences{}, err
 		}
-		roles, err := projection.ListRoles(ctx, identitysdk.ProjectionQuery{})
+		roles, err := projection.ListRoles(ctx, identitysdk.ProjectionQuery{Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(principal.WorkspaceID)}})
 		if err != nil {
 			return capabilityapplication.CapabilityIdentityReferences{}, err
 		}

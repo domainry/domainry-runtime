@@ -204,6 +204,9 @@ func recordLocalizedOrders(workspaceID string, object definitionmodel.ObjectSche
 	for _, rule := range queryValue.Sort {
 		direction := strings.ToUpper(strings.TrimSpace(rule.Direction))
 		if strings.TrimSpace(queryValue.Locale) == "" || !localizedSet[rule.Field] {
+			if queryValue.StableNullsLast {
+				orders = append(orders, query.AscendingExpression(query.CaseWhen(query.IsNull(rule.Field), 1).Else(0)))
+			}
 			if direction == "DESC" {
 				orders = append(orders, query.Descending(rule.Field))
 			} else {
@@ -221,6 +224,9 @@ func recordLocalizedOrders(workspaceID string, object definitionmodel.ObjectSche
 		}
 		values = append(values, query.Column(rule.Field))
 		expression := query.Coalesce(values...)
+		if queryValue.StableNullsLast {
+			orders = append(orders, query.AscendingExpression(query.CaseWhen(query.IsNullExpression(expression), 1).Else(0)))
+		}
 		if direction == "DESC" {
 			orders = append(orders, query.DescendingExpression(expression))
 		} else {
