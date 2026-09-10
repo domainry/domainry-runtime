@@ -1,12 +1,12 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "843a864caee978300ad2c145ed8c11f3d9bd4825342660ee868e38be71c79d3e",
+  "set_sha256": "a2eb72dda2f3debac3b59f089b9f70e3e462a90cf0249caa2e2132bb36fdee25",
   "modules": [
     {
       "key": "agent",
       "implementation": "github.com/domainry/domainry-agent",
-      "implementation_version": "v0.1.10",
-      "implementation_sum": "h1:+iKRk+HBRwZK++BBnP4rIU6V7geJGrrxsR+FnW09cKw=",
+      "implementation_version": "v0.1.11",
+      "implementation_sum": "h1:N+/QthdjBw1vCmTfLGzHrjeWnPvQJJohR37vhnXm0LQ=",
       "sdk": "github.com/domainry/domainry-agent-sdk",
       "sdk_version": "v0.1.6",
       "sdk_sum": "h1:t8Mn1SlNJ+G7ROejyKWHiz9bQQkDdRtYasHlqLTki6A=",
