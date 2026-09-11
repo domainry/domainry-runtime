@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 )
@@ -182,10 +183,14 @@ func validateFieldRules(field definitionmodel.FieldSchema, value any) error {
 		return nil
 	}
 	if text, ok := value.(string); ok {
-		if minLength, ok := intConfig(field.Config, "min_length"); ok && len(text) < minLength {
+		// Length limits count characters (Unicode code points), the unit the
+		// published JSON Schema maxLength and a utf8mb4 VARCHAR(n) column use;
+		// counting bytes refused 101 CJK characters against max_length=300.
+		length := utf8.RuneCountInString(text)
+		if minLength, ok := intConfig(field.Config, "min_length"); ok && length < minLength {
 			return validationError("backend.validation.min_length", "field", field.Key, "min", strconv.Itoa(minLength))
 		}
-		if maxLength, ok := intConfig(field.Config, "max_length"); ok && len(text) > maxLength {
+		if maxLength, ok := intConfig(field.Config, "max_length"); ok && length > maxLength {
 			return validationError("backend.validation.max_length", "field", field.Key, "max", strconv.Itoa(maxLength))
 		}
 		if pattern, ok := stringConfig(field.Config, "pattern"); ok {

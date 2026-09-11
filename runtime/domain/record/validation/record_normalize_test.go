@@ -104,6 +104,11 @@ func TestValidateFieldTypeAndRules(t *testing.T) {
 	text := definitionmodel.FieldSchema{Key: "name", Type: "text", Config: map[string]any{"min_length": 2, "max_length": 4, "pattern": "^[a-z]+$"}}
 	assertValidationCode(t, validateFieldRules(text, "a"), "backend.validation.min_length")
 	assertValidationCode(t, validateFieldRules(text, "abcde"), "backend.validation.max_length")
+	// Limits count characters, not bytes: four CJK characters are twelve bytes and still within max_length=4.
+	cjk := definitionmodel.FieldSchema{Key: "name", Type: "text", Config: map[string]any{"min_length": 2, "max_length": 4}}
+	assertValidationCode(t, validateFieldRules(cjk, "文字文字"), "")
+	assertValidationCode(t, validateFieldRules(cjk, "文字文字文"), "backend.validation.max_length")
+	assertValidationCode(t, validateFieldRules(cjk, "文"), "backend.validation.min_length")
 	assertValidationCode(t, validateFieldRules(text, "AB"), "backend.validation.invalid_format")
 	text.Config["pattern"] = "["
 	assertValidationCode(t, validateFieldRules(text, "ab"), "backend.validation.invalid_pattern")
