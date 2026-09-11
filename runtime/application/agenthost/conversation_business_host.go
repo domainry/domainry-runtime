@@ -153,7 +153,7 @@ func (h *ConversationBusinessHost) objects(ctx context.Context, p principalmodel
 		}
 		fields := make([]definitionmodel.FieldSchema, 0, len(object.Fields))
 		for _, field := range object.Fields {
-			if field.DisabledAt == "" && recordpolicy.RecordCanReadFieldForPrincipal(p, object.Key, field.Key) {
+			if field.DisabledAt == "" && recordpolicy.RecordCanReadObjectFieldForPrincipal(p, object, field) {
 				fields = append(fields, field)
 			}
 		}

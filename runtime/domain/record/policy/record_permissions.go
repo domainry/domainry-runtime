@@ -92,6 +92,9 @@ func RecordFilterReadable(principal principalmodel.Principal, object definitionm
 func RecordFilterReadableData(principal principalmodel.Principal, object definitionmodel.ObjectSchema, data map[string]any) map[string]any {
 	filtered := map[string]any{}
 	for _, field := range object.Fields {
+		if RecordSensitiveFieldClosedForPrincipal(principal, object.Key, field) {
+			continue
+		}
 		if allowed, masked, handled := RecordSDKReadableField(principal, object.Key, field.Key); handled {
 			if !allowed {
 				continue
@@ -122,7 +125,7 @@ func RecordFilterReadableData(principal principalmodel.Principal, object definit
 func RecordValidateWritableFields(principal principalmodel.Principal, object definitionmodel.ObjectSchema, data map[string]any) error {
 	for key := range data {
 		field, found := recordObjectField(object, key)
-		if found {
+		if found && !RecordSensitiveFieldClosedForPrincipal(principal, object.Key, field) {
 			if allowed, _, handled := RecordSDKWritableField(principal, object.Key, field.Key); handled {
 				if allowed {
 					continue
@@ -140,6 +143,9 @@ func RecordValidateWritableFields(principal principalmodel.Principal, object def
 func RecordExportableFieldsForPrincipal(principal principalmodel.Principal, object definitionmodel.ObjectSchema) []definitionmodel.FieldSchema {
 	fields := []definitionmodel.FieldSchema{}
 	for _, field := range object.Fields {
+		if RecordSensitiveFieldClosedForPrincipal(principal, object.Key, field) {
+			continue
+		}
 		if allowed, _, handled := RecordSDKExportableField(principal, object.Key, field.Key); handled {
 			if allowed {
 				fields = append(fields, field)
@@ -156,6 +162,9 @@ func RecordExportableFieldsForPrincipal(principal principalmodel.Principal, obje
 func RecordExportMaskedFieldKeysForPrincipal(principal principalmodel.Principal, object definitionmodel.ObjectSchema) []string {
 	keys := []string{}
 	for _, field := range object.Fields {
+		if RecordSensitiveFieldClosedForPrincipal(principal, object.Key, field) {
+			continue
+		}
 		if allowed, masked, handled := RecordSDKExportableField(principal, object.Key, field.Key); handled {
 			if allowed && masked {
 				keys = append(keys, field.Key)

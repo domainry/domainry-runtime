@@ -26,7 +26,7 @@ var objectAuthoringKeys = stringSet(
 )
 
 var fieldAuthoringKeys = stringSet(
-	"config", "default_value", "i18n", "key", "name", "options", "provenance", "required", "type", "unique", "upgrade", "validation", "version_history",
+	"config", "default_value", "i18n", "key", "name", "options", "provenance", "required", "sensitive", "type", "unique", "upgrade", "validation", "version_history",
 )
 
 var validationAuthoringKeys = stringSet(

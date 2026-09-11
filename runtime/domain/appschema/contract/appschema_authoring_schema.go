@@ -140,6 +140,7 @@ func metadataFieldPayloadSchema(fieldTypes []string) capabilitycontract.Capabili
 			"key": metadataNonEmptyStringSchema("Compatibility input only; Runtime materializes the authoritative resourceKey path value when omitted."), "name": metadataNonEmptyStringSchema("Human-readable field name."), "description": {Type: "string"},
 			"type": {Type: "string", Enum: values}, "required": {Type: "boolean", Default: false}, "unique": {Type: "boolean", Default: false},
 			"default": {}, "default_value": {}, "config": config, "upgrade": upgrade,
+			"sensitive": {Type: "boolean", Default: false, Description: "Closes the field for every principal without an explicit field policy for it: read, write and export are refused instead of inheriting the object-level grant."},
 		},
 	}
 }

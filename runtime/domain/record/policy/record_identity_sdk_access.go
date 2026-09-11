@@ -65,6 +65,9 @@ func RecordCanWriteFieldForPrincipal(principal principalmodel.Principal, objectK
 }
 
 func RecordCanReadObjectFieldForPrincipal(principal principalmodel.Principal, object definitionmodel.ObjectSchema, field definitionmodel.FieldSchema) bool {
+	if RecordSensitiveFieldClosedForPrincipal(principal, object.Key, field) {
+		return false
+	}
 	if allowed, _, handled := RecordSDKReadableField(principal, object.Key, field.Key); handled {
 		return allowed
 	}
@@ -72,6 +75,9 @@ func RecordCanReadObjectFieldForPrincipal(principal principalmodel.Principal, ob
 }
 
 func RecordCanWriteObjectFieldForPrincipal(principal principalmodel.Principal, object definitionmodel.ObjectSchema, field definitionmodel.FieldSchema) bool {
+	if RecordSensitiveFieldClosedForPrincipal(principal, object.Key, field) {
+		return false
+	}
 	if allowed, _, handled := RecordSDKWritableField(principal, object.Key, field.Key); handled {
 		return allowed
 	}
@@ -79,10 +85,56 @@ func RecordCanWriteObjectFieldForPrincipal(principal principalmodel.Principal, o
 }
 
 func RecordCanExportObjectFieldForPrincipal(principal principalmodel.Principal, object definitionmodel.ObjectSchema, field definitionmodel.FieldSchema) bool {
+	if RecordSensitiveFieldClosedForPrincipal(principal, object.Key, field) {
+		return false
+	}
 	if allowed, _, handled := RecordSDKExportableField(principal, object.Key, field.Key); handled {
 		return allowed
 	}
 	return principal.SystemScope.Valid() && principal.Allows(object.Key, "export")
+}
+
+// RecordSensitiveFieldClosedForPrincipal reports whether a `sensitive` field
+// is closed for the principal: neither the object-level grant nor the SDK's
+// inherit-from-object default may open it. Only a field policy that names the
+// field by its exact key governs it, in whichever direction that policy
+// decides. The per-object "*" envelope Identity derives from the object grant
+// is that default, not a decision about this field. A principal without an
+// access bundle has no way to name the field and is closed as well.
+func RecordSensitiveFieldClosedForPrincipal(principal principalmodel.Principal, objectKey string, field definitionmodel.FieldSchema) bool {
+	if !field.Sensitive {
+		return false
+	}
+	if principal.AccessBundle == nil {
+		return true
+	}
+	objectKey = strings.TrimSpace(objectKey)
+	fieldKey := strings.TrimSpace(field.Key)
+	for _, policy := range principal.AccessBundle.FieldPolicies {
+		resource := strings.TrimSpace(string(policy.Resource))
+		if (resource == objectKey || resource == "*") && strings.TrimSpace(policy.Field) == fieldKey {
+			return false
+		}
+	}
+	return true
+}
+
+// RecordCanReadObjectFieldKeyForPrincipal is RecordCanReadObjectFieldForPrincipal
+// for callers that hold the object and a field key: the field's own schema,
+// including its sensitivity, is looked up before the decision. A key the
+// object does not define falls back to the key-only rule.
+func RecordCanReadObjectFieldKeyForPrincipal(principal principalmodel.Principal, object definitionmodel.ObjectSchema, fieldKey string) bool {
+	if field, ok := recordObjectField(object, strings.TrimSpace(fieldKey)); ok {
+		return RecordCanReadObjectFieldForPrincipal(principal, object, field)
+	}
+	return RecordCanReadFieldForPrincipal(principal, object.Key, fieldKey)
+}
+
+func RecordCanWriteObjectFieldKeyForPrincipal(principal principalmodel.Principal, object definitionmodel.ObjectSchema, fieldKey string) bool {
+	if field, ok := recordObjectField(object, strings.TrimSpace(fieldKey)); ok {
+		return RecordCanWriteObjectFieldForPrincipal(principal, object, field)
+	}
+	return RecordCanWriteFieldForPrincipal(principal, object.Key, fieldKey)
 }
 
 func RecordCanExportFieldForPrincipal(principal principalmodel.Principal, objectKey, fieldKey string) bool {

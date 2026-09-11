@@ -88,7 +88,7 @@ func (s *UploadAccessApplicationService) AuthorizeUpload(ctx context.Context, ob
 	if !objectHasField(object, fieldKey) {
 		return uploadAccessError(apperror.KindBadRequest, "backend.upload.field_not_defined")
 	}
-	if (recordpolicy.RecordAllowsObjectAction(principal, objectKey, "update") || recordpolicy.RecordAllowsObjectAction(principal, objectKey, "create")) && recordpolicy.RecordCanWriteFieldForPrincipal(principal, objectKey, fieldKey) {
+	if (recordpolicy.RecordAllowsObjectAction(principal, objectKey, "update") || recordpolicy.RecordAllowsObjectAction(principal, objectKey, "create")) && recordpolicy.RecordCanWriteObjectFieldKeyForPrincipal(principal, object, fieldKey) {
 		return nil
 	}
 	s.audit.AppendWithMetadata(ctx, "file_upload_denied", objectKey, "", principal, "File upload permission denied", nil, nil, map[string]any{"field_key": fieldKey, "reason": "permission"})
@@ -114,7 +114,7 @@ func (s *UploadAccessApplicationService) AuthorizeDownload(ctx context.Context, 
 	if !ok {
 		return s.denyDownload(ctx, objectKey, fieldKey, recordID, filename, principal, "File download object missing", "object", apperror.KindNotFound, "backend.object.not_found")
 	}
-	readAllowed := objectHasField(object, fieldKey) && recordpolicy.RecordAllowsObjectAction(principal, objectKey, "read") && recordpolicy.RecordCanReadFieldForPrincipal(principal, objectKey, fieldKey)
+	readAllowed := objectHasField(object, fieldKey) && recordpolicy.RecordAllowsObjectAction(principal, objectKey, "read") && recordpolicy.RecordCanReadObjectFieldKeyForPrincipal(principal, object, fieldKey)
 	if !readAllowed {
 		return s.denyDownload(ctx, objectKey, fieldKey, recordID, filename, principal, "File download permission denied", "permission", apperror.KindForbidden, "backend.upload.permission_denied")
 	}

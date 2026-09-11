@@ -32,6 +32,13 @@ type FieldSchema struct {
 	// DisabledAt is set when the field has been soft-disabled.
 	// ensureObjectStorage skips disabled fields (no physical DROP).
 	DisabledAt string `json:"disabled_at,omitempty"`
+	// Sensitive closes the field for every principal whose access bundle
+	// carries no explicit field policy for it: read, write and export are all
+	// refused instead of inheriting the object-level grant. A credential or a
+	// derivative of one (a PIN fingerprint, a token hash) is declared this way
+	// so that a Role added later, or one the author forgot to restrict, cannot
+	// publish it through the record and list routes.
+	Sensitive bool `json:"sensitive,omitempty"`
 	// Upgrade declares how rows that predate this field are treated when a
 	// later definition version adds the field to a populated object.
 	Upgrade *FieldUpgradeRule `json:"upgrade,omitempty"`

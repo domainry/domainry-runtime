@@ -22,7 +22,7 @@ func recordAuthorizeReadQueryFields(principal principalmodel.Principal, object d
 		case "id", "created_at", "updated_at":
 			return true // These fields belong to every readable record envelope.
 		}
-		return recordpolicy.RecordCanReadFieldForPrincipal(principal, object.Key, key) &&
+		return recordpolicy.RecordCanReadObjectFieldKeyForPrincipal(principal, object, key) &&
 			!recordpolicy.RecordFieldReadMaskedForPrincipal(principal, object.Key, key) &&
 			!recordpolicy.RecordFieldRequiresPolicyEvaluation(principal, object.Key, key, "read")
 	}

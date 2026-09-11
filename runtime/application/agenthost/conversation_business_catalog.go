@@ -68,7 +68,7 @@ func (h *ConversationBusinessHost) BusinessCatalog(ctx context.Context, q agents
 		if q.ObjectKey != "" {
 			if readable {
 				for _, field := range object.Fields {
-					if field.DisabledAt != "" || !recordpolicy.RecordCanReadFieldForPrincipal(p, object.Key, field.Key) {
+					if field.DisabledAt != "" || !recordpolicy.RecordCanReadObjectFieldForPrincipal(p, object, field) {
 						continue
 					}
 					item.Fields = append(item.Fields, businessField(field, object.Key, p))

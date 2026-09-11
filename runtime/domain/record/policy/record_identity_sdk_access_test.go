@@ -130,3 +130,64 @@ func TestRecordStaticFieldEnvelopeDelegatesRulesAndGuardrailsToSDK(t *testing.T)
 		t.Fatal("contextual field rule was not disclosed to query planners")
 	}
 }
+
+func TestSensitiveFieldIsClosedUnlessAnExplicitFieldPolicyNamesIt(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "staff_account", Fields: []definitionmodel.FieldSchema{
+		{Key: "display_name", Type: "text"},
+		{Key: "pin_fingerprint", Type: "text", Sensitive: true},
+	}}
+	fingerprint := object.Fields[1]
+	record := recordmodel.Record{ID: "staff-1", Data: map[string]any{"id": "staff-1", "display_name": "Doctor", "pin_fingerprint": "1bcd47"}}
+	bundle := func(fieldPolicies ...accessfixture.FieldPolicyFixture) principalmodel.Principal {
+		return accessfixture.Attach(
+			principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-a"}},
+			accessfixture.Bundle{
+				Key: "front_desk", Permissions: []string{"staff_account.read", "staff_account.update", "staff_account.export"},
+				DataPolicies:  []accessfixture.DataPolicyFixture{{ObjectKey: "staff_account", Scope: "all", Read: true, Write: true}},
+				FieldPolicies: fieldPolicies,
+			},
+		)
+	}
+
+	// The object-level grant alone opens every ordinary field and no sensitive one.
+	inherited := bundle()
+	if !RecordCanReadObjectFieldForPrincipal(inherited, object, object.Fields[0]) {
+		t.Fatal("ordinary field lost the inherited object grant")
+	}
+	if RecordCanReadObjectFieldForPrincipal(inherited, object, fingerprint) || RecordCanWriteObjectFieldForPrincipal(inherited, object, fingerprint) || RecordCanExportObjectFieldForPrincipal(inherited, object, fingerprint) {
+		t.Fatal("sensitive field inherited the object grant")
+	}
+	if !RecordCanReadObjectFieldKeyForPrincipal(inherited, object, "display_name") || RecordCanReadObjectFieldKeyForPrincipal(inherited, object, "pin_fingerprint") || RecordCanWriteObjectFieldKeyForPrincipal(inherited, object, "pin_fingerprint") {
+		t.Fatal("key lookup did not apply the field's sensitivity")
+	}
+	if filtered := RecordFilterReadable(inherited, object, record); filtered.Data["display_name"] != "Doctor" || filtered.Data["pin_fingerprint"] != nil {
+		t.Fatalf("read projection published the sensitive field: %#v", filtered.Data)
+	}
+	if got := RecordExportFieldKeys(RecordExportableFieldsForPrincipal(inherited, object)); !reflect.DeepEqual(got, []string{"display_name"}) {
+		t.Fatalf("export fields=%v", got)
+	}
+	if err := RecordValidateWritableFields(inherited, object, map[string]any{"pin_fingerprint": "changed"}); err == nil {
+		t.Fatal("sensitive field accepted for write without an explicit policy")
+	}
+
+	// An explicit policy for the field governs it in either direction.
+	reopened := bundle(accessfixture.FieldPolicyFixture{ObjectKey: "staff_account", FieldKey: "pin_fingerprint", Read: true, Export: true, Masked: true})
+	if !RecordCanReadObjectFieldForPrincipal(reopened, object, fingerprint) || !RecordFieldReadMaskedForPrincipal(reopened, object.Key, fingerprint.Key) {
+		t.Fatal("explicit masked read policy did not reopen the sensitive field")
+	}
+	if RecordCanWriteObjectFieldForPrincipal(reopened, object, fingerprint) {
+		t.Fatal("explicit read-only policy opened the sensitive field for write")
+	}
+	closed := bundle(accessfixture.FieldPolicyFixture{ObjectKey: "staff_account", FieldKey: "pin_fingerprint"})
+	if RecordCanReadObjectFieldForPrincipal(closed, object, fingerprint) {
+		t.Fatal("explicit closed policy was ignored")
+	}
+
+	// A principal without an access bundle cannot name the field and stays closed.
+	if RecordSensitiveFieldClosedForPrincipal(principalmodel.Principal{}, object.Key, object.Fields[0]) {
+		t.Fatal("ordinary field reported closed")
+	}
+	if !RecordSensitiveFieldClosedForPrincipal(principalmodel.Principal{}, object.Key, fingerprint) {
+		t.Fatal("bundle-less principal reached the sensitive field")
+	}
+}

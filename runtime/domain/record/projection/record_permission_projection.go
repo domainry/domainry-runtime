@@ -175,6 +175,13 @@ func fieldPermissionSnapshots(principal principalmodel.Principal, object definit
 }
 
 func fieldPermissionSnapshot(principal principalmodel.Principal, object definitionmodel.ObjectSchema, field definitionmodel.FieldSchema) recordcontract.RecordFieldPermissionSnapshot {
+	if recordpolicy.RecordSensitiveFieldClosedForPrincipal(principal, object.Key, field) {
+		return recordcontract.RecordFieldPermissionSnapshot{
+			ObjectKey: object.Key, FieldKey: field.Key, FieldType: field.Type,
+			Read: fieldAccessDecision(false, "sensitive_field_closed"), Write: fieldAccessDecision(false, "sensitive_field_closed"),
+			Export: fieldAccessDecision(false, "sensitive_field_closed"), Source: "sensitive_field",
+		}
+	}
 	read, readMasked, readHandled := recordpolicy.RecordSDKReadableField(principal, object.Key, field.Key)
 	write, _, writeHandled := recordpolicy.RecordSDKWritableField(principal, object.Key, field.Key)
 	export, exportMasked, exportHandled := recordpolicy.RecordSDKExportableField(principal, object.Key, field.Key)
@@ -217,6 +224,12 @@ func exportPermissionSnapshot(principal principalmodel.Principal, object definit
 	fields := make([]recordcontract.RecordExportFieldPermission, 0, len(object.Fields))
 	for _, field := range object.Fields {
 		if field.DisabledAt != "" {
+			continue
+		}
+		if recordpolicy.RecordSensitiveFieldClosedForPrincipal(principal, object.Key, field) {
+			fields = append(fields, recordcontract.RecordExportFieldPermission{
+				FieldKey: field.Key, FieldType: field.Type, Export: fieldAccessDecision(false, "sensitive_field_closed"),
+			})
 			continue
 		}
 		allowed, masked, handled := recordpolicy.RecordSDKExportableField(principal, object.Key, field.Key)

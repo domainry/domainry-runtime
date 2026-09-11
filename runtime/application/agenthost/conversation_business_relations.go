@@ -33,7 +33,7 @@ func businessRelations(snapshot appschemamodel.ApplicationSchemaSnapshot, p prin
 			continue
 		}
 		for _, field := range object.Fields {
-			if field.Type != "relation" || field.DisabledAt != "" || !recordpolicy.RecordCanReadFieldForPrincipal(p, object.Key, field.Key) || !businessOperatorAllowed(businessField(field, object.Key, p), "eq") {
+			if field.Type != "relation" || field.DisabledAt != "" || !recordpolicy.RecordCanReadObjectFieldForPrincipal(p, object, field) || !businessOperatorAllowed(businessField(field, object.Key, p), "eq") {
 				continue
 			}
 			target := recordvalidation.RecordRelationTarget(field)
