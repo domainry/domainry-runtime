@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -33,7 +34,19 @@ func recordValueOrDefault(value, fallback string) string {
 	return fallback
 }
 
+// recordInternalError classifies a repository failure as backend.internal --
+// unless the repository already classified it. The record store raises client
+// errors with stable codes (a keyset page requested without its cursor is
+// backend.record.pagination_cursor_required, KindBadRequest); wrapping those
+// into KindInternal here turned them back into the 500 with
+// {"operation":"list records"} that the store-level fix was meant to end, and
+// a delivery reproduced exactly that 500 on page 2 of every Object. A
+// classified non-internal error passes through unchanged.
 func recordInternalError(operation string, err error) error {
+	var classified *apperror.AppError
+	if errors.As(err, &classified) && classified != nil && classified.Kind != apperror.KindInternal && classified.Kind != "" {
+		return err
+	}
 	return recordServiceError(apperror.KindInternal, "backend.internal", err, "operation", operation)
 }
 
