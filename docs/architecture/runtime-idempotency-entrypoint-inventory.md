@@ -66,7 +66,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workspaceprovision` | `POST /workspaces/{workspaceCode}/suspend` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 | `workspaceprovision` | `PUT /workspaces/{workspaceCode}/commercial-configuration` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 
-## Application mutation commands (127)
+## Application mutation commands (128)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -192,6 +192,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workflow` | `RetryWorkflowProcess` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_process_application_service.go` |
 | `workflow` | `RetryWorkflowProcessWithKey` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_process_application_service.go` |
 | `workflow` | `RunAgentWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
+| `workflow` | `RunAgentWorkflowWithKey` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_agent_invocation_application_service.go` |
 | `workflow` | `RunAutomationWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
 | `workflow` | `RunIntegrationWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
 | `workflow` | `RunWorkflow` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_application_service.go` |
