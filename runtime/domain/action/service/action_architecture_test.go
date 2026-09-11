@@ -13,7 +13,22 @@ func TestBusinessActionArchitectureHasOneInvocationAndMutationExecutor(t *testin
 	runtimeRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
 	production := readRuntimeProductionGo(t, runtimeRoot)
 
-	assertSourceCount(t, production, "InvokeBusinessAction", 0)
+	// The agent SDK's ConversationBusinessActionSource names its entry
+	// InvokeBusinessAction. That implementation is the only definition allowed,
+	// and it reaches the governed Action Application through Invoke like every
+	// other source; a second definition would be a second executor.
+	assertSourceCount(t, production, "InvokeBusinessAction(", 1)
+	for path, source := range production {
+		if !strings.Contains(source, "InvokeBusinessAction(") {
+			continue
+		}
+		if !strings.HasSuffix(filepath.ToSlash(path), "application/agenthost/conversation_business_actions.go") {
+			t.Fatalf("InvokeBusinessAction defined outside the agent host SDK adapter in %s", path)
+		}
+		if !strings.Contains(source, "func (h *ConversationBusinessHost) InvokeBusinessAction(") || !strings.Contains(source, "h.actions.Invoke(ctx, actionmodel.ActionSourceAgent, in)") {
+			t.Fatalf("agent host InvokeBusinessAction must delegate to the governed Action Application Invoke in %s", path)
+		}
+	}
 	assertSourceCount(t, production, "func (s *ActionApplicationService) Invoke(", 1)
 	assertSourceCount(t, production, "invocation.Source = source", 1)
 	assertSourceCount(t, production, "invocation.Source = ActionSourceHTTP", 0)

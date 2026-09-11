@@ -1,6 +1,11 @@
 # Exact production-code workspace fallback candidates reviewed by
 # TestRuntimeWorkspaceFallbackReviewBaseline. Remove entries when the matching
 # fallback is removed; add or change an entry only after explicit adjudication.
+#
+# 2026-09-11 review: six candidates added since the last review are all guard
+# clauses that refuse an empty or "default" workspace (agent host authority and
+# construction, workflow agent invocation receipt, action execution scope, and
+# external workspace provisioning requests). None falls back to a workspace.
 runtime/application/action/action_workspace_aggregate_execution.go|5bb28c1937a21188
 runtime/application/action/action_workspace_identity_usage_execution.go|33146e63c53c252b
 runtime/application/action/action_workspace_identity_usage_execution.go|4555daacc7fce16c
@@ -10,6 +15,8 @@ runtime/application/action/action_workspace_identity_usage_execution.go|eea8f470
 runtime/application/action/workspace_identity_usage_cursor.go|c7f5a914731a8893
 runtime/application/action/workspace_identity_usage_cursor.go|f94f39652a2e0fc3
 runtime/application/agenthost/agent_task_dispatch_application_service.go|a1aa32c92cd2c2fa
+runtime/application/agenthost/conversation_business_host.go|4c46628760bfbeb3
+runtime/application/agenthost/conversation_business_host.go|e3dcace4ac8cd670
 runtime/application/notificationfacade/module_transactions.go|a53412ab9d129a2d
 runtime/application/publicationhandoff/publication_handoff_application_service.go|3a264f3250c4d24e
 runtime/application/publicationhandoff/publication_handoff_application_service.go|b2e5ab60c1900c7a
@@ -18,12 +25,14 @@ runtime/application/seed/business/acceptance_setup.go|77da2f4766b7ea50
 runtime/application/seed/business/records.go|b2e5ab60c1900c7a
 runtime/application/seed/globalcapability/runtime.go|c9934cedd7524bf6
 runtime/application/workflow/workflow_agent_capability_completion.go|a0f007c7d608a730
+runtime/application/workflow/workflow_agent_invocation_application_service.go|4a61a3d45199a286
 runtime/application/workflow/workflow_principal_resolver_application_service.go|a7621539cdd54a6e
 runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
 runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
 runtime/application/workspaceprovision/workspace_administration_application_service.go|0e4286d03e5f3289
 runtime/application/workspaceprovision/workspace_administration_application_service.go|6a0413e7fa385b92
 runtime/application/workspaceprovision/workspace_administration_application_service.go|b7fd3431341b3beb
+runtime/infrastructure/persistence/database/action/action_business_execution_store.go|8a6b0a15d07ee4c7
 runtime/infrastructure/persistence/database/appschema/manifest_store.go|4abfd612c230c5f8
 runtime/infrastructure/persistence/database/automation/sql_values.go|e3a854a480b5fcda
 runtime/infrastructure/persistence/database/datamigration/copy.go|50c2e571441e2111
@@ -63,6 +72,8 @@ runtime/infrastructure/persistence/database/workspaceaggregate/store.go|57146323
 runtime/infrastructure/persistence/database/workspaceaggregate/store.go|8fc20d6bd3224ab5
 runtime/infrastructure/persistence/database/workspaceaggregate/store.go|abdaed3fd66a86e2
 runtime/infrastructure/persistence/database/workspaceprovision/commercial_configuration_store.go|92f88f881e40d9d7
+runtime/infrastructure/persistence/database/workspaceprovision/external_workspace.go|485ce7b9ddf1d0c2
+runtime/infrastructure/persistence/database/workspaceprovision/external_workspace.go|85126cf14f7b36c7
 runtime/infrastructure/persistence/database/workspaceprovision/runtime_installation.go|4ad2342bd50e12cb
 runtime/infrastructure/persistence/database/workspaceprovision/workspace_administration_store.go|5a564a74778c604c
 runtime/infrastructure/persistence/database/workspaceprovision/workspace_administration_store.go|e59c076c6b0d497e
