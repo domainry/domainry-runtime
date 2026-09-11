@@ -8,7 +8,7 @@ import (
 )
 
 func TestInstallationAdministratorCredentialFileDeliveryIsPrivateAndCreateOnly(t *testing.T) {
-	directory := t.TempDir()
+	directory := privateTempDir(t)
 	path := filepath.Join(directory, "installation-administrator.json")
 	delivery, err := NewInstallationAdministratorCredentialFileDelivery(path)
 	if err != nil {

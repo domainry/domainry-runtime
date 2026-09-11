@@ -29,7 +29,7 @@ func (probe *initialCredentialDeliveryProbe) DeliverInitialWorkspaceCredential(_
 }
 
 func TestInitialWorkspaceCredentialFileDeliveryIsPrivateCreateOnlyAndNeverOverwrites(t *testing.T) {
-	directory := t.TempDir()
+	directory := privateTempDir(t)
 	path := filepath.Join(directory, "initial-workspace.json")
 	delivery, err := NewInitialWorkspaceCredentialFileDelivery(path)
 	if err != nil {
@@ -122,4 +122,20 @@ func TestWorkspaceManagerDeliversCredentialOnceAndDeliveryFailureKeepsCommittedW
 			}
 		})
 	}
+}
+
+// privateTempDir is t.TempDir() with the group and other write bits cleared.
+// Credential delivery refuses a group- or world-writable parent directory,
+// which is correct, but t.TempDir() inherits the ambient umask -- on a box with
+// umask 002 (the Ubuntu per-user-group default) it hands back 0775 and the
+// delivery constructor rightly refuses it. Without this the two credential
+// tests fail on the developer's machine and pass in CI, which reads as a
+// product regression and is not one.
+func privateTempDir(t *testing.T) string {
+	t.Helper()
+	directory := t.TempDir()
+	if err := os.Chmod(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return directory
 }

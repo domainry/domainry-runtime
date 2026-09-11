@@ -381,3 +381,27 @@ func TestRuntimeAPIContractKeepsOnlyRuntimePublicationHandoff(t *testing.T) {
 		}
 	}
 }
+
+// TestRuntimeAPIContractPublishesEveryRecordListQueryParameter pins the list
+// route's query surface against the failure that made it worth pinning: a
+// parameter the transport honours but the contract omits is invisible to every
+// consumer that reads the contract instead of the source. `search` shipped
+// without `search_fields`, which the field policy requires before it builds a
+// search predicate, so callers concluded the records route was exact-match
+// only; `after_id` is the keyset cursor without which page 2 is unreachable.
+func TestRuntimeAPIContractPublishesEveryRecordListQueryParameter(t *testing.T) {
+	var document struct {
+		Routes map[string]struct {
+			Query []string `json:"query"`
+		} `json:"routes"`
+	}
+	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
+		t.Fatal(err)
+	}
+	query := document.Routes["object_query"].Query
+	for _, parameter := range []string{"page", "page_size", "after_id", "search", "search_fields", "filters", "sort"} {
+		if !stringSliceContains(query, parameter) {
+			t.Fatalf("object_query does not publish %q: %v", parameter, query)
+		}
+	}
+}
