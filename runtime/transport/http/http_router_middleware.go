@@ -224,6 +224,7 @@ func CORSMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if origin, ok := allowedCORSOriginFor(origins, r.Header.Get("Origin")); ok {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Vary", "Origin")
 		}
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match, Last-Event-ID, Traceparent, Tracestate, Baggage, X-API-Key, X-User-ID, X-Role, X-User-Role, X-Preview-Role, X-Preview-User-ID, X-Workspace-ID, X-Request-ID, X-Correlation-ID, X-Operation-Reason, X-Operation-Confirmation, Builder-Task-ID, Idempotency-Key, Expected-Schema-Hash, Runtime-Authoring-Evidence-Step-Token")
@@ -258,10 +259,13 @@ func allowedCORSOriginFor(allowedOrigins []string, origin string) (string, bool)
 		return "", false
 	}
 	for _, allowed := range allowedOrigins {
-		if allowed == "*" {
-			return "*", true
-		}
-		if strings.EqualFold(allowed, origin) {
+		// The response always names the requesting origin, never the literal
+		// "*": the delivered Identity client sends credentialed requests
+		// (`credentials: 'include'` for the rotating refresh cookie) and a
+		// browser refuses a wildcard origin for those. "*" is a development
+		// setting (production configuration rejects it), so reflecting the
+		// origin there keeps the same reach with a credential-capable answer.
+		if allowed == "*" || strings.EqualFold(allowed, origin) {
 			return origin, true
 		}
 	}

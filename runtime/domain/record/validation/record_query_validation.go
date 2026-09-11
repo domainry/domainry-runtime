@@ -60,6 +60,13 @@ func normalizeListFilters(object definitionmodel.ObjectSchema, raw map[string]an
 		if key == "" || RecordIsEmptyValue(value) {
 			continue
 		}
+		if key == "id" {
+			// Equality on the record identity is the single-value form of `id__in`.
+			if normalized := normalizedListFilterValues(definitionmodel.FieldSchema{}, []any{value}, true); len(normalized) > 0 {
+				out["id__in"] = normalized
+			}
+			continue
+		}
 		if baseKey, operator, ok := splitFilterOperator(key); ok {
 			if operator == "in" && (baseKey == "id" || fields[baseKey].Key != "") {
 				if normalized := normalizedListFilterValues(fields[baseKey], value, baseKey == "id"); len(normalized) > 0 {
@@ -85,6 +92,34 @@ func normalizeListFilters(object definitionmodel.ObjectSchema, raw map[string]an
 		}
 	}
 	return out
+}
+
+// RecordValidateListFilters refuses a filter key that names neither the record
+// identity nor a field of the object. Normalization drops such keys, and a
+// listing that silently ignores its filter returns the whole page as if the
+// filter had matched: a client reading "the record I asked for" from it reads
+// somebody else's. The refusal names the key so the caller fixes the query.
+func RecordValidateListFilters(object definitionmodel.ObjectSchema, raw map[string]any) error {
+	fields := map[string]bool{"id": true, "workspace_id": true}
+	for _, field := range object.Fields {
+		fields[field.Key] = true
+	}
+	keys := make([]string, 0, len(raw))
+	for key := range raw {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, rawKey := range keys {
+		key := strings.TrimSpace(rawKey)
+		if key == "" {
+			continue
+		}
+		baseKey, _, _ := splitFilterOperator(key)
+		if !fields[baseKey] {
+			return validationError("backend.validation.filter_field_unknown", "field", baseKey, "object_key", object.Key)
+		}
+	}
+	return nil
 }
 
 func splitFilterOperator(key string) (string, string, bool) {

@@ -112,14 +112,14 @@ func TestModuleAdapterRouterAppliesRuntimeCORSToModuleRoutes(t *testing.T) {
 	request.Header.Set("Origin", "http://127.0.0.1:4473")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || response.Header().Get("Access-Control-Allow-Origin") != "*" {
+	if response.Code != http.StatusOK || response.Header().Get("Access-Control-Allow-Origin") != "http://127.0.0.1:4473" || response.Header().Get("Access-Control-Allow-Credentials") != "true" {
 		t.Fatalf("module route must carry the Runtime CORS policy: status=%d headers=%v", response.Code, response.Header())
 	}
 	preflight := httptest.NewRequest(http.MethodOptions, "/report/weekly/query", nil)
 	preflight.Header.Set("Origin", "http://127.0.0.1:4473")
 	response = httptest.NewRecorder()
 	router.ServeHTTP(response, preflight)
-	if response.Code != http.StatusNoContent || response.Header().Get("Access-Control-Allow-Origin") != "*" {
+	if response.Code != http.StatusNoContent || response.Header().Get("Access-Control-Allow-Origin") != "http://127.0.0.1:4473" || response.Header().Get("Access-Control-Allow-Credentials") != "true" {
 		t.Fatalf("preflight status=%d headers=%v", response.Code, response.Header())
 	}
 	bare := newModuleAdapterRouter(runtimehttp.ListenerRouteGroupPublic, fallback)

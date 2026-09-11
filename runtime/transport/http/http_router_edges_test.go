@@ -51,7 +51,7 @@ func TestCORSOriginPolicyAndPreflight(t *testing.T) {
 		t.Fatal("unlisted origin accepted")
 	}
 	wildcard := &HTTPRouter{corsAllowedOrigins: []string{"*"}}
-	if origin, ok := wildcard.allowedCORSOrigin("https://any.example"); !ok || origin != "*" {
+	if origin, ok := wildcard.allowedCORSOrigin("https://any.example"); !ok || origin != "https://any.example" {
 		t.Fatalf("wildcard origin=%q ok=%v", origin, ok)
 	}
 
@@ -64,7 +64,7 @@ func TestCORSOriginPolicyAndPreflight(t *testing.T) {
 	request := httptest.NewRequest(http.MethodOptions, "/records", nil)
 	request.Header.Set("Origin", "https://app.example")
 	handler.ServeHTTP(preflight, request)
-	if preflight.Code != http.StatusNoContent || called || preflight.Header().Get("Access-Control-Allow-Origin") != "https://app.example" || preflight.Header().Get("Vary") != "Origin" || !strings.Contains(preflight.Header().Get("Access-Control-Allow-Headers"), "Last-Event-ID") {
+	if preflight.Code != http.StatusNoContent || called || preflight.Header().Get("Access-Control-Allow-Origin") != "https://app.example" || preflight.Header().Get("Access-Control-Allow-Credentials") != "true" || preflight.Header().Get("Vary") != "Origin" || !strings.Contains(preflight.Header().Get("Access-Control-Allow-Headers"), "Last-Event-ID") {
 		t.Fatalf("preflight status=%d called=%v headers=%v", preflight.Code, called, preflight.Header())
 	}
 	for _, header := range []string{"If-Match", "Builder-Task-ID", "Idempotency-Key", "Expected-Schema-Hash", "X-Operation-Reason", "X-Operation-Confirmation", RuntimeAuthoringEvidenceStepTokenHeader} {

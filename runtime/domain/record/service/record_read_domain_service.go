@@ -5,6 +5,7 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
+	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
@@ -68,11 +69,11 @@ func (s *RecordReadDomainService) IdentityProfileReferences(ctx context.Context,
 	}
 	references := []RecordIdentityProfileReference{}
 	for _, extension := range s.identityProfileExtensions() {
-		page, err := s.ListRecords(ctx, extension.ObjectKey, recordmodel.RecordListQuery{
+		page, err := s.listRecords(ctx, extension.ObjectKey, recordmodel.RecordListQuery{
 			Page:     1,
 			PageSize: 1,
 			Filters:  map[string]any{extension.IdentityRelationField: userID},
-		}, principal)
+		}, principal, true, false)
 		if err != nil {
 			return nil, err
 		}
@@ -89,7 +90,7 @@ func (s *RecordReadDomainService) IdentityProfileReferences(ctx context.Context,
 }
 
 func (s *RecordReadDomainService) ListRecords(ctx context.Context, objectKey string, query recordmodel.RecordListQuery, principal principalmodel.Principal) (recordmodel.RecordPageResult, error) {
-	return s.listRecords(ctx, objectKey, query, principal, true)
+	return s.listRecords(ctx, objectKey, query, principal, true, true)
 }
 
 // ListRecordsForAction preserves object authorization and record scope while
@@ -97,16 +98,24 @@ func (s *RecordReadDomainService) ListRecords(ctx context.Context, objectKey str
 // Handler. Presentation masking belongs to external reads, not to the
 // source-owned business-rule execution boundary.
 func (s *RecordReadDomainService) ListRecordsForAction(ctx context.Context, objectKey string, query recordmodel.RecordListQuery, principal principalmodel.Principal) (recordmodel.RecordPageResult, error) {
-	return s.listRecords(ctx, objectKey, query, principal, false)
+	return s.listRecords(ctx, objectKey, query, principal, false, false)
 }
 
-func (s *RecordReadDomainService) listRecords(ctx context.Context, objectKey string, query recordmodel.RecordListQuery, principal principalmodel.Principal, applyFieldPolicy bool) (recordmodel.RecordPageResult, error) {
+func (s *RecordReadDomainService) listRecords(ctx context.Context, objectKey string, query recordmodel.RecordListQuery, principal principalmodel.Principal, applyFieldPolicy, validateFilters bool) (recordmodel.RecordPageResult, error) {
 	object, err := s.policy.ObjectForAction(principal, objectKey, "read")
 	if err != nil {
 		return recordmodel.RecordPageResult{}, err
 	}
 	if err := s.policy.EnsureReportSnapshotAccess(object, "read", principal); err != nil {
 		return recordmodel.RecordPageResult{}, err
+	}
+	if validateFilters {
+		// A caller-supplied filter (HTTP listing) that names no field of the
+		// object is refused by name; internal callers build filters from the
+		// model (identity relation fields, ordered claims) and skip this.
+		if err := recordvalidation.RecordValidateListFilters(object, query.Filters); err != nil {
+			return recordmodel.RecordPageResult{}, err
+		}
 	}
 	query = s.policy.NormalizeListQuery(object, query, principal)
 	if applyFieldPolicy {
