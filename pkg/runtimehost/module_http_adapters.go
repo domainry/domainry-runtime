@@ -20,6 +20,12 @@ type moduleAdapterRouter struct {
 	fallback http.Handler
 	handler  http.Handler
 	guard    moduleRouteGuard
+	// corsOrigins is the Runtime's browser policy. Module routes are served
+	// here, ahead of the Runtime router and its middleware, so without this
+	// wrapper an Identity or Report response reached the browser with no
+	// Access-Control-Allow-Origin header and every cross-origin frontend had to
+	// proxy /auth and /report through its own origin.
+	corsOrigins []string
 }
 
 func newModuleAdapterRouter(group runtimehttp.ListenerRouteGroup, fallback http.Handler) *moduleAdapterRouter {
@@ -37,6 +43,9 @@ func (router *moduleAdapterRouter) Bind(adapters []modulehttp.Adapter, guards ..
 	handler, err := mountModuleHTTPAdapters(router.group, adapters, router.fallback, guard)
 	if err != nil {
 		return err
+	}
+	if len(router.corsOrigins) > 0 {
+		handler = runtimehttp.CORSMiddleware(router.corsOrigins, handler)
 	}
 	router.mu.Lock()
 	router.handler = handler

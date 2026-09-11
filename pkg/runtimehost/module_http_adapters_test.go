@@ -94,3 +94,41 @@ func runtimeHostTestAction(key, pattern string, exposures []actioncontract.Expos
 	}
 	return action
 }
+
+func TestModuleAdapterRouterAppliesRuntimeCORSToModuleRoutes(t *testing.T) {
+	// Module routes (Identity /auth, Report /report) are served by the host
+	// router ahead of the Runtime router, so the Runtime's CORS middleware never
+	// sees them; the host applies the same policy or a browser cannot read them.
+	sample := moduleAdapterStub{owner: "report", name: "business", handler: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+	}), routes: []modulehttp.Route{{Action: runtimeHostTestAction("report.query", "POST /report/{reportKey}/query", []actioncontract.Exposure{actioncontract.ExposurePublic}, actioncontract.AuthorizationAnonymous)}}}
+	fallback := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusTeapot) })
+	router := newModuleAdapterRouter(runtimehttp.ListenerRouteGroupPublic, fallback)
+	router.corsOrigins = []string{"*"}
+	if err := router.Bind([]modulehttp.Adapter{sample}); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/report/weekly/query", strings.NewReader("{}"))
+	request.Header.Set("Origin", "http://127.0.0.1:4473")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("module route must carry the Runtime CORS policy: status=%d headers=%v", response.Code, response.Header())
+	}
+	preflight := httptest.NewRequest(http.MethodOptions, "/report/weekly/query", nil)
+	preflight.Header.Set("Origin", "http://127.0.0.1:4473")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, preflight)
+	if response.Code != http.StatusNoContent || response.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("preflight status=%d headers=%v", response.Code, response.Header())
+	}
+	bare := newModuleAdapterRouter(runtimehttp.ListenerRouteGroupPublic, fallback)
+	if err := bare.Bind([]modulehttp.Adapter{sample}); err != nil {
+		t.Fatal(err)
+	}
+	response = httptest.NewRecorder()
+	bare.ServeHTTP(response, request)
+	if response.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Fatalf("without a configured policy no CORS header is invented: %v", response.Header())
+	}
+}

@@ -212,8 +212,17 @@ func (s *HTTPRouter) httpMetricsSummary() map[string]int64 {
 }
 
 func (s *HTTPRouter) withCORS(next http.Handler) http.Handler {
+	return CORSMiddleware(s.corsAllowedOrigins, next)
+}
+
+// CORSMiddleware applies the Runtime's browser cross-origin policy to any
+// handler. The process host serves module-owned routes (Identity /auth,
+// Report /report) ahead of the Runtime router, so it applies the same policy
+// there; a browser reads a module response only when it carries these headers.
+func CORSMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
+	origins := normalizeCORSOrigins(allowedOrigins)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if origin, ok := s.allowedCORSOrigin(r.Header.Get("Origin")); ok {
+		if origin, ok := allowedCORSOriginFor(origins, r.Header.Get("Origin")); ok {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 		}
@@ -240,11 +249,15 @@ func normalizeCORSOrigins(origins []string) []string {
 }
 
 func (s *HTTPRouter) allowedCORSOrigin(origin string) (string, bool) {
+	return allowedCORSOriginFor(s.corsAllowedOrigins, origin)
+}
+
+func allowedCORSOriginFor(allowedOrigins []string, origin string) (string, bool) {
 	origin = strings.TrimSpace(origin)
 	if origin == "" {
 		return "", false
 	}
-	for _, allowed := range s.corsAllowedOrigins {
+	for _, allowed := range allowedOrigins {
 		if allowed == "*" {
 			return "*", true
 		}

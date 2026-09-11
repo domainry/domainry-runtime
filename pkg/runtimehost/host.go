@@ -465,6 +465,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	}
 	for group, handler := range handlers {
 		identityRouters[group] = newIdentityAdapterRouter(group, handler)
+		identityRouters[group].corsOrigins = cfg.CORSAllowedOrigins
 		if err := identityRouters[group].Bind(workspaceManager.Adapters(), initialModuleGuard); err != nil {
 			return fmt.Errorf("mount initialized Identity HTTP adapters: %w", err)
 		}
