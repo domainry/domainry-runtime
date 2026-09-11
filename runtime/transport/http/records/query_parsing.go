@@ -13,10 +13,16 @@ import (
 func parseListQuery(r *http.Request) recordmodel.RecordListQuery {
 	values := r.URL.Query()
 	query := recordmodel.RecordListQuery{
-		Page:           intQuery(values.Get("page")),
-		PageSize:       intQuery(values.Get("page_size")),
-		AfterID:        strings.TrimSpace(values.Get("after_id")),
-		Search:         strings.TrimSpace(values.Get("search")),
+		Page:     intQuery(values.Get("page")),
+		PageSize: intQuery(values.Get("page_size")),
+		AfterID:  strings.TrimSpace(values.Get("after_id")),
+		Search:   strings.TrimSpace(values.Get("search")),
+		// search needs the fields it may match; without them the query field
+		// policy sees an empty projection and refuses rather than widening the
+		// listing, so `search` alone was unusable from HTTP. The policy filters
+		// these to the object's queryable fields, so a caller cannot name one it
+		// is not allowed to read.
+		SearchFields:   splitQueryCSV(values.Get("search_fields")),
 		Filters:        map[string]any{},
 		Locale:         recordRequestLocale(r),
 		FallbackLocale: recordFallbackLocale(r),
