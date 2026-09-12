@@ -47,16 +47,35 @@ func recordInternalError(operation string, err error) error {
 	if errors.As(err, &classified) && classified != nil && classified.Kind != apperror.KindInternal && classified.Kind != "" {
 		return err
 	}
-	// A CodedError is the other half of the same story: the foundation defines it
-	// as a stable client-facing code raised at a leaf boundary, for the
-	// Application layer to give a kind. Burying it here published
-	// backend.validation.filter_field_unknown -- a documented 400 naming the bad
-	// filter key -- as a 500 backend.internal with the key thrown away.
-	var coded *apperror.CodedError
-	if errors.As(err, &coded) && coded != nil && strings.TrimSpace(coded.Code) != "" {
-		return &apperror.AppError{Kind: apperror.KindBadRequest, Code: coded.Code, Params: coded.ErrorParams()}
+	// A CodedError is the other half of the same story: the store can also raise
+	// one, and burying it here would publish a documented client refusal as an
+	// internal error.
+	if refusal := recordClassifyLeafRefusal(err); refusal != err {
+		return refusal
 	}
 	return recordServiceError(apperror.KindInternal, "backend.internal", err, "operation", operation)
+}
+
+// recordClassifyLeafRefusal gives a leaf refusal the kind the foundation says
+// the Application layer owes it. apperror.CodedError is defined as a stable
+// client-facing code raised at a leaf boundary "without assigning an
+// HTTP/application error kind"; apperror.KindOf answers KindInternal for
+// anything that is not an *AppError. So a CodedError that reaches the HTTP
+// boundary unclassified is published as 500 backend.internal with its code and
+// params thrown away: a delivery asked for an unknown filter key and got that
+// 500 instead of the documented 400 backend.validation.filter_field_unknown
+// naming the key. An error that already carries a kind, and an unclassified
+// error that is not a coded refusal (a real fault), both pass through unchanged.
+func recordClassifyLeafRefusal(err error) error {
+	var classified *apperror.AppError
+	if errors.As(err, &classified) && classified != nil && classified.Kind != "" {
+		return err
+	}
+	var coded *apperror.CodedError
+	if errors.As(err, &coded) && coded != nil && strings.TrimSpace(coded.Code) != "" {
+		return &apperror.AppError{Kind: apperror.KindBadRequest, Code: coded.Code, Params: coded.ErrorParams(), Err: err}
+	}
+	return err
 }
 
 func recordServiceError(kind apperror.ErrorKind, code string, err error, params ...string) error {

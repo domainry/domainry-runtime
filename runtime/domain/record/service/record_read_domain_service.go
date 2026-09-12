@@ -114,7 +114,7 @@ func (s *RecordReadDomainService) listRecords(ctx context.Context, objectKey str
 		// object is refused by name; internal callers build filters from the
 		// model (identity relation fields, ordered claims) and skip this.
 		if err := recordvalidation.RecordValidateListFilters(object, query.Filters); err != nil {
-			return recordmodel.RecordPageResult{}, err
+			return recordmodel.RecordPageResult{}, recordClassifyLeafRefusal(err)
 		}
 	}
 	query = s.policy.NormalizeListQuery(object, query, principal)

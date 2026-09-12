@@ -52,3 +52,32 @@ func TestRecordInternalErrorClassifiesLeafCodedErrorsAsBadRequest(t *testing.T) 
 		t.Fatal("an unclassified repository failure must stay internal")
 	}
 }
+
+// The filter refusal never reaches recordInternalError -- it is raised before
+// the repository call and returned straight out of the read service. An
+// end-to-end probe against a delivered product proved it: GET
+// /records/leave_request?filters={"not_a_field":"x"} answered 500
+// backend.internal with params null. Classification has to happen where the
+// refusal is raised, so pin every leg of it here.
+func TestRecordClassifyLeafRefusal(t *testing.T) {
+	coded := &apperror.CodedError{Code: "backend.validation.filter_field_unknown", Params: map[string]string{"field": "not_a_field", "object_key": "leave_request"}}
+	var classified *apperror.AppError
+	if got := recordClassifyLeafRefusal(coded); !errors.As(got, &classified) || classified.Kind != apperror.KindBadRequest || classified.Code != "backend.validation.filter_field_unknown" || classified.Params["field"] != "not_a_field" {
+		t.Fatalf("leaf refusal was not classified as a bad request: %#v", got)
+	}
+	if got := recordClassifyLeafRefusal(fmt.Errorf("normalize filters: %w", coded)); !errors.As(got, &classified) || classified.Kind != apperror.KindBadRequest {
+		t.Fatalf("wrapped leaf refusal was not classified: %#v", got)
+	}
+	// A policy denial already carries its kind and must keep it: relabelling a
+	// forbidden read as a bad request would tell the caller to fix the request.
+	denial := &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.record.field_not_queryable"}
+	if got := recordClassifyLeafRefusal(denial); got != error(denial) {
+		t.Fatalf("a classified error must pass through unchanged: %#v", got)
+	}
+	// A real fault is not a refusal and must stay unclassified, so that
+	// recordInternalError still calls it backend.internal.
+	fault := errors.New("sql: connection reset")
+	if got := recordClassifyLeafRefusal(fault); got != fault {
+		t.Fatalf("an unclassified fault must pass through unchanged: %#v", got)
+	}
+}
