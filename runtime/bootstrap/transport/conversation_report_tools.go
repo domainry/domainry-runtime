@@ -8,7 +8,7 @@ import (
 // Runtime bootstrap selects Tools' public adapter. The Runtime application
 // exposes only its current authority and the Report owner's SDK DTO port.
 func (h runtimeAgentApplicationHost) ConversationToolDefinitions() []agent.ConversationToolDefinition {
-	return append(toolmodule.ReportDefinitions(),toolmodule.AnalysisDefinitions()...)
+	return append(toolmodule.ReportDefinitions(), toolmodule.AnalysisDefinitions()...)
 }
 
 func (h runtimeAgentApplicationHost) AssembleConversationTools(base agent.ConversationToolHost) (agent.ConversationToolHost, error) {
@@ -17,8 +17,10 @@ func (h runtimeAgentApplicationHost) AssembleConversationTools(base agent.Conver
 	if err := adapter.Register(registry); err != nil {
 		return nil, err
 	}
-	analysis:=&toolmodule.AnalysisAdapter{Source:func()toolmodule.AnalysisSource{return h.conversations},Authorize:h.conversations.AuthorizeConversationTool}
-	if err:=analysis.Register(registry);err!=nil{return nil,err}
+	analysis := &toolmodule.AnalysisAdapter{Source: func() toolmodule.AnalysisSource { return h.conversations }, Authorize: h.conversations.AuthorizeConversationTool}
+	if err := analysis.Register(registry); err != nil {
+		return nil, err
+	}
 	keys := []string{}
 	for _, d := range h.ConversationToolDefinitions() {
 		keys = append(keys, d.Key)
