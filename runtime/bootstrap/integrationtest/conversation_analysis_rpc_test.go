@@ -141,8 +141,13 @@ func TestAnalysisToolRPCWithRealOwnerIdentityAndRestart(t *testing.T) {
 	}
 	for _, role := range []string{"analysis_tool_revoked", "business_field_restricted", "business_restricted"} {
 		b.assign(role)
-		if _, err := selected.InvokeConversationTool(t.Context(), r); err == nil {
-			t.Fatal("revoked execution", role)
+		revoked, err := selected.InvokeConversationTool(t.Context(), r)
+		if role == "business_field_restricted" {
+			if err != nil || revoked.Status != "failed" || revoked.ErrorCode != "backend.report.analysis.spec_invalid" {
+				t.Fatal("revoked business field returned a non-recoverable or successful result", revoked, err)
+			}
+		} else if err == nil {
+			t.Fatal("revoked tool or dataset permission still executed", role, revoked)
 		}
 		if err := selected.AuthorizeConversationToolResult(t.Context(), r, result); err == nil {
 			t.Fatal("revoked saved result", role)

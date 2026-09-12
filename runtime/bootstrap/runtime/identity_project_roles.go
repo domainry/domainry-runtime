@@ -12,6 +12,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	workspaceprovisionapplication "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
@@ -19,7 +20,7 @@ import (
 // publishRuntimeProjectRoles projects application-owned authorization roles
 // through Identity's deployment-neutral port. Older/remote bindings may omit
 // the optional capability; they continue to own their role provisioning.
-func publishRuntimeProjectRoles(ctx context.Context, binding identitysdk.Binding, objects []definitionmodel.ObjectSchema, roles []manifestmodel.RoleSchema, workspaceID, applicationKey string, handlerDescriptors ...runtimeext.HandlerDescriptor) error {
+func publishRuntimeProjectRoles(ctx context.Context, binding identitysdk.Binding, objects []definitionmodel.ObjectSchema, roles []manifestmodel.RoleSchema, workspaceID, applicationKey string, includeInstallationAdministrator bool, handlerDescriptors ...runtimeext.HandlerDescriptor) error {
 	if binding == nil {
 		return nil
 	}
@@ -27,12 +28,70 @@ func publishRuntimeProjectRoles(ctx context.Context, binding identitysdk.Binding
 	if !ok {
 		return nil
 	}
-	catalog, err := RuntimeWorkspaceProjectRoleCatalog(objects, roles, workspaceID, applicationKey, handlerDescriptors...)
+	var catalog identitysdk.ProjectRoleCatalog
+	var err error
+	if includeInstallationAdministrator {
+		catalog, err = RuntimeInstallationWorkspaceProjectRoleCatalog(objects, roles, workspaceID, applicationKey, handlerDescriptors...)
+	} else {
+		catalog, err = RuntimeWorkspaceProjectRoleCatalog(objects, roles, workspaceID, applicationKey, handlerDescriptors...)
+	}
 	if err != nil {
 		return err
 	}
 	_, err = publisher.PublishProjectRoles(ctx, catalog)
 	return err
+}
+
+// RuntimeInstallationWorkspaceBootstrapRoleCatalog adds the installation-only
+// administrator role to the first Workspace transaction. The role is manual
+// only inside the closed bootstrap transaction because the Identity bootstrap
+// catalog deliberately excludes system-managed roles. Before Runtime opens
+// HTTP traffic, ordinary publication replaces this definition with the
+// system-managed variant returned by RuntimeInstallationWorkspaceProjectRoleCatalog.
+func RuntimeInstallationWorkspaceBootstrapRoleCatalog(objects []definitionmodel.ObjectSchema, roles []manifestmodel.RoleSchema, initialWorkspaceAdministratorRole, applicationKey string, handlerDescriptors ...runtimeext.HandlerDescriptor) (identitysdk.ProjectRoleCatalog, error) {
+	roles, err := runtimeRolesWithInstallationAdministrator(roles, "manual", true)
+	if err != nil {
+		return identitysdk.ProjectRoleCatalog{}, err
+	}
+	return RuntimeWorkspaceBootstrapRoleCatalog(objects, roles, initialWorkspaceAdministratorRole, applicationKey, handlerDescriptors...)
+}
+
+// RuntimeInstallationWorkspaceProjectRoleCatalog publishes the protected
+// Runtime-owned administrator only in the installation Workspace. It is
+// system-managed, cannot be granted through public Identity APIs, and is not
+// copied by the ordinary new-Workspace bootstrap catalog.
+func RuntimeInstallationWorkspaceProjectRoleCatalog(objects []definitionmodel.ObjectSchema, roles []manifestmodel.RoleSchema, workspaceID, applicationKey string, handlerDescriptors ...runtimeext.HandlerDescriptor) (identitysdk.ProjectRoleCatalog, error) {
+	roles, err := runtimeRolesWithInstallationAdministrator(roles, "system_managed", false)
+	if err != nil {
+		return identitysdk.ProjectRoleCatalog{}, err
+	}
+	return RuntimeWorkspaceProjectRoleCatalog(objects, roles, workspaceID, applicationKey, handlerDescriptors...)
+}
+
+func runtimeRolesWithInstallationAdministrator(roles []manifestmodel.RoleSchema, assignmentMode string, provisionToWorkspaces bool) ([]manifestmodel.RoleSchema, error) {
+	for _, role := range roles {
+		if strings.TrimSpace(role.Key) == workspaceprovisionapplication.WorkspaceAdministratorRoleKey {
+			return nil, fmt.Errorf("Runtime Workspace role %q is platform-owned and cannot be declared by a project", workspaceprovisionapplication.WorkspaceAdministratorRoleKey)
+		}
+	}
+	permissions := []string{
+		workspaceprovisionapplication.ProvisionActionKey,
+		workspaceprovisionapplication.ListWorkspacesActionKey,
+		workspaceprovisionapplication.SuspendWorkspaceActionKey,
+		workspaceprovisionapplication.ReactivateWorkspaceActionKey,
+		workspaceprovisionapplication.UpdateWorkspaceCommercialConfigurationActionKey,
+	}
+	grants := make([]manifestmodel.RolePermission, 0, len(permissions))
+	for _, permission := range permissions {
+		grants = append(grants, manifestmodel.RolePermission{PermissionKey: permission, DataScope: identitysdk.DataScopeAll, AuditDenial: true})
+	}
+	result := append([]manifestmodel.RoleSchema(nil), roles...)
+	result = append(result, manifestmodel.RoleSchema{
+		Key: workspaceprovisionapplication.WorkspaceAdministratorRoleKey, Name: "Installation administrator",
+		Permissions: grants, Audience: "user", AssignmentMode: assignmentMode, RiskLevel: "privileged",
+		ProvisionToWorkspaces: provisionToWorkspaces,
+	})
+	return result, nil
 }
 
 // RuntimeProjectRoleCatalog converts Runtime-owned role metadata into

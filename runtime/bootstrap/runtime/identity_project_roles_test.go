@@ -12,9 +12,53 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	workspaceprovisionapplication "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
+
+func TestRuntimeInstallationAdministratorRoleIsPlatformOwnedAndProtected(t *testing.T) {
+	roles := runtimeWorkspaceRolesForTest()
+	bootstrapCatalog, err := RuntimeInstallationWorkspaceBootstrapRoleCatalog(nil, roles, "crm_acceptance_admin", "runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bootstrapRole, found := projectRoleByKey(bootstrapCatalog.Roles, workspaceprovisionapplication.WorkspaceAdministratorRoleKey)
+	if !found || bootstrapRole.AssignmentMode != "manual" || !bootstrapRole.ProvisionToWorkspaces {
+		t.Fatalf("bootstrap installation role=%+v found=%t", bootstrapRole, found)
+	}
+
+	projectCatalog, err := RuntimeInstallationWorkspaceProjectRoleCatalog(nil, roles, "workspace-primary", "runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectRole, found := projectRoleByKey(projectCatalog.Roles, workspaceprovisionapplication.WorkspaceAdministratorRoleKey)
+	if !found || projectRole.AssignmentMode != "system_managed" || projectRole.ProvisionToWorkspaces || projectRole.RiskLevel != "privileged" || len(projectRole.GrantableRoleKeys) != 0 {
+		t.Fatalf("published installation role=%+v found=%t", projectRole, found)
+	}
+	wantPermissions := map[string]bool{
+		workspaceprovisionapplication.ProvisionActionKey:                              true,
+		workspaceprovisionapplication.ListWorkspacesActionKey:                         true,
+		workspaceprovisionapplication.SuspendWorkspaceActionKey:                       true,
+		workspaceprovisionapplication.ReactivateWorkspaceActionKey:                    true,
+		workspaceprovisionapplication.UpdateWorkspaceCommercialConfigurationActionKey: true,
+	}
+	for _, permission := range projectRole.Permissions {
+		if !wantPermissions[permission.PermissionKey] || permission.DataScope != identitysdk.DataScopeAll || !permission.AuditDenial {
+			t.Fatalf("installation permission=%+v", permission)
+		}
+		delete(wantPermissions, permission.PermissionKey)
+	}
+	if len(wantPermissions) != 0 {
+		t.Fatalf("installation role missing permissions=%v", wantPermissions)
+	}
+
+	projectDeclared := append([]manifestmodel.RoleSchema(nil), roles...)
+	projectDeclared = append(projectDeclared, manifestmodel.RoleSchema{Key: workspaceprovisionapplication.WorkspaceAdministratorRoleKey, Name: "Project tenant admin"})
+	if _, err := RuntimeInstallationWorkspaceProjectRoleCatalog(nil, projectDeclared, "workspace-primary", "runtime"); err == nil || !strings.Contains(err.Error(), "platform-owned") {
+		t.Fatalf("project-declared installation role error=%v", err)
+	}
+}
 
 func TestRuntimeWorkspaceRoleCatalogClosesFrozenHandlerCapabilitiesWithExactActionScope(t *testing.T) {
 	descriptors := []runtimeext.HandlerDescriptor{
@@ -445,7 +489,7 @@ func TestRuntimeRolePermissionsKeepsOnlyExactDeclaredKeys(t *testing.T) {
 func TestPublishRuntimeProjectRolesUsesOptionalBindingCapability(t *testing.T) {
 	binding := &runtimeProjectRolePublisherBinding{runtimeIdentityBindingStub: runtimeIdentityBindingStub{}}
 	roles := append(runtimeWorkspaceRolesForTest(), runtimeInternalServiceRoleForTest())
-	err := publishRuntimeProjectRoles(t.Context(), binding, []definitionmodel.ObjectSchema{{Key: "member", Fields: []definitionmodel.FieldSchema{{Key: "name"}}}}, roles, "workspace-primary", "runtime")
+	err := publishRuntimeProjectRoles(t.Context(), binding, []definitionmodel.ObjectSchema{{Key: "member", Fields: []definitionmodel.FieldSchema{{Key: "name"}}}}, roles, "workspace-primary", "runtime", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,7 +502,7 @@ func TestPublishRuntimeProjectRolesUsesOptionalBindingCapability(t *testing.T) {
 	if len(binding.catalog.Objects) == 0 {
 		t.Fatal("published catalog has no application objects")
 	}
-	if err := publishRuntimeProjectRoles(t.Context(), &binding.runtimeIdentityBindingStub, nil, nil, "workspace-primary", "runtime"); err != nil {
+	if err := publishRuntimeProjectRoles(t.Context(), &binding.runtimeIdentityBindingStub, nil, nil, "workspace-primary", "runtime", false); err != nil {
 		t.Fatalf("binding without optional publisher failed: %v", err)
 	}
 }

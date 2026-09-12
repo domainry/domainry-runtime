@@ -20,6 +20,7 @@ func projectIdentityDatabaseHandle(database *bootstrap.ProjectDatabase, filePath
 		profileResolver = profile.Resolve
 	}
 	handle := identitysdk.DatabaseHandle{Pool: database.DB(), Driver: database.Driver(), Schema: database.DatabaseSchema(), FilePath: filePath, BusinessProfileResolver: profileResolver, Migrations: database, ModuleMigrations: database}
+	handle.WorkspaceResolver = runtimeIdentityWorkspaceResolver{database: database}
 	handle.ExternalWorkspaces = &runtimeExternalWorkspaceHost{database: database}
 	if len(usageOptions) > 0 && strings.TrimSpace(usageOptions[0].ApplicationKey) != "" && strings.TrimSpace(usageOptions[0].CursorSecret) != "" {
 		handle.WorkspaceIdentityUsageAuthority = newRuntimeWorkspaceIdentityUsageAuthority(database, usageOptions[0].ApplicationKey)

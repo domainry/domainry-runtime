@@ -122,7 +122,14 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, manifest m
 	if err != nil {
 		return fmt.Errorf("compile roles for initial Workspace: %w", err)
 	}
-	rolePolicy, err := workspaceprovision.NewWorkspaceBootstrapRolePolicyEvidence(roleCatalog, manager.projectNavigationCatalog)
+	initialRoleCatalog := roleCatalog
+	if manager.bootstrap != nil && manager.cfg.InstallationAdministratorBootstrapEnabled {
+		initialRoleCatalog, err = runtimebootstrap.RuntimeInstallationWorkspaceBootstrapRoleCatalog(manifest.Objects, manifest.Roles, manifest.InitialWorkspaceAdministratorRole, manager.cfg.IdentityAudience, handlerDescriptors...)
+		if err != nil {
+			return fmt.Errorf("compile installation roles for initial Workspace: %w", err)
+		}
+	}
+	rolePolicy, err := workspaceprovision.NewWorkspaceBootstrapRolePolicyEvidence(initialRoleCatalog, manager.projectNavigationCatalog)
 	if err != nil {
 		return fmt.Errorf("compile role-policy evidence for initial Workspace: %w", err)
 	}
@@ -142,7 +149,7 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, manifest m
 	if manager.credentialDelivery == nil {
 		return fmt.Errorf("initial Workspace credential delivery is required before initialization")
 	}
-	if err := manager.bindWorkspaceBootstrapCatalogs(ctx, manager.bootstrap); err != nil {
+	if err := manager.bindWorkspaceBootstrapCatalogsWithRoleCatalog(ctx, manager.bootstrap, initialRoleCatalog); err != nil {
 		return err
 	}
 	if err := manager.database.EnsureRuntimeSchema(ctx); err != nil {
@@ -197,6 +204,10 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, manifest m
 }
 
 func (manager *projectWorkspaceManager) bindWorkspaceBootstrapCatalogs(ctx context.Context, target any) error {
+	return manager.bindWorkspaceBootstrapCatalogsWithRoleCatalog(ctx, target, manager.bootstrapRoleCatalog)
+}
+
+func (manager *projectWorkspaceManager) bindWorkspaceBootstrapCatalogsWithRoleCatalog(ctx context.Context, target any, roleCatalog identitysdk.ProjectRoleCatalog) error {
 	if _, supportsWorkspaceBootstrap := target.(identitysdk.WorkspaceIdentityBootstrap); !supportsWorkspaceBootstrap {
 		return nil
 	}
@@ -204,7 +215,7 @@ func (manager *projectWorkspaceManager) bindWorkspaceBootstrapCatalogs(ctx conte
 	if !ok {
 		return fmt.Errorf("embedded Identity binding does not accept the trusted Workspace role catalog")
 	}
-	if err := roleBinder.BindBootstrapProjectRoleCatalog(ctx, manager.bootstrapRoleCatalog); err != nil {
+	if err := roleBinder.BindBootstrapProjectRoleCatalog(ctx, roleCatalog); err != nil {
 		return fmt.Errorf("bind roles for Workspace bootstrap: %w", err)
 	}
 	navigationBinder, ok := target.(identitysdk.BootstrapProjectNavigationCatalogBinder)
@@ -273,6 +284,28 @@ func (manager *projectWorkspaceManager) bindInitializedIdentity(ctx context.Cont
 	if err != nil {
 		return err
 	}
+	// Repair legacy workspaces before any browser routes become ready. Registration
+	// remains owned by Identity and preserves administrator-owned application status.
+	if manager.handle.WorkspaceResolver != nil && binding.Descriptor().Mode == identitysdk.DeploymentModeModule {
+		workspaces, err := workspaceprovision.ActiveIdentityWorkspaces(ctx, manager.database, "")
+		if err != nil {
+			_ = binding.Close(context.WithoutCancel(ctx))
+			return err
+		}
+		for _, workspaceID := range workspaces {
+			_, err := binding.Applications().Register(ctx, identitysdk.ApplicationRegistration{
+				Application: identitysdk.ApplicationRef{WorkspaceID: identitysdk.WorkspaceID(workspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)}, RedirectURLs: cfg.IdentityRedirectURLs,
+			})
+			if err != nil {
+				_ = binding.Close(context.WithoutCancel(ctx))
+				return fmt.Errorf("reconcile workspace Identity application: %w", err)
+			}
+		}
+	}
+	if err := manager.publishInstallationAdministratorRole(ctx, binding, installation); err != nil {
+		_ = binding.Close(context.WithoutCancel(ctx))
+		return err
+	}
 	if err := manager.ensureInstallationAdministrator(ctx, binding, installation); err != nil {
 		_ = binding.Close(context.WithoutCancel(ctx))
 		return err
@@ -295,6 +328,24 @@ func (manager *projectWorkspaceManager) bindInitializedIdentity(ctx context.Cont
 		}
 	}
 	manager.cfg, manager.binding, manager.adapters = cfg, binding, adapters
+	return nil
+}
+
+func (manager *projectWorkspaceManager) publishInstallationAdministratorRole(ctx context.Context, binding identitysdk.Binding, installation workspaceprovision.Installation) error {
+	if !manager.cfg.InstallationAdministratorBootstrapEnabled {
+		return nil
+	}
+	publisher, ok := binding.(identitysdk.ProjectRoleCatalogPublisher)
+	if !ok {
+		return fmt.Errorf("explicit installation administrator bootstrap requires embedded Identity role publication")
+	}
+	catalog, err := runtimebootstrap.RuntimeInstallationWorkspaceProjectRoleCatalog(nil, nil, installation.WorkspaceID, manager.cfg.IdentityAudience)
+	if err != nil {
+		return fmt.Errorf("compile installation administrator role: %w", err)
+	}
+	if _, err := publisher.PublishProjectRoles(ctx, catalog); err != nil {
+		return fmt.Errorf("publish installation administrator role: %w", err)
+	}
 	return nil
 }
 

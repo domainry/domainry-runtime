@@ -680,7 +680,7 @@
         ]
       },
       "enabled": true,
-      "run_as": "sales_manager"
+      "run_as": "crm_risk_follow_up_service"
     },
     {
       "key": "lead.auto_route",
@@ -735,7 +735,7 @@
         ]
       },
       "enabled": true,
-      "run_as": "sales_manager"
+      "run_as": "crm_lead_routing_service"
     },
     {
       "key": "payment.overdue_escalation",
@@ -791,7 +791,7 @@
         ]
       },
       "enabled": true,
-      "run_as": "finance_reviewer",
+      "run_as": "crm_payment_escalation_service",
       "idempotency_keys": [
         "record_id",
         "scheduled_at",
@@ -1504,6 +1504,52 @@
     }
   ],
   "roles": [
+    {
+      "key": "crm_risk_follow_up_service",
+      "name": "CRM Risk Follow Up Service",
+      "audience": "service",
+      "assignment_mode": "system_managed",
+      "risk_level": "normal",
+      "provision_to_workspaces": false,
+      "permissions": [
+        {
+          "permission_key": "customer.record_risk_follow_up",
+          "data_scope": "all"
+        }
+      ]
+    },
+    {
+      "key": "crm_lead_routing_service",
+      "name": "CRM Lead Routing Service",
+      "audience": "service",
+      "assignment_mode": "system_managed",
+      "risk_level": "normal",
+      "provision_to_workspaces": false,
+      "permissions": [
+        {
+          "permission_key": "lead.record_ready_for_conversion",
+          "data_scope": "all"
+        }
+      ]
+    },
+    {
+      "key": "crm_payment_escalation_service",
+      "name": "CRM Payment Escalation Service",
+      "audience": "service",
+      "assignment_mode": "system_managed",
+      "risk_level": "normal",
+      "provision_to_workspaces": false,
+      "permissions": [
+        {
+          "permission_key": "payment.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "payment.record_overdue_escalation",
+          "data_scope": "all"
+        }
+      ]
+    },
     {
       "key": "sales_manager",
       "name": "Sales Manager",

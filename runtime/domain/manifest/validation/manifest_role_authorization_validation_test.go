@@ -128,7 +128,6 @@ func TestInitialWorkspaceAdministratorRoleIsExplicitAndProvisionable(t *testing.
 
 func TestInitialWorkspaceAdministratorRoleDoesNotInferProductSpecificRoles(t *testing.T) {
 	roles := []manifestmodel.RoleSchema{
-		{Key: "tenant_admin", Name: "Platform administrator", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true},
 		{Key: "headquarters_admin", Name: "Headquarters administrator", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true},
 		{Key: "store_manager", Name: "Store manager", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true},
 		{Key: "staff", Name: "Staff", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true},
@@ -137,5 +136,15 @@ func TestInitialWorkspaceAdministratorRoleDoesNotInferProductSpecificRoles(t *te
 	state.validateRoles()
 	if err := state.errs; err == nil || !strings.Contains(err.Error(), "initial_workspace_administrator_role") {
 		t.Fatalf("product-specific role keys inferred an initial administrator: %v", err)
+	}
+}
+
+func TestManifestRejectsProjectOwnedInstallationAdministratorRole(t *testing.T) {
+	state := newValidationState(manifestmodel.ManifestSchema{Roles: []manifestmodel.RoleSchema{{
+		Key: "tenant_admin", Name: "Project administrator", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true,
+	}}}, nil)
+	state.validateRoles()
+	if err := state.errs; err == nil || !strings.Contains(err.Error(), `role "tenant_admin" is platform-owned`) {
+		t.Fatalf("project-owned installation administrator role error=%v", err)
 	}
 }

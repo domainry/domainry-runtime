@@ -64,7 +64,6 @@ func TestExplicitInstallationAdministratorAuthenticatesAndReachesCommercialCatal
 		t.Fatal(err)
 	}
 	roles := workspaceRolesForTest()
-	roles[0].Permissions = []manifestmodel.RolePermission{{PermissionKey: workspaceprovisionapplication.ListWorkspacesActionKey, DataScope: identitysdk.DataScopeAll}}
 	permissionRequest, err := identitysdk.NewPermissionReconcileRequest(application, "application:domainry-runtime", "", []identitysdk.PermissionDefinition{{
 		PermissionKey: workspaceprovisionapplication.ListWorkspacesActionKey, ResourceKey: "runtime.workspaceprovision", OperationKey: "list_workspaces",
 		Label: "List Workspaces", Category: "Workspace administration", SourceKind: "runtime_action",
@@ -75,7 +74,7 @@ func TestExplicitInstallationAdministratorAuthenticatesAndReachesCommercialCatal
 	if _, err := manager.Binding().Permissions().Reconcile(t.Context(), permissionRequest); err != nil {
 		t.Fatal(err)
 	}
-	roleCatalog, err := runtimebootstrap.RuntimeWorkspaceProjectRoleCatalog(nil, roles, manager.cfg.IdentityWorkspaceID, cfg.IdentityAudience)
+	roleCatalog, err := runtimebootstrap.RuntimeInstallationWorkspaceProjectRoleCatalog(nil, roles, manager.cfg.IdentityWorkspaceID, cfg.IdentityAudience)
 	if err != nil {
 		t.Fatal(err)
 	}

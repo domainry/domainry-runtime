@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -31,6 +32,8 @@ type IdentityFixtureRole struct {
 	Key                  string
 	Name                 string
 	Permissions          []string
+	Audience             string
+	AssignmentMode       string
 	AllowAllBusinessData bool
 	DataPredicate        *identitysdk.Predicate
 	DataPolicies         []identitysdk.DataPolicy
@@ -115,7 +118,7 @@ func (factory IdentityFactory) Open(_ context.Context, application identitysdk.A
 	}
 	return &manifestIdentityBinding{
 		application: application, roles: factory.roles, users: factory.users, userRoles: factory.userRoles,
-		sessions: map[string]manifestIdentitySession{},
+		sessions: map[string]manifestIdentitySession{}, workflowWorkloads: map[string]identitysdk.WorkflowWorkloadBinding{},
 	}, nil
 }
 
@@ -134,6 +137,7 @@ type manifestIdentityBinding struct {
 	sessions                 map[string]manifestIdentitySession
 	permissions              map[string]map[string]identitysdk.PermissionDefinition
 	permissionSnapshotHashes map[string]string
+	workflowWorkloads        map[string]identitysdk.WorkflowWorkloadBinding
 }
 
 func (binding *manifestIdentityBinding) Descriptor() identitysdk.Descriptor {
@@ -149,7 +153,10 @@ func (binding *manifestIdentityBinding) Applications() identitysdk.ApplicationRe
 }
 func (binding *manifestIdentityBinding) Permissions() identitysdk.PermissionRegistry { return binding }
 func (binding *manifestIdentityBinding) Credentials() identitysdk.CredentialManager  { return binding }
-func (binding *manifestIdentityBinding) Close(context.Context) error                 { return nil }
+func (binding *manifestIdentityBinding) WorkflowWorkloads() identitysdk.WorkflowWorkloadIdentity {
+	return binding
+}
+func (binding *manifestIdentityBinding) Close(context.Context) error { return nil }
 
 func (binding *manifestIdentityBinding) Providers(context.Context, identitysdk.ProviderQuery) ([]identitysdk.Provider, error) {
 	return nil, nil
@@ -244,6 +251,9 @@ func (binding *manifestIdentityBinding) Reauthorize(ctx context.Context, request
 }
 
 func (binding *manifestIdentityBinding) Resolve(_ context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+	if request.Workload != nil {
+		return binding.resolveWorkflowWorkload(request)
+	}
 	roleKey := strings.TrimSpace(request.RoleKey)
 	if roleKey == "" {
 		roleKey = binding.firstUserRole(string(request.SubjectID))
@@ -263,6 +273,121 @@ func (binding *manifestIdentityBinding) Resolve(_ context.Context, request ident
 		Permissions: append([]string(nil), role.Permissions...), AccessBundle: &bundle,
 	}
 	return identitysdk.PrincipalResolution{Principal: principal, AccessBundle: bundle}, nil
+}
+
+func (binding *manifestIdentityBinding) ApplyWorkflowWorkloadBindings(_ context.Context, request identitysdk.ApplyWorkflowWorkloadBindingsRequest) (identitysdk.ApplyWorkflowWorkloadBindingsResult, error) {
+	if err := request.Validate(); err != nil {
+		return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, err
+	}
+	if !binding.matchesApplication(request.Application) {
+		return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.application_scope_mismatch", StatusCode: http.StatusForbidden}
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	next := make(map[string]identitysdk.WorkflowWorkloadBinding, len(request.Bindings))
+	result := identitysdk.ApplyWorkflowWorkloadBindingsResult{Bindings: make([]identitysdk.WorkflowWorkloadBinding, 0, len(request.Bindings))}
+	for _, spec := range request.Bindings {
+		role, found := binding.roles[spec.RoleKey]
+		if !found {
+			return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.workflow_workload_role_not_found", StatusCode: http.StatusNotFound}
+		}
+		if strings.TrimSpace(role.Audience) != "service" {
+			return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.workflow_workload_role_audience_invalid", StatusCode: http.StatusForbidden}
+		}
+		if strings.TrimSpace(role.AssignmentMode) != "system_managed" {
+			return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.workflow_workload_role_assignment_mode_invalid", StatusCode: http.StatusForbidden}
+		}
+		allowed := make(map[string]struct{}, len(role.Permissions))
+		for _, permission := range role.Permissions {
+			allowed[strings.TrimSpace(permission)] = struct{}{}
+		}
+		for _, actionKey := range spec.ActionKeys {
+			if _, ok := allowed[actionKey]; !ok {
+				return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.workflow_workload_action_denied", StatusCode: http.StatusForbidden}
+			}
+		}
+		workload := identitysdk.WorkflowWorkloadBinding{
+			Application: request.Application, SubjectID: identitysdk.WorkflowWorkloadSubjectID(spec.WorkflowKey),
+			WorkflowKey: spec.WorkflowKey, DefinitionVersionID: spec.DefinitionVersionID, DefinitionVersion: spec.DefinitionVersion,
+			RoleKey: spec.RoleKey, ActionKeys: append([]string(nil), spec.ActionKeys...), ReleaseID: request.ReleaseID, ReleaseDigest: request.ReleaseDigest,
+			SourceKind: "deployment_control_plane", SourceID: string(request.Application.ApplicationKey), Status: identitysdk.WorkflowWorkloadBindingActive,
+			CreatedAt: now, UpdatedAt: now,
+		}
+		next[spec.WorkflowKey] = workload
+		result.Bindings = append(result.Bindings, workload)
+	}
+	binding.mu.Lock()
+	binding.workflowWorkloads = next
+	binding.mu.Unlock()
+	return result, nil
+}
+
+func (binding *manifestIdentityBinding) GetWorkflowWorkloadBinding(_ context.Context, request identitysdk.GetWorkflowWorkloadBindingRequest) (identitysdk.WorkflowWorkloadBinding, error) {
+	if err := request.Validate(); err != nil {
+		return identitysdk.WorkflowWorkloadBinding{}, err
+	}
+	if !binding.matchesApplication(request.Application) {
+		return identitysdk.WorkflowWorkloadBinding{}, &identitysdk.Error{Code: "identity.application_scope_mismatch", StatusCode: http.StatusForbidden}
+	}
+	binding.mu.RLock()
+	workload, found := binding.workflowWorkloads[strings.TrimSpace(request.WorkflowKey)]
+	binding.mu.RUnlock()
+	if !found || workload.Status != identitysdk.WorkflowWorkloadBindingActive {
+		return identitysdk.WorkflowWorkloadBinding{}, &identitysdk.Error{Code: "identity.workflow_workload_not_found", StatusCode: http.StatusNotFound}
+	}
+	if workload.DefinitionVersionID != strings.TrimSpace(request.DefinitionVersionID) {
+		return identitysdk.WorkflowWorkloadBinding{}, &identitysdk.Error{Code: "identity.workflow_workload_version_mismatch", StatusCode: http.StatusForbidden}
+	}
+	if workload.ReleaseDigest != strings.TrimSpace(request.ReleaseDigest) {
+		return identitysdk.WorkflowWorkloadBinding{}, &identitysdk.Error{Code: "identity.workflow_workload_release_digest_mismatch", StatusCode: http.StatusForbidden}
+	}
+	return workload, nil
+}
+
+func (binding *manifestIdentityBinding) resolveWorkflowWorkload(request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+	workload := request.Workload
+	workflowKey := strings.TrimSpace(workload.WorkflowKey)
+	subjectID := identitysdk.WorkflowWorkloadSubjectID(workflowKey)
+	if !binding.matchesApplication(request.Application) || subjectID == "" || request.SubjectID != subjectID || strings.TrimSpace(request.RoleKey) == "" || strings.TrimSpace(workload.DefinitionVersionID) == "" || workload.DefinitionVersion <= 0 || strings.TrimSpace(workload.ReleaseID) == "" || strings.TrimSpace(workload.ReleaseDigest) == "" {
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_resolution_invalid", StatusCode: http.StatusBadRequest}
+	}
+	binding.mu.RLock()
+	current, found := binding.workflowWorkloads[workflowKey]
+	binding.mu.RUnlock()
+	if !found || current.Status != identitysdk.WorkflowWorkloadBindingActive {
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_not_found", StatusCode: http.StatusNotFound}
+	}
+	if current.RoleKey != strings.TrimSpace(request.RoleKey) {
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_role_mismatch", StatusCode: http.StatusForbidden}
+	}
+	if current.DefinitionVersionID != strings.TrimSpace(workload.DefinitionVersionID) || current.DefinitionVersion != workload.DefinitionVersion {
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_version_mismatch", StatusCode: http.StatusForbidden}
+	}
+	if current.ReleaseID != strings.TrimSpace(workload.ReleaseID) || current.ReleaseDigest != strings.TrimSpace(workload.ReleaseDigest) {
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_release_digest_mismatch", StatusCode: http.StatusForbidden}
+	}
+	role, found := binding.roles[current.RoleKey]
+	if !found || strings.TrimSpace(role.Audience) != "service" || strings.TrimSpace(role.AssignmentMode) != "system_managed" {
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_role_unavailable", StatusCode: http.StatusForbidden}
+	}
+	bundle := binding.accessBundle(string(subjectID), current.RoleKey)
+	principal := identitysdk.Principal{
+		ContractVersion: identitysdk.PrincipalContextContractVersion, Known: true, WorkspaceID: string(binding.application.WorkspaceID), UserID: string(subjectID), RoleKey: current.RoleKey,
+		AuthorizationRevision: "plane-testkit-workload-authorization", User: identitysdk.User{ID: string(subjectID), Name: workflowKey, Status: "active"},
+		Roles: []identitysdk.Role{{ID: current.RoleKey, Key: current.RoleKey, Label: role.Name, Status: "active"}}, Permissions: append([]string(nil), role.Permissions...), AccessBundle: &bundle,
+		Workload: &identitysdk.WorkflowWorkloadPrincipalContext{
+			WorkflowKey: workflowKey, DefinitionVersionID: workload.DefinitionVersionID, DefinitionVersion: workload.DefinitionVersion,
+			ReleaseID: workload.ReleaseID, ReleaseDigest: workload.ReleaseDigest, TaskID: strings.TrimSpace(workload.TaskID), SourceEventID: strings.TrimSpace(workload.SourceEventID), InitiatorSubjectID: workload.InitiatorSubjectID,
+		},
+	}
+	return identitysdk.PrincipalResolution{Principal: principal, AccessBundle: bundle}, nil
+}
+
+func (binding *manifestIdentityBinding) matchesApplication(application identitysdk.ApplicationScope) bool {
+	if application.WorkspaceID != binding.application.WorkspaceID || application.ApplicationKey != binding.application.ApplicationKey {
+		return false
+	}
+	return application.TenantID == "" || binding.application.TenantID == "" || application.TenantID == binding.application.TenantID
 }
 
 func (binding *manifestIdentityBinding) FindUser(_ context.Context, lookup identitysdk.UserLookup) (identitysdk.User, bool, error) {
@@ -541,3 +666,5 @@ func (binding *manifestIdentityBinding) accessBundle(subject, roleKey string) id
 
 var _ identitysdk.Factory = IdentityFactory{}
 var _ identitysdk.Binding = (*manifestIdentityBinding)(nil)
+var _ identitysdk.WorkflowWorkloadIdentityBinding = (*manifestIdentityBinding)(nil)
+var _ identitysdk.WorkflowWorkloadIdentity = (*manifestIdentityBinding)(nil)

@@ -976,7 +976,7 @@
     {
       "key": "termination_case.due_scheduler",
       "name": "Termination Date Scheduler",
-      "run_as": "admin",
+      "run_as": "termination_scheduler_service",
       "trigger": {
         "type": "scheduled:daily",
         "object_key": "termination_case"
@@ -1091,6 +1091,24 @@
     }
   ],
   "roles": [
+    {
+      "key": "termination_scheduler_service",
+      "name": "Termination Scheduler Service",
+      "audience": "service",
+      "assignment_mode": "system_managed",
+      "risk_level": "normal",
+      "provision_to_workspaces": false,
+      "permissions": [
+        {
+          "permission_key": "termination_case.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "termination_case.execute_due",
+          "data_scope": "all"
+        }
+      ]
+    },
     {
       "key": "admin",
       "name": "Admin",

@@ -65,6 +65,12 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 		"runtime.automation.validate_automation_rule", "runtime.automation.simulate_rule_candidate", "runtime.automation.simulate_rule",
 	}
 	return []runtimetestkit.IdentityFixtureRole{
+		integrationServiceIdentityRole("crm_risk_follow_up_service", "CRM Risk Follow Up Service", "customer.record_risk_follow_up"),
+		integrationServiceIdentityRole("crm_lead_routing_service", "CRM Lead Routing Service", "lead.record_ready_for_conversion"),
+		integrationServiceIdentityRole("crm_payment_escalation_service", "CRM Payment Escalation Service", "payment.read", "payment.record_overdue_escalation"),
+		integrationServiceIdentityRole("inventory_watch_service", "Inventory Watch Service", "stock_item.read", "stock_item.low_stock_watch.execute"),
+		integrationServiceIdentityRole("termination_scheduler_service", "Termination Scheduler Service", "termination_case.read", "termination_case.execute_due"),
+		integrationServiceIdentityRole("kitchen_alert_service", "Kitchen Alert Service", "kitchen_order.read", "kitchen_order.ready_alert.execute"),
 		integrationIdentityRole("admin", "Administrator", []string{
 			"business.access", "admin_console.access", "report.summary.get", "customer.read", "customer.create", "opportunity.read", "lead.read", "audit.business.read",
 		}, true),
@@ -248,5 +254,11 @@ func applyIntegrationIdentity(request *http.Request, role string) {
 func integrationIdentityRole(key, name string, permissions []string, allowAllBusinessData bool) runtimetestkit.IdentityFixtureRole {
 	return runtimetestkit.IdentityFixtureRole{
 		Key: key, Name: name, Permissions: permissions, AllowAllBusinessData: allowAllBusinessData,
+	}
+}
+
+func integrationServiceIdentityRole(key, name string, permissions ...string) runtimetestkit.IdentityFixtureRole {
+	return runtimetestkit.IdentityFixtureRole{
+		Key: key, Name: name, Permissions: append([]string(nil), permissions...), Audience: "service", AssignmentMode: "system_managed", AllowAllBusinessData: true,
 	}
 }

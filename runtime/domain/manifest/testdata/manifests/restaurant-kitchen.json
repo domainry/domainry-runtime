@@ -145,6 +145,24 @@
   ],
   "roles": [
     {
+      "key": "kitchen_alert_service",
+      "name": "Kitchen Alert Service",
+      "audience": "service",
+      "assignment_mode": "system_managed",
+      "risk_level": "normal",
+      "provision_to_workspaces": false,
+      "permissions": [
+        {
+          "permission_key": "kitchen_order.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "kitchen_order.ready_alert.execute",
+          "data_scope": "all"
+        }
+      ]
+    },
+    {
       "key": "kitchen_lead",
       "name": "Kitchen Lead",
       "permissions": [
@@ -251,7 +269,7 @@
       },
       "key": "kitchen_order.ready_alert",
       "name": "Ready Alert",
-      "run_as": "kitchen_lead",
+      "run_as": "kitchen_alert_service",
       "trigger": {
         "object_key": "kitchen_order",
         "type": "record_updated"

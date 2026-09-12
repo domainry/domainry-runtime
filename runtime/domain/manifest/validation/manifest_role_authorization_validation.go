@@ -9,6 +9,8 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
 
+const platformInstallationAdministratorRoleKey = "tenant_admin"
+
 func (state *validationState) validateRoles() {
 	seen := map[string]bool{}
 	for index, role := range state.manifest.Roles {
@@ -16,6 +18,8 @@ func (state *validationState) validateRoles() {
 		key := strings.TrimSpace(role.Key)
 		if key == "" {
 			state.add(path+".key", "is required")
+		} else if key == platformInstallationAdministratorRoleKey {
+			state.add(path+".key", "role %q is platform-owned and cannot be declared by a project", key)
 		} else if seen[key] {
 			state.add(path+".key", "duplicate role key %q", key)
 		}

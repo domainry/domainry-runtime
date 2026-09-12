@@ -182,7 +182,6 @@ func managedIdentityFieldAccessManifest(t *testing.T, dir string) string {
 		t.Fatal("source manifest has no administrator role to adapt")
 	}
 	manifest["roles"] = []any{
-		map[string]any{"key": "tenant_admin", "name": "Platform administrator", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
 		headquartersRole,
 		map[string]any{"key": "store_manager", "name": "Store manager", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},
 		map[string]any{"key": "staff", "name": "Staff", "permissions": []any{}, "audience": "user", "assignment_mode": "manual"},

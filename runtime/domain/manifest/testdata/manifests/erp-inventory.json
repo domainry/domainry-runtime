@@ -173,6 +173,24 @@
   ],
   "roles": [
     {
+      "key": "inventory_watch_service",
+      "name": "Inventory Watch Service",
+      "audience": "service",
+      "assignment_mode": "system_managed",
+      "risk_level": "normal",
+      "provision_to_workspaces": false,
+      "permissions": [
+        {
+          "permission_key": "stock_item.read",
+          "data_scope": "all"
+        },
+        {
+          "permission_key": "stock_item.low_stock_watch.execute",
+          "data_scope": "all"
+        }
+      ]
+    },
+    {
       "key": "inventory_manager",
       "name": "Inventory Manager",
       "permissions": [
@@ -295,7 +313,7 @@
       },
       "key": "stock_item.low_stock_watch",
       "name": "Low Stock Watch",
-      "run_as": "inventory_manager",
+      "run_as": "inventory_watch_service",
       "trigger": {
         "object_key": "stock_item",
         "type": "scheduled:daily"

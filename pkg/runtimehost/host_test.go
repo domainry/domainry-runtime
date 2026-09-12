@@ -233,7 +233,6 @@ func serverManifestJSON(t *testing.T, target *manifestmodel.GeneratedDomainSDKId
 
 func workspaceRolesForTest() []manifestmodel.RoleSchema {
 	return []manifestmodel.RoleSchema{
-		{Key: "tenant_admin", Name: "Platform administrator", Audience: "user", AssignmentMode: "manual", RiskLevel: "privileged", ProvisionToWorkspaces: true},
 		{Key: "headquarters_admin", Name: "Headquarters administrator", Audience: "user", AssignmentMode: "manual", RiskLevel: "privileged", ProvisionToWorkspaces: true},
 		{Key: "store_manager", Name: "Store manager", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true},
 		{Key: "staff", Name: "Staff", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true},
