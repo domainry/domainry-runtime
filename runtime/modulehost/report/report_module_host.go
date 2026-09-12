@@ -19,11 +19,12 @@ import (
 )
 
 type ReportModuleQueryHostDependencies struct {
-	Access          reportcontract.ReportRecordAccess
-	ObjectSQL       reportcontract.ReportObjectSQLExecutor
-	SnapshotSources reportcontract.ReportSnapshotSourceVersionReader
-	ResolveSubject  func(context.Context, reportmodel.ReportAuthority) (principalmodel.Principal, error)
-	Audit           func(context.Context, reportmodel.ReportSchema, reportmodel.ReportSummary, principalmodel.Principal) error
+	Access             reportcontract.ReportRecordAccess
+	AnalysisObjectKeys func() []string
+	ObjectSQL          reportcontract.ReportObjectSQLExecutor
+	SnapshotSources    reportcontract.ReportSnapshotSourceVersionReader
+	ResolveSubject     func(context.Context, reportmodel.ReportAuthority) (principalmodel.Principal, error)
+	Audit              func(context.Context, reportmodel.ReportSchema, reportmodel.ReportSummary, principalmodel.Principal) error
 }
 
 // ReportModuleQueryHost is the Runtime anti-corruption adapter for Report's

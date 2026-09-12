@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	"github.com/domainry/domainry-agent-sdk/businessrpc"
 
 	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
@@ -29,6 +30,14 @@ type ConversationWebOptions = runtimebootstrap.ConversationWebOptions
 
 func ConversationWebHandler(runtime *Runtime, options ConversationWebOptions) (http.Handler, error) {
 	return runtimebootstrap.ConversationWebHandler(runtime, options)
+}
+
+func ConversationBusinessSource(runtime *Runtime) (businessrpc.Backend, error) {
+	return runtimebootstrap.ConversationBusinessSource(runtime)
+}
+
+func ConversationBusinessHandler(runtime *Runtime, token string) (http.Handler, error) {
+	return runtimebootstrap.ConversationBusinessHandler(runtime, token)
 }
 
 type EntrypointMux = transportbootstrap.EntrypointMux

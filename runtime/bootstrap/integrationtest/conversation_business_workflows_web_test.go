@@ -149,6 +149,9 @@ func runConversationBusinessWorkflowAcceptance(t *testing.T, live bool) {
 			switch call.Name {
 			case "workflow_start":
 				starts++
+				if call.Status != "completed" || call.Effect != "write" || call.Completion != "accepted" {
+					t.Fatal("workflow acceptance must not be presented as business completion", call)
+				}
 				_ = json.Unmarshal(e.Data, &receipt)
 			case "workflow_get":
 				_ = json.Unmarshal(e.Data, &state)

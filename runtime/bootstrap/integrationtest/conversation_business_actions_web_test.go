@@ -184,6 +184,9 @@ func (b *businessBrowser) actionWait(conversationID, runID, status string) agent
 	b.t.Helper()
 	deadline := time.Now().Add(30 * time.Second)
 	pollInterval := 10 * time.Millisecond
+	if b.f.identityFactory != nil {
+		pollInterval = 500 * time.Millisecond
+	}
 	if os.Getenv("RUNTIME_BUSINESS_LIVE") == "1" {
 		deadline = time.Now().Add(4 * time.Minute)
 		// Real model calls can take minutes. Keep status polling below the

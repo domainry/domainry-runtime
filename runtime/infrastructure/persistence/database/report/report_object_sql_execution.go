@@ -168,42 +168,9 @@ func crossWorkspaceJoinSafePlan(plan reportmodel.ReportObjectSQLPlan) reportmode
 func (s *ReportSQLStore) reportObjectSQLSources(ctx context.Context, tx *sql.Tx, request reportcontract.ReportObjectSQLExecutionRequest) ([]string, []any, error) {
 	cteParts, args := make([]string, 0, len(request.Plan.Sources)), []any{}
 	for index, source := range request.Plan.Sources {
-		object, queryValue := request.Objects[source.Alias], request.Queries[source.Alias]
-		if request.CrossWorkspaceAggregate {
-			queryValue = recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, SelectFields: append([]string(nil), source.Fields...)}
-			queryValue.SelectFields = append(queryValue.SelectFields, "workspace_id")
-		}
-		if queryValue.ScopeExpression != nil && querypersistence.ScopeExpressionHasRelation(*queryValue.ScopeExpression) {
-			resolved, err := querypersistence.ResolveScopeMembership(s.store, request.WorkspaceID, *queryValue.ScopeExpression, querypersistence.ScopeMembershipINThreshold, func(statement string, lookupArgs ...any) ([]string, error) {
-				rows, queryErr := tx.QueryContext(ctx, statement, lookupArgs...)
-				if queryErr != nil {
-					return nil, queryErr
-				}
-				defer rows.Close()
-				values := []string{}
-				for rows.Next() {
-					var value string
-					if scanErr := rows.Scan(&value); scanErr != nil {
-						return nil, scanErr
-					}
-					values = append(values, value)
-				}
-				return values, rows.Err()
-			})
-			if err != nil {
-				return nil, nil, err
-			}
-			queryValue.ScopeExpression = &resolved
-		}
-		queryValue = recordpersistence.RecordQueryDatabaseValues(s.store.RuntimeEngine, object, queryValue)
-		columns := reportStoreSourceColumns(queryValue.SelectFields)
-		builder := query.NewSelectBuilder(s.store.SQLRenderer, object.Key).Columns(columns...)
-		if !request.CrossWorkspaceAggregate {
-			predicate, err := querypersistence.BuildTenantPredicate(s.store, request.WorkspaceID, queryValue)
-			if err != nil {
-				return nil, nil, fmt.Errorf("build report object SQL source %s scope: %w", source.Alias, err)
-			}
-			builder.Where(predicate)
+		builder, err := s.reportObjectSQLSourceSelect(ctx, tx, request, source)
+		if err != nil {
+			return nil, nil, err
 		}
 		statement, sourceArgs, err := builder.BuildWithOffset(len(args))
 		if err != nil {
@@ -213,6 +180,49 @@ func (s *ReportSQLStore) reportObjectSQLSources(ctx context.Context, tx *sql.Tx,
 		cteParts = append(cteParts, s.store.Identifier(reportObjectSQLCTE(index))+" AS ("+statement+")")
 	}
 	return cteParts, args, nil
+}
+
+// Both query execution and analysis versioning use this exact tenant/RLS
+// builder. The version reader adds only ordering and streams rows locally.
+func (s *ReportSQLStore) reportObjectSQLSourceSelect(ctx context.Context, tx *sql.Tx, request reportcontract.ReportObjectSQLExecutionRequest, source reportmodel.ReportObjectSQLSource) (*query.SelectBuilder, error) {
+	object, queryValue := request.Objects[source.Alias], request.Queries[source.Alias]
+	if request.CrossWorkspaceAggregate {
+		queryValue = recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, SelectFields: append([]string(nil), source.Fields...)}
+		queryValue.SelectFields = append(queryValue.SelectFields, "workspace_id")
+	}
+	if queryValue.ScopeExpression != nil && querypersistence.ScopeExpressionHasRelation(*queryValue.ScopeExpression) {
+		resolved, err := querypersistence.ResolveScopeMembership(s.store, request.WorkspaceID, *queryValue.ScopeExpression, querypersistence.ScopeMembershipINThreshold, func(statement string, lookupArgs ...any) ([]string, error) {
+			rows, queryErr := tx.QueryContext(ctx, statement, lookupArgs...)
+			if queryErr != nil {
+				return nil, queryErr
+			}
+			defer rows.Close()
+			values := []string{}
+			for rows.Next() {
+				var value string
+				if scanErr := rows.Scan(&value); scanErr != nil {
+					return nil, scanErr
+				}
+				values = append(values, value)
+			}
+			return values, rows.Err()
+		})
+		if err != nil {
+			return nil, err
+		}
+		queryValue.ScopeExpression = &resolved
+	}
+	queryValue = recordpersistence.RecordQueryDatabaseValues(s.store.RuntimeEngine, object, queryValue)
+	columns := reportStoreSourceColumns(queryValue.SelectFields)
+	builder := query.NewSelectBuilder(s.store.SQLRenderer, object.Key).Columns(columns...)
+	if !request.CrossWorkspaceAggregate {
+		predicate, err := querypersistence.BuildTenantPredicate(s.store, request.WorkspaceID, queryValue)
+		if err != nil {
+			return nil, fmt.Errorf("build report object SQL source %s scope: %w", source.Alias, err)
+		}
+		builder.Where(predicate)
+	}
+	return builder, nil
 }
 
 func reportObjectSQLCTE(index int) string { return fmt.Sprintf("report_object_sql_source_%d", index) }

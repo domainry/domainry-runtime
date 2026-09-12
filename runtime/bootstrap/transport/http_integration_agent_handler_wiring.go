@@ -49,6 +49,7 @@ type AgentApplicationHostDependencies struct {
 	Principals           identitysdk.PrincipalResolver
 	RateLimiter          ratelimit.Limiter
 	IntegrationSecretKey string
+	IdentityIssuer       string
 }
 
 // BindAgentApplicationHost closes Agent's application boundary before Runtime
@@ -83,12 +84,7 @@ func BindAgentApplicationHost(dependencies AgentApplicationHostDependencies) err
 	proposal := runtimeAgentProposalHost{records: dependencies.Records, principals: dependencies.Principals}
 	audit := runtimeAgentAuditHost{audit: applications.Audit}
 	analysis := runtimeAgentAnalysisHost{catalog: applications.Schema, records: applications.Records}
-	conversationOptions := []agentapplication.ConversationBusinessHostOption{agentapplication.WithConversationBusinessActions(applications.Actions), agentapplication.WithConversationBusinessWorkflows(applications.Workflows)}
-	if strings.TrimSpace(dependencies.IntegrationSecretKey) != "" {
-		evidenceKey := sha256.Sum256([]byte("domainry-agent-business-evidence-v1:" + dependencies.IntegrationSecretKey))
-		conversationOptions = append(conversationOptions, agentapplication.WithConversationBusinessEvidenceKey(evidenceKey[:]))
-	}
-	conversations, err := agentapplication.NewConversationBusinessHost(dependencies.RuntimeID, dependencies.Application, dependencies.Principals, applications.Schema, applications.Records, conversationOptions...)
+	conversations, err := NewConversationBusinessSource(ConversationBusinessDependencies{RuntimeID: dependencies.RuntimeID, Application: dependencies.Application, Records: dependencies.Records, Principals: dependencies.Principals, IntegrationSecretKey: dependencies.IntegrationSecretKey, IdentityIssuer: dependencies.IdentityIssuer})
 	if err != nil {
 		return err
 	}
@@ -136,6 +132,7 @@ func (a *httpServerAssembly) bindAgentApplicationHost() {
 		Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(a.dependencies.Config.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(a.dependencies.Config.IdentityAudience)},
 		Binding:     a.dependencies.AgentBinding, Records: a.dependencies.Records, Principals: a.principals,
 		RateLimiter: a.dependencies.RateLimiter, IntegrationSecretKey: a.dependencies.Config.IntegrationSecretKey,
+		IdentityIssuer: a.dependencies.IdentityBinding.Descriptor().Issuer,
 	}); err != nil {
 		panic(err.Error())
 	}

@@ -31,14 +31,16 @@ const businessWebOrigin = "http://127.0.0.1:8093"
 const businessWebPassword = "Business-Browser-Changed!2026"
 
 type businessWebFixture struct {
-	t            *testing.T
-	cfg          config.Config
-	identityPath string
-	options      agentmodule.Options
-	files        fs.FS
-	runtime      *bootstrap.Runtime
-	identity     identitysdk.Binding
-	handler      http.Handler
+	t               *testing.T
+	cfg             config.Config
+	identityPath    string
+	options         agentmodule.Options
+	files           fs.FS
+	runtime         *bootstrap.Runtime
+	identity        identitysdk.Binding
+	identityFactory identitysdk.Factory
+	identityHandler http.Handler
+	handler         http.Handler
 }
 
 func newBusinessWebFixture(t *testing.T, customize ...func(map[string]any)) *businessWebFixture {
@@ -46,6 +48,14 @@ func newBusinessWebFixture(t *testing.T, customize ...func(map[string]any)) *bus
 }
 
 func newBusinessWebFixtureWithModel(t *testing.T, model agentsdk.ConversationModel, customize ...func(map[string]any)) *businessWebFixture {
+	f := prepareBusinessWebFixtureWithModel(t, model, customize...)
+	f.open()
+	return f
+}
+
+// Preparation is separate so service acceptance can supply its actual remote
+// Identity factory before any Runtime or local Identity database is opened.
+func prepareBusinessWebFixtureWithModel(t *testing.T, model agentsdk.ConversationModel, customize ...func(map[string]any)) *businessWebFixture {
 	t.Helper()
 	t.Setenv("AUTH_DEFAULT_PASSWORD", "Business-Browser-Initial!2026")
 	t.Setenv("AUTH_JWT_SECRET", "business-browser-signing-secret-2026-stable")
@@ -127,7 +137,6 @@ func newBusinessWebFixtureWithModel(t *testing.T, model agentsdk.ConversationMod
 		files = os.DirFS(root)
 	}
 	f := &businessWebFixture{t: t, cfg: initializedIntegrationRuntimeConfig(config.Config{AppLocale: "en-US", DatabaseDriver: "sqlite", DBPath: filepath.Join(dir, "runtime.db"), ManifestPath: path, UploadDir: filepath.Join(dir, "uploads"), IdentityAudience: "domainry-runtime", RuntimeInstanceID: "business-browser-runtime", IntegrationSecretKey: "business-browser-integration-secret-fixture"}), identityPath: filepath.Join(dir, "identity.db"), options: options, files: files}
-	f.open()
 	t.Cleanup(f.close)
 	return f
 }
@@ -135,7 +144,11 @@ func newBusinessWebFixtureWithModel(t *testing.T, model agentsdk.ConversationMod
 func (f *businessWebFixture) open() {
 	f.t.Helper()
 	var err error
-	f.identity, err = identitymodule.NewFactory(identitymodule.Options{DatabaseDriver: "sqlite", DatabasePath: f.identityPath}).Open(f.t.Context(), identitysdk.ApplicationRef{WorkspaceID: identitysdk.WorkspaceID(f.cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(f.cfg.IdentityAudience)})
+	factory := f.identityFactory
+	if factory == nil {
+		factory = identitymodule.NewFactory(identitymodule.Options{DatabaseDriver: "sqlite", DatabasePath: f.identityPath})
+	}
+	f.identity, err = factory.Open(f.t.Context(), identitysdk.ApplicationRef{WorkspaceID: identitysdk.WorkspaceID(f.cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(f.cfg.IdentityAudience)})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -226,6 +239,10 @@ func (b *businessBrowser) session() {
 
 func (b *businessBrowser) assign(role string) {
 	b.t.Helper()
+	if b.f.identityHandler != nil {
+		managedIdentityRequest(b.t, b.f.identityHandler, b.cookies["domainry_agent_access"].Value, "PUT", "/identity/users/admin/account-and-roles", map[string]any{"user": map[string]any{"name": "Admin", "email": "admin@example.com", "status": "active"}, "assignments": []any{map[string]any{"role_id": role}}}, fmt.Sprintf("business-role-%d", time.Now().UnixNano()), 200)
+		return
+	}
 	mux := http.NewServeMux()
 	for _, adapter := range b.f.identity.(identityhttpapi.Provider).HTTPAdapters() {
 		for _, route := range adapter.Routes() {
@@ -247,6 +264,12 @@ func (b *businessBrowser) runWithMessage(conversationID, message string) agentsd
 		b.t.Fatal(err)
 	}
 	deadline := time.Now().Add(4 * time.Minute)
+	poll := 25 * time.Millisecond
+	if b.f.identityFactory != nil {
+		// Remote history reads revalidate saved sources over HTTP. Match a UI
+		// polling interval instead of flooding its real application limiter.
+		poll = 500 * time.Millisecond
+	}
 	for {
 		response = b.call("GET", "/agent/conversations/"+conversationID+"/runs/"+run.ID, nil, 200)
 		if err := json.Unmarshal(response.Body.Bytes(), &run); err != nil {
@@ -258,6 +281,6 @@ func (b *businessBrowser) runWithMessage(conversationID, message string) agentsd
 		if run.Status == "failed" || run.Status == "waiting_user" || time.Now().After(deadline) {
 			b.t.Fatalf("business browser run incomplete: %s", response.Body.String())
 		}
-		time.Sleep(25 * time.Millisecond)
+		time.Sleep(poll)
 	}
 }

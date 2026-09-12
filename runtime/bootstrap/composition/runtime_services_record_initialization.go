@@ -57,6 +57,14 @@ func initializeRecordApplications(s *runtimeAssembly) {
 	crossWorkspaceAudit := reportadapter.NewReportCrossWorkspaceAuditAdapter(s.auditApplicationService)
 	s.reportModuleQueryHost = reportadapter.NewReportModuleQueryHost(reportadapter.ReportModuleQueryHostDependencies{
 		Access: reportRecords, ObjectSQL: s.reportObjectSQL, SnapshotSources: s.reportSnapshotSources,
+		AnalysisObjectKeys: func() []string {
+			objects := s.reportRecordSchemaMap()
+			keys := make([]string, 0, len(objects))
+			for key := range objects {
+				keys = append(keys, key)
+			}
+			return keys
+		},
 		ResolveSubject: func(ctx context.Context, authority reportmodel.ReportAuthority) (principalmodel.Principal, error) {
 			if authority.Subject != nil {
 				return reportadapter.RuntimePrincipalFromReportSubject(*authority.Subject), nil

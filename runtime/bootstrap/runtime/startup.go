@@ -415,12 +415,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	})
 	mustCompleteRuntimeStartup(err)
 	records, recordRepository := serviceAssembly.services, serviceAssembly.records
-	mustCompleteRuntimeStartup(transportbootstrap.BindAgentApplicationHost(transportbootstrap.AgentApplicationHostDependencies{
-		RuntimeID:   cfg.RuntimeInstanceID,
-		Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)},
-		Binding:     agentBinding, Records: records, Principals: identityPrincipals,
-		RateLimiter: sharedRateLimiter, IntegrationSecretKey: cfg.IntegrationSecretKey,
-	}))
+
 	auditHostBinder, ok := auditBinding.(auditsdk.ApplicationHostBinder)
 	if !ok {
 		mustCompleteRuntimeStartup(errors.New("Audit Binding does not accept application host capabilities"))
@@ -451,6 +446,14 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		cursorKey:               []byte(cfg.AuditExportTokenKey),
 	}))
 	mustCompleteRuntimeStartup(records.BindReportApplication(reportBinding))
+	// Bind Agent only after its business owner ports, including Report, are ready.
+	mustCompleteRuntimeStartup(transportbootstrap.BindAgentApplicationHost(transportbootstrap.AgentApplicationHostDependencies{
+		RuntimeID:   cfg.RuntimeInstanceID,
+		Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)},
+		Binding:     agentBinding, Records: records, Principals: identityPrincipals,
+		RateLimiter: sharedRateLimiter, IntegrationSecretKey: cfg.IntegrationSecretKey,
+		IdentityIssuer: identityBinding.Descriptor().Issuer,
+	}))
 	integrationTriggers.Bind(newRuntimeIntegrationTriggerSink(records, identityPrincipals))
 	var monitoringBinding monitoringsdk.Binding
 	if monitoringFactory != nil {

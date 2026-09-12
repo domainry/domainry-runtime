@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -21,6 +22,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
+	toolsdk "github.com/domainry/domainry-tools-sdk"
 )
 
 type ConversationBusinessSchema interface {
@@ -44,9 +46,23 @@ type ConversationBusinessHost struct {
 	evidenceKey []byte
 	actions     ConversationBusinessActions
 	workflows   ConversationBusinessWorkflows
+	reports     ConversationBusinessReports
 }
 
 type ConversationBusinessHostOption func(*ConversationBusinessHost) error
+
+// WithConversationBusinessIdentityIssuer binds saved sources and proofs to the
+// actual Identity trust domain. Names shared by independent Identity deployments
+// must not make their users or previously authorized evidence interchangeable.
+func WithConversationBusinessIdentityIssuer(issuer string) ConversationBusinessHostOption {
+	return func(h *ConversationBusinessHost) error {
+		if issuer == "" || strings.TrimSpace(issuer) != issuer || len(issuer) > 2048 || strings.ContainsAny(issuer, "\r\n\x00") {
+			return fmt.Errorf("conversation business Identity issuer is required")
+		}
+		h.source = "runtime-business-v2:" + conversationBusinessDigest([]string{h.runtimeID, string(h.application.WorkspaceID), string(h.application.ApplicationKey), issuer})
+		return nil
+	}
+}
 
 func NewConversationBusinessHost(runtimeID string, application identitysdk.ApplicationScope, principals identitysdk.PrincipalResolver, schema ConversationBusinessSchema, records ConversationBusinessRecords, options ...ConversationBusinessHostOption) (*ConversationBusinessHost, error) {
 	if strings.TrimSpace(runtimeID) == "" || application.WorkspaceID == "" || application.ApplicationKey == "" || principals == nil || schema == nil || records == nil {
@@ -132,6 +148,8 @@ func (h *ConversationBusinessHost) AuthorizeConversationTool(ctx context.Context
 	definitions = append(definitions, agentsdk.BusinessRelationConversationTools()...)
 	definitions = append(definitions, agentsdk.BusinessActionConversationTools()...)
 	definitions = append(definitions, agentsdk.BusinessWorkflowConversationTools()...)
+	definitions = append(definitions, toolsdk.ReportQueryDefinitions()...)
+	definitions = append(definitions, toolsdk.AnalysisDefinitions()...)
 	for _, definition := range definitions {
 		if definition.Key == in.Definition.Key && definition.ActionKey == in.Definition.ActionKey && definition.Version == in.Definition.Version {
 			return h.authorizeAction(ctx, in.Authority, definition.ActionKey)
@@ -142,6 +160,18 @@ func (h *ConversationBusinessHost) AuthorizeConversationTool(ctx context.Context
 func (h *ConversationBusinessHost) AuthorizeConversationInteraction(ctx context.Context, a agentsdk.ConversationAuthority, _ agentsdk.ConversationInteraction) (agentsdk.ConversationToolAuthorization, error) {
 	return h.authorizeAction(ctx, a, agentsdk.ConversationInteractionPermission().Key)
 }
+
+func (h *ConversationBusinessHost) AuthorizeConversationExecution(ctx context.Context, in agentsdk.ConversationExecutionAuthorizationRequest) (bool, error) {
+	_, err := h.principal(ctx, in.Authority)
+	var denied *agentsdk.Error
+	if errors.As(err, &denied) && (denied.Class == "forbidden" || denied.Class == "not_found") {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+var _ agentsdk.ConversationExecutionAuthorizer = (*ConversationBusinessHost)(nil)
+
 func (h *ConversationBusinessHost) BusinessSourceIdentity() string { return h.source }
 
 func (h *ConversationBusinessHost) objects(ctx context.Context, p principalmodel.Principal) []definitionmodel.ObjectSchema {
