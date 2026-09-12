@@ -133,22 +133,33 @@ func g06SendScheduledWindow(t *testing.T, handler http.Handler, cfg config.Confi
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodPost, dispatchhttp.RuntimeExecutionPath, bytes.NewReader(body))
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	signature, err := schedulergateway.SignRequest(body, schedulergateway.SignedRequest{Method: http.MethodPost, Path: dispatchhttp.RuntimeExecutionPath, RuntimeID: cfg.RuntimeInstanceID, IdempotencyKey: idempotency}, schedulergateway.SchedulerClientID, timestamp, []byte(cfg.IntegrationSecretKey))
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set(schedulergateway.RuntimeIDHeader, cfg.RuntimeInstanceID)
-	request.Header.Set(schedulergateway.SignatureVersionHeader, schedulergateway.CallbackSignatureContractVersion)
-	request.Header.Set(schedulergateway.ClientIDHeader, schedulergateway.SchedulerClientID)
-	request.Header.Set(schedulergateway.TimestampHeader, timestamp)
-	request.Header.Set(schedulergateway.SignatureHeader, signature)
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		t.Fatalf("scheduled window %d status=%d body=%s", window, response.Code, response.Body.String())
+	var response *httptest.ResponseRecorder
+	for attempt := 0; attempt < 5; attempt++ {
+		request := httptest.NewRequest(http.MethodPost, dispatchhttp.RuntimeExecutionPath, bytes.NewReader(body))
+		request.Header.Set(schedulergateway.RuntimeIDHeader, cfg.RuntimeInstanceID)
+		request.Header.Set(schedulergateway.SignatureVersionHeader, schedulergateway.CallbackSignatureContractVersion)
+		request.Header.Set(schedulergateway.ClientIDHeader, schedulergateway.SchedulerClientID)
+		request.Header.Set(schedulergateway.TimestampHeader, timestamp)
+		request.Header.Set(schedulergateway.SignatureHeader, signature)
+		response = httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code == http.StatusOK {
+			return
+		}
+		if response.Code < http.StatusInternalServerError {
+			break
+		}
+		// Scheduler retries the exact signed callback after a retryable receiver
+		// failure. Preserve the body and idempotency key so Runtime must reclaim
+		// its failed-retryable receipt rather than create a second execution.
+		time.Sleep(time.Duration(attempt+1) * 20 * time.Millisecond)
 	}
+	t.Fatalf("scheduled window %d status=%d body=%s", window, response.Code, response.Body.String())
 }
 
 func g06WaitTasks(t *testing.T, handler http.Handler, count int) []agentsdk.ConversationTaskSummary {
