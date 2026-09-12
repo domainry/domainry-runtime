@@ -47,7 +47,7 @@ func TestWorkflowProcessStoreLifecycleAndCancellation(t *testing.T) {
 	if err := repository.UpdateTask(t.Context(), workspaceID, task); err != nil {
 		t.Fatalf("update task: %v", err)
 	}
-	if value, found, err := repository.GetProcess(t.Context(), workspaceID, process.ID); err != nil || !found || value.Status != "waiting" {
+	if value, found, err := repository.GetProcess(t.Context(), workspaceID, process.ID); err != nil || !found || value.Status != "waiting" || value.DefinitionSnapshot.DefinitionVersionID != "version-1" || value.DefinitionSnapshot.PublishedVersion != 1 {
 		t.Fatalf("get process=%#v found=%v err=%v", value, found, err)
 	}
 	if values, err := repository.ListProcesses(t.Context(), workspaceID, workflowmodel.WorkflowProcessFilter{Status: "waiting", Limit: 10}); err != nil || len(values) != 1 {

@@ -12,7 +12,7 @@ func TestConversationExecutionAuthorizationUsesCurrentRuntimePrincipal(t *testin
 	if allowed, err := host.AuthorizeConversationExecution(t.Context(), in); err != nil || !allowed {
 		t.Fatal("current authenticated owner denied", err)
 	}
-	if resolver.request.SubjectID != "operator" || resolver.request.RoleKey != a.RoleKey || resolver.request.Application.WorkspaceID != host.application.WorkspaceID {
+	if resolver.request.SubjectID != "operator" || resolver.request.RoleKey != a.RoleKey || resolver.workspace != string(host.application.WorkspaceID) {
 		t.Fatal("current principal not resolved in host application")
 	}
 	for _, change := range []string{"runtime", "workspace", "user", "known"} {

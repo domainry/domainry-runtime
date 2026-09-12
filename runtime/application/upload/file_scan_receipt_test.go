@@ -21,7 +21,7 @@ func (fileScanStoreStub) RecordFileScan(context.Context, lifecyclecontract.FileS
 }
 
 func TestFileScanReceiptIsCleanOnlyAndBoundToExactIdentity(t *testing.T) {
-	clean := lifecyclecontract.FileScanEvidence{FileID: "file-1", WorkspaceID: "workspace-a", SHA256: "abc", Size: 7, Status: lifecyclecontract.FileScanClean, Provider: "scanner", EvidenceRef: "scan-1", ScannedAt: time.Date(2026, 8, 12, 1, 2, 3, 0, time.UTC)}
+	clean := lifecyclecontract.FileScanEvidence{FileID: "file-1", WorkspaceID: "workspace-a", ContentType: "image/png", SHA256: "abc", Size: 7, Status: lifecyclecontract.FileScanClean, Provider: "scanner", EvidenceRef: "scan-1", ScannedAt: time.Date(2026, 8, 12, 1, 2, 3, 0, time.UTC)}
 	service := NewFileScanReceiptVerifier(fileScanStoreStub{evidence: clean}, []byte("01234567890123456789012345678901"))
 	status, err := service.Status(t.Context(), "workspace-a", "file-1")
 	if err != nil || status.Receipt == "" {
@@ -32,6 +32,13 @@ func TestFileScanReceiptIsCleanOnlyAndBoundToExactIdentity(t *testing.T) {
 	}
 	if _, err := service.VerifyClean(t.Context(), "workspace-a", "file-1", "changed", status.Receipt); !errors.Is(err, ErrFileScanReceiptInvalid) {
 		t.Fatalf("changed hash error = %v", err)
+	}
+	tamperedContentType := service
+	changedMIME := clean
+	changedMIME.ContentType = "image/jpeg"
+	tamperedContentType.store = fileScanStoreStub{evidence: changedMIME}
+	if _, err := tamperedContentType.VerifyClean(t.Context(), "workspace-a", "file-1", "abc", status.Receipt); !errors.Is(err, ErrFileScanReceiptInvalid) {
+		t.Fatalf("changed MIME error = %v", err)
 	}
 	tampered := service
 	tampered.store = fileScanStoreStub{evidence: lifecyclecontract.FileScanEvidence{FileID: "file-2", WorkspaceID: "workspace-a", SHA256: "abc", Size: 7, Status: lifecyclecontract.FileScanClean, Provider: "scanner", EvidenceRef: "scan-1", ScannedAt: clean.ScannedAt}}

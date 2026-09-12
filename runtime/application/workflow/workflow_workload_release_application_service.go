@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -222,8 +223,8 @@ func (s *WorkflowApplicationService) synchronizeWorkflowWorkloadBindings(ctx con
 			WorkflowKey: binding.WorkflowKey, DefinitionVersionID: binding.DefinitionVersionID, DefinitionVersion: binding.DefinitionVersion,
 			ReleaseID: binding.ReleaseID, ReleaseDigest: binding.ReleaseDigest,
 		}
-		resolved, resolveErr := s.principals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{
-			Application: request.Application, SubjectID: identitysdk.WorkflowWorkloadSubjectID(binding.WorkflowKey), RoleKey: binding.RoleKey, Workload: &resolution,
+		resolved, resolveErr := s.principals.Resolve(requestcontext.WithWorkspaceID(ctx, string(request.Application.WorkspaceID)), identitysdk.PrincipalResolutionRequest{
+			SubjectID: identitysdk.WorkflowWorkloadSubjectID(binding.WorkflowKey), RoleKey: binding.RoleKey, Workload: &resolution,
 		})
 		if resolveErr != nil {
 			return s.failWorkflowWorkloadSynchronization(ctx, fmt.Errorf("resolve workflow workload %s: %w", binding.WorkflowKey, resolveErr))

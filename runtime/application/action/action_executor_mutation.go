@@ -89,6 +89,10 @@ func (e *businessActionExecution) canonicalCommits() ([]transactionmodel.RecordM
 	if len(e.notifications) > 0 && len(commits) == 0 {
 		return nil, apperror.New(apperror.KindBadRequest, "backend.notification.action_requires_business_mutation", nil, nil)
 	}
+	if len(e.businessJobCommits) > 0 && len(commits) == 0 {
+		return nil, apperror.New(apperror.KindBadRequest, "backend.business_job.requires_business_mutation", nil, nil)
+	}
+	commits = append(commits, e.businessJobCommits...)
 	for index, intent := range e.intents {
 		dedupKey := strings.TrimSpace(intent.IdempotencyKey)
 		if dedupKey == "" {

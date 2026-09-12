@@ -129,6 +129,12 @@ func scanWorkflowProcess(scanner workflowScanner) (workflowmodel.WorkflowProcess
 	}
 	process.ObjectKey, process.RecordID, process.InitiatorRoleKey, process.ErrorCode, process.CompletedAt = objectKey.String, recordID.String, initiatorRoleKey.String, errorCode.String, completedAt.String
 	_ = json.Unmarshal([]byte(definition), &process.DefinitionSnapshot)
+	// DefinitionVersionID and PublishedVersion are runtime metadata and are
+	// intentionally excluded from the authored Workflow JSON. Rehydrate them
+	// from the canonical process columns so durable continuations resolve the
+	// exact workload release that was active when the process started.
+	process.DefinitionSnapshot.DefinitionVersionID = process.DefinitionVersionID
+	process.DefinitionSnapshot.PublishedVersion = process.DefinitionVersion
 	_ = json.Unmarshal([]byte(currentNodes), &process.CurrentNodeIDs)
 	_ = json.Unmarshal([]byte(variables), &process.Variables)
 	_ = json.Unmarshal([]byte(result), &process.Result)

@@ -58,6 +58,9 @@ type BusinessHandlerExecutionDependencies struct {
 	ValidateDurableIntent             func(context.Context, runtimeext.DurableIntent, principalmodel.Principal) error
 	CompileNotification               func(context.Context, string, runtimeext.NotificationIntent, principalmodel.Principal) (notificationmodel.NotificationEvent, error)
 	VerifyFileClean                   func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
+	OpenVerifiedFile                  func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
+	CreateDerivedFile                 func(context.Context, string, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
+	StageBusinessJob                  func(context.Context, string, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error)
 	ObjectForKey                      func(string) (definitionmodel.ObjectSchema, bool)
 	NormalizeAggregateQuery           func(definitionmodel.ObjectSchema, recordmodel.RecordListQuery, principalmodel.Principal) recordmodel.RecordListQuery
 	WorkspaceAggregateCatalog         workspaceaggregatecontract.Catalog
@@ -233,6 +236,7 @@ type businessActionExecution struct {
 	initialCredential        *identitysdk.HandlerInitialCredential
 	plans                    []transactionmodel.MutationPlan
 	setCommits               []transactionmodel.RecordMutationCommit
+	businessJobCommits       []transactionmodel.RecordMutationCommit
 	intents                  []runtimeext.DurableIntent
 	notifications            []notificationmodel.NotificationEvent
 	mutatedRecords           map[string]recordmodel.Record

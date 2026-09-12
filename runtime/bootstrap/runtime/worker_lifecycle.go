@@ -39,6 +39,7 @@ func StartWorkers(ctx context.Context, runtime *Runtime) {
 	runtime.startNotificationInboxWorker(ctx)
 	runtime.startNotificationChannelWorker(ctx)
 	runtime.startDataExchangeWorker(ctx)
+	runtime.startFileScanWorker(ctx)
 	runtime.startIdempotencyCleanupWorker(ctx)
 	runtime.startLifecycleCleanupWorker(ctx)
 	if runtime.api != nil {

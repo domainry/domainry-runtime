@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	businessseed "github.com/domainry/domainry-runtime/runtime/application/seed/business"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -17,12 +18,12 @@ type businessSeedIdentityProjection struct {
 	runtimeIdentityProjectionStub
 	users         map[string]identitysdk.User
 	organizations map[string]identitysdk.OrganizationUnit
-	requests      []identitysdk.ApplicationScope
+	requests      []string
 	err           error
 }
 
-func (projection *businessSeedIdentityProjection) FindUser(_ context.Context, lookup identitysdk.UserLookup) (identitysdk.User, bool, error) {
-	projection.requests = append(projection.requests, lookup.Application)
+func (projection *businessSeedIdentityProjection) FindUser(ctx context.Context, lookup identitysdk.UserLookup) (identitysdk.User, bool, error) {
+	projection.requests = append(projection.requests, requestcontext.WorkspaceID(ctx))
 	if projection.err != nil {
 		return identitysdk.User{}, false, projection.err
 	}
@@ -30,8 +31,8 @@ func (projection *businessSeedIdentityProjection) FindUser(_ context.Context, lo
 	return user, found, nil
 }
 
-func (projection *businessSeedIdentityProjection) FindOrganizationUnit(_ context.Context, lookup identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
-	projection.requests = append(projection.requests, lookup.Application)
+func (projection *businessSeedIdentityProjection) FindOrganizationUnit(ctx context.Context, lookup identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
+	projection.requests = append(projection.requests, requestcontext.WorkspaceID(ctx))
 	if projection.err != nil {
 		return identitysdk.OrganizationUnit{}, false, projection.err
 	}
@@ -84,9 +85,9 @@ func TestBusinessSeedReferenceResolverSelectsStableWorkspaceScopedIdentityRefere
 		}
 		previous = rows[0].DataJSON
 	}
-	for _, application := range projection.requests {
-		if application.TenantID != "workspace-primary" || application.WorkspaceID != "workspace-primary" || application.ApplicationKey != "domainry-runtime" {
-			t.Fatalf("unscoped Identity verification request=%+v", application)
+	for _, workspaceID := range projection.requests {
+		if workspaceID != "workspace-primary" {
+			t.Fatalf("unscoped Identity verification request=%q", workspaceID)
 		}
 	}
 }

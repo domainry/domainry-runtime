@@ -214,7 +214,9 @@ func (h *UploadsHandler) uploadFile(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, http.StatusInternalServerError, "backend.upload.save_failed")
 		return
 	}
-	filename := hex.EncodeToString(hash.Sum(nil)[:16]) + extension
+	fileID := requestcontext.NewRequestID()
+	fileIdentityDigest := sha256.Sum256([]byte(fileID))
+	filename := hex.EncodeToString(hash.Sum(nil)[:16]) + "-" + hex.EncodeToString(fileIdentityDigest[:8]) + extension
 	path := filepath.Join(workspaceDir, filename)
 	if err := uploadRename(temporaryPath, path); err != nil {
 		if uploadStorageExhausted(err) {
@@ -224,7 +226,6 @@ func (h *UploadsHandler) uploadFile(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, http.StatusInternalServerError, "backend.upload.save_failed")
 		return
 	}
-	fileID := requestcontext.NewRequestID()
 	contentSHA256 := hex.EncodeToString(hash.Sum(nil))
 	if h.artifacts != nil {
 		artifact := lifecyclecontract.UploadArtifact{ID: fileID, WorkspaceID: principal.WorkspaceID, ObjectKey: objectKey, FieldKey: fieldKey, Filename: filename, ContentType: contentType, SHA256: contentSHA256, Size: size, CreatedAt: time.Now().UTC()}

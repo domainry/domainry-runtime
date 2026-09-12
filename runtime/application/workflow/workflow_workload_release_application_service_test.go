@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -44,10 +45,10 @@ type workflowWorkloadPrincipalTestStub struct {
 	mutate      func(*identitysdk.PrincipalResolution)
 }
 
-func (s *workflowWorkloadPrincipalTestStub) Resolve(_ context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+func (s *workflowWorkloadPrincipalTestStub) Resolve(ctx context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
 	s.requests = append(s.requests, request)
 	principal := workflowPrincipalWithPermissions(principalmodel.Principal{Principal: identitysdk.Principal{
-		Known: true, WorkspaceID: string(request.Application.WorkspaceID), UserID: string(request.SubjectID), RoleKey: request.RoleKey,
+		Known: true, WorkspaceID: requestcontext.WorkspaceID(ctx), UserID: string(request.SubjectID), RoleKey: request.RoleKey,
 	}}, s.permissions...)
 	resolution := workflowPrincipalResolution(principal)
 	if request.Workload != nil {

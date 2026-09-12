@@ -2,6 +2,8 @@ package runtimeext
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 )
 
 // ExecutionPhase is controlled by Runtime. Project code can observe the phase
@@ -73,6 +75,18 @@ type FileVerificationExecution interface {
 	VerifyFileClean(context.Context, FileVerificationRequest) (FileVerificationEvidence, error)
 }
 
+type VerifiedFileExecution interface {
+	OpenVerifiedFile(context.Context, VerifiedFileRequest) (VerifiedFile, error)
+}
+
+type DerivedFileExecution interface {
+	CreateDerivedFile(context.Context, DerivedFileRequest) (DerivedFileEvidence, error)
+}
+
+type BusinessJobExecution interface {
+	RunBusinessJob(context.Context, BusinessJobRequest) (BusinessJobReceipt, error)
+}
+
 // RecordNotificationRecipientRequest identifies one record whose Runtime-owned
 // owner user is needed as a notification recipient. The projection never
 // exposes organization ownership or other system metadata to project code.
@@ -101,6 +115,30 @@ func VerifyFileClean(ctx context.Context, execution ActionExecution, request Fil
 	return verifier.VerifyFileClean(ctx, request)
 }
 
+func OpenVerifiedFile(ctx context.Context, execution ActionExecution, request VerifiedFileRequest) (VerifiedFile, error) {
+	opener, ok := execution.(VerifiedFileExecution)
+	if !ok {
+		return VerifiedFile{}, &BusinessError{Code: "backend.upload.file_open_unavailable", Message: "Runtime verified file access is unavailable"}
+	}
+	return opener.OpenVerifiedFile(ctx, request)
+}
+
+func CreateDerivedFile(ctx context.Context, execution ActionExecution, request DerivedFileRequest) (DerivedFileEvidence, error) {
+	creator, ok := execution.(DerivedFileExecution)
+	if !ok {
+		return DerivedFileEvidence{}, &BusinessError{Code: "backend.upload.derived_file_unavailable", Message: "Runtime derived file storage is unavailable"}
+	}
+	return creator.CreateDerivedFile(ctx, request)
+}
+
+func RunBusinessJob(ctx context.Context, execution ActionExecution, request BusinessJobRequest) (BusinessJobReceipt, error) {
+	runner, ok := execution.(BusinessJobExecution)
+	if !ok {
+		return BusinessJobReceipt{}, &BusinessError{Code: "backend.business_job.unavailable", Message: "Runtime business job execution is unavailable"}
+	}
+	return runner.RunBusinessJob(ctx, request)
+}
+
 type FileVerificationRequest struct {
 	FileID        string
 	ContentSHA256 string
@@ -108,6 +146,58 @@ type FileVerificationRequest struct {
 }
 
 type FileVerificationEvidence struct {
-	FileID, ContentSHA256, Status, Provider, EvidenceRef string
-	Size                                                 int64
+	FileID, ContentSHA256, Filename, ContentType, Status, Provider, EvidenceRef, ScanReceipt string
+	Size                                                                                     int64
+}
+
+// FileRecordBinding binds an opaque Runtime file to one caller-readable
+// business record field. Runtime reads that exact record under the Action's
+// generated grants before it opens any bytes.
+type FileRecordBinding struct {
+	ObjectKey   string
+	RecordID    string
+	FileIDField string
+}
+
+type VerifiedFileRequest struct {
+	FileVerificationRequest
+	Binding FileRecordBinding
+}
+
+type VerifiedFile struct {
+	FileVerificationEvidence
+	Filename    string
+	ContentType string
+	Content     io.ReadCloser
+}
+
+type DerivedFileRequest struct {
+	IdempotencyKey string
+	ObjectKey      string
+	FieldKey       string
+	Filename       string
+	ContentType    string
+	Content        io.Reader
+}
+
+type DerivedFileEvidence struct {
+	FileVerificationEvidence
+	Filename          string
+	ContentType       string
+	ProtectedDownload string
+}
+
+type BusinessJobRequest struct {
+	JobKey               string
+	ObjectKey            string
+	RecordID             string
+	ActionKey            string
+	Payload              json.RawMessage
+	MaxAttempts          int
+	RetryDelaySeconds    int
+	RetryMaxDelaySeconds int
+}
+
+type BusinessJobReceipt struct {
+	JobID string
 }

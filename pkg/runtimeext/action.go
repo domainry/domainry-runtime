@@ -29,7 +29,12 @@ type ActionObjectCapability struct {
 	Operations []string
 }
 
-const FileOperationVerifyClean = "verify_clean"
+const (
+	FileOperationVerifyClean   = "verify_clean"
+	FileOperationOpenVerified  = "open_verified"
+	FileOperationCreateDerived = "create_derived"
+	FileOperationRunJob        = "run_business_job"
+)
 
 // ConnectorOperationMode is the Action-visible delivery boundary of one
 // generated Connector operation.
@@ -158,7 +163,7 @@ func (d HandlerDescriptor) Validate() error {
 	files := map[string]bool{}
 	for _, raw := range d.FileCapabilities {
 		operation := strings.TrimSpace(raw)
-		if operation != FileOperationVerifyClean || files[operation] {
+		if !supportedFileOperation(operation) || files[operation] {
 			return ErrHandlerCapabilityInvalid
 		}
 		files[operation] = true
@@ -212,6 +217,15 @@ func (d HandlerDescriptor) Validate() error {
 		return ErrHandlerCapabilityInvalid
 	}
 	return nil
+}
+
+func supportedFileOperation(operation string) bool {
+	switch operation {
+	case FileOperationVerifyClean, FileOperationOpenVerified, FileOperationCreateDerived, FileOperationRunJob:
+		return true
+	default:
+		return false
+	}
 }
 
 func organizationUnitDeliveryTargetMatches(target *ActionTargetOrganizationCapability, capability OrganizationUnitDeliveryCapability) bool {

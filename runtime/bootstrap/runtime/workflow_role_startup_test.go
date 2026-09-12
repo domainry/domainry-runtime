@@ -125,8 +125,7 @@ func assertWorkflowWorkloadStartup(t *testing.T, binding identitysdk.Binding, id
 		t.Fatalf("resolve workflow workload binding=%+v err=%v", resolvedBinding, err)
 	}
 	resolution, err := binding.Principals().Resolve(t.Context(), identitysdk.PrincipalResolutionRequest{
-		Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(workspaceID), ApplicationKey: identitysdk.ApplicationKey(applicationKey)},
-		SubjectID:   identitysdk.SubjectID(subjectID), RoleKey: roleKey,
+		SubjectID: identitysdk.SubjectID(subjectID), RoleKey: roleKey,
 		Workload: &identitysdk.WorkflowWorkloadResolution{
 			WorkflowKey: "document.approval", DefinitionVersionID: definitionVersionID, DefinitionVersion: definitionVersion,
 			ReleaseID: releaseID, ReleaseDigest: releaseDigest, TaskID: "startup-task", SourceEventID: "startup-event", InitiatorSubjectID: "operator-1",

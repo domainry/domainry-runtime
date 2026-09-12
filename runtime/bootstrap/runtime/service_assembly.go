@@ -71,6 +71,7 @@ type runtimeServiceAssembly struct {
 	worker              workerplatform.Dependencies
 	dataExchangeBinding dataexchangesdk.Binding
 	lifecycleBinding    lifecyclesdk.Binding
+	fileScanProcessor   *uploadapplication.FileScanProcessor
 }
 
 type runtimeExtensionRegistries struct {
@@ -218,6 +219,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		return runtimeServiceAssembly{}, fmt.Errorf("Lifecycle Binding is incomplete")
 	}
 	var agentLifecycleExecutor lifecyclecontract.OwnerLifecycleExecutor
+	var agentSubjectHandlers []lifecyclecontract.SubjectExecutionHandler
 	if agentBinding != nil {
 		if !agentBinding.Descriptor().HasCapability(agentsdk.CapabilityLifecycleExecute) {
 			_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
@@ -232,6 +234,15 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		if agentLifecycleExecutor == nil {
 			_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
 			return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned no lifecycle executor")
+		}
+		if subjects, ok := agentBinding.(agentlifecycle.SubjectBinding); ok {
+			agentSubjectHandlers = subjects.LifecycleSubjectHandlers()
+			for _, handler := range agentSubjectHandlers {
+				if handler == nil || strings.TrimSpace(handler.Owner(ctx)) == "" {
+					_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+					return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding returned an invalid lifecycle subject handler")
+				}
+			}
 		}
 	}
 	lifecycleArtifacts, err := lifecycleBinding.SubjectArtifacts(uploadDirectory)
@@ -250,6 +261,16 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		return runtimeServiceAssembly{}, fmt.Errorf("open Lifecycle upload artifacts: %w", err)
 	}
 	workerDependencies = workerplatform.NormalizeDependencies(workerDependencies)
+	durableFileScans, ok := lifecycleFileArtifacts.(uploadapplication.DurableFileScanStore)
+	if !ok {
+		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+		return runtimeServiceAssembly{}, fmt.Errorf("Lifecycle Binding does not disclose durable file scan capability")
+	}
+	fileScanProcessor, err := uploadapplication.NewFileScanProcessor(durableFileScans, uploadDirectory, workerDependencies.Clock.Now)
+	if err != nil {
+		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+		return runtimeServiceAssembly{}, fmt.Errorf("initialize file scan processor: %w", err)
+	}
 	lifecycleExecutors := []lifecyclecontract.OwnerLifecycleExecutor{
 		ratelimitpersistence.LifecycleExecutor(store, lifecycleArchives),
 		actionpersistence.LifecycleExecutor(store, lifecycleArchives),
@@ -270,6 +291,11 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	}
 	fileScanKey := sha256.Sum256([]byte("domainry-file-scan-receipt-v1:" + cfg.IntegrationSecretKey))
 	fileScans := uploadapplication.NewFileScanReceiptVerifier(lifecycleFileArtifacts, fileScanKey[:])
+	fileCapabilities, err := uploadapplication.NewFileCapabilityService(lifecycleFileArtifacts, fileScans, uploadDirectory, workerDependencies.Clock.Now)
+	if err != nil {
+		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+		return runtimeServiceAssembly{}, fmt.Errorf("initialize file capabilities: %w", err)
+	}
 	recordSubjectLifecycle := recordapplication.NewRecordSubjectLifecycleApplicationService(records, manifest.Objects, lifecycleArtifacts, manifest.IdentityProfileExtensions)
 	reportSQLStore := reportpersistence.NewReportSQLStore(store)
 	reportExportPrepareReceipts := reportpersistence.NewReportExportPrepareReceiptStore(store)
@@ -290,6 +316,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	}
 	projectRevision, metadataRevision := runtimeActionRevisions(manifest)
 	subjectHandlers := []lifecyclecontract.SubjectExecutionHandler{recordSubjectLifecycle, auditSubjectLifecycle}
+	subjectHandlers = append(subjectHandlers, agentSubjectHandlers...)
 	if notificationSubjectLifecycle != nil {
 		subjectHandlers = append(subjectHandlers, notificationSubjectLifecycle)
 	}
@@ -356,13 +383,9 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			WorkspaceUsageResolver:              workspaceAggregates,
 			WorkspaceAggregateRepository:        workspaceAggregates,
 			WorkspaceCommercialConfiguration:    workspaceprovisionpersistence.NewCommercialConfigurationStore(store),
-			VerifyFileClean: func(ctx context.Context, workspaceID string, request runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error) {
-				evidence, err := fileScans.VerifyClean(ctx, workspaceID, request.FileID, request.ContentSHA256, request.ScanReceipt)
-				if err != nil {
-					return runtimeext.FileVerificationEvidence{}, err
-				}
-				return runtimeext.FileVerificationEvidence{FileID: evidence.FileID, ContentSHA256: evidence.SHA256, Size: evidence.Size, Status: evidence.Status, Provider: evidence.Provider, EvidenceRef: evidence.EvidenceRef}, nil
-			},
+			VerifyFileClean:                     fileCapabilities.VerifyClean,
+			OpenVerifiedFile:                    fileCapabilities.OpenVerified,
+			CreateDerivedFile:                   fileCapabilities.CreateDerived,
 			PrepareOutboxPayload: func(ctx context.Context, message publicationmodel.Message, payload map[string]any) (map[string]any, error) {
 				if strings.TrimSpace(message.ConnectorKey) != "email" || strings.TrimSpace(message.Operation) != "send_file_email" {
 					return payload, nil
@@ -414,7 +437,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	lifecyclePrincipal := lifecycleaccess.NewSystemPrincipal("runtime-lifecycle", lifecycleScope)
 	services.Applications().RuntimeStatus.ConfigureLifecycleHealth(ctx, lifecycleBinding.System())
 	return completeRuntimeServiceAssembly(
-		runtimeServiceAssembly{services: services, records: records, worker: workerDependencies, dataExchangeBinding: dataExchangeBinding, lifecycleBinding: lifecycleBinding},
+		runtimeServiceAssembly{services: services, records: records, worker: workerDependencies, dataExchangeBinding: dataExchangeBinding, lifecycleBinding: lifecycleBinding, fileScanProcessor: fileScanProcessor},
 		func() error {
 			return lifecycleBinding.System().InstallDefaultPolicies(ctx, principalmodel.InstallationWorkspaceID, lifecyclePrincipal, time.Now().UTC())
 		},

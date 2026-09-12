@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -16,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentmodule "github.com/domainry/domainry-agent/module"
 	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
@@ -23,6 +25,9 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identitymodule "github.com/domainry/domainry-identity/module"
 	integrationmodule "github.com/domainry/domainry-integration/module"
+	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
+	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	monitoringremote "github.com/domainry/domainry-monitoring-sdk/remote"
 	monitoringcapability "github.com/domainry/domainry-monitoring/capability"
@@ -201,6 +206,215 @@ func TestPinnedModuleSetComposesAllElevenBindingsAcrossRealDialects(t *testing.T
 				t.Fatalf("real-dialect restart drifted: first_digests=%v second_digests=%v first_ledger=%d second_ledger=%d", firstDigests, secondDigests, firstLedgerRows, secondLedgerRows)
 			}
 		})
+	}
+}
+
+func TestRuntimeAgentRetentionAndSubjectErasureEndToEnd(t *testing.T) {
+	cfg := moduleSetTestConfig(t)
+	store, err := PrepareProjectDatabase(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	identityBinding, err := identitymodule.NewFactory(identitymodule.Options{DatabaseDriver: cfg.DatabaseDriver, DatabasePath: cfg.DBPath}).OpenWithDatabase(
+		t.Context(), identitysdk.ApplicationRef{WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)},
+		identitysdk.DatabaseHandle{Pool: store.DB(), Driver: store.Driver(), Schema: store.DatabaseSchema(), FilePath: cfg.DBPath, Migrations: store, ModuleMigrations: store},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = identityBinding.Close(context.Background()) })
+	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers.Freeze()
+	connectors := connector.NewRegistry()
+	connectors.Freeze()
+	application := NewVerifiedProjectWithAllTopologyFactoriesAndDatabase(
+		t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{},
+		identityBinding, notificationmodule.NewFactory(notificationmodule.Options{}), moduleSetMonitoringModuleFactory(t), schedulermodule.NewFactory(schedulermodule.Options{}),
+		dataexchangemodule.NewFactory(dataexchangemodule.Options{}), integrationmodule.NewFactory(), reportmodule.NewFactory(), store,
+		agentmodule.NewFactory(agentmodule.Options{BaseURL: "http://127.0.0.1", APIKey: "subject-erasure-test", AgentID: 1}),
+	)
+	t.Cleanup(func() { _ = application.CloseContext(context.Background()) })
+	conversationBinding, ok := application.agentBinding.(agentsdk.ConversationBinding)
+	if !ok || conversationBinding.Conversations() == nil {
+		t.Fatal("Runtime did not expose Agent conversations")
+	}
+	conversations := conversationBinding.Conversations()
+	alice := agentsdk.ConversationAuthority{Known: true, RuntimeID: cfg.RuntimeInstanceID, WorkspaceID: cfg.IdentityWorkspaceID, UserID: "alice", RoleKey: "member"}
+	bob := alice
+	bob.UserID = "bob"
+	aliceConversation, err := conversations.Create(t.Context(), agentsdk.ConversationCreate{ClientID: "alice-lifecycle", Title: "Alice private"}, alice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = conversations.WriteMemory(t.Context(), agentsdk.ConversationMemoryWrite{ID: "prefs:alice.v1", Title: "Alice", Content: "private", Enabled: true}, alice); err != nil {
+		t.Fatal(err)
+	}
+	bobConversation, err := conversations.Create(t.Context(), agentsdk.ConversationCreate{ClientID: "bob-lifecycle", Title: "Bob private"}, bob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerKey := func(a agentsdk.ConversationAuthority) string {
+		raw, _ := json.Marshal([]string{a.RuntimeID, a.WorkspaceID, a.UserID})
+		return fmt.Sprintf("%x", sha256.Sum256(raw))
+	}
+	seedOwnerCopies := func(a agentsdk.ConversationAuthority, suffix string) {
+		t.Helper()
+		owner, now := ownerKey(a), time.Now().UTC().UnixMilli()
+		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _agent_user_todos(owner_key,todo_id,batch_id,position,created_at,source_conversation_id,status,revision,payload_json) VALUES(?,?,?,?,?,?,?,?,?)`, owner, "todo_"+suffix, "batch_"+suffix, 1, now, "", "open", 1, `{"title":"`+suffix+` todo"}`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _agent_artifacts(owner_key,artifact_id,version,created_at,source_conversation_id,payload_json) VALUES(?,?,?,?,?,?)`, owner, "artifact_"+suffix, 1, now, "", `{"title":"`+suffix+` artifact"}`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seedOwnerCopies(alice, "alice")
+	seedOwnerCopies(bob, "bob")
+	principal := func(user string, permissions ...string) lifecycleaccess.Principal {
+		value := lifecycleaccess.Principal{Known: true, WorkspaceID: cfg.IdentityWorkspaceID, UserID: user, Permissions: map[string]struct{}{}}
+		for _, permission := range permissions {
+			value.Permissions[permission] = struct{}{}
+		}
+		return value
+	}
+	identityContext := func(ctx context.Context, value lifecycleaccess.Principal) context.Context {
+		bundle := &identitysdk.AccessBundle{Subject: identitysdk.Subject{WorkspaceID: identitysdk.WorkspaceID(value.WorkspaceID), SubjectID: identitysdk.SubjectID(value.UserID), OrgID: "org-a", OrgScopeIDs: []string{"org-a"}}}
+		for permission := range value.Permissions {
+			separator := strings.LastIndex(permission, ".")
+			resource, action := permission[:separator], permission[separator+1:]
+			bundle.FunctionGrants = append(bundle.FunctionGrants, identitysdk.FunctionGrant{Resource: identitysdk.ResourceType(resource), Action: identitysdk.Action(action), Effect: identitysdk.EffectAllow})
+			bundle.DataPolicies = append(bundle.DataPolicies, identitysdk.DataPolicy{Key: "runtime-" + permission, Resource: identitysdk.ResourceType(resource), Action: identitysdk.Action(action), Effect: identitysdk.EffectAllow, DataScopes: []identitysdk.DataScope{identitysdk.DataScopeAll}})
+		}
+		return identitysdk.WithRequestIdentity(ctx, identitysdk.RequestIdentity{Principal: identitysdk.Principal{Known: true, WorkspaceID: value.WorkspaceID, UserID: value.UserID, AccessBundle: bundle}})
+	}
+	requester := principal("requester", lifecyclesdk.ActionLifecycleSubjectRequestsCreate, lifecyclesdk.ActionLifecycleSubjectRequestsVerify, lifecyclesdk.ActionLifecycleSubjectRequestsPreview)
+	approver := principal("operator", lifecyclesdk.ActionLifecycleSubjectRequestsApprove, lifecyclesdk.ActionLifecycleSubjectRequestsExecute, lifecyclesdk.ActionLifecycleDeletionsReplay)
+	governance := application.lifecycleBinding.Governance()
+	request, err := governance.CreateSubjectRequest(identityContext(t.Context(), requester), lifecyclemodel.SubjectRequest{WorkspaceID: cfg.IdentityWorkspaceID, Kind: lifecyclemodel.SubjectRequestErase, SubjectType: "user", SubjectID: alice.UserID, Reason: "user deletion"}, requester)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request, err = governance.VerifySubjectRequest(identityContext(t.Context(), requester), cfg.IdentityWorkspaceID, request.ID, "mfa-test", requester); err != nil {
+		t.Fatal(err)
+	}
+	if request, err = governance.PreviewSubjectRequest(identityContext(t.Context(), requester), cfg.IdentityWorkspaceID, request.ID, requester); err != nil {
+		t.Fatal(err)
+	}
+	if request, err = governance.ApproveSubjectRequest(identityContext(t.Context(), approver), cfg.IdentityWorkspaceID, request.ID, approver); err != nil {
+		t.Fatal(err)
+	}
+	if request, err = governance.ExecuteSubjectRequest(identityContext(t.Context(), approver), cfg.IdentityWorkspaceID, request.ID, approver); err != nil || request.Status != lifecyclemodel.SubjectRequestSucceeded {
+		t.Fatalf("request=%+v err=%v", request, err)
+	}
+	if _, err = conversations.Get(t.Context(), aliceConversation.ID, alice); err == nil {
+		t.Fatal("Agent owner did not erase Alice conversation")
+	}
+	if _, err = conversations.Get(t.Context(), bobConversation.ID, bob); err != nil {
+		t.Fatal("Agent owner crossed into Bob data", err)
+	}
+	for _, table := range []string{"_agent_user_todos", "_agent_artifacts"} {
+		for _, check := range []struct {
+			owner string
+			want  int
+		}{{ownerKey(alice), 0}, {ownerKey(bob), 1}} {
+			var count int
+			if err = store.DB().QueryRowContext(t.Context(), `SELECT count(*) FROM `+table+` WHERE owner_key=?`, check.owner).Scan(&count); err != nil || count != check.want {
+				t.Fatalf("%s owner=%s count=%d want=%d err=%v", table, check.owner, count, check.want, err)
+			}
+		}
+	}
+	owners := map[string]bool{}
+	rows, err := store.DB().QueryContext(t.Context(), `SELECT owner FROM _lifecycle_subject_execution_steps WHERE workspace_id=? AND request_id=?`, cfg.IdentityWorkspaceID, request.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var owner string
+		if err = rows.Scan(&owner); err != nil {
+			t.Fatal(err)
+		}
+		owners[owner] = true
+	}
+	_ = rows.Close()
+	for _, owner := range []string{"agent", "todo", "knowledge"} {
+		if !owners[owner] {
+			t.Fatalf("missing completed owner step %q: %v", owner, owners)
+		}
+	}
+	if replayed, err := governance.ReplayRegisteredDeletions(identityContext(t.Context(), approver), cfg.IdentityWorkspaceID, 10, approver); err != nil || replayed != 1 {
+		t.Fatalf("replayed=%d err=%v", replayed, err)
+	}
+
+	retained := alice
+	retained.UserID = "retained-user"
+	retainedConversation, err := conversations.Create(t.Context(), agentsdk.ConversationCreate{ClientID: "retention-policy", Title: "Archived conversation"}, retained)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archived := true
+	retainedConversation, err = conversations.Update(t.Context(), retainedConversation.ID, agentsdk.ConversationUpdate{ExpectedRevision: retainedConversation.Revision, Archived: &archived}, retained)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().UTC().Add(-48 * time.Hour).Truncate(time.Millisecond)
+	retainedConversation.UpdatedAt = old
+	conversationPayload, _ := json.Marshal(retainedConversation)
+	if _, err = store.DB().ExecContext(t.Context(), `UPDATE _agent_conversations SET updated_at=?, payload_json=? WHERE owner_key=? AND conversation_id=?`, old.UnixMilli(), conversationPayload, ownerKey(retained), retainedConversation.ID); err != nil {
+		t.Fatal(err)
+	}
+	retainedRunID := "retention-run"
+	messagePayload := []byte(`{"id":"retention-message","run_id":"retention-run","role":"user","content":"retained user input"}`)
+	if _, err = store.DB().ExecContext(t.Context(), `INSERT INTO _agent_conversation_messages(owner_key,conversation_id,message_id,run_id,seq,payload_json) VALUES(?,?,?,?,?,?)`, ownerKey(retained), retainedConversation.ID, "retention-message", retainedRunID, 1, messagePayload); err != nil {
+		t.Fatal(err)
+	}
+	externalResponse := []byte(`{"call":{"name":"web_fetch"},"result":{"content":"retained external response"}}`)
+	if _, err = store.DB().ExecContext(t.Context(), `INSERT INTO _agent_conversation_tool_calls(owner_key,conversation_id,run_id,step_no,payload_json,call_key) VALUES(?,?,?,?,?,?)`, ownerKey(retained), retainedConversation.ID, retainedRunID, 1, externalResponse, strings.Repeat("e", 64)); err != nil {
+		t.Fatal(err)
+	}
+	policyAdmin := principal("retention-admin", lifecyclesdk.ActionLifecyclePoliciesPublish, lifecyclesdk.ActionLifecycleCleanupPreview, lifecyclesdk.ActionLifecycleCleanupJobsCreate, lifecyclesdk.ActionLifecycleArchiveList)
+	policy, err := governance.PublishPolicy(identityContext(t.Context(), policyAdmin), lifecyclemodel.PolicyVersion{Policy: lifecyclemodel.RetentionPolicy{
+		Key: "agent.dialog.v1", Version: "2", Owner: "agent", Class: lifecyclemodel.RetentionClassProduct,
+		DefaultRetention: 24 * time.Hour, MinimumRetention: time.Hour, StatusRetention: map[string]time.Duration{"archived": 24 * time.Hour},
+		WorkspaceMayExtend: true, LegalHoldEligible: true, BackupBehavior: lifecyclemodel.BackupBehaviorStandard, EraseBehavior: lifecyclemodel.EraseBehaviorDelete,
+	}, ApprovalRef: "approval-h02", ChangePlanRef: "change-h02"}, policyAdmin)
+	if err != nil || policy.Status != lifecyclemodel.PolicyStatusPublished || policy.WorkspaceID != cfg.IdentityWorkspaceID {
+		t.Fatalf("policy=%+v err=%v", policy, err)
+	}
+	preview, err := governance.PreviewCleanup(identityContext(t.Context(), policyAdmin), cfg.IdentityWorkspaceID, policy.Policy.Key, policyAdmin, time.Now().UTC())
+	if err != nil || preview.Rows < 1 || preview.Bytes == 0 {
+		t.Fatalf("preview=%+v err=%v", preview, err)
+	}
+	job, err := governance.CreateCleanupJob(identityContext(t.Context(), policyAdmin), lifecyclemodel.CleanupJob{WorkspaceID: cfg.IdentityWorkspaceID, PolicyKey: policy.Policy.Key, Operation: lifecyclemodel.OperationPurge, Reason: "H02 retention acceptance"}, policyAdmin)
+	if err != nil || job.EstimatedRows < 1 {
+		t.Fatalf("job=%+v err=%v", job, err)
+	}
+	worker := lifecycleaccess.NewSystemPrincipal("lifecycle-worker", lifecycleaccess.NewSystemScope(lifecycleaccess.SystemScopeInstallation, "H02 retention acceptance"), lifecyclesdk.ActionLifecycleCleanupJobsProcess)
+	job, err = governance.ProcessCleanupJob(t.Context(), cfg.IdentityWorkspaceID, job.ID, "h02-worker", time.Minute, 100, time.Now().UTC(), worker)
+	if err != nil || job.Status != lifecyclemodel.CleanupStatusSucceeded || job.Archived < 1 || job.Purged < 1 {
+		t.Fatalf("processed job=%+v err=%v", job, err)
+	}
+	if _, err = conversations.Get(t.Context(), retainedConversation.ID, retained); err == nil {
+		t.Fatal("retention purge left the eligible archived conversation")
+	}
+	if _, err = conversations.Get(t.Context(), bobConversation.ID, bob); err != nil {
+		t.Fatal("retention purge crossed into an active conversation", err)
+	}
+	entries, err := governance.ListArchiveEntries(identityContext(t.Context(), policyAdmin), "agent.conversation", 100, policyAdmin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundArchive := false
+	var archivedPayload []byte
+	for _, entry := range entries {
+		if entry.Owner == "agent" && entry.ResourceID == retainedConversation.ID {
+			foundArchive = true
+			if err = store.DB().QueryRowContext(t.Context(), `SELECT payload_json FROM _lifecycle_archive_entries WHERE workspace_id=? AND id=?`, cfg.IdentityWorkspaceID, entry.ID).Scan(&archivedPayload); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if !foundArchive || !bytes.Contains(archivedPayload, []byte("retained user input")) || !bytes.Contains(archivedPayload, []byte("retained external response")) {
+		t.Fatalf("complete conversation archive was not retained: %+v", entries)
 	}
 }
 

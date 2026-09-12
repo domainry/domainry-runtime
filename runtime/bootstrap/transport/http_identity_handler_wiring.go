@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -19,11 +20,12 @@ func (a *httpServerAssembly) wireIdentityReferences(constructionContext context.
 
 func identitySDKCapabilityReferenceSource(projection identitysdk.Projection) func(context.Context, principalmodel.Principal) (capabilityapplication.CapabilityIdentityReferences, error) {
 	return func(ctx context.Context, principal principalmodel.Principal) (capabilityapplication.CapabilityIdentityReferences, error) {
-		users, err := projection.ListUsers(ctx, identitysdk.ProjectionQuery{Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(principal.WorkspaceID)}})
+		ctx = requestcontext.WithWorkspaceID(ctx, principal.WorkspaceID)
+		users, err := projection.ListUsers(ctx, identitysdk.ProjectionQuery{})
 		if err != nil {
 			return capabilityapplication.CapabilityIdentityReferences{}, err
 		}
-		roles, err := projection.ListRoles(ctx, identitysdk.ProjectionQuery{Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(principal.WorkspaceID)}})
+		roles, err := projection.ListRoles(ctx, identitysdk.ProjectionQuery{})
 		if err != nil {
 			return capabilityapplication.CapabilityIdentityReferences{}, err
 		}

@@ -205,7 +205,7 @@ func TestConversationBusinessThroughManagedIdentityAndRuntimeHTTP(t *testing.T) 
 		"user":        map[string]any{"name": "Admin", "email": "admin@example.com", "status": "active"},
 		"assignments": []any{map[string]any{"role_id": "business_restricted"}},
 	}, "business-role-revoke", 200)
-	resolution, err := binding.Principals().Resolve(t.Context(), identitysdk.PrincipalResolutionRequest{Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)}, SubjectID: "admin"})
+	resolution, err := binding.Principals().Resolve(t.Context(), identitysdk.PrincipalResolutionRequest{SubjectID: "admin"})
 	if err != nil {
 		t.Fatal(err)
 	}

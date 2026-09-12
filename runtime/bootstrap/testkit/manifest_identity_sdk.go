@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/modulecapability"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityevaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
@@ -250,7 +251,10 @@ func (binding *manifestIdentityBinding) Reauthorize(ctx context.Context, request
 	}, nil
 }
 
-func (binding *manifestIdentityBinding) Resolve(_ context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+func (binding *manifestIdentityBinding) Resolve(ctx context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+	if workspaceID := requestcontext.WorkspaceID(ctx); workspaceID != "" && workspaceID != string(binding.application.WorkspaceID) {
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.application_scope_mismatch", StatusCode: http.StatusForbidden}
+	}
 	if request.Workload != nil {
 		return binding.resolveWorkflowWorkload(request)
 	}
@@ -348,7 +352,7 @@ func (binding *manifestIdentityBinding) resolveWorkflowWorkload(request identity
 	workload := request.Workload
 	workflowKey := strings.TrimSpace(workload.WorkflowKey)
 	subjectID := identitysdk.WorkflowWorkloadSubjectID(workflowKey)
-	if !binding.matchesApplication(request.Application) || subjectID == "" || request.SubjectID != subjectID || strings.TrimSpace(request.RoleKey) == "" || strings.TrimSpace(workload.DefinitionVersionID) == "" || workload.DefinitionVersion <= 0 || strings.TrimSpace(workload.ReleaseID) == "" || strings.TrimSpace(workload.ReleaseDigest) == "" {
+	if subjectID == "" || request.SubjectID != subjectID || strings.TrimSpace(request.RoleKey) == "" || strings.TrimSpace(workload.DefinitionVersionID) == "" || workload.DefinitionVersion <= 0 || strings.TrimSpace(workload.ReleaseID) == "" || strings.TrimSpace(workload.ReleaseDigest) == "" {
 		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_resolution_invalid", StatusCode: http.StatusBadRequest}
 	}
 	binding.mu.RLock()

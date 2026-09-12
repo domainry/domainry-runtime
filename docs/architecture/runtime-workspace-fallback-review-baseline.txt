@@ -6,6 +6,9 @@
 # clauses that refuse an empty or "default" workspace (agent host authority and
 # construction, workflow agent invocation receipt, action execution scope, and
 # external workspace provisioning requests). None falls back to a workspace.
+# 2026-09-13 review: the file capability and file scan candidates reject an
+# empty workspace before deriving a workspace-scoped filesystem path. None
+# substitutes a default workspace.
 runtime/application/action/action_workspace_aggregate_execution.go|5bb28c1937a21188
 runtime/application/action/action_workspace_identity_usage_execution.go|33146e63c53c252b
 runtime/application/action/action_workspace_identity_usage_execution.go|4555daacc7fce16c
@@ -24,6 +27,9 @@ runtime/application/record/record_subject_lifecycle_application_service.go|9bc2b
 runtime/application/seed/business/acceptance_setup.go|77da2f4766b7ea50
 runtime/application/seed/business/records.go|b2e5ab60c1900c7a
 runtime/application/seed/globalcapability/runtime.go|c9934cedd7524bf6
+runtime/application/upload/file_capability_service.go|78a91dc513a29438
+runtime/application/upload/file_capability_service.go|ad1cbf6e3847fe7b
+runtime/application/upload/file_scan_processor.go|9146e651dde443c7
 runtime/application/workflow/workflow_agent_capability_completion.go|a0f007c7d608a730
 runtime/application/workflow/workflow_agent_invocation_application_service.go|4a61a3d45199a286
 runtime/application/workflow/workflow_principal_resolver_application_service.go|a7621539cdd54a6e

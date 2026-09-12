@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/modulecapability"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 )
 
@@ -86,18 +87,22 @@ func (runtimeIdentityAuthorizationStub) Reauthorize(context.Context, identitysdk
 
 type runtimeIdentityPrincipalResolverStub struct{}
 
-func (runtimeIdentityPrincipalResolverStub) Resolve(_ context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+func (runtimeIdentityPrincipalResolverStub) Resolve(ctx context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
 	roleKey := request.RoleKey
 	if roleKey == "" {
 		roleKey = "admin"
 	}
+	workspaceID := requestcontext.WorkspaceID(ctx)
+	if workspaceID == "" {
+		workspaceID = "workspace-primary"
+	}
 	principal := identitysdk.Principal{
-		Known: true, WorkspaceID: string(request.Application.WorkspaceID), UserID: string(request.SubjectID), RoleKey: roleKey,
+		Known: true, WorkspaceID: workspaceID, UserID: string(request.SubjectID), RoleKey: roleKey,
 		Permissions: []string{"runtime.appschema.validate_application_definition"}, AuthorizationRevision: "test-authorization",
 	}
 	bundle := identitysdk.AccessBundle{
 		ContractVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationRevision: "test-authorization", ExpiresAt: time.Now().Add(time.Hour),
-		Subject:        identitysdk.Subject{WorkspaceID: request.Application.WorkspaceID, SubjectID: request.SubjectID},
+		Subject:        identitysdk.Subject{WorkspaceID: identitysdk.WorkspaceID(workspaceID), SubjectID: request.SubjectID},
 		FunctionGrants: []identitysdk.FunctionGrant{{Resource: "workspace", Action: "admin", Effect: identitysdk.EffectAllow}},
 	}
 	principal.AccessBundle = &bundle

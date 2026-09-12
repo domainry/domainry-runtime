@@ -6,17 +6,20 @@ import (
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 )
 
 type followUpPrincipalResolver struct {
 	request    identitysdk.PrincipalResolutionRequest
+	workspace  string
 	resolution identitysdk.PrincipalResolution
 }
 
-func (r *followUpPrincipalResolver) Resolve(_ context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+func (r *followUpPrincipalResolver) Resolve(ctx context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
 	r.request = request
+	r.workspace = requestcontext.WorkspaceID(ctx)
 	return r.resolution, nil
 }
 
@@ -33,7 +36,7 @@ func TestAgentFollowUpNotificationPublisherRevalidatesAndNarrowsIntent(t *testin
 	if err := publisher.PublishConversationFollowUp(t.Context(), event); err != nil {
 		t.Fatal(err)
 	}
-	if resolver.request.Application != application || resolver.request.SubjectID != "user" || intent.EventType != "agent.follow_up.needs_action" || intent.WorkspaceID != "workspace" || len(intent.RecipientUserIDs) != 1 || intent.RecipientUserIDs[0] != "user" || intent.SubjectID != "task" || intent.GroupKey != "plan" || intent.DedupeKey != event.ID || intent.Locale != "zh-CN" || intent.Variables["question"] != "是否批准？" {
+	if resolver.workspace != string(application.WorkspaceID) || resolver.request.SubjectID != "user" || intent.EventType != "agent.follow_up.needs_action" || intent.WorkspaceID != "workspace" || len(intent.RecipientUserIDs) != 1 || intent.RecipientUserIDs[0] != "user" || intent.SubjectID != "task" || intent.GroupKey != "plan" || intent.DedupeKey != event.ID || intent.Locale != "zh-CN" || intent.Variables["question"] != "是否批准？" {
 		t.Fatalf("resolution=%+v intent=%+v", resolver.request, intent)
 	}
 	if _, found := intent.Variables["observation"]; found {

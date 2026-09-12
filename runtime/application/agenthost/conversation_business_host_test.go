@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	ormschema "github.com/domainry/domainry-orm/schema"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
@@ -31,14 +32,16 @@ type businessPrincipalResolver struct {
 	mu        sync.Mutex
 	principal principalmodel.Principal
 	request   identitysdk.PrincipalResolutionRequest
+	workspace string
 	checks    int
 }
 
-func (r *businessPrincipalResolver) Resolve(_ context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+func (r *businessPrincipalResolver) Resolve(ctx context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.checks++
 	r.request = request
+	r.workspace = requestcontext.WorkspaceID(ctx)
 	return agentPrincipalResolution(r.principal), nil
 }
 func (r *businessPrincipalResolver) revoke() {
@@ -196,7 +199,7 @@ func TestConversationBusinessRuntimeReadsApplyScopesMaskingAndExactIntegers(t *t
 			t.Fatal("principal boundary ignored")
 		}
 	}
-	if resolver.request.Application != host.application {
+	if resolver.workspace != string(host.application.WorkspaceID) {
 		t.Fatal("identity application scope omitted")
 	}
 }

@@ -69,6 +69,8 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		actionAssuranceStore:                deps.ActionAssurance,
 		connectorRegistry:                   connectorRegistry,
 		verifyFileClean:                     deps.VerifyFileClean,
+		openVerifiedFile:                    deps.OpenVerifiedFile,
+		createDerivedFile:                   deps.CreateDerivedFile,
 		workspaceAggregateCatalog:           deps.WorkspaceAggregateCatalog,
 		workspaceActiveResolver:             deps.WorkspaceActiveResolver,
 		workspaceUsageResolver:              deps.WorkspaceUsageResolver,

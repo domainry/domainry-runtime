@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -49,7 +50,7 @@ func (r *WorkflowPrincipalResolver) ResolveWorkflowPrincipalForExecution(ctx con
 	// principal from the active release binding and service role; it never
 	// creates a user or a user-role assignment for a Workflow.
 	subjectID := "workflow:" + strings.TrimSpace(workflow.Key)
-	request := identitysdk.PrincipalResolutionRequest{Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(initiator.WorkspaceID)}, SubjectID: identitysdk.SubjectID(subjectID), RoleKey: runAs}
+	request := identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(subjectID), RoleKey: runAs}
 	var expectedWorkload *identitysdk.WorkflowWorkloadResolution
 	if r.releases != nil && r.releases.Configured() {
 		workload, found := r.releases.Resolution(workflow)
@@ -63,11 +64,10 @@ func (r *WorkflowPrincipalResolver) ResolveWorkflowPrincipalForExecution(ctx con
 			initiatorSubjectID = strings.TrimSpace(initiator.UserID)
 		}
 		workload.InitiatorSubjectID = identitysdk.SubjectID(initiatorSubjectID)
-		request.Application = r.releases.Application()
 		request.Workload = &workload
 		expectedWorkload = &workload
 	}
-	resolution, err := r.principals.Resolve(ctx, request)
+	resolution, err := r.principals.Resolve(requestcontext.WithWorkspaceID(ctx, initiator.WorkspaceID), request)
 	if err != nil {
 		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workflow.execution_principal_denied", err, map[string]string{"workflow": strings.TrimSpace(workflow.Key), "role": runAs})
 	}

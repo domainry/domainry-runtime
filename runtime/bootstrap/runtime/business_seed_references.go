@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	businessseed "github.com/domainry/domainry-runtime/runtime/application/seed/business"
@@ -111,15 +112,11 @@ func (resolver *identityBusinessSeedReferenceResolver) ResolveBaselineReference(
 		switch targetObjectKey {
 		case definitioncontract.IdentityUserObjectKey:
 			var user identitysdk.User
-			user, found, err = resolver.projection.FindUser(ctx, identitysdk.UserLookup{
-				Application: resolver.application, UserID: identitysdk.SubjectID(recordID),
-			})
+			user, found, err = resolver.projection.FindUser(requestcontext.WithWorkspaceID(ctx, workspaceID), identitysdk.UserLookup{UserID: identitysdk.SubjectID(recordID)})
 			resolvedID = strings.TrimSpace(user.ID)
 		case definitioncontract.IdentityOrganizationUnitObjectKey:
 			var organization identitysdk.OrganizationUnit
-			organization, found, err = resolver.projection.FindOrganizationUnit(ctx, identitysdk.OrganizationUnitLookup{
-				Application: resolver.application, OrgID: recordID,
-			})
+			organization, found, err = resolver.projection.FindOrganizationUnit(requestcontext.WithWorkspaceID(ctx, workspaceID), identitysdk.OrganizationUnitLookup{OrgID: recordID})
 			resolvedID = strings.TrimSpace(organization.ID)
 		default:
 			return "", fail("unsupported_external_target")

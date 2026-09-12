@@ -15,6 +15,7 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	"github.com/domainry/domainry-identity-sdk/authorization/evaluator"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -109,7 +110,7 @@ func (h *ConversationBusinessHost) principal(ctx context.Context, a agentsdk.Con
 	if !a.Known || a.RuntimeID != h.runtimeID || a.WorkspaceID != string(h.application.WorkspaceID) || strings.TrimSpace(a.UserID) == "" {
 		return principalmodel.Principal{}, conversationBusinessError("forbidden")
 	}
-	resolved, err := h.principals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{Application: h.application, SubjectID: identitysdk.SubjectID(a.UserID), RoleKey: a.RoleKey})
+	resolved, err := h.principals.Resolve(requestcontext.WithWorkspaceID(ctx, a.WorkspaceID), identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(a.UserID), RoleKey: a.RoleKey})
 	if err != nil {
 		return principalmodel.Principal{}, conversationBusinessReadError(err)
 	}

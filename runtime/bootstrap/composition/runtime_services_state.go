@@ -144,6 +144,8 @@ type runtimeAssembly struct {
 	workflowProcesses                   *workflowapplication.WorkflowProcessEngine
 	connectorRegistry                   *runtimeConnectorCatalog
 	verifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
+	openVerifiedFile                    func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
+	createDerivedFile                   func(context.Context, string, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
 	workspaceAggregateCatalog           workspaceaggregatecontract.Catalog
 	workspaceActiveResolver             workspaceaggregatecontract.ActiveResolver
 	workspaceUsageResolver              workspaceaggregatecontract.UsageResolver

@@ -24,6 +24,7 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
+	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -55,6 +56,7 @@ type Runtime struct {
 	integrationWorkers   integrationsdk.LocalWorkers
 	dataExchangeBinding  dataexchangesdk.Binding
 	lifecycleBinding     lifecyclesdk.Binding
+	fileScanProcessor    *uploadapplication.FileScanProcessor
 	manifest             manifestmodel.ManifestSchema
 	workspaceRolePolicy  workspaceprovision.WorkspaceBootstrapRolePolicyEvidence
 	recordRepo           recordrepository.RecordRepository

@@ -30,12 +30,14 @@ import (
 )
 
 type uploadArtifactStoreStub struct {
-	artifact lifecyclecontract.UploadArtifact
-	err      error
+	artifact  lifecyclecontract.UploadArtifact
+	artifacts []lifecyclecontract.UploadArtifact
+	err       error
 }
 
 func (s *uploadArtifactStoreStub) RegisterUpload(_ context.Context, artifact lifecyclecontract.UploadArtifact) error {
 	s.artifact = artifact
+	s.artifacts = append(s.artifacts, artifact)
 	return s.err
 }
 
@@ -285,14 +287,11 @@ func TestUploadFileSuccessAndStorageFailure(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(workspaceDir, payload.Filename)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(filepath.Join(workspaceDir, payload.Filename)); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Mkdir(filepath.Join(workspaceDir, payload.Filename), 0o700); err != nil {
-		t.Fatal(err)
-	}
+	originalRename := uploadRename
+	uploadRename = func(string, string) error { return errors.New("rename failed") }
 	response = httptest.NewRecorder()
 	handler.uploadFile(response, multipartUploadRequest(t, "/uploads?object_key=document&field_key=file_url", "note.txt", []byte("hello upload")))
+	uploadRename = originalRename
 	if response.Code != http.StatusInternalServerError || response.Header().Get("X-Error-Code") != "backend.upload.save_failed" {
 		t.Fatalf("save failure status=%d code=%q", response.Code, response.Header().Get("X-Error-Code"))
 	}
@@ -306,6 +305,32 @@ func TestUploadFileSuccessAndStorageFailure(t *testing.T) {
 	handler.uploadFile(response, multipartUploadRequest(t, "/uploads?object_key=document&field_key=file_url", "note.txt", []byte("hello")))
 	if response.Code != http.StatusInternalServerError || response.Header().Get("X-Error-Code") != "backend.upload.create_directory_failed" {
 		t.Fatalf("directory failure status=%d code=%q", response.Code, response.Header().Get("X-Error-Code"))
+	}
+}
+
+func TestRepeatedUploadGetsDistinctRegisteredFileIdentity(t *testing.T) {
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "u1", WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
+	handler := uploadTestHandler(t, principal)
+	registry := &uploadArtifactStoreStub{}
+	handler.artifacts = registry
+	var payloads []uploadResponse
+	for range 2 {
+		response := httptest.NewRecorder()
+		handler.uploadFile(response, multipartUploadRequest(t, "/uploads?object_key=document&field_key=file_url", "same.png", append([]byte("\x89PNG\r\n\x1a\n"), bytes.Repeat([]byte{0}, 600)...)))
+		if response.Code != http.StatusCreated {
+			t.Fatalf("upload status=%d code=%q", response.Code, response.Header().Get("X-Error-Code"))
+		}
+		var payload uploadResponse
+		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		payloads = append(payloads, payload)
+	}
+	if payloads[0].SHA256 != payloads[1].SHA256 || payloads[0].FileID == payloads[1].FileID || payloads[0].Filename == payloads[1].Filename {
+		t.Fatalf("repeated upload identities=%#v", payloads)
+	}
+	if len(registry.artifacts) != 2 || registry.artifacts[0].ID != payloads[0].FileID || registry.artifacts[1].ID != payloads[1].FileID || registry.artifacts[0].Filename != payloads[0].Filename || registry.artifacts[1].Filename != payloads[1].Filename {
+		t.Fatalf("registered artifacts=%#v payloads=%#v", registry.artifacts, payloads)
 	}
 }
 

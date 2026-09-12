@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/modulecapability"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 )
 
@@ -86,7 +87,7 @@ func (transportIdentityAuthorizationStub) Reauthorize(context.Context, identitys
 
 type transportIdentityPrincipalResolverStub struct{}
 
-func (transportIdentityPrincipalResolverStub) Resolve(_ context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+func (transportIdentityPrincipalResolverStub) Resolve(ctx context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
 	roleKey := strings.TrimSpace(request.RoleKey)
 	if roleKey == "" {
 		roleKey = "admin"
@@ -94,14 +95,18 @@ func (transportIdentityPrincipalResolverStub) Resolve(_ context.Context, request
 	permissions := map[string][]string{
 		"admin": {"runtime.appschema.validate_application_definition", "identity.users.read"}, "operator": {"runtime.operations.list_operations", "runtime.operations.get_operation"}, "business": {"customer.read"},
 	}[roleKey]
+	workspaceID := requestcontext.WorkspaceID(ctx)
+	if workspaceID == "" {
+		workspaceID = "workspace-primary"
+	}
 	bundle := identitysdk.AccessBundle{ContractVersion: identitysdk.CurrentPolicyBundleVersion, Subject: identitysdk.Subject{
-		SubjectID: request.SubjectID, WorkspaceID: request.Application.WorkspaceID,
+		SubjectID: request.SubjectID, WorkspaceID: identitysdk.WorkspaceID(workspaceID),
 	}}
 	for _, permission := range permissions {
 		resource, action, _ := strings.Cut(permission, ".")
 		bundle.FunctionGrants = append(bundle.FunctionGrants, identitysdk.FunctionGrant{Resource: identitysdk.ResourceType(resource), Action: identitysdk.Action(action), Effect: identitysdk.EffectAllow})
 	}
-	principal := identitysdk.Principal{Known: len(permissions) > 0, UserID: string(request.SubjectID), WorkspaceID: string(request.Application.WorkspaceID), RoleKey: roleKey, AccessBundle: &bundle}
+	principal := identitysdk.Principal{Known: len(permissions) > 0, UserID: string(request.SubjectID), WorkspaceID: workspaceID, RoleKey: roleKey, AccessBundle: &bundle}
 	return identitysdk.PrincipalResolution{Principal: principal, AccessBundle: bundle}, nil
 }
 

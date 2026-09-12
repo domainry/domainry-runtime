@@ -13,6 +13,7 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
+	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
@@ -106,6 +107,41 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 			},
 			CompileNotification: compileActionNotification(records),
 			VerifyFileClean:     records.verifyFileClean,
+			OpenVerifiedFile:    records.openVerifiedFile,
+			CreateDerivedFile:   records.createDerivedFile,
+			StageBusinessJob: func(ctx context.Context, workspaceID string, request runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
+				if records.recordTimerService == nil {
+					return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, apperror.New(apperror.KindInternal, "backend.business_job.unavailable", nil, nil)
+				}
+				targetAction, ok := records.actions[request.ActionKey]
+				if !ok {
+					return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, apperror.New(apperror.KindBadRequest, "backend.business_job.action_not_found", nil, map[string]string{"action": request.ActionKey})
+				}
+				if strings.TrimSpace(targetAction.ObjectKey) != strings.TrimSpace(request.ObjectKey) {
+					return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, apperror.New(apperror.KindBadRequest, "backend.business_job.target_invalid", nil, map[string]string{"action": request.ActionKey, "object": request.ObjectKey})
+				}
+				maxAttempts := request.MaxAttempts
+				if maxAttempts == 0 {
+					maxAttempts = 5
+				}
+				retryDelay := request.RetryDelaySeconds
+				if retryDelay == 0 {
+					retryDelay = 5
+				}
+				retryMaxDelay := request.RetryMaxDelaySeconds
+				if retryMaxDelay == 0 {
+					retryMaxDelay = 300
+				}
+				commit, err := records.recordTimerService.BuildRecordTimerMutation(ctx, workspaceID, recordtimerapplication.RecordTimerSchedule{
+					TimerKey: request.JobKey, ObjectKey: request.ObjectKey, RecordID: request.RecordID, Purpose: "business_job:" + request.ActionKey,
+					ScheduleMode: "absolute", DueAt: records.workerDependencies.Clock.Now(), Timezone: "UTC", TargetType: "action", TargetKey: request.ActionKey,
+					PayloadJSON: string(request.Payload), MaxAttempts: maxAttempts, RetryDelaySeconds: retryDelay, RetryMaxDelaySeconds: retryMaxDelay,
+				}, records.workerDependencies.Clock.Now())
+				if err != nil {
+					return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, err
+				}
+				return commit, runtimeext.BusinessJobReceipt{JobID: commit.Record.ID}, nil
+			},
 			ObjectForKey: func(key string) (definitionmodel.ObjectSchema, bool) {
 				object, ok := records.schema[strings.TrimSpace(key)]
 				return object, ok

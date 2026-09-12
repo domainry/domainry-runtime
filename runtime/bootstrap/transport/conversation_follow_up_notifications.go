@@ -8,6 +8,7 @@ import (
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 )
@@ -51,7 +52,7 @@ func (p agentFollowUpNotificationPublisher) PublishConversationFollowUp(ctx cont
 	default:
 		return fmt.Errorf("Agent follow-up event kind is invalid")
 	}
-	resolution, err := p.principals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{Application: p.application, SubjectID: identitysdk.SubjectID(event.Authority.UserID), RoleKey: event.Authority.RoleKey})
+	resolution, err := p.principals.Resolve(requestcontext.WithWorkspaceID(ctx, event.Authority.WorkspaceID), identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(event.Authority.UserID), RoleKey: event.Authority.RoleKey})
 	if err != nil {
 		return err
 	}

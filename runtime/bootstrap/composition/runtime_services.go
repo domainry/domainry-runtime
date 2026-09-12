@@ -140,6 +140,8 @@ type RuntimeServicesDependencies struct {
 	AgentScheduledTasks                 agentsdk.ScheduledConversationTaskService
 	BusinessHandlers                    *runtimeext.BusinessHandlerRegistry
 	VerifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
+	OpenVerifiedFile                    func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
+	CreateDerivedFile                   func(context.Context, string, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
 	WorkspaceAggregateCatalog           workspaceaggregatecontract.Catalog
 	WorkspaceActiveResolver             workspaceaggregatecontract.ActiveResolver
 	WorkspaceUsageResolver              workspaceaggregatecontract.UsageResolver

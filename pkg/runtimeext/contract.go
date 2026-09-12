@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v34"
-	ContractSHA256  = "d7d20947a89b9d2115d74676bca46678ec0e286e95d4119b49fbb7bb27030758"
+	ContractVersion = "runtimeext-v35"
+	ContractSHA256  = "d9990bc81efc44ca90e47cd24ea088f26f87ee92bdcce327be08f240b8151b22"
 )
 
-const contractDefinitionV34 = `runtimeext-v34
+const contractDefinitionV35 = `runtimeext-v35
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -34,6 +34,15 @@ ResolveRecordNotificationRecipient(context.Context,ActionExecution,RecordNotific
 RecordNotificationRecipientOperation=notification_recipient
 VerifyFileClean(context.Context,ActionExecution,FileVerificationRequest)(FileVerificationEvidence,error)
 FileOperationVerifyClean=verify_clean
+OpenVerifiedFile(context.Context,ActionExecution,VerifiedFileRequest)(VerifiedFile,error)
+FileOperationOpenVerified=open_verified
+CreateDerivedFile(context.Context,ActionExecution,DerivedFileRequest)(DerivedFileEvidence,error)
+FileOperationCreateDerived=create_derived
+RunBusinessJob(context.Context,ActionExecution,BusinessJobRequest)(BusinessJobReceipt,error)
+FileOperationRunJob=run_business_job
+OpenVerifiedFileSemantics=exact_workspace|caller_readable_record_field_binding|clean_receipt_and_sha256|exact_stored_bytes
+CreateDerivedFileSemantics=bounded_128_mib|stable_idempotency_key|immutable_content_identity|protected_download_reference|runtime_clean_receipt
+RunBusinessJobSemantics=exact_json_payload|exact_target_object|same_action_uow_record_timer|durable_lease_and_fencing|bounded_retry_and_dead_letter|target_action_stable_idempotency_receipt
 FileActionGrantDeniedErrorCode=backend.upload.action_grant_denied
 WorkflowStartExecution.StageWorkflowStart(context.Context,WorkflowStart)(WorkflowStartReceipt,error)
 StageWorkflowStart(context.Context,ActionExecution,WorkflowStart)(WorkflowStartReceipt,error)
@@ -108,7 +117,7 @@ AcceptanceFixtureContract=runtime-acceptance-fixture-v2|workspace_code
 // by generated project code and Runtime readiness checks.
 func ComputedContractSHA256() string {
 	structs := []any{
-		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, RecordNotificationRecipientRequest{},
+		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, DerivedFileRequest{}, DerivedFileEvidence{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{},
 		CrossWorkspaceAggregateDimension{}, CrossWorkspaceAggregateDimensionTransform{}, CrossWorkspaceAggregateDateBucketTransform{}, CrossWorkspaceAggregateMeasure{}, CrossWorkspaceAggregateFilterCapability{}, CrossWorkspaceAggregateCapability{}, CrossWorkspaceAggregateFilter{}, CrossWorkspaceAggregateRequest{}, CrossWorkspaceAggregateRow{}, CrossWorkspaceAggregateResult{},
 		ActionTargetOrganizationCapability{}, TargetOrganization{}, OrganizationUnitDeliveryCapability{}, OrganizationUnitDeliveryRequest{}, OrganizationUnitResolveRequest{}, OrganizationUnit{}, OrganizationUnitDeliveryResult{}, StoreOrganizationProvisionRequest{}, StoreOrganizationProvisionResult{}, StoreOrganizationRenameRequest{}, StoreOrganizationDisableRequest{}, StoreOrganizationMutationResult{}, ActionStoreOrganizationMutationCapability{},
 		IdentityProfileBindingCapability{}, IdentityHandlerDeliveryCapability{}, IdentityUser{}, IdentityHandlerUserMutation{}, IdentityHandlerProfileBindingMutation{}, IdentityHandlerDeliveryRequest{}, IdentityHandlerProfileBinding{}, IdentityHandlerProfileBindingSelector{}, IdentityHandlerDeliveryResult{}, IdentityBoundIdentity{},
@@ -123,7 +132,7 @@ func ComputedContractSHA256() string {
 		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV34)
+	definition.WriteString(contractDefinitionV35)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())
