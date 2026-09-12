@@ -177,7 +177,12 @@ func (s *RecordRelationValidator) Validate(ctx context.Context, object definitio
 				return err
 			}
 			if !allowed {
-				return recordServiceError(apperror.KindForbidden, "backend.record.outside_scope", nil)
+				// Writing a relation is gated by the caller's read access to the
+				// target record, which is a different grant from the one that
+				// authorised this write. Name the field and the object: without
+				// them a caller writing several relations cannot tell which one
+				// was refused, and the fix is on the target object's permission.
+				return recordServiceError(apperror.KindForbidden, "backend.record.outside_scope", nil, "field", field.Key, "object", target, "record_id", recordID)
 			}
 			continue
 		}
@@ -193,7 +198,7 @@ func (s *RecordRelationValidator) Validate(ctx context.Context, object definitio
 			return err
 		}
 		if !allowed {
-			return recordServiceError(apperror.KindForbidden, "backend.record.outside_scope", nil)
+			return recordServiceError(apperror.KindForbidden, "backend.record.outside_scope", nil, "field", field.Key, "object", target, "record_id", recordID)
 		}
 	}
 	return nil
