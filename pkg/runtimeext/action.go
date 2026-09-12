@@ -32,6 +32,7 @@ type ActionObjectCapability struct {
 const (
 	FileOperationVerifyClean   = "verify_clean"
 	FileOperationOpenVerified  = "open_verified"
+	FileOperationIssueDownload = "issue_download"
 	FileOperationCreateDerived = "create_derived"
 	FileOperationRunJob        = "run_business_job"
 )
@@ -223,7 +224,7 @@ func (d HandlerDescriptor) Validate() error {
 
 func supportedFileOperation(operation string) bool {
 	switch operation {
-	case FileOperationVerifyClean, FileOperationOpenVerified, FileOperationCreateDerived, FileOperationRunJob:
+	case FileOperationVerifyClean, FileOperationOpenVerified, FileOperationIssueDownload, FileOperationCreateDerived, FileOperationRunJob:
 		return true
 	default:
 		return false

@@ -145,6 +145,7 @@ type runtimeAssembly struct {
 	connectorRegistry                   *runtimeConnectorCatalog
 	verifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 	openVerifiedFile                    func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
+	issueFileDownload                   func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)
 	createDerivedFile                   func(context.Context, string, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
 	workspaceAggregateCatalog           workspaceaggregatecontract.Catalog
 	workspaceActiveResolver             workspaceaggregatecontract.ActiveResolver

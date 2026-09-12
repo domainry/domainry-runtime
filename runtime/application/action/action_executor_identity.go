@@ -89,6 +89,28 @@ func (e *businessActionExecution) OpenVerifiedFile(ctx context.Context, request 
 	return e.dependencies.OpenVerifiedFile(e.unitOfWork.executionContext(ctx), e.workspace.ID, request)
 }
 
+func (e *businessActionExecution) IssueFileDownload(ctx context.Context, request runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error) {
+	if !e.hasFileGrant(runtimeext.FileOperationIssueDownload) {
+		return runtimeext.FileDownloadTicket{}, apperror.New(apperror.KindForbidden, runtimeext.FileActionGrantDeniedErrorCode, nil, nil)
+	}
+	binding := request.Binding
+	objectKey, recordID, fieldKey := strings.TrimSpace(binding.ObjectKey), strings.TrimSpace(binding.RecordID), strings.TrimSpace(binding.FileIDField)
+	if objectKey == "" || recordID == "" || fieldKey == "" || strings.TrimSpace(request.FileID) == "" || strings.TrimSpace(request.ContentSHA256) == "" || strings.TrimSpace(request.ScanReceipt) == "" || strings.TrimSpace(e.principal.UserID) == "" {
+		return runtimeext.FileDownloadTicket{}, apperror.New(apperror.KindBadRequest, "backend.upload.download_ticket_request_invalid", nil, nil)
+	}
+	result, err := e.QueryRecords(ctx, runtimeext.RecordQuery{Operation: runtimeext.QueryGet, ObjectKey: objectKey, RecordID: recordID})
+	if err != nil {
+		return runtimeext.FileDownloadTicket{}, err
+	}
+	if len(result.Records) != 1 || strings.TrimSpace(fmt.Sprint(result.Records[0].Fields[fieldKey])) != strings.TrimSpace(request.FileID) {
+		return runtimeext.FileDownloadTicket{}, apperror.New(apperror.KindForbidden, "backend.upload.file_record_binding_denied", nil, map[string]string{"object": objectKey, "record_id": recordID, "field": fieldKey})
+	}
+	if e.dependencies.IssueFileDownload == nil {
+		return runtimeext.FileDownloadTicket{}, missingExecutorPort("issue_file_download")
+	}
+	return e.dependencies.IssueFileDownload(e.unitOfWork.executionContext(ctx), e.workspace.ID, e.principal, request)
+}
+
 func (e *businessActionExecution) CreateDerivedFile(ctx context.Context, request runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error) {
 	if !e.hasFileGrant(runtimeext.FileOperationCreateDerived) {
 		return runtimeext.DerivedFileEvidence{}, apperror.New(apperror.KindForbidden, runtimeext.FileActionGrantDeniedErrorCode, nil, nil)

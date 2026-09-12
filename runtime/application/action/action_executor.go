@@ -59,6 +59,7 @@ type BusinessHandlerExecutionDependencies struct {
 	CompileNotification               func(context.Context, string, runtimeext.NotificationIntent, principalmodel.Principal) (notificationmodel.NotificationEvent, error)
 	VerifyFileClean                   func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 	OpenVerifiedFile                  func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
+	IssueFileDownload                 func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)
 	CreateDerivedFile                 func(context.Context, string, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
 	StageBusinessJob                  func(context.Context, string, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error)
 	ObjectForKey                      func(string) (definitionmodel.ObjectSchema, bool)
@@ -248,6 +249,7 @@ type businessActionExecution struct {
 }
 
 var _ runtimeext.ActionExecution = (*businessActionExecution)(nil)
+var _ runtimeext.FileDownloadExecution = (*businessActionExecution)(nil)
 var _ runtimeext.RecordNotificationRecipientExecution = (*businessActionExecution)(nil)
 var _ runtimeext.CrossWorkspaceAggregateExecution = (*businessActionExecution)(nil)
 var _ runtimeext.TargetOrganizationExecution = (*businessActionExecution)(nil)

@@ -35,6 +35,7 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 	}
 	var artifacts lifecyclecontract.UploadArtifactStore
 	var scans *uploadapplication.FileScanReceiptVerifier
+	var tickets *uploadapplication.FileDownloadTicketService
 	if a.dependencies.Store != nil && a.dependencies.LifecycleBinding != nil {
 		fileStore, err := a.dependencies.LifecycleBinding.UploadArtifacts(lifecyclesdk.UploadArtifactOptions{
 			Root:              uploadDir,
@@ -48,12 +49,17 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 		artifacts = fileStore
 		key := sha256.Sum256([]byte("domainry-file-scan-receipt-v1:" + a.dependencies.Config.IntegrationSecretKey))
 		scans = uploadapplication.NewFileScanReceiptVerifier(fileStore, key[:])
+		downloadKey := sha256.Sum256([]byte("domainry-file-download-ticket-v1:" + a.dependencies.Config.IntegrationSecretKey))
+		tickets, err = uploadapplication.NewFileDownloadTicketService(downloadKey[:], nil)
+		if err != nil {
+			panic("initialize file download tickets: " + err.Error())
+		}
 	}
 	a.handlers.Uploads = uploadhttp.NewUploadsHandler(uploadhttp.UploadsDependencies{
 		Access:    uploadapplication.NewUploadAccessApplicationService(records.Applications().Schema, records.Applications().Audit, queries),
 		UploadDir: uploadDir, Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 		WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,
-		Artifacts: artifacts, Scans: scans,
+		Artifacts: artifacts, Scans: scans, Tickets: tickets,
 	})
 	workflows := records.Applications().Workflows
 	a.handlers.Workflows = workflowhttp.NewWorkflowsHandler(workflowhttp.WorkflowsDependencies{

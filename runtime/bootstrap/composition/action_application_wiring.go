@@ -108,6 +108,7 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 			CompileNotification: compileActionNotification(records),
 			VerifyFileClean:     records.verifyFileClean,
 			OpenVerifiedFile:    records.openVerifiedFile,
+			IssueFileDownload:   records.issueFileDownload,
 			CreateDerivedFile:   records.createDerivedFile,
 			StageBusinessJob: func(ctx context.Context, workspaceID string, request runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
 				if records.recordTimerService == nil {

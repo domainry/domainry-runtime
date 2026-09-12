@@ -114,3 +114,34 @@ func TestFileCapabilityOpenVerifiedRehashesStoredBytes(t *testing.T) {
 		t.Fatalf("expected identity mismatch, got %v", err)
 	}
 }
+
+func TestFileCapabilityIssuesTicketOnlyForExactCleanArtifactBinding(t *testing.T) {
+	now := time.Date(2026, 9, 13, 4, 5, 6, 0, time.UTC)
+	store := &fileCapabilityStoreStub{evidence: map[string]lifecyclecontract.FileScanEvidence{}}
+	tickets, err := NewFileDownloadTicketService(bytes.Repeat([]byte("t"), 32), func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewFileCapabilityService(store, NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32)), t.TempDir(), func() time.Time { return now }, tickets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := service.CreateDerived(t.Context(), "workspace-a", runtimeext.DerivedFileRequest{
+		IdempotencyKey: "file-1", ObjectKey: "document_file_version", FieldKey: "runtime_file_id", Filename: "file.pdf", ContentType: "application/pdf", Content: bytes.NewReader([]byte("pdf")),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := runtimeext.FileDownloadRequest{
+		FileVerificationRequest: runtimeext.FileVerificationRequest{FileID: created.FileID, ContentSHA256: created.ContentSHA256, ScanReceipt: created.ScanReceipt},
+		Binding:                 runtimeext.FileRecordBinding{ObjectKey: "document_file_version", RecordID: "version-1", FileIDField: "runtime_file_id"},
+	}
+	ticket, err := service.IssueDownload(t.Context(), "workspace-a", runtimeext.Principal{UserID: "user-a", AuthorizationRevision: "auth-1", Known: true}, request)
+	if err != nil || ticket.ProtectedDownload == "" || ticket.ExpiresAt != now.Add(fileDownloadTicketLifetime) {
+		t.Fatalf("ticket=%+v err=%v", ticket, err)
+	}
+	request.Binding.FileIDField = "other_field"
+	if _, err := service.IssueDownload(t.Context(), "workspace-a", runtimeext.Principal{UserID: "user-a", Known: true}, request); err == nil || err.Error() != "backend.upload.file_artifact_binding_mismatch" {
+		t.Fatalf("binding mismatch err=%v", err)
+	}
+}

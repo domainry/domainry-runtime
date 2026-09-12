@@ -67,6 +67,7 @@ type UploadsHandler struct {
 	readPrefix        func(io.Reader) ([]byte, error)
 	artifacts         lifecyclecontract.UploadArtifactStore
 	scans             *uploadapplication.FileScanReceiptVerifier
+	tickets           *uploadapplication.FileDownloadTicketService
 }
 
 type UploadsDependencies struct {
@@ -78,11 +79,12 @@ type UploadsDependencies struct {
 	WriteServiceError func(http.ResponseWriter, *http.Request, error)
 	Artifacts         lifecyclecontract.UploadArtifactStore
 	Scans             *uploadapplication.FileScanReceiptVerifier
+	Tickets           *uploadapplication.FileDownloadTicketService
 }
 
 func NewUploadsHandler(deps UploadsDependencies) *UploadsHandler {
 	return &UploadsHandler{
-		access: deps.Access, uploadDir: deps.UploadDir, principal: deps.Principal, artifacts: deps.Artifacts, scans: deps.Scans,
+		access: deps.Access, uploadDir: deps.UploadDir, principal: deps.Principal, artifacts: deps.Artifacts, scans: deps.Scans, tickets: deps.Tickets,
 		writeJSON: deps.WriteJSON, writeError: deps.WriteError, writeServiceError: deps.WriteServiceError,
 		copyUpload: io.Copy, readPrefix: readUploadPrefix,
 	}
@@ -316,6 +318,20 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 	objectKey := strings.TrimSpace(r.URL.Query().Get("object_key"))
 	fieldKey := strings.TrimSpace(r.URL.Query().Get("field_key"))
 	recordID := strings.TrimSpace(r.URL.Query().Get("record_id"))
+	ticketAuthorized := false
+	if token := strings.TrimSpace(r.URL.Query().Get("download_ticket")); token != "" {
+		if h.tickets == nil {
+			h.writeError(w, r, http.StatusServiceUnavailable, "backend.upload.download_ticket_unavailable")
+			return
+		}
+		claims, err := h.tickets.Authorize(r.Context(), token, principal.WorkspaceID, principal.UserID, principal.EffectiveAuthorizationRevision(), fileIdentifier)
+		if err != nil {
+			h.writeServiceError(w, r, err)
+			return
+		}
+		objectKey, fieldKey, recordID = claims.ObjectKey, claims.FieldKey, claims.RecordID
+		ticketAuthorized = true
+	}
 	storageFilename := fileIdentifier
 	if h.scans != nil {
 		evidence, err := h.scans.Status(r.Context(), principal.WorkspaceID, fileIdentifier)
@@ -336,9 +352,13 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
-	if err := h.access.AuthorizeDownload(r.Context(), objectKey, fieldKey, recordID, fileIdentifier, principal); err != nil {
-		h.writeServiceError(w, r, err)
-		return
+	if ticketAuthorized {
+		h.access.RecordTicketDownload(r.Context(), objectKey, fieldKey, recordID, fileIdentifier, principal)
+	} else {
+		if err := h.access.AuthorizeDownload(r.Context(), objectKey, fieldKey, recordID, fileIdentifier, principal); err != nil {
+			h.writeServiceError(w, r, err)
+			return
+		}
 	}
 	workspaceDir, err := h.workspaceUploadDir(principal.WorkspaceID)
 	if err != nil {

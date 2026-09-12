@@ -291,7 +291,13 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	}
 	fileScanKey := sha256.Sum256([]byte("domainry-file-scan-receipt-v1:" + cfg.IntegrationSecretKey))
 	fileScans := uploadapplication.NewFileScanReceiptVerifier(lifecycleFileArtifacts, fileScanKey[:])
-	fileCapabilities, err := uploadapplication.NewFileCapabilityService(lifecycleFileArtifacts, fileScans, uploadDirectory, workerDependencies.Clock.Now)
+	fileDownloadTicketKey := sha256.Sum256([]byte("domainry-file-download-ticket-v1:" + cfg.IntegrationSecretKey))
+	fileDownloadTickets, err := uploadapplication.NewFileDownloadTicketService(fileDownloadTicketKey[:], workerDependencies.Clock.Now)
+	if err != nil {
+		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+		return runtimeServiceAssembly{}, fmt.Errorf("initialize file download tickets: %w", err)
+	}
+	fileCapabilities, err := uploadapplication.NewFileCapabilityService(lifecycleFileArtifacts, fileScans, uploadDirectory, workerDependencies.Clock.Now, fileDownloadTickets)
 	if err != nil {
 		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
 		return runtimeServiceAssembly{}, fmt.Errorf("initialize file capabilities: %w", err)
@@ -385,6 +391,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			WorkspaceCommercialConfiguration:    workspaceprovisionpersistence.NewCommercialConfigurationStore(store),
 			VerifyFileClean:                     fileCapabilities.VerifyClean,
 			OpenVerifiedFile:                    fileCapabilities.OpenVerified,
+			IssueFileDownload:                   fileCapabilities.IssueDownload,
 			CreateDerivedFile:                   fileCapabilities.CreateDerived,
 			PrepareOutboxPayload: func(ctx context.Context, message publicationmodel.Message, payload map[string]any) (map[string]any, error) {
 				if strings.TrimSpace(message.ConnectorKey) != "email" || strings.TrimSpace(message.Operation) != "send_file_email" {

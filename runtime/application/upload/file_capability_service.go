@@ -30,9 +30,10 @@ type FileCapabilityService struct {
 	verifier   *FileScanReceiptVerifier
 	uploadRoot string
 	clock      func() time.Time
+	tickets    *FileDownloadTicketService
 }
 
-func NewFileCapabilityService(store lifecyclecontract.UploadFileArtifactStore, verifier *FileScanReceiptVerifier, uploadRoot string, clock func() time.Time) (*FileCapabilityService, error) {
+func NewFileCapabilityService(store lifecyclecontract.UploadFileArtifactStore, verifier *FileScanReceiptVerifier, uploadRoot string, clock func() time.Time, tickets ...*FileDownloadTicketService) (*FileCapabilityService, error) {
 	root, err := filepath.Abs(strings.TrimSpace(uploadRoot))
 	if err != nil || strings.TrimSpace(uploadRoot) == "" {
 		return nil, fmt.Errorf("file capability upload root is required")
@@ -43,7 +44,11 @@ func NewFileCapabilityService(store lifecyclecontract.UploadFileArtifactStore, v
 	if clock == nil {
 		clock = time.Now
 	}
-	return &FileCapabilityService{store: store, verifier: verifier, uploadRoot: root, clock: clock}, nil
+	var downloadTickets *FileDownloadTicketService
+	if len(tickets) > 0 {
+		downloadTickets = tickets[0]
+	}
+	return &FileCapabilityService{store: store, verifier: verifier, uploadRoot: root, clock: clock, tickets: downloadTickets}, nil
 }
 
 func (s *FileCapabilityService) VerifyClean(ctx context.Context, workspaceID string, request runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error) {
@@ -82,6 +87,24 @@ func (s *FileCapabilityService) OpenVerified(ctx context.Context, workspaceID st
 		return runtimeext.VerifiedFile{}, errors.New("backend.upload.file_identity_mismatch")
 	}
 	return runtimeext.VerifiedFile{FileVerificationEvidence: evidence, Filename: evidence.Filename, ContentType: evidence.ContentType, Content: io.NopCloser(bytes.NewReader(content))}, nil
+}
+
+func (s *FileCapabilityService) IssueDownload(ctx context.Context, workspaceID string, principal runtimeext.Principal, request runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error) {
+	if s.tickets == nil {
+		return runtimeext.FileDownloadTicket{}, errors.New("backend.upload.download_ticket_unavailable")
+	}
+	evidence, err := s.VerifyClean(ctx, workspaceID, request.FileVerificationRequest)
+	if err != nil {
+		return runtimeext.FileDownloadTicket{}, err
+	}
+	registered, err := s.store.FindFileScan(ctx, workspaceID, evidence.FileID)
+	if err != nil {
+		return runtimeext.FileDownloadTicket{}, err
+	}
+	if registered.ObjectKey != strings.TrimSpace(request.Binding.ObjectKey) || registered.FieldKey != strings.TrimSpace(request.Binding.FileIDField) {
+		return runtimeext.FileDownloadTicket{}, errors.New("backend.upload.file_artifact_binding_mismatch")
+	}
+	return s.tickets.Issue(ctx, workspaceID, principal.UserID, principal.AuthorizationRevision, request)
 }
 
 func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID string, request runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error) {

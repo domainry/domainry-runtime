@@ -13,6 +13,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -469,6 +471,59 @@ func TestServeUploadedFileResolvesOpaqueFileIdentityInsideWorkspace(t *testing.T
 	handler.serveUploadedFile(response, request)
 	if response.Code != http.StatusForbidden || response.Header().Get("X-Error-Code") != "backend.upload.permission_denied" {
 		t.Fatalf("artifact binding mismatch status=%d code=%q", response.Code, response.Header().Get("X-Error-Code"))
+	}
+}
+
+func TestServeUploadedFileAcceptsExactActionDownloadTicketWithoutNativeRecordGrant(t *testing.T) {
+	now := time.Date(2026, 9, 13, 5, 6, 7, 0, time.UTC)
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "listed-member", WorkspaceID: "workspace-a"}}, uploadTestRole("document.read"))
+	handler := uploadTestHandler(t, principal)
+	workspaceDir, err := handler.workspaceUploadDir(principal.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(workspaceDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	storageFilename := "stored-document.pdf"
+	if err := os.WriteFile(filepath.Join(workspaceDir, storageFilename), []byte("authorized bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := &uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{
+		"workspace-a\x00opaque-document-file": {
+			FileID: "opaque-document-file", WorkspaceID: "workspace-a", Filename: storageFilename,
+			ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean,
+		},
+	}}
+	handler.scans = uploadapplication.NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32))
+	tickets, err := uploadapplication.NewFileDownloadTicketService(bytes.Repeat([]byte("t"), 32), func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler.tickets = tickets
+	ticket, err := tickets.Issue(t.Context(), "workspace-a", principal.UserID, principal.EffectiveAuthorizationRevision(), runtimeext.FileDownloadRequest{
+		FileVerificationRequest: runtimeext.FileVerificationRequest{FileID: "opaque-document-file", ContentSHA256: strings.Repeat("a", 64), ScanReceipt: "receipt"},
+		Binding:                 runtimeext.FileRecordBinding{ObjectKey: "asset", RecordID: "asset-1", FileIDField: "file_url"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, ticket.ProtectedDownload, nil)
+	request.SetPathValue("filename", "opaque-document-file")
+	response := httptest.NewRecorder()
+	handler.serveUploadedFile(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != "authorized bytes" {
+		t.Fatalf("ticket download status=%d body=%q code=%q", response.Code, response.Body.String(), response.Header().Get("X-Error-Code"))
+	}
+
+	other := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "other-member", WorkspaceID: "workspace-a"}}, uploadTestRole("document.read"))
+	handler.principal = func(*http.Request) principalmodel.Principal { return other }
+	request = httptest.NewRequest(http.MethodGet, ticket.ProtectedDownload, nil)
+	request.SetPathValue("filename", "opaque-document-file")
+	response = httptest.NewRecorder()
+	handler.serveUploadedFile(response, request)
+	if response.Code != http.StatusForbidden || response.Header().Get("X-Error-Code") != "backend.upload.download_ticket_invalid" {
+		t.Fatalf("cross-user ticket status=%d code=%q", response.Code, response.Header().Get("X-Error-Code"))
 	}
 }
 

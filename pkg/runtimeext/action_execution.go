@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"time"
 )
 
 // ExecutionPhase is controlled by Runtime. Project code can observe the phase
@@ -79,6 +80,10 @@ type VerifiedFileExecution interface {
 	OpenVerifiedFile(context.Context, VerifiedFileRequest) (VerifiedFile, error)
 }
 
+type FileDownloadExecution interface {
+	IssueFileDownload(context.Context, FileDownloadRequest) (FileDownloadTicket, error)
+}
+
 type DerivedFileExecution interface {
 	CreateDerivedFile(context.Context, DerivedFileRequest) (DerivedFileEvidence, error)
 }
@@ -121,6 +126,14 @@ func OpenVerifiedFile(ctx context.Context, execution ActionExecution, request Ve
 		return VerifiedFile{}, &BusinessError{Code: "backend.upload.file_open_unavailable", Message: "Runtime verified file access is unavailable"}
 	}
 	return opener.OpenVerifiedFile(ctx, request)
+}
+
+func IssueFileDownload(ctx context.Context, execution ActionExecution, request FileDownloadRequest) (FileDownloadTicket, error) {
+	issuer, ok := execution.(FileDownloadExecution)
+	if !ok {
+		return FileDownloadTicket{}, &BusinessError{Code: "backend.upload.download_ticket_unavailable", Message: "Runtime file download ticket issuance is unavailable"}
+	}
+	return issuer.IssueFileDownload(ctx, request)
 }
 
 func CreateDerivedFile(ctx context.Context, execution ActionExecution, request DerivedFileRequest) (DerivedFileEvidence, error) {
@@ -169,6 +182,16 @@ type VerifiedFile struct {
 	Filename    string
 	ContentType string
 	Content     io.ReadCloser
+}
+
+type FileDownloadRequest struct {
+	FileVerificationRequest
+	Binding FileRecordBinding
+}
+
+type FileDownloadTicket struct {
+	ProtectedDownload string
+	ExpiresAt         time.Time
 }
 
 type DerivedFileRequest struct {

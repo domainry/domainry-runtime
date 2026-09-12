@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v36"
-	ContractSHA256  = "9d2996b3478b0bb17ffd5a98346866f0ac1e13fcf0ba62ea812590a79613929c"
+	ContractVersion = "runtimeext-v37"
+	ContractSHA256  = "a69b96a5a5fbcf2504ddf63905cd64b699a702314b7e0c8d62b35266a6659927"
 )
 
-const contractDefinitionV36 = `runtimeext-v36
+const contractDefinitionV37 = `runtimeext-v37
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -36,11 +36,14 @@ VerifyFileClean(context.Context,ActionExecution,FileVerificationRequest)(FileVer
 FileOperationVerifyClean=verify_clean
 OpenVerifiedFile(context.Context,ActionExecution,VerifiedFileRequest)(VerifiedFile,error)
 FileOperationOpenVerified=open_verified
+IssueFileDownload(context.Context,ActionExecution,FileDownloadRequest)(FileDownloadTicket,error)
+FileOperationIssueDownload=issue_download
 CreateDerivedFile(context.Context,ActionExecution,DerivedFileRequest)(DerivedFileEvidence,error)
 FileOperationCreateDerived=create_derived
 RunBusinessJob(context.Context,ActionExecution,BusinessJobRequest)(BusinessJobReceipt,error)
 FileOperationRunJob=run_business_job
 OpenVerifiedFileSemantics=exact_workspace|caller_readable_record_field_binding|clean_receipt_and_sha256|exact_stored_bytes
+IssueFileDownloadSemantics=exact_workspace|exact_user_and_authorization_revision|caller_readable_record_field_binding|clean_receipt_and_sha256|opaque_file_identity|hmac_signed_two_minute_expiry|download_audit
 CreateDerivedFileSemantics=bounded_128_mib|stable_idempotency_key|immutable_content_identity|protected_download_reference|runtime_clean_receipt
 RunBusinessJobSemantics=exact_json_payload|exact_target_object|same_action_uow_record_timer|durable_lease_and_fencing|bounded_retry_and_dead_letter|target_action_stable_idempotency_receipt
 FileActionGrantDeniedErrorCode=backend.upload.action_grant_denied
@@ -118,7 +121,7 @@ AcceptanceFixtureContract=runtime-acceptance-fixture-v2|workspace_code
 // by generated project code and Runtime readiness checks.
 func ComputedContractSHA256() string {
 	structs := []any{
-		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, DerivedFileRequest{}, DerivedFileEvidence{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{},
+		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, FileDownloadRequest{}, FileDownloadTicket{}, DerivedFileRequest{}, DerivedFileEvidence{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{},
 		CrossWorkspaceAggregateDimension{}, CrossWorkspaceAggregateDimensionTransform{}, CrossWorkspaceAggregateDateBucketTransform{}, CrossWorkspaceAggregateMeasure{}, CrossWorkspaceAggregateFilterCapability{}, CrossWorkspaceAggregateCapability{}, CrossWorkspaceAggregateFilter{}, CrossWorkspaceAggregateRequest{}, CrossWorkspaceAggregateRow{}, CrossWorkspaceAggregateResult{},
 		ActionTargetOrganizationCapability{}, TargetOrganization{}, OrganizationUnitDeliveryCapability{}, OrganizationUnitDeliveryRequest{}, OrganizationUnitResolveRequest{}, OrganizationUnit{}, OrganizationUnitDeliveryResult{}, StoreOrganizationProvisionRequest{}, StoreOrganizationProvisionResult{}, StoreOrganizationRenameRequest{}, StoreOrganizationDisableRequest{}, StoreOrganizationMutationResult{}, ActionStoreOrganizationMutationCapability{},
 		IdentityProfileBindingCapability{}, IdentityHandlerDeliveryCapability{}, IdentityUser{}, IdentityHandlerUserMutation{}, IdentityHandlerProfileBindingMutation{}, IdentityHandlerDeliveryRequest{}, IdentityHandlerProfileBinding{}, IdentityHandlerProfileBindingSelector{}, IdentityHandlerDeliveryResult{}, IdentityBoundIdentity{},
@@ -133,7 +136,7 @@ func ComputedContractSHA256() string {
 		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV36)
+	definition.WriteString(contractDefinitionV37)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

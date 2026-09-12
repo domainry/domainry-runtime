@@ -121,6 +121,15 @@ func (s *UploadAccessApplicationService) AuthorizeDownload(ctx context.Context, 
 	return s.authorizeRecordDownload(ctx, objectKey, fieldKey, recordID, filename, principal)
 }
 
+func (s *UploadAccessApplicationService) RecordTicketDownload(ctx context.Context, objectKey, fieldKey, recordID, fileID string, principal principalmodel.Principal) {
+	if uploadAuthorizePrincipal(principal) != nil {
+		return
+	}
+	s.audit.AppendWithMetadata(ctx, "file_downloaded", strings.TrimSpace(objectKey), strings.TrimSpace(recordID), principal, "", nil, nil, map[string]any{
+		"file_id": strings.TrimSpace(fileID), "field_key": strings.TrimSpace(fieldKey), "authorization": "action_download_ticket",
+	})
+}
+
 func objectHasField(object definitionmodel.ObjectSchema, fieldKey string) bool {
 	for _, field := range object.Fields {
 		if field.Key == fieldKey {
