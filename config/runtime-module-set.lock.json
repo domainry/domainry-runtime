@@ -1,6 +1,6 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "c7e9127fee8b0e95d2831a43ffddbc67a49dee80df2f455c076d83e8e26ee53a",
+  "set_sha256": "083c28cd2efefcd2dffee2156dc3347a713199ca8b86f53dd2e743b4f523451b",
   "modules": [
     {
       "key": "agent",
@@ -98,8 +98,8 @@
       "implementation_version": "v0.1.9",
       "implementation_sum": "h1:+TWv1aXbo0/VgHQdPZBgQLlkcdoQ8L/o95GVj/I9dqk=",
       "sdk": "github.com/domainry/domainry-report-sdk",
-      "sdk_version": "v0.1.7",
-      "sdk_sum": "h1:PUfl5EuemAUp4BiFWUfHRl2CwFBvTHTTkLnDJzUv9mQ=",
+      "sdk_version": "v0.1.8",
+      "sdk_sum": "h1:cmOwJg25b0O1dYdOmguypLGa9FM3hPpXJ8fE4Jfsw6s=",
       "capability_contract_sha256": "c4445a91c4a98efd9ef9e85b10753e05d4a82c22430dff769f3db18b8fdbff58"
     },
     {
