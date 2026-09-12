@@ -240,7 +240,8 @@ func reportSubjectFromPrincipal(principal principalmodel.Principal, accessHash s
 	subject := reportmodel.ReportSubject{
 		Principal: principal.Principal, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID,
 		CausationID: principal.CausationID, AccessScopeHash: accessHash,
-		TrustedProcess: principal.SystemScope.Valid(), ProcessCapabilities: append([]string(nil), principal.SystemCapabilities...),
+		BusinessAuthorizationRevision: principal.BusinessAuthorizationRevision,
+		TrustedProcess:                principal.SystemScope.Valid(), ProcessCapabilities: append([]string(nil), principal.SystemCapabilities...),
 	}
 	for _, profile := range principal.BusinessProfiles {
 		subject.BusinessProfiles = append(subject.BusinessProfiles, portableBusinessProfile(profile))
@@ -255,6 +256,7 @@ func reportSubjectFromPrincipal(principal principalmodel.Principal, accessHash s
 
 func RuntimePrincipalFromReportSubject(subject reportmodel.ReportSubject) principalmodel.Principal {
 	principal := principalmodel.Principal{Principal: subject.Principal, RequestID: subject.RequestID, CorrelationID: subject.CorrelationID, CausationID: subject.CausationID}
+	principal.BusinessAuthorizationRevision = subject.BusinessAuthorizationRevision
 	if subject.TrustedProcess {
 		principal.SystemScope = principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "embedded report execution")
 		principal.SystemCapabilities = append([]string(nil), subject.ProcessCapabilities...)

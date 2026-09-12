@@ -28,7 +28,7 @@ func ReportAccessScopeHash(principal principalmodel.Principal) (string, error) {
 		AuthorizationRevision string
 		SystemScopeKind       principalmodel.SystemScopeKind
 		SystemCapabilities    []string
-	}{principal.WorkspaceID, principal.UserID, principal.OrgID, principal.OrgScopeIDs, principal.ReportingScopeUserIDs, principal.RoleKey, principal.BusinessProfiles, principal.ActiveBusinessProfile, principal.BusinessClaims, principal.AuthorizationRevision, principal.SystemScope.Kind, principal.SystemCapabilities}
+	}{principal.WorkspaceID, principal.UserID, principal.OrgID, principal.OrgScopeIDs, principal.ReportingScopeUserIDs, principal.RoleKey, principal.BusinessProfiles, principal.ActiveBusinessProfile, principal.BusinessClaims, principal.EffectiveAuthorizationRevision(), principal.SystemScope.Kind, principal.SystemCapabilities}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return "", err

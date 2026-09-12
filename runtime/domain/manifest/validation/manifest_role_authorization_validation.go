@@ -18,9 +18,13 @@ func (state *validationState) validateRoles() {
 		key := strings.TrimSpace(role.Key)
 		if key == "" {
 			state.add(path+".key", "is required")
-		} else if key == platformInstallationAdministratorRoleKey {
-			state.add(path+".key", "role %q is platform-owned and cannot be declared by a project", key)
-		} else if seen[key] {
+		}
+		if key == platformInstallationAdministratorRoleKey || role.PlatformRoleExtension {
+			if err := manifestmodel.ValidatePlatformRoleExtension(role); err != nil {
+				state.add(path+".key", "%v", err)
+			}
+		}
+		if seen[key] {
 			state.add(path+".key", "duplicate role key %q", key)
 		}
 		seen[key] = true

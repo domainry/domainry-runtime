@@ -180,7 +180,7 @@ func (e *businessActionExecution) ListWorkspaceIdentityUsage(ctx context.Context
 	}
 	cursorBinding := WorkspaceIdentityUsageCursorBinding{
 		ActionKey: strings.TrimSpace(e.action.Key), WorkspaceID: strings.TrimSpace(e.invocation.Principal.WorkspaceID),
-		SubjectID: strings.TrimSpace(e.invocation.Principal.UserID), AuthorizationRevision: strings.TrimSpace(e.invocation.Principal.AuthorizationRevision),
+		SubjectID: strings.TrimSpace(e.invocation.Principal.UserID), AuthorizationRevision: strings.TrimSpace(e.invocation.Principal.EffectiveAuthorizationRevision()),
 	}
 	if !cursorBinding.valid() {
 		return fail(apperror.KindForbidden, "backend.action.workspace_identity_usage_authorization_revision_required", "denied", nil)

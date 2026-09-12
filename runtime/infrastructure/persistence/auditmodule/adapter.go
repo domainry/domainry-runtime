@@ -24,7 +24,7 @@ func ActorFromPrincipal(principal principalmodel.Principal) sdkcontract.Actor {
 	return sdkcontract.Actor{
 		WorkspaceID: principal.WorkspaceID, SubjectID: principal.UserID,
 		RoleKey: principal.RoleKey, Kind: kind, RequestID: principal.RequestID,
-		AuthorizationRevision: principal.AuthorizationRevision,
+		AuthorizationRevision: principal.EffectiveAuthorizationRevision(),
 	}
 }
 

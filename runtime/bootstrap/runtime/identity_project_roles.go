@@ -69,10 +69,21 @@ func RuntimeInstallationWorkspaceProjectRoleCatalog(objects []definitionmodel.Ob
 }
 
 func runtimeRolesWithInstallationAdministrator(roles []manifestmodel.RoleSchema, assignmentMode string, provisionToWorkspaces bool) ([]manifestmodel.RoleSchema, error) {
+	result := make([]manifestmodel.RoleSchema, 0, len(roles)+1)
+	var extension *manifestmodel.RoleSchema
 	for _, role := range roles {
-		if strings.TrimSpace(role.Key) == workspaceprovisionapplication.WorkspaceAdministratorRoleKey {
-			return nil, fmt.Errorf("Runtime Workspace role %q is platform-owned and cannot be declared by a project", workspaceprovisionapplication.WorkspaceAdministratorRoleKey)
+		if strings.TrimSpace(role.Key) == workspaceprovisionapplication.WorkspaceAdministratorRoleKey || role.PlatformRoleExtension {
+			if err := manifestmodel.ValidatePlatformRoleExtension(role); err != nil {
+				return nil, err
+			}
+			if extension != nil {
+				return nil, fmt.Errorf("duplicate platform role extension %q", role.Key)
+			}
+			copy := role
+			extension = &copy
+			continue
 		}
+		result = append(result, role)
 	}
 	permissions := []string{
 		workspaceprovisionapplication.ProvisionActionKey,
@@ -85,12 +96,30 @@ func runtimeRolesWithInstallationAdministrator(roles []manifestmodel.RoleSchema,
 	for _, permission := range permissions {
 		grants = append(grants, manifestmodel.RolePermission{PermissionKey: permission, DataScope: identitysdk.DataScopeAll, AuditDenial: true})
 	}
-	result := append([]manifestmodel.RoleSchema(nil), roles...)
-	result = append(result, manifestmodel.RoleSchema{
+	administrator := manifestmodel.RoleSchema{
 		Key: workspaceprovisionapplication.WorkspaceAdministratorRoleKey, Name: "Installation administrator",
 		Permissions: grants, Audience: "user", AssignmentMode: assignmentMode, RiskLevel: "privileged",
 		ProvisionToWorkspaces: provisionToWorkspaces,
-	})
+	}
+	if extension != nil {
+		base := make(map[string]bool, len(permissions))
+		for _, key := range permissions {
+			base[key] = true
+		}
+		for _, grant := range extension.Permissions {
+			if base[grant.PermissionKey] {
+				if grant.DataScope != identitysdk.DataScopeAll {
+					return nil, fmt.Errorf("platform role extension cannot change scope of %q", grant.PermissionKey)
+				}
+				continue
+			}
+			administrator.Permissions = append(administrator.Permissions, grant)
+		}
+		administrator.FieldPermissions = extension.FieldPermissions
+		administrator.ReferencePermissions = extension.ReferencePermissions
+		administrator.ExportRules = extension.ExportRules
+	}
+	result = append(result, administrator)
 	return result, nil
 }
 
@@ -423,6 +452,13 @@ func runtimeWorkspaceRoleCatalogRoles(roles []manifestmodel.RoleSchema) ([]manif
 		}
 		seen[key] = true
 		role.Key = key
+		if role.PlatformRoleExtension {
+			if err := manifestmodel.ValidatePlatformRoleExtension(role); err != nil {
+				return nil, nil, err
+			}
+			// Ordinary Workspace publication must never distribute installation grants.
+			continue
+		}
 		if strings.TrimSpace(role.Name) == "" {
 			return nil, nil, fmt.Errorf("Runtime Workspace role %q has an empty name", key)
 		}

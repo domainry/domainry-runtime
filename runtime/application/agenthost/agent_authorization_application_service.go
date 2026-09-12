@@ -179,8 +179,8 @@ func (s *AgentAuthorizationApplicationService) AuthorizeTask(ctx context.Context
 		}
 		sort.Strings(fields[object.Key])
 	}
-	policyRevision := agentStableHash(map[string]any{"schema_hash": visible.SchemaHash, "task_key": task.Key, "task_version": task.Version, "authorization_revision": execution.AuthorizationRevision, "objects": objects, "actions": actions, "outcomes": outcomes, "tools": tools})
-	evidence := agentmodel.AgentAuthorizationEvidence{Decision: "allow", Code: "agent.authorization.allowed", PolicyRevision: policyRevision, AuthorizationRevision: execution.AuthorizationRevision, AllowedObjects: objects, AllowedActions: actions, AllowedOutcomes: outcomes, AllowedTools: tools}
+	policyRevision := agentStableHash(map[string]any{"schema_hash": visible.SchemaHash, "task_key": task.Key, "task_version": task.Version, "authorization_revision": execution.EffectiveAuthorizationRevision(), "objects": objects, "actions": actions, "outcomes": outcomes, "tools": tools})
+	evidence := agentmodel.AgentAuthorizationEvidence{Decision: "allow", Code: "agent.authorization.allowed", PolicyRevision: policyRevision, AuthorizationRevision: execution.EffectiveAuthorizationRevision(), AllowedObjects: objects, AllowedActions: actions, AllowedOutcomes: outcomes, AllowedTools: tools}
 	return AgentTaskAuthorization{Principal: execution, Identity: identity, Task: task, AllowedObjects: objects, AllowedActions: actions, AllowedOutcomes: outcomes, AllowedTools: tools, VisibleFields: fields, Evidence: evidence}, nil
 }
 
@@ -271,7 +271,7 @@ func (s *AgentAuthorizationApplicationService) ResolveGlobalContext(ctx context.
 	if len(encoded) > assignment.ContextContract.MaxContextBytes {
 		return agentsdk.GlobalContext{}, agentAuthorizationError("agent.authorization.context_limit", principal.AuthorizationRevision)
 	}
-	contextValue.ContextRevision = agentStableHash(map[string]any{"context": contextValue, "schema_hash": visible.SchemaHash, "authorization_revision": principal.AuthorizationRevision})
+	contextValue.ContextRevision = agentStableHash(map[string]any{"context": contextValue, "schema_hash": visible.SchemaHash, "authorization_revision": principal.EffectiveAuthorizationRevision()})
 	return contextValue, nil
 }
 

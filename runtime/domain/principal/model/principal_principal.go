@@ -44,12 +44,24 @@ type Principal struct {
 	BusinessProfiles      []profilebindingmodel.Reference
 	ActiveBusinessProfile *profilebindingmodel.Reference
 	BusinessClaims        map[string]profilebindingmodel.ClaimValue
+	// BusinessAuthorizationRevision binds Identity authorization to the current
+	// business profiles and selection without changing the SDK-owned revision.
+	BusinessAuthorizationRevision string
 	// SystemCapabilities are explicit, process-owned capabilities. They are
 	// honored only when SystemScope is valid and are never populated for a
 	// human, API-key, or other externally authenticated principal.
 	SystemCapabilities []string `json:"-"`
 	AutomationDepth    int
 	VisitedRuleKeys    []string
+}
+
+// EffectiveAuthorizationRevision invalidates business evidence when either
+// Identity authorization or the selected business context changes.
+func (principal Principal) EffectiveAuthorizationRevision() string {
+	if principal.BusinessAuthorizationRevision != "" {
+		return principal.BusinessAuthorizationRevision
+	}
+	return principal.AuthorizationRevision
 }
 
 // HasPermission evaluates SDK function grants for authenticated principals.

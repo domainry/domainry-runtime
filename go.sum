@@ -91,6 +91,8 @@ github.com/domainry/domainry-report v0.1.9 h1:+TWv1aXbo0/VgHQdPZBgQLlkcdoQ8L/o95
 github.com/domainry/domainry-report v0.1.9/go.mod h1:EkcR6Cn1T133iBAvytdwubr4tKYKtlvJFyA6fOQLI9M=
 github.com/domainry/domainry-report-sdk v0.1.7 h1:PUfl5EuemAUp4BiFWUfHRl2CwFBvTHTTkLnDJzUv9mQ=
 github.com/domainry/domainry-report-sdk v0.1.7/go.mod h1:ZR1Ck+r6awqkoHSbaaTma4L2ZlVsoYuGpEc0bqozNpU=
+github.com/domainry/domainry-report-sdk v0.1.8 h1:cmOwJg25b0O1dYdOmguypLGa9FM3hPpXJ8fE4Jfsw6s=
+github.com/domainry/domainry-report-sdk v0.1.8/go.mod h1:ZR1Ck+r6awqkoHSbaaTma4L2ZlVsoYuGpEc0bqozNpU=
 github.com/domainry/domainry-scheduler v0.1.8 h1:W5uW/6oejdXar8vEfbe7DNGKS8UJxxuoL3KaceIXV0c=
 github.com/domainry/domainry-scheduler v0.1.8/go.mod h1:P2byO5PNHW2EbsSFrZXUl50ns2ndekX/90/Jz8PBfWM=
 github.com/domainry/domainry-scheduler-sdk v0.1.5 h1:XTd6JYSiHbzNoDe+eqJit5rmGae5AsduWYJ/vEWR1h8=

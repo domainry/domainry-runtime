@@ -24,7 +24,7 @@ type BusinessPrincipalDependencies struct {
 // BusinessPrincipalApplicationService resolves business identity facts from
 // the current published object graph on every request. It intentionally owns
 // no authorization cache: a committed profile mutation changes the next
-// principal and its AuthorizationRevision immediately.
+// principal and its BusinessAuthorizationRevision immediately.
 type BusinessPrincipalApplicationService struct {
 	dependencies BusinessPrincipalDependencies
 }
@@ -86,14 +86,6 @@ func (s *BusinessPrincipalApplicationService) ResolveBusinessPrincipal(ctx conte
 	principal.BusinessProfiles = profiles
 	principal.BusinessClaims = nil
 	principal.ActiveBusinessProfile = nil
-	revision, err := idempotency.Fingerprint(idempotency.FingerprintInput{
-		UseCase: "identity.business_principal", ResourceType: principal.WorkspaceID, TargetID: principal.UserID,
-		Payload: map[string]any{"base_authorization_revision": principal.AuthorizationRevision, "business_profiles": revisions},
-	})
-	if err != nil {
-		return principalmodel.Principal{}, businessPrincipalError(apperror.KindInternal, "backend.identity.business_profile_resolution_failed", err)
-	}
-	principal.AuthorizationRevision = revision
 	selected, found, err := selectBusinessProfile(profiles, bindingKey, recordID)
 	if err != nil {
 		return principalmodel.Principal{}, err
@@ -103,6 +95,14 @@ func (s *BusinessPrincipalApplicationService) ResolveBusinessPrincipal(ctx conte
 		principal.ActiveBusinessProfile = &selectedCopy
 		principal.BusinessClaims = selectedCopy.Claims
 	}
+	revision, err := idempotency.Fingerprint(idempotency.FingerprintInput{
+		UseCase: "identity.business_principal", ResourceType: principal.WorkspaceID, TargetID: principal.UserID,
+		Payload: map[string]any{"base_authorization_revision": principal.AuthorizationRevision, "business_profiles": revisions, "active_business_profile": principal.ActiveBusinessProfile},
+	})
+	if err != nil {
+		return principalmodel.Principal{}, businessPrincipalError(apperror.KindInternal, "backend.identity.business_profile_resolution_failed", err)
+	}
+	principal.BusinessAuthorizationRevision = revision
 	return principal, nil
 }
 

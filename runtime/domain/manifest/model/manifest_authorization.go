@@ -8,6 +8,9 @@ import (
 // RoleSchema transports application-authored policy to Identity. Runtime does
 // not derive a human AccessBundle from it; the SDK bundle remains authoritative.
 type RoleSchema struct {
+	// PlatformRoleExtension carries project grants for a protected platform role.
+	// Publication consumes it only in the installation Workspace.
+	PlatformRoleExtension bool                               `json:"platform_role_extension,omitempty"`
 	Key                   string                             `json:"key"`
 	Name                  string                             `json:"name"`
 	I18n                  localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`

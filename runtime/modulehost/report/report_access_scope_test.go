@@ -1,6 +1,7 @@
 package reportmodulehost
 
 import (
+	"encoding/json"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -8,6 +9,33 @@ import (
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
+
+func TestReportSubjectRoundTripPreservesBothAuthorizationRevisions(t *testing.T) {
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "admin", AuthorizationRevision: "identity-1"}, BusinessAuthorizationRevision: "business-1"}
+	hash, err := ReportAccessScopeHash(principal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subject := reportSubjectFromPrincipal(principal, hash)
+	// Embedded and serialized owner boundaries must preserve the same evidence.
+	raw, err := json.Marshal(subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &subject); err != nil {
+		t.Fatal(err)
+	}
+	restored := RuntimePrincipalFromReportSubject(subject)
+	actual, err := ReportAccessScopeHash(restored)
+	if err != nil || actual != hash || restored.AuthorizationRevision != "identity-1" || restored.BusinessAuthorizationRevision != "business-1" {
+		t.Fatalf("report round trip lost revision: %+v hash=%s error=%v", restored, actual, err)
+	}
+	restored.BusinessAuthorizationRevision = "business-2"
+	changed, err := ReportAccessScopeHash(restored)
+	if err != nil || changed == hash {
+		t.Fatal("Profile change did not invalidate report evidence")
+	}
+}
 
 func TestReportAccessScopeHashCanonicalizesSetOrderingWithoutWeakeningFacts(t *testing.T) {
 	left := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "demo-user", AuthorizationRevision: "revision-1",
