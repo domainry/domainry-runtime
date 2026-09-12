@@ -66,7 +66,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workspaceprovision` | `POST /workspaces/{workspaceCode}/suspend` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 | `workspaceprovision` | `PUT /workspaces/{workspaceCode}/commercial-configuration` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 
-## Application mutation commands (129)
+## Application mutation commands (130)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -169,6 +169,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `recordtimer` | `ResolveFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_recovery.go` |
 | `recordtimer` | `RetryFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/recordtimer/record_timer_recovery.go` |
 | `report` | `PrepareResolvedExport` | `caller_key_required` | Report prepare caller key scoped by workspace, requester, report object, and audit | `runtime/application/report/export/application/report_export_data_exchange_application.go` |
+| `upload` | `RecordTicketDownload` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/upload/upload_access_application_service.go` |
 | `upload` | `RecordUploaded` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/upload/upload_access_application_service.go` |
 | `workflow` | `CancelWorkflowProcess` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_process_application_service.go` |
 | `workflow` | `CancelWorkflowProcessWithKey` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_process_application_service.go` |
