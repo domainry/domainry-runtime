@@ -33,3 +33,22 @@ func TestRecordInternalErrorKeepsARepositoryClientError(t *testing.T) {
 		t.Fatalf("an internal repository error still gains the operation: %#v", internal)
 	}
 }
+
+// A leaf CodedError is a client-facing refusal, not a server fault: an unknown
+// filter key is a documented 400 that names the key, and it used to reach the
+// caller as a 500 with the key discarded.
+func TestRecordInternalErrorClassifiesLeafCodedErrorsAsBadRequest(t *testing.T) {
+	coded := &apperror.CodedError{Code: "backend.validation.filter_field_unknown", Params: map[string]string{"field": "not_a_field", "object_key": "member_profile"}}
+	err := recordInternalError("list records", coded)
+	var classified *apperror.AppError
+	if !errors.As(err, &classified) || classified.Kind != apperror.KindBadRequest {
+		t.Fatalf("kind = %v, want %v (err=%v)", apperror.KindOf(err), apperror.KindBadRequest, err)
+	}
+	if classified.Code != "backend.validation.filter_field_unknown" || classified.Params["field"] != "not_a_field" {
+		t.Fatalf("code=%q params=%v", classified.Code, classified.Params)
+	}
+	// An unclassified failure is still an internal one.
+	if apperror.KindOf(recordInternalError("list records", errors.New("boom"))) != apperror.KindInternal {
+		t.Fatal("an unclassified repository failure must stay internal")
+	}
+}

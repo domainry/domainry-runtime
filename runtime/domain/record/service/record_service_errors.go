@@ -47,6 +47,15 @@ func recordInternalError(operation string, err error) error {
 	if errors.As(err, &classified) && classified != nil && classified.Kind != apperror.KindInternal && classified.Kind != "" {
 		return err
 	}
+	// A CodedError is the other half of the same story: the foundation defines it
+	// as a stable client-facing code raised at a leaf boundary, for the
+	// Application layer to give a kind. Burying it here published
+	// backend.validation.filter_field_unknown -- a documented 400 naming the bad
+	// filter key -- as a 500 backend.internal with the key thrown away.
+	var coded *apperror.CodedError
+	if errors.As(err, &coded) && coded != nil && strings.TrimSpace(coded.Code) != "" {
+		return &apperror.AppError{Kind: apperror.KindBadRequest, Code: coded.Code, Params: coded.ErrorParams()}
+	}
 	return recordServiceError(apperror.KindInternal, "backend.internal", err, "operation", operation)
 }
 
