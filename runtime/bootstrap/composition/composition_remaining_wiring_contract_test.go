@@ -135,16 +135,17 @@ func TestActionNotificationCompilerValidatesDependenciesRecipientsAndProjection(
 	}
 	intent = runtimeext.NotificationIntent{
 		EventType: " order.ready ", SourceEventID: " source ", RecipientUserIDs: []string{" recipient "},
-		SubjectObjectKey: " order ", SubjectRecordID: " order-1 ", SubjectVersion: " v1 ", DedupeKey: " dedupe ", GroupKey: " group ", Alert: true,
+		SubjectObjectKey: " order ", SubjectRecordID: " order-1 ", SubjectVersion: " v1 ", DedupeKey: " dedupe ", GroupKey: " group ",
+		ActionState: " completed ", AlertState: " resolved ", ExpiresAt: time.Date(2026, 8, 11, 1, 2, 3, 0, time.FixedZone("CST", 8*60*60)),
 		OccurredAt: time.Date(2026, 8, 10, 1, 2, 3, 0, time.UTC), Variables: []runtimeext.NotificationVariable{{Key: " name ", StringValue: &value}},
 	}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a"}}
-	if event, err := compileActionNotification(assembly)(t.Context(), "event-1", intent, principal); err != nil || event.ID != "event-1" || compiled.AlertState != notificationmodel.NotificationAlertFiring || compiled.Variables["name"] != "Ada" {
+	if event, err := compileActionNotification(assembly)(t.Context(), "event-1", intent, principal); err != nil || event.ID != "event-1" || compiled.ActionState != notificationmodel.NotificationActionCompleted || compiled.AlertState != notificationmodel.NotificationAlertResolved || compiled.ExpiresAt != "2026-08-10T17:02:03Z" || compiled.Variables["name"] != "Ada" {
 		t.Fatalf("event=%+v compiled=%+v err=%v", event, compiled, err)
 	}
-	intent.Alert = false
-	if _, err := compileActionNotification(assembly)(t.Context(), "event-2", intent, principal); err != nil || compiled.AlertState != "" {
-		t.Fatalf("non-alert compiled=%+v err=%v", compiled, err)
+	intent.ActionState, intent.AlertState, intent.ExpiresAt, intent.Alert = "", "", time.Time{}, true
+	if _, err := compileActionNotification(assembly)(t.Context(), "event-2", intent, principal); err != nil || compiled.AlertState != notificationmodel.NotificationAlertFiring {
+		t.Fatalf("legacy alert compiled=%+v err=%v", compiled, err)
 	}
 }
 

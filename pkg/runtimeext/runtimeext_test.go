@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 type testBusinessHandler struct {
@@ -559,6 +560,38 @@ func TestBusinessErrorUsesStableCodeAndPreservesCause(t *testing.T) {
 	err := &BusinessError{Code: "gym.class.capacity_full", Cause: cause}
 	if !err.Valid() || err.Error() != "gym.class.capacity_full" || !errors.Is(err, cause) {
 		t.Fatalf("business error = %#v", err)
+	}
+}
+
+func TestNotificationIntentValidatesGovernedTerminalStates(t *testing.T) {
+	base := NotificationIntent{
+		EventType: "booking.cancelled", SourceEventID: "booking-1:cancelled", RecipientUserIDs: []string{"member-1"},
+		SubjectObjectKey: "booking", SubjectRecordID: "booking-1", SubjectVersion: "v2", DedupeKey: "booking-1:cancelled",
+		GroupKey: "booking-1", ActionState: NotificationActionCompleted, AlertState: NotificationAlertResolved,
+		OccurredAt: time.Date(2026, 9, 12, 1, 0, 0, 0, time.UTC), ExpiresAt: time.Date(2026, 9, 13, 1, 0, 0, 0, time.UTC),
+	}
+	if !base.Valid() {
+		t.Fatal("governed terminal notification must be valid")
+	}
+	invalidAction := base
+	invalidAction.ActionState = "reopened"
+	if invalidAction.Valid() {
+		t.Fatal("unknown action state must be rejected")
+	}
+	invalidAlert := base
+	invalidAlert.AlertState = "closed"
+	if invalidAlert.Valid() {
+		t.Fatal("unknown alert state must be rejected")
+	}
+	conflictingLegacyAlert := base
+	conflictingLegacyAlert.Alert = true
+	if conflictingLegacyAlert.Valid() {
+		t.Fatal("legacy firing flag must not conflict with an explicit terminal alert state")
+	}
+	invalidExpiry := base
+	invalidExpiry.ExpiresAt = invalidExpiry.OccurredAt
+	if invalidExpiry.Valid() {
+		t.Fatal("expiry must be later than occurrence")
 	}
 }
 

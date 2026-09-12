@@ -35,6 +35,9 @@ type WorkflowApplicationService struct {
 	routes                    workflowcontract.WorkflowRouteStore
 	identity                  identitysdk.Projection
 	principals                identitysdk.PrincipalResolver
+	workloads                 identitysdk.WorkflowWorkloadIdentity
+	workloadApplication       identitysdk.ApplicationScope
+	workloadReleases          *WorkflowWorkloadReleaseState
 	schema                    WorkflowSchemaProvider
 	schemaMap                 func(context.Context) map[string]definitionmodel.ObjectSchema
 	recordReader              WorkflowRecordReader
@@ -48,6 +51,9 @@ type WorkflowApplicationService struct {
 }
 
 func NewWorkflowApplicationService(dependencies WorkflowDependencies) *WorkflowApplicationService {
+	if dependencies.WorkloadReleases == nil {
+		dependencies.WorkloadReleases = NewWorkflowWorkloadReleaseState()
+	}
 	processEngine := NewWorkflowProcessEngine(dependencies)
 	return newWorkflowApplicationService(dependencies, processEngine)
 }
@@ -114,12 +120,13 @@ func newWorkflowApplicationService(dependencies WorkflowDependencies, processEng
 		registry:        dependencies.WorkflowRegistry,
 		processEngine:   processEngine,
 		objectForAction: dependencies.ObjectForAction, audit: dependencies.Audit, auditMetadata: dependencies.AuditMetadata,
-		decisions:  processEngine.DecisionRuntime(),
-		routes:     dependencies.Routes,
-		identity:   dependencies.Identity,
-		principals: dependencies.Principals,
-		schema:     dependencies.Schema,
-		schemaMap:  dependencies.ObjectMap, recordReader: dependencies.RecordReader, canAccess: dependencies.CanAccessRecord,
+		decisions:        processEngine.DecisionRuntime(),
+		routes:           dependencies.Routes,
+		identity:         dependencies.Identity,
+		principals:       dependencies.Principals,
+		workloadReleases: dependencies.WorkloadReleases,
+		schema:           dependencies.Schema,
+		schemaMap:        dependencies.ObjectMap, recordReader: dependencies.RecordReader, canAccess: dependencies.CanAccessRecord,
 		invokeAction:        dependencies.InvokeAction,
 		referenceValidator:  NewWorkflowReferenceValidator(dependencies.Schema, dependencies.ObjectMap, dependencies.Identity),
 		executionVisibility: NewWorkflowExecutionVisibilityApplicationService(dependencies.RecordReader, dependencies.CanAccessRecord),

@@ -94,7 +94,7 @@ func (e *WorkflowProcessEngine) executeActionNode(ctx context.Context, process *
 	if recordID == "" || recordID == "<nil>" {
 		recordID = process.RecordID
 	}
-	actionPrincipal, err := NewWorkflowPrincipalResolver(e.runtime.dependencies.Principals).ResolveWorkflowPrincipal(ctx, process.DefinitionSnapshot, principal)
+	actionPrincipal, err := NewWorkflowPrincipalResolver(e.runtime.dependencies.Principals, e.runtime.dependencies.WorkloadReleases).ResolveWorkflowPrincipalForExecution(ctx, process.DefinitionSnapshot, principal, workflowPrincipalExecutionForProcess(*process, process.ID+":"+node.ID))
 	if err != nil {
 		return nil, err
 	}

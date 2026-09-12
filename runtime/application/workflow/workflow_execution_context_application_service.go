@@ -25,7 +25,24 @@ func workflowWorkerPrincipal() principalmodel.Principal {
 func WorkflowWorkerPrincipal() principalmodel.Principal { return workflowWorkerPrincipal() }
 
 func (s *WorkflowApplicationService) workflowPrincipal(ctx context.Context, workflow definitionmodel.WorkflowSchema, initiator principalmodel.Principal) (principalmodel.Principal, error) {
-	return NewWorkflowPrincipalResolver(s.principals).ResolveWorkflowPrincipal(ctx, workflow, initiator)
+	return NewWorkflowPrincipalResolver(s.principals, s.workloadReleases).ResolveWorkflowPrincipal(ctx, workflow, initiator)
+}
+
+func (s *WorkflowApplicationService) workflowPrincipalForExecution(ctx context.Context, workflow definitionmodel.WorkflowSchema, initiator principalmodel.Principal, execution WorkflowPrincipalExecutionContext) (principalmodel.Principal, error) {
+	return NewWorkflowPrincipalResolver(s.principals, s.workloadReleases).ResolveWorkflowPrincipalForExecution(ctx, workflow, initiator, execution)
+}
+
+func workflowPrincipalExecutionForProcess(process workflowmodel.WorkflowProcessInstance, taskID string) WorkflowPrincipalExecutionContext {
+	sourceEventID := ""
+	for _, key := range []string{"source_event_id", "event_id", "record_id"} {
+		if value := strings.TrimSpace(fmt.Sprint(process.Variables[key])); value != "" && value != "<nil>" {
+			sourceEventID = value
+			break
+		}
+	}
+	return WorkflowPrincipalExecutionContext{
+		TaskID: strings.TrimSpace(taskID), SourceEventID: sourceEventID, InitiatorSubjectID: strings.TrimSpace(process.InitiatorID),
+	}
 }
 
 func workflowRenderedString(ctx context.Context, value any, payload map[string]any, principal principalmodel.Principal) string {

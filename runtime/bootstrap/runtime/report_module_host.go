@@ -54,6 +54,9 @@ func (h runtimeReportApplicationHost) ReportSnapshotTerminals() reportmodulehost
 func (h runtimeReportApplicationHost) ReportExports() reportmodulehost.ExportGateway {
 	return h.ports.Exports
 }
+func (h runtimeReportApplicationHost) ReportAnalysisTables() reportmodulehost.AnalysisTableSource {
+	return h.ports.Tables
+}
 func (h runtimeReportApplicationHost) ReportCursorSigningKey() []byte {
 	return append([]byte(nil), h.cursorKey...)
 }

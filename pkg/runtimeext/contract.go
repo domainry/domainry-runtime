@@ -9,7 +9,7 @@ import (
 
 const (
 	ContractVersion = "runtimeext-v34"
-	ContractSHA256  = "af62e772348185bf02284647e6f543500c133b40d65456675f87e2026193a80f"
+	ContractSHA256  = "d7d20947a89b9d2115d74676bca46678ec0e286e95d4119b49fbb7bb27030758"
 )
 
 const contractDefinitionV34 = `runtimeext-v34

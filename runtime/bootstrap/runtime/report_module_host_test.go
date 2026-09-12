@@ -1,13 +1,36 @@
 package runtime
 
 import (
+	"context"
 	"testing"
 
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	reportmodule "github.com/domainry/domainry-report/module"
+	"github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
+
+type runtimeReportAnalysisTableSourceStub struct{}
+
+func (*runtimeReportAnalysisTableSourceStub) ReportAnalysisSources(context.Context, reportmodel.ReportSubject) ([]reportmodel.AnalysisDataset, error) {
+	return nil, nil
+}
+func (*runtimeReportAnalysisTableSourceStub) ReadReportAnalysisTableVersion(context.Context, string, []string, reportmodel.ReportSubject) (reportmodulehost.AnalysisTableVersion, error) {
+	return reportmodulehost.AnalysisTableVersion{}, nil
+}
+func (*runtimeReportAnalysisTableSourceStub) StreamReportAnalysisTable(context.Context, reportmodulehost.AnalysisTableVersion, []string, reportmodel.ReportSubject, func(reportmodel.AnalysisTableRow) error) (reportmodulehost.AnalysisTableVersion, error) {
+	return reportmodulehost.AnalysisTableVersion{}, nil
+}
+
+func TestRuntimeReportApplicationHostExposesComposedAnalysisTableSource(t *testing.T) {
+	source := &runtimeReportAnalysisTableSourceStub{}
+	host := runtimeReportApplicationHost{ports: composition.ReportModuleApplicationPorts{Tables: source}}
+	if host.ReportAnalysisTables() != source {
+		t.Fatal("Report host replaced the project-owned table source")
+	}
+}
 
 func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) {
 	store := openAgentBindingRuntimeStore(t)

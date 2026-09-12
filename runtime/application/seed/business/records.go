@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -76,8 +77,13 @@ func SyncManifestBusinessSeeds(ctx context.Context, records recordrepository.Rec
 		}
 		data := map[string]any{}
 		if strings.TrimSpace(row.DataJSON) != "" {
-			if err := json.Unmarshal([]byte(row.DataJSON), &data); err != nil {
+			decoder := json.NewDecoder(strings.NewReader(row.DataJSON))
+			decoder.UseNumber()
+			if err := decoder.Decode(&data); err != nil {
 				return fmt.Errorf("decode domain seed %s/%s: %w", row.ObjectKey, row.Key, err)
+			}
+			if err := decoder.Decode(new(any)); err != io.EOF {
+				return fmt.Errorf("decode domain seed %s/%s: trailing JSON data", row.ObjectKey, row.Key)
 			}
 		}
 		data = filterManifestBusinessSeedData(object, resolveManifestBusinessSeedPlaceholders(resolveManifestBusinessSeedRefs(data, idsByKey), runID))

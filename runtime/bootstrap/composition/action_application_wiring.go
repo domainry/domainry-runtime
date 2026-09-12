@@ -260,11 +260,19 @@ func compileActionNotification(records *runtimeAssembly) func(context.Context, s
 		return records.recordNotificationCompiler(notificationmodel.NotificationIntent{
 			ID: eventID, WorkspaceID: principal.WorkspaceID, SourceEventID: strings.TrimSpace(intent.SourceEventID), EventType: strings.TrimSpace(intent.EventType),
 			RecipientUserIDs: append([]string(nil), intent.RecipientUserIDs...), SubjectType: strings.TrimSpace(intent.SubjectObjectKey), SubjectID: strings.TrimSpace(intent.SubjectRecordID), SubjectVersion: strings.TrimSpace(intent.SubjectVersion),
-			DedupeKey: strings.TrimSpace(intent.DedupeKey), GroupKey: strings.TrimSpace(intent.GroupKey), AlertState: func() string {
+			DedupeKey: strings.TrimSpace(intent.DedupeKey), GroupKey: strings.TrimSpace(intent.GroupKey), ActionState: strings.ToLower(strings.TrimSpace(intent.ActionState)), AlertState: func() string {
+				if state := strings.ToLower(strings.TrimSpace(intent.AlertState)); state != "" {
+					return state
+				}
 				if intent.Alert {
 					return notificationmodel.NotificationAlertFiring
 				}
 				return ""
+			}(), ExpiresAt: func() string {
+				if intent.ExpiresAt.IsZero() {
+					return ""
+				}
+				return intent.ExpiresAt.UTC().Format(time.RFC3339Nano)
 			}(), OccurredAt: intent.OccurredAt.UTC().Format(time.RFC3339Nano), Variables: variables,
 		})
 	}

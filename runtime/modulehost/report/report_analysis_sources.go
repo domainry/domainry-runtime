@@ -121,6 +121,7 @@ func (h *ReportModuleQueryHost) ReportAnalysisSources(ctx context.Context, subje
 		}
 		digest := sha256.Sum256(content)
 		dataset.Version = hex.EncodeToString(digest[:])
+		dataset.References = []model.AnalysisReference{{Kind: "business_object", ID: key, Label: object.Name, Version: dataset.Version}}
 		result = append(result, dataset)
 	}
 	return result, nil

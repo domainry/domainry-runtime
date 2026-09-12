@@ -82,7 +82,7 @@ func (s *WorkflowApplicationService) queueWorkflowTaskReminder(ctx context.Conte
 	input["workflow_task_id"] = task.ID
 	invocation := WorkflowBusinessActionInvocationResult{}
 	if strings.TrimSpace(contract.ReminderActionKey) != "" {
-		actionPrincipal, err := s.workflowPrincipal(ctx, process.DefinitionSnapshot, actor)
+		actionPrincipal, err := s.workflowPrincipalForExecution(ctx, process.DefinitionSnapshot, actor, workflowPrincipalExecutionForProcess(process, task.ID))
 		if err != nil {
 			return err
 		}

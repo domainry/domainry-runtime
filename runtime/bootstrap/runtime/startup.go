@@ -408,6 +408,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		dataExchangeFactory:             dataExchangeFactory,
 		agentBinding:                    agentBinding,
 		reportBinding:                   reportBinding,
+		reportAnalysisTables:            startupOptions.AnalysisTableSource,
 		identityHandlerDeliveryBinder:   identityHandlerDeliveryBinder,
 		organizationUnitDeliveryBinder:  organizationUnitDeliveryBinder,
 		storeOrganizationDeliveryBinder: storeOrganizationDeliveryBinder,
@@ -415,6 +416,9 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	})
 	mustCompleteRuntimeStartup(err)
 	records, recordRepository := serviceAssembly.services, serviceAssembly.records
+	mustCompleteRuntimeStartup(records.Applications().Workflows.ConfigureWorkflowWorkloadIdentity(identityBinding, identitysdk.ApplicationScope{
+		WorkspaceID: identitysdk.WorkspaceID(strings.TrimSpace(cfg.IdentityWorkspaceID)), ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(cfg.IdentityAudience)),
+	}))
 
 	auditHostBinder, ok := auditBinding.(auditsdk.ApplicationHostBinder)
 	if !ok {
@@ -567,6 +571,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 					reconcileRuntimePermissionRegistries(rollbackCtx, identityBinding.Permissions(), application, candidateRegistry, previousRegistry),
 					publishRuntimeProjectRoles(rollbackCtx, identityBinding, previousSnapshot.Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, handlerDescriptors...),
 					publishRuntimeProjectProfileExtensions(rollbackCtx, identityBinding, previousSnapshot.IdentityProfileExtensions),
+					records.Applications().Workflows.RestoreWorkflowWorkloadBindings(rollbackCtx),
 				)
 			}
 			preparation.Abort = func(abortCtx context.Context) error {

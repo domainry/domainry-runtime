@@ -98,6 +98,9 @@ func (s *WorkflowApplicationService) InitializePublishedWorkflowDefinitions(ctx 
 		published.Workflow.PublishedVersion = published.Version
 		publishedWorkflows[definition.Key] = published.Workflow
 	}
+	if err := s.synchronizeWorkflowWorkloadBindings(ctx, publishedWorkflows); err != nil {
+		return fmt.Errorf("synchronize workflow workload release: %w", err)
+	}
 	for _, existing := range s.registry.List() {
 		s.registry.Delete(existing.Key)
 	}

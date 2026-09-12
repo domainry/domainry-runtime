@@ -138,6 +138,9 @@ func TestReportAnalysisRealOwnerFullSQLiteAggregationAndCurrentPermissions(t *te
 	if len(aggregate.Rows) != 1 || aggregate.Source.InputCounts["dataset"] != "1201" {
 		t.Fatal(aggregate)
 	}
+	if !aggregate.Coverage.Complete || aggregate.Coverage.Truncated || aggregate.Coverage.ReturnedRows != 1 || aggregate.Visualization.Chart == nil || aggregate.Visualization.Chart.Type != "bar" || aggregate.Visualization.Chart.XColumn != "department" || len(aggregate.References) != 1 || aggregate.References[0].Kind != "business_object" || aggregate.References[0].ID != object.Key || aggregate.References[0].Version == "" {
+		t.Fatal("structured metadata or provenance missing", aggregate)
+	}
 	cell(aggregate.Rows[0], "revenue", "12.01")
 	cell(aggregate.Rows[0], "mean", "0.010000")
 	cell(aggregate.Rows[0], "rows", "1201")

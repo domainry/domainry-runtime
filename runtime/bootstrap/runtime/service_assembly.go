@@ -30,6 +30,7 @@ import (
 	lifecyclemoduleimpl "github.com/domainry/domainry-lifecycle/module"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	reportsdk "github.com/domainry/domainry-report-sdk"
+	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
@@ -93,6 +94,7 @@ type runtimeExtensionRegistries struct {
 	dataExchangeFactory             dataexchangesdk.Factory
 	agentBinding                    agentsdk.Binding
 	reportBinding                   reportsdk.Binding
+	reportAnalysisTables            reportmodulehost.AnalysisTableSource
 	identityHandlerDeliveryBinder   identitysdk.HandlerDeliveryUnitOfWorkBinder
 	organizationUnitDeliveryBinder  organizationunit.UnitOfWorkBinder
 	storeOrganizationDeliveryBinder identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
@@ -116,6 +118,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	var dataExchangeFactory dataexchangesdk.Factory
 	var agentBinding agentsdk.Binding
 	var reportBinding reportsdk.Binding
+	var reportAnalysisTables reportmodulehost.AnalysisTableSource
 	var identityHandlerDeliveryBinder identitysdk.HandlerDeliveryUnitOfWorkBinder
 	var organizationUnitDeliveryBinder organizationunit.UnitOfWorkBinder
 	var storeOrganizationDeliveryBinder identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
@@ -152,6 +155,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		dataExchangeFactory = extensionRegistries[0].dataExchangeFactory
 		agentBinding = extensionRegistries[0].agentBinding
 		reportBinding = extensionRegistries[0].reportBinding
+		reportAnalysisTables = extensionRegistries[0].reportAnalysisTables
 		identityHandlerDeliveryBinder = extensionRegistries[0].identityHandlerDeliveryBinder
 		organizationUnitDeliveryBinder = extensionRegistries[0].organizationUnitDeliveryBinder
 		storeOrganizationDeliveryBinder = extensionRegistries[0].storeOrganizationDeliveryBinder
@@ -301,6 +305,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			Records:                             records,
 			ReportObjectSQL:                     reportSQLStore,
 			ReportSnapshotSources:               reportSQLStore,
+			ReportAnalysisTables:                reportAnalysisTables,
 			ReportExportPrepareReceipts:         reportExportPrepareReceipts,
 			RecordExecutions:                    records,
 			DataExchange:                        dataExchangeBinding,

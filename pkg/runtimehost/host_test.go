@@ -23,6 +23,8 @@ import (
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	reportmodule "github.com/domainry/domainry-report/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
@@ -52,6 +54,18 @@ type identityFactoryStub struct {
 type agentFactoryStub struct{}
 
 type integrationFactoryStub struct{}
+
+type runtimehostAnalysisSource struct{}
+
+func (*runtimehostAnalysisSource) ReportAnalysisSources(context.Context, reportmodel.ReportSubject) ([]reportmodel.AnalysisDataset, error) {
+	return nil, nil
+}
+func (*runtimehostAnalysisSource) ReadReportAnalysisTableVersion(context.Context, string, []string, reportmodel.ReportSubject) (reportmodulehost.AnalysisTableVersion, error) {
+	return reportmodulehost.AnalysisTableVersion{}, nil
+}
+func (*runtimehostAnalysisSource) StreamReportAnalysisTable(context.Context, reportmodulehost.AnalysisTableVersion, []string, reportmodel.ReportSubject, func(reportmodel.AnalysisTableRow) error) (reportmodulehost.AnalysisTableVersion, error) {
+	return reportmodulehost.AnalysisTableVersion{}, nil
+}
 
 func (integrationFactoryStub) DeploymentMode() integrationsdk.DeploymentMode {
 	return integrationsdk.DeploymentModeModule
@@ -464,6 +478,30 @@ func TestRunWithDependenciesBindsAndUnbindsGeneratedConnectorGateway(t *testing.
 	}
 	if _, err := generated.Call(t.Context(), connectorBindingExecution{}, ConnectorCallRequest{Payload: json.RawMessage(`{}`)}); runtimeextErrorCode(err) != "backend.connector.gateway_unavailable" {
 		t.Fatalf("gateway remained bound after Runtime close: %v", err)
+	}
+}
+
+func TestRunWithDependenciesPassesProjectAnalysisSourceThroughPublicSDKPort(t *testing.T) {
+	options := validOptions()
+	source := &runtimehostAnalysisSource{}
+	factoryRuntimeID := ""
+	options.AnalysisTableSourceFactory = func(runtimeID string) (reportmodulehost.AnalysisTableSource, error) {
+		factoryRuntimeID = runtimeID
+		return source, nil
+	}
+	runtime := &serverRuntimeFake{}
+	cfg := serverTestConfig()
+	deps := serverTestDependencies(t, cfg, runtime)
+	seen := false
+	deps.newRuntime = func(_ context.Context, _ config.Config, _ *runtimeext.BusinessHandlerRegistry, _ *connector.Registry, _ runtimehttp.RuntimeReleaseIdentity, _ bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ agentsdk.Factory, _ integrationsdk.Factory, _ reportsdk.Factory, _ *bootstrap.ProjectDatabase, startup bootstrap.ProjectStartupOptions) runtimeProcess {
+		seen = startup.AnalysisTableSource == source
+		return runtime
+	}
+	if err := runWithDependencies(options, deps); err != nil {
+		t.Fatal(err)
+	}
+	if !seen || factoryRuntimeID != cfg.RuntimeInstanceID {
+		t.Fatal("project analysis source did not reach Runtime startup")
 	}
 }
 

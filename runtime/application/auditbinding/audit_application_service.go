@@ -31,7 +31,9 @@ func runtimePolicy() auditapplication.Policy[principalmodel.Principal, principal
 	return auditapplication.Policy[principalmodel.Principal, principalmodel.SystemScope]{
 		Actor: func(principal principalmodel.Principal) auditcontract.Actor {
 			kind := "user"
-			if !principal.Known || principal.SystemScope.Valid() {
+			if principal.Workload != nil {
+				kind = "workload"
+			} else if !principal.Known || principal.SystemScope.Valid() {
 				kind = "system"
 			}
 			return auditcontract.Actor{WorkspaceID: principal.WorkspaceID, SubjectID: principal.UserID, RoleKey: principal.RoleKey, Kind: kind, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, AuthorizationRevision: principal.AuthorizationRevision}
@@ -57,7 +59,34 @@ func runtimePolicy() auditapplication.Policy[principalmodel.Principal, principal
 }
 
 func AuditBuildEvent(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, before, after, metadata map[string]any) auditcontract.AuditEvent {
-	return auditapplication.NewService[principalmodel.Principal, principalmodel.SystemScope](nil, runtimePolicy()).NewAuditEvent(ctx, AuditAppendRequest{Event: event, ObjectKey: objectKey, RecordID: recordID, Principal: principal, Summary: summary, Before: before, After: after, Metadata: metadata})
+	return auditapplication.NewService[principalmodel.Principal, principalmodel.SystemScope](nil, runtimePolicy()).NewAuditEvent(ctx, AuditAppendRequest{Event: event, ObjectKey: objectKey, RecordID: recordID, Principal: principal, Summary: summary, Before: before, After: after, Metadata: workloadAuditMetadata(principal, metadata)})
+}
+
+func workloadAuditMetadata(principal principalmodel.Principal, metadata map[string]any) map[string]any {
+	if principal.Workload == nil {
+		return metadata
+	}
+	result := make(map[string]any, len(metadata)+9)
+	for key, value := range metadata {
+		result[key] = value
+	}
+	workload := principal.Workload
+	result["actor_kind"] = "workload"
+	result["workflow_key"] = workload.WorkflowKey
+	result["workflow_definition_version_id"] = workload.DefinitionVersionID
+	result["workflow_definition_version"] = workload.DefinitionVersion
+	result["workflow_release_id"] = workload.ReleaseID
+	result["workflow_release_digest"] = workload.ReleaseDigest
+	if workload.TaskID != "" {
+		result["workflow_task_id"] = workload.TaskID
+	}
+	if workload.SourceEventID != "" {
+		result["workflow_source_event_id"] = workload.SourceEventID
+	}
+	if workload.InitiatorSubjectID != "" {
+		result["workflow_initiator_subject_id"] = workload.InitiatorSubjectID
+	}
+	return result
 }
 func AuditRedactSensitiveMap(value map[string]any) map[string]any {
 	return auditapplication.RedactSensitiveMap(value)

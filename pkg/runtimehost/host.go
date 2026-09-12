@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,6 +11,7 @@ import (
 	"sync"
 	"syscall"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/logging"
@@ -23,6 +23,7 @@ import (
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
+	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -516,9 +517,17 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			if manifest.SourceBlueprintID == provision.DirectAuthoringSourceID && len(manifest.Objects) == 0 {
 				runtimeConfig.AllowEmptyAuthoringManifest = true
 			}
+			var analysisTableSource reportmodulehost.AnalysisTableSource
+			if options.AnalysisTableSourceFactory != nil {
+				analysisTableSource, err = options.AnalysisTableSourceFactory(runtimeConfig.RuntimeInstanceID)
+				if err != nil {
+					return nil, fmt.Errorf("open project analysis table source: %w", err)
+				}
+			}
 			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, businessHandlers, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, notificationFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, agentFactory, integrationFactory, reportFactory, projectDatabase, bootstrap.ProjectStartupOptions{
 				BusinessSeedReferenceCandidates: businessSeedReferences,
 				ProjectNavigationCatalog:        projectNavigation,
+				AnalysisTableSource:             analysisTableSource,
 			})
 			if runtime == nil {
 				return nil, errors.New("Runtime bootstrap returned no process")

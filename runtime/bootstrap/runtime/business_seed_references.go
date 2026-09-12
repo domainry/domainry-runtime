@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	businessseed "github.com/domainry/domainry-runtime/runtime/application/seed/business"
 	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
 )
@@ -25,6 +26,9 @@ type BusinessSeedReferenceCandidate struct {
 type ProjectStartupOptions struct {
 	BusinessSeedReferenceCandidates []BusinessSeedReferenceCandidate
 	ProjectNavigationCatalog        identitysdk.ProjectNavigationCatalog
+	// AnalysisTableSource is a trusted public data-owner port assembled by the
+	// project host. Runtime and Report never import the source implementation.
+	AnalysisTableSource reportmodulehost.AnalysisTableSource
 }
 
 type identityBusinessSeedReferenceResolver struct {

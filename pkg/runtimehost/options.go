@@ -12,6 +12,7 @@ import (
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
+	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
@@ -31,6 +32,10 @@ type Options struct {
 	// ReportFactory selects the Report Module or SaaS Binding. Report-owned
 	// definitions and snapshot state are never assembled inside Runtime.
 	ReportFactory reportsdk.Factory
+	// AnalysisTableSourceFactory is assembled by project code from a Knowledge
+	// or data-service public adapter. Runtime supplies the resolved instance ID
+	// and consumes only the Report SDK owner port.
+	AnalysisTableSourceFactory func(string) (reportmodulehost.AnalysisTableSource, error)
 	// NotificationFactory is selected by generated composition. Module builds
 	// inject domainry-notification/module; SaaS builds inject the SDK Remote
 	// Factory. Runtime never switches topology from environment at startup.

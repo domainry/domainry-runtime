@@ -11,6 +11,14 @@ const (
 	NotificationActionGrantDeniedErrorCode = "backend.notification.action_grant_denied"
 	NotificationBatchSizeInvalidErrorCode  = "backend.notification.action_batch_size_invalid"
 	NotificationBatchMaximum               = 200
+	NotificationActionNone                 = "none"
+	NotificationActionOpen                 = "open"
+	NotificationActionCompleted            = "completed"
+	NotificationActionExpired              = "expired"
+	NotificationActionCancelled            = "cancelled"
+	NotificationAlertFiring                = "firing"
+	NotificationAlertAcknowledged          = "acknowledged"
+	NotificationAlertResolved              = "resolved"
 )
 
 // NotificationVariable is one typed template fact. Exactly one value pointer
@@ -70,13 +78,24 @@ type NotificationIntent struct {
 	SubjectVersion   string
 	DedupeKey        string
 	GroupKey         string
+	ActionState      string
+	AlertState       string
 	Alert            bool
+	ExpiresAt        time.Time
 	OccurredAt       time.Time
 	Variables        []NotificationVariable
 }
 
 func (v NotificationIntent) Valid() bool {
-	if strings.TrimSpace(v.EventType) == "" || strings.TrimSpace(v.SourceEventID) == "" || len(v.RecipientUserIDs) == 0 || strings.TrimSpace(v.SubjectObjectKey) == "" || strings.TrimSpace(v.SubjectRecordID) == "" || strings.TrimSpace(v.SubjectVersion) == "" || strings.TrimSpace(v.DedupeKey) == "" || v.OccurredAt.IsZero() || (v.Alert && strings.TrimSpace(v.GroupKey) == "") {
+	actionState := strings.ToLower(strings.TrimSpace(v.ActionState))
+	alertState := strings.ToLower(strings.TrimSpace(v.AlertState))
+	if strings.TrimSpace(v.EventType) == "" || strings.TrimSpace(v.SourceEventID) == "" || len(v.RecipientUserIDs) == 0 || strings.TrimSpace(v.SubjectObjectKey) == "" || strings.TrimSpace(v.SubjectRecordID) == "" || strings.TrimSpace(v.SubjectVersion) == "" || strings.TrimSpace(v.DedupeKey) == "" || v.OccurredAt.IsZero() || ((v.Alert || alertState != "") && strings.TrimSpace(v.GroupKey) == "") {
+		return false
+	}
+	if !validNotificationActionState(actionState) || !validNotificationAlertState(alertState) || (v.Alert && alertState != "" && alertState != NotificationAlertFiring) {
+		return false
+	}
+	if !v.ExpiresAt.IsZero() && !v.ExpiresAt.After(v.OccurredAt) {
 		return false
 	}
 	seenRecipients, seenVariables := map[string]bool{}, map[string]bool{}
@@ -95,6 +114,24 @@ func (v NotificationIntent) Valid() bool {
 		seenVariables[key] = true
 	}
 	return true
+}
+
+func validNotificationActionState(value string) bool {
+	switch value {
+	case "", NotificationActionNone, NotificationActionOpen, NotificationActionCompleted, NotificationActionExpired, NotificationActionCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
+func validNotificationAlertState(value string) bool {
+	switch value {
+	case "", NotificationAlertFiring, NotificationAlertAcknowledged, NotificationAlertResolved:
+		return true
+	default:
+		return false
+	}
 }
 
 type NotificationReceipt struct{ ID string }

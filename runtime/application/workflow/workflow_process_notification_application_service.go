@@ -137,7 +137,7 @@ func (e *WorkflowProcessEngine) executeCCNode(ctx context.Context, process workf
 	if len(recipients) == 0 {
 		return nil, badRequest("backend.workflow.cc_recipient_not_found", "node", node.ID)
 	}
-	actionPrincipal, err := NewWorkflowPrincipalResolver(e.runtime.dependencies.Principals).ResolveWorkflowPrincipal(ctx, process.DefinitionSnapshot, principal)
+	actionPrincipal, err := NewWorkflowPrincipalResolver(e.runtime.dependencies.Principals, e.runtime.dependencies.WorkloadReleases).ResolveWorkflowPrincipalForExecution(ctx, process.DefinitionSnapshot, principal, workflowPrincipalExecutionForProcess(process, process.ID+":"+node.ID))
 	if err != nil {
 		return nil, err
 	}

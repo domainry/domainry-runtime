@@ -56,6 +56,7 @@ type ReportModuleApplicationPorts struct {
 	Authorization  reportmodulehost.ExportAuthorization
 	Terminals      reportmodulehost.SnapshotTerminalCommitter
 	Exports        reportmodulehost.ExportGateway
+	Tables         reportmodulehost.AnalysisTableSource
 }
 
 func (s *RuntimeServices) ReportModuleApplicationPorts() ReportModuleApplicationPorts {
@@ -94,6 +95,7 @@ type RuntimeServicesDependencies struct {
 	Records                             recordrepository.RecordRepository
 	ReportObjectSQL                     reportcontract.ReportObjectSQLExecutor
 	ReportSnapshotSources               reportcontract.ReportSnapshotSourceVersionReader
+	ReportAnalysisTables                reportmodulehost.AnalysisTableSource
 	ReportExportPrepareReceipts         reportcontract.ReportExportPrepareReceiptStore
 	RecordExecutions                    recordcontract.RecordMutationExecutionStore
 	DataExchange                        dataexchange.Binding
@@ -169,6 +171,7 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *Runt
 			Authorization: assembly.reportModuleQueryHost,
 			Terminals:     assembly.reportModuleSnapshotHost,
 			Exports:       assembly.reportModuleExportHost,
+			Tables:        config.Dependencies.ReportAnalysisTables,
 		},
 	}
 }

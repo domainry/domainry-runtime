@@ -28,6 +28,7 @@ type WorkflowDependencies struct {
 	ApprovalDeadlineTimers   WorkflowApprovalDeadlineTimerService
 	Identity                 identitysdk.Projection
 	Principals               identitysdk.PrincipalResolver
+	WorkloadReleases         *WorkflowWorkloadReleaseState
 	Schema                   WorkflowSchemaProvider
 	RecordReader             WorkflowRecordReader
 	ObjectForAction          func(context.Context, principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error)
