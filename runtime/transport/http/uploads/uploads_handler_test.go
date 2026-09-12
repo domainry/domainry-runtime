@@ -3,6 +3,7 @@ package uploads
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -33,6 +34,30 @@ type uploadArtifactStoreStub struct {
 	artifact  lifecyclecontract.UploadArtifact
 	artifacts []lifecyclecontract.UploadArtifact
 	err       error
+}
+
+type uploadFileScanStoreStub struct {
+	byID map[string]lifecyclecontract.FileScanEvidence
+	err  error
+}
+
+func (s *uploadFileScanStoreStub) FindFileScan(_ context.Context, workspaceID, fileID string) (lifecyclecontract.FileScanEvidence, error) {
+	if s.err != nil {
+		return lifecyclecontract.FileScanEvidence{}, s.err
+	}
+	evidence, ok := s.byID[workspaceID+"\x00"+fileID]
+	if !ok {
+		return lifecyclecontract.FileScanEvidence{}, sql.ErrNoRows
+	}
+	return evidence, nil
+}
+
+func (s *uploadFileScanStoreStub) RecordFileScan(_ context.Context, evidence lifecyclecontract.FileScanEvidence) error {
+	if s.byID == nil {
+		s.byID = map[string]lifecyclecontract.FileScanEvidence{}
+	}
+	s.byID[evidence.WorkspaceID+"\x00"+evidence.FileID] = evidence
+	return s.err
 }
 
 func (s *uploadArtifactStoreStub) RegisterUpload(_ context.Context, artifact lifecyclecontract.UploadArtifact) error {
@@ -406,6 +431,45 @@ func TestServeUploadedFileAndDownloadAuthorization(t *testing.T) {
 		})
 	}
 
+}
+
+func TestServeUploadedFileResolvesOpaqueFileIdentityInsideWorkspace(t *testing.T) {
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "u1", WorkspaceID: "workspace-a"}}, uploadTestRole("asset.read"))
+	handler := uploadTestHandler(t, principal)
+	workspaceDir, err := handler.workspaceUploadDir(principal.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(workspaceDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	storageFilename := "content-addressed-storage-name.zip"
+	if err := os.WriteFile(filepath.Join(workspaceDir, storageFilename), []byte("archive"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := &uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{
+		"workspace-a\x00derived-export": {
+			FileID: "derived-export", WorkspaceID: "workspace-a", Filename: storageFilename,
+			ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean,
+		},
+	}}
+	handler.scans = uploadapplication.NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32))
+
+	request := httptest.NewRequest(http.MethodGet, "/uploads/derived-export?object_key=asset&field_key=file_url", nil)
+	request.SetPathValue("filename", "derived-export")
+	response := httptest.NewRecorder()
+	handler.serveUploadedFile(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != "archive" {
+		t.Fatalf("opaque file identity status=%d body=%q", response.Code, response.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/uploads/derived-export?object_key=document&field_key=file_url", nil)
+	request.SetPathValue("filename", "derived-export")
+	response = httptest.NewRecorder()
+	handler.serveUploadedFile(response, request)
+	if response.Code != http.StatusForbidden || response.Header().Get("X-Error-Code") != "backend.upload.permission_denied" {
+		t.Fatalf("artifact binding mismatch status=%d code=%q", response.Code, response.Header().Get("X-Error-Code"))
+	}
 }
 
 func TestUploadStorageIsIsolatedByWorkspace(t *testing.T) {

@@ -2,6 +2,7 @@ package uploads
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -307,15 +308,35 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 		h.writeError(w, r, http.StatusForbidden, "backend.role.unknown")
 		return
 	}
-	filename := filepath.Base(strings.TrimSpace(r.PathValue("filename")))
-	if filename == "." || strings.Contains(filename, "..") {
+	fileIdentifier := filepath.Base(strings.TrimSpace(r.PathValue("filename")))
+	if fileIdentifier == "." || strings.Contains(fileIdentifier, "..") {
 		http.NotFound(w, r)
 		return
 	}
 	objectKey := strings.TrimSpace(r.URL.Query().Get("object_key"))
 	fieldKey := strings.TrimSpace(r.URL.Query().Get("field_key"))
 	recordID := strings.TrimSpace(r.URL.Query().Get("record_id"))
-	if err := h.access.AuthorizeDownload(r.Context(), objectKey, fieldKey, recordID, filename, principal); err != nil {
+	storageFilename := fileIdentifier
+	if h.scans != nil {
+		evidence, err := h.scans.Status(r.Context(), principal.WorkspaceID, fileIdentifier)
+		switch {
+		case err == nil:
+			if strings.TrimSpace(evidence.ObjectKey) != objectKey || strings.TrimSpace(evidence.FieldKey) != fieldKey {
+				h.writeError(w, r, http.StatusForbidden, "backend.upload.permission_denied")
+				return
+			}
+			storageFilename = filepath.Base(strings.TrimSpace(evidence.Filename))
+			if storageFilename == "." || strings.Contains(storageFilename, "..") {
+				http.NotFound(w, r)
+				return
+			}
+		case errors.Is(err, sql.ErrNoRows):
+		default:
+			h.writeServiceError(w, r, err)
+			return
+		}
+	}
+	if err := h.access.AuthorizeDownload(r.Context(), objectKey, fieldKey, recordID, fileIdentifier, principal); err != nil {
 		h.writeServiceError(w, r, err)
 		return
 	}
@@ -324,9 +345,9 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 		h.writeError(w, r, http.StatusForbidden, "backend.workspace_scope_required")
 		return
 	}
-	path := filepath.Join(workspaceDir, filename)
+	path := filepath.Join(workspaceDir, storageFilename)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Disposition", "inline; filename="+filename)
+	w.Header().Set("Content-Disposition", "inline; filename="+storageFilename)
 	http.ServeFile(w, r, path)
 }
 
