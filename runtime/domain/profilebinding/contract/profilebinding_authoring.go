@@ -6,34 +6,17 @@ import (
 )
 
 func ProfileBindingAuthoringCapability() capabilitycontract.CapabilityAuthoringDefinition {
-	closed, open := profileBindingBoolPointer(false), profileBindingBoolPointer(true)
-	strings := capabilitycontract.CapabilityAuthoringSchema{Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string", MinLength: profileBindingIntPointer(1)}}
-	claim := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: closed, Required: []string{"claim_key", "field_key"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-		"claim_key": {Type: "string", MinLength: profileBindingIntPointer(1)}, "field_key": {Type: "string", MinLength: profileBindingIntPointer(1)},
-	}}
-	claimProof := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: closed, Required: []string{"type", "field_key"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-		"type": {Type: "string", Enum: []any{"email", "phone", "external_idp_subject"}}, "field_key": {Type: "string", MinLength: profileBindingIntPointer(1)},
-	}}
-	bindingLifecycle := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: closed, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-		"allow_unbound": {Type: "boolean"}, "invitation_channels": {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string", Enum: []any{"email", "sms", "external_idp"}}},
-		"claim_proofs": {Type: "array", Items: &claimProof}, "rebind_requires_approval": {Type: "boolean"}, "rebind_revokes_sessions": {Type: "boolean"},
-	}}
-	businessIdentity := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: closed, Required: []string{"key"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-		"key": {Type: "string", MinLength: profileBindingIntPointer(1)}, "status_field": {Type: "string"}, "active_status_values": strings,
-		"blacklist_field": {Type: "string"}, "claims": {Type: "array", Items: &claim},
-	}}
-	payload := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: closed,
-		Required: []string{"object_key", "identity_relation_field", "business_identity", "default_visibility"},
-		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-			"object_key": {Type: "string", MinLength: profileBindingIntPointer(1)}, "identity_relation_field": {Type: "string", MinLength: profileBindingIntPointer(1)},
-			"business_identity": businessIdentity,
-			"binding_lifecycle": bindingLifecycle,
-			"summary_fields":    strings, "profile_tabs": strings, "profile_tab_labels": {Type: "object", AdditionalProperties: open},
-			"profile_tab_fields": {Type: "object", AdditionalProperties: open}, "profile_tab_related_objects": {Type: "object", AdditionalProperties: open},
-			"profile_tab_components": {Type: "object", AdditionalProperties: open}, "default_visibility": {Type: "string", Enum: []any{"when_readable", "hidden"}},
-			"required_permissions": strings, "standalone_workspace": {Type: "boolean"}, "provenance": {Type: "object", AdditionalProperties: open},
-		},
+	// The payload is an Object's `ux.config` plus the object key it hangs on, so
+	// it is built from the one schema both surfaces publish; see
+	// appschemacontract.IdentityProfileExtensionConfigSchema.
+	payload := appschemacontract.IdentityProfileExtensionConfigSchema()
+	properties := make(map[string]capabilitycontract.CapabilityAuthoringSchema, len(payload.Properties)+1)
+	for key, value := range payload.Properties {
+		properties[key] = value
 	}
+	properties["object_key"] = capabilitycontract.CapabilityAuthoringSchema{Type: "string", MinLength: profileBindingIntPointer(1)}
+	payload.Properties = properties
+	payload.Required = append([]string{"object_key"}, payload.Required...)
 	execution := appschemacontract.VersionedApplicationDefinitionExecution("principal.profile_binding")
 	return capabilitycontract.CapabilityAuthoringDefinition{
 		Key: "principal.profile_binding", Status: "supported", Lifecycle: "versioned_metadata", Requires: []string{"schema.object", "schema.relation"},

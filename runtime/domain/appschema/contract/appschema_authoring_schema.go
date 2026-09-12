@@ -81,10 +81,8 @@ func metadataObjectPayloadSchema() capabilitycontract.CapabilityAuthoringSchema 
 	ux := capabilitycontract.CapabilityAuthoringSchema{
 		Type: "object", AdditionalProperties: metadataBoolPointer(false),
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-			"kind": {Type: "string", Enum: []any{"identity_profile_extension"}},
-			"config": {Type: "object", AdditionalProperties: metadataBoolPointer(false), Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-				"identity_relation_field": {Type: "string", MinLength: metadataIntPointer(1)},
-			}},
+			"kind":   {Type: "string", Enum: []any{"identity_profile_extension"}},
+			"config": IdentityProfileExtensionConfigSchema(),
 			"display": {Type: "object", AdditionalProperties: metadataBoolPointer(false), Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 				"title_field": {Type: "string", MinLength: metadataIntPointer(1)},
 			}},
