@@ -3,8 +3,11 @@ package runtimehost
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 )
 
@@ -92,4 +95,131 @@ func runtimeextErrorCode(err error) string {
 		return business.Code
 	}
 	return ""
+}
+
+type integrationConnectorLease struct {
+	requestID string
+	released  bool
+}
+
+func (lease *integrationConnectorLease) ConnectorRequestID() string { return lease.requestID }
+func (lease *integrationConnectorLease) Release()                   { lease.released = true }
+
+type integrationConnectorExecution struct {
+	identity   runtimeext.ExecutionIdentity
+	principal  runtimeext.Principal
+	workspace  runtimeext.Workspace
+	lease      *integrationConnectorLease
+	capability runtimeext.ActionConnectorCapability
+	acquireErr error
+}
+
+func (execution *integrationConnectorExecution) Identity() runtimeext.ExecutionIdentity {
+	return execution.identity
+}
+func (execution *integrationConnectorExecution) Principal() runtimeext.Principal {
+	return execution.principal
+}
+func (execution *integrationConnectorExecution) Workspace() runtimeext.Workspace {
+	return execution.workspace
+}
+func (*integrationConnectorExecution) Phase() runtimeext.ExecutionPhase {
+	return runtimeext.ExecutionPhasePrewrite
+}
+func (*integrationConnectorExecution) QueryRecords(context.Context, runtimeext.RecordQuery) (runtimeext.RecordQueryResult, error) {
+	return runtimeext.RecordQueryResult{}, nil
+}
+func (*integrationConnectorExecution) ApplyRecordMutation(context.Context, runtimeext.RecordMutation) (runtimeext.RecordMutationResult, error) {
+	return runtimeext.RecordMutationResult{}, nil
+}
+func (*integrationConnectorExecution) StageDurableIntent(context.Context, runtimeext.DurableIntent) (runtimeext.DurableIntentReceipt, error) {
+	return runtimeext.DurableIntentReceipt{}, nil
+}
+func (execution *integrationConnectorExecution) AcquireSynchronousConnectorCall(capability runtimeext.ActionConnectorCapability) (runtimeext.SynchronousConnectorCallLease, error) {
+	execution.capability = capability
+	if execution.acquireErr != nil {
+		return nil, execution.acquireErr
+	}
+	return execution.lease, nil
+}
+
+type integrationOperationsProbe struct {
+	integrationsdk.Operations
+	request integrationsdk.ProviderCallRequest
+	result  integrationsdk.ProviderCallResult
+	err     error
+	calls   int
+}
+
+func (probe *integrationOperationsProbe) Call(_ context.Context, request integrationsdk.ProviderCallRequest) (integrationsdk.ProviderCallResult, error) {
+	probe.calls++
+	probe.request = request
+	return probe.result, probe.err
+}
+
+func TestIntegrationRuntimeConnectorGatewayUsesOwnerOperationAndLease(t *testing.T) {
+	probe := &integrationOperationsProbe{result: integrationsdk.ProviderCallResult{Response: json.RawMessage(`{"text":"receipt"}`)}}
+	lease := &integrationConnectorLease{requestID: "execution-1:connector:3"}
+	execution := &integrationConnectorExecution{
+		identity:  runtimeext.ExecutionIdentity{ExecutionID: "execution-1", ActionKey: "invoice_ocr_job.process"},
+		principal: runtimeext.Principal{UserID: "worker-1", RoleKey: "ocr_worker"},
+		workspace: runtimeext.Workspace{ID: "workspace-a"}, lease: lease,
+	}
+	request := ConnectorCallRequest{
+		ConnectorKey: "expense_ocr", ConnectionKey: "primary", OperationKey: "parse_expense",
+		ContractSHA256: strings.Repeat("a", 64), Mode: "call", Effect: "write", Payload: json.RawMessage(`{"document":"base64"}`),
+	}
+	result, err := (integrationRuntimeConnectorGateway{operations: probe}).Call(t.Context(), execution, request)
+	if err != nil || string(result.Payload) != `{"text":"receipt"}` {
+		t.Fatalf("result=%s error=%v", result.Payload, err)
+	}
+	if !lease.released || probe.calls != 1 {
+		t.Fatalf("released=%t calls=%d", lease.released, probe.calls)
+	}
+	if execution.capability.ConnectorKey != "expense_ocr" || execution.capability.ConnectionKey != "primary" || execution.capability.OperationKey != "parse_expense" || execution.capability.ContractSHA256 != strings.Repeat("a", 64) || execution.capability.Mode != runtimeext.ConnectorModeCall || execution.capability.Effect != runtimeext.ConnectorEffectWrite {
+		t.Fatalf("capability=%+v", execution.capability)
+	}
+	got := probe.request
+	if got.RequestID != lease.requestID || got.WorkspaceID != "workspace-a" || got.ConnectorKey != "expense_ocr" || got.ConnectionKey != "primary" || got.Operation != "parse_expense" || got.ActorID != "worker-1" || got.RoleKey != "ocr_worker" || got.PersistenceMode != integrationsdk.ProviderCallPersistenceSensitive || got.MaskedDestination != "expense_ocr/parse_expense" || string(got.Payload) != string(request.Payload) {
+		t.Fatalf("provider request=%+v", got)
+	}
+}
+
+func TestIntegrationRuntimeConnectorGatewayKeepsReadEvidenceAndReleasesOnFailure(t *testing.T) {
+	want := errors.New("provider failed")
+	probe := &integrationOperationsProbe{err: want}
+	lease := &integrationConnectorLease{}
+	execution := &integrationConnectorExecution{
+		identity:  runtimeext.ExecutionIdentity{ExecutionID: "execution-2", ActionKey: "member.lookup"},
+		workspace: runtimeext.Workspace{ID: "workspace-b"}, lease: lease,
+	}
+	request := ConnectorCallRequest{
+		ConnectorKey: "directory", ConnectionKey: "primary", OperationKey: "lookup",
+		ContractSHA256: strings.Repeat("b", 64), Mode: "call", Effect: "read", Payload: json.RawMessage(`{}`),
+	}
+	_, err := (integrationRuntimeConnectorGateway{operations: probe}).Call(t.Context(), execution, request)
+	if !errors.Is(err, want) || !lease.released {
+		t.Fatalf("error=%v released=%t", err, lease.released)
+	}
+	if probe.request.RequestID != "execution-2" || probe.request.PersistenceMode != integrationsdk.ProviderCallPersistenceStandard || probe.request.MaskedDestination != "" {
+		t.Fatalf("provider request=%+v", probe.request)
+	}
+}
+
+func TestIntegrationRuntimeConnectorGatewayFailsClosedBeforeOwnerCall(t *testing.T) {
+	request := ConnectorCallRequest{ConnectorKey: "directory", ConnectionKey: "primary", OperationKey: "lookup", ContractSHA256: strings.Repeat("c", 64), Mode: "call", Effect: "read", Payload: json.RawMessage(`{}`)}
+	execution := &integrationConnectorExecution{identity: runtimeext.ExecutionIdentity{ExecutionID: "execution-3", ActionKey: "member.lookup"}, workspace: runtimeext.Workspace{ID: "workspace-c"}, lease: &integrationConnectorLease{}}
+	if _, err := (integrationRuntimeConnectorGateway{}).Call(t.Context(), execution, request); runtimeextErrorCode(err) != "backend.connector.gateway_unavailable" {
+		t.Fatalf("missing Operations error=%v", err)
+	}
+	probe := &integrationOperationsProbe{}
+	execution.identity = runtimeext.ExecutionIdentity{}
+	if _, err := (integrationRuntimeConnectorGateway{operations: probe}).Call(t.Context(), execution, request); runtimeextErrorCode(err) != "backend.connector.execution_identity_invalid" || probe.calls != 0 {
+		t.Fatalf("invalid identity error=%v calls=%d", err, probe.calls)
+	}
+	execution.identity = runtimeext.ExecutionIdentity{ExecutionID: "execution-3", ActionKey: "member.lookup"}
+	execution.acquireErr = errors.New("grant denied")
+	if _, err := (integrationRuntimeConnectorGateway{operations: probe}).Call(t.Context(), execution, request); !errors.Is(err, execution.acquireErr) || probe.calls != 0 {
+		t.Fatalf("grant error=%v calls=%d", err, probe.calls)
+	}
 }

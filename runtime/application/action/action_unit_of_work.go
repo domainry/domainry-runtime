@@ -31,11 +31,23 @@ type actionUnitOfWork struct {
 	mu                              sync.Mutex
 	transaction                     actioncontract.ActionExecutionTransaction
 	activeSynchronousConnectorCalls int
+	synchronousConnectorCallsIssued int
 }
 
 type actionSynchronousConnectorCallLease struct {
 	unitOfWork *actionUnitOfWork
+	requestID  string
 	once       sync.Once
+}
+
+// ConnectorRequestID is an internal host handshake. It gives every external
+// call inside one Action execution a stable, distinct Integration identity
+// without widening the project-facing SynchronousConnectorCallLease contract.
+func (l *actionSynchronousConnectorCallLease) ConnectorRequestID() string {
+	if l == nil {
+		return ""
+	}
+	return l.requestID
 }
 
 func (l *actionSynchronousConnectorCallLease) Release() {
@@ -185,7 +197,11 @@ func (u *actionUnitOfWork) acquireSynchronousConnectorCall() (runtimeext.Synchro
 		return nil, apperror.New(apperror.KindConflict, runtimeext.ConnectorCallAfterWriteErrorCode, nil, map[string]string{"phase": string(phase)})
 	}
 	u.activeSynchronousConnectorCalls++
-	return &actionSynchronousConnectorCallLease{unitOfWork: u}, nil
+	u.synchronousConnectorCallsIssued++
+	return &actionSynchronousConnectorCallLease{
+		unitOfWork: u,
+		requestID:  fmt.Sprintf("%s:connector:%d", u.executionID(), u.synchronousConnectorCallsIssued),
+	}, nil
 }
 
 func (u *actionUnitOfWork) executionContext(ctx context.Context) context.Context {

@@ -95,6 +95,15 @@ type Runtime struct {
 	operationsControlLoader       func(context.Context) ([]operationsmodel.OperationsControl, error)
 }
 
+// IntegrationOwnerOperations returns the source-owned Integration execution
+// port for runtimehost's generated Connector gateway.
+func (r *Runtime) IntegrationOwnerOperations() integrationsdk.Operations {
+	if r == nil || r.records == nil {
+		return nil
+	}
+	return r.records.IntegrationOwnerOperations()
+}
+
 func (a *Runtime) runtimeReleaseLease() deploymentmodel.RuntimeReleaseCohortLease {
 	a.releaseMu.Lock()
 	defer a.releaseMu.Unlock()

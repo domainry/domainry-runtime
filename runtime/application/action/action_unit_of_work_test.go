@@ -675,11 +675,15 @@ func TestSynchronousConnectorCallLeaseExcludesActionTransactionAndLocks(t *testi
 	store := &actionUnitOfWorkStoreProbe{}
 	unitOfWork := &actionUnitOfWork{
 		manager: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
+		claim:   actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{ID: "execution-lease"}},
 		phases:  newActionExecutionPhaseMachine(),
 	}
 	lease, err := unitOfWork.acquireSynchronousConnectorCall()
 	if err != nil || lease == nil || unitOfWork.activeSynchronousConnectorCalls != 1 {
 		t.Fatalf("lease=%T active=%d error=%v", lease, unitOfWork.activeSynchronousConnectorCalls, err)
+	}
+	if identified, ok := lease.(interface{ ConnectorRequestID() string }); !ok || identified.ConnectorRequestID() != "execution-lease:connector:1" {
+		t.Fatalf("lease request identity=%T", lease)
 	}
 	if _, err := unitOfWork.beginWriting(t.Context()); apperror.CodeOf(err) != runtimeext.ActionWriteDuringConnectorCallErrorCode {
 		t.Fatalf("write during Connector call error=%v", err)

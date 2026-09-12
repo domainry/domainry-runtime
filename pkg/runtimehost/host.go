@@ -96,7 +96,10 @@ func (r bootstrapRuntimeProcess) ModuleHTTPAdapters() []modulehttp.Adapter {
 }
 
 func (r bootstrapRuntimeProcess) connectorGateway() runtimeConnectorGateway {
-	return unavailableRuntimeConnectorGateway{}
+	if r.Runtime == nil {
+		return unavailableRuntimeConnectorGateway{}
+	}
+	return integrationRuntimeConnectorGateway{operations: r.Runtime.IntegrationOwnerOperations()}
 }
 
 type serverRunDependencies struct {

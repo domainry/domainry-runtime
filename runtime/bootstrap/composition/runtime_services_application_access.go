@@ -3,6 +3,7 @@ package composition
 import (
 	"context"
 
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
@@ -22,6 +23,16 @@ import (
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
+
+// IntegrationOwnerOperations exposes the already assembled owner port to the
+// process host. Project handlers still reach it only through the governed,
+// generated Connector gateway.
+func (s *RuntimeServices) IntegrationOwnerOperations() integrationsdk.Operations {
+	if s == nil || s.assembly == nil {
+		return nil
+	}
+	return s.assembly.integrationOwnerOperations
+}
 
 type RuntimeApplications struct {
 	AgentAuthorization    *agentapplication.AgentAuthorizationApplicationService

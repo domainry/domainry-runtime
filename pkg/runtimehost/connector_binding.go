@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 	"sync"
 
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 )
 
@@ -78,4 +80,56 @@ type unavailableRuntimeConnectorGateway struct{}
 
 func (unavailableRuntimeConnectorGateway) Call(context.Context, runtimeext.ActionExecution, ConnectorCallRequest) (ConnectorCallResult, error) {
 	return ConnectorCallResult{}, &runtimeext.BusinessError{Code: "backend.connector.gateway_unavailable", Message: "Synchronous Runtime Connector execution moved to the Integration owner"}
+}
+
+type connectorRequestIDLease interface {
+	runtimeext.SynchronousConnectorCallLease
+	ConnectorRequestID() string
+}
+
+type integrationRuntimeConnectorGateway struct {
+	operations integrationsdk.Operations
+}
+
+func (gateway integrationRuntimeConnectorGateway) Call(ctx context.Context, execution runtimeext.ActionExecution, request ConnectorCallRequest) (ConnectorCallResult, error) {
+	if gateway.operations == nil {
+		return ConnectorCallResult{}, &runtimeext.BusinessError{Code: "backend.connector.gateway_unavailable", Message: "Integration Operations are unavailable"}
+	}
+	identity, workspace, principal := execution.Identity(), execution.Workspace(), execution.Principal()
+	if !identity.Valid() || !workspace.Valid() {
+		return ConnectorCallResult{}, &runtimeext.BusinessError{Code: "backend.connector.execution_identity_invalid", Message: "Connector execution identity and Workspace are required"}
+	}
+	capability := runtimeext.ActionConnectorCapability{
+		ConnectorKey: strings.TrimSpace(request.ConnectorKey), ConnectionKey: strings.TrimSpace(request.ConnectionKey),
+		OperationKey: strings.TrimSpace(request.OperationKey), ContractSHA256: strings.TrimSpace(request.ContractSHA256),
+		Mode: runtimeext.ConnectorOperationMode(strings.TrimSpace(request.Mode)), Effect: runtimeext.ConnectorOperationEffect(strings.TrimSpace(request.Effect)),
+	}
+	lease, err := execution.AcquireSynchronousConnectorCall(capability)
+	if err != nil {
+		return ConnectorCallResult{}, err
+	}
+	defer lease.Release()
+	requestID := identity.ExecutionID
+	if identified, ok := lease.(connectorRequestIDLease); ok && strings.TrimSpace(identified.ConnectorRequestID()) != "" {
+		requestID = strings.TrimSpace(identified.ConnectorRequestID())
+	}
+	persistence := integrationsdk.ProviderCallPersistenceStandard
+	maskedDestination := ""
+	if capability.Effect == runtimeext.ConnectorEffectReserve || capability.Effect == runtimeext.ConnectorEffectWrite {
+		// Synchronous external effects can contain billable or sensitive business
+		// payloads. Integration retains only routing/status evidence; the Handler
+		// persists the approved result in business records.
+		persistence = integrationsdk.ProviderCallPersistenceSensitive
+		maskedDestination = capability.ConnectorKey + "/" + capability.OperationKey
+	}
+	result, err := gateway.operations.Call(ctx, integrationsdk.ProviderCallRequest{
+		RequestID: requestID, WorkspaceID: workspace.ID,
+		ConnectorKey: capability.ConnectorKey, ConnectionKey: capability.ConnectionKey, Operation: capability.OperationKey,
+		Payload: append(json.RawMessage(nil), request.Payload...), PersistenceMode: persistence, MaskedDestination: maskedDestination,
+		ActorID: strings.TrimSpace(principal.UserID), RoleKey: strings.TrimSpace(principal.RoleKey),
+	})
+	if err != nil {
+		return ConnectorCallResult{}, err
+	}
+	return ConnectorCallResult{Payload: append(json.RawMessage(nil), result.Response...)}, nil
 }
