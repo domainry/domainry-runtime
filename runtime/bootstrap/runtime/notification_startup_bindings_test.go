@@ -55,6 +55,9 @@ func TestNotificationStartupRevisionAndPublisherBoundaries(t *testing.T) {
 	if err := notificationIntentPublisherCallback(nil)(t.Context(), notificationmodel.NotificationIntent{}); err != nil {
 		t.Fatal(err)
 	}
+	if notificationEventPublisherCallback(nil) != nil {
+		t.Fatal("scheduled Notification publisher must fail closed when the Binding is unavailable")
+	}
 	failure := errors.New("publish failed")
 	callback := notificationIntentPublisherCallback(func(_ context.Context, _ notificationmodel.NotificationIntent, scope principalmodel.SystemScope) (notificationmodel.NotificationEvent, bool, error) {
 		if scope.Kind != principalmodel.SystemScopeRuntimeGlobal {
@@ -64,6 +67,16 @@ func TestNotificationStartupRevisionAndPublisherBoundaries(t *testing.T) {
 	})
 	if err := callback(t.Context(), notificationmodel.NotificationIntent{}); !errors.Is(err, failure) {
 		t.Fatalf("publisher error=%v", err)
+	}
+	withReceipt := notificationEventPublisherCallback(func(_ context.Context, intent notificationmodel.NotificationIntent, scope principalmodel.SystemScope) (notificationmodel.NotificationEvent, bool, error) {
+		if scope.Kind != principalmodel.SystemScopeRuntimeGlobal || scope.Purpose != "publish scheduled notification" {
+			t.Fatalf("scope=%+v", scope)
+		}
+		return notificationmodel.NotificationEvent{ID: intent.ID}, true, nil
+	})
+	event, created, err := withReceipt(t.Context(), notificationmodel.NotificationIntent{ID: "event"})
+	if err != nil || !created || event.ID != "event" {
+		t.Fatalf("event=%+v created=%t err=%v", event, created, err)
 	}
 }
 

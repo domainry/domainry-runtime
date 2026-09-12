@@ -3,6 +3,7 @@ package composition
 import (
 	"context"
 
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
@@ -84,6 +85,16 @@ func (s *RuntimeServices) Applications() RuntimeApplications {
 		return RuntimeApplications{TargetExecutions: targetExecutions, RecordTimers: recordtimerapplication.NewRecordTimerApplicationService(nil, nil, nil)}
 	}
 	return s.applications
+}
+
+// NotificationEventPublisher exposes the assembled Notification SDK producer
+// port to startup composition. Source modules still receive only their own
+// neutral event contracts through Runtime adapters.
+func (s *RuntimeServices) NotificationEventPublisher() func(context.Context, notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, bool, error) {
+	if s == nil {
+		return nil
+	}
+	return s.notificationEventPublisher
 }
 
 // SchedulerDefinitionSource exposes only the host-supplied definition

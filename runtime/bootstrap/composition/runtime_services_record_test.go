@@ -457,7 +457,7 @@ func TestAutomationApplicationUsesCanonicalRuntimeServiceAndOwnerBoundaries(t *t
 	automationPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "admin", WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "developer", Permissions: []string{"customer.update"}})
 	configuredRuntime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
 		Manifest:     manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}},
-		Dependencies: RuntimeServicesDependencies{AgentPrincipals: agentPrincipalResolverStub{principal: automationPrincipal}},
+		Dependencies: RuntimeServicesDependencies{IdentityPrincipals: agentPrincipalResolverStub{principal: automationPrincipal}},
 	})
 	if _, err := configuredRuntime.Applications().Automations.AutomationExecutions(t.Context(), automationmodel.AutomationExecutionFilter{}, historyPrincipal); err != nil {
 		t.Fatalf("configured Automation history error=%v", err)

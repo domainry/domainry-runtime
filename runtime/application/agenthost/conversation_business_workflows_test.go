@@ -24,6 +24,7 @@ type businessWorkflowPortProbe struct {
 	definition      definitionmodel.WorkflowSchema
 	process         workflowmodel.WorkflowProcessInstance
 	execution       workflowmodel.WorkflowExecution
+	lastPrincipal   principalmodel.Principal
 	starts          int
 	denied, unknown bool
 }
@@ -36,6 +37,7 @@ func (f *businessWorkflowPortProbe) AgentWorkflowDefinition(_ context.Context, k
 }
 func (f *businessWorkflowPortProbe) RunAgentWorkflowWithKey(_ context.Context, key string, data map[string]any, call string, p principalmodel.Principal) (workflowmodel.WorkflowRunResult, error) {
 	f.starts++
+	f.lastPrincipal = p
 	f.execution = workflowmodel.WorkflowExecution{ID: "execution-1", ProcessID: f.process.ID, WorkflowKey: key, ActorID: p.UserID, WorkspaceID: p.WorkspaceID, IdempotencyKey: call, Payload: data}
 	if f.unknown {
 		return workflowmodel.WorkflowRunResult{}, fmt.Errorf("transport unavailable")
@@ -90,7 +92,7 @@ func TestConversationWorkflowHostConfirmsReconcilesAndRevalidatesChangingState(t
 		}
 	}
 	receipt, err := host.StartBusinessWorkflow(t.Context(), request)
-	if err != nil || receipt.Status != "uncertain" || port.starts != 1 {
+	if err != nil || receipt.Status != "uncertain" || port.starts != 1 || port.lastPrincipal.CorrelationID != request.RunID {
 		t.Fatal(receipt, err)
 	}
 	receipt, err = host.ReconcileBusinessWorkflow(t.Context(), request)

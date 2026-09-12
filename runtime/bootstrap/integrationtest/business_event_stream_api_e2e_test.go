@@ -74,13 +74,15 @@ func TestRuntimeBusinessEventStreamConnectsReplaysAndRejectsCrossTenant(t *testi
 
 	deadline := time.Now().Add(2 * time.Second)
 	for {
-		audits := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, token, http.MethodGet, "/audit/events", nil)
-		items, _ := audits["items"].([]any)
-		if runtimeAuditHasEvent(items, "business_event_stream_connected") && runtimeAuditHasEvent(items, "business_event_stream_disconnected") && runtimeAuditHasEvent(items, "auth_workspace_denied") {
+		businessAudits := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, token, http.MethodGet, "/audit/events", nil)
+		operationsAudits := runtimeFixtureAuthorizedRequest[map[string]any](t, handler, token, http.MethodGet, "/audit/system/events", nil)
+		businessItems, _ := businessAudits["items"].([]any)
+		operationsItems, _ := operationsAudits["items"].([]any)
+		if runtimeAuditHasEvent(businessItems, "business_event_stream_connected") && runtimeAuditHasEvent(businessItems, "business_event_stream_disconnected") && runtimeAuditHasEvent(operationsItems, "auth_workspace_denied") {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("stream/workspace audit evidence missing: %#v", audits)
+			t.Fatalf("stream/workspace audit evidence missing: business=%#v operations=%#v", businessAudits, operationsAudits)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

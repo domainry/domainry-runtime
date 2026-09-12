@@ -119,7 +119,7 @@ func notificationModuleRoutes(t *testing.T, runtime *bootstrap.Runtime) http.Han
 	t.Helper()
 	mux := http.NewServeMux()
 	for _, adapter := range runtime.ModuleHTTPAdapters() {
-		if adapter.Owner() != "notification" && adapter.Owner() != "audit" {
+		if adapter.Owner() != "notification" && adapter.Owner() != "audit" && adapter.Owner() != "integration" {
 			continue
 		}
 		if err := modulehttp.ValidateAdapter(adapter); err != nil {

@@ -84,7 +84,7 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 			workflowapplication.WakeWorkflowContinuation(records.workflowApplicationService, workflowapplication.WorkflowContinuationLocator{WorkspaceID: workspaceID, ExecutionID: executionID})
 		},
 		Identity:     records.identityProjection,
-		Principals:   records.agentPrincipals,
+		Principals:   records.identityPrincipals,
 		Schema:       runtimeWorkflowSchemaProvider{records: records},
 		RecordReader: workflowapplication.NewWorkflowRecordReaderAdapter(records.recordRepo, records.RecordQueryPolicyDomainService.NormalizeListQuery),
 		ObjectForAction: func(ctx context.Context, principal principalmodel.Principal, objectKey, action string) (definitionmodel.ObjectSchema, error) {

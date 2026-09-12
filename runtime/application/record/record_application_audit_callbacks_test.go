@@ -19,15 +19,20 @@ func TestRecordApplicationAuditCallbacksCoverDisabledAndEnabledPaths(t *testing.
 	service.auditFieldDenials(t.Context(), object, record, "read", nil, principal)
 	service.auditScopeDenial(t.Context(), object, record.ID, principal)
 	events := []string{}
+	metadataByEvent := map[string]map[string]any{}
 	service.audit = func(_ context.Context, event, objectKey, recordID string, _ principalmodel.Principal, _ string, _, _, metadata map[string]any) {
 		if objectKey != object.Key || recordID != record.ID || metadata == nil {
 			t.Fatalf("event=%s object=%s record=%s metadata=%v", event, objectKey, recordID, metadata)
 		}
 		events = append(events, event)
+		metadataByEvent[event] = metadata
 	}
 	service.auditFieldDenials(t.Context(), object, record, "read", []recordservice.RecordFieldPolicyDecision{{FieldKey: "secret", RuleKey: "mask-secret"}}, principal)
 	service.auditScopeDenial(t.Context(), object, record.ID, principal)
 	if len(events) != 2 || events[0] != "field_access_denied" || events[1] != "data_scope_access_denied" {
 		t.Fatalf("events=%v", events)
+	}
+	if metadataByEvent["field_access_denied"]["result"] != "denied" || metadataByEvent["field_access_denied"]["reason"] != "field_policy_denied" {
+		t.Fatalf("field denial metadata=%#v", metadataByEvent["field_access_denied"])
 	}
 }

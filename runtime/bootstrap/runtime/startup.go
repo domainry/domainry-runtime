@@ -456,8 +456,20 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)},
 		Binding:     agentBinding, Records: records, Principals: identityPrincipals,
 		RateLimiter: sharedRateLimiter, IntegrationSecretKey: cfg.IntegrationSecretKey,
-		IdentityIssuer: identityBinding.Descriptor().Issuer,
+		IdentityIssuer:     identityBinding.Descriptor().Issuer,
+		NotificationEvents: records.NotificationEventPublisher(),
 	}))
+	if agentBinding != nil && agentBinding.Descriptor().HasCapability(agentsdk.CapabilityScheduledConversationTask) {
+		conversations, ok := agentBinding.(agentsdk.ConversationBinding)
+		if !ok || conversations.Conversations() == nil {
+			mustCompleteRuntimeStartup(errors.New("Agent Binding advertises scheduled conversation tasks without a conversation binding"))
+		}
+		tasks, ok := conversations.Conversations().(agentsdk.ScheduledConversationTaskService)
+		if !ok || tasks == nil {
+			mustCompleteRuntimeStartup(errors.New("Agent Binding advertises scheduled conversation tasks without the task service"))
+		}
+		mustCompleteRuntimeStartup(records.BindAgentScheduledTasks(tasks))
+	}
 	integrationTriggers.Bind(newRuntimeIntegrationTriggerSink(records, identityPrincipals))
 	var monitoringBinding monitoringsdk.Binding
 	if monitoringFactory != nil {

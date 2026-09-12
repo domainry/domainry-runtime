@@ -9,6 +9,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/telemetry"
+	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
@@ -40,9 +41,10 @@ type ActionAssurance struct {
 }
 
 type ActionAudit struct {
-	BuildSuccess func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult) auditmodel.AuditEvent
-	BuildFailure func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult, error) []auditmodel.AuditEvent
-	Bulk         func(context.Context, actionmodel.ActionBulkResult, []string, principalmodel.Principal)
+	BuildSuccess  func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult) auditmodel.AuditEvent
+	BuildFailure  func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult, error) []auditmodel.AuditEvent
+	AppendAttempt func(context.Context, auditapplication.AuditAppendRequest) error
+	Bulk          func(context.Context, actionmodel.ActionBulkResult, []string, principalmodel.Principal)
 }
 
 type ActionApplicationDependencies struct {
@@ -199,27 +201,27 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 		invocation.ObjectKey = action.ObjectKey
 	}
 	if action.ObjectKey != invocation.ObjectKey {
-		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.object_mismatch", nil, nil)
+		return s.failPreClaim(ctx, action, invocation, apperror.New(apperror.KindBadRequest, "backend.action.object_mismatch", nil, nil))
 	}
 	if invocation.RecordID == "" && !actionpolicy.ActionIsObjectKind(action.Kind) {
-		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.object_action_required", nil, map[string]string{"action": action.Key})
+		return s.failPreClaim(ctx, action, invocation, apperror.New(apperror.KindBadRequest, "backend.action.object_action_required", nil, map[string]string{"action": action.Key}))
 	}
 	if invocation.RecordID != "" && !actionpolicy.ActionIsRecordKind(action.Kind) {
-		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.record_action_required", nil, map[string]string{"action": action.Key})
+		return s.failPreClaim(ctx, action, invocation, apperror.New(apperror.KindBadRequest, "backend.action.record_action_required", nil, map[string]string{"action": action.Key}))
 	}
 	if err := validateActionTargetOrganizationInvocation(action, invocation); err != nil {
-		return actionmodel.ActionInvocationResult{}, err
+		return s.failPreClaim(ctx, action, invocation, err)
 	}
 	if err := s.dependencies.Authorization.Validate(invocation.Principal, action); err != nil {
-		return actionmodel.ActionInvocationResult{}, err
+		return s.failPreClaim(ctx, action, invocation, err)
 	}
 	payload, err := ActionNormalizePayload(action, invocation.Input)
 	if err != nil {
-		return actionmodel.ActionInvocationResult{}, err
+		return s.failPreClaim(ctx, action, invocation, err)
 	}
 	invocation.Input = payload
 	if assured, err := actionValidateInvocationAssurance(ctx, s.dependencies.Assurance.Validate, invocation); err != nil {
-		return actionmodel.ActionInvocationResult{}, err
+		return s.failPreClaim(ctx, action, invocation, err)
 	} else {
 		invocation = assured
 	}
@@ -297,6 +299,31 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 	}
 	s.executeCommittedWorkflowStarts(ctx, executed.Commits, invocation.Principal)
 	return result, nil
+}
+
+func (s *ActionApplicationService) failPreClaim(ctx context.Context, action definitionmodel.ActionSchema, invocation actionmodel.ActionInvocation, failure error) (actionmodel.ActionInvocationResult, error) {
+	if s.dependencies.Audit.AppendAttempt == nil {
+		return actionmodel.ActionInvocationResult{}, failure
+	}
+	code := strings.TrimSpace(apperror.CodeOf(failure))
+	result, event := "failed", "action_invocation_failed"
+	if apperror.KindOf(failure) == apperror.KindForbidden {
+		result, event = "denied", "action_invocation_denied"
+	}
+	idempotencyKey := ""
+	if requestID := strings.TrimSpace(invocation.RequestID); requestID != "" {
+		idempotencyKey = event + ":" + requestID
+	}
+	if err := s.dependencies.Audit.AppendAttempt(ctx, auditapplication.AuditAppendRequest{
+		IdempotencyKey: idempotencyKey, Event: event, ObjectKey: action.ObjectKey, RecordID: invocation.RecordID,
+		Principal: invocation.Principal, Summary: "Action invocation rejected before execution",
+		Metadata: map[string]any{
+			"action_key": action.Key, "owner_source": invocation.Source, "result": result, "reason": code, "error_code": code,
+		},
+	}); err != nil {
+		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindInternal, "backend.action.audit_failed", err, map[string]string{"action": action.Key})
+	}
+	return actionmodel.ActionInvocationResult{}, failure
 }
 
 func (s *ActionApplicationService) executeCommittedWorkflowStarts(ctx context.Context, commits []transactionmodel.RecordMutationCommit, principal principalmodel.Principal) {

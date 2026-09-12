@@ -188,8 +188,8 @@ func TestAgentWorkflowDependencyAbsentAndRetryBranches(t *testing.T) {
 	_, _ = workflowDependencies(assembly).StartAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{})
 	_, _ = workflowDependencies(assembly).StartAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{Contract: definitionmodel.WorkflowAgentTaskNodeContract{Retry: &definitionmodel.WorkflowRetryPolicy{MaxAttempts: 0}}})
 	_, _ = workflowDependencies(assembly).StartAgentTask(t.Context(), workflowapplication.WorkflowAgentTaskPreparation{Contract: definitionmodel.WorkflowAgentTaskNodeContract{Retry: &definitionmodel.WorkflowRetryPolicy{MaxAttempts: 3}}})
-	assemblyWithPrincipal := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{AgentPrincipals: agentPrincipalResolverStub{principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}}}})
-	_, _ = resolveIdentityPrincipal(t.Context(), assemblyWithPrincipal.agentPrincipals, "user", "role")
+	assemblyWithPrincipal := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{IdentityPrincipals: agentPrincipalResolverStub{principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}}}})
+	_, _ = resolveIdentityPrincipal(t.Context(), assemblyWithPrincipal.identityPrincipals, "user", "role")
 	if _, err := (runtimeInteractiveWorkflowStarter{records: &runtimeAssembly{}}).StartInteractiveAgentWorkflow(t.Context(), "workflow", nil, "run", "key", principalmodel.Principal{}); apperror.CodeOf(err) != "agent.interactive.workflow_handoff_unavailable" {
 		t.Fatalf("ownerless err=%v", err)
 	}

@@ -99,6 +99,7 @@ func (h *ConversationBusinessHost) startBusinessWorkflow(ctx context.Context, re
 		return agentsdk.ConversationWorkflowReceipt{}, conversationBusinessError("forbidden")
 	}
 	p.RequestID = "conversation:" + request.RunID + ":" + request.CallID
+	p.CorrelationID = request.RunID
 	if reconcile {
 		execution, found, err := h.workflows.InspectAgentWorkflowInvocation(ctx, request.Start.WorkflowKey, data, request.IdempotencyKey, p)
 		if err != nil {

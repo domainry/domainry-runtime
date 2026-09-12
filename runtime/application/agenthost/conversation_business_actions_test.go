@@ -96,7 +96,7 @@ func TestConversationBusinessActionValidatesContractConfirmationAndReconciliatio
 	}
 	request := confirmed(q)
 	result, err := host.InvokeBusinessAction(t.Context(), request)
-	if err != nil || result.Status != "completed" || port.invokes != 1 || port.last.Input["name"] != "New Name" || port.last.Principal.UserID != a.UserID {
+	if err != nil || result.Status != "completed" || port.invokes != 1 || port.last.Input["name"] != "New Name" || port.last.Principal.UserID != a.UserID || port.last.Principal.CorrelationID != request.RunID {
 		t.Fatal(result, err)
 	}
 	raw, _ := json.Marshal(result)

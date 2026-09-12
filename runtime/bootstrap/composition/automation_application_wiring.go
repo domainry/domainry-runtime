@@ -27,7 +27,7 @@ func assembleAutomationApplication(records *runtimeAssembly) *automationapplicat
 			if roleKey == "" {
 				roleKey = fallbackRoleKey
 			}
-			principal, err := resolveIdentityPrincipal(ctx, records.agentPrincipals, userID, roleKey)
+			principal, err := resolveIdentityPrincipal(ctx, records.identityPrincipals, userID, roleKey)
 			if err != nil {
 				return principalmodel.Principal{Principal: identitysdk.Principal{Known: false}}
 			}

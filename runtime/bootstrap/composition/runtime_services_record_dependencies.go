@@ -78,10 +78,10 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 			// does not carry user-role assignments, organization facts, or the
 			// authorization revision and therefore cannot reproduce a frozen
 			// Report authorization-scope hash.
-			if s.agentPrincipals == nil {
+			if s.identityPrincipals == nil {
 				return principalmodel.Principal{Principal: identitysdk.Principal{Known: false}}
 			}
-			resolution, err := s.agentPrincipals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(userID), RoleKey: roleKey})
+			resolution, err := s.identityPrincipals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(userID), RoleKey: roleKey})
 			if err != nil {
 				return principalmodel.Principal{Principal: identitysdk.Principal{Known: false}}
 			}

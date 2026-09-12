@@ -476,11 +476,11 @@ func TestActionExecutionPhaseFollowsRuntimeOwnedUnitOfWork(t *testing.T) {
 	t.Run("failure receipt completion error replaces business result", func(t *testing.T) {
 		handler := newHandler()
 		handler.fail = &runtimeext.BusinessError{Code: "gym.class_waitlist_full"}
-		store := &actionUnitOfWorkStoreProbe{completeErr: errors.New("receipt unavailable")}
+		store := &actionUnitOfWorkStoreProbe{commitErr: errors.New("receipt unavailable")}
 		result, err := newService(t, store, handler).Invoke(t.Context(), actionmodel.ActionSourceHTTP, invocation)
 		if apperror.CodeOf(err) != "backend.internal" || !result.Retryable ||
-			handler.execution.Phase() != runtimeext.ExecutionPhaseRolledBack || store.completeCalls != 1 {
-			t.Fatalf("result=%+v phase=%q complete=%d error=%v", result, handler.execution.Phase(), store.completeCalls, err)
+			handler.execution.Phase() != runtimeext.ExecutionPhaseRolledBack || store.completeCalls != 0 || store.beginTransactionCalls != 1 {
+			t.Fatalf("result=%+v phase=%q complete=%d begins=%d error=%v", result, handler.execution.Phase(), store.completeCalls, store.beginTransactionCalls, err)
 		}
 	})
 
@@ -655,10 +655,13 @@ func TestActionScopeDenialAfterLockingReadRollsBackBeforeAtomicFailureAudit(t *t
 		t.Fatalf("commits=%v completions=%v", store.commits, store.completions)
 	}
 	completion := store.completions[0]
-	if completion.ErrorCode != "backend.record.not_found" || completion.ResponseStatus != 404 || len(completion.AuditEvents) != 1 {
+	if completion.ErrorCode != "backend.record.not_found" || completion.ResponseStatus != 404 || len(completion.AuditEvents) != 2 {
 		t.Fatalf("failure completion=%+v", completion)
 	}
-	audit := completion.AuditEvents[0]
+	if completion.AuditEvents[0].Event != "action_execution_failed" || completion.AuditEvents[0].Metadata["result"] != "failed" {
+		t.Fatalf("terminal failure audit=%+v", completion.AuditEvents[0])
+	}
+	audit := completion.AuditEvents[1]
 	if audit.Event != "data_scope_access_denied" || audit.ObjectKey != "booking" || audit.RecordID != "booking-1" ||
 		audit.Metadata["action_key"] != "booking.lock" || audit.Metadata["decision"] != "denied" {
 		t.Fatalf("denial audit=%+v", audit)

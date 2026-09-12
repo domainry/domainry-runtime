@@ -2,6 +2,7 @@ package composition
 
 import (
 	"context"
+	"fmt"
 	publicationrepository "github.com/domainry/domainry-runtime/runtime/domain/publication/repository"
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
@@ -42,10 +43,12 @@ import (
 // Construction-only repositories, indexes, and owner services remain on the
 // private runtimeAssembly and are captured only by their explicit ports.
 type RuntimeServices struct {
-	applications              RuntimeApplications
-	schema                    runtimeSchemaReader
-	reportModule              ReportModuleApplicationPorts
-	schedulerDefinitionSource SchedulerDefinitionSource
+	applications               RuntimeApplications
+	schema                     runtimeSchemaReader
+	reportModule               ReportModuleApplicationPorts
+	schedulerDefinitionSource  SchedulerDefinitionSource
+	notificationEventPublisher func(context.Context, notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, bool, error)
+	assembly                   *runtimeAssembly
 }
 
 type ReportModuleApplicationPorts struct {
@@ -123,6 +126,7 @@ type RuntimeServicesDependencies struct {
 	AutomationNotificationCompiler      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	AutomationNotificationCommitter     automationapplication.AutomationExecutionNotificationCommitter
 	NotificationIntentPublisher         func(context.Context, notificationmodel.NotificationIntent) error
+	NotificationEventPublisher          func(context.Context, notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, bool, error)
 	ApplicationSchema                   appschemarepository.ApplicationSchemaRepository
 	MetadataDefinitions                 metadatasdk.Definitions
 	MetadataLocalization                metadatasdk.Localization
@@ -131,8 +135,9 @@ type RuntimeServicesDependencies struct {
 	BusinessEvidence                    changeplanrepository.ChangePlanEvidenceRepository
 	ActionExecutions                    actioncontract.ActionExecutionStore
 	ActionAssurance                     actioncontract.ActionAssuranceStore
-	AgentPrincipals                     identitysdk.PrincipalResolver
+	IdentityPrincipals                  identitysdk.PrincipalResolver
 	AgentTaskRunner                     agentsdk.TaskRunner
+	AgentScheduledTasks                 agentsdk.ScheduledConversationTaskService
 	BusinessHandlers                    *runtimeext.BusinessHandlerRegistry
 	VerifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 	WorkspaceAggregateCatalog           workspaceaggregatecontract.Catalog
@@ -164,7 +169,9 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *Runt
 	assembly := newRuntimeServicesAssembly(ctx, config)
 	return &RuntimeServices{
 		applications: assembly.Applications(), schema: assembly.RecordSchemaSnapshotProvider,
-		schedulerDefinitionSource: assembly.schedulerDefinitionSource,
+		schedulerDefinitionSource:  assembly.schedulerDefinitionSource,
+		notificationEventPublisher: assembly.notificationEventPublisher,
+		assembly:                   assembly,
 		reportModule: ReportModuleApplicationPorts{
 			Subjects:  assembly.reportModuleQueryHost,
 			ObjectSQL: assembly.reportModuleQueryHost, SourceVersions: assembly.reportModuleQueryHost, Audit: assembly.reportModuleQueryHost,
@@ -174,6 +181,22 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *Runt
 			Tables:        config.Dependencies.ReportAnalysisTables,
 		},
 	}
+}
+
+// BindAgentScheduledTasks completes the startup-only circular composition:
+// Agent needs Runtime authorization ports before it can publish conversation
+// capabilities, while Runtime needs that published SDK service for Scheduler
+// dispatch. Callers bind once before serving HTTP.
+func (s *RuntimeServices) BindAgentScheduledTasks(tasks agentsdk.ScheduledConversationTaskService) error {
+	if s == nil || s.assembly == nil || s.assembly.targetExecutionService == nil || tasks == nil {
+		return fmt.Errorf("scheduled Agent task binding is incomplete")
+	}
+	if s.assembly.agentScheduledTasks != nil && s.assembly.agentScheduledTasks != tasks {
+		return fmt.Errorf("scheduled Agent task binding already completed")
+	}
+	s.assembly.agentScheduledTasks = tasks
+	s.assembly.targetExecutionService.UseAgentTargetRuntime(scheduledAgentTargetRuntimeAdapter{runtime: s.assembly, principals: s.assembly.identityPrincipals, tasks: tasks})
+	return nil
 }
 
 func newRuntimeServicesAssembly(ctx context.Context, config RuntimeServicesConfig) *runtimeAssembly {
@@ -187,6 +210,8 @@ func newRuntimeServicesAssembly(ctx context.Context, config RuntimeServicesConfi
 	initializeRecordApplications(services)
 	services.applyManifestMetadata(manifest.TemplateID, manifest.Version, manifest.Name, manifest.EffectiveTimeZone(), manifest.Objects, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
 	services.applyManifestAgentMetadata(manifest.AgentTasks, manifest.AgentEntrypoints, manifest.AgentServicePrincipals)
+	services.targetExecutionService.UseAgentTargetRuntime(scheduledAgentTargetRuntimeAdapter{runtime: services, principals: services.identityPrincipals, tasks: services.agentScheduledTasks})
+	services.targetExecutionService.UseNotificationTargetRuntime(scheduledNotificationTargetRuntimeAdapter{runtime: services, principals: services.identityPrincipals, publish: services.notificationEventPublisher})
 	initializeIntegrationAndBusinessSystem(ctx, services, manifest, deps, queryPolicy)
 	return services
 }

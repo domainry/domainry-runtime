@@ -52,6 +52,8 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 		"report.summary.get",
 		"notification.inbox.list", "notification.inbox.item.get",
 		"notification.inbox.item.mark_read", "notification.inbox.item.acknowledge",
+		"notification.deliveries.list", "runtime.notifications.list_deliveries",
+		"integration.invocations.list",
 		"customer.read", "customer.create", "customer.update", "customer.export",
 		"contact.read", "contact.create", "contact.update",
 		"lead.read", "lead.create", "lead.update",
@@ -72,7 +74,7 @@ func integrationIdentityFixtureRoles() []runtimetestkit.IdentityFixtureRole {
 		integrationServiceIdentityRole("termination_scheduler_service", "Termination Scheduler Service", "termination_case.read", "termination_case.execute_due"),
 		integrationServiceIdentityRole("kitchen_alert_service", "Kitchen Alert Service", "kitchen_order.read", "kitchen_order.ready_alert.execute"),
 		integrationIdentityRole("admin", "Administrator", []string{
-			"business.access", "admin_console.access", "report.summary.get", "customer.read", "customer.create", "opportunity.read", "lead.read", "audit.business.read",
+			"business.access", "admin_console.access", "report.summary.get", "customer.read", "customer.create", "opportunity.read", "lead.read", "audit.business.read", "audit.ops.read",
 		}, true),
 		integrationIdentityRole("business_admin", "Business administrator", []string{
 			"business.access", "customer.read", "customer.create", "customer.update", "customer.export", "opportunity.read", "opportunity.create", "opportunity.update",

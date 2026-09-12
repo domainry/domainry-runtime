@@ -303,10 +303,12 @@ func (s *RecordApplicationService) ProjectRecordFields(ctx context.Context, prin
 				continue
 			}
 			fields := make([]string, 0, len(recordDenials))
+			rules := make([]string, 0, len(recordDenials))
 			for _, denial := range recordDenials {
 				fields = append(fields, denial.FieldKey)
+				rules = append(rules, denial.RuleKey)
 			}
-			s.audit(ctx, "field_access_denied", object.Key, record.ID, principal, "Contextual field access denied", nil, nil, map[string]any{"action": action, "fields": fields})
+			s.audit(ctx, "field_access_denied", object.Key, record.ID, principal, "Contextual field access denied", nil, nil, map[string]any{"action": action, "fields": fields, "policy_rules": rules, "result": "denied", "reason": "field_policy_denied"})
 		}
 	}
 	return projected, nil

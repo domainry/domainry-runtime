@@ -274,8 +274,19 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	reportSQLStore := reportpersistence.NewReportSQLStore(store)
 	reportExportPrepareReceipts := reportpersistence.NewReportExportPrepareReceiptStore(store)
 	var agentTaskRunner agentsdk.TaskRunner
+	var agentScheduledTasks agentsdk.ScheduledConversationTaskService
 	if agentBinding != nil {
 		agentTaskRunner = agentBinding.TaskRunner()
+		if agentBinding.Descriptor().HasCapability(agentsdk.CapabilityScheduledConversationTask) {
+			conversations, ok := agentBinding.(agentsdk.ConversationBinding)
+			if !ok || conversations.Conversations() == nil {
+				return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding advertises scheduled conversation tasks without a conversation binding")
+			}
+			agentScheduledTasks, ok = conversations.Conversations().(agentsdk.ScheduledConversationTaskService)
+			if !ok || agentScheduledTasks == nil {
+				return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding advertises scheduled conversation tasks without the task service")
+			}
+		}
 	}
 	projectRevision, metadataRevision := runtimeActionRevisions(manifest)
 	subjectHandlers := []lifecyclecontract.SubjectExecutionHandler{recordSubjectLifecycle, auditSubjectLifecycle}
@@ -297,8 +308,9 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		Manifest: manifest,
 		Dependencies: composition.RuntimeServicesDependencies{
 			ProductBrandName:                    cfg.EffectiveProductBrandName(),
-			AgentPrincipals:                     identityPrincipals,
+			IdentityPrincipals:                  identityPrincipals,
 			AgentTaskRunner:                     agentTaskRunner,
+			AgentScheduledTasks:                 agentScheduledTasks,
 			ActionRuntimeRevision:               cfg.RuntimeVersion,
 			ActionProjectRevision:               projectRevision,
 			ActionMetadataRevision:              metadataRevision,
@@ -332,6 +344,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			AutomationNotificationCompiler:      notificationCompiler,
 			AutomationNotificationCommitter:     automationnotification.NewAutomationExecutionNotificationCommitter(store),
 			NotificationIntentPublisher:         notificationIntentPublisherCallback(notificationPublisher),
+			NotificationEventPublisher:          notificationEventPublisherCallback(notificationPublisher),
 			AutomationWorker:                    automationpersistence.NewAutomationWorkerStore(store),
 			AutomationExecutions:                automationpersistence.NewAutomationExecutionStore(store),
 			BusinessEvidence:                    nil,

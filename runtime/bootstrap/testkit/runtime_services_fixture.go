@@ -75,7 +75,7 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *comp
 	}
 	dependencies.WorkflowDecisions = config.WorkflowDecisions
 	dependencies.IdentityProjection = config.IdentityProjection
-	dependencies.AgentPrincipals = config.IdentityPrincipals
+	dependencies.IdentityPrincipals = config.IdentityPrincipals
 	dependencies.DataExchange = config.DataExchange
 	services := composition.NewRuntimeServices(ctx, composition.RuntimeServicesConfig{
 		Manifest:     manifest,

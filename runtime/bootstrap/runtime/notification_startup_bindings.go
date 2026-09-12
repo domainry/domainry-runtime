@@ -118,6 +118,15 @@ func notificationIntentPublisherCallback(publisher notificationIntentPublisher) 
 	}
 }
 
+func notificationEventPublisherCallback(publisher notificationIntentPublisher) func(context.Context, notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, bool, error) {
+	if publisher == nil {
+		return nil
+	}
+	return func(ctx context.Context, intent notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, bool, error) {
+		return publisher(ctx, intent, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "publish scheduled notification"))
+	}
+}
+
 func newNotificationRecipientLocaleResolver(lookup notificationRecipientLookup) func(context.Context, string, string) (string, error) {
 	return func(ctx context.Context, workspaceID, recipientID string) (string, error) {
 		user, found, err := lookup(requestcontext.WithWorkspaceID(ctx, workspaceID), recipientID)

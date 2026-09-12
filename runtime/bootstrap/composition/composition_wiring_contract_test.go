@@ -211,7 +211,7 @@ func TestRecordApplicationDependencyClosuresUseCanonicalOwners(t *testing.T) {
 	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{Manifest: manifestmodel.ManifestSchema{
 		Objects:                   []definitionmodel.ObjectSchema{{Key: "customer", Name: "Customer"}},
 		IdentityProfileExtensions: []profilebindingmodel.Binding{{ObjectKey: "customer", IdentityRelationField: "owner"}},
-	}, Dependencies: RuntimeServicesDependencies{AgentPrincipals: agentPrincipalResolverStub{principal: dynamicPrincipal}}})
+	}, Dependencies: RuntimeServicesDependencies{IdentityPrincipals: agentPrincipalResolverStub{principal: dynamicPrincipal}}})
 	dependencies := buildRecordApplicationDependencies(runtime)
 	principal := dependencies.ResolveBatchPrincipal(t.Context(), "persisted-user", "persisted-role")
 	if !principal.Known || principal.AuthorizationRevision != dynamicPrincipal.AuthorizationRevision || principal.RoleKey != dynamicPrincipal.RoleKey {

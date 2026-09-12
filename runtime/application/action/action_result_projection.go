@@ -67,12 +67,24 @@ func (s *ActionApplicationService) failOwnedInvocation(ctx context.Context, unit
 
 func buildActionSuccessAudit(ctx context.Context, action definitionmodel.ActionSchema, invocation actionmodel.ActionInvocation, result actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
 	event := definitionmodel.EffectiveActionAuditEvent(action)
-	return auditcontract.AuditBuildEvent(ctx, event, action.ObjectKey, invocation.RecordID, invocation.Principal, "Executed action "+action.Key, nil, nil, map[string]any{"action_key": action.Key, "invocation_id": result.InvocationID, "owner_source": invocation.Source, "status": result.Status})
+	return auditcontract.AuditBuildEvent(ctx, event, action.ObjectKey, invocation.RecordID, invocation.Principal, "Executed action "+action.Key, nil, nil, map[string]any{"action_key": action.Key, "owner_source": invocation.Source, "result": "success", "reason": "action_completed", "status": result.Status})
 }
 
 func buildActionFailureAudits(ctx context.Context, action definitionmodel.ActionSchema, invocation actionmodel.ActionInvocation, result actionmodel.ActionInvocationResult, failure error) []auditmodel.AuditEvent {
-	if apperror.CodeOf(failure) != "backend.record.not_found" {
+	failed, normalized := failInvocation(result, failure)
+	if failed.Retryable {
 		return nil
+	}
+	code := strings.TrimSpace(apperror.CodeOf(normalized))
+	resultValue := "failed"
+	if apperror.KindOf(normalized) == apperror.KindForbidden {
+		resultValue = "denied"
+	}
+	events := []auditmodel.AuditEvent{auditcontract.AuditBuildEvent(ctx, "action_execution_failed", action.ObjectKey, invocation.RecordID, invocation.Principal, "Action execution failed", nil, nil, map[string]any{
+		"action_key": action.Key, "owner_source": invocation.Source, "result": resultValue, "reason": code, "error_code": code, "status": "failed",
+	})}
+	if apperror.CodeOf(normalized) != "backend.record.not_found" {
+		return events
 	}
 	params := apperror.ParamsOf(failure)
 	objectKey := strings.TrimSpace(params["object_key"])
@@ -84,10 +96,10 @@ func buildActionFailureAudits(ctx context.Context, action definitionmodel.Action
 		recordID = strings.TrimSpace(invocation.RecordID)
 	}
 	if !invocation.Principal.Known {
-		return nil
+		return events
 	}
 	if invocation.Principal.AccessBundle == nil {
-		return nil
+		return events
 	}
 	auditDenial, err := identityevaluator.AuditDenialRequired(
 		*invocation.Principal.AccessBundle,
@@ -96,15 +108,17 @@ func buildActionFailureAudits(ctx context.Context, action definitionmodel.Action
 		time.Now().UTC(),
 	)
 	if err != nil || !auditDenial {
-		return nil
+		return events
 	}
 	event := auditcontract.AuditBuildEvent(ctx, "data_scope_access_denied", objectKey, recordID, invocation.Principal, "Data scope access denied", nil, nil, map[string]any{
-		"action":        "read_detail",
-		"action_key":    action.Key,
-		"decision":      "denied",
-		"invocation_id": result.InvocationID,
-		"owner_source":  invocation.Source,
-		"status":        "failed",
+		"action":       "read_detail",
+		"action_key":   action.Key,
+		"decision":     "denied",
+		"owner_source": invocation.Source,
+		"status":       "failed",
+		"result":       "denied",
+		"reason":       "backend.record.not_found",
+		"error_code":   "backend.record.not_found",
 	})
-	return []auditmodel.AuditEvent{event}
+	return append(events, event)
 }

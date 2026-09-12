@@ -58,6 +58,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		reportSnapshotNotificationCommitter: deps.ReportSnapshotNotificationCommitter,
 		automationNotificationCompiler:      deps.AutomationNotificationCompiler,
 		automationNotificationCommitter:     deps.AutomationNotificationCommitter,
+		notificationEventPublisher:          deps.NotificationEventPublisher,
 		applicationSchemaRepo:               deps.ApplicationSchema,
 		metadataDefinitions:                 deps.MetadataDefinitions,
 		metadataLocalization:                deps.MetadataLocalization,
@@ -86,9 +87,10 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 	}
 	services.RecordSchemaSnapshotProvider = &RecordSchemaSnapshotProvider{snapshot: func() appschemamodel.ApplicationSchemaSnapshot { return recordSchemaSnapshot(services) }}
 	services.ActionExecutionRuntime = actionruntime.NewActionExecutionRuntime(deps.ActionExecutions)
-	agentPrincipals := deps.AgentPrincipals
-	services.agentPrincipals = agentPrincipals
-	services.agentAuthorizationService = agentapplication.NewAgentAuthorizationApplicationService(agentapplication.AgentAuthorizationDependencies{Principals: agentPrincipals, Schema: services.RecordSchemaSnapshotProvider, Records: runtimeAgentRecordVisibility{records: services}})
+	identityPrincipals := deps.IdentityPrincipals
+	services.identityPrincipals = identityPrincipals
+	services.agentScheduledTasks = deps.AgentScheduledTasks
+	services.agentAuthorizationService = agentapplication.NewAgentAuthorizationApplicationService(agentapplication.AgentAuthorizationDependencies{Principals: identityPrincipals, Schema: services.RecordSchemaSnapshotProvider, Records: runtimeAgentRecordVisibility{records: services}})
 	services.agentTaskDispatchService = agentapplication.NewAgentTaskDispatchApplicationService(services.agentAuthorizationService, services.workerDependencies.Clock, services.workerDependencies.IDs)
 	services.agentTaskRunner = deps.AgentTaskRunner
 	// Agent owns the asynchronous task worker. Runtime keeps only the stable SDK

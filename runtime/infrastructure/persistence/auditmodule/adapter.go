@@ -23,7 +23,7 @@ func ActorFromPrincipal(principal principalmodel.Principal) sdkcontract.Actor {
 	}
 	return sdkcontract.Actor{
 		WorkspaceID: principal.WorkspaceID, SubjectID: principal.UserID,
-		RoleKey: principal.RoleKey, Kind: kind, RequestID: principal.RequestID,
+		RoleKey: principal.RoleKey, Kind: kind, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID,
 		AuthorizationRevision: principal.EffectiveAuthorizationRevision(),
 	}
 }

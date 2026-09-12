@@ -25,8 +25,16 @@ const actionExecutionLeaseTTL = 30 * time.Second
 // ActionExecutionRuntime owns the generic Action receipt lifecycle while the
 // Application owner supplies the semantic fingerprint inputs.
 type ActionExecutionRuntime struct {
-	repository actioncontract.ActionExecutionStore
+	repository               actioncontract.ActionExecutionStore
+	fingerprintConflictAudit ActionFingerprintConflictAuditAppender
 }
+
+type ActionFingerprintConflictAudit struct {
+	ObjectKey, RecordID, ActionKey, RequestID, RequestFingerprintSHA256, OriginalReceiptID string
+	Principal                                                                              principalmodel.Principal
+}
+
+type ActionFingerprintConflictAuditAppender func(context.Context, ActionFingerprintConflictAudit) error
 
 func (s *ActionExecutionRuntime) BeginTransaction(ctx context.Context) (actioncontract.ActionExecutionTransaction, error) {
 	if s == nil || s.repository == nil {
@@ -59,6 +67,12 @@ func (s *ActionExecutionRuntime) CommitTransaction(ctx context.Context, transact
 
 func NewActionExecutionRuntime(repository actioncontract.ActionExecutionStore) *ActionExecutionRuntime {
 	return &ActionExecutionRuntime{repository: repository}
+}
+
+func (s *ActionExecutionRuntime) ConfigureFingerprintConflictAudit(appender ActionFingerprintConflictAuditAppender) {
+	if s != nil {
+		s.fingerprintConflictAudit = appender
+	}
 }
 
 func (s *ActionExecutionRuntime) Available() bool {
@@ -231,6 +245,15 @@ func (s *ActionExecutionRuntime) begin(ctx context.Context, objectKey, recordID,
 		}
 		return claim, true, nil
 	case idempotency.DecisionFingerprintConflict:
+		principal.RequestID = owner
+		if s.fingerprintConflictAudit != nil {
+			if auditErr := s.fingerprintConflictAudit(ctx, ActionFingerprintConflictAudit{
+				ObjectKey: strings.TrimSpace(objectKey), RecordID: strings.TrimSpace(recordID), ActionKey: strings.TrimSuffix(strings.TrimSpace(actionKey), "#bulk"),
+				RequestID: owner, RequestFingerprintSHA256: fingerprint, OriginalReceiptID: strings.TrimSpace(claim.Execution.ID), Principal: principal,
+			}); auditErr != nil {
+				return claim, false, apperror.New(apperror.KindInternal, "backend.action.audit_failed", auditErr, map[string]string{"action": strings.TrimSpace(actionKey)})
+			}
+		}
 		return claim, false, apperror.New(apperror.KindConflict, idempotency.ErrorCodeKeyReused, nil, map[string]string{"action": actionKey})
 	case idempotency.DecisionInProgress:
 		return claim, false, apperror.New(apperror.KindConflict, idempotency.ErrorCodeInProgress, nil, map[string]string{"retry_after": actionRetryAfter(claim.Execution.LeaseExpiresAt)})

@@ -47,6 +47,11 @@ func notificationBuiltInEventTypes(locales []string, defaultLocale string, looku
 		schedulerEventType("scheduler.job.repeated_failure", "scheduler.job.repeated_failure.in_app", "warning", true),
 		schedulerEventType("scheduler.job.missed_deadline", "scheduler.job.missed_deadline.in_app", "warning", true),
 		schedulerEventType("scheduler.job.recovered", "scheduler.job.recovered.in_app", "info", false),
+		scheduledReminderEventType(),
+		agentFollowUpEventType("agent.follow_up.changed", "agent.follow_up.changed.in_app", "info"),
+		agentFollowUpEventType("agent.follow_up.completed", "agent.follow_up.completed.in_app", "info"),
+		agentFollowUpEventType("agent.follow_up.failed", "agent.follow_up.failed.in_app", "warning"),
+		agentFollowUpEventType("agent.follow_up.needs_action", "agent.follow_up.needs_action.in_app", "warning"),
 		integrationCredentialEventType("integration.credential.expiring", "integration.credential.expiring.in_app", "warning", "integration_secret", "integration.secret.open"),
 		integrationCredentialEventType("integration.credential.expired", "integration.credential.expired.in_app", "critical", "integration_secret", "integration.secret.open"),
 		integrationCredentialEventType("integration.credential.refresh_failed", "integration.credential.refresh_failed.in_app", "critical", "integration_connection", "integration.connection.open"),
@@ -138,6 +143,25 @@ func schedulerEventType(key, templateKey, severity string, actionable bool) noti
 	return value
 }
 
+func scheduledReminderEventType() notificationmodel.NotificationEventType {
+	return notificationmodel.NotificationEventType{
+		Key: "scheduler.reminder.due", Source: "scheduler", Category: "reminder", DefaultSeverity: "info", MandatoryInApp: true,
+		TemplateKey: "scheduler.reminder.due.in_app", Variables: []notificationmodel.NotificationTemplateVariable{
+			{Key: "title", Type: "string", Required: true}, {Key: "message", Type: "text", Required: true}, {Key: "scheduled_for", Type: "datetime", Required: true},
+		},
+	}
+}
+
+func agentFollowUpEventType(key, templateKey, severity string) notificationmodel.NotificationEventType {
+	return notificationmodel.NotificationEventType{
+		Key: key, Source: "agent", Category: "follow_up", DefaultSeverity: severity, MandatoryInApp: true,
+		TemplateKey: templateKey, Variables: []notificationmodel.NotificationTemplateVariable{
+			{Key: "goal", Type: "string", Required: true}, {Key: "summary", Type: "text"},
+			{Key: "question", Type: "text"}, {Key: "error_code", Type: "string"}, {Key: "occurrence", Type: "number", Required: true},
+		},
+	}
+}
+
 func integrationCredentialEventType(key, templateKey, severity, resourceType, actionKey string) notificationmodel.NotificationEventType {
 	value := notificationmodel.NotificationEventType{
 		Key: key, Source: "integration", Category: "integration", DefaultSeverity: severity, MandatoryInApp: true,
@@ -187,6 +211,10 @@ func notificationBuiltInPresentationKeys(eventType string) ([]string, []string) 
 		return nil, []string{"workflow.task.open"}
 	case "scheduler.job.failed", "scheduler.job.repeated_failure", "scheduler.job.missed_deadline":
 		return []string{"scheduled", "errorCode"}, []string{"scheduler.job.open"}
+	case "scheduler.reminder.due":
+		return []string{"scheduled"}, nil
+	case "agent.follow_up.changed", "agent.follow_up.completed", "agent.follow_up.failed", "agent.follow_up.needs_action":
+		return nil, nil
 	case "integration.credential.expiring", "integration.credential.expired":
 		return []string{"expiresAt", "daysRemaining"}, []string{"integration.secret.open"}
 	case "integration.credential.refresh_failed":

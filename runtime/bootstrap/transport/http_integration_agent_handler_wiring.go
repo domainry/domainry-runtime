@@ -15,6 +15,7 @@ import (
 	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/ratelimit"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
@@ -50,6 +51,7 @@ type AgentApplicationHostDependencies struct {
 	RateLimiter          ratelimit.Limiter
 	IntegrationSecretKey string
 	IdentityIssuer       string
+	NotificationEvents   func(context.Context, notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, bool, error)
 }
 
 // BindAgentApplicationHost closes Agent's application boundary before Runtime
@@ -88,7 +90,8 @@ func BindAgentApplicationHost(dependencies AgentApplicationHostDependencies) err
 	if err != nil {
 		return err
 	}
-	if err := binder.BindApplicationHost(runtimeAgentApplicationHost{interactive: interactive, task: task, proposal: proposal, audit: audit, analysis: analysis, conversations: conversations}); err != nil {
+	followUps := agentFollowUpNotificationPublisher{runtimeID: dependencies.RuntimeID, application: dependencies.Application, principals: dependencies.Principals, publish: dependencies.NotificationEvents}
+	if err := binder.BindApplicationHost(runtimeAgentApplicationHost{interactive: interactive, task: task, proposal: proposal, audit: audit, analysis: analysis, conversations: conversations, followUps: followUps}); err != nil {
 		return fmt.Errorf("bind Agent application host: %w", err)
 	}
 	if err := validateAgentAuthorizationProjection(dependencies.Binding); err != nil {
@@ -132,7 +135,8 @@ func (a *httpServerAssembly) bindAgentApplicationHost() {
 		Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(a.dependencies.Config.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(a.dependencies.Config.IdentityAudience)},
 		Binding:     a.dependencies.AgentBinding, Records: a.dependencies.Records, Principals: a.principals,
 		RateLimiter: a.dependencies.RateLimiter, IntegrationSecretKey: a.dependencies.Config.IntegrationSecretKey,
-		IdentityIssuer: a.dependencies.IdentityBinding.Descriptor().Issuer,
+		IdentityIssuer:     a.dependencies.IdentityBinding.Descriptor().Issuer,
+		NotificationEvents: a.dependencies.Records.NotificationEventPublisher(),
 	}); err != nil {
 		panic(err.Error())
 	}
@@ -157,6 +161,7 @@ type runtimeAgentApplicationHost struct {
 	proposal      agentmodulehost.ProposalHost
 	audit         agentmodulehost.AuditHost
 	analysis      agentmodulehost.AnalysisHost
+	followUps     agentsdk.ConversationFollowUpPublisher
 }
 
 func (h runtimeAgentApplicationHost) ConversationAuthorizer() agentsdk.ConversationToolAuthorizer {
@@ -164,6 +169,9 @@ func (h runtimeAgentApplicationHost) ConversationAuthorizer() agentsdk.Conversat
 }
 func (h runtimeAgentApplicationHost) ConversationBusinessSource() agentsdk.ConversationBusinessSource {
 	return h.conversations
+}
+func (h runtimeAgentApplicationHost) ConversationFollowUpPublisher() agentsdk.ConversationFollowUpPublisher {
+	return h.followUps
 }
 
 func (h runtimeAgentApplicationHost) InteractiveAgent() agentmodulehost.InteractiveHost {

@@ -243,8 +243,8 @@ func TestActionFailureAuditFallbacksAndPermissionCombinations(t *testing.T) {
 		Principal: principal,
 		Source:    actionmodel.ActionSourceHTTP,
 	}
-	if events := buildActionFailureAudits(t.Context(), action, invocation, result, notFound); events != nil {
-		t.Fatalf("non-audited permissions emitted events: %+v", events)
+	if events := buildActionFailureAudits(t.Context(), action, invocation, result, notFound); len(events) != 1 || events[0].Event != "action_execution_failed" {
+		t.Fatalf("terminal failure audit=%+v", events)
 	}
 
 	invocation.Principal = accessfixture.WithMutation(invocation.Principal, func(role *accessfixture.Bundle) {
@@ -253,7 +253,7 @@ func TestActionFailureAuditFallbacksAndPermissionCombinations(t *testing.T) {
 		})
 	})
 	events := buildActionFailureAudits(t.Context(), action, invocation, result, notFound)
-	if len(events) != 1 || events[0].ObjectKey != "order" || events[0].RecordID != "order-1" {
+	if len(events) != 2 || events[0].Event != "action_execution_failed" || events[1].Event != "data_scope_access_denied" || events[1].ObjectKey != "order" || events[1].RecordID != "order-1" {
 		t.Fatalf("fallback denial audit = %+v", events)
 	}
 }

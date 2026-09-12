@@ -191,8 +191,10 @@ func TestProjectRecordFieldsRemainingPolicyAndAuditEdges(t *testing.T) {
 	}
 
 	audited := []string{}
-	service.audit = func(_ context.Context, event, _, recordID string, _ principalmodel.Principal, _ string, _, _, _ map[string]any) {
+	auditMetadata := []map[string]any{}
+	service.audit = func(_ context.Context, event, _, recordID string, _ principalmodel.Principal, _ string, _, _, metadata map[string]any) {
 		audited = append(audited, event+":"+recordID)
+		auditMetadata = append(auditMetadata, metadata)
 	}
 	accessfixture.Set(&principal, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{
 		ObjectKey: object.Key, FieldKey: "secret",
@@ -201,5 +203,10 @@ func TestProjectRecordFieldsRemainingPolicyAndAuditEdges(t *testing.T) {
 	projected, err = service.ProjectRecordFields(t.Context(), principal, object, records, "read")
 	if err != nil || len(projected) != 3 || len(audited) != 2 || len(projected[0].Data) != 0 {
 		t.Fatalf("projected=%v audited=%v err=%v", projected, audited, err)
+	}
+	for _, metadata := range auditMetadata {
+		if metadata["result"] != "denied" || metadata["reason"] != "field_policy_denied" || len(metadata["policy_rules"].([]string)) != 1 {
+			t.Fatalf("field denial metadata=%#v", metadata)
+		}
 	}
 }

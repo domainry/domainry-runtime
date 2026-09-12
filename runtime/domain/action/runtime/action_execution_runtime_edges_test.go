@@ -20,10 +20,11 @@ import (
 )
 
 type executionRepositoryEdgeStub struct {
-	claim       actionmodel.ActionExecutionClaimResult
-	claimErr    error
-	completeErr error
-	request     actionmodel.ActionExecutionClaimRequest
+	claim         actionmodel.ActionExecutionClaimResult
+	claimErr      error
+	completeErr   error
+	completeCalls int
+	request       actionmodel.ActionExecutionClaimRequest
 }
 
 func (stub *executionRepositoryEdgeStub) TryBeginExecution(_ context.Context, request actionmodel.ActionExecutionClaimRequest) (actionmodel.ActionExecutionClaimResult, error) {
@@ -36,6 +37,7 @@ func (*executionRepositoryEdgeStub) HeartbeatExecution(context.Context, string, 
 }
 
 func (stub *executionRepositoryEdgeStub) CompleteExecution(_ context.Context, _ actionmodel.ActionExecutionCompletion) (actionmodel.ActionBusinessExecution, error) {
+	stub.completeCalls++
 	return actionmodel.ActionBusinessExecution{}, stub.completeErr
 }
 
@@ -99,6 +101,36 @@ func TestActionExecutionRuntimeDecisionAndRepositoryEdges(t *testing.T) {
 	stub := &executionRepositoryEdgeStub{}
 	if _, _, _, err := NewActionExecutionRuntime(stub).BeginObject(t.Context(), "object", "action", "key", idempotency.FingerprintInput{Payload: make(chan int)}, principalmodel.Principal{}); err == nil {
 		t.Fatal("unencodable fingerprint accepted")
+	}
+}
+
+func TestActionExecutionRuntimeAuditsFingerprintConflictWithoutMutatingReceipt(t *testing.T) {
+	stored := actionmodel.ActionBusinessExecution{
+		ID: "receipt-1", WorkspaceID: "workspace-primary", ObjectKey: "order", RecordID: "order-1",
+		ActionKey: "order.approve", RequestFingerprint: "original-fingerprint", Status: string(idempotency.StatusSucceeded),
+	}
+	repository := &executionRepositoryEdgeStub{claim: actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionFingerprintConflict, Execution: stored}}
+	service := NewActionExecutionRuntime(repository)
+	var captured ActionFingerprintConflictAudit
+	service.ConfigureFingerprintConflictAudit(func(_ context.Context, audit ActionFingerprintConflictAudit) error {
+		captured = audit
+		return nil
+	})
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "user-1", RoleKey: "manager"}, RequestID: "request-1"}
+	_, claim, _, err := service.BeginRecord(t.Context(), "order", "order-1", "order.approve", "raw-idempotency-key", idempotency.FingerprintInput{Payload: map[string]any{"approved": false}}, principal)
+	if apperror.CodeOf(err) != idempotency.ErrorCodeKeyReused {
+		t.Fatalf("conflict err=%v", err)
+	}
+	if claim.Execution.ID != stored.ID || claim.Execution.RequestFingerprint != stored.RequestFingerprint || captured.ObjectKey != "order" || captured.RecordID != "order-1" || captured.ActionKey != "order.approve" || captured.RequestID != "request-1" || captured.OriginalReceiptID != "receipt-1" || len(captured.RequestFingerprintSHA256) != 64 {
+		t.Fatalf("claim=%#v audit=%#v", claim, captured)
+	}
+	if repository.completeCalls != 0 {
+		t.Fatalf("receipt mutation attempted: %#v", repository)
+	}
+
+	service.ConfigureFingerprintConflictAudit(func(context.Context, ActionFingerprintConflictAudit) error { return errors.New("audit unavailable") })
+	if _, _, _, err := service.BeginRecord(t.Context(), "order", "order-1", "order.approve", "raw-idempotency-key", idempotency.FingerprintInput{Payload: map[string]any{"approved": false}}, principal); apperror.CodeOf(err) != "backend.action.audit_failed" {
+		t.Fatalf("audit failure err=%v", err)
 	}
 }
 

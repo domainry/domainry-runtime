@@ -344,7 +344,7 @@ func (s *RecordApplicationService) auditFieldDenials(ctx context.Context, object
 		fields = append(fields, denial.FieldKey)
 		rules = append(rules, denial.RuleKey)
 	}
-	s.audit(ctx, "field_access_denied", object.Key, record.ID, principal, "Contextual field access denied", nil, nil, map[string]any{"action": action, "fields": fields, "policy_rules": rules})
+	s.audit(ctx, "field_access_denied", object.Key, record.ID, principal, "Contextual field access denied", nil, nil, map[string]any{"action": action, "fields": fields, "policy_rules": rules, "result": "denied", "reason": "field_policy_denied"})
 }
 
 func (s *RecordApplicationService) auditScopeDenial(ctx context.Context, object definitionmodel.ObjectSchema, recordID string, principal principalmodel.Principal) {

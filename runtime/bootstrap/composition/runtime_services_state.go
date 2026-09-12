@@ -125,6 +125,7 @@ type runtimeAssembly struct {
 	reportSnapshotNotificationCommitter ReportSnapshotNotificationCommitter
 	automationNotificationCompiler      func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
 	automationNotificationCommitter     automationapplication.AutomationExecutionNotificationCommitter
+	notificationEventPublisher          func(context.Context, notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, bool, error)
 	applicationSchemaRepo               appschemarepository.ApplicationSchemaRepository
 	metadataDefinitions                 metadatasdk.Definitions
 	metadataLocalization                metadatasdk.Localization
@@ -161,7 +162,8 @@ type runtimeAssembly struct {
 	agentAuthorizationService           *agentapplication.AgentAuthorizationApplicationService
 	agentTaskDispatchService            *agentapplication.AgentTaskDispatchApplicationService
 	agentTaskRunner                     agentsdk.TaskRunner
-	agentPrincipals                     identitysdk.PrincipalResolver
+	identityPrincipals                  identitysdk.PrincipalResolver
+	agentScheduledTasks                 agentsdk.ScheduledConversationTaskService
 	mu                                  sync.RWMutex // guards concurrent schema reads vs. hot-reload writes
 	workerDependencies                  workerplatform.Dependencies
 }

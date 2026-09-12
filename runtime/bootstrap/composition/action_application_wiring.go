@@ -15,6 +15,7 @@ import (
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
+	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -29,6 +30,21 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 	ValidateApplicationDefinition(context.Context, string, string, appschemamodel.ApplicationDefinitionUpsertRequest, principalmodel.Principal) (appschemamodel.ApplicationDefinitionValidationResult, error)
 }, handlers *runtimeext.BusinessHandlerRegistry, audit func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any)) *actionapplication.ActionApplicationService {
 	_ = metadata
+	records.ActionExecutionRuntime.ConfigureFingerprintConflictAudit(func(ctx context.Context, conflict actionruntime.ActionFingerprintConflictAudit) error {
+		idempotencyKey := ""
+		if conflict.RequestID != "" {
+			idempotencyKey = "action_idempotency_conflict:" + conflict.RequestID
+		}
+		return records.auditApplicationService.AppendAudit(ctx, auditapplication.AuditAppendRequest{
+			IdempotencyKey: idempotencyKey, Event: "action_idempotency_conflict", ObjectKey: conflict.ObjectKey, RecordID: conflict.RecordID,
+			Principal: conflict.Principal, Summary: "Action idempotency fingerprint conflict",
+			Metadata: map[string]any{
+				"action_key": conflict.ActionKey, "request_fingerprint_sha256": conflict.RequestFingerprintSHA256,
+				"original_receipt_id": conflict.OriginalReceiptID, "result": "conflict",
+				"reason": "idempotency_fingerprint_conflict", "error_code": "backend.idempotency.key_reused",
+			},
+		})
+	})
 	pipelineTransitions := newPipelineTransitionApplicationService(records)
 	pipelineDescriptor := actionapplication.SystemOperationDescriptor{Key: "pipeline.transition", Matches: pipelineTransitions.IsAction, WriteOperation: "update"}
 	systemCatalog := actionapplication.NewRuntimeSystemOperationCatalog(pipelineDescriptor)
@@ -229,6 +245,7 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 			})
 		},
 		Audit: actionapplication.ActionAudit{
+			AppendAttempt: records.auditApplicationService.AppendAudit,
 			Bulk: func(ctx context.Context, result actionmodel.ActionBulkResult, recordIDs []string, principal principalmodel.Principal) {
 				audit(ctx, "record_bulk_action_executed", result.ObjectKey, "", principal, "Executed bulk action "+result.ActionKey, map[string]any{"action_key": result.ActionKey, "total": result.Total, "succeeded": result.Succeeded, "failed": result.Failed, "record_ids": recordIDs})
 			},
