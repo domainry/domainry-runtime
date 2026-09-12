@@ -58,13 +58,14 @@ type RolePermission struct {
 	AuditDenial   bool                  `json:"audit_denial,omitempty"`
 }
 type RoleFieldPermission struct {
-	ObjectKey string `json:"object_key"`
-	FieldKey  string `json:"field_key"`
-	Read      bool   `json:"read"`
-	Write     bool   `json:"write"`
-	Export    bool   `json:"export"`
-	Masked    bool   `json:"masked,omitempty"`
-	Reason    string `json:"reason,omitempty"`
+	ObjectKey   string `json:"object_key"`
+	FieldKey    string `json:"field_key"`
+	Read        bool   `json:"read"`
+	Write       bool   `json:"write"`
+	Export      bool   `json:"export"`
+	Masked      bool   `json:"masked,omitempty"`
+	Reason      string `json:"reason,omitempty"`
+	AuditDenial bool   `json:"audit_denial,omitempty"`
 }
 type RoleReferencePermission struct {
 	SourceObjectKey  string   `json:"source_object_key"`

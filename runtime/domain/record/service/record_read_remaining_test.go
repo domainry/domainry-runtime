@@ -106,6 +106,20 @@ func TestReadServiceContextualPolicyAuditAndErrorEdges(t *testing.T) {
 	if _, err := service.applyFieldPolicy(t.Context(), allowedPrincipal, object, record, "read"); err != nil {
 		t.Fatalf("single without denials err=%v", err)
 	}
+	if audits != 2 {
+		t.Fatalf("allowed fields produced denial audit noise: %d", audits)
+	}
+	staticPrincipal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{
+		ObjectKey: object.Key, FieldKey: "secret", Read: false, Reason: "sensitive field", AuditDenial: true,
+	}}})
+	filtered, err := service.applyFieldPolicy(t.Context(), staticPrincipal, object, record, "read")
+	if err != nil || filtered.Data["secret"] != nil || audits != 3 {
+		t.Fatalf("static denial record=%#v audits=%d err=%v", filtered, audits, err)
+	}
+	decision, err := contextual.Decide(t.Context(), staticPrincipal, object, record, "secret", "read")
+	if err != nil || decision.Effect != "hide" || decision.RuleKey != "static_field_policy" || decision.Reason != "sensitive field" || !decision.AuditDenial {
+		t.Fatalf("static denial decision=%#v err=%v", decision, err)
+	}
 
 	invalid := principal
 	accessfixture.Mutate(&invalid, func(role *accessfixture.Bundle) {

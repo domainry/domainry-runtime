@@ -11,12 +11,13 @@ import (
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	identityhttpmiddleware "github.com/domainry/domainry-identity-sdk/httpmiddleware"
 )
 
-type moduleRouteGuard func(modulehttp.Route, http.Handler) (http.Handler, error)
+type moduleRouteGuard func(modulehttp.Route, http.Handler, modulehttp.AuditRecorder) (http.Handler, error)
 
 func newModuleHTTPRouteGuard(binding identitysdk.Binding, resolverOptions ...identityprincipal.Options) (moduleRouteGuard, error) {
 	options := identityprincipal.Options{}
@@ -27,11 +28,16 @@ func newModuleHTTPRouteGuard(binding identitysdk.Binding, resolverOptions ...ide
 	if err != nil {
 		return nil, fmt.Errorf("construct module HTTP principal resolver: %w", err)
 	}
-	middleware, err := identityhttpmiddleware.New(resolver, identityhttpmiddleware.WithAuthorization(binding.Authorization()), identityhttpmiddleware.WithBindingCredential(binding))
-	if err != nil {
-		return nil, fmt.Errorf("construct module HTTP identity middleware: %w", err)
-	}
-	return func(route modulehttp.Route, next http.Handler) (http.Handler, error) {
+	return func(route modulehttp.Route, next http.Handler, audit modulehttp.AuditRecorder) (http.Handler, error) {
+		middleware, err := identityhttpmiddleware.New(
+			resolver,
+			identityhttpmiddleware.WithAuthorization(binding.Authorization()),
+			identityhttpmiddleware.WithBindingCredential(binding),
+			identityhttpmiddleware.WithErrorWriter(moduleIdentityErrorWriter(route, audit)),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("construct module HTTP identity middleware: %w", err)
+		}
 		governed := governModuleHTTPRoute(route, next)
 		var protected http.Handler
 		switch route.Action.Authorization.Strategy {
@@ -69,6 +75,75 @@ func newModuleHTTPRouteGuard(binding identitysdk.Binding, resolverOptions ...ide
 		}
 		return middleware.Authenticate(protected), nil
 	}, nil
+}
+
+func moduleIdentityErrorWriter(route modulehttp.Route, audit modulehttp.AuditRecorder) identityhttpmiddleware.ErrorWriter {
+	return func(writer http.ResponseWriter, request *http.Request, status int, code string) {
+		if status == http.StatusForbidden && code == "auth.permission_denied" && audit != nil {
+			identity, known := identitysdk.RequestIdentityFromContext(request.Context())
+			if known && identity.Principal.Known {
+				if err := audit.Record(request.Context(), modulePermissionDeniedAuditEvent(route, request, identity.Principal)); err != nil {
+					writeModuleIdentityError(writer, http.StatusServiceUnavailable, "backend.audit.append_failed")
+					return
+				}
+			}
+		}
+		writeModuleIdentityError(writer, status, code)
+	}
+}
+
+func modulePermissionDeniedAuditEvent(route modulehttp.Route, request *http.Request, principal identitysdk.Principal) modulehttp.AuditEvent {
+	objectKey := "module_action"
+	permissionKey := ""
+	if route.Action.Permission != nil {
+		permissionKey = strings.TrimSpace(route.Action.Permission.Key)
+		if value := strings.TrimSpace(route.Action.Permission.ResourceKey); value != "" {
+			objectKey = value
+		}
+	}
+	routeTemplate := ""
+	if route.Action.HTTP != nil {
+		routeTemplate = strings.TrimSpace(route.Action.HTTP.RouteTemplate)
+	}
+	return modulehttp.AuditEvent{
+		Event: "auth_api_denied", ObjectKey: objectKey, RecordID: moduleRouteRecordID(routeTemplate, request),
+		WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, RoleKey: principal.RoleKey,
+		Summary: "Identity API permission denied",
+		Metadata: map[string]any{
+			"action_key": route.Action.Key, "permission_key": permissionKey,
+			"method": request.Method, "route_template": routeTemplate,
+			"result": "denied", "reason": "permission_denied", "error_code": "auth.permission_denied",
+			"request_id": requestcontext.RequestID(request.Context()), "correlation_id": requestcontext.CorrelationID(request.Context()),
+		},
+	}
+}
+
+func moduleRouteRecordID(routeTemplate string, request *http.Request) string {
+	if request == nil {
+		return ""
+	}
+	for _, key := range []string{"userID", "roleID", "assignmentID", "id"} {
+		if value := strings.TrimSpace(request.PathValue(key)); value != "" {
+			return value
+		}
+	}
+	for _, segment := range strings.Split(routeTemplate, "/") {
+		key := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(segment), "{"), "}")
+		if key == segment || key == "" || strings.Contains(strings.ToLower(key), "token") {
+			continue
+		}
+		if value := strings.TrimSpace(request.PathValue(key)); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func writeModuleIdentityError(writer http.ResponseWriter, status int, code string) {
+	writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	writer.Header().Set("Cache-Control", "no-store")
+	writer.WriteHeader(status)
+	_ = json.NewEncoder(writer).Encode(map[string]any{"code": code, "error": map[string]string{"code": code}})
 }
 
 func signedModuleGrant(action actioncontract.ActionDefinition) (identitysdk.ApplicationServiceGrant, error) {

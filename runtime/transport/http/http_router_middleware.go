@@ -82,13 +82,10 @@ func (s *HTTPRouter) withMetrics(next http.Handler) http.Handler {
 		if s.httpMetrics != nil {
 			s.httpMetrics.Begin()
 		}
-		requestID := requestIDFromRequest(r)
-		correlationID := correlationIDFromRequest(r, requestID)
-		r.Header.Set(requestIDHeader, requestID)
-		r.Header.Set(correlationIDHeader, correlationID)
-		ctx := httpTracePropagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-		ctx = requestcontext.WithRequestID(ctx, requestID)
-		ctx = requestcontext.WithCorrelationID(ctx, correlationID)
+		requestID, correlationID, r := requestContextRequest(r)
+		w.Header().Set(requestIDHeader, requestID)
+		w.Header().Set(correlationIDHeader, correlationID)
+		ctx := r.Context()
 		ctx = requestcontext.WithWorkspaceID(ctx, explicitWorkspaceIDFromRequest(r))
 		ctx = requestcontext.WithActorID(ctx, strings.TrimSpace(r.Header.Get("X-User-ID")))
 		if s.allowDevAuthHeaders {
@@ -116,6 +113,33 @@ func (s *HTTPRouter) withMetrics(next http.Handler) http.Handler {
 		}
 		s.observeHTTPRequest(r, path, recorder.status, time.Since(start))
 	})
+}
+
+// RequestContextMiddleware publishes the same request and correlation identity
+// on module-owned routes that the Runtime router publishes on host-owned
+// routes. Module adapters are mounted ahead of HTTPRouter, so they must receive
+// this narrow shared wrapper at the process-host boundary.
+func RequestContextMiddleware(next http.Handler) http.Handler {
+	if next == nil {
+		next = http.NotFoundHandler()
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID, correlationID, request := requestContextRequest(r)
+		w.Header().Set(requestIDHeader, requestID)
+		w.Header().Set(correlationIDHeader, correlationID)
+		next.ServeHTTP(w, request)
+	})
+}
+
+func requestContextRequest(r *http.Request) (string, string, *http.Request) {
+	requestID := requestIDFromRequest(r)
+	correlationID := correlationIDFromRequest(r, requestID)
+	r.Header.Set(requestIDHeader, requestID)
+	r.Header.Set(correlationIDHeader, correlationID)
+	ctx := httpTracePropagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+	ctx = requestcontext.WithRequestID(ctx, requestID)
+	ctx = requestcontext.WithCorrelationID(ctx, correlationID)
+	return requestID, correlationID, r.WithContext(ctx)
 }
 
 func requestIDFromRequest(r *http.Request) string {

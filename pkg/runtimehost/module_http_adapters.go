@@ -47,6 +47,7 @@ func (router *moduleAdapterRouter) Bind(adapters []modulehttp.Adapter, guards ..
 	if len(router.corsOrigins) > 0 {
 		handler = runtimehttp.CORSMiddleware(router.corsOrigins, handler)
 	}
+	handler = runtimehttp.RequestContextMiddleware(handler)
 	router.mu.Lock()
 	router.handler = handler
 	router.guard = guard
@@ -93,7 +94,11 @@ func mountModuleHTTPAdapters(group runtimehttp.ListenerRouteGroup, adapters []mo
 					return nil, fmt.Errorf("module HTTP route %q requires a host authorization guard", pattern)
 				}
 				var err error
-				handler, err = guard(route, handler)
+				var audit modulehttp.AuditRecorder
+				if recorder, ok := adapter.(modulehttp.AuditRecorder); ok {
+					audit = recorder
+				}
+				handler, err = guard(route, handler, audit)
 				if err != nil {
 					return nil, fmt.Errorf("guard module HTTP route %q: %w", pattern, err)
 				}

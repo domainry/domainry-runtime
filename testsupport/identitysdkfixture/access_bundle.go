@@ -70,14 +70,15 @@ func DataPoliciesForPermissions(permissionKeys []string, scope identitysdk.DataS
 }
 
 type FieldPolicyFixture struct {
-	ObjectKey string
-	FieldKey  string
-	Read      bool
-	Write     bool
-	Export    bool
-	Masked    bool
-	Reason    string
-	Policies  []FieldRuleFixture
+	ObjectKey   string
+	FieldKey    string
+	Read        bool
+	Write       bool
+	Export      bool
+	Masked      bool
+	Reason      string
+	AuditDenial bool
+	Policies    []FieldRuleFixture
 }
 
 type ReferencePolicyFixture struct {
@@ -261,7 +262,7 @@ func Attach(principal principalmodel.Principal, spec Bundle) principalmodel.Prin
 		bundle.FieldPolicies = append(bundle.FieldPolicies, identitysdk.FieldPolicy{
 			Resource: identitysdk.ResourceType(permission.ObjectKey), Field: permission.FieldKey,
 			Read: permission.Read, Write: permission.Write, Export: permission.Export, Masked: permission.Masked,
-			Reason: permission.Reason, Rules: sdkFieldRules(permission.Policies),
+			Reason: permission.Reason, AuditDenial: permission.AuditDenial, Rules: sdkFieldRules(permission.Policies),
 		})
 	}
 	for _, permission := range spec.ReferencePolicies {
@@ -362,7 +363,7 @@ func FromPrincipal(principal principalmodel.Principal) Bundle {
 		spec.FieldPolicies = append(spec.FieldPolicies, FieldPolicyFixture{
 			ObjectKey: string(policy.Resource), FieldKey: policy.Field,
 			Read: policy.Read, Write: policy.Write, Export: policy.Export, Masked: policy.Masked,
-			Reason: policy.Reason, Policies: fieldRulesFromSDK(policy.Rules),
+			Reason: policy.Reason, AuditDenial: policy.AuditDenial, Policies: fieldRulesFromSDK(policy.Rules),
 		})
 	}
 	for _, policy := range principal.AccessBundle.ReferencePolicies {

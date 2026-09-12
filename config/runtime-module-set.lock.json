@@ -1,6 +1,6 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "248b388b7aa3cab9f98eee95838973bda71555f189da62e8143495629563495f",
+  "set_sha256": "96dc4b40c628986f8893bc511f0b5aa750b32d929af49320d26bcf77c25d4af5",
   "modules": [
     {
       "key": "agent",
@@ -15,8 +15,8 @@
     {
       "key": "audit",
       "implementation": "github.com/domainry/domainry-audit",
-      "implementation_version": "v0.1.9",
-      "implementation_sum": "h1:vlEDW6fEM1BsO/sAQyBsK/ICC1vOyXQw9o7uF2SCrNc=",
+      "implementation_version": "v0.1.10",
+      "implementation_sum": "h1:sMXyE4jtyDiuj2bUMfHAgP2pny7twvVUT+toW9htzqg=",
       "sdk": "github.com/domainry/domainry-audit-sdk",
       "sdk_version": "v0.1.4",
       "sdk_sum": "h1:YKyzvKNfsvHUgJYQkg6iUZBIho8AtIqaxseBnHwg7vI=",
@@ -35,11 +35,11 @@
     {
       "key": "identity",
       "implementation": "github.com/domainry/domainry-identity",
-      "implementation_version": "v0.2.8",
-      "implementation_sum": "h1:uSlNz9vH9d8smTiksYiugrJnpZZoGWd9fItmPI9hW1E=",
+      "implementation_version": "v0.2.10",
+      "implementation_sum": "h1:VVFkSCFEmv8WZnmngG3nZrO94MiTPgd234sdJ7yfBHY=",
       "sdk": "github.com/domainry/domainry-identity-sdk",
-      "sdk_version": "v0.1.7",
-      "sdk_sum": "h1:5qWzzHZ2xowfzz92siz7lEZ9tlbNK5z6dZPMkcrJ/90=",
+      "sdk_version": "v0.1.9",
+      "sdk_sum": "h1:wqmwRV3TuIsUeFK4g8vAGK4ngjE5v2hm71SLl8QIm5I=",
       "capability_contract_sha256": "b67cd04e8e99cc93ceb69b73710a9aa824220664ffedd3d07636b0c3bed15300"
     },
     {

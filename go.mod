@@ -8,15 +8,15 @@ require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/domainry/domainry-agent v0.1.15
 	github.com/domainry/domainry-agent-sdk v0.1.9
-	github.com/domainry/domainry-audit v0.1.9
+	github.com/domainry/domainry-audit v0.1.10
 	github.com/domainry/domainry-audit-sdk v0.1.4
 	github.com/domainry/domainry-connector-sdk v0.1.1
 	github.com/domainry/domainry-data-exchange v0.3.8
 	github.com/domainry/domainry-data-exchange-sdk v0.3.5
 	github.com/domainry/domainry-foundation v0.1.0
-	github.com/domainry/domainry-identity v0.2.8
+	github.com/domainry/domainry-identity v0.2.10
 	github.com/domainry/domainry-identity-bridge v0.1.1
-	github.com/domainry/domainry-identity-sdk v0.1.7
+	github.com/domainry/domainry-identity-sdk v0.1.9
 	github.com/domainry/domainry-integration v0.1.13
 	github.com/domainry/domainry-integration-sdk v0.1.5
 	github.com/domainry/domainry-lifecycle v0.1.9

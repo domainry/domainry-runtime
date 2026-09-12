@@ -69,7 +69,9 @@ func newIdentityAdapterRouter(group runtimehttp.ListenerRouteGroup, fallback htt
 }
 
 func mountIdentityHTTPAdapters(group runtimehttp.ListenerRouteGroup, adapters []identityhttpapi.Adapter, fallback http.Handler) (http.Handler, error) {
-	return mountModuleHTTPAdapters(group, adapters, fallback, func(_ modulehttp.Route, handler http.Handler) (http.Handler, error) { return handler, nil })
+	return mountModuleHTTPAdapters(group, adapters, fallback, func(_ modulehttp.Route, handler http.Handler, _ modulehttp.AuditRecorder) (http.Handler, error) {
+		return handler, nil
+	})
 }
 
 func identityRouteVisible(group runtimehttp.ListenerRouteGroup, exposures []identityhttpapi.Exposure) bool {

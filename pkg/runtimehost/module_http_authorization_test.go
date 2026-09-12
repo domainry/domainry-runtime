@@ -2,6 +2,8 @@ package runtimehost
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +11,7 @@ import (
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 )
@@ -29,7 +32,8 @@ func (stub *moduleServiceVerifierStub) Verify(_ context.Context, request identit
 
 type moduleServiceBindingStub struct {
 	runtimetestkit.IdentityBindingStub
-	services identitysdk.ApplicationServiceTokenVerifier
+	services  identitysdk.ApplicationServiceTokenVerifier
+	principal identitysdk.Principal
 }
 
 func (moduleServiceBindingStub) Descriptor() identitysdk.Descriptor {
@@ -38,6 +42,26 @@ func (moduleServiceBindingStub) Descriptor() identitysdk.Descriptor {
 
 func (stub moduleServiceBindingStub) ApplicationServiceVerifier() identitysdk.ApplicationServiceTokenVerifier {
 	return stub.services
+}
+
+func (stub moduleServiceBindingStub) PrincipalAuthenticator() identitysdk.PrincipalAuthenticator {
+	return modulePrincipalAuthenticatorStub{principal: stub.principal}
+}
+
+type modulePrincipalAuthenticatorStub struct{ principal identitysdk.Principal }
+
+func (stub modulePrincipalAuthenticatorStub) Authenticate(context.Context, string) (identitysdk.Principal, error) {
+	return stub.principal, nil
+}
+
+type moduleAuditRecorderStub struct {
+	events []modulehttp.AuditEvent
+	err    error
+}
+
+func (stub *moduleAuditRecorderStub) Record(_ context.Context, event modulehttp.AuditEvent) error {
+	stub.events = append(stub.events, event)
+	return stub.err
 }
 
 func TestModuleHTTPGovernanceEnforcesIdempotencyReasonAndConfirmation(t *testing.T) {
@@ -84,7 +108,7 @@ func TestModuleHTTPSignedRequestVerifiesExactAudienceAndGrant(t *testing.T) {
 	handler, err := guard(modulehttp.Route{Action: action}, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		executed++
 		writer.WriteHeader(http.StatusNoContent)
-	}))
+	}), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,9 +135,50 @@ func TestModuleHTTPSignedRequestVerifiesExactAudienceAndGrant(t *testing.T) {
 		t.Fatalf("verification request=%+v", verifier.request)
 	}
 	action.Authorization.Audiences = []string{"other-runtime"}
-	if _, err := guard(modulehttp.Route{Action: action}, http.NotFoundHandler()); err == nil {
+	if _, err := guard(modulehttp.Route{Action: action}, http.NotFoundHandler(), nil); err == nil {
 		t.Fatal("service Action with another audience was mounted")
 	}
 }
 
 var _ identitysdk.ApplicationServiceVerificationBinding = moduleServiceBindingStub{}
+
+func TestModuleHTTPPermissionDenialUsesSourceOwnedAuditRecorder(t *testing.T) {
+	principal := identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "coach-1", RoleKey: "coach"}
+	guard, err := newModuleHTTPRouteGuard(moduleServiceBindingStub{principal: principal})
+	if err != nil {
+		t.Fatal(err)
+	}
+	action := runtimeHostTestAction("identity.user_role_assignments.assign", "POST /identity/users/{userID}/role-assignments", []actioncontract.Exposure{actioncontract.ExposureManagement}, actioncontract.AuthorizationAuthenticated)
+	recorder := &moduleAuditRecorderStub{}
+	handler, err := guard(modulehttp.Route{Action: action}, http.NotFoundHandler(), recorder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/identity/users/target-1/role-assignments", strings.NewReader(`{"role_id":"private-role"}`))
+	request.Header.Set("Authorization", "Bearer known-token")
+	request.SetPathValue("userID", "target-1")
+	request = request.WithContext(requestcontext.WithCorrelationID(requestcontext.WithRequestID(request.Context(), "request-1"), "correlation-1"))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || len(recorder.events) != 1 {
+		t.Fatalf("status=%d events=%#v body=%s", response.Code, recorder.events, response.Body.String())
+	}
+	event := recorder.events[0]
+	if event.Event != "auth_api_denied" || event.ObjectKey != "identity.user_role_assignments" || event.RecordID != "target-1" || event.WorkspaceID != "workspace-a" || event.ActorID != "coach-1" || event.RoleKey != "coach" {
+		t.Fatalf("denial audit=%#v", event)
+	}
+	if event.Metadata["result"] != "denied" || event.Metadata["reason"] != "permission_denied" || event.Metadata["error_code"] != "auth.permission_denied" || event.Metadata["request_id"] != "request-1" || event.Metadata["correlation_id"] != "correlation-1" {
+		t.Fatalf("denial metadata=%#v", event.Metadata)
+	}
+	encoded, _ := json.Marshal(event)
+	if strings.Contains(string(encoded), "private-role") || strings.Contains(string(encoded), "known-token") {
+		t.Fatalf("denial audit leaked request credentials or body: %s", encoded)
+	}
+
+	recorder.err = errors.New("audit unavailable")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "backend.audit.append_failed") {
+		t.Fatalf("audit failure status=%d body=%s", response.Code, response.Body.String())
+	}
+}

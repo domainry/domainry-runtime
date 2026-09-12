@@ -443,7 +443,7 @@ func TestRuntimeProjectRoleCatalogPreservesExternalAssignmentSafetyFacts(t *test
 	roles := []manifestmodel.RoleSchema{
 		{
 			Key: "member_onboarding", Name: "Member onboarding", Permissions: []manifestmodel.RolePermission{{PermissionKey: "course.read", DataScope: identitysdk.DataScopeAll}}, Audience: "any", AssignmentMode: "manual", RiskLevel: "normal",
-			FieldPermissions: []manifestmodel.RoleFieldPermission{{ObjectKey: "course", FieldKey: "name", Read: true}},
+			FieldPermissions: []manifestmodel.RoleFieldPermission{{ObjectKey: "course", FieldKey: "name", Read: true, AuditDenial: true}},
 		},
 		{Key: "operator", Name: "Operator", Permissions: []manifestmodel.RolePermission{{PermissionKey: "runtime.appschema.validate_application_definition", DataScope: identitysdk.DataScopeAll}}, Audience: "any", AssignmentMode: "manual", RiskLevel: "privileged"},
 		{Key: "member", Name: "Member", Audience: "business", RequiredBindingKey: "member", AssignmentMode: "system_managed", RiskLevel: "normal"},
@@ -474,7 +474,7 @@ func TestRuntimeProjectRoleCatalogPreservesExternalAssignmentSafetyFacts(t *test
 		t.Fatalf("role publication invented permissions: %#v", catalog.Roles)
 	}
 	var fieldPermissions []manifestmodel.RoleFieldPermission
-	if err := json.Unmarshal(catalog.Roles[0].FieldPermissions, &fieldPermissions); err != nil || len(fieldPermissions) != 1 || fieldPermissions[0].FieldKey != "name" || !fieldPermissions[0].Read {
+	if err := json.Unmarshal(catalog.Roles[0].FieldPermissions, &fieldPermissions); err != nil || len(fieldPermissions) != 1 || fieldPermissions[0].FieldKey != "name" || !fieldPermissions[0].Read || !fieldPermissions[0].AuditDenial {
 		t.Fatalf("field permissions were not preserved: %#v, err=%v", fieldPermissions, err)
 	}
 }
