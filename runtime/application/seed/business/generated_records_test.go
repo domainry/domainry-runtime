@@ -213,8 +213,21 @@ func TestGeneratedBusinessSeedsCoverManifestFixturesWithoutModelSeedData(t *test
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(rows) != len(manifest.Objects) {
-				t.Fatalf("generated rows=%d objects=%d", len(rows), len(manifest.Objects))
+			// One baseline row per Object the product writes directly. An
+			// action_only Object is deliberately left empty: a synthesised row
+			// there is a combination no Handler could produce.
+			covered := map[string]bool{}
+			for _, row := range rows {
+				covered[row.ObjectKey] = true
+			}
+			for _, object := range manifest.Objects {
+				want := !generatedSeedSkipsObject(object)
+				if covered[object.Key] != want {
+					t.Errorf("object %s: baseline row present=%v, want %v", object.Key, covered[object.Key], want)
+				}
+			}
+			if len(rows) != len(covered) {
+				t.Fatalf("generated rows=%d for %d distinct objects", len(rows), len(covered))
 			}
 		})
 	}

@@ -19,6 +19,7 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
+	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 )
 
 const runtimeGeneratedBusinessSeedSourceKind = "runtime_generated"
@@ -46,7 +47,7 @@ func generateManifestBusinessSeedRows(ctx context.Context, manifest manifestmode
 	sort.SliceStable(objects, func(i, j int) bool { return strings.TrimSpace(objects[i].Key) < strings.TrimSpace(objects[j].Key) })
 	for _, object := range objects {
 		objectKey := strings.TrimSpace(object.Key)
-		if objectKey == "" || covered[objectKey] {
+		if objectKey == "" || covered[objectKey] || generatedSeedSkipsObject(object) {
 			continue
 		}
 		firstSeedKeyByObject[objectKey] = runtimeGeneratedBusinessSeedKey(objectKey)
@@ -56,7 +57,7 @@ func generateManifestBusinessSeedRows(ctx context.Context, manifest manifestmode
 	referenceTime := time.Now().UTC()
 	for _, object := range objects {
 		objectKey := strings.TrimSpace(object.Key)
-		if objectKey == "" || covered[objectKey] {
+		if objectKey == "" || covered[objectKey] || generatedSeedSkipsObject(object) {
 			continue
 		}
 		data, err := generateManifestBusinessSeedData(ctx, object, firstSeedKeyByObject, referenceTime, workspaceID, resolver)
@@ -81,6 +82,22 @@ func generateManifestBusinessSeedRows(ctx context.Context, manifest manifestmode
 
 func runtimeGeneratedBusinessSeedKey(objectKey string) string {
 	return "runtime_baseline_" + strings.TrimSpace(objectKey)
+}
+
+// generatedSeedSkipsObject leaves an action_only Object empty.
+//
+// A baseline row is synthesised field by field from the field contract, which is
+// sound for an Object the product writes directly: every such row is a row a
+// user could have created. An action_only Object is the opposite case -- its
+// values are derived inside a Handler transaction (a number from a sequence, a
+// rank from a category, a state from a lifecycle), so choosing each field
+// independently produces a combination no product path can reach. The row is
+// then indistinguishable from business data to every read path, and each
+// acceptance oracle over that collection has to carve it out by hand.
+// An explicit manifest seed for the same Object is still honoured; only the
+// generated stand-in is withheld.
+func generatedSeedSkipsObject(object definitionmodel.ObjectSchema) bool {
+	return transactionmodel.MutationObjectWritePolicy(object) == transactionmodel.ObjectWritePolicyActionOnly
 }
 
 func generateManifestBusinessSeedData(ctx context.Context, object definitionmodel.ObjectSchema, targetSeedKeys map[string]string, referenceTime time.Time, workspaceID string, resolver BaselineReferenceResolver) (map[string]any, error) {
