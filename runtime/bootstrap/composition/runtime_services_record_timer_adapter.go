@@ -37,7 +37,7 @@ func executeRecordTimer(ctx context.Context, execution recordtimerapplication.Re
 		}
 	case "action":
 		executionPrincipal := principal.WithExactSystemCapabilities(execution.TargetKey)
-		_, err := actionService.Invoke(ctx, actionmodel.ActionSourceRecordTimer, actionmodel.ActionInvocation{ActionKey: execution.TargetKey, ObjectKey: execution.ObjectKey, RecordID: execution.RecordID, Input: execution.Payload, Principal: executionPrincipal, Actor: principal, IdempotencyKey: execution.IdempotencyKey})
+		_, err := actionService.Invoke(ctx, actionmodel.ActionSourceRecordTimer, actionmodel.ActionInvocation{PreventExecutionReclaim: true, ActionKey: execution.TargetKey, ObjectKey: execution.ObjectKey, RecordID: execution.RecordID, Input: execution.Payload, Principal: executionPrincipal, Actor: principal, IdempotencyKey: execution.IdempotencyKey})
 		return err
 	default:
 		return fmt.Errorf("unsupported record timer target type %q", execution.TargetType)

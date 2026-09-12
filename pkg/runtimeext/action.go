@@ -47,7 +47,9 @@ const (
 )
 
 // ConnectorOperationEffect classifies whether an operation only observes an
-// external system or can change/reserve external state.
+// external system or can change/reserve external state. Synchronous reserve or
+// write calls are valid grants, but Runtime only leases them to a
+// non-reclaimable durable Action invocation.
 type ConnectorOperationEffect string
 
 const (
@@ -73,7 +75,7 @@ func (c ActionConnectorCapability) Valid() bool {
 	}
 	switch c.Mode {
 	case ConnectorModeCall:
-		return c.Effect == ConnectorEffectRead
+		return c.Effect == ConnectorEffectRead || c.Effect == ConnectorEffectReserve || c.Effect == ConnectorEffectWrite
 	case ConnectorModeEnqueue, ConnectorModeStartOperation:
 		return c.Effect == ConnectorEffectReserve || c.Effect == ConnectorEffectWrite
 	default:

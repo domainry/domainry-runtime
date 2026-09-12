@@ -821,7 +821,7 @@ func TestRecordTimerRuntimeAdapterTargets(t *testing.T) {
 	actionExecution.IdempotencyKey = "timer-action-1"
 	if err := executeRecordTimer(t.Context(), actionExecution, principal, workflowRuntime, actionRuntime); !errors.Is(err, actionRuntime.err) ||
 		actionRuntime.source != actionmodel.ActionSourceRecordTimer || actionRuntime.invocation.ActionKey != "missing.action" ||
-		actionRuntime.invocation.Principal.UserID != principal.UserID || actionRuntime.invocation.Actor.UserID != principal.UserID {
+		actionRuntime.invocation.Principal.UserID != principal.UserID || actionRuntime.invocation.Actor.UserID != principal.UserID || !actionRuntime.invocation.PreventExecutionReclaim {
 		t.Fatalf("action source=%q invocation=%#v err=%v", actionRuntime.source, actionRuntime.invocation, err)
 	}
 	if err := executeRecordTimer(t.Context(), recordtimerapplication.RecordTimerExecution{

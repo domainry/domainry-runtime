@@ -68,13 +68,13 @@ func TestHandlerDescriptorRequiresStableIdentityAndContracts(t *testing.T) {
 	}
 	synchronousWrite := validTestBusinessHandler("group_class.book_class").Descriptor()
 	synchronousWrite.ConnectorCapabilities[0].Mode = ConnectorModeCall
-	if err := synchronousWrite.Validate(); !errors.Is(err, ErrHandlerCapabilityInvalid) {
-		t.Fatalf("synchronous Connector write error = %v", err)
+	if err := synchronousWrite.Validate(); err != nil {
+		t.Fatalf("valid synchronous Connector write grant error = %v", err)
 	}
 }
 
 func TestRuntimeextContractIdentityIsCurrent(t *testing.T) {
-	if ContractVersion != "runtimeext-v35" {
+	if ContractVersion != "runtimeext-v36" {
 		t.Fatalf("contract version = %q", ContractVersion)
 	}
 	if got := ComputedContractSHA256(); got != ContractSHA256 {

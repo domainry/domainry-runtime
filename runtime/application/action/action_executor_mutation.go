@@ -22,7 +22,20 @@ func (e *businessActionExecution) AcquireSynchronousConnectorCall(requested runt
 	if e == nil {
 		return nil, apperror.New(apperror.KindInternal, runtimeext.ConnectorActionExecutionRequiredErrorCode, nil, nil)
 	}
-	if requested.Mode != runtimeext.ConnectorModeCall || requested.Effect != runtimeext.ConnectorEffectRead {
+	if requested.Mode != runtimeext.ConnectorModeCall {
+		return nil, apperror.New(apperror.KindForbidden, runtimeext.ConnectorActionSideEffectOutboxErrorCode, nil, map[string]string{"connector": requested.ConnectorKey, "operation": requested.OperationKey})
+	}
+	switch requested.Effect {
+	case runtimeext.ConnectorEffectRead:
+	case runtimeext.ConnectorEffectReserve, runtimeext.ConnectorEffectWrite:
+		// A synchronous external effect may only run from a durable timer
+		// invocation whose Action receipt can never be reclaimed. If the
+		// worker disappears after dispatch, later timer attempts observe the
+		// unresolved receipt instead of repeating the external call.
+		if e.invocation.Source != actionmodel.ActionSourceRecordTimer || !e.invocation.PreventExecutionReclaim {
+			return nil, apperror.New(apperror.KindForbidden, runtimeext.ConnectorActionSideEffectOutboxErrorCode, nil, map[string]string{"connector": requested.ConnectorKey, "operation": requested.OperationKey})
+		}
+	default:
 		return nil, apperror.New(apperror.KindForbidden, runtimeext.ConnectorActionSideEffectOutboxErrorCode, nil, map[string]string{"connector": requested.ConnectorKey, "operation": requested.OperationKey})
 	}
 	if !e.hasConnectorGrant(requested) {

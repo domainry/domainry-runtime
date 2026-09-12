@@ -40,6 +40,17 @@ func TestBusinessActionExecutionRejectsConnectorCallsOutsidePublishedGrant(t *te
 	if _, err := execution.AcquireSynchronousConnectorCall(writeCall); apperror.CodeOf(err) != runtimeext.ConnectorActionSideEffectOutboxErrorCode {
 		t.Fatalf("synchronous side effect error=%v", err)
 	}
+	execution.connectorGrants = []runtimeext.ActionConnectorCapability{writeCall}
+	execution.invocation = actionmodel.ActionInvocation{Source: actionmodel.ActionSourceRecordTimer, PreventExecutionReclaim: true}
+	if lease, err := execution.AcquireSynchronousConnectorCall(writeCall); err != nil {
+		t.Fatalf("non-reclaimable timer side effect error=%v", err)
+	} else {
+		lease.Release()
+	}
+	execution.invocation.PreventExecutionReclaim = false
+	if _, err := execution.AcquireSynchronousConnectorCall(writeCall); apperror.CodeOf(err) != runtimeext.ConnectorActionSideEffectOutboxErrorCode {
+		t.Fatalf("reclaimable timer side effect error=%v", err)
+	}
 }
 
 func TestBusinessActionExecutionStagesOnlyValidatedGrantedOutboxIntent(t *testing.T) {

@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v35"
-	ContractSHA256  = "d9990bc81efc44ca90e47cd24ea088f26f87ee92bdcce327be08f240b8151b22"
+	ContractVersion = "runtimeext-v36"
+	ContractSHA256  = "9d2996b3478b0bb17ffd5a98346866f0ac1e13fcf0ba62ea812590a79613929c"
 )
 
-const contractDefinitionV35 = `runtimeext-v35
+const contractDefinitionV36 = `runtimeext-v36
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -55,6 +55,7 @@ NotificationDispatchOperationKey=notification.intent.dispatch
 NotificationBatchSizeInvalidErrorCode=backend.notification.action_batch_size_invalid
 NotificationBatchMaximum=200
 SynchronousConnectorCallLease.Release()
+SynchronousConnectorCallSemantics=read_before_write|reserve_or_write_only_from_non_reclaimable_record_timer_action|unresolved_dispatch_never_reclaimed
 ConnectorCallAfterWriteErrorCode=backend.connector.call_after_write_forbidden
 ActionWriteDuringConnectorCallErrorCode=backend.action.write_during_connector_call_forbidden
 ConnectorActionExecutionRequiredErrorCode=backend.connector.action_execution_required
@@ -132,7 +133,7 @@ func ComputedContractSHA256() string {
 		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV35)
+	definition.WriteString(contractDefinitionV36)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

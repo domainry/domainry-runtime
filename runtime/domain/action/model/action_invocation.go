@@ -17,8 +17,8 @@ const (
 
 type ActionInvocation struct {
 	// Trusted caller policy: create or replay, but never take over an existing
-	// unresolved execution. Used by conversation recovery to avoid repeating
-	// an external effect merely because its local lease expired.
+	// unresolved execution. Used by durable external-effect callers to avoid
+	// repeating an effect merely because the local execution lease expired.
 	PreventExecutionReclaim bool
 	ActionKey               string
 	ObjectKey               string
