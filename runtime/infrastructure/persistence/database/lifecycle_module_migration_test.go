@@ -50,7 +50,7 @@ func TestLifecycleModuleAloneAppliesOwnedMigrationToHostLedger(t *testing.T) {
 		}
 	}
 	var migrations int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:lifecycle' AND dirty=FALSE`).Scan(&migrations); err != nil || migrations != 3 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:lifecycle' AND dirty=FALSE`).Scan(&migrations); err != nil || migrations != 4 {
 		t.Fatalf("Lifecycle ledger rows=%d err=%v", migrations, err)
 	}
 }
@@ -91,7 +91,7 @@ func TestLifecycleModuleReopenAdoptsExistingOwnedSchemaOnce(t *testing.T) {
 	}
 	openLifecycleMigrationBinding(t, store, "lifecycle-adoption")
 	var clean int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:lifecycle' AND dirty=FALSE`).Scan(&clean); err != nil || clean != 3 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:lifecycle' AND dirty=FALSE`).Scan(&clean); err != nil || clean != 4 {
 		t.Fatalf("adopted lifecycle ledger rows=%d err=%v", clean, err)
 	}
 }

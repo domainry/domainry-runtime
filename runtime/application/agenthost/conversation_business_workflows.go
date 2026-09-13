@@ -40,6 +40,10 @@ func (h *ConversationBusinessHost) businessWorkflowVersion(workflow definitionmo
 }
 
 func (h *ConversationBusinessHost) prepareBusinessWorkflow(ctx context.Context, start agentsdk.ConversationWorkflowStart, a agentsdk.ConversationAuthority) (principalmodel.Principal, map[string]any, error) {
+	return h.prepareBusinessWorkflowAccess(ctx, start, a, false)
+}
+
+func (h *ConversationBusinessHost) prepareBusinessWorkflowAccess(ctx context.Context, start agentsdk.ConversationWorkflowStart, a agentsdk.ConversationAuthority, resultRead bool) (principalmodel.Principal, map[string]any, error) {
 	p, err := h.principal(ctx, a)
 	if err != nil {
 		return p, nil, err
@@ -47,7 +51,16 @@ func (h *ConversationBusinessHost) prepareBusinessWorkflow(ctx context.Context, 
 	if h.workflows == nil || len(h.evidenceKey) == 0 || start.WorkflowKey == "" || len(start.WorkflowKey) > 128 || len(start.Version) > 256 {
 		return p, nil, conversationBusinessError("forbidden")
 	}
-	workflow, err := h.workflows.AgentWorkflowDefinition(ctx, start.WorkflowKey, p)
+	var workflow definitionmodel.WorkflowSchema
+	if resultRead {
+		reader, ok := h.workflows.(conversationBusinessWorkflowReceiptReader)
+		if !ok {
+			return p, nil, &agentsdk.Error{Class: "unavailable", Code: agentsdk.BusinessResultReadUnsupportedCode}
+		}
+		workflow, err = reader.AgentWorkflowReceiptDefinition(ctx, start.WorkflowKey, p)
+	} else {
+		workflow, err = h.workflows.AgentWorkflowDefinition(ctx, start.WorkflowKey, p)
+	}
 	if err != nil {
 		return p, nil, conversationBusinessReadError(err)
 	}
@@ -186,6 +199,10 @@ func (h *ConversationBusinessHost) GetBusinessWorkflow(ctx context.Context, q ag
 }
 
 func (h *ConversationBusinessHost) RevalidateBusinessWorkflow(ctx context.Context, e agentsdk.ConversationBusinessEvidence, a agentsdk.ConversationAuthority) error {
+	return h.revalidateBusinessWorkflow(ctx, e, a, false)
+}
+
+func (h *ConversationBusinessHost) revalidateBusinessWorkflow(ctx context.Context, e agentsdk.ConversationBusinessEvidence, a agentsdk.ConversationAuthority, resultRead bool) error {
 	if e.Version != 1 || e.Source != h.source || e.ScopeSHA256 != conversationBusinessDigest([]string{h.source, a.RuntimeID, a.WorkspaceID, a.UserID}) {
 		return conversationBusinessError("forbidden")
 	}
@@ -236,7 +253,17 @@ func (h *ConversationBusinessHost) RevalidateBusinessWorkflow(ctx context.Contex
 		return conversationBusinessError("forbidden")
 	}
 	p, err := h.principal(ctx, a)
-	if err != nil || parts[1] != h.businessPolicyDigest(ctx, p) {
+	if err != nil {
+		return err
+	}
+	if parts[1] != h.businessPolicyDigest(ctx, p) {
+		// A policy change (including removal of the producing tool grant)
+		// may still permit the exact currently visible process projection.
+		// Verify the signature first; never ignore a forged proof or replace
+		// historical state with current state under a changed policy.
+		if resultRead && conversationBusinessDigest(current) == conversationBusinessDigest(json.RawMessage(e.Data)) {
+			return nil
+		}
 		return conversationBusinessError("forbidden")
 	}
 	// Current membership and record scope were rechecked above. An ordinary

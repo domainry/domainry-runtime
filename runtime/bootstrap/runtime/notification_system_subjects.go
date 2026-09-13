@@ -50,3 +50,38 @@ func (s notificationSystemSubjectLifecycle) EraseSubjectForRequest(ctx context.C
 }
 
 var _ lifecyclecontract.SubjectExecutionHandler = notificationSystemSubjectLifecycle{}
+
+type notificationSubjectErasurePlan struct {
+	RequestID      string          `json:"request_id"`
+	WorkspaceID    string          `json:"workspace_id"`
+	SubjectID      string          `json:"subject_id"`
+	PreparedCounts json.RawMessage `json:"prepared_counts"`
+}
+
+func (s notificationSystemSubjectLifecycle) PrepareSubjectErasure(ctx context.Context, requestID, workspaceID, subjectID string) (json.RawMessage, error) {
+	counts, err := s.PreviewSubject(ctx, workspaceID, subjectID)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(notificationSubjectErasurePlan{RequestID: requestID, WorkspaceID: workspaceID, SubjectID: subjectID, PreparedCounts: counts})
+}
+func (s notificationSystemSubjectLifecycle) ErasePreparedSubject(ctx context.Context, requestID, workspaceID, subjectID string, raw json.RawMessage, holds []lifecyclemodel.LegalHold) (json.RawMessage, error) {
+	var plan notificationSubjectErasurePlan
+	if json.Unmarshal(raw, &plan) != nil || requestID == "" || plan.RequestID != requestID || plan.WorkspaceID != workspaceID || plan.SubjectID != subjectID {
+		return nil, fmt.Errorf("notification subject erasure plan scope mismatch")
+	}
+	if len(holds) > 0 {
+		return nil, fmt.Errorf("notification subject erasure blocked by legal hold")
+	}
+	if _, err := s.EraseSubject(ctx, workspaceID, subjectID, holds); err != nil {
+		return nil, err
+	}
+	// Source erasure is an idempotent redaction. Report the frozen inventory,
+	// since attempt-local row counts change when execution resumes after a crash.
+	return json.Marshal(struct {
+		Plan   notificationSubjectErasurePlan `json:"plan"`
+		Erased bool                           `json:"erased"`
+	}{plan, true})
+}
+
+var _ lifecyclecontract.PreparedSubjectErasureHandler = notificationSystemSubjectLifecycle{}

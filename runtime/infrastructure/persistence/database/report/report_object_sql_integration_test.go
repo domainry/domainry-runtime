@@ -20,6 +20,9 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
+	if err := store.EnsureApplicationSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	for _, statement := range []string{
 		`CREATE TABLE sale (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, employee_id TEXT, team_id TEXT, organization_path TEXT, status TEXT, net_total TEXT, discount_total TEXT, refund_total TEXT, units INTEGER, UNIQUE (workspace_id, id))`,
 		`CREATE TABLE payment (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, sale_id TEXT, owner_id TEXT, kind TEXT, amount TEXT, UNIQUE (workspace_id, id))`,

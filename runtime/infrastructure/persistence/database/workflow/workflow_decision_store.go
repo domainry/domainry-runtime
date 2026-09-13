@@ -316,6 +316,9 @@ func (r WorkflowDecisionStore) insertTx(ctx context.Context, tx *sql.Tx, table s
 	if err != nil {
 		return err
 	}
+	if err := r.store.GuardSubjectEvidenceWrite(ctx, tx, workspaceID, table, columns, values); err != nil {
+		return err
+	}
 	queryValue, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, table, workspaceID).Columns(scopedColumns...).Values(scopedValues...).Build()
 	if err != nil {
 		return fmt.Errorf("build %s insert: %w", table, err)
@@ -332,7 +335,7 @@ func (r WorkflowDecisionStore) updateTx(ctx context.Context, tx *sql.Tx, table, 
 	for index, column := range columns {
 		builder.Set(column, values[index])
 	}
-	queryValue, args, err := builder.Where(query.Equal("id", id)).Build()
+	queryValue, args, err := builder.Where(query.And(query.Equal("id", id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id))).Build()
 	if err != nil {
 		return fmt.Errorf("build %s update: %w", table, err)
 	}

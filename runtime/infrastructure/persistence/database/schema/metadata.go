@@ -6,6 +6,9 @@ import (
 )
 
 func EnsureApplicationSchema(ctx context.Context, s Store) error {
+	if err := EnsureSubjectErasureSchema(ctx, s); err != nil {
+		return err
+	}
 	documentText := "TEXT"
 	if s.Driver() == "mysql" {
 		// Change Plans and canonical resource definitions are complete system

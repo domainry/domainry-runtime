@@ -182,7 +182,7 @@ func newRouteWorkflowRuntime(t *testing.T, cfg config.Config, route map[string]a
 		Users: fixtureUsers, UserRoleAssignments: assignments,
 	})
 	binding, err := factory.Open(t.Context(), identitysdk.ApplicationRef{
-		TenantID: identitysdk.TenantID(cfg.IdentityWorkspaceID), WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey("domainry-runtime"),
+		WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey("domainry-runtime"),
 	})
 	if err != nil {
 		t.Fatal(err)

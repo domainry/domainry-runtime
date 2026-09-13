@@ -122,7 +122,6 @@ func integrationModulePrincipal(authorization string) identitysdk.Principal {
 		ContractVersion: identitysdk.PrincipalContextContractVersion,
 		Known:           true, WorkspaceID: "workspace-primary", UserID: subject, RoleKey: role,
 	}}, accessfixture.Bundle{Key: role, Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScope(recordScope))})
-	principal.AccessBundle.Subject.TenantID = "tenant-primary"
 	return principal.Principal
 }
 
@@ -137,7 +136,6 @@ func integrationAuditPrincipal(authorization string) identitysdk.Principal {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
 		ContractVersion: identitysdk.PrincipalContextContractVersion, Known: true, WorkspaceID: "workspace-primary", UserID: subject, RoleKey: role,
 	}}, accessfixture.Bundle{Key: role, Permissions: integrationIdentityRolePermissions(role), DataPolicies: accessfixture.DataPoliciesForPermissions(integrationIdentityRolePermissions(role), "all")})
-	principal.AccessBundle.Subject.TenantID = "tenant-primary"
 	return principal.Principal
 }
 

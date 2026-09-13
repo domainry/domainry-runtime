@@ -342,6 +342,14 @@ func runtimeDownstreamCapabilityPermissions(descriptors []runtimeext.HandlerDesc
 				}
 			}
 		}
+		if descriptor.AccountErasure != nil {
+			for _, operation := range descriptor.AccountErasure.Operations {
+				if operation == runtimeext.AccountErasureStage {
+					add(identitysdk.HandlerDeliveryResolvePermission)
+					add(identitysdk.HandlerDeliveryDisablePermission)
+				}
+			}
+		}
 		if descriptor.WorkspaceIdentityUsage != nil {
 			add(identitysdk.WorkspaceIdentityUsageAggregatePermission)
 		}

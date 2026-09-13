@@ -7,8 +7,13 @@ import (
 	"time"
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
+	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
+	lifecyclehost "github.com/domainry/domainry-lifecycle-sdk/modulehost"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
@@ -237,6 +242,25 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 				}
 				return records.identityHandlerDeliveryBinder.BindHandlerDeliveryUnitOfWork(identitysdk.EmbeddedTransaction{Executor: executor})
 			},
+			StageApprovedAccountErasure: func(ctx context.Context, approval lifecyclecontract.AccountErasureApproval) (lifecyclemodel.SubjectRequest, error) {
+				executor := database.ActionExecutionTransaction(ctx)
+				if records.accountErasures == nil || executor == nil {
+					return lifecyclemodel.SubjectRequest{}, apperror.New(apperror.KindInternal, "backend.account_erasure.transaction_required", nil, nil)
+				}
+				ctx = lifecyclehost.WithExecutor(requestcontext.WithWorkspaceID(ctx, approval.WorkspaceID), executor)
+				return records.accountErasures.StageApprovedAccountErasure(ctx, approval, lifecycleaccess.NewSystemScope(lifecycleaccess.SystemScopeGlobal, "stage approved project account erasure"))
+			},
+			GetAccountErasure: func(ctx context.Context, reference lifecyclecontract.AccountErasureReference) (lifecyclemodel.SubjectRequest, error) {
+				if records.accountErasures == nil {
+					return lifecyclemodel.SubjectRequest{}, apperror.New(apperror.KindInternal, "backend.account_erasure.unavailable", nil, nil)
+				}
+				executor := database.ActionExecutionTransaction(ctx)
+				if executor == nil {
+					return lifecyclemodel.SubjectRequest{}, apperror.New(apperror.KindInternal, "backend.account_erasure.transaction_required", nil, nil)
+				}
+				ctx = lifecyclehost.WithExecutor(requestcontext.WithWorkspaceID(ctx, reference.WorkspaceID), executor)
+				return records.accountErasures.GetAccountErasure(ctx, reference, lifecycleaccess.NewSystemScope(lifecycleaccess.SystemScopeGlobal, "read project account erasure receipt"))
+			},
 			BindWorkspaceIdentityUsage: func(ctx context.Context) (identitysdk.WorkspaceIdentityUsageAggregate, error) {
 				if records.workspaceIdentityUsageBinder == nil {
 					return nil, apperror.New(apperror.KindInternal, "identity.workspace_usage_transaction_required", nil, nil)
@@ -258,9 +282,10 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 				return "", false
 			},
 		}),
-		Authorization: actionapplication.ActionAuthorization{ObjectForAction: records.RecordQueryPolicyDomainService.ObjectForAction},
-		Assurance:     actionapplication.ActionAssurance{Validate: actionAssuranceValidator(records, assuranceDomain, audit)},
-		UnitOfWork:    actionapplication.NewActionUnitOfWorkManager(records.ActionExecutionRuntime),
+		Authorization:         actionapplication.ActionAuthorization{ObjectForAction: records.RecordQueryPolicyDomainService.ObjectForAction},
+		ReceiptRecordReadable: records.recordApplicationService.RecordScopeAllows,
+		Assurance:             actionapplication.ActionAssurance{Validate: actionAssuranceValidator(records, assuranceDomain, audit)},
+		UnitOfWork:            actionapplication.NewActionUnitOfWorkManager(records.ActionExecutionRuntime),
 		ProjectRecord: func(ctx context.Context, principal principalmodel.Principal, objectKey string, record recordmodel.Record) (recordmodel.Record, error) {
 			object, ok := records.schema[strings.TrimSpace(objectKey)]
 			if !ok {

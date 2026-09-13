@@ -25,7 +25,7 @@ func TestInsertIntentParticipatesInCallerTransaction(t *testing.T) {
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.BindNotificationSaaSPublications(database.NotificationSaaSPublicationScope{TenantID: "tenant-a", WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}); err != nil {
+	if err := store.BindNotificationSaaSPublications(database.NotificationSaaSPublicationScope{WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}); err != nil {
 		t.Fatal(err)
 	}
 	intent := notificationmodel.NotificationIntent{ID: "request-a", WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", OccurredAt: "2026-08-28T00:00:00Z", Variables: map[string]any{"name": "A"}}
@@ -54,12 +54,12 @@ func TestInsertIntentParticipatesInCallerTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertPublicationCount(t, store, 1)
-	var tenant, workspace, application, source, payload, fingerprint, status string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT tenant_id,workspace_id,application_key,source_event_id,intent_json,request_fingerprint,status FROM _publication_outbox WHERE id=?", intent.ID).Scan(&tenant, &workspace, &application, &source, &payload, &fingerprint, &status); err != nil {
+	var workspace, application, source, payload, fingerprint, status string
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT workspace_id,application_key,source_event_id,intent_json,request_fingerprint,status FROM _publication_outbox WHERE id=?", intent.ID).Scan(&workspace, &application, &source, &payload, &fingerprint, &status); err != nil {
 		t.Fatal(err)
 	}
-	if tenant != "tenant-a" || workspace != intent.WorkspaceID || application != "runtime-a" || source != intent.SourceEventID || fingerprint == "" || status != "queued" || payload == "" {
-		t.Fatalf("stored scope/payload is incomplete: %q %q %q %q %q %q", tenant, workspace, application, source, fingerprint, status)
+	if workspace != intent.WorkspaceID || application != "runtime-a" || source != intent.SourceEventID || fingerprint == "" || status != "queued" || payload == "" {
+		t.Fatalf("stored scope/payload is incomplete: %q %q %q %q %q", workspace, application, source, fingerprint, status)
 	}
 }
 
@@ -283,7 +283,7 @@ func TestRelayRecoversExpiredLeaseAfterProcessRestart(t *testing.T) {
 			_ = store.Close()
 			t.Fatal(err)
 		}
-		if err := store.BindNotificationSaaSPublications(database.NotificationSaaSPublicationScope{TenantID: "tenant-a", WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}); err != nil {
+		if err := store.BindNotificationSaaSPublications(database.NotificationSaaSPublicationScope{WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}); err != nil {
 			_ = store.Close()
 			t.Fatal(err)
 		}
@@ -381,7 +381,7 @@ func openPublicationStore(t *testing.T) (*database.RuntimeStore, PublicationOutb
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.BindNotificationSaaSPublications(database.NotificationSaaSPublicationScope{TenantID: "tenant-a", WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}); err != nil {
+	if err := store.BindNotificationSaaSPublications(database.NotificationSaaSPublicationScope{WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}); err != nil {
 		t.Fatal(err)
 	}
 	return store, NewPublicationOutboxStore(store), notificationmodel.NotificationIntent{ID: "request-a", WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", OccurredAt: "2026-08-28T00:00:00Z"}

@@ -161,7 +161,7 @@ func TestIntegrationRuntimeConnectorGatewayUsesOwnerOperationAndLease(t *testing
 	probe := &integrationOperationsProbe{result: integrationsdk.ProviderCallResult{Response: json.RawMessage(`{"text":"receipt"}`)}}
 	lease := &integrationConnectorLease{requestID: "execution-1:connector:3"}
 	execution := &integrationConnectorExecution{
-		identity:  runtimeext.ExecutionIdentity{ExecutionID: "execution-1", ActionKey: "invoice_ocr_job.process"},
+		identity:  runtimeext.ExecutionIdentity{ExecutionID: "execution-1", ActionKey: "invoice_ocr_job.process", ObjectKey: "invoice", RecordID: "invoice-a"},
 		principal: runtimeext.Principal{UserID: "worker-1", RoleKey: "ocr_worker"},
 		workspace: runtimeext.Workspace{ID: "workspace-a"}, lease: lease,
 	}
@@ -180,7 +180,7 @@ func TestIntegrationRuntimeConnectorGatewayUsesOwnerOperationAndLease(t *testing
 		t.Fatalf("capability=%+v", execution.capability)
 	}
 	got := probe.request
-	if got.RequestID != lease.requestID || got.WorkspaceID != "workspace-a" || got.ConnectorKey != "expense_ocr" || got.ConnectionKey != "primary" || got.Operation != "parse_expense" || got.ActorID != "worker-1" || got.RoleKey != "ocr_worker" || got.PersistenceMode != integrationsdk.ProviderCallPersistenceSensitive || got.MaskedDestination != "expense_ocr/parse_expense" || string(got.Payload) != string(request.Payload) {
+	if got.Source != (integrationsdk.InvocationSource{ExecutionID: "execution-1", ObjectKey: "invoice", RecordID: "invoice-a"}) || got.RequestID != lease.requestID || got.WorkspaceID != "workspace-a" || got.ConnectorKey != "expense_ocr" || got.ConnectionKey != "primary" || got.Operation != "parse_expense" || got.ActorID != "worker-1" || got.RoleKey != "ocr_worker" || got.PersistenceMode != integrationsdk.ProviderCallPersistenceSensitive || got.MaskedDestination != "expense_ocr/parse_expense" || string(got.Payload) != string(request.Payload) {
 		t.Fatalf("provider request=%+v", got)
 	}
 }

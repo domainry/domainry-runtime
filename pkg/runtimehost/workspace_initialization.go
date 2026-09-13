@@ -106,7 +106,7 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, manifest m
 	defer manager.mu.Unlock()
 	if manager.binding != nil && manager.binding.Descriptor().Mode == identitysdk.DeploymentModeExternal {
 		for _, handler := range handlerDescriptors {
-			if handler.TargetOrganization != nil || handler.OrganizationUnitDelivery != nil || handler.IdentityHandlerDelivery != nil || handler.StoreOrganizationCatalog != nil || handler.StoreOrganizationMutation != nil || handler.WorkspaceIdentityUsage != nil {
+			if handler.TargetOrganization != nil || handler.OrganizationUnitDelivery != nil || handler.IdentityHandlerDelivery != nil || handler.AccountErasure != nil || handler.StoreOrganizationCatalog != nil || handler.StoreOrganizationMutation != nil || handler.WorkspaceIdentityUsage != nil {
 				return fmt.Errorf("external identity does not provide organization or account administration required by handler %q", handler.ActionKey)
 			}
 		}
@@ -474,7 +474,7 @@ func resolveInstallationConfig(cfg config.Config, installation workspaceprovisio
 	}
 	cfg.IdentityWorkspaceID = installation.WorkspaceID
 	cfg.NotificationWorkspaceID = installation.WorkspaceID
-	return applyLegacyNotificationWorkspaceScope(cfg, installation.WorkspaceID)
+	return cfg, nil
 }
 
 func (manager *projectWorkspaceManager) Config() config.Config {

@@ -96,7 +96,14 @@ type sqlResult struct{ sql.Result }
 
 var _ auditrepository.AuditRepository = (*AuditStore)(nil)
 
-type SubjectLifecycle struct{ lifecycle sdkcontract.SubjectLifecycle }
+type SubjectLifecycle struct {
+	lifecycle sdkcontract.SubjectLifecycle
+	resources func(context.Context, string, string) ([]sdkcontract.SubjectResource, error)
+}
+
+func (s *SubjectLifecycle) BindSubjectResourceResolver(resolve func(context.Context, string, string) ([]sdkcontract.SubjectResource, error)) {
+	s.resources = resolve
+}
 
 func NewSubjectLifecycle(binding auditsdk.Binding) *SubjectLifecycle {
 	return &SubjectLifecycle{lifecycle: binding.SubjectLifecycle()}
@@ -112,7 +119,10 @@ func (s *SubjectLifecycle) ExportSubject(ctx context.Context, workspaceID, ident
 func (s *SubjectLifecycle) ExportSubjectForRequest(ctx context.Context, _ string, workspaceID, identity string) (json.RawMessage, error) {
 	return s.ExportSubject(ctx, workspaceID, identity)
 }
-func (s *SubjectLifecycle) EraseSubject(ctx context.Context, workspaceID, identity string, _ []lifecyclemodel.LegalHold) (json.RawMessage, error) {
+func (s *SubjectLifecycle) EraseSubject(ctx context.Context, workspaceID, identity string, holds []lifecyclemodel.LegalHold) (json.RawMessage, error) {
+	if len(holds) > 0 {
+		return nil, fmt.Errorf("audit subject erasure blocked by legal hold")
+	}
 	return s.lifecycle.EraseSubject(ctx, workspaceID, identity)
 }
 
@@ -121,3 +131,48 @@ func (s *SubjectLifecycle) EraseSubjectForRequest(ctx context.Context, _ string,
 }
 
 var _ lifecyclecontract.SubjectExecutionHandler = (*SubjectLifecycle)(nil)
+
+type subjectErasurePlan struct {
+	RequestID      string                        `json:"request_id"`
+	WorkspaceID    string                        `json:"workspace_id"`
+	SubjectID      string                        `json:"subject_id"`
+	PreparedCounts json.RawMessage               `json:"prepared_counts"`
+	Resources      []sdkcontract.SubjectResource `json:"resources"`
+}
+
+func (s *SubjectLifecycle) PrepareSubjectErasure(ctx context.Context, requestID, workspaceID, subjectID string) (json.RawMessage, error) {
+	counts, err := s.PreviewSubject(ctx, workspaceID, subjectID)
+	if err != nil {
+		return nil, err
+	}
+	resources := []sdkcontract.SubjectResource{}
+	if s.resources != nil {
+		resources, err = s.resources(ctx, workspaceID, subjectID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal(subjectErasurePlan{RequestID: requestID, WorkspaceID: workspaceID, SubjectID: subjectID, PreparedCounts: counts, Resources: resources})
+}
+func (s *SubjectLifecycle) ErasePreparedSubject(ctx context.Context, requestID, workspaceID, subjectID string, raw json.RawMessage, holds []lifecyclemodel.LegalHold) (json.RawMessage, error) {
+	var plan subjectErasurePlan
+	if json.Unmarshal(raw, &plan) != nil || requestID == "" || plan.RequestID != requestID || plan.WorkspaceID != workspaceID || plan.SubjectID != subjectID {
+		return nil, fmt.Errorf("audit subject erasure plan scope mismatch")
+	}
+	if len(holds) > 0 {
+		return nil, fmt.Errorf("audit subject erasure blocked by legal hold")
+	}
+	source, ok := s.lifecycle.(sdkcontract.SubjectResourceLifecycle)
+	if !ok {
+		return nil, fmt.Errorf("audit subject resource erasure unavailable")
+	}
+	if _, err := source.EraseSubjectResources(ctx, workspaceID, subjectID, plan.Resources); err != nil {
+		return nil, err
+	}
+	return json.Marshal(struct {
+		Plan   subjectErasurePlan `json:"plan"`
+		Erased bool               `json:"erased"`
+	}{plan, true})
+}
+
+var _ lifecyclecontract.PreparedSubjectErasureHandler = (*SubjectLifecycle)(nil)

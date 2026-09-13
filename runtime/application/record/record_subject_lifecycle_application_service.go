@@ -9,7 +9,6 @@ import (
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"sort"
 	"strings"
-	"time"
 
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
@@ -114,72 +113,13 @@ func (s *RecordSubjectLifecycleApplicationService) ExportSubjectForRequest(ctx c
 	return s.ExportSubject(ctx, workspaceID, resolvedIdentity)
 }
 
-func (s *RecordSubjectLifecycleApplicationService) EraseSubject(ctx context.Context, workspaceID, resolvedIdentity string, holds []lifecyclemodel.LegalHold) (json.RawMessage, error) {
-	if len(holds) > 0 {
-		return nil, fmt.Errorf("record subject erasure blocked by legal hold")
-	}
-	matches, err := s.subjectRecords(ctx, workspaceID, resolvedIdentity)
-	if err != nil {
-		return nil, err
-	}
-	evidence := map[string]any{"updated_records": 0, "deleted_files": []lifecyclecontract.SubjectFileEvidence{}}
-	deletedFiles := []lifecyclecontract.SubjectFileEvidence{}
-	updated := 0
-	for _, object := range s.objects {
-		for _, record := range matches[object.Key] {
-			changed := false
-			filesToDelete := []lifecyclecontract.SubjectFileReference{}
-			for _, field := range object.Fields {
-				mode := recordpolicy.RecordSubjectEraseMode(field)
-				if mode == recordpolicy.RecordLifecycleEraseRetain {
-					continue
-				}
-				value, present := record.Data[field.Key]
-				if !present || value == nil || strings.TrimSpace(fmt.Sprint(value)) == "" {
-					continue
-				}
-				if recordpolicy.RecordSubjectFileField(field) && mode == recordpolicy.RecordLifecycleEraseDelete {
-					for _, reference := range recordSubjectFileValues(value) {
-						filesToDelete = append(filesToDelete, lifecyclecontract.SubjectFileReference{WorkspaceID: workspaceID, ObjectKey: object.Key, RecordID: record.ID, FieldKey: field.Key, Reference: reference})
-					}
-					record.Data[field.Key] = nil
-					changed = true
-					continue
-				}
-				switch mode {
-				case recordpolicy.RecordLifecycleEraseDelete:
-					record.Data[field.Key] = nil
-				case recordpolicy.RecordLifecycleEraseAnonymize:
-					record.Data[field.Key] = recordSubjectAnonymousValue(workspaceID, resolvedIdentity, object.Key, record.ID, field)
-				}
-				changed = true
-			}
-			if !changed {
-				continue
-			}
-			record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-			if err := s.repository.UpdateRecord(ctx, workspaceID, object, record); err != nil {
-				return nil, err
-			}
-			updated++
-			for _, reference := range filesToDelete {
-				if s.files == nil {
-					return nil, fmt.Errorf("record subject file store unavailable")
-				}
-				fileEvidence, deleteErr := s.files.DeleteSubjectFile(ctx, reference)
-				if deleteErr != nil {
-					return nil, deleteErr
-				}
-				deletedFiles = append(deletedFiles, fileEvidence)
-			}
-		}
-	}
-	evidence["updated_records"], evidence["deleted_files"] = updated, deletedFiles
-	return json.Marshal(evidence)
+// Record erasure must run through Lifecycle, which durably saves the plan
+// before detaching file references. Direct execution cannot guarantee retry.
+func (s *RecordSubjectLifecycleApplicationService) EraseSubject(context.Context, string, string, []lifecyclemodel.LegalHold) (json.RawMessage, error) {
+	return nil, fmt.Errorf("record subject erasure requires a persisted Lifecycle plan")
 }
-
-func (s *RecordSubjectLifecycleApplicationService) EraseSubjectForRequest(ctx context.Context, _ string, workspaceID, resolvedIdentity string, holds []lifecyclemodel.LegalHold) (json.RawMessage, error) {
-	return s.EraseSubject(ctx, workspaceID, resolvedIdentity, holds)
+func (s *RecordSubjectLifecycleApplicationService) EraseSubjectForRequest(context.Context, string, string, string, []lifecyclemodel.LegalHold) (json.RawMessage, error) {
+	return nil, fmt.Errorf("record subject erasure requires a persisted Lifecycle plan")
 }
 
 func (s *RecordSubjectLifecycleApplicationService) subjectRecords(ctx context.Context, workspaceID, resolvedIdentity string) (map[string][]recordmodel.Record, error) {
@@ -187,44 +127,95 @@ func (s *RecordSubjectLifecycleApplicationService) subjectRecords(ctx context.Co
 	if s == nil || s.repository == nil {
 		return result, fmt.Errorf("record subject repository unavailable")
 	}
+	byObject := map[string]map[string]recordmodel.Record{}
 	for _, object := range s.objects {
-		identityFields := recordpolicy.RecordSubjectIdentityFields(object)
-		identityFieldKeys := make([]string, 0, len(identityFields)+len(s.profileIdentityFields[object.Key]))
-		for _, field := range identityFields {
-			identityFieldKeys = appendUniqueRecordSubjectField(identityFieldKeys, field.Key)
+		byObject[object.Key] = map[string]recordmodel.Record{}
+	}
+	visited := map[string]bool{}
+	total := 0
+	addMatches := func(object definitionmodel.ObjectSchema, fieldKey, subjectValue string) error {
+		key := object.Key + "\x00" + fieldKey + "\x00" + subjectValue
+		if visited[key] {
+			return nil
 		}
-		for _, field := range s.profileIdentityFields[object.Key] {
-			identityFieldKeys = appendUniqueRecordSubjectField(identityFieldKeys, field)
+		visited[key] = true
+		afterID := ""
+		for {
+			page, err := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: recordSubjectPageSize, SkipTotal: true, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, AfterID: afterID, Filters: map[string]any{fieldKey: subjectValue}, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}})
+			if err != nil {
+				return err
+			}
+			for _, record := range page.Items {
+				if _, known := byObject[object.Key][record.ID]; !known {
+					total++
+					if total > 10000 {
+						return fmt.Errorf("subject record limit exceeded")
+					}
+					byObject[object.Key][record.ID] = record
+				}
+			}
+			if !page.HasNext {
+				break
+			}
+			if len(page.Items) == 0 || page.Items[len(page.Items)-1].ID <= afterID {
+				return fmt.Errorf("subject record cursor did not advance")
+			}
+			afterID = page.Items[len(page.Items)-1].ID
 		}
-		if len(identityFieldKeys) == 0 {
-			continue
+		return nil
+	}
+	for _, object := range s.objects {
+		keys := append([]string(nil), s.profileIdentityFields[object.Key]...)
+		for _, field := range recordpolicy.RecordSubjectIdentityFields(object) {
+			keys = appendUniqueRecordSubjectField(keys, field.Key)
 		}
-		byID := map[string]recordmodel.Record{}
-		for _, fieldKey := range identityFieldKeys {
-			afterID := ""
-			for {
-				values, err := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: recordSubjectPageSize, SkipTotal: true, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, AfterID: afterID, Filters: map[string]any{fieldKey: resolvedIdentity}, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}})
-				if err != nil {
-					return nil, err
-				}
-				for _, record := range values.Items {
-					byID[record.ID] = record
-				}
-				if !values.HasNext {
-					break
-				}
-				afterID = values.Items[len(values.Items)-1].ID
+		for _, key := range keys {
+			if err := addMatches(object, key, resolvedIdentity); err != nil {
+				return nil, err
 			}
 		}
-		ids := make([]string, 0, len(byID))
-		for id := range byID {
+	}
+	// Follow only declared subject-ownership relations. Ordinary references to
+	// shared business entities do not make their records owned by this subject.
+	for {
+		before := total
+		for _, object := range s.objects {
+			for _, field := range object.Fields {
+				target := recordpolicy.RecordSubjectRelationTarget(field)
+				if target == "" {
+					continue
+				}
+				parents, known := byObject[target]
+				if !known {
+					return nil, fmt.Errorf("subject relation target %s is unavailable", target)
+				}
+				ids := make([]string, 0, len(parents))
+				for id := range parents {
+					ids = append(ids, id)
+				}
+				sort.Strings(ids)
+				for _, id := range ids {
+					if err := addMatches(object, field.Key, id); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+		if before == total {
+			break
+		}
+	}
+	for _, object := range s.objects {
+		ids := make([]string, 0, len(byObject[object.Key]))
+		for id := range byObject[object.Key] {
 			ids = append(ids, id)
 		}
 		sort.Strings(ids)
 		for _, id := range ids {
-			result[object.Key] = append(result[object.Key], byID[id])
+			result[object.Key] = append(result[object.Key], byObject[object.Key][id])
 		}
 	}
+
 	return result, nil
 }
 

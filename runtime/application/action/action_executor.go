@@ -11,6 +11,8 @@ import (
 	"github.com/domainry/domainry-foundation/mutation"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -76,6 +78,8 @@ type BusinessHandlerExecutionDependencies struct {
 	BindOrganizationUnitDelivery      func(context.Context) (organizationunit.Delivery, error)
 	BindStoreOrganizationDelivery     func(context.Context) (identitysdk.StoreOrganizationDelivery, error)
 	BindIdentityHandlerDelivery       func(context.Context) (identitysdk.HandlerDelivery, error)
+	StageApprovedAccountErasure       func(context.Context, lifecyclecontract.AccountErasureApproval) (lifecyclemodel.SubjectRequest, error)
+	GetAccountErasure                 func(context.Context, lifecyclecontract.AccountErasureReference) (lifecyclemodel.SubjectRequest, error)
 	BindWorkspaceIdentityUsage        func(context.Context) (identitysdk.WorkspaceIdentityUsageAggregate, error)
 	WorkspaceCommercialConfiguration  WorkspaceCommercialConfigurationLocker
 	ResolveProfileBindingField        func(string, string) (string, bool)
@@ -131,6 +135,7 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 		targetGrant:           cloneTargetOrganizationCapability(descriptor.TargetOrganization),
 		organizationUnitGrant: cloneOrganizationUnitDeliveryCapability(descriptor.OrganizationUnitDelivery),
 		identityGrant:         cloneIdentityHandlerDeliveryCapability(descriptor.IdentityHandlerDelivery),
+		accountErasureGrant:   cloneAccountErasureCapability(descriptor.AccountErasure),
 		storeCatalogGrant:     cloneStoreOrganizationCatalogCapability(descriptor.StoreOrganizationCatalog),
 		storeMutationGrant:    cloneStoreOrganizationMutationCapability(descriptor.StoreOrganizationMutation),
 		workspaceUsageGrant:   cloneWorkspaceIdentityUsageCapability(descriptor.WorkspaceIdentityUsage),
@@ -211,6 +216,9 @@ type businessActionExecution struct {
 	targetGrant              *runtimeext.ActionTargetOrganizationCapability
 	organizationUnitGrant    *runtimeext.OrganizationUnitDeliveryCapability
 	identityGrant            *runtimeext.IdentityHandlerDeliveryCapability
+	accountErasureGrant      *runtimeext.AccountErasureCapability
+	accountErasureCalls      int
+	accountErasureOK         bool
 	storeCatalogGrant        *runtimeext.StoreOrganizationCatalogCapability
 	storeMutationGrant       *runtimeext.ActionStoreOrganizationMutationCapability
 	workspaceUsageGrant      *runtimeext.WorkspaceIdentityUsageCapability
@@ -257,6 +265,7 @@ var _ runtimeext.StoreOrganizationProvisionExecution = (*businessActionExecution
 var _ runtimeext.OrganizationUnitDeliveryExecution = (*businessActionExecution)(nil)
 var _ runtimeext.StoreOrganizationMutationExecution = (*businessActionExecution)(nil)
 var _ runtimeext.IdentityHandlerDeliveryExecution = (*businessActionExecution)(nil)
+var _ runtimeext.AccountErasureExecution = (*businessActionExecution)(nil)
 var _ runtimeext.StoreOrganizationCatalogExecution = (*businessActionExecution)(nil)
 var _ runtimeext.WorkspaceIdentityUsageExecution = (*businessActionExecution)(nil)
 var _ runtimeext.ConditionalUpdateManyExecution = (*businessActionExecution)(nil)

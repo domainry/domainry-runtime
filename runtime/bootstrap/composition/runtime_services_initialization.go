@@ -79,6 +79,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		prepareOutboxPayload:                deps.PrepareOutboxPayload,
 		identityProjection:                  identityProjection,
 		identityHandlerDeliveryBinder:       deps.IdentityHandlerDeliveryBinder,
+		accountErasures:                     deps.AccountErasures,
 		organizationUnitDeliveryBinder:      deps.OrganizationUnitDeliveryBinder,
 		storeOrganizationDeliveryBinder:     deps.StoreOrganizationDeliveryBinder,
 		workspaceIdentityUsageBinder:        deps.WorkspaceIdentityUsageBinder,

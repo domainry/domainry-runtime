@@ -70,6 +70,9 @@ func (s *ReportExportPrepareReceiptStore) tryBeginReportExportPrepareOnce(ctx co
 	receipt.FencingToken = 1
 	receipt.CreatedAt, receipt.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	columns, values := reportExportPrepareReceiptColumns(), reportExportPrepareReceiptValues(receipt)
+	if err := s.store.GuardSubjectEvidenceWrite(ctx, s.store.DB(), receipt.WorkspaceID, runtimeschema.ReportExportPrepareReceiptTable, columns, values); err != nil {
+		return reportmodel.ReportExportPrepareClaimResult{}, err
+	}
 	statement, arguments, buildErr := query.NewWorkspaceInsertBuilder(s.store.SQLRenderer, runtimeschema.ReportExportPrepareReceiptTable, receipt.WorkspaceID).
 		Columns(append(columns[:2], columns[3:]...)...).
 		Values(append(values[:2], values[3:]...)...).
@@ -438,6 +441,7 @@ func normalizeReportExportPrepareClaim(request reportmodel.ReportExportPrepareCl
 	receipt.ReportKey = strings.TrimSpace(receipt.ReportKey)
 	receipt.ObjectKey = strings.TrimSpace(receipt.ObjectKey)
 	receipt.AuditID = strings.TrimSpace(receipt.AuditID)
+	receipt.RetryOfJobID = strings.TrimSpace(receipt.RetryOfJobID)
 	callerKey := strings.TrimSpace(receipt.CallerKey)
 	fingerprint, owner := strings.TrimSpace(request.RequestFingerprint), strings.TrimSpace(request.LeaseOwner)
 	if receipt.WorkspaceID == "" || receipt.RequesterUserID == "" || receipt.UseCase == "" || receipt.ReportKey == "" || receipt.ObjectKey == "" || receipt.AuditID == "" || callerKey == "" || fingerprint == "" || owner == "" {
@@ -459,11 +463,19 @@ func normalizedReportExportPrepareTime(value time.Time) time.Time {
 }
 
 func reportExportPrepareOperationID(receipt reportmodel.ReportExportPrepareReceipt) string {
-	return reportExportPrepareDigest("operation", receipt.WorkspaceID, receipt.UseCase, receipt.ReportKey, receipt.ObjectKey, receipt.AuditID)
+	values := []string{receipt.WorkspaceID, receipt.UseCase, receipt.ReportKey, receipt.ObjectKey, receipt.AuditID}
+	if receipt.RetryOfJobID != "" {
+		values = append(values, "retry", receipt.RetryOfJobID)
+	}
+	return reportExportPrepareDigest("operation", values...)
 }
 
 func reportExportPrepareReceiptID(receipt reportmodel.ReportExportPrepareReceipt) string {
-	return reportExportPrepareDigest("receipt", receipt.WorkspaceID, receipt.RequesterUserID, receipt.UseCase, receipt.ReportKey, receipt.ObjectKey, receipt.AuditID, receipt.CallerKey)
+	values := []string{receipt.WorkspaceID, receipt.RequesterUserID, receipt.UseCase, receipt.ReportKey, receipt.ObjectKey, receipt.AuditID, receipt.CallerKey}
+	if receipt.RetryOfJobID != "" {
+		values = append(values, "retry", receipt.RetryOfJobID)
+	}
+	return reportExportPrepareDigest("receipt", values...)
 }
 
 func reportExportPrepareDigest(kind string, values ...string) string {
@@ -477,7 +489,7 @@ func reportExportPrepareCallerKey(value string) string {
 }
 
 func sameReportExportPrepareOperation(left, right reportmodel.ReportExportPrepareReceipt) bool {
-	return left.OperationID == right.OperationID && left.WorkspaceID == right.WorkspaceID && left.UseCase == right.UseCase && left.ReportKey == right.ReportKey && left.ObjectKey == right.ObjectKey && left.AuditID == right.AuditID
+	return left.OperationID == right.OperationID && left.WorkspaceID == right.WorkspaceID && left.UseCase == right.UseCase && left.ReportKey == right.ReportKey && left.ObjectKey == right.ObjectKey && left.AuditID == right.AuditID && left.RetryOfJobID == right.RetryOfJobID
 }
 
 func reportExportCompletionOwnsReceipt(receipt reportmodel.ReportExportPrepareReceipt, binding reportmodel.ReportExportCompletionBinding, payloadJSON string) bool {
@@ -520,19 +532,19 @@ func expectOneReportExportPrepareMutation(ctx context.Context, store *database.R
 
 func reportExportPrepareReceiptColumns() []string {
 	return []string{
-		"id", "operation_id", "workspace_id", "requester_user_id", "use_case", "report_key", "object_key", "audit_id", "idempotency_key", "request_fingerprint", "status", "payload_json", "business_job_key", "job_id", "completion_artifact_id", "completion_fingerprint", "terminal_error_code", "lease_owner", "lease_expires_at", "fencing_token", "created_at", "updated_at", "expires_at",
+		"id", "operation_id", "workspace_id", "requester_user_id", "use_case", "report_key", "object_key", "audit_id", "idempotency_key", "request_fingerprint", "status", "payload_json", "business_job_key", "job_id", "completion_artifact_id", "completion_fingerprint", "terminal_error_code", "lease_owner", "lease_expires_at", "fencing_token", "created_at", "updated_at", "expires_at", "retry_of_job_id",
 	}
 }
 
 func reportExportPrepareReceiptValues(value reportmodel.ReportExportPrepareReceipt) []any {
 	return []any{
-		value.ID, value.OperationID, value.WorkspaceID, value.RequesterUserID, value.UseCase, value.ReportKey, value.ObjectKey, value.AuditID, value.CallerKey, value.RequestFingerprint, value.Status, value.PayloadJSON, value.BusinessJobKey, value.JobID, value.CompletionArtifactID, value.CompletionFingerprint, value.TerminalErrorCode, value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.CreatedAt, value.UpdatedAt, value.ExpiresAt,
+		value.ID, value.OperationID, value.WorkspaceID, value.RequesterUserID, value.UseCase, value.ReportKey, value.ObjectKey, value.AuditID, value.CallerKey, value.RequestFingerprint, value.Status, value.PayloadJSON, value.BusinessJobKey, value.JobID, value.CompletionArtifactID, value.CompletionFingerprint, value.TerminalErrorCode, value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.CreatedAt, value.UpdatedAt, value.ExpiresAt, value.RetryOfJobID,
 	}
 }
 
 func reportExportPrepareReceiptScanTargets(value *reportmodel.ReportExportPrepareReceipt) []any {
 	return []any{
-		&value.ID, &value.OperationID, &value.WorkspaceID, &value.RequesterUserID, &value.UseCase, &value.ReportKey, &value.ObjectKey, &value.AuditID, &value.CallerKey, &value.RequestFingerprint, &value.Status, &value.PayloadJSON, &value.BusinessJobKey, &value.JobID, &value.CompletionArtifactID, &value.CompletionFingerprint, &value.TerminalErrorCode, &value.LeaseOwner, &value.LeaseExpiresAt, &value.FencingToken, &value.CreatedAt, &value.UpdatedAt, &value.ExpiresAt,
+		&value.ID, &value.OperationID, &value.WorkspaceID, &value.RequesterUserID, &value.UseCase, &value.ReportKey, &value.ObjectKey, &value.AuditID, &value.CallerKey, &value.RequestFingerprint, &value.Status, &value.PayloadJSON, &value.BusinessJobKey, &value.JobID, &value.CompletionArtifactID, &value.CompletionFingerprint, &value.TerminalErrorCode, &value.LeaseOwner, &value.LeaseExpiresAt, &value.FencingToken, &value.CreatedAt, &value.UpdatedAt, &value.ExpiresAt, &value.RetryOfJobID,
 	}
 }
 

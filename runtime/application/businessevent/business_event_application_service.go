@@ -52,15 +52,15 @@ func NewBusinessEventApplicationService(backplane businesseventcontract.Backplan
 }
 
 func (s *BusinessEventApplicationService) Publish(ctx context.Context, workspaceID, objectKey, reason string) (businesseventmodel.BusinessEvent, error) {
-	tenantID := strings.TrimSpace(workspaceID)
-	if len(tenantID) == 0 {
+	workspaceScopeID := strings.TrimSpace(workspaceID)
+	if len(workspaceScopeID) == 0 {
 		return businesseventmodel.BusinessEvent{}, apperror.New(apperror.KindForbidden, "backend.event_stream.workspace_required", nil, nil)
 	}
 	if s == nil || s.backplane == nil {
 		return businesseventmodel.BusinessEvent{}, apperror.New(apperror.KindUnavailable, "backend.event_stream.unavailable", nil, nil)
 	}
 	event, err := s.backplane.Publish(ctx, businesseventmodel.BusinessEvent{
-		Type: businesseventmodel.EventTypeRefresh, WorkspaceID: tenantID,
+		Type: businesseventmodel.EventTypeRefresh, WorkspaceID: workspaceScopeID,
 		ObjectKey: strings.TrimSpace(objectKey), Reason: strings.TrimSpace(reason), OccurredAt: time.Now().UTC(),
 	})
 	if err != nil {
@@ -76,21 +76,21 @@ func (s *BusinessEventApplicationService) Open(ctx context.Context, principal pr
 	if s == nil || s.backplane == nil {
 		return businesseventcontract.Subscription{}, apperror.New(apperror.KindUnavailable, "backend.event_stream.unavailable", nil, nil)
 	}
-	tenantID := strings.TrimSpace(principal.WorkspaceID)
+	workspaceScopeID := strings.TrimSpace(principal.WorkspaceID)
 	userID := strings.TrimSpace(principal.UserID)
-	if len(tenantID) == 0 {
+	if len(workspaceScopeID) == 0 {
 		return businesseventcontract.Subscription{}, apperror.New(apperror.KindForbidden, "backend.event_stream.workspace_required", nil, nil)
 	}
 	if !principal.Known || userID == "" {
 		return businesseventcontract.Subscription{}, apperror.New(apperror.KindForbidden, "backend.event_stream.identity_required", nil, nil)
 	}
-	principalKey := tenantID + "\x00" + userID
-	if !s.acquire(tenantID, principalKey) {
+	principalKey := workspaceScopeID + "\x00" + userID
+	if !s.acquire(workspaceScopeID, principalKey) {
 		return businesseventcontract.Subscription{}, apperror.New(apperror.KindRateLimited, "backend.event_stream.capacity_exceeded", nil, nil)
 	}
-	subscription, err := s.backplane.Open(ctx, tenantID, strings.TrimSpace(lastEventID))
+	subscription, err := s.backplane.Open(ctx, workspaceScopeID, strings.TrimSpace(lastEventID))
 	if err != nil {
-		s.release(tenantID, principalKey)
+		s.release(workspaceScopeID, principalKey)
 		return businesseventcontract.Subscription{}, apperror.New(apperror.KindUnavailable, "backend.event_stream.unavailable", err, nil)
 	}
 	closeBackplane := subscription.Close
@@ -100,7 +100,7 @@ func (s *BusinessEventApplicationService) Open(ctx context.Context, principal pr
 			if closeBackplane != nil {
 				closeBackplane()
 			}
-			s.release(tenantID, principalKey)
+			s.release(workspaceScopeID, principalKey)
 		})
 	}
 	return subscription, nil

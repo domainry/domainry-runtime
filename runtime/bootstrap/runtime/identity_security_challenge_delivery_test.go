@@ -28,7 +28,7 @@ func TestIdentitySecurityChallengeDeliveryUsesSensitiveIntegrationOperation(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if receipt.ResponseRef != "invocation-1" || probe.request.ConnectorKey != "telephony" || probe.request.Operation != "send_sms" || probe.request.PersistenceMode != integrationsdk.ProviderCallPersistenceSensitive || probe.request.MaskedDestination != "+8*********0000" {
+	if receipt.ResponseRef != "invocation-1" || probe.request.ConnectorKey != "telephony" || probe.request.Operation != "send_sms" || probe.request.PersistenceMode != integrationsdk.ProviderCallPersistenceSensitive || probe.request.MaskedDestination != "telephony/send_sms" {
 		t.Fatalf("receipt=%#v request=%#v", receipt, probe.request)
 	}
 	var payload map[string]string

@@ -272,6 +272,12 @@ func normalizeHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor 
 		})
 		result.IdentityHandlerDelivery = &capability
 	}
+	if result.AccountErasure != nil {
+		capability := *result.AccountErasure
+		capability.Operations = append([]AccountErasureOperation(nil), capability.Operations...)
+		sort.Slice(capability.Operations, func(i, j int) bool { return capability.Operations[i] < capability.Operations[j] })
+		result.AccountErasure = &capability
+	}
 	if result.StoreOrganizationCatalog != nil {
 		capability := *result.StoreOrganizationCatalog
 		result.StoreOrganizationCatalog = &capability
@@ -339,6 +345,11 @@ func cloneHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor {
 		capability.Operations = append([]IdentityHandlerOperation(nil), capability.Operations...)
 		capability.ProfileBindings = append([]IdentityProfileBindingCapability(nil), capability.ProfileBindings...)
 		result.IdentityHandlerDelivery = &capability
+	}
+	if descriptor.AccountErasure != nil {
+		capability := *descriptor.AccountErasure
+		capability.Operations = append([]AccountErasureOperation(nil), capability.Operations...)
+		result.AccountErasure = &capability
 	}
 	if descriptor.StoreOrganizationCatalog != nil {
 		capability := *descriptor.StoreOrganizationCatalog

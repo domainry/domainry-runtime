@@ -52,6 +52,13 @@ func BuildAuthorizationRegistry(input AuthorizationRegistryInput) (*actioncontra
 		if err := registry.Register(definition); err != nil {
 			return nil, fmt.Errorf("register authored Action %q: %w", authored.Key, err)
 		}
+		receipt, err := actionprojection.AuthorizationActionForActionReceipt(authored, applicationOwner)
+		if err != nil {
+			return nil, err
+		}
+		if err := registry.Register(receipt); err != nil {
+			return nil, fmt.Errorf("register Action receipt %q: %w", authored.Key, err)
+		}
 	}
 	for _, workflow := range input.Snapshot.Workflows {
 		if !workflow.Enabled {
@@ -63,6 +70,13 @@ func BuildAuthorizationRegistry(input AuthorizationRegistryInput) (*actioncontra
 		}
 		if err := registry.Register(definition); err != nil {
 			return nil, fmt.Errorf("register Workflow Action %q: %w", workflow.Key, err)
+		}
+		receipt, err := actionprojection.AuthorizationActionForWorkflowReceipt(workflow, applicationOwner)
+		if err != nil {
+			return nil, err
+		}
+		if err := registry.Register(receipt); err != nil {
+			return nil, fmt.Errorf("register Workflow receipt %q: %w", workflow.Key, err)
 		}
 	}
 	moduleActionKeys := make(map[string]bool)

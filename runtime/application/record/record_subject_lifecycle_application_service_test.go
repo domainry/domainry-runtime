@@ -29,8 +29,8 @@ func TestRecordSubjectLifecycleExportsRecordsAndFilesThenErasesDeclaredFields(t 
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	object := definitionmodel.ObjectSchema{Key: "employee_document", Fields: []definitionmodel.FieldSchema{
-		{Key: "employee", Type: "user"},
-		{Key: "owner", Type: "user"},
+		{Key: "employee", Type: "user", Config: map[string]any{"lifecycle_erase": "retain"}},
+		{Key: "owner", Type: "user", Config: map[string]any{"lifecycle_erase": "retain"}},
 		{Key: "email", Type: "email", Config: map[string]any{"lifecycle_erase": "anonymize"}},
 		{Key: "attachment", Type: "text", Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete"}},
 	}}
@@ -88,7 +88,14 @@ func TestRecordSubjectLifecycleExportsRecordsAndFilesThenErasesDeclaredFields(t 
 		t.Fatalf("exported=%#v", exported)
 	}
 
-	evidence, err := service.EraseSubject(t.Context(), "workspace-a", "user-1", nil)
+	if _, err := service.EraseSubject(t.Context(), "workspace-a", "user-1", nil); err == nil {
+		t.Fatal("unprepared erasure accepted")
+	}
+	plan, err := service.PrepareSubjectErasure(t.Context(), "erase-1", "workspace-a", "user-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err := service.ErasePreparedSubject(t.Context(), "erase-1", "workspace-a", "user-1", plan, nil)
 	if err != nil || !strings.Contains(string(evidence), "updated_records") {
 		t.Fatalf("evidence=%s err=%v", evidence, err)
 	}

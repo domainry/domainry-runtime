@@ -3,6 +3,9 @@ package schema
 import "context"
 
 func EnsureEvidenceSchema(ctx context.Context, s Store) error {
+	if err := EnsureSubjectErasureSchema(ctx, s); err != nil {
+		return err
+	}
 	if err := EnsureDispatchCallbackReceiptSchema(ctx, s); err != nil {
 		return err
 	}
@@ -285,7 +288,6 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 		"_publication_outbox": {
 			"id " + text + " PRIMARY KEY",
 			"publication_type " + idempotencyScopeText + " NOT NULL DEFAULT 'integration.connector'",
-			"tenant_id " + idempotencyScopeText + " NOT NULL DEFAULT ''",
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"application_key " + idempotencyScopeText + " NOT NULL DEFAULT ''",
 			"source_event_id " + idempotencyScopeText + " NOT NULL DEFAULT ''",

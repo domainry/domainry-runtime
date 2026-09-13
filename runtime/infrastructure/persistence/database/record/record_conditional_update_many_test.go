@@ -105,6 +105,9 @@ func TestConditionalUpdateManyPersistenceRejectsNonDistinctExactCoverageWithoutW
 
 func TestConditionalUpdateManyAffectedMismatchRollsBackTransaction(t *testing.T) {
 	runtimeStore := openRuntimeStore(t)
+	if err := runtimeStore.EnsureEvidenceSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := runtimeStore.DB().Exec(`CREATE TABLE shift (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}

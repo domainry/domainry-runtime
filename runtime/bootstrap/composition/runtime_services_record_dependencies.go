@@ -81,7 +81,7 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 			if s.identityPrincipals == nil {
 				return principalmodel.Principal{Principal: identitysdk.Principal{Known: false}}
 			}
-			resolution, err := s.identityPrincipals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(userID), RoleKey: roleKey})
+			resolution, err := s.identityPrincipals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(userID), SessionRoleKey: roleKey})
 			if err != nil {
 				return principalmodel.Principal{Principal: identitysdk.Principal{Known: false}}
 			}

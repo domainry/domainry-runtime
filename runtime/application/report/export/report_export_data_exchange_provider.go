@@ -28,6 +28,7 @@ type ExportPayload struct {
 	WorkspaceID              string                                  `json:"workspace_id"`
 	RequesterUserID          string                                  `json:"requester_user_id"`
 	PrepareReceiptID         string                                  `json:"prepare_receipt_id"`
+	RetryOfJobID             string                                  `json:"retry_of_job_id,omitempty"`
 	ReportKey                string                                  `json:"report_key"`
 	ObjectKey                string                                  `json:"object_key"`
 	AuditID                  string                                  `json:"audit_id"`

@@ -59,12 +59,22 @@ func (r RecordStore) InsertRecord(ctx context.Context, workspaceID string, objec
 			values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
-	queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(s.SQLRenderer, object.Key, workspaceID).Columns(columns...).Values(values...).Build()
+	builder, buildErr := s.SubjectEvidenceInsertBuilder(workspaceID, object.Key, columns, values, s.SubjectResourceWriteAllowed(workspaceID, object.Key, record.ID))
 	if buildErr != nil {
 		return buildErr
 	}
-	if _, err := r.database().ExecContext(ctx, queryValue, args...); err != nil {
+	queryValue, args, buildErr := builder.Build()
+	if buildErr != nil {
+		return buildErr
+	}
+	result, err := r.queryExecutor(ctx).ExecContext(ctx, queryValue, args...)
+	if err != nil {
 		return fmt.Errorf("insert record: %w", err)
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return err
+	} else if affected != 1 {
+		return fmt.Errorf("runtime.subject_erased")
 	}
 	return nil
 }
@@ -87,12 +97,18 @@ func (r RecordStore) UpdateRecord(ctx context.Context, workspaceID string, objec
 			builder.Set(field.Key, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
-	queryValue, args, buildErr := builder.Where(query.Equal("id", record.ID)).Build()
+	queryValue, args, buildErr := builder.Where(query.And(query.Equal("id", record.ID), s.SubjectRecordWriteAllowed(workspaceID, object.Key, record.UpdateBy))).Build()
 	if buildErr != nil {
 		return buildErr
 	}
-	if _, err := r.database().ExecContext(ctx, queryValue, args...); err != nil {
+	result, err := r.queryExecutor(ctx).ExecContext(ctx, queryValue, args...)
+	if err != nil {
 		return fmt.Errorf("update record: %w", err)
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return err
+	} else if affected != 1 {
+		return sql.ErrNoRows
 	}
 	return nil
 }
@@ -115,7 +131,7 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 			builder.Set(field.Key, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
-	predicates := []query.Predicate{query.Equal("id", record.ID)}
+	predicates := []query.Predicate{query.Equal("id", record.ID), s.SubjectRecordWriteAllowed(workspaceID, object.Key, record.UpdateBy)}
 	keys := make([]string, 0, len(conditions))
 	for key := range conditions {
 		keys = append(keys, key)
@@ -128,7 +144,7 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 	if buildErr != nil {
 		return false, buildErr
 	}
-	result, err := r.database().ExecContext(ctx, queryValue, args...)
+	result, err := r.queryExecutor(ctx).ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return false, fmt.Errorf("update record with conditions: %w", err)
 	}
@@ -150,7 +166,7 @@ func (r RecordStore) DeleteRecord(ctx context.Context, workspaceID string, objec
 		return fmt.Errorf("begin record delete: %w", err)
 	}
 	defer tx.Rollback()
-	queryValue, args, buildErr := query.NewWorkspaceDeleteBuilder(s.SQLRenderer, object.Key, workspaceID).Where(query.Equal("id", recordID)).Build()
+	queryValue, args, buildErr := query.NewWorkspaceDeleteBuilder(s.SQLRenderer, object.Key, workspaceID).Where(query.And(query.Equal("id", recordID), s.SubjectRecordWriteAllowed(workspaceID, object.Key, ""))).Build()
 	if buildErr != nil {
 		return buildErr
 	}

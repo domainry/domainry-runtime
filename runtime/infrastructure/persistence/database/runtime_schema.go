@@ -21,7 +21,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "026_workflow_route_steps"
+const CurrentRuntimeSchemaVersion = "028_subject_execution_evidence"
 
 const (
 	managedDatabaseCohortTable           = "_domainry_managed_runtime_database_cohort"
@@ -29,7 +29,7 @@ const (
 )
 
 func SupportedRuntimeSchemaUpgradeVersions() []string {
-	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "007_identity_global_names", "008_identity_account_projection", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox", "012_rate_limit_schema_owner", "013_agent_schema_owner", "020_tenant_initialization", "021_workspace_only_foundation", "022_report_export_prepare_receipts", "023_dispatch_callback_receipts", "024_application_time_zone", "025_definition_upgrade_receipts"}
+	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "007_identity_global_names", "008_identity_account_projection", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox", "012_rate_limit_schema_owner", "013_agent_schema_owner", "020_tenant_initialization", "021_workspace_only_foundation", "022_report_export_prepare_receipts", "023_dispatch_callback_receipts", "024_application_time_zone", "025_definition_upgrade_receipts", "026_workflow_route_steps"}
 }
 
 func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
@@ -422,7 +422,7 @@ func (s *RuntimeStore) removeObsoleteMigrationLedgers(ctx context.Context) error
 }
 
 func currentRuntimeSchemaChecksum() string {
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,lifecycle,operations,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_only_provisioning,typed_commercial_configuration,legacy_workspace_authority_migration,report_export_prepare_receipts,dispatch_callback_receipts,definition_upgrade_receipts,workflow_route_steps"))
+	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,lifecycle,operations,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_only_provisioning,typed_commercial_configuration,legacy_workspace_authority_migration,report_export_prepare_receipts,dispatch_callback_receipts,definition_upgrade_receipts,workflow_route_steps,report_export_retry_lineage,subject_execution_evidence_fences_receipts"))
 	return hex.EncodeToString(sum[:])
 }
 

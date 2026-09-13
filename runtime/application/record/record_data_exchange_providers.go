@@ -13,6 +13,7 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-data-exchange-sdk/modulehost"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -105,6 +106,11 @@ func (p *DataExchangeProviders) ExportProvider(key string) (modulehost.ExportPro
 
 func (p *DataExchangeProviders) principal(ctx context.Context, scope dataexchange.Scope) principalmodel.Principal {
 	value := principalmodel.Principal{}
+	// Scope is authenticated by Data Exchange (or restored from its durable job),
+	// while SDK HTTP middleware does not publish Foundation request context.
+	// Identity must receive the trusted workspace before resolving the subject.
+	ctx = requestcontext.WithWorkspaceID(ctx, strings.TrimSpace(scope.WorkspaceID))
+	ctx = requestcontext.WithActorID(ctx, strings.TrimSpace(scope.ActorID))
 	if p.resolve != nil {
 		value = p.resolve(ctx, scope.ActorID, scope.RoleKey)
 	}

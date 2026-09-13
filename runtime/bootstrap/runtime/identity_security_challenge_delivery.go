@@ -35,14 +35,16 @@ func (delivery runtimeIdentitySecurityChallengeDelivery) DeliverSecurityChalleng
 		return identitymodulehost.SecurityChallengeDeliveryReceipt{}, err
 	}
 	result, err := delivery.operations.Call(ctx, integrationsdk.ProviderCallRequest{
-		RequestID:         strings.TrimSpace(request.ChallengeID),
-		WorkspaceID:       strings.TrimSpace(request.WorkspaceID),
-		ConnectorKey:      connectorKey,
-		ConnectionKey:     strings.TrimSpace(request.ConnectionKey),
-		Operation:         operation,
-		Payload:           payload,
-		PersistenceMode:   integrationsdk.ProviderCallPersistenceSensitive,
-		MaskedDestination: strings.TrimSpace(request.MaskedDestination),
+		RequestID:       strings.TrimSpace(request.ChallengeID),
+		WorkspaceID:     strings.TrimSpace(request.WorkspaceID),
+		ConnectorKey:    connectorKey,
+		ConnectionKey:   strings.TrimSpace(request.ConnectionKey),
+		Operation:       operation,
+		Payload:         payload,
+		PersistenceMode: integrationsdk.ProviderCallPersistenceSensitive,
+		// Identity owns the user-facing destination mask. Integration evidence
+		// needs only this non-personal routing label, including anonymous OTP.
+		MaskedDestination: connectorKey + "/" + operation,
 		ActorID:           "identity-security-challenge",
 		RoleKey:           "system",
 	})

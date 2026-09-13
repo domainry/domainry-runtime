@@ -20,7 +20,7 @@ func resultReadRoles(m map[string]any) {
 			continue
 		}
 		role["permissions"] = append(role["permissions"].([]any), map[string]any{"permission_key": report.ActionReportResultsRead, "data_scope": "all"}, map[string]any{"permission_key": tools.ReportQueryDefinitions()[0].ActionKey, "data_scope": "all"})
-		for _, key := range []string{"results_reader", "results_denied", "results_narrow"} {
+		for _, key := range []string{"results_reader", "results_denied", "results_narrow", "results_field_denied", "results_data_denied"} {
 			raw, _ := json.Marshal(role)
 			var clone map[string]any
 			_ = json.Unmarshal(raw, &clone)
@@ -29,7 +29,7 @@ func resultReadRoles(m map[string]any) {
 			for _, value := range clone["permissions"].([]any) {
 				p := value.(map[string]any)
 				action := p["permission_key"]
-				if action == report.ActionReportQueryExecute || action == tools.ReportQueryDefinitions()[0].ActionKey || action == tools.AnalysisDefinitions()[0].ActionKey || key == "results_denied" && action == report.ActionReportResultsRead {
+				if action == report.ActionReportQueryExecute || action == tools.ReportQueryDefinitions()[0].ActionKey || action == tools.AnalysisDefinitions()[0].ActionKey || key == "results_denied" && action == report.ActionReportResultsRead || key == "results_data_denied" && action == "customer.read" {
 					continue
 				}
 				if action == "customer.read" {
@@ -42,6 +42,14 @@ func resultReadRoles(m map[string]any) {
 				permissions = append(permissions, p)
 			}
 			clone["permissions"] = permissions
+			if key == "results_field_denied" {
+				for _, value := range clone["field_permissions"].([]any) {
+					field := value.(map[string]any)
+					if field["object_key"] == "customer" && field["field_key"] == "balance" {
+						field["read"] = false
+					}
+				}
+			}
 			m["roles"] = append(m["roles"].([]any), clone)
 		}
 		for _, value := range role["permissions"].([]any) {
@@ -180,6 +188,22 @@ func TestReportAndAnalysisIndependentResultReadThroughRealOwnerRPC(t *testing.T)
 	}
 	b.assign("results_reader")
 	read(true)
+	for _, role := range []string{"results_field_denied", "results_data_denied"} {
+		b.assign(role)
+		if err := c.AuthorizeReportResultRead(t.Context(), model.ReportQueryResultAuthorization{Query: query, Result: qr}, a); err == nil {
+			t.Fatalf("%s retained old report values", role)
+		}
+		if err := c.AuthorizeAnalysisResultRead(t.Context(), model.AnalysisResultAuthorization{Request: request, Result: analysis}, a); err == nil {
+			t.Fatalf("%s retained old analysis values", role)
+		}
+		for _, i := range []int{1, 3} {
+			if err := selected.AuthorizeConversationToolResultRead(t.Context(), requests[i], results[i]); err == nil {
+				t.Fatalf("%s retained tool result %d", role, i)
+			}
+		}
+	}
+	b.assign("results_reader")
+	read(true)
 	changed := qr
 	changed.Source.Complete = !changed.Source.Complete
 	if err := c.AuthorizeReportResultRead(t.Context(), model.ReportQueryResultAuthorization{Query: query, Result: changed}, a); err == nil {
@@ -190,5 +214,27 @@ func TestReportAndAnalysisIndependentResultReadThroughRealOwnerRPC(t *testing.T)
 	if err := c.AuthorizeReportResultRead(t.Context(), model.ReportQueryResultAuthorization{Query: query, Result: qr}, other); err == nil {
 		t.Fatal("cross-workspace result accepted")
 	}
-	t.Log("actual Report/Runtime/Identity/SQLite and Tools through RPC: query pages and catalog cursors, analysis result/catalog, tool and report execution grants revoked, independent reads survive restart, read grant and row scope revoked, raw replay/invocation/tampered result denied")
+	// A real source mutation invalidates saved values even if the aggregate
+	// happens to stay numerically equal. Use the public business action only.
+	b.assign("headquarters_admin")
+	b.call("POST", "/auth/login", map[string]any{"login": "admin@example.com", "password": businessWebPassword}, 200)
+	b.session()
+	records, err := c.QueryBusinessRecords(t.Context(), agent.ConversationBusinessQuery{ObjectKey: "customer", Fields: []string{"name"}, PageSize: 1, Sort: []agent.ConversationBusinessSort{{Field: "name", Direction: "asc"}}}, a)
+	if err != nil || len(records.Items) != 1 {
+		t.Fatal(records, err)
+	}
+	routes := f.runtime.Routes()
+	scoped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("X-Workspace-ID", f.cfg.IdentityWorkspaceID)
+		routes.ServeHTTP(w, r)
+	})
+	managedIdentityRequest(t, scoped, b.cookies["domainry_agent_access"].Value, http.MethodPost, "/records/customer/items/"+records.Items[0].ID+"/actions/customer.rename", map[string]any{"data": map[string]any{"name": "Updated Acme", "expected_updated_at": records.Items[0].Version}}, "result-read-source-change", http.StatusOK)
+	b.assign("results_reader")
+	if err := c.AuthorizeReportResultRead(t.Context(), model.ReportQueryResultAuthorization{Query: query, Result: qr}, a); err == nil {
+		t.Fatal("source mutation retained old report")
+	}
+	if err := c.AuthorizeAnalysisResultRead(t.Context(), model.AnalysisResultAuthorization{Request: request, Result: analysis}, a); err == nil {
+		t.Fatal("source mutation retained old analysis")
+	}
+	t.Log("actual Report/Runtime/Identity/SQLite and Tools through RPC: query pages and catalog cursors, analysis result/catalog, tool and report execution grants revoked, independent reads survive restart, read/source/field grants and row scope revoked, real business mutation invalidates old values, raw replay/invocation/tampered result denied")
 }

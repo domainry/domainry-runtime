@@ -69,12 +69,22 @@ func (r AutomationExecutionStore) InsertExecution(ctx context.Context, workspace
 	}
 	columns := []string{"id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at"}
 	values := []any{value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), value.CreatedAt, value.UpdatedAt}
-	statement, args, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_automation_rule_executions", workspaceID).Columns(columns...).Values(values...).Build()
+	builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, "_automation_rule_executions", columns, values)
+	if buildErr != nil {
+		return automationmodel.AutomationRuleExecution{}, buildErr
+	}
+	statement, args, buildErr := builder.Build()
 	if buildErr != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("build automation rule execution insert: %w", buildErr)
 	}
-	if _, err := r.executor(ctx).ExecContext(ctx, statement, args...); err != nil {
+	result, err := r.executor(ctx).ExecContext(ctx, statement, args...)
+	if err != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("insert automation rule execution: %w", err)
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return automationmodel.AutomationRuleExecution{}, err
+	} else if affected != 1 {
+		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("runtime.subject_erased")
 	}
 	return value, nil
 }
@@ -116,13 +126,24 @@ func (r AutomationExecutionStore) InsertExecutionSeed(ctx context.Context, works
 	}
 	columns := []string{"id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at"}
 	values := []any{value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), value.CreatedAt, value.UpdatedAt}
-	statement, args, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_automation_rule_executions", workspaceID).
-		Columns(columns...).Values(values...).OnConflictDoNothing("workspace_id", "id").Build()
+	builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, "_automation_rule_executions", columns, values)
+	if buildErr != nil {
+		return automationmodel.AutomationRuleExecution{}, buildErr
+	}
+	statement, args, buildErr := builder.OnConflictDoNothing("workspace_id", "id").Build()
 	if buildErr != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("build automation execution seed insert: %w", buildErr)
 	}
-	if _, err := r.db.ExecContext(ctx, statement, args...); err != nil {
+	result, err := r.db.ExecContext(ctx, statement, args...)
+	if err != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("insert automation execution seed: %w", err)
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return automationmodel.AutomationRuleExecution{}, err
+	} else if affected == 0 {
+		if err := r.store.GuardSubjectEvidenceWrite(ctx, r.db, workspaceID, "_automation_rule_executions", columns, values); err != nil {
+			return automationmodel.AutomationRuleExecution{}, err
+		}
 	}
 	return value, nil
 }

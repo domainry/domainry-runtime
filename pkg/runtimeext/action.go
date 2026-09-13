@@ -106,6 +106,7 @@ type HandlerDescriptor struct {
 	TargetOrganization        *ActionTargetOrganizationCapability
 	OrganizationUnitDelivery  *OrganizationUnitDeliveryCapability
 	IdentityHandlerDelivery   *IdentityHandlerDeliveryCapability
+	AccountErasure            *AccountErasureCapability
 	StoreOrganizationCatalog  *StoreOrganizationCatalogCapability
 	StoreOrganizationMutation *ActionStoreOrganizationMutationCapability
 	WorkspaceIdentityUsage    *WorkspaceIdentityUsageCapability
@@ -206,6 +207,33 @@ func (d HandlerDescriptor) Validate() error {
 	}
 	if d.IdentityHandlerDelivery != nil && !d.IdentityHandlerDelivery.Valid() {
 		return ErrHandlerCapabilityInvalid
+	}
+	if d.AccountErasure != nil && (!d.AccountErasure.Valid() || d.TargetOrganization == nil) {
+		return ErrHandlerCapabilityInvalid
+	}
+	if d.AccountErasure != nil {
+		required := []string{d.AccountErasure.ProfileBinding.ObjectKey}
+		for _, operation := range d.AccountErasure.Operations {
+			if operation == AccountErasureStage {
+				required = append(required, d.AccountErasure.RequestObjectKey)
+			}
+		}
+		for _, objectKey := range required {
+			allowed := false
+			for _, capability := range d.ObjectCapabilities {
+				if capability.ObjectKey != objectKey {
+					continue
+				}
+				for _, operation := range capability.Operations {
+					if operation == "get_for_update" {
+						allowed = true
+					}
+				}
+			}
+			if !allowed {
+				return ErrHandlerCapabilityInvalid
+			}
+		}
 	}
 	if d.IdentityHandlerDelivery != nil && handlerDeliveryMutatesIdentity(d.IdentityHandlerDelivery.Operations) && d.TargetOrganization == nil {
 		return ErrHandlerCapabilityInvalid

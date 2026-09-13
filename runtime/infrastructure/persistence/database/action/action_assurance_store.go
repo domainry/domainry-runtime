@@ -25,6 +25,9 @@ func (s ActionAssuranceStore) SaveActionAssuranceGrant(ctx context.Context, gran
 	methods, _ := json.Marshal(grant.Methods)
 	columns := []string{"id", "token_hash", "user_id", "action_key", "object_key", "record_id", "payload_digest", "methods_json", "approval_version", "approval_hash", "issued_at", "expires_at", "consumed_at"}
 	values := []any{grant.ID, grant.TokenHash, grant.UserID, grant.ActionKey, grant.ObjectKey, grant.RecordID, grant.PayloadDigest, string(methods), grant.ApprovalVersion, grant.ApprovalHash, grant.IssuedAt, grant.ExpiresAt, grant.ConsumedAt}
+	if err := s.store.GuardSubjectEvidenceWrite(ctx, s.db, grant.WorkspaceID, "_action_assurance_grants", columns, values); err != nil {
+		return err
+	}
 	queryValue, args, err := query.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_action_assurance_grants", grant.WorkspaceID).Columns(columns...).Values(values...).Build()
 	if err == nil {
 		_, err = s.db.ExecContext(ctx, queryValue, args...)

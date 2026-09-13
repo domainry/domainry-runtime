@@ -25,6 +25,7 @@ func EnsureReportExportPrepareReceiptSchema(ctx context.Context, store Store) er
 			ormschema.Column("report_key", key).NotNull(),
 			ormschema.Column("object_key", key).NotNull(),
 			ormschema.Column("audit_id", key).NotNull(),
+			ormschema.Column("retry_of_job_id", key).NotNull().DefaultValue(""),
 			ormschema.Column("idempotency_key", ormschema.TextKey(71)).NotNull(),
 			ormschema.Column("request_fingerprint", key).NotNull(),
 			ormschema.Column("status", key).NotNull(),
@@ -48,6 +49,9 @@ func EnsureReportExportPrepareReceiptSchema(ctx context.Context, store Store) er
 	}
 	if _, err := store.SchemaDB().ExecContext(ctx, statement, arguments...); err != nil {
 		return fmt.Errorf("create report export prepare receipt table: %w", err)
+	}
+	if err := store.EnsureRuntimeColumn(ctx, ReportExportPrepareReceiptTable, "retry_of_job_id", store.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT ''"); err != nil {
+		return fmt.Errorf("upgrade report export retry lineage: %w", err)
 	}
 	if err := store.CreateIndexIfMissing(ctx, ReportExportPrepareReceiptTable, "uniq_report_export_prepare_operation", true, "workspace_id", "operation_id"); err != nil {
 		return fmt.Errorf("create report export prepare operation identity: %w", err)

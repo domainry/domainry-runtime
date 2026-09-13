@@ -162,7 +162,7 @@ func newIntegrationIdentityBinding(t *testing.T, cfg config.Config) identitysdk.
 		applicationKey = "domainry-runtime"
 	}
 	binding, err := newIntegrationIdentityFactory().Open(t.Context(), identitysdk.ApplicationRef{
-		TenantID: identitysdk.TenantID(workspaceID), WorkspaceID: identitysdk.WorkspaceID(workspaceID), ApplicationKey: identitysdk.ApplicationKey(applicationKey),
+		WorkspaceID: identitysdk.WorkspaceID(workspaceID), ApplicationKey: identitysdk.ApplicationKey(applicationKey),
 	})
 	if err != nil {
 		t.Fatal(err)

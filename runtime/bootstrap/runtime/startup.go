@@ -298,7 +298,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		catalog, catalogErr := notificationSDKCatalog(valueOrDefault(manifest.DefaultLocale, cfg.AppLocale), manifest, runtimeNotificationEventTypes)
 		mustCompleteRuntimeStartup(catalogErr)
 		sdkDeliveryGateway = &notificationSDKDeliveryGateway{repository: publicationhandoffpersistence.NewPublicationStore(store), productName: cfg.EffectiveProductBrandName()}
-		notificationScope, scopeErr := resolveLegacyNotificationWorkspaceScope(cfg)
+		notificationScope, scopeErr := resolveNotificationWorkspaceScope(cfg)
 		mustCompleteRuntimeStartup(scopeErr)
 		application := notificationScope.applicationRef()
 		if moduleFactory, ok := notificationFactory.(modulehost.Factory); ok {
@@ -397,10 +397,12 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		integrationOwnerCatalog:         integrationOwner.Catalog,
 		integrationOwnerManagement:      integrationOwner.Management,
 		integrationOwnerOperations:      integrationOwner.Operations,
+		integrationOwnerSubjects:        integrationOwner.Subjects,
 		dataExchangeProviderKey:         identityDataExchangeKey,
 		dataExchangeImportProvider:      identityDataExchangeImport,
 		dataExchangeExportProvider:      identityDataExchangeExport,
 		integrationMode:                 integrationOwner.Binding.Descriptor().Mode,
+		identitySubjectLifecycle:        identitySystemSubjectLifecycle{binding: identityBinding},
 		notificationSubjectLifecycle:    notificationSystemSubjectLifecycle{subjects: systemSubjectBinding.SystemSubjects()},
 		notificationRetention:           notificationSystemRetention{retention: systemRetentionBinding.SystemRetention()},
 		auditRepository:                 runtimeAuditRepository,

@@ -32,13 +32,28 @@ func (s OperationsStore) CreateOperationsBreakGlass(ctx context.Context, grant o
 		return false, err
 	}
 	approvers, _ := json.Marshal(grant.ApproverIDs)
-	queryValue, args, buildErr = query.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_operation_break_glass_grants", grant.WorkspaceID).Columns("id", "state", "actor_id", "approver_ids_json", "reason", "incident_ref", "alert_target", "audit_event_id", "expires_at", "revision", "created_at", "updated_at", "revoked_at", "revoked_by", "revocation_note").Values(grant.ID, string(grant.State), grant.ActorID, string(approvers), grant.Reason, grant.IncidentRef, grant.AlertTarget, grant.AuditEventID, grant.ExpiresAt.UTC().Format(time.RFC3339Nano), grant.Revision, grant.CreatedAt.UTC().Format(time.RFC3339Nano), grant.UpdatedAt.UTC().Format(time.RFC3339Nano), "", "", "").Build()
+	columns := []string{"id", "state", "actor_id", "approver_ids_json", "reason", "incident_ref", "alert_target", "audit_event_id", "expires_at", "revision", "created_at", "updated_at", "revoked_at", "revoked_by", "revocation_note"}
+	values := []any{grant.ID, string(grant.State), grant.ActorID, string(approvers), grant.Reason, grant.IncidentRef, grant.AlertTarget, grant.AuditEventID, grant.ExpiresAt.UTC().Format(time.RFC3339Nano), grant.Revision, grant.CreatedAt.UTC().Format(time.RFC3339Nano), grant.UpdatedAt.UTC().Format(time.RFC3339Nano), "", "", ""}
+	actorFences := []query.Predicate{}
+	for _, actor := range grant.ApproverIDs {
+		actorFences = append(actorFences, s.store.SubjectActorWriteAllowed(grant.WorkspaceID, actor))
+	}
+	builder, buildErr := s.store.SubjectEvidenceInsertBuilder(grant.WorkspaceID, "_operation_break_glass_grants", columns, values, actorFences...)
 	if buildErr != nil {
 		return false, buildErr
 	}
-	_, err = tx.ExecContext(ctx, queryValue, args...)
+	queryValue, args, buildErr = builder.Build()
+	if buildErr != nil {
+		return false, buildErr
+	}
+	result, err := tx.ExecContext(ctx, queryValue, args...)
 	if err != nil {
 		return false, err
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return false, err
+	} else if affected != 1 {
+		return false, fmt.Errorf("runtime.subject_erased")
 	}
 	if err := tx.Commit(); err != nil {
 		return false, err
@@ -90,7 +105,7 @@ func (s OperationsStore) RevokeOperationsBreakGlass(ctx context.Context, grant o
 	if grant.RevokedAt != nil {
 		revokedAt = grant.RevokedAt.UTC().Format(time.RFC3339Nano)
 	}
-	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_operation_break_glass_grants", grant.WorkspaceID).Set("state", string(grant.State)).Set("revision", grant.Revision).Set("updated_at", grant.UpdatedAt.UTC().Format(time.RFC3339Nano)).Set("revoked_at", revokedAt).Set("revoked_by", grant.RevokedBy).Set("revocation_note", grant.RevocationNote).Where(query.And(query.Equal("id", grant.ID), query.Equal("state", string(operationsmodel.OperationsBreakGlassActive)), query.Equal("revision", expectedRevision))).Build()
+	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_operation_break_glass_grants", grant.WorkspaceID).Set("state", string(grant.State)).Set("revision", grant.Revision).Set("updated_at", grant.UpdatedAt.UTC().Format(time.RFC3339Nano)).Set("revoked_at", revokedAt).Set("revoked_by", grant.RevokedBy).Set("revocation_note", grant.RevocationNote).Where(query.And(query.Equal("id", grant.ID), query.Equal("state", string(operationsmodel.OperationsBreakGlassActive)), query.Equal("revision", expectedRevision), s.store.SubjectEvidenceWriteAllowed(grant.WorkspaceID, "_operation_break_glass_grants", grant.ID), s.store.SubjectActorWriteAllowed(grant.WorkspaceID, grant.RevokedBy))).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}

@@ -196,7 +196,7 @@ func newStructuredActionRuntime(t *testing.T, cfg config.Config) (*bootstrap.Run
 		UserRoleAssignments: map[string][]string{structuredActionUser: {structuredActionRole}},
 	})
 	binding, err := factory.Open(t.Context(), identitysdk.ApplicationRef{
-		TenantID: identitysdk.TenantID(cfg.IdentityWorkspaceID), WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey("domainry-runtime"),
+		WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey("domainry-runtime"),
 	})
 	if err != nil {
 		t.Fatal(err)

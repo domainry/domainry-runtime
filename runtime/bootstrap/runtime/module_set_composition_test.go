@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -20,10 +21,12 @@ import (
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentmodule "github.com/domainry/domainry-agent/module"
 	connector "github.com/domainry/domainry-connector-sdk"
+	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	"github.com/domainry/domainry-foundation/modulecapability"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identitymodule "github.com/domainry/domainry-identity/module"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	integrationmodule "github.com/domainry/domainry-integration/module"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
@@ -38,7 +41,11 @@ import (
 	reportmodule "github.com/domainry/domainry-report/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
+	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	publicationstore "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
+	workflowstore "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	schedulermodule "github.com/domainry/domainry-scheduler/module"
@@ -268,8 +275,49 @@ func TestRuntimeAgentRetentionAndSubjectErasureEndToEnd(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	for _, subject := range []string{alice.UserID, bob.UserID} {
+		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _identity_users (id,workspace_id,name,email,status,version,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)`, subject, cfg.IdentityWorkspaceID, subject, subject+"@example.test", "active", 1, "now", "now"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	seedOwnerCopies(alice, "alice")
 	seedOwnerCopies(bob, "bob")
+	dataExchangeJobs := map[string]dataexchangesdk.Job{}
+	integrationManagement := application.integrationBinding.(integrationsdk.ManagementBinding).Management()
+	integrationWebPush := application.integrationBinding.(integrationsdk.WebPushBinding).WebPushSubscriptions()
+	for _, subject := range []string{alice.UserID, bob.UserID} {
+		if _, err = integrationManagement.CreateAPIKey(t.Context(), cfg.IdentityWorkspaceID, "operator", integrationsdk.APIKeyInput{Name: subject + "@private.example.test", ActorID: subject, RoleKey: "member"}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = integrationWebPush.Upsert(t.Context(), cfg.IdentityWorkspaceID, subject, "push-"+subject, integrationsdk.WebPushSubscriptionInput{Endpoint: "https://push.example.test/" + subject, P256DH: "private-key-" + subject, Auth: "private-auth-" + subject}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, subject := range []string{alice.UserID, bob.UserID} {
+		job, replayed, err := application.dataExchangeBinding.SubmitImport(t.Context(), dataexchangesdk.ImportRequest{
+			Scope: dataexchangesdk.Scope{WorkspaceID: cfg.IdentityWorkspaceID, ActorID: subject}, Provider: "records", ObjectKey: "contact",
+			IdempotencyKey: "subject-private-upload", Filename: subject + ".csv", Source: strings.NewReader("email\n" + subject + "@private.example.test\n"),
+		})
+		if err != nil || replayed || job.ActorID != subject {
+			t.Fatalf("subject upload job=%+v replayed=%v err=%v", job, replayed, err)
+		}
+		dataExchangeJobs[subject] = job
+	}
+
+	for _, subject := range []string{alice.UserID, bob.UserID} {
+		if err := workflowstore.NewWorkflowWorkerStore(store).InsertExecution(t.Context(), cfg.IdentityWorkspaceID, workflowmodel.WorkflowExecution{
+			ID: "workflow-" + subject, WorkflowKey: "private_copy", Status: "pending", ActorID: subject, Payload: map[string]any{"email": subject + "@private.example.test"},
+			CreatedAt: "2026-09-14T00:00:00Z", UpdatedAt: "2026-09-14T00:00:00Z",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := publicationstore.NewPublicationStore(store).InsertOutbox(t.Context(), cfg.IdentityWorkspaceID, publicationmodel.Message{
+			ID: "publication-" + subject, ConnectorKey: "email", Operation: "send", CreatedBy: subject, DedupKey: "private-" + subject,
+			Payload: map[string]any{"email": subject + "@private.example.test", "_runtime_attachment_base64": base64.StdEncoding.EncodeToString([]byte("email\n" + subject + "@private.example.test\n"))},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	principal := func(user string, permissions ...string) lifecycleaccess.Principal {
 		value := lifecycleaccess.Principal{Known: true, WorkspaceID: cfg.IdentityWorkspaceID, UserID: user, Permissions: map[string]struct{}{}}
 		for _, permission := range permissions {
@@ -306,11 +354,56 @@ func TestRuntimeAgentRetentionAndSubjectErasureEndToEnd(t *testing.T) {
 	if request, err = governance.ExecuteSubjectRequest(identityContext(t.Context(), approver), cfg.IdentityWorkspaceID, request.ID, approver); err != nil || request.Status != lifecyclemodel.SubjectRequestSucceeded {
 		t.Fatalf("request=%+v err=%v", request, err)
 	}
+
+	for _, subject := range []string{alice.UserID, bob.UserID} {
+		for _, table := range []string{"_workflow_executions", "_publication_outbox"} {
+			id := "workflow-" + subject
+			if table == "_publication_outbox" {
+				id = "publication-" + subject
+			}
+			var payload string
+			if err := store.DB().QueryRowContext(t.Context(), "SELECT payload_json FROM "+store.TableIdentifier(table)+" WHERE workspace_id=? AND id=?", cfg.IdentityWorkspaceID, id).Scan(&payload); err != nil {
+				t.Fatal(err)
+			}
+			if subject == alice.UserID && payload != "{}" {
+				t.Fatalf("Runtime did not clean %s Alice copy: %s", table, payload)
+			}
+			if subject == bob.UserID && !strings.Contains(payload, "bob@private.example.test") {
+				t.Fatalf("Runtime changed %s Bob copy", table)
+			}
+		}
+	}
 	if _, err = conversations.Get(t.Context(), aliceConversation.ID, alice); err == nil {
 		t.Fatal("Agent owner did not erase Alice conversation")
 	}
 	if _, err = conversations.Get(t.Context(), bobConversation.ID, bob); err != nil {
 		t.Fatal("Agent owner crossed into Bob data", err)
+	}
+	for _, subject := range []string{alice.UserID, bob.UserID} {
+		push, e := integrationWebPush.List(t.Context(), cfg.IdentityWorkspaceID, subject)
+		want := 1
+		if subject == alice.UserID {
+			want = 0
+		}
+		if e != nil || len(push) != want {
+			t.Fatalf("Integration push subject=%s count=%d want=%d err=%v", subject, len(push), want, e)
+		}
+	}
+	keys, e := integrationManagement.ListAPIKeys(t.Context(), cfg.IdentityWorkspaceID)
+	if e != nil || len(keys) != 1 || keys[0].ActorID != bob.UserID {
+		t.Fatalf("Integration private credentials not scoped: %+v err=%v", keys, e)
+	}
+	for _, check := range []struct {
+		subject string
+		count   int
+	}{{alice.UserID, 0}, {bob.UserID, 1}} {
+		var count int
+		if err = store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _data_exchange_job_chunks WHERE workspace_id=? AND job_id=?`, cfg.IdentityWorkspaceID, dataExchangeJobs[check.subject].ID).Scan(&count); err != nil || count != check.count {
+			t.Fatalf("subject=%s Data Exchange chunks=%d want=%d err=%v", check.subject, count, check.count, err)
+		}
+	}
+	if _, _, err = application.dataExchangeBinding.SubmitImport(t.Context(), dataexchangesdk.ImportRequest{Scope: dataexchangesdk.Scope{WorkspaceID: cfg.IdentityWorkspaceID, ActorID: alice.UserID}, Provider: "records", ObjectKey: "contact", IdempotencyKey: "after-erasure", Source: strings.NewReader("email\nalice@private.example.test\n")}); err == nil {
+		t.Fatal("erased subject recreated private upload")
 	}
 	for _, table := range []string{"_agent_user_todos", "_agent_artifacts"} {
 		for _, check := range []struct {
@@ -336,7 +429,7 @@ func TestRuntimeAgentRetentionAndSubjectErasureEndToEnd(t *testing.T) {
 		owners[owner] = true
 	}
 	_ = rows.Close()
-	for _, owner := range []string{"agent", "todo", "knowledge"} {
+	for _, owner := range []string{"agent", "todo", "knowledge", "identity", "data_exchange", "lifecycle", "runtime_evidence", "integration"} {
 		if !owners[owner] {
 			t.Fatalf("missing completed owner step %q: %v", owner, owners)
 		}

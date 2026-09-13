@@ -103,6 +103,9 @@ func newConversationBusinessFixture(t *testing.T, extraObjects ...definitionmode
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
+	if err := store.EnsureApplicationSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	for _, object := range objects {
 		columns := []ormschema.ColumnDefinition{}
 		for _, key := range []string{"workspace_id", "id", "created_at", "updated_at", "owner_user_id", "owner_org_id"} {

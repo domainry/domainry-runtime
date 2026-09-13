@@ -20,6 +20,10 @@ type workflowExecutionReceiptReader interface {
 // AgentWorkflowDefinition resolves the current executable definition. Schema
 // discovery alone cannot authorize a start or substitute a stale definition.
 func (s *WorkflowApplicationService) AgentWorkflowDefinition(ctx context.Context, key string, principal principalmodel.Principal) (definitionmodel.WorkflowSchema, error) {
+	return s.agentWorkflowDefinition(ctx, key, principal, false)
+}
+
+func (s *WorkflowApplicationService) agentWorkflowDefinition(ctx context.Context, key string, principal principalmodel.Principal, resultRead bool) (definitionmodel.WorkflowSchema, error) {
 	if err := workflowAuthorizeCommand(principal); err != nil || !principal.Known || strings.TrimSpace(principal.UserID) == "" {
 		return definitionmodel.WorkflowSchema{}, forbidden("backend.workflow.run_permission_required")
 	}
@@ -30,8 +34,14 @@ func (s *WorkflowApplicationService) AgentWorkflowDefinition(ctx context.Context
 	if !found {
 		return workflow, notFound("backend.workflow.not_found")
 	}
-	if len(invocationcontract.ValidateWorkflowPermission(workflow, principal)) > 0 {
-		return workflow, forbidden("backend.workflow.run_permission_required")
+	if resultRead {
+		if !workflowReceiptPermissionPresent(workflow.Key, principal) {
+			return workflow, forbidden("backend.workflow.receipt_read_denied")
+		}
+	} else {
+		if len(invocationcontract.ValidateWorkflowPermission(workflow, principal)) > 0 {
+			return workflow, forbidden("backend.workflow.run_permission_required")
+		}
 	}
 	if issues := invocationcontract.ValidateWorkflowTarget(workflow, invocationcontract.WorkflowEntryAgent); len(issues) > 0 {
 		return workflow, workflowInvocationError(issues[0])
@@ -100,6 +110,10 @@ func (s *WorkflowApplicationService) InspectAgentWorkflowInvocation(ctx context.
 	if err != nil {
 		return workflowmodel.WorkflowExecution{}, false, err
 	}
+	return s.inspectAgentWorkflowInvocation(ctx, workflow, payload, callerKey, principal)
+}
+
+func (s *WorkflowApplicationService) inspectAgentWorkflowInvocation(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, callerKey string, principal principalmodel.Principal) (workflowmodel.WorkflowExecution, bool, error) {
 	data, err := NormalizeAgentWorkflowInput(workflow, payload)
 	if err != nil {
 		return workflowmodel.WorkflowExecution{}, false, err

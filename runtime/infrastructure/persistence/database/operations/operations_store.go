@@ -76,7 +76,11 @@ func (s OperationsStore) RegisterOperationsCommand(ctx context.Context, receipt 
 	if workspaceID, err := principalmodel.NewWorkspaceID(receipt.Command.Scope.WorkspaceID); err == nil {
 		insertColumns := append(append([]string{}, columns[:1]...), columns[2:]...)
 		insertValues := append(append([]any{}, values[:1]...), values[2:]...)
-		queryValue, args, err = query.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_operation_requests", workspaceID.String()).Columns(insertColumns...).Values(insertValues...).Build()
+		builder, buildErr := s.store.SubjectEvidenceInsertBuilder(workspaceID.String(), "_operation_requests", insertColumns, insertValues)
+		if buildErr != nil {
+			return operationsmodel.OperationsReceipt{}, "", buildErr
+		}
+		queryValue, args, err = builder.Build()
 		if err != nil {
 			return operationsmodel.OperationsReceipt{}, "", err
 		}
@@ -89,12 +93,18 @@ func (s OperationsStore) RegisterOperationsCommand(ctx context.Context, receipt 
 	if err := workerplatform.CheckFault(ctx, s.faults, workerplatform.FaultTransactionBeforeWrite); err != nil {
 		return operationsmodel.OperationsReceipt{}, "", err
 	}
-	if _, err := tx.ExecContext(ctx, queryValue, args...); err != nil {
+	result, err := tx.ExecContext(ctx, queryValue, args...)
+	if err != nil {
 		_ = tx.Rollback()
 		if replay, replayFound, replayErr := s.GetOperationsReceiptByKey(ctx, receipt.Command.Scope, receipt.Command.Kind, receipt.Command.IdempotencyKey); replayErr == nil && replayFound {
 			return replay, operationspolicy.OperationsClassifySubmission(&replay, receipt.Command), nil
 		}
 		return operationsmodel.OperationsReceipt{}, "", err
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return operationsmodel.OperationsReceipt{}, "", err
+	} else if affected != 1 {
+		return operationsmodel.OperationsReceipt{}, "", fmt.Errorf("runtime.subject_erased")
 	}
 	if err := workerplatform.CheckFault(ctx, s.faults, workerplatform.FaultTransactionAfterWrite); err != nil {
 		return operationsmodel.OperationsReceipt{}, "", err
@@ -274,6 +284,8 @@ func (s OperationsStore) UpdateOperationsReceipt(ctx context.Context, receipt op
 	builder := query.NewUpdateBuilder(s.store.SQLRenderer, "_operation_requests")
 	if workspaceID != "" {
 		builder = query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_operation_requests", workspaceID)
+		predicate = combineOperationsPredicate(predicate, s.store.SubjectEvidenceWriteAllowed(workspaceID, "_operation_requests", receipt.Command.ID))
+		predicate = combineOperationsPredicate(predicate, s.store.SubjectActorWriteAllowed(workspaceID, receipt.Command.RequestedBy))
 	}
 	queryValue, args, buildErr := builder.Set("status", string(receipt.Command.Status)).Set("started_at", startedAt).Set("finished_at", finishedAt).Set("updated_at", receipt.Command.UpdatedAt.UTC().Format(time.RFC3339Nano)).Set("result_json", resultJSON).Set("error_code", strings.TrimSpace(receipt.ErrorCode)).Set("failure_class", string(receipt.FailureClass)).Set("next_action", strings.TrimSpace(receipt.NextAction)).Set("related_ids_json", relatedJSON).Set("correlation", strings.TrimSpace(receipt.Correlation)).Set("evidence_json", evidenceJSON).Where(predicate).Build()
 	if buildErr != nil {

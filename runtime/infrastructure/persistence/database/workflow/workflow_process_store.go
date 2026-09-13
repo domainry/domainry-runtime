@@ -48,6 +48,9 @@ func (r WorkflowProcessStore) InsertProcess(ctx context.Context, workspaceID str
 	}
 	process.WorkspaceID = workspaceID
 	values := workflowProcessValues(process)
+	if err := r.store.GuardSubjectEvidenceWrite(ctx, r.database(), workspaceID, "_workflow_process_instances", workflowProcessColumns, values); err != nil {
+		return err
+	}
 	queryValue, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(workflowProcessColumns[1:]...).Values(values[1:]...).Build()
 	if err != nil {
 		return fmt.Errorf("build workflow process insert: %w", err)
@@ -165,6 +168,9 @@ func (r WorkflowProcessStore) InsertNode(ctx context.Context, workspaceID string
 	}
 	node.WorkspaceID = workspaceID
 	values := workflowNodeValues(node)
+	if err := r.store.GuardSubjectEvidenceWrite(ctx, r.database(), workspaceID, "_workflow_node_instances", workflowNodeColumns, values); err != nil {
+		return err
+	}
 	queryValue, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_node_instances", workspaceID).Columns(workflowNodeColumns[1:]...).Values(values[1:]...).Build()
 	if err != nil {
 		return fmt.Errorf("build workflow node insert: %w", err)
@@ -267,6 +273,9 @@ func (r WorkflowProcessStore) InsertTask(ctx context.Context, workspaceID string
 		return err
 	}
 	task.WorkspaceID = workspaceID
+	if err := r.store.GuardSubjectEvidenceWrite(ctx, r.database(), workspaceID, "_workflow_tasks", workflowTaskColumns(), workflowTaskValues(task)); err != nil {
+		return err
+	}
 	queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).
 		Columns(workflowTaskColumns()[1:]...).Values(workflowTaskValues(task)[1:]...).Build()
 	if buildErr != nil {
@@ -420,6 +429,9 @@ func (r WorkflowProcessStore) InsertEvent(ctx context.Context, workspaceID strin
 	event.WorkspaceID = workspaceID
 	metadata, _ := json.Marshal(database.NonNilMap(event.Metadata))
 	values := []any{event.ID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), event.CreatedAt}
+	if err := r.store.GuardSubjectEvidenceWrite(ctx, r.database(), workspaceID, "_workflow_process_events", workflowEventColumns[1:], values); err != nil {
+		return err
+	}
 	queryValue, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_process_events", workspaceID).Columns(workflowEventColumns[1:]...).Values(values...).Build()
 	if err != nil {
 		return fmt.Errorf("build workflow process event insert: %w", err)
@@ -467,7 +479,7 @@ func (r WorkflowProcessStore) updateScopedRow(ctx context.Context, table, worksp
 	for index, column := range columns {
 		builder.Set(column, values[index])
 	}
-	queryValue, args, err := builder.Where(query.Equal("id", id)).Build()
+	queryValue, args, err := builder.Where(query.And(query.Equal("id", id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id))).Build()
 	if err != nil {
 		return err
 	}

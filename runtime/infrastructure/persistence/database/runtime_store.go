@@ -75,11 +75,11 @@ func (s *RuntimeStore) Metadata() metadatasdk.Binding {
 }
 
 type NotificationSaaSPublicationScope struct {
-	TenantID, WorkspaceID, ApplicationKey string
+	WorkspaceID, ApplicationKey string
 }
 
 func (s *RuntimeStore) BindNotificationSaaSPublications(scope NotificationSaaSPublicationScope) error {
-	if s == nil || strings.TrimSpace(scope.TenantID) == "" || strings.TrimSpace(scope.WorkspaceID) == "" || strings.TrimSpace(scope.ApplicationKey) == "" {
+	if s == nil || strings.TrimSpace(scope.WorkspaceID) == "" || strings.TrimSpace(scope.ApplicationKey) == "" {
 		return fmt.Errorf("Notification SaaS publication scope is required")
 	}
 	s.notificationMu.Lock()

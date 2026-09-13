@@ -26,6 +26,9 @@ func TestReportPeriodPercentUsesStoredScaleAndFloorsOnce(t *testing.T) {
 			t.Error(err)
 		}
 	})
+	if err := store.EnsureApplicationSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	columns := []ormschema.ColumnDefinition{}
 	for _, field := range []string{"workspace_id", "id", "created_at", "updated_at", "owner_org_id", "rate"} {
 		columns = append(columns, ormschema.Column(field, ormschema.Text()))

@@ -35,7 +35,7 @@ func TestRuntimeStoreBindsOneNotificationTransactionPublisher(t *testing.T) {
 }
 
 func TestRuntimeStoreBindsExactlyOneNotificationPublicationTopology(t *testing.T) {
-	scope := NotificationSaaSPublicationScope{TenantID: "tenant-a", WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}
+	scope := NotificationSaaSPublicationScope{WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}
 	store := &RuntimeStore{}
 	if err := store.BindNotificationSaaSPublications(scope); err != nil {
 		t.Fatal(err)

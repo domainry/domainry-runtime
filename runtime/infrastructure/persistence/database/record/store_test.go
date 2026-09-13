@@ -64,5 +64,8 @@ func openRuntimeStore(t *testing.T) *persistence.RuntimeStore {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
+	if err := store.EnsureApplicationSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	return store
 }

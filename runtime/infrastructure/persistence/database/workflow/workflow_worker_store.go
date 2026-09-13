@@ -58,6 +58,9 @@ func (r WorkflowWorkerStore) InsertExecution(ctx context.Context, workspaceID st
 	if err != nil {
 		return err
 	}
+	if err := r.store.GuardSubjectEvidenceWrite(ctx, tx, workspaceID, "_workflow_executions", columns, values); err != nil {
+		return err
+	}
 	statement, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID).Columns(scopedColumns...).Values(scopedValues...).Build()
 	if err != nil {
 		return fmt.Errorf("build workflow execution insert: %w", err)
@@ -155,7 +158,7 @@ func (r WorkflowWorkerStore) UpdateExecutionWhere(ctx context.Context, workspace
 	for i, column := range columns {
 		builder.Set(column, values[i])
 	}
-	predicates := []query.Predicate{query.Equal("id", execution.ID)}
+	predicates := []query.Predicate{query.Equal("id", execution.ID), r.store.SubjectEvidenceWriteAllowed(workspaceID, "_workflow_executions", execution.ID)}
 	keys := make([]string, 0, len(conditions))
 	for key := range conditions {
 		keys = append(keys, key)
@@ -293,6 +296,9 @@ func (r WorkflowWorkerStore) InsertProcessEvent(ctx context.Context, workspaceID
 	if err != nil {
 		return err
 	}
+	if err := r.store.GuardSubjectEvidenceWrite(ctx, r.database(), workspaceID, "_workflow_process_events", columns, values); err != nil {
+		return err
+	}
 	queryValue, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_process_events", workspaceID).Columns(scopedColumns...).Values(scopedValues...).Build()
 	if err == nil {
 		_, err = r.database().ExecContext(ctx, queryValue, args...)
@@ -311,7 +317,7 @@ func (r WorkflowWorkerStore) updateRow(ctx context.Context, table, workspaceID, 
 	for i, column := range columns {
 		builder.Set(column, values[i])
 	}
-	queryValue, args, err := builder.Where(query.Equal("id", id)).Build()
+	queryValue, args, err := builder.Where(query.And(query.Equal("id", id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id))).Build()
 	if err != nil {
 		return fmt.Errorf("build %s update: %w", table, err)
 	}

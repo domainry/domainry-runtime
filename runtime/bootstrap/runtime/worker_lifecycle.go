@@ -42,6 +42,7 @@ func StartWorkers(ctx context.Context, runtime *Runtime) {
 	runtime.startFileScanWorker(ctx)
 	runtime.startIdempotencyCleanupWorker(ctx)
 	runtime.startLifecycleCleanupWorker(ctx)
+	runtime.startAccountErasureWorker(ctx)
 	if runtime.api != nil {
 		runtime.api.MarkStartupComplete()
 	}

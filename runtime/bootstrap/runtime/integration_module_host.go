@@ -25,6 +25,7 @@ type openedRuntimeIntegration struct {
 	Management   integrationsdk.Management
 	Operations   integrationsdk.Operations
 	Workers      integrationsdk.LocalWorkers
+	Subjects     integrationsdk.SubjectLifecycle
 }
 
 func openRuntimeIntegration(ctx context.Context, application integrationsdk.ApplicationRef, factory integrationsdk.Factory, host runtimeIntegrationModuleHost) (openedRuntimeIntegration, error) {
@@ -58,6 +59,9 @@ func openRuntimeIntegration(ctx context.Context, application integrationsdk.Appl
 		return openedRuntimeIntegration{}, fmt.Errorf("Integration Binding returned no Operations port")
 	}
 	result.Operations = operations.Operations()
+	if port, ok := binding.(integrationsdk.SubjectLifecycleBinding); ok {
+		result.Subjects = port.SubjectLifecycle()
+	}
 	if binding.Descriptor().Mode == integrationsdk.DeploymentModeModule {
 		workers, ok := binding.(integrationsdk.LocalWorkerBinding)
 		if !ok {

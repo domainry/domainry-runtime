@@ -77,6 +77,11 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 	value.CreatedAt, value.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	columns := actionExecutionColumns()
 	values := actionExecutionValues(value, "{}")
+	if value.ActorID != "" {
+		if err := r.store.GuardSubjectEvidenceWrite(ctx, r.db, value.WorkspaceID, "_action_executions", []string{"actor_id"}, []any{value.ActorID}); err != nil {
+			return actionmodel.ActionExecutionClaimResult{}, err
+		}
+	}
 	columns, values = slices.Delete(columns, 1, 2), slices.Delete(values, 1, 2)
 	insertQuery, insertArgs, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_action_executions", value.WorkspaceID).Columns(columns...).Values(values...).Build()
 	if buildErr != nil {

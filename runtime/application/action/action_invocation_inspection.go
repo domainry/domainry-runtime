@@ -21,6 +21,10 @@ type ActionInvocationInspection struct {
 // acquires a lease, rechecks post-mutation business preconditions or executes.
 // Callers must also apply current record scope before exposing its result.
 func (s *ActionApplicationService) InspectInvocation(ctx context.Context, in actionmodel.ActionInvocation) (ActionInvocationInspection, error) {
+	return s.inspectInvocation(ctx, in, false)
+}
+
+func (s *ActionApplicationService) inspectInvocation(ctx context.Context, in actionmodel.ActionInvocation, resultRead bool) (ActionInvocationInspection, error) {
 	var out ActionInvocationInspection
 	in = ActionNormalizeInvocation(in)
 	if err := actionAuthorizeQuery(in.Principal); err != nil {
@@ -34,8 +38,14 @@ func (s *ActionApplicationService) InspectInvocation(ctx context.Context, in act
 	if action.ObjectKey != in.ObjectKey || in.RecordID == "" && !actionpolicy.ActionIsObjectKind(action.Kind) || in.RecordID != "" && !actionpolicy.ActionIsRecordKind(action.Kind) {
 		return out, apperror.New(apperror.KindBadRequest, "backend.action.object_mismatch", nil, nil)
 	}
-	if err := s.dependencies.Authorization.Validate(in.Principal, action); err != nil {
-		return out, err
+	if resultRead {
+		if err := s.authorizeInvocationReceipt(ctx, in, action); err != nil {
+			return out, err
+		}
+	} else {
+		if err := s.dependencies.Authorization.Validate(in.Principal, action); err != nil {
+			return out, err
+		}
 	}
 	payload, err := ActionNormalizePayload(action, in.Input)
 	if err != nil {

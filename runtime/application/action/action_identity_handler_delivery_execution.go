@@ -411,6 +411,9 @@ func (e *businessActionExecution) validateCapabilityCompletion(output map[string
 	if e.organizationUnitGrant != nil && strings.TrimSpace(e.organizationUnitResult.Organization.ID) == "" {
 		return apperror.New(apperror.KindBadRequest, "backend.action.organization_unit_delivery_incomplete", nil, nil)
 	}
+	if e.accountErasureCalls != 0 && !e.accountErasureOK {
+		return apperror.New(apperror.KindInternal, "backend.account_erasure.incomplete", nil, nil)
+	}
 	if e.identityDeliveryCalls != 0 && !e.identityDeliveryOK {
 		return apperror.New(apperror.KindInternal, "identity.handler_delivery_incomplete", nil, nil)
 	}

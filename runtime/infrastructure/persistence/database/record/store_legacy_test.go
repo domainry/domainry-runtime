@@ -297,6 +297,9 @@ func openStoreForGeneratedListTest(t *testing.T) *RuntimeStore {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
+	if err := store.EnsureApplicationSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	return store
 }
 

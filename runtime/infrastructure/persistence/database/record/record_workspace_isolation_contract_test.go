@@ -31,6 +31,9 @@ func TestRecordStoreWorkspaceIsolationContract(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := store.EnsureEvidenceSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	repository := NewRecordStore(store)
 	object := definitionmodel.ObjectSchema{Key: "workspace_record", Fields: []definitionmodel.FieldSchema{{Key: "email", Type: "text", Unique: true}}}
 	workspaceA, workspaceB := "workspace-a", "workspace-b"
@@ -94,6 +97,9 @@ func TestTwoRuntimeStoreInstancesProcessDifferentWorkspacesConcurrently(t *testi
 	first, second := open(), open()
 	defer first.Close()
 	defer second.Close()
+	if err := first.EnsureApplicationSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := first.DB().Exec(`CREATE TABLE two_runtime_workspace_record (
 		workspace_id TEXT NOT NULL,
 		id TEXT NOT NULL,

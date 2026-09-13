@@ -57,6 +57,11 @@ func (r RecordStore) tryBeginRecordMutationOnce(ctx context.Context, request rec
 	value.CreatedAt, value.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	columns := recordMutationExecutionColumns()
 	values := recordMutationExecutionValues(value, "{}")
+	if value.ActorID != "" {
+		if err := r.store.GuardSubjectEvidenceWrite(ctx, r.database(), workspaceID, "_record_mutation_executions", columns, values); err != nil {
+			return recordmodel.RecordMutationClaimResult{}, err
+		}
+	}
 	queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_record_mutation_executions", workspaceID).
 		Columns(append(columns[:1], columns[2:]...)...).Values(append(values[:1], values[2:]...)...).Build()
 	if buildErr != nil {

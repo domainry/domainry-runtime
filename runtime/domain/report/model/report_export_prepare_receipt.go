@@ -20,6 +20,7 @@ type ReportExportPrepareReceipt struct {
 	ReportKey             string
 	ObjectKey             string
 	AuditID               string
+	RetryOfJobID          string
 	CallerKey             string
 	RequestFingerprint    string
 	Status                string

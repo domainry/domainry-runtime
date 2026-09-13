@@ -105,13 +105,17 @@ func businessActionHostError(err error) error {
 }
 
 func (h *ConversationBusinessHost) prepareBusinessAction(ctx context.Context, q agentsdk.ConversationBusinessAction, a agentsdk.ConversationAuthority) (definitionmodel.ActionSchema, actionmodel.ActionInvocation, error) {
+	return h.prepareBusinessActionAccess(ctx, q, a, false)
+}
+
+func (h *ConversationBusinessHost) prepareBusinessActionAccess(ctx context.Context, q agentsdk.ConversationBusinessAction, a agentsdk.ConversationAuthority, resultRead bool) (definitionmodel.ActionSchema, actionmodel.ActionInvocation, error) {
 	var in actionmodel.ActionInvocation
 	p, err := h.principal(ctx, a)
 	if err != nil {
 		return definitionmodel.ActionSchema{}, in, err
 	}
 	action, ok := h.businessActionDefinition(q.ActionKey)
-	if !ok || len(h.evidenceKey) == 0 || len(invocationcontract.ValidateActionPermission(action, p)) != 0 {
+	if !ok || len(h.evidenceKey) == 0 || !resultRead && len(invocationcontract.ValidateActionPermission(action, p)) != 0 {
 		return action, in, conversationBusinessError("forbidden")
 	}
 	if q.Version != h.businessActionVersion(action) {
@@ -120,7 +124,7 @@ func (h *ConversationBusinessHost) prepareBusinessAction(ctx context.Context, q 
 	if action.ObjectKey != q.ObjectKey || action.PayloadFields == nil || q.RecordID == "" && !actionpolicy.ActionIsObjectKind(action.Kind) || q.RecordID != "" && !actionpolicy.ActionIsRecordKind(action.Kind) || len(q.RecordID) > 256 {
 		return action, in, businessActionError("bad_request", "business_action_invalid")
 	}
-	if q.RecordID != "" {
+	if q.RecordID != "" && !resultRead {
 		allowed, err := h.records.(conversationBusinessActionRecords).RecordScopeAllowsAction(ctx, action.ObjectKey, q.RecordID, actionpolicy.ActionName(action), p)
 		if err != nil {
 			return action, in, businessActionHostError(err)

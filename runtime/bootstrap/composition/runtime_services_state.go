@@ -12,6 +12,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
@@ -135,6 +136,7 @@ type runtimeAssembly struct {
 	runtimeStatusRepo                   deploymentrepository.DeploymentRuntimeStatusRepository
 	identityProjection                  identitysdk.Projection
 	identityHandlerDeliveryBinder       identitysdk.HandlerDeliveryUnitOfWorkBinder
+	accountErasures                     lifecyclecontract.AccountErasures
 	organizationUnitDeliveryBinder      organizationunit.UnitOfWorkBinder
 	storeOrganizationDeliveryBinder     identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
 	workspaceIdentityUsageBinder        identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder

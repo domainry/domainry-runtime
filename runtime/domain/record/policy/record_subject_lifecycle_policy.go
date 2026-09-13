@@ -53,6 +53,12 @@ func RecordValidateSubjectLifecycle(object definitionmodel.ObjectSchema) error {
 				return fmt.Errorf("%s.%s lifecycle_subject_file must be boolean", object.Key, field.Key)
 			}
 		}
+		if raw, ok := field.Config["lifecycle_subject_relation"]; ok {
+			enabled, valid := raw.(bool)
+			if !valid || enabled && (field.Type != "relation" || strings.TrimSpace(field.Validation.Target) == "") {
+				return fmt.Errorf("%s.%s lifecycle_subject_relation requires a declared relation target", object.Key, field.Key)
+			}
+		}
 		switch mode := RecordSubjectEraseMode(field); mode {
 		case RecordLifecycleEraseRetain, RecordLifecycleEraseAnonymize, RecordLifecycleEraseDelete:
 		default:
@@ -75,4 +81,13 @@ func recordLifecycleBool(config map[string]any, key string) (bool, bool) {
 	}
 	value, valid := raw.(bool)
 	return value, valid
+}
+
+// RecordSubjectRelationTarget follows an explicitly owned business relation.
+func RecordSubjectRelationTarget(field definitionmodel.FieldSchema) string {
+	enabled, _ := recordLifecycleBool(field.Config, "lifecycle_subject_relation")
+	if !enabled {
+		return ""
+	}
+	return strings.TrimSpace(field.Validation.Target)
 }

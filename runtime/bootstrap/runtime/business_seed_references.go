@@ -43,7 +43,7 @@ func newIdentityBusinessSeedReferenceResolver(cfgWorkspaceID, applicationKey str
 	return &identityBusinessSeedReferenceResolver{
 		projection: projection,
 		application: identitysdk.ApplicationScope{
-			TenantID:       identitysdk.TenantID(strings.TrimSpace(cfgWorkspaceID)),
+
 			WorkspaceID:    identitysdk.WorkspaceID(strings.TrimSpace(cfgWorkspaceID)),
 			ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(applicationKey)),
 		},

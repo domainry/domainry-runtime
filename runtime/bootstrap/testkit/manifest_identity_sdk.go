@@ -223,7 +223,7 @@ func (binding *manifestIdentityBinding) Verify(_ context.Context, request identi
 	}
 	now := time.Now()
 	return identitysdk.VerifiedToken{
-		Issuer: "plane-testkit-identity", Audience: binding.application.ApplicationKey, SubjectID: identitysdk.SubjectID(session.subject), TenantID: binding.application.TenantID, WorkspaceID: binding.application.WorkspaceID,
+		Issuer: "plane-testkit-identity", Audience: binding.application.ApplicationKey, SubjectID: identitysdk.SubjectID(session.subject), WorkspaceID: binding.application.WorkspaceID,
 		SessionID: "plane-testkit-session", AuthorizationRevision: "plane-testkit-authorization", IssuedAt: now.Add(-time.Minute).Unix(), ExpiresAt: now.Add(time.Hour).Unix(), TokenID: request.AccessToken,
 	}, nil
 }
@@ -391,7 +391,7 @@ func (binding *manifestIdentityBinding) matchesApplication(application identitys
 	if application.WorkspaceID != binding.application.WorkspaceID || application.ApplicationKey != binding.application.ApplicationKey {
 		return false
 	}
-	return application.TenantID == "" || binding.application.TenantID == "" || application.TenantID == binding.application.TenantID
+	return true
 }
 
 func (binding *manifestIdentityBinding) FindUser(_ context.Context, lookup identitysdk.UserLookup) (identitysdk.User, bool, error) {
@@ -663,7 +663,7 @@ func (binding *manifestIdentityBinding) accessBundle(subject, roleKey string) id
 	})
 	return identitysdk.AccessBundle{
 		ContractVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationRevision: "plane-testkit-authorization", ExpiresAt: time.Now().Add(time.Hour),
-		Subject: identitysdk.Subject{TenantID: binding.application.TenantID, WorkspaceID: binding.application.WorkspaceID, SubjectID: identitysdk.SubjectID(subject)}, FunctionGrants: grants, DataPolicies: dataPolicies, FieldPolicies: fields,
+		Subject: identitysdk.Subject{WorkspaceID: binding.application.WorkspaceID, SubjectID: identitysdk.SubjectID(subject)}, FunctionGrants: grants, DataPolicies: dataPolicies, FieldPolicies: fields,
 		ExportPolicies: append([]identitysdk.ExportPolicy(nil), role.ExportPolicies...), Guardrails: append([]identitysdk.Guardrail(nil), role.Guardrails...),
 	}
 }

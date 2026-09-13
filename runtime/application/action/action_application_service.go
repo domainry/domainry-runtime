@@ -57,6 +57,9 @@ type ActionApplicationDependencies struct {
 	Audit            ActionAudit
 	ProjectRecord    func(context.Context, principalmodel.Principal, string, recordmodel.Record) (recordmodel.Record, error)
 	ProjectOutput    func(context.Context, principalmodel.Principal, definitionmodel.ActionSchema, map[string]any) (map[string]any, error)
+	// ReceiptRecordReadable checks current read scope for each target/reference.
+	// Missing wiring denies independent receipt reading, without changing writes.
+	ReceiptRecordReadable func(context.Context, string, string, principalmodel.Principal) (bool, error)
 	// ExecuteCommittedWorkflows activates the Workflow intents an Action staged
 	// inside its own transaction. It runs only after the commit succeeded, so a
 	// crash here leaves the durable pending intent for the Workflow worker.

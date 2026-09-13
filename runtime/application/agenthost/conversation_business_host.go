@@ -112,6 +112,10 @@ func (h *ConversationBusinessHost) principal(ctx context.Context, a agentsdk.Con
 	}
 	resolved, err := h.principals.Resolve(requestcontext.WithWorkspaceID(ctx, a.WorkspaceID), identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(a.UserID), RoleKey: a.RoleKey})
 	if err != nil {
+		var denied *identitysdk.Error
+		if errors.As(err, &denied) && (denied.StatusCode == 401 || denied.StatusCode == 403 || denied.StatusCode == 404 || denied.Code == "identity.subject_not_found") {
+			return principalmodel.Principal{}, conversationBusinessError("forbidden")
+		}
 		return principalmodel.Principal{}, conversationBusinessReadError(err)
 	}
 	p := resolved.Principal
@@ -149,6 +153,7 @@ func (h *ConversationBusinessHost) AuthorizeConversationTool(ctx context.Context
 	definitions = append(definitions, agentsdk.BusinessRelationConversationTools()...)
 	definitions = append(definitions, agentsdk.BusinessActionConversationTools()...)
 	definitions = append(definitions, agentsdk.BusinessWorkflowConversationTools()...)
+	definitions = append(definitions, agentsdk.ConversationCollaborationTools()...)
 	definitions = append(definitions, toolsdk.ReportQueryDefinitions()...)
 	definitions = append(definitions, toolsdk.AnalysisDefinitions()...)
 	for _, definition := range definitions {

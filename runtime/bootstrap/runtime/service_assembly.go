@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	auditcontract "github.com/domainry/domainry-audit-sdk/contract"
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"os"
 	"path/filepath"
@@ -61,6 +62,7 @@ import (
 	workspaceaggregatepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceaggregate"
 	workspaceprovisionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
+	subjectevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/subjectevidence"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -84,11 +86,13 @@ type runtimeExtensionRegistries struct {
 	integrationOwnerCatalog         integrationsdk.Catalog
 	integrationOwnerManagement      integrationsdk.Management
 	integrationOwnerOperations      integrationsdk.Operations
+	integrationOwnerSubjects        integrationsdk.SubjectLifecycle
 	dataExchangeProviderKey         string
 	dataExchangeImportProvider      dataexchangemodulehost.ImportProvider
 	dataExchangeExportProvider      dataexchangemodulehost.ExportProvider
 	integrationMode                 integrationsdk.DeploymentMode
 	notificationSubjectLifecycle    lifecyclecontract.SubjectExecutionHandler
+	identitySubjectLifecycle        lifecyclecontract.SubjectExecutionHandler
 	notificationRetention           lifecyclecontract.OwnerLifecycleExecutor
 	auditRepository                 auditrepository.AuditRepository
 	auditSubjectLifecycle           lifecyclecontract.SubjectExecutionHandler
@@ -112,7 +116,9 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	var integrationOwnerCatalog integrationsdk.Catalog
 	var integrationOwnerManagement integrationsdk.Management
 	var integrationOwnerOperations integrationsdk.Operations
+	var integrationOwnerSubjects integrationsdk.SubjectLifecycle
 	var notificationSubjectLifecycle lifecyclecontract.SubjectExecutionHandler
+	var identitySubjectLifecycle lifecyclecontract.SubjectExecutionHandler
 	var notificationRetention lifecyclecontract.OwnerLifecycleExecutor
 	var auditRepository auditrepository.AuditRepository
 	var auditSubjectLifecycle lifecyclecontract.SubjectExecutionHandler
@@ -145,7 +151,9 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		integrationOwnerCatalog = extensionRegistries[0].integrationOwnerCatalog
 		integrationOwnerManagement = extensionRegistries[0].integrationOwnerManagement
 		integrationOwnerOperations = extensionRegistries[0].integrationOwnerOperations
+		integrationOwnerSubjects = extensionRegistries[0].integrationOwnerSubjects
 		notificationSubjectLifecycle = extensionRegistries[0].notificationSubjectLifecycle
+		identitySubjectLifecycle = extensionRegistries[0].identitySubjectLifecycle
 		notificationRetention = extensionRegistries[0].notificationRetention
 		if extensionRegistries[0].auditRepository != nil {
 			auditRepository = extensionRegistries[0].auditRepository
@@ -303,6 +311,20 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		return runtimeServiceAssembly{}, fmt.Errorf("initialize file capabilities: %w", err)
 	}
 	recordSubjectLifecycle := recordapplication.NewRecordSubjectLifecycleApplicationService(records, manifest.Objects, lifecycleArtifacts, manifest.IdentityProfileExtensions)
+	if audit, ok := auditSubjectLifecycle.(*runtimeauditmodule.SubjectLifecycle); ok {
+		audit.BindSubjectResourceResolver(func(ctx context.Context, workspaceID, subjectID string) ([]auditcontract.SubjectResource, error) {
+			refs, err := recordSubjectLifecycle.SubjectRecordReferences(ctx, workspaceID, subjectID)
+			if err != nil {
+				return nil, err
+			}
+			resources := []auditcontract.SubjectResource{{ObjectKey: "identity_user", RecordID: subjectID}}
+			for _, ref := range refs {
+				resources = append(resources, auditcontract.SubjectResource{ObjectKey: ref.ObjectKey, RecordID: ref.RecordID})
+			}
+			return resources, nil
+		})
+	}
+
 	reportSQLStore := reportpersistence.NewReportSQLStore(store)
 	reportExportPrepareReceipts := reportpersistence.NewReportExportPrepareReceiptStore(store)
 	var agentTaskRunner agentsdk.TaskRunner
@@ -321,7 +343,11 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		}
 	}
 	projectRevision, metadataRevision := runtimeActionRevisions(manifest)
-	subjectHandlers := []lifecyclecontract.SubjectExecutionHandler{recordSubjectLifecycle, auditSubjectLifecycle}
+	subjectEvidence := subjectevidence.New(store, recordSubjectLifecycle.SubjectRecordReferences, subjectEvidenceEvents(auditRepository))
+	subjectHandlers := []lifecyclecontract.SubjectExecutionHandler{recordSubjectLifecycle, auditSubjectLifecycle, dataExchangeSubjectLifecycle{binding: dataExchangeBinding}, subjectEvidence, integrationSubjectLifecycle{subjects: integrationOwnerSubjects, evidence: subjectEvidence}}
+	if identitySubjectLifecycle != nil {
+		subjectHandlers = append(subjectHandlers, identitySubjectLifecycle)
+	}
 	subjectHandlers = append(subjectHandlers, agentSubjectHandlers...)
 	if notificationSubjectLifecycle != nil {
 		subjectHandlers = append(subjectHandlers, notificationSubjectLifecycle)
@@ -333,6 +359,12 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
 		return runtimeServiceAssembly{}, fmt.Errorf("bind Lifecycle owner extensions: %w", err)
 	}
+	accountErasureBinding, ok := lifecycleBinding.(lifecyclesdk.AccountErasureBinding)
+	if !ok || !lifecycleBinding.Descriptor().Capabilities.AccountErasure || accountErasureBinding.AccountErasures() == nil {
+		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+		return runtimeServiceAssembly{}, fmt.Errorf("Lifecycle Binding returned no approved account erasure queue")
+	}
+	accountErasures := accountErasureBinding.AccountErasures()
 	if lifecycleBinding.Governance() == nil || lifecycleBinding.System() == nil {
 		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
 		return runtimeServiceAssembly{}, fmt.Errorf("Lifecycle Binding returned no business capabilities")
@@ -429,6 +461,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			Notifications:                   notifications,
 			IdentityProjection:              identityProjection,
 			IdentityHandlerDeliveryBinder:   identityHandlerDeliveryBinder,
+			AccountErasures:                 accountErasures,
 			OrganizationUnitDeliveryBinder:  organizationUnitDeliveryBinder,
 			StoreOrganizationDeliveryBinder: storeOrganizationDeliveryBinder,
 			WorkspaceIdentityUsageBinder:    workspaceIdentityUsageBinder,

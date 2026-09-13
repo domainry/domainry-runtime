@@ -72,6 +72,9 @@ func (r WorkflowRouteStore) InsertRouteSteps(ctx context.Context, workspaceID st
 		if err != nil {
 			return err
 		}
+		if err := r.store.GuardSubjectEvidenceWrite(ctx, r.database(), workspaceID, workflowRouteStepsTable, workflowRouteStepColumns, values); err != nil {
+			return err
+		}
 		statement, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, workflowRouteStepsTable, workspaceID).Columns(workflowRouteStepColumns[1:]...).Values(values[1:]...).Build()
 		if err != nil {
 			return fmt.Errorf("build workflow route step insert: %w", err)
@@ -139,6 +142,7 @@ func (r WorkflowRouteStore) UpdateRouteStepCAS(ctx context.Context, workspaceID 
 
 type workflowRouteStepExecutor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
 func updateWorkflowRouteStepTx(ctx context.Context, store *database.RuntimeStore, tx workflowRouteStepExecutor, step workflowmodel.WorkflowRouteStep, expectedStatus string) (bool, error) {
@@ -153,7 +157,7 @@ func updateWorkflowRouteStepTx(ctx context.Context, store *database.RuntimeStore
 		}
 		builder.Set(column, values[index])
 	}
-	predicates := []query.Predicate{query.Equal("id", step.ID)}
+	predicates := []query.Predicate{query.Equal("id", step.ID), store.SubjectEvidenceWriteAllowed(step.WorkspaceID, workflowRouteStepsTable, step.ID)}
 	if expected := strings.TrimSpace(expectedStatus); expected != "" {
 		predicates = append(predicates, query.Equal("status", expected))
 	}
@@ -172,6 +176,9 @@ func updateWorkflowRouteStepTx(ctx context.Context, store *database.RuntimeStore
 func insertWorkflowRouteStepTx(ctx context.Context, store *database.RuntimeStore, tx workflowRouteStepExecutor, step workflowmodel.WorkflowRouteStep) error {
 	values, err := workflowRouteStepValues(step)
 	if err != nil {
+		return err
+	}
+	if err := store.GuardSubjectEvidenceWrite(ctx, tx, step.WorkspaceID, workflowRouteStepsTable, workflowRouteStepColumns, values); err != nil {
 		return err
 	}
 	statement, args, err := query.NewWorkspaceInsertBuilder(store.SQLRenderer, workflowRouteStepsTable, step.WorkspaceID).Columns(workflowRouteStepColumns[1:]...).Values(values[1:]...).Build()

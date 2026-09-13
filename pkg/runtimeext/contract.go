@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v37"
-	ContractSHA256  = "a69b96a5a5fbcf2504ddf63905cd64b699a702314b7e0c8d62b35266a6659927"
+	ContractVersion = "runtimeext-v38"
+	ContractSHA256  = "478644a809ea3570c0bc01c607b1128abc6a64fd6ebc79935cc40e04911e75c7"
 )
 
-const contractDefinitionV37 = `runtimeext-v37
+const contractDefinitionV38 = `runtimeext-v38
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -90,6 +90,9 @@ OrganizationUnitDeliveryNodeType=region,department,team,warehouse|company_and_st
 OrganizationUnitDeliveryParentSource=workspace_company,target_organization
 OrganizationUnitDeliveryAuthority=published_manifest_and_handler_descriptor_exact_match|runtime_workspace_and_bearer|runtime_parent_resolution|same_action_uow|opaque_result|no_workspace_bearer_parent_or_owner_input
 DeliverIdentity(context.Context,ActionExecution,IdentityHandlerDeliveryRequest)(IdentityHandlerDeliveryResult,error)
+StageAccountErasure(context.Context,ActionExecution,AccountErasureStageRequest)(AccountErasureReceipt,error)
+GetAccountErasure(context.Context,ActionExecution,AccountErasureGetRequest)(AccountErasureReceipt,error)
+AccountErasureSemantics=static_profile_and_request_mapping|locked_subject_intent|independent_approver|exact_organization|identity_and_binding_cas|joined_queue_and_disable|effects_after_commit|source_owned_retry|success_only_after_all_owners
 ResolveBoundIdentity(context.Context,ActionExecution,string)(IdentityBoundIdentity,error)
 ResolveBoundIdentities(context.Context,ActionExecution,[]string)([]IdentityBoundIdentity,error)
 ResolveBoundIdentityProfile(context.Context,ActionExecution,string,IdentityHandlerProfileBindingSelector)(IdentityBoundIdentity,error)
@@ -124,6 +127,7 @@ func ComputedContractSHA256() string {
 		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, FileDownloadRequest{}, FileDownloadTicket{}, DerivedFileRequest{}, DerivedFileEvidence{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{},
 		CrossWorkspaceAggregateDimension{}, CrossWorkspaceAggregateDimensionTransform{}, CrossWorkspaceAggregateDateBucketTransform{}, CrossWorkspaceAggregateMeasure{}, CrossWorkspaceAggregateFilterCapability{}, CrossWorkspaceAggregateCapability{}, CrossWorkspaceAggregateFilter{}, CrossWorkspaceAggregateRequest{}, CrossWorkspaceAggregateRow{}, CrossWorkspaceAggregateResult{},
 		ActionTargetOrganizationCapability{}, TargetOrganization{}, OrganizationUnitDeliveryCapability{}, OrganizationUnitDeliveryRequest{}, OrganizationUnitResolveRequest{}, OrganizationUnit{}, OrganizationUnitDeliveryResult{}, StoreOrganizationProvisionRequest{}, StoreOrganizationProvisionResult{}, StoreOrganizationRenameRequest{}, StoreOrganizationDisableRequest{}, StoreOrganizationMutationResult{}, ActionStoreOrganizationMutationCapability{},
+		AccountErasureCapability{}, AccountErasureStageRequest{}, AccountErasureGetRequest{}, AccountErasureReceipt{},
 		IdentityProfileBindingCapability{}, IdentityHandlerDeliveryCapability{}, IdentityUser{}, IdentityHandlerUserMutation{}, IdentityHandlerProfileBindingMutation{}, IdentityHandlerDeliveryRequest{}, IdentityHandlerProfileBinding{}, IdentityHandlerProfileBindingSelector{}, IdentityHandlerDeliveryResult{}, IdentityBoundIdentity{},
 		StoreOrganizationCatalogCapability{}, StoreOrganizationCatalogRequest{}, StoreOrganizationCatalogItem{}, StoreOrganizationCatalogPage{},
 		WorkspaceIdentityUsageCapability{}, WorkspaceIdentityUsageRequest{}, WorkspaceIdentityUsageResolveRequest{}, WorkspaceIdentityAccountCounts{}, WorkspaceCommercialTerms{}, WorkspaceCommercialConfiguration{}, WorkspaceIdentityUsageItem{}, WorkspaceIdentityUsagePage{}, WorkspaceIdentityUsageResolveResult{},
@@ -136,7 +140,7 @@ func ComputedContractSHA256() string {
 		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV37)
+	definition.WriteString(contractDefinitionV38)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

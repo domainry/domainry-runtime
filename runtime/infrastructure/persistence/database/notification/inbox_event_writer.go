@@ -95,7 +95,6 @@ func (w InboxEventWriter) CommittedCount(ctx context.Context, event notification
 		queryValue, args, err := query.NewWorkspaceSelectBuilder(w.runtimeStore.SQLRenderer, "_publication_outbox", event.WorkspaceID).
 			Projections(query.Project(query.CountAll())).Where(query.And(
 			query.Equal("publication_type", "notification.saas"),
-			query.Equal("tenant_id", scope.TenantID),
 			query.Equal("application_key", scope.ApplicationKey), query.Equal("source_event_id", event.SourceEventID),
 		)).Build()
 		if err != nil {

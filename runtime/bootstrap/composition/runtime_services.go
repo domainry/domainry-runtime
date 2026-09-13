@@ -9,6 +9,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
@@ -152,6 +153,7 @@ type RuntimeServicesDependencies struct {
 	Notifications                       NotificationRenderer
 	IdentityProjection                  identitysdk.Projection
 	IdentityHandlerDeliveryBinder       identitysdk.HandlerDeliveryUnitOfWorkBinder
+	AccountErasures                     lifecyclecontract.AccountErasures
 	OrganizationUnitDeliveryBinder      organizationunit.UnitOfWorkBinder
 	StoreOrganizationDeliveryBinder     identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
 	WorkspaceIdentityUsageBinder        identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder

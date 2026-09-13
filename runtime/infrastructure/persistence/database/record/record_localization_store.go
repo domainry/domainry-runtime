@@ -114,7 +114,7 @@ func (r RecordStore) applyRecordLocalizedMutationsTx(ctx context.Context, tx Tra
 		return nil
 	}
 	for _, value := range mutations {
-		predicate := query.And(query.Equal("object_key", commitObject.Key), query.Equal("record_id", recordID), query.Equal("field_key", value.FieldKey), query.Equal("locale", value.Locale))
+		predicate := query.And(query.Equal("object_key", commitObject.Key), query.Equal("record_id", recordID), query.Equal("field_key", value.FieldKey), query.Equal("locale", value.Locale), r.store.SubjectResourceWriteAllowed(workspaceID, commitObject.Key, recordID))
 		deleteSQL, deleteArgs, buildErr := query.NewWorkspaceDeleteBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Where(predicate).Build()
 		if buildErr != nil {
 			return buildErr
@@ -125,12 +125,24 @@ func (r RecordStore) applyRecordLocalizedMutationsTx(ctx context.Context, tx Tra
 		if strings.TrimSpace(value.TextValue) == "" {
 			continue
 		}
-		insert, args, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, recordLocalizedValueTable, workspaceID).Columns("object_key", "record_id", "field_key", "locale", "text_value", "created_at", "updated_at").Values(commitObject.Key, recordID, value.FieldKey, value.Locale, value.TextValue, changedAt, changedAt).Build()
+		builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, recordLocalizedValueTable,
+			[]string{"object_key", "record_id", "field_key", "locale", "text_value", "created_at", "updated_at"},
+			[]any{commitObject.Key, recordID, value.FieldKey, value.Locale, value.TextValue, changedAt, changedAt})
 		if buildErr != nil {
 			return buildErr
 		}
-		if _, err := tx.ExecContext(ctx, insert, args...); err != nil {
+		insert, args, buildErr := builder.Build()
+		if buildErr != nil {
+			return buildErr
+		}
+		result, err := tx.ExecContext(ctx, insert, args...)
+		if err != nil {
 			return fmt.Errorf("insert record localized value: %w", err)
+		}
+		if affected, err := result.RowsAffected(); err != nil {
+			return err
+		} else if affected != 1 {
+			return fmt.Errorf("runtime.subject_erased")
 		}
 	}
 	return nil

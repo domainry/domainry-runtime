@@ -123,6 +123,7 @@ func (gateway integrationRuntimeConnectorGateway) Call(ctx context.Context, exec
 		maskedDestination = capability.ConnectorKey + "/" + capability.OperationKey
 	}
 	result, err := gateway.operations.Call(ctx, integrationsdk.ProviderCallRequest{
+		Source:    integrationsdk.InvocationSource{ExecutionID: identity.ExecutionID, ObjectKey: identity.ObjectKey, RecordID: identity.RecordID},
 		RequestID: requestID, WorkspaceID: workspace.ID,
 		ConnectorKey: capability.ConnectorKey, ConnectionKey: capability.ConnectionKey, Operation: capability.OperationKey,
 		Payload: append(json.RawMessage(nil), request.Payload...), PersistenceMode: persistence, MaskedDestination: maskedDestination,

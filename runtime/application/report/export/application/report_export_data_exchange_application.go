@@ -36,11 +36,17 @@ const (
 // reading the mutable audit row or probing source data.
 func (s *ReportExportApplicationService) PrepareResolvedExport(ctx context.Context, request reportmodel.ReportExportPrepareRequest, report reportmodel.ReportSchema, control reportmodel.ReportExportControlSchema, principal principalmodel.Principal) (reportexport.ExchangeJob, error) {
 	request.IdempotencyKey = strings.TrimSpace(request.IdempotencyKey)
+	request.RetryOfJobID = strings.TrimSpace(request.RetryOfJobID)
 	if request.IdempotencyKey == "" {
 		return reportexport.ExchangeJob{}, &apperror.AppError{Kind: apperror.KindBadRequest, Code: idempotency.ErrorCodeMissingKey}
 	}
 	if err := s.validateReportExportPrepareStatic(request, report, control, principal); err != nil {
 		return reportexport.ExchangeJob{}, err
+	}
+	if request.RetryOfJobID != "" {
+		if err := s.validateReportExportRetry(ctx, request, principal); err != nil {
+			return reportexport.ExchangeJob{}, err
+		}
 	}
 	fingerprint, err := reportExportPrepareRequestFingerprint(request, report, control, principal)
 	if err != nil {
@@ -56,6 +62,7 @@ func (s *ReportExportApplicationService) PrepareResolvedExport(ctx context.Conte
 			WorkspaceID: strings.TrimSpace(principal.WorkspaceID), RequesterUserID: strings.TrimSpace(principal.UserID),
 			UseCase: runtimereportmodel.ReportExportPrepareUseCase, ReportKey: strings.TrimSpace(report.Key),
 			ObjectKey: strings.TrimSpace(request.ObjectKey), AuditID: strings.TrimSpace(request.AuditID), CallerKey: request.IdempotencyKey,
+			RetryOfJobID: request.RetryOfJobID,
 		},
 		RequestFingerprint: fingerprint, LeaseOwner: leaseOwner, LeaseTTL: reportExportPrepareLeaseTTL, Now: now,
 	})
@@ -101,6 +108,7 @@ func (s *ReportExportApplicationService) executeReportExportPrepareClaim(ctx con
 		return reportexport.ExchangeJob{}, s.releaseFreshReportExportPrepare(ctx, receipt, err)
 	}
 	payload.PrepareReceiptID = receipt.ID
+	payload.RetryOfJobID = receipt.RetryOfJobID
 	receipt.BusinessJobKey = reportExportBusinessJobKey(receipt)
 	payload.ArtifactIdempotencyKey = reportExportArtifactKey(receipt)
 	payloadJSON, err := json.Marshal(payload)
@@ -313,21 +321,26 @@ func reportExportPrepareRequestFingerprint(request reportmodel.ReportExportPrepa
 		ReportKey: strings.TrimSpace(report.Key), ObjectKey: strings.TrimSpace(request.ObjectKey), AuditID: strings.TrimSpace(request.AuditID),
 		Scope: request.Scope, ReportDefinitionSHA256: reportHash, ReportSourceSHA256: sourceHash,
 		AuthorizationScopeSHA256: authorizationHash, ControlDefinitionSHA256: controlHash, MaxRows: control.MaxRows, Format: "csv",
+		RetryOfJobID: request.RetryOfJobID,
 	})
 }
 
 func reportExportPrepareFingerprint(payload reportexport.ExportPayload) (string, error) {
+	preconditions := map[string]any{
+		"report_definition_sha256": payload.ReportDefinitionSHA256, "report_source_sha256": payload.ReportSourceSHA256,
+		"authorization_scope_sha256": payload.AuthorizationScopeSHA256, "control_definition_sha256": payload.ControlDefinitionSHA256,
+		"max_rows": payload.MaxRows,
+	}
+	if payload.RetryOfJobID != "" {
+		preconditions["retry_of_job_id"] = payload.RetryOfJobID
+	}
 	return idempotency.Fingerprint(idempotency.FingerprintInput{
 		UseCase: runtimereportmodel.ReportExportPrepareUseCase, ResourceType: "report_export_audit", TargetID: strings.TrimSpace(payload.AuditID),
 		Payload: map[string]any{
 			"report_key": strings.TrimSpace(payload.ReportKey), "object_key": strings.TrimSpace(payload.ObjectKey),
 			"scope": payload.Scope, "format": strings.TrimSpace(payload.Format),
 		},
-		Preconditions: map[string]any{
-			"report_definition_sha256": payload.ReportDefinitionSHA256, "report_source_sha256": payload.ReportSourceSHA256,
-			"authorization_scope_sha256": payload.AuthorizationScopeSHA256, "control_definition_sha256": payload.ControlDefinitionSHA256,
-			"max_rows": payload.MaxRows,
-		},
+		Preconditions: preconditions,
 	})
 }
 
@@ -338,7 +351,7 @@ func reportExportPayloadFromReceipt(receipt runtimereportmodel.ReportExportPrepa
 	}
 	fingerprint, err := reportExportPrepareFingerprint(payload)
 	if err != nil || strings.TrimSpace(payload.PrepareReceiptID) != receipt.ID || fingerprint != receipt.RequestFingerprint ||
-		payload.WorkspaceID != receipt.WorkspaceID || payload.RequesterUserID != receipt.RequesterUserID || payload.ReportKey != receipt.ReportKey || payload.ObjectKey != receipt.ObjectKey || payload.AuditID != receipt.AuditID ||
+		payload.WorkspaceID != receipt.WorkspaceID || payload.RequesterUserID != receipt.RequesterUserID || payload.ReportKey != receipt.ReportKey || payload.ObjectKey != receipt.ObjectKey || payload.AuditID != receipt.AuditID || payload.RetryOfJobID != receipt.RetryOfJobID ||
 		receipt.BusinessJobKey != reportExportBusinessJobKey(receipt) || payload.ArtifactIdempotencyKey != reportExportArtifactKey(receipt) {
 		return payload, &apperror.AppError{Kind: apperror.KindConflict, Code: idempotency.ErrorCodeReceiptUnavailable, Err: err}
 	}
@@ -369,9 +382,13 @@ func reportExportResultHash(rows []reportmodel.ReportResultRow) (string, error) 
 }
 
 func reportExportBusinessJobKey(receipt runtimereportmodel.ReportExportPrepareReceipt) string {
-	digest := sha256.Sum256([]byte(strings.Join([]string{
+	parts := []string{
 		"domainry-runtime/report-export-job/v1", receipt.WorkspaceID, receipt.RequesterUserID, receipt.UseCase, receipt.ReportKey, receipt.ObjectKey, receipt.AuditID,
-	}, "\x00")))
+	}
+	if receipt.RetryOfJobID != "" {
+		parts = append(parts, "retry", receipt.RetryOfJobID)
+	}
+	digest := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
 	return "report-export-job:" + hex.EncodeToString(digest[:])
 }
 

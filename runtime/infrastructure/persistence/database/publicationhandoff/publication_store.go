@@ -127,6 +127,9 @@ func (s PublicationStore) InsertOutbox(ctx context.Context, workspaceID string, 
 	}
 	columns := []string{"id", "publication_type", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at"}
 	values := []any{value.ID, "integration.connector", value.ConnectorKey, value.ConnectionKey, value.Operation, value.Status, string(payload), value.EventID, value.RequestRef, value.DedupKey, value.RequestFingerprint, value.ResponseRef, value.Error, value.AttemptCount, value.NextAttemptAt, value.LastAttemptAt, value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.CreatedBy, value.CreatedAt, value.UpdatedAt}
+	if err := s.store.GuardSubjectEvidenceWrite(ctx, s.db, workspaceID, "_publication_outbox", columns, values); err != nil {
+		return publicationmodel.Message{}, err
+	}
 	queryValue, args, err := query.NewWorkspaceInsertBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(columns...).Values(values...).Build()
 	if err != nil {
 		return publicationmodel.Message{}, fmt.Errorf("build Runtime publication insert: %w", err)
@@ -163,7 +166,7 @@ func (s PublicationStore) UpdateOutboxStatus(ctx context.Context, workspaceID, i
 	now := time.Now().UTC().Format(time.RFC3339)
 	queryValue, args, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 		Set("status", strings.TrimSpace(status)).Set("response_ref", strings.TrimSpace(responseRef)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", "").Set("updated_at", now).
-		Where(publicationPredicate(query.Equal("id", id))).Build()
+		Where(publicationPredicate(query.And(query.Equal("id", id), s.store.SubjectEvidenceWriteAllowed(workspaceID, "_publication_outbox", id)))).Build()
 	if err != nil {
 		return publicationmodel.Message{}, fmt.Errorf("build Runtime publication status update: %w", err)
 	}
@@ -205,7 +208,7 @@ func (s PublicationStore) ScheduleOutboxRetry(ctx context.Context, workspaceID, 
 	if errorText = strings.TrimSpace(errorText); errorText != "" {
 		builder.Set("error", errorText)
 	}
-	queryValue, args, err := builder.Where(publicationPredicate(query.Equal("id", id))).Build()
+	queryValue, args, err := builder.Where(publicationPredicate(query.And(query.Equal("id", id), s.store.SubjectEvidenceWriteAllowed(workspaceID, "_publication_outbox", id)))).Build()
 	if err != nil {
 		return publicationmodel.Message{}, fmt.Errorf("build Runtime publication retry: %w", err)
 	}

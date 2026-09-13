@@ -286,7 +286,7 @@ func validateStoreOrganizationSnapshotOutput(action definitionmodel.ActionSchema
 		if descriptor.StoreOrganizationCatalog == nil || !field.Required || field.Repeated || len(field.StoreOrganizationSnapshotObjectKeys) == 0 {
 			return fmt.Errorf("published action %s store Organization snapshot output %s is not closed over a catalog and required singleton Objects", action.Key, field.Key)
 		}
-		if descriptor.TargetOrganization != nil || descriptor.OrganizationUnitDelivery != nil || descriptor.StoreOrganizationMutation != nil || descriptor.WorkspaceIdentityUsage != nil || descriptor.IdentityHandlerDelivery != nil || len(descriptor.CrossWorkspaceAggregates) != 0 || len(descriptor.ConnectorCapabilities) != 0 || len(descriptor.NotificationEventTypes) != 0 || len(descriptor.FileCapabilities) != 0 {
+		if descriptor.TargetOrganization != nil || descriptor.OrganizationUnitDelivery != nil || descriptor.StoreOrganizationMutation != nil || descriptor.WorkspaceIdentityUsage != nil || descriptor.IdentityHandlerDelivery != nil || descriptor.AccountErasure != nil || len(descriptor.CrossWorkspaceAggregates) != 0 || len(descriptor.ConnectorCapabilities) != 0 || len(descriptor.NotificationEventTypes) != 0 || len(descriptor.FileCapabilities) != 0 {
 			return fmt.Errorf("published action %s store Organization snapshot output may grant only read-only record access and the store Organization catalog", action.Key)
 		}
 		for _, objectKey := range field.StoreOrganizationSnapshotObjectKeys {

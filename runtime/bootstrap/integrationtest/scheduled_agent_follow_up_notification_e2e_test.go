@@ -71,7 +71,7 @@ func g06IdentityBinding(t *testing.T, cfg config.Config) identitysdk.Binding {
 		Users:               []identitysdk.User{{ID: "runtime_fixture_user", Name: "Runtime fixture user", Email: "runtime-fixture@example.com", Status: "active", Locale: "en-US"}},
 		UserRoleAssignments: map[string][]string{"runtime_fixture_user": {"admin"}},
 	})
-	binding, err := factory.Open(t.Context(), identitysdk.ApplicationRef{TenantID: identitysdk.TenantID(cfg.IdentityWorkspaceID), WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)})
+	binding, err := factory.Open(t.Context(), identitysdk.ApplicationRef{WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)})
 	if err != nil {
 		t.Fatal(err)
 	}

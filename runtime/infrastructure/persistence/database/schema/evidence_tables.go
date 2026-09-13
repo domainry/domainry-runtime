@@ -84,7 +84,6 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		"request_fingerprint": text + " NOT NULL DEFAULT ''",
 		"fencing_token":       "BIGINT NOT NULL DEFAULT 0",
 		"publication_type":    text + " NOT NULL DEFAULT 'integration.connector'",
-		"tenant_id":           text + " NOT NULL DEFAULT ''",
 		"application_key":     text + " NOT NULL DEFAULT ''",
 		"source_event_id":     text + " NOT NULL DEFAULT ''",
 		"event_type":          text + " NOT NULL DEFAULT ''",
@@ -144,7 +143,7 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		{name: "idx_runtime_publication_due", table: "_publication_outbox", columns: []string{"publication_type", "status", "next_attempt_at", "lease_expires_at", "created_at"}},
 		{name: "uniq_runtime_publication_dedup", table: "_publication_outbox", columns: []string{"workspace_id", "publication_type", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
 
-		{name: "uniq_runtime_notification_publication_source", table: "_publication_outbox", columns: []string{"publication_type", "tenant_id", "workspace_id", "application_key", "source_event_id", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
+		{name: "uniq_runtime_notification_publication_source", table: "_publication_outbox", columns: []string{"publication_type", "workspace_id", "application_key", "source_event_id", "connector_key", "connection_key", "operation", "dedup_key"}, unique: true},
 		{name: "idx_automation_execution_rule", table: "_automation_rule_executions", columns: []string{"workspace_id", "rule_key", "created_at"}},
 		{name: "idx_automation_execution_record", table: "_automation_rule_executions", columns: []string{"workspace_id", "object_key", "record_id", "created_at"}},
 		{name: "idx_automation_execution_status", table: "_automation_rule_executions", columns: []string{"workspace_id", "status", "created_at"}},

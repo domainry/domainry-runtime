@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
-	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
@@ -126,12 +125,7 @@ func TestRecordSubjectLifecycleDiscoversProfileExtensionRelation(t *testing.T) {
 	if len(repository.queries) != 1 || repository.queries[0].Filters["identity_user"] != "user-1" {
 		t.Fatalf("profile relation queries=%#v", repository.queries)
 	}
-	if _, err := service.EraseSubject(t.Context(), "workspace-a", "user-1", nil); err != nil {
-		t.Fatal(err)
-	}
-	if len(repository.updated) != 1 || repository.updated[0].Data["email"] == "member@example.com" {
-		t.Fatalf("profile was not anonymized: %#v", repository.updated)
-	}
+
 }
 
 func TestRecordSubjectRepositoryAndFileExportFailures(t *testing.T) {
@@ -187,60 +181,21 @@ func TestRecordSubjectEmptyObjectsPaginationAndEraseValueEdges(t *testing.T) {
 	if _, err := service.PreviewSubject(t.Context(), "workspace-a", "user-1"); err != nil || repository.pages != 2 {
 		t.Fatalf("paginated preview pages=%d err=%v", repository.pages, err)
 	}
-	if _, err := service.EraseSubject(t.Context(), "workspace-a", "user-1", nil); err != nil || len(repository.updated) != 1 {
-		t.Fatalf("erase updated=%#v err=%v", repository.updated, err)
-	}
-	if got := repository.updated[0].Data["file_token"]; !strings.HasPrefix(got.(string), "erased-") {
-		t.Fatalf("anonymized file token=%#v", got)
-	}
-	if repository.updated[0].Data["delete_value"] != nil {
-		t.Fatalf("deleted scalar=%#v", repository.updated[0].Data["delete_value"])
-	}
 
-	unchanged := definitionmodel.ObjectSchema{Key: "identity", Fields: []definitionmodel.FieldSchema{{Key: "employee", Type: "user"}}}
-	repository = &subjectLifecycleRepository{records: []recordmodel.Record{{ID: "identity-1", Data: map[string]any{"employee": "user-1"}}}}
-	service = NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{unchanged}, nil)
-	if _, err := service.EraseSubject(t.Context(), "workspace-a", "user-1", nil); err != nil || len(repository.updated) != 0 {
-		t.Fatalf("unchanged updated=%#v err=%v", repository.updated, err)
-	}
-
-	failure := errors.New("list failed")
-	service = NewRecordSubjectLifecycleApplicationService(&subjectLifecycleRepository{listErr: failure}, []definitionmodel.ObjectSchema{object}, nil)
-	if _, err := service.EraseSubject(t.Context(), "workspace-a", "user-1", nil); !errors.Is(err, failure) {
-		t.Fatalf("erase list err=%v", err)
-	}
 }
 
-func TestRecordSubjectEraseLegalHoldUpdateAndFileFailures(t *testing.T) {
-	object := subjectLifecycleObject()
-	newRecord := func() recordmodel.Record {
-		return recordmodel.Record{ID: "document-1", Data: map[string]any{
-			"employee": "user-1", "email": "person@example.com", "attachments": "file-a", "notes": "retain",
-		}}
+func TestRecordSubjectUnpreparedErasureNeverMutatesRecordsOrFiles(t *testing.T) {
+	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{ID: "one", Data: map[string]any{"employee": "user-one", "attachments": "file-a"}}}}
+	files := &subjectLifecycleFileStore{}
+	service := NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{subjectLifecycleObject()}, files)
+	if _, err := service.EraseSubject(t.Context(), "workspace-one", "user-one", nil); err == nil {
+		t.Fatal("unprepared erasure accepted")
 	}
-	service := NewRecordSubjectLifecycleApplicationService(&subjectLifecycleRepository{records: []recordmodel.Record{newRecord()}}, []definitionmodel.ObjectSchema{object}, nil)
-	if _, err := service.EraseSubject(t.Context(), "workspace-a", "user-1", []lifecyclemodel.LegalHold{{}}); err == nil || !strings.Contains(err.Error(), "legal hold") {
-		t.Fatalf("legal hold err=%v", err)
+	if _, err := service.EraseSubjectForRequest(t.Context(), "request-one", "workspace-one", "user-one", nil); err == nil {
+		t.Fatal("unprepared request accepted")
 	}
-
-	failure := errors.New("subject mutation failed")
-	repository := &subjectLifecycleRepository{records: []recordmodel.Record{newRecord()}, updateErr: failure}
-	service = NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, nil)
-	if _, err := service.EraseSubject(t.Context(), "workspace-a", "user-1", nil); !errors.Is(err, failure) {
-		t.Fatalf("update err=%v", err)
-	}
-
-	repository = &subjectLifecycleRepository{records: []recordmodel.Record{newRecord()}}
-	service = NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, nil)
-	if _, err := service.EraseSubject(t.Context(), "workspace-a", "user-1", nil); err == nil || !strings.Contains(err.Error(), "file store unavailable") || len(repository.updated) != 1 {
-		t.Fatalf("missing file store err=%v updated=%d", err, len(repository.updated))
-	}
-
-	files := &subjectLifecycleFileStore{deleteErr: failure}
-	repository = &subjectLifecycleRepository{records: []recordmodel.Record{newRecord()}}
-	service = NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, files)
-	if _, err := service.EraseSubject(t.Context(), "workspace-a", "user-1", nil); !errors.Is(err, failure) || len(files.deleted) != 1 {
-		t.Fatalf("delete err=%v deleted=%#v", err, files.deleted)
+	if len(repository.updated) != 0 || len(files.deleted) != 0 {
+		t.Fatal("unprepared erasure had effects")
 	}
 }
 

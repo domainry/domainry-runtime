@@ -63,6 +63,12 @@ func TestEverySupportedRuntimeSchemaVersionUpgradesToCurrent(t *testing.T) {
 					t.Fatalf("workflow route step table after upgrade count=%d err=%v", steps, err)
 				}
 			}
+			if version == "026_workflow_route_steps" {
+				var lineage, payload, fingerprint, job string
+				if err := store.DB().QueryRowContext(t.Context(), `SELECT retry_of_job_id, payload_json, request_fingerprint, job_id FROM _report_export_prepare_receipts WHERE id = 'receipt-026'`).Scan(&lineage, &payload, &fingerprint, &job); err != nil || lineage != "" || payload != `{"historical":"payload"}` || fingerprint != "frozen-fingerprint" || job != "failed-job-026" {
+					t.Fatalf("historical receipt changed on retry migration: lineage=%q payload=%q fingerprint=%q job=%q err=%v", lineage, payload, fingerprint, job, err)
+				}
+			}
 			var currentRows, dirty int
 			if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*), COALESCE(MAX(dirty), 0) FROM _schema_migrations WHERE path = ?`, "runtime_schema_"+CurrentRuntimeSchemaVersion).Scan(&currentRows, &dirty); err != nil || currentRows != 1 || dirty != 0 {
 				t.Fatalf("current ledger version=%s rows=%d dirty=%d err=%v", CurrentRuntimeSchemaVersion, currentRows, dirty, err)
