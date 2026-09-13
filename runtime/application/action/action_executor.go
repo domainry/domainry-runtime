@@ -513,6 +513,19 @@ func actionEffectAuthority(set *definitionmodel.ActionEffectSet) map[string][]st
 	return result
 }
 
+func actionReadEffectAuthority(set *definitionmodel.ActionEffectSet) map[string]bool {
+	result := map[string]bool{}
+	if set == nil {
+		return result
+	}
+	for _, effect := range set.Read {
+		if objectKey := strings.TrimSpace(effect.ObjectKey); objectKey != "" {
+			result[objectKey] = true
+		}
+	}
+	return result
+}
+
 func toRuntimeextPrincipal(principal principalmodel.Principal) runtimeext.Principal {
 	result := runtimeext.Principal{UserID: principal.UserID, RoleKey: principal.RoleKey, OrgID: principal.OrgID, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, CausationID: principal.CausationID, AuthorizationRevision: principal.EffectiveAuthorizationRevision(), Known: principal.Known}
 	if principal.ActiveBusinessProfile != nil {

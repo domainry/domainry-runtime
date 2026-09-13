@@ -107,7 +107,7 @@ func (e *businessActionExecution) planConditionalUpdateMany(ctx context.Context,
 		e.observeRecord(request.ObjectKey, before)
 		planCtx := recordmutation.WithMutationInvocation(ctx, recordmutation.MutationInvocation{
 			Source: transactionmodel.MutationSourceAction, ActionKey: e.action.Key, IdempotencyKey: e.invocation.IdempotencyKey,
-			EffectAuthority: actionEffectAuthority(e.action.EffectSet), TargetOrganizationID: e.targetOrganization.ID,
+			EffectAuthority: actionEffectAuthority(e.action.EffectSet), ReadEffectAuthority: actionReadEffectAuthority(e.action.EffectSet), TargetOrganizationID: e.targetOrganization.ID,
 		})
 		plan, _, err := e.dependencies.PlanConditionalUpdateLockedRecord(planCtx, request.ObjectKey, before, transactionmodel.ConditionalUpdateInput{Patch: request.Fields}, e.actionMutationPrincipal())
 		if err != nil {

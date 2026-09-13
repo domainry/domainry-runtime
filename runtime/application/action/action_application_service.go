@@ -385,7 +385,7 @@ func (s *ActionApplicationService) execute(ctx context.Context, governed governe
 	ctx = recordmutation.WithMutationInvocation(ctx, recordmutation.MutationInvocation{
 		Source: transactionmodel.MutationSourceAction, ActionKey: governed.entry.Definition.Key, IdempotencyKey: governed.invocation.IdempotencyKey,
 		ActionResource: actionResource, ActionOperation: actionOperation,
-		EffectAuthority: actionEffectAuthority(governed.entry.Definition.EffectSet), AssuranceEvidence: governed.invocation.AssuranceEvidence,
+		EffectAuthority: actionEffectAuthority(governed.entry.Definition.EffectSet), ReadEffectAuthority: actionReadEffectAuthority(governed.entry.Definition.EffectSet), AssuranceEvidence: governed.invocation.AssuranceEvidence,
 		WorkflowTriggers: []string{"action_executed:" + governed.entry.Definition.Key},
 	})
 	switch governed.entry.Owner {

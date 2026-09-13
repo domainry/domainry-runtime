@@ -2,12 +2,18 @@ package composition
 
 import (
 	"context"
+	"strings"
+	"time"
+
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
+	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
+	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 )
 
 func (a recordQueryPolicyAdapter) normalizeListQuery(object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, principal principalmodel.Principal) recordmodel.RecordListQuery {
@@ -19,7 +25,11 @@ func (a recordQueryPolicyAdapter) canAccessRecord(principal principalmodel.Princ
 }
 
 func (a recordQueryPolicyAdapter) canAccessPersistedRecord(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, record recordmodel.Record) (bool, error) {
-	return a.service.CanAccessPersistedRecordScope(ctx, principal, object, record, false)
+	authorized, err := relationReadEffectPrincipal(ctx, principal, object.Key)
+	if err != nil {
+		return false, err
+	}
+	return a.service.CanAccessPersistedRecordScope(ctx, authorized, object, record, false)
 }
 
 func (a recordQueryPolicyAdapter) canWriteRecordScope(principal principalmodel.Principal, object definitionmodel.ObjectSchema, data map[string]any) bool {
@@ -81,3 +91,27 @@ func (a recordMutationPolicyAdapter) validateDuplicateIdentity(ctx context.Conte
 }
 
 type recordApplicationRuntimeAdapter struct{ records *runtimeAssembly }
+
+// relationReadEffectPrincipal authorizes relation validation with the read
+// effect explicitly delegated by the source Action. The derived principal is
+// local to this check, so ordinary record browsing keeps the caller's scope.
+func relationReadEffectPrincipal(ctx context.Context, principal principalmodel.Principal, objectKey string) (principalmodel.Principal, error) {
+	invocation, ok := recordmutation.MutationInvocationFromContext(ctx)
+	if !ok || invocation.Source != transactionmodel.MutationSourceAction || principal.AccessBundle == nil {
+		return principal, nil
+	}
+	objectKey = strings.TrimSpace(objectKey)
+	if !invocation.ReadEffectAuthority[objectKey] {
+		return principal, nil
+	}
+	bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{
+		Resource: identitysdk.ResourceType(objectKey), Action: identitysdk.Action("read"),
+		SourceResource: identitysdk.ResourceType(invocation.ActionResource), SourceAction: identitysdk.Action(invocation.ActionOperation),
+	}, time.Now().UTC())
+	if err != nil {
+		return principal, err
+	}
+	authorized := principal
+	authorized.AccessBundle = &bundle
+	return authorized, nil
+}

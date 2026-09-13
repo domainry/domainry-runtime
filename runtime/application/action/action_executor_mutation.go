@@ -162,7 +162,7 @@ func (e *businessActionExecution) ApplyRecordMutation(ctx context.Context, mutat
 	ctx = recordmutation.WithMutationInvocation(ctx, recordmutation.MutationInvocation{
 		Source: transactionmodel.MutationSourceAction, ActionKey: e.action.Key, IdempotencyKey: e.invocation.IdempotencyKey,
 		ActionResource: actionResource, ActionOperation: actionOperation,
-		EffectAuthority: actionEffectAuthority(e.action.EffectSet), AssuranceEvidence: e.invocation.AssuranceEvidence,
+		EffectAuthority: actionEffectAuthority(e.action.EffectSet), ReadEffectAuthority: actionReadEffectAuthority(e.action.EffectSet), AssuranceEvidence: e.invocation.AssuranceEvidence,
 		WorkflowTriggers:     []string{"action_executed:" + e.action.Key},
 		TargetOrganizationID: e.targetOrganization.ID,
 	})

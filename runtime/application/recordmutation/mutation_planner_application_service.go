@@ -26,6 +26,7 @@ type MutationInvocation struct {
 	IdempotencyKey            string
 	CausationID               string
 	EffectAuthority           map[string][]string
+	ReadEffectAuthority       map[string]bool
 	AssuranceEvidence         map[string]string
 	WorkflowTriggers          []string
 	TargetOrganizationID      string

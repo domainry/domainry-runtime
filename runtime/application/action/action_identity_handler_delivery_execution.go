@@ -369,7 +369,7 @@ func (e *businessActionExecution) planIdentityProfileCreate(ctx context.Context,
 	resource, operation := definitionmodel.ActionPermissionSubject(e.action)
 	ctx = recordmutation.WithMutationInvocation(ctx, recordmutation.MutationInvocation{
 		Source: transactionmodel.MutationSourceAction, ActionKey: e.action.Key, IdempotencyKey: e.invocation.IdempotencyKey,
-		ActionResource: resource, ActionOperation: operation, EffectAuthority: effectAuthority, AssuranceEvidence: e.invocation.AssuranceEvidence,
+		ActionResource: resource, ActionOperation: operation, EffectAuthority: effectAuthority, ReadEffectAuthority: actionReadEffectAuthority(e.action.EffectSet), AssuranceEvidence: e.invocation.AssuranceEvidence,
 		WorkflowTriggers: []string{"action_executed:" + e.action.Key}, TargetOrganizationID: e.targetOrganization.ID,
 		ProfileBindingAuthorities: []recordmutation.ProfileBindingAuthority{{ObjectKey: binding.ObjectKey, ProfileID: binding.ProfileID, FieldKey: fieldKey, IdentityUserID: userID}},
 	})
