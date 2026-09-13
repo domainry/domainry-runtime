@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"io"
 	"os"
 	"testing"
@@ -85,14 +86,14 @@ func TestFileCapabilityOpenVerifiedRehashesStoredBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	created, err := service.CreateDerived(t.Context(), "workspace-a", runtimeext.DerivedFileRequest{
-		IdempotencyKey: "preview-1", ObjectKey: "document_version", FieldKey: "file_id", Filename: "preview.png", ContentType: "image/png", Content: bytes.NewReader([]byte("png-content")),
+		IdempotencyKey: "preview-1", ObjectKey: "document_upload", FieldKey: "file_url", Filename: "preview.png", ContentType: "image/png", Content: bytes.NewReader([]byte("png-content")),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	request := runtimeext.VerifiedFileRequest{
 		FileVerificationRequest: runtimeext.FileVerificationRequest{FileID: created.FileID, ContentSHA256: created.ContentSHA256, ScanReceipt: created.ScanReceipt},
-		Binding:                 runtimeext.FileRecordBinding{ObjectKey: "document_version", FileIDField: "file_id"},
+		Binding:                 runtimeext.FileRecordBinding{ObjectKey: "document_source_file", RecordID: "source-1", FileIDField: "runtime_file_id"},
 	}
 	opened, err := service.OpenVerified(t.Context(), "workspace-a", request)
 	if err != nil {
@@ -115,7 +116,7 @@ func TestFileCapabilityOpenVerifiedRehashesStoredBytes(t *testing.T) {
 	}
 }
 
-func TestFileCapabilityIssuesTicketOnlyForExactCleanArtifactBinding(t *testing.T) {
+func TestFileCapabilityIssuesTicketForActionAuthorizedRecordBinding(t *testing.T) {
 	now := time.Date(2026, 9, 13, 4, 5, 6, 0, time.UTC)
 	store := &fileCapabilityStoreStub{evidence: map[string]lifecyclecontract.FileScanEvidence{}}
 	tickets, err := NewFileDownloadTicketService(bytes.Repeat([]byte("t"), 32), func() time.Time { return now })
@@ -127,7 +128,7 @@ func TestFileCapabilityIssuesTicketOnlyForExactCleanArtifactBinding(t *testing.T
 		t.Fatal(err)
 	}
 	created, err := service.CreateDerived(t.Context(), "workspace-a", runtimeext.DerivedFileRequest{
-		IdempotencyKey: "file-1", ObjectKey: "document_file_version", FieldKey: "runtime_file_id", Filename: "file.pdf", ContentType: "application/pdf", Content: bytes.NewReader([]byte("pdf")),
+		IdempotencyKey: "file-1", ObjectKey: "document_upload", FieldKey: "file_url", Filename: "file.pdf", ContentType: "application/pdf", Content: bytes.NewReader([]byte("pdf")),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -140,8 +141,8 @@ func TestFileCapabilityIssuesTicketOnlyForExactCleanArtifactBinding(t *testing.T
 	if err != nil || ticket.ProtectedDownload == "" || ticket.ExpiresAt != now.Add(fileDownloadTicketLifetime) {
 		t.Fatalf("ticket=%+v err=%v", ticket, err)
 	}
-	request.Binding.FileIDField = "other_field"
-	if _, err := service.IssueDownload(t.Context(), "workspace-a", runtimeext.Principal{UserID: "user-a", Known: true}, request); err == nil || err.Error() != "backend.upload.file_artifact_binding_mismatch" {
-		t.Fatalf("binding mismatch err=%v", err)
+	request.ScanReceipt = "forged"
+	if _, err := service.IssueDownload(t.Context(), "workspace-a", runtimeext.Principal{UserID: "user-a", Known: true}, request); !errors.Is(err, ErrFileScanReceiptInvalid) {
+		t.Fatalf("scan receipt mismatch err=%v", err)
 	}
 }

@@ -67,13 +67,11 @@ func (s *FileCapabilityService) OpenVerified(ctx context.Context, workspaceID st
 	if err != nil {
 		return runtimeext.VerifiedFile{}, err
 	}
-	registered, err := s.store.FindFileScan(ctx, workspaceID, evidence.FileID)
-	if err != nil {
-		return runtimeext.VerifiedFile{}, err
-	}
-	if registered.ObjectKey != strings.TrimSpace(request.Binding.ObjectKey) || registered.FieldKey != strings.TrimSpace(request.Binding.FileIDField) {
-		return runtimeext.VerifiedFile{}, errors.New("backend.upload.file_artifact_binding_mismatch")
-	}
+	// The scan evidence keeps the field that authorized the original upload.
+	// The Action executor separately authorizes Binding against the exact
+	// caller-readable record that currently references this immutable file ID.
+	// Those bindings legitimately differ after a trusted Action promotes an
+	// upload into a source, version, or other business record.
 	path, err := s.artifactPath(workspaceID, evidence.Filename)
 	if err != nil {
 		return runtimeext.VerifiedFile{}, err
@@ -93,16 +91,8 @@ func (s *FileCapabilityService) IssueDownload(ctx context.Context, workspaceID s
 	if s.tickets == nil {
 		return runtimeext.FileDownloadTicket{}, errors.New("backend.upload.download_ticket_unavailable")
 	}
-	evidence, err := s.VerifyClean(ctx, workspaceID, request.FileVerificationRequest)
-	if err != nil {
+	if _, err := s.VerifyClean(ctx, workspaceID, request.FileVerificationRequest); err != nil {
 		return runtimeext.FileDownloadTicket{}, err
-	}
-	registered, err := s.store.FindFileScan(ctx, workspaceID, evidence.FileID)
-	if err != nil {
-		return runtimeext.FileDownloadTicket{}, err
-	}
-	if registered.ObjectKey != strings.TrimSpace(request.Binding.ObjectKey) || registered.FieldKey != strings.TrimSpace(request.Binding.FileIDField) {
-		return runtimeext.FileDownloadTicket{}, errors.New("backend.upload.file_artifact_binding_mismatch")
 	}
 	return s.tickets.Issue(ctx, workspaceID, principal.UserID, principal.AuthorizationRevision, request)
 }

@@ -337,7 +337,10 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 		evidence, err := h.scans.Status(r.Context(), principal.WorkspaceID, fileIdentifier)
 		switch {
 		case err == nil:
-			if strings.TrimSpace(evidence.ObjectKey) != objectKey || strings.TrimSpace(evidence.FieldKey) != fieldKey {
+			// Ordinary download URLs remain bound to the field that authorized the
+			// upload. A signed Action ticket instead carries the exact business
+			// record binding already authorized by the Action executor.
+			if !ticketAuthorized && (strings.TrimSpace(evidence.ObjectKey) != objectKey || strings.TrimSpace(evidence.FieldKey) != fieldKey) {
 				h.writeError(w, r, http.StatusForbidden, "backend.upload.permission_denied")
 				return
 			}

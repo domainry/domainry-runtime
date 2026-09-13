@@ -492,7 +492,7 @@ func TestServeUploadedFileAcceptsExactActionDownloadTicketWithoutNativeRecordGra
 	store := &uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{
 		"workspace-a\x00opaque-document-file": {
 			FileID: "opaque-document-file", WorkspaceID: "workspace-a", Filename: storageFilename,
-			ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean,
+			ObjectKey: "document_upload", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean,
 		},
 	}}
 	handler.scans = uploadapplication.NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32))
@@ -503,7 +503,7 @@ func TestServeUploadedFileAcceptsExactActionDownloadTicketWithoutNativeRecordGra
 	handler.tickets = tickets
 	ticket, err := tickets.Issue(t.Context(), "workspace-a", principal.UserID, principal.EffectiveAuthorizationRevision(), runtimeext.FileDownloadRequest{
 		FileVerificationRequest: runtimeext.FileVerificationRequest{FileID: "opaque-document-file", ContentSHA256: strings.Repeat("a", 64), ScanReceipt: "receipt"},
-		Binding:                 runtimeext.FileRecordBinding{ObjectKey: "asset", RecordID: "asset-1", FileIDField: "file_url"},
+		Binding:                 runtimeext.FileRecordBinding{ObjectKey: "document_file_version", RecordID: "version-1", FileIDField: "runtime_file_id"},
 	})
 	if err != nil {
 		t.Fatal(err)
