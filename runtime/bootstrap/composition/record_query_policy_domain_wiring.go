@@ -97,12 +97,19 @@ type recordApplicationRuntimeAdapter struct{ records *runtimeAssembly }
 // local to this check, so ordinary record browsing keeps the caller's scope.
 func relationReadEffectPrincipal(ctx context.Context, principal principalmodel.Principal, objectKey string) (principalmodel.Principal, error) {
 	invocation, ok := recordmutation.MutationInvocationFromContext(ctx)
-	if !ok || invocation.Source != transactionmodel.MutationSourceAction || principal.AccessBundle == nil {
+	if !ok || invocation.Source != transactionmodel.MutationSourceAction {
 		return principal, nil
 	}
 	objectKey = strings.TrimSpace(objectKey)
 	if !invocation.ReadEffectAuthority[objectKey] {
 		return principal, nil
+	}
+	if principal.AccessBundle == nil {
+		permission := strings.TrimSpace(invocation.ActionResource) + "." + strings.TrimSpace(invocation.ActionOperation)
+		if !principal.SystemScope.Valid() || !principal.HasExactPermission(permission) {
+			return principal, nil
+		}
+		return principal.WithExactSystemCapabilities(objectKey + ".read"), nil
 	}
 	bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{
 		Resource: identitysdk.ResourceType(objectKey), Action: identitysdk.Action("read"),

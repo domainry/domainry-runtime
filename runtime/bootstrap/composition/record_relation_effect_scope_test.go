@@ -137,4 +137,38 @@ func TestRelationReadEffectScope(t *testing.T) {
 			t.Fatal("missing source authority was accepted")
 		}
 	})
+
+	t.Run("record timer system action receives only its declared relation read", func(t *testing.T) {
+		principal := principalmodel.NewSystemPrincipal(
+			"record-timer:worker",
+			principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "record timer dispatch"),
+			"booking.manage_booking_lifecycle",
+		)
+		authorized, err := relationReadEffectPrincipal(actionContext, principal, "booking")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !authorized.HasExactPermission("booking.read") {
+			t.Fatal("declared relation read was not granted to record timer action")
+		}
+		if authorized.HasExactPermission("member.read") || principal.HasExactPermission("booking.read") {
+			t.Fatal("record timer relation scope escaped the derived principal")
+		}
+		allowed, err := adapter.canAccessPersistedRecord(actionContext, principal, object, recordmodel.Record{ID: "workflow-booking"})
+		if err != nil || !allowed {
+			t.Fatalf("record timer relation read allowed=%v error=%v", allowed, err)
+		}
+	})
+
+	t.Run("system caller without the source action capability gains no read", func(t *testing.T) {
+		principal := principalmodel.NewSystemPrincipal(
+			"record-timer:worker",
+			principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "record timer dispatch"),
+			"another.action",
+		)
+		authorized, err := relationReadEffectPrincipal(actionContext, principal, "booking")
+		if err != nil || authorized.HasExactPermission("booking.read") {
+			t.Fatal("untrusted system caller gained the declared relation read", err)
+		}
+	})
 }
