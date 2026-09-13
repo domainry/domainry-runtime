@@ -24,8 +24,10 @@ func NewWorkspaceProvisionApplicationService(repository workspaceprovisionreposi
 }
 
 func (service *WorkspaceProvisionApplicationService) Provision(ctx context.Context, principal principalmodel.Principal, request workspaceprovisionmodel.Request) (workspaceprovisionmodel.Result, error) {
-	if err := authorizeWorkspaceAdministration(principal, ProvisionActionKey); err != nil {
-		return workspaceprovisionmodel.Result{}, err
+	if SignedProvisionClient(ctx, request.RequestID) == "" {
+		if err := authorizeWorkspaceAdministration(principal, ProvisionActionKey); err != nil {
+			return workspaceprovisionmodel.Result{}, err
+		}
 	}
 	if service == nil || service.repository == nil {
 		return workspaceprovisionmodel.Result{}, workspaceProvisionError(workspaceprovisionmodel.ErrIdentityUnavailable)

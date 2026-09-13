@@ -50,6 +50,10 @@ func BuildWithWorkspaceBootstrap(snapshot appschemamodel.ApplicationSchemaSnapsh
 				"in":   "header",
 				"name": "X-Signature",
 			},
+			"WorkspaceProvisionSignature": map[string]any{
+				"type": "apiKey", "in": "header", "name": "X-Signature",
+				"description": "Existing v2 request signature, using the configured provisioning client and dedicated secret. Requires X-Signature-Version, X-Client-ID, X-Timestamp, X-Domainry-Runtime-ID and Idempotency-Key (equal to body request_id).",
+			},
 		},
 		"schemas": openAPISchemas(snapshot),
 	}

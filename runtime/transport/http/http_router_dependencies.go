@@ -63,6 +63,8 @@ func responseParams(values ...string) map[string]string {
 }
 
 type HTTPRouterConfig struct {
+	WorkspaceProvisionClientID        string
+	WorkspaceProvisionSigningSecret   string
 	ProductBrandName                  string
 	CORSAllowedOrigins                []string
 	AllowDevAuthHeaders               bool

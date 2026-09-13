@@ -128,8 +128,10 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	scenarioReceiptKey := sha256.Sum256([]byte("domainry-runtime-authoring-scenario-receipt-v1:" + dependencies.Config.IntegrationSecretKey))
 	scenarioReceipts := businesssystemapplication.NewRuntimeAuthoringScenarioReceiptService(scenarioReceiptKey[:])
 	server := runtimehttp.NewHTTPRouter(runtimehttp.HTTPRouterConfig{
-		ProductBrandName:   dependencies.Config.EffectiveProductBrandName(),
-		CORSAllowedOrigins: dependencies.Config.CORSAllowedOrigins, AllowDevAuthHeaders: dependencies.Config.RuntimeAllowDevIdentityHeaders,
+		WorkspaceProvisionClientID:      dependencies.Config.RuntimeWorkspaceProvisionClientID,
+		WorkspaceProvisionSigningSecret: dependencies.Config.RuntimeWorkspaceProvisionSigningSecret,
+		ProductBrandName:                dependencies.Config.EffectiveProductBrandName(),
+		CORSAllowedOrigins:              dependencies.Config.CORSAllowedOrigins, AllowDevAuthHeaders: dependencies.Config.RuntimeAllowDevIdentityHeaders,
 		HealthCheckTimeout: dependencies.Config.HealthCheckTimeout,
 		MaxJSONBodyBytes:   int64(dependencies.Config.HTTPMaxJSONBodyBytes),
 		RequestTimeout:     dependencies.Config.CapacityRequestTimeout,

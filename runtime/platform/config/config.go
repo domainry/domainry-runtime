@@ -124,6 +124,8 @@ type Config struct {
 	// WorkspaceProvisionFailurePoint is a process-start acceptance control.
 	// Project, file, and remote configuration sources cannot set it.
 	WorkspaceProvisionFailurePoint              string
+	RuntimeWorkspaceProvisionClientID           string
+	RuntimeWorkspaceProvisionSigningSecret      string
 	InitialWorkspaceRequestID                   string
 	InitialWorkspaceCode                        string
 	InitialWorkspaceName                        string
@@ -292,6 +294,8 @@ func FromEnv() Config {
 		SkipManifestValidation:                      boolEnv("SKIP_MANIFEST_VALIDATION", false),
 		BusinessSeedSyncDisabled:                    !boolEnv("BUSINESS_SEED_SYNC_ENABLED", true),
 		WorkspaceProvisionFailurePoint:              strings.TrimSpace(os.Getenv("WORKSPACE_PROVISION_FAILURE_POINT")),
+		RuntimeWorkspaceProvisionClientID:           strings.TrimSpace(os.Getenv("RUNTIME_WORKSPACE_PROVISION_CLIENT_ID")),
+		RuntimeWorkspaceProvisionSigningSecret:      os.Getenv("RUNTIME_WORKSPACE_PROVISION_SIGNING_SECRET"),
 		InitialWorkspaceRequestID:                   env("INITIAL_WORKSPACE_REQUEST_ID", "initial-workspace"),
 		InitialWorkspaceCode:                        strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_CODE")),
 		InitialWorkspaceName:                        strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_NAME")),
@@ -420,6 +424,14 @@ func (c Config) EffectiveDatabaseMigrationMode() string {
 }
 
 func (c Config) ValidateSecurity() error {
+	if c.RuntimeWorkspaceProvisionClientID != "" || c.RuntimeWorkspaceProvisionSigningSecret != "" {
+		if strings.TrimSpace(c.RuntimeWorkspaceProvisionClientID) == "" || strings.ContainsAny(c.RuntimeWorkspaceProvisionClientID, "\r\n") || len(c.RuntimeWorkspaceProvisionSigningSecret) < 32 {
+			return fmt.Errorf("RUNTIME_WORKSPACE_PROVISION_CLIENT_ID and a signing secret of at least 32 bytes must be configured together")
+		}
+		if c.RuntimeWorkspaceProvisionSigningSecret == c.IntegrationSecretKey || c.RuntimeWorkspaceProvisionSigningSecret == c.AuditExportTokenKey {
+			return fmt.Errorf("RUNTIME_WORKSPACE_PROVISION_SIGNING_SECRET must be dedicated to workspace provisioning")
+		}
+	}
 	if err := c.validateWorkspaceProvisionFailurePoint(); err != nil {
 		return err
 	}

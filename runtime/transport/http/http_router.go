@@ -79,6 +79,8 @@ type HTTPRouter struct {
 	runtimeReleaseAdmission          RuntimeReleaseAdmissionProvider
 	runtimeReleaseIntegrity          RuntimeReleaseIntegrityProvider
 	runtimeInstanceID                string
+	workspaceProvisionClientID       string
+	workspaceProvisionSigningSecret  []byte
 	workerControl                    *workerplatform.Controller
 	businessEvents                   *businesseventapplication.BusinessEventApplicationService
 	businessEventHTTP                *businesseventhttp.BusinessEventsHandler
@@ -122,7 +124,9 @@ func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRo
 		authorizationActions:   authorizationActions,
 		identityAuthentication: deps.IdentityAuthentication, identityPrincipal: deps.IdentityPrincipal, integrationAuth: deps.IntegrationAuthentication,
 		securityAudit: deps.SecurityAudit, runtimeStatus: deps.RuntimeStatus,
-		corsAllowedOrigins: normalizeCORSOrigins(config.CORSAllowedOrigins), allowDevAuthHeaders: config.AllowDevAuthHeaders,
+		workspaceProvisionClientID:      config.WorkspaceProvisionClientID,
+		workspaceProvisionSigningSecret: []byte(config.WorkspaceProvisionSigningSecret),
+		corsAllowedOrigins:              normalizeCORSOrigins(config.CORSAllowedOrigins), allowDevAuthHeaders: config.AllowDevAuthHeaders,
 		listenerGroupPolicies: config.ListenerGroupPolicies,
 		listenerGroupCapacity: map[ListenerRouteGroup]*capacityplatform.Controller{}, rateLimiter: deps.RateLimiter,
 		technicalMetrics: deps.TechnicalMetrics,

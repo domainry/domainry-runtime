@@ -1,16 +1,16 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "0c224caafa2cd50ceae499ba6e546e346fd21448beff365bc37cc3bdc9b12578",
+  "set_sha256": "4cffd218c93f5494b2d1db724408b9177f56ffe9c5abe906139feac2b2c9f881",
   "modules": [
     {
       "key": "agent",
       "implementation": "github.com/domainry/domainry-agent",
-      "implementation_version": "v0.1.20",
-      "implementation_sum": "h1:HWPTY0fg/lMn5Y3M5vbfj9uJVM6MhPh33Yz88ZDBBEU=",
+      "implementation_version": "v0.1.22",
+      "implementation_sum": "h1:6/ZOhYCJYZNi0HfHKqA1TT53bI3HBC1OdG0BjAHi5pY=",
       "sdk": "github.com/domainry/domainry-agent-sdk",
-      "sdk_version": "v0.1.12",
-      "sdk_sum": "h1:Cuato8e9Gl3kxWVu8IjEjHcs4jQNwI81SWRgDRz8bmQ=",
-      "capability_contract_sha256": "0c9614aee94f549faf145ddbb37e44201290c84ee00cc6934ea6760ac310929a"
+      "sdk_version": "v0.1.14",
+      "sdk_sum": "h1:KvHMwTHUbvAinKmPb2J5WuBpRLy8u0XYsL/E+iBZI4U=",
+      "capability_contract_sha256": "b631a007518f154d70f1aad139e632be969e0e0203a5f5373a8267a1a700d6cf"
     },
     {
       "key": "audit",
@@ -95,11 +95,11 @@
     {
       "key": "report",
       "implementation": "github.com/domainry/domainry-report",
-      "implementation_version": "v0.1.9",
-      "implementation_sum": "h1:+TWv1aXbo0/VgHQdPZBgQLlkcdoQ8L/o95GVj/I9dqk=",
+      "implementation_version": "v0.1.11",
+      "implementation_sum": "h1:e1Ustf3QvrRl4rKjN8Yp6jsPeuv6hPNqu3hLkMZceQU=",
       "sdk": "github.com/domainry/domainry-report-sdk",
-      "sdk_version": "v0.1.8",
-      "sdk_sum": "h1:cmOwJg25b0O1dYdOmguypLGa9FM3hPpXJ8fE4Jfsw6s=",
+      "sdk_version": "v0.1.9",
+      "sdk_sum": "h1:FC9yog6uyl8HuD7unV/G7CGR3fmAkvLrAvNc1kUCD/k=",
       "capability_contract_sha256": "c4445a91c4a98efd9ef9e85b10753e05d4a82c22430dff769f3db18b8fdbff58"
     },
     {

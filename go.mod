@@ -6,8 +6,8 @@ toolchain go1.26.6
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
-	github.com/domainry/domainry-agent v0.1.20
-	github.com/domainry/domainry-agent-sdk v0.1.12
+	github.com/domainry/domainry-agent v0.1.22
+	github.com/domainry/domainry-agent-sdk v0.1.14
 	github.com/domainry/domainry-audit v0.1.10
 	github.com/domainry/domainry-audit-sdk v0.1.4
 	github.com/domainry/domainry-connector-sdk v0.1.1
@@ -27,8 +27,8 @@ require (
 	github.com/domainry/domainry-monitoring-sdk v0.1.3
 	github.com/domainry/domainry-notification v0.1.3
 	github.com/domainry/domainry-notification-sdk v0.1.0
-	github.com/domainry/domainry-report v0.1.9
-	github.com/domainry/domainry-report-sdk v0.1.8
+	github.com/domainry/domainry-report v0.1.11
+	github.com/domainry/domainry-report-sdk v0.1.9
 	github.com/domainry/domainry-scheduler v0.1.10
 	github.com/domainry/domainry-scheduler-sdk v0.1.7
 	github.com/go-sql-driver/mysql v1.10.0
@@ -68,8 +68,8 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/domainry/domainry-orm v0.1.30
-	github.com/domainry/domainry-tools v0.1.1
-	github.com/domainry/domainry-tools-sdk v0.1.1
+	github.com/domainry/domainry-tools v0.1.2
+	github.com/domainry/domainry-tools-sdk v0.1.3
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

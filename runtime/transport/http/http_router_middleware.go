@@ -13,6 +13,7 @@ import (
 	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	workspaceprovision "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	localization "github.com/domainry/domainry-runtime/runtime/platform/localization"
@@ -300,6 +301,13 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		policy := routePolicyFor(routes, r)
 		resolved := s.resolveRequestAction(routes, r)
+		if resolved.found && resolved.definition.Key == workspaceprovision.ProvisionActionKey && provisioningSignaturePresented(r) {
+			verified, ok := s.authenticateProvisioningSignature(w, r)
+			if ok {
+				next.ServeHTTP(w, verified)
+			}
+			return
+		}
 		if r.Method == http.MethodOptions || resolved.found && (resolved.definition.Authorization.Strategy == actioncontract.AuthorizationAnonymous || resolved.definition.Authorization.Strategy == actioncontract.AuthorizationSigned) || policy.fallback {
 			next.ServeHTTP(w, r)
 			return

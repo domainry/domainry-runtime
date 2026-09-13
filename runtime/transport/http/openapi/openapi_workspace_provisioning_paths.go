@@ -112,8 +112,15 @@ func addWorkspaceProvisioningOpenAPIPaths(paths map[string]any, participant runt
 		),
 		"post": openAPIOperation(
 			"provisionWorkspace", "Workspace Administration", "Atomically provision a Workspace, Identity bootstrap graph, and typed commercial configuration",
-			openAPIAdminSecurity(), openAPIJSONRequest(request), openAPIJSONResponse("Workspace provisioning result", result),
+			openAPISecurity{Items: []map[string]any{{"BearerAuth": []string{}}, {"WorkspaceProvisionSignature": []string{}}}},
+			openAPIJSONRequest(request), openAPIJSONResponse("Workspace provisioning result", result),
 		),
+	}
+	provision := paths["/workspaces"].(map[string]any)["post"].(map[string]any)
+	provision["description"] = "Accepts the existing installation administrator session or a host-configured v2 signed request on the same endpoint. The signature binds method, path, Runtime instance, client, timestamp, request_id and exact body bytes. All signature headers are required together; query parameters and mixed Bearer/signature credentials are rejected. The timestamp window is five minutes. The existing durable provisioning receipt handles retries and never replays the initial password."
+	for _, header := range []string{"X-Signature-Version", "X-Client-ID", "X-Timestamp", "X-Domainry-Runtime-ID", "Idempotency-Key"} {
+		parameters, _ := provision["parameters"].([]map[string]any)
+		provision["parameters"] = append(parameters, openAPIHeaderParameter(header, "Required when using WorkspaceProvisionSignature", false))
 	}
 	lifecycleRequest := openAPIRequiredObject([]string{"expected_revision"}, map[string]any{"expected_revision": map[string]any{"type": "integer", "minimum": 1}})
 	lifecycleRequest["additionalProperties"] = false

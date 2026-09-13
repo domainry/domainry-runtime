@@ -2,6 +2,7 @@ package workspaceprovision
 
 import (
 	"context"
+	workspaceprovision "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
 	"net/http"
 	"strconv"
 	"strings"
@@ -117,6 +118,7 @@ func (handler *WorkspaceProvisionHandler) provision(response http.ResponseWriter
 		handler.dependencies.SecurityAudit(request, "workspace.provisioned", result.WorkspaceID, map[string]any{
 			"request_id": input.RequestID, "workspace_id": result.WorkspaceID, "canonical_code": result.CanonicalCode,
 			"admin_login_id": result.AdminLoginID, "replayed": result.Replayed,
+			"signing_client_id": workspaceprovision.SignedProvisionClient(request.Context(), input.RequestID),
 		})
 	}
 	response.Header().Set("Cache-Control", "no-store")

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
+	workspaceprovision "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
 	runtimeactioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 )
@@ -151,6 +152,10 @@ func (s *HTTPRouter) withActionAuthorization(routes *http.ServeMux, next http.Ha
 			serveAuthorized()
 			return
 		case actioncontract.AuthorizationAuthenticated:
+			if action.Key == workspaceprovision.ProvisionActionKey && workspaceprovision.SignedProvisionClient(r.Context(), "") != "" {
+				serveAuthorized()
+				return
+			}
 			if !principal.Known {
 				writeError(w, r, http.StatusUnauthorized, "auth.session_expired")
 				return
