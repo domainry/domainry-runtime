@@ -69,6 +69,7 @@ var specs = []spec{
 	{table: "_workflow_route_steps", status: "status", set: map[string]any{"title": "", "assignee_snapshot_json": "[]", "configured_by": "anonymous", "status": "cancelled"}},
 	{table: "_publication_outbox", status: "status", busy: []string{"sending", "processing", "running"}, fence: true, set: map[string]any{"intent_json": "{}", "payload_json": "{}", "created_by": "anonymous", "request_ref": "", "response_ref": "", "request_fingerprint": "", "error": "", "last_error": "", "status": "failed", "last_error_code": "runtime.subject_erased", "next_attempt_at": "", "lease_owner": "", "lease_expires_at": ""}},
 	{table: "_action_assurance_grants"},
+	{table: "_upload_subject_bindings"},
 	{table: "_record_mutation_executions", status: "status", busy: []string{"processing", "pending"}, fence: true, set: map[string]any{"result_json": "{}", "actor_id": "anonymous", "idempotency_key": "", "request_fingerprint": "", "status": "failed", "error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": ""}},
 	{table: "_report_export_prepare_receipts", status: "status", busy: []string{"processing"}, fence: true, set: map[string]any{"payload_json": "", "requester_user_id": "anonymous", "request_fingerprint": "", "completion_fingerprint": "", "idempotency_key": "", "status": "failed", "terminal_error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": ""}},
 	{table: "_automation_rule_executions", status: "status", busy: []string{"processing", "running"}, set: map[string]any{"actor_id": "anonymous", "role_key": "", "candidate_json": "{}", "trace_json": "{}", "status": "failed", "error_code": "runtime.subject_erased"}},
@@ -136,6 +137,8 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 			predicate = query.Or(in("process_id", processIDs), query.Equal("configured_by", subject))
 		case "_workflow_node_instances":
 			predicate = in("process_id", processIDs)
+		case "_upload_subject_bindings":
+			predicate = query.Equal("user_id", subject)
 		case "_action_assurance_grants":
 			predicate = query.Or(query.Equal("user_id", subject), refsPredicate(resources))
 		case "_publication_outbox":

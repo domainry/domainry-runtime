@@ -108,6 +108,40 @@ func (s *RecordSubjectLifecycleApplicationService) PrepareSubjectErasure(ctx con
 			}
 		}
 	}
+	if s.subjectUploads != nil {
+		refs, err := s.subjectUploads(ctx, workspaceID, subjectID)
+		if err != nil {
+			return nil, err
+		}
+		for _, reference := range refs {
+			if reference.WorkspaceID != workspaceID {
+				return nil, fmt.Errorf("upload subject workspace mismatch")
+			}
+			if seenFiles[reference.Reference] {
+				continue
+			}
+			if s.files == nil {
+				return nil, fmt.Errorf("record subject file store unavailable")
+			}
+			if _, ok := s.files.(lifecyclecontract.SubjectFileVersionDeleter); !ok {
+				return nil, fmt.Errorf("record subject file version deletion unavailable")
+			}
+			evidence, err := s.files.ExportSubjectFile(ctx, reference)
+			// Lifecycle may already have reconciled an abandoned upload.
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			if evidence.SHA256 == "" || evidence.Reference != reference.Reference || reference.Reference != "/uploads/"+evidence.Filename {
+				return nil, fmt.Errorf("invalid uploaded subject file evidence")
+			}
+			evidence.Content = nil
+			seenFiles[reference.Reference] = true
+			plan.Files = append(plan.Files, recordSubjectErasureFile{Reference: reference, Evidence: evidence})
+		}
+	}
 	for index := range plan.Files {
 		shared, err := s.subjectFileReferencedOutsidePlan(ctx, plan.WorkspaceID, plan.Files[index].Reference.Reference, plan.Mutations)
 		if err != nil {

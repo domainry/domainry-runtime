@@ -3,6 +3,9 @@ package schema
 import "context"
 
 func EnsureEvidenceSchema(ctx context.Context, s Store) error {
+	if err := EnsureUploadSubjectSchema(ctx, s); err != nil {
+		return err
+	}
 	if err := EnsureSubjectErasureSchema(ctx, s); err != nil {
 		return err
 	}

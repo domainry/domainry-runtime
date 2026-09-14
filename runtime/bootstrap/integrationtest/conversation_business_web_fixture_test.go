@@ -16,6 +16,7 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentmodule "github.com/domainry/domainry-agent/module"
+	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityhttpapi "github.com/domainry/domainry-identity-sdk/httpapi"
 	identitymodule "github.com/domainry/domainry-identity/module"
@@ -31,16 +32,17 @@ const businessWebOrigin = "http://127.0.0.1:8093"
 const businessWebPassword = "Business-Browser-Changed!2026"
 
 type businessWebFixture struct {
-	t               *testing.T
-	cfg             config.Config
-	identityPath    string
-	options         agentmodule.Options
-	files           fs.FS
-	runtime         *bootstrap.Runtime
-	identity        identitysdk.Binding
-	identityFactory identitysdk.Factory
-	identityHandler http.Handler
-	handler         http.Handler
+	t                   *testing.T
+	cfg                 config.Config
+	identityPath        string
+	options             agentmodule.Options
+	files               fs.FS
+	runtime             *bootstrap.Runtime
+	identity            identitysdk.Binding
+	identityFactory     identitysdk.Factory
+	dataExchangeFactory dataexchangesdk.Factory
+	identityHandler     http.Handler
+	handler             http.Handler
 }
 
 func newBusinessWebFixture(t *testing.T, customize ...func(map[string]any)) *businessWebFixture {
@@ -152,7 +154,11 @@ func (f *businessWebFixture) open() {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	f.runtime = bootstrap.NewWithScheduler(f.t.Context(), f.cfg, f.identity, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory(), agentmodule.NewFactory(f.options))
+	dataExchangeFactory := f.dataExchangeFactory
+	if dataExchangeFactory == nil {
+		dataExchangeFactory = dataexchangefixture.NewFactory()
+	}
+	f.runtime = bootstrap.NewWithScheduler(f.t.Context(), f.cfg, f.identity, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataExchangeFactory, integrationmodule.NewFactory(), agentmodule.NewFactory(f.options))
 	f.handler, err = bootstrap.ConversationWebHandler(f.runtime, bootstrap.ConversationWebOptions{Origin: businessWebOrigin, Model: f.options.ConversationModel, Files: f.files})
 	if err != nil {
 		f.t.Fatal(err)

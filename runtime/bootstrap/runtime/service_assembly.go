@@ -310,7 +310,9 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
 		return runtimeServiceAssembly{}, fmt.Errorf("initialize file capabilities: %w", err)
 	}
+	fileCapabilities.BindUploadSubjects(uploadapplication.NewUploadSubjectRegistry(store))
 	recordSubjectLifecycle := recordapplication.NewRecordSubjectLifecycleApplicationService(records, manifest.Objects, lifecycleArtifacts, manifest.IdentityProfileExtensions)
+	recordSubjectLifecycle.BindSubjectUploads(store.SubjectUploadReferences)
 	if audit, ok := auditSubjectLifecycle.(*runtimeauditmodule.SubjectLifecycle); ok {
 		audit.BindSubjectResourceResolver(func(ctx context.Context, workspaceID, subjectID string) ([]auditcontract.SubjectResource, error) {
 			refs, err := recordSubjectLifecycle.SubjectRecordReferences(ctx, workspaceID, subjectID)

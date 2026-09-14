@@ -68,6 +68,7 @@ func TestFreshRuntimeSchemaUsesOwnedBusinessNamesAndOneHostLedger(t *testing.T) 
 		"_subject_evidence_erasure_fences",
 		"_subject_evidence_erasure_receipts",
 		"_transaction_boundary_intents",
+		"_upload_subject_bindings",
 		"_worker_queue_scopes",
 		"_workflow_definition_versions",
 		"_workflow_definitions",

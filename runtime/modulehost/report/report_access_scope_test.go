@@ -10,6 +10,31 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
+func TestReportSubjectRoundTripCanonicalizesEmptyClaimsAndPreservesNonemptyClaims(t *testing.T) {
+	for _, claims := range []map[string]profilebindingmodel.ClaimValue{nil, {}, {"store": {Type: "text", Value: "a"}}} {
+		principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "member", RoleKey: "member", AuthorizationRevision: "identity-1"}, BusinessAuthorizationRevision: "business-1", BusinessClaims: claims}
+		hash, err := ReportAccessScopeHash(principal)
+		if err != nil {
+			t.Fatal(err)
+		}
+		restored := RuntimePrincipalFromReportSubject(reportSubjectFromPrincipal(principal, hash))
+		actual, err := ReportAccessScopeHash(restored)
+		if err != nil || actual != hash {
+			t.Fatalf("claims=%v hash=%s restored=%s error=%v", claims, hash, actual, err)
+		}
+		principal.BusinessClaims = map[string]profilebindingmodel.ClaimValue{"store": {Type: "text", Value: "b"}}
+		changed, err := ReportAccessScopeHash(principal)
+		if err != nil || changed == hash {
+			t.Fatal("real claim change did not invalidate frozen scope")
+		}
+	}
+	empty, _ := ReportAccessScopeHash(principalmodel.Principal{BusinessClaims: map[string]profilebindingmodel.ClaimValue{}})
+	nilClaims, _ := ReportAccessScopeHash(principalmodel.Principal{})
+	if empty != nilClaims {
+		t.Fatal("nil and empty claims differ")
+	}
+}
+
 func TestReportSubjectRoundTripPreservesBothAuthorizationRevisions(t *testing.T) {
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "admin", AuthorizationRevision: "identity-1"}, BusinessAuthorizationRevision: "business-1"}
 	hash, err := ReportAccessScopeHash(principal)

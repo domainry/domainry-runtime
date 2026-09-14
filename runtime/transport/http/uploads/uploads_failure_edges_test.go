@@ -131,7 +131,7 @@ func TestUploadStorageFailureMappingAtEveryFilesystemStage(t *testing.T) {
 	uploadAbs = func(string) (string, error) { return "", errors.New("absolute path failed") }
 	assertError(t, request(t, uploadTestHandler(t, principal)), http.StatusForbidden, "backend.workspace_scope_required")
 	downloadHandler := uploadTestHandler(t, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("asset.read")))
-	downloadRequest := httptest.NewRequest(http.MethodGet, "/uploads/file.txt?object_key=asset&field_key=file_url", nil)
+	downloadRequest := httptest.NewRequest(http.MethodGet, "/uploads/file.txt?object_key=asset&field_key=file_url&record_id=file.txt", nil)
 	downloadRequest.SetPathValue("filename", "file.txt")
 	downloadResponse := httptest.NewRecorder()
 	downloadHandler.serveUploadedFile(downloadResponse, downloadRequest)

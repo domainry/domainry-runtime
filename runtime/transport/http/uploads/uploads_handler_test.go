@@ -30,6 +30,7 @@ import (
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 type uploadArtifactStoreStub struct {
@@ -76,7 +77,7 @@ func uploadTestHandler(t *testing.T, principal principalmodel.Principal) *Upload
 	t.Helper()
 	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "uploads", TemplateVersion: "1", Objects: uploadTestObjects()})
 	return NewUploadsHandler(UploadsDependencies{
-		Access: uploadapplication.NewUploadAccessApplicationService(records.Applications().Schema, records.Applications().Audit, nil), UploadDir: t.TempDir(), Principal: func(*http.Request) principalmodel.Principal { return principal },
+		Access: uploadapplication.NewUploadAccessApplicationService(records.Applications().Schema, records.Applications().Audit, uploadTestRecordQuery{}), Subjects: uploadapplication.NewUploadSubjectRegistry(uploadSubjectTestMemory{}), Scans: uploadapplication.NewFileScanReceiptVerifier(&uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{"workspace-a\x00asset.txt": {FileID: "asset.txt", WorkspaceID: "workspace-a", Filename: "asset.txt", ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean}, "workspace-a\x00file.txt": {FileID: "file.txt", WorkspaceID: "workspace-a", Filename: "file.txt", ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean}}}, bytes.Repeat([]byte("k"), 32)), UploadDir: t.TempDir(), Principal: func(*http.Request) principalmodel.Principal { return principal },
 		WriteJSON: func(w http.ResponseWriter, status int, value any) {
 			w.WriteHeader(status)
 			_ = json.NewEncoder(w).Encode(value)
@@ -266,7 +267,7 @@ func TestUploadFileAuthorizationAndValidation(t *testing.T) {
 }
 
 func TestUploadReadFailureAndDetectedContentType(t *testing.T) {
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "u1", WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
 	handler := uploadTestHandler(t, principal)
 	handler.copyUpload = func(io.Writer, io.Reader) (int64, error) { return 0, errors.New("read failed") }
 	response := httptest.NewRecorder()
@@ -400,7 +401,7 @@ func TestServeUploadedFileAndDownloadAuthorization(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspaceDir, "asset.txt"), []byte("asset"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodGet, "/uploads/asset.txt?object_key=asset&field_key=file_url", nil)
+	request := httptest.NewRequest(http.MethodGet, "/uploads/asset.txt?object_key=asset&field_key=file_url&record_id=asset.txt", nil)
 	request.SetPathValue("filename", "asset.txt")
 	response := httptest.NewRecorder()
 	handler.serveUploadedFile(response, request)
@@ -419,7 +420,7 @@ func TestServeUploadedFileAndDownloadAuthorization(t *testing.T) {
 		{name: "invalid filename", principal: principal, target: "/uploads/x", filename: "..", status: http.StatusNotFound},
 		{name: "dot filename", principal: principal, target: "/uploads/x", filename: ".", status: http.StatusNotFound},
 		{name: "missing context", principal: principal, target: "/uploads/asset.txt", filename: "asset.txt", status: http.StatusForbidden},
-		{name: "unknown object", principal: principal, target: "/uploads/asset.txt?object_key=missing&field_key=file_url", filename: "asset.txt", status: http.StatusNotFound},
+		{name: "unknown object", principal: principal, target: "/uploads/asset.txt?object_key=missing&field_key=file_url", filename: "asset.txt", status: http.StatusForbidden},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			h := uploadTestHandler(t, test.principal)
@@ -457,7 +458,7 @@ func TestServeUploadedFileResolvesOpaqueFileIdentityInsideWorkspace(t *testing.T
 	}}
 	handler.scans = uploadapplication.NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32))
 
-	request := httptest.NewRequest(http.MethodGet, "/uploads/derived-export?object_key=asset&field_key=file_url", nil)
+	request := httptest.NewRequest(http.MethodGet, "/uploads/derived-export?object_key=asset&field_key=file_url&record_id=derived-export", nil)
 	request.SetPathValue("filename", "derived-export")
 	response := httptest.NewRecorder()
 	handler.serveUploadedFile(response, request)
@@ -558,7 +559,7 @@ func TestUploadStorageIsIsolatedByWorkspace(t *testing.T) {
 	request.SetPathValue("filename", payload.Filename)
 	response = httptest.NewRecorder()
 	handlerB.serveUploadedFile(response, request)
-	if response.Code != http.StatusNotFound {
+	if response.Code != http.StatusForbidden {
 		t.Fatalf("workspace-b must not read workspace-a upload, status=%d", response.Code)
 	}
 }
@@ -575,4 +576,76 @@ func TestUploadHelpersAndRoutes(t *testing.T) {
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("registered download route status=%d", response.Code)
 	}
+}
+
+type handoffReviewCatalog struct{}
+
+func (handoffReviewCatalog) ObjectMap(context.Context) map[string]definitionmodel.ObjectSchema {
+	return map[string]definitionmodel.ObjectSchema{"asset": {Key: "asset", Fields: []definitionmodel.FieldSchema{{Key: "file_url", Type: "text"}}}}
+}
+
+type handoffReviewAudit struct{}
+
+func (handoffReviewAudit) AppendWithMetadata(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) {
+}
+
+type handoffReviewRecord struct{}
+
+func (handoffReviewRecord) GetRecord(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
+	return recordmodel.Record{ID: "own-record", Data: map[string]any{"file_url": "/uploads/review.png"}}, nil
+}
+func TestServeUploadedFileRejectsNonCleanRecordBoundDownloads(t *testing.T) {
+	for _, status := range []string{"clean", "pending", "quarantined", "failed"} {
+		t.Run(status, func(t *testing.T) {
+			principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "u1", WorkspaceID: "workspace-a"}}, uploadTestRole("asset.read"))
+			handler := uploadTestHandler(t, principal)
+			handler.access = uploadapplication.NewUploadAccessApplicationService(handoffReviewCatalog{}, handoffReviewAudit{}, handoffReviewRecord{})
+			dir, err := handler.workspaceUploadDir(principal.WorkspaceID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err = os.WriteFile(filepath.Join(dir, "review.png"), []byte("review bytes"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			store := &uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{"workspace-a\x00review.png": {FileID: "review-file", WorkspaceID: "workspace-a", Filename: "review.png", ObjectKey: "asset", FieldKey: "file_url", Status: status}}}
+			handler.scans = uploadapplication.NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32))
+			request := httptest.NewRequest(http.MethodGet, "/uploads/review.png?object_key=asset&field_key=file_url&record_id=own-record", nil)
+			request.SetPathValue("filename", "review.png")
+			response := httptest.NewRecorder()
+			handler.serveUploadedFile(response, request)
+			if status == "clean" {
+				if response.Code != 200 {
+					t.Fatalf("clean control returned %d", response.Code)
+				}
+				return
+			}
+			if response.Code == 200 {
+				t.Errorf("unsafe download allowed: status=%s HTTP=%d bytes=%q with valid record_id", status, response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+type uploadSubjectTestMemory map[string]uploadapplication.UploadSubjectBinding
+
+func (s uploadSubjectTestMemory) InsertUploadSubject(_ context.Context, value uploadapplication.UploadSubjectBinding) error {
+	s[value.WorkspaceID+"\x00"+value.FileID] = value
+	return nil
+}
+func (s uploadSubjectTestMemory) FindUploadSubject(_ context.Context, workspace, id string) (uploadapplication.UploadSubjectBinding, error) {
+	for _, value := range s {
+		if value.WorkspaceID == workspace && (value.FileID == id || value.Filename == id) {
+			return value, nil
+		}
+	}
+	return uploadapplication.UploadSubjectBinding{}, sql.ErrNoRows
+}
+
+type uploadTestRecordQuery struct{}
+
+func (uploadTestRecordQuery) GetRecord(_ context.Context, object, id string, principal principalmodel.Principal) (recordmodel.Record, error) {
+	return recordmodel.Record{ID: id, OwnerUserID: principal.UserID, Data: map[string]any{"file_url": "/uploads/" + id}}, nil
 }

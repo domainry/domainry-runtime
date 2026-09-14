@@ -38,6 +38,11 @@ func ReportAccessScopeHash(principal principalmodel.Principal) (string, error) {
 }
 
 func canonicalReportAccessPrincipal(principal principalmodel.Principal) principalmodel.Principal {
+	// Report adapters collapse an empty claims map to nil. Both representations
+	// carry the same permission facts and must freeze the same access scope.
+	if len(principal.BusinessClaims) == 0 {
+		principal.BusinessClaims = nil
+	}
 	principal.OrgScopeIDs = canonicalReportAccessSlice(append([]string(nil), principal.OrgScopeIDs...))
 	principal.ReportingScopeUserIDs = canonicalReportAccessSlice(append([]string(nil), principal.ReportingScopeUserIDs...))
 	principal.SystemCapabilities = canonicalReportAccessSlice(append([]string(nil), principal.SystemCapabilities...))

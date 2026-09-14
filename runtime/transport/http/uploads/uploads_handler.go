@@ -68,6 +68,7 @@ type UploadsHandler struct {
 	artifacts         lifecyclecontract.UploadArtifactStore
 	scans             *uploadapplication.FileScanReceiptVerifier
 	tickets           *uploadapplication.FileDownloadTicketService
+	subjects          *uploadapplication.UploadSubjectRegistry
 }
 
 type UploadsDependencies struct {
@@ -80,11 +81,12 @@ type UploadsDependencies struct {
 	Artifacts         lifecyclecontract.UploadArtifactStore
 	Scans             *uploadapplication.FileScanReceiptVerifier
 	Tickets           *uploadapplication.FileDownloadTicketService
+	Subjects          *uploadapplication.UploadSubjectRegistry
 }
 
 func NewUploadsHandler(deps UploadsDependencies) *UploadsHandler {
 	return &UploadsHandler{
-		access: deps.Access, uploadDir: deps.UploadDir, principal: deps.Principal, artifacts: deps.Artifacts, scans: deps.Scans, tickets: deps.Tickets,
+		access: deps.Access, uploadDir: deps.UploadDir, principal: deps.Principal, artifacts: deps.Artifacts, scans: deps.Scans, tickets: deps.Tickets, subjects: deps.Subjects,
 		writeJSON: deps.WriteJSON, writeError: deps.WriteError, writeServiceError: deps.WriteServiceError,
 		copyUpload: io.Copy, readPrefix: readUploadPrefix,
 	}
@@ -230,8 +232,13 @@ func (h *UploadsHandler) uploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	contentSHA256 := hex.EncodeToString(hash.Sum(nil))
+	artifact := lifecyclecontract.UploadArtifact{ID: fileID, WorkspaceID: principal.WorkspaceID, ObjectKey: objectKey, FieldKey: fieldKey, Filename: filename, ContentType: contentType, SHA256: contentSHA256, Size: size, CreatedAt: time.Now().UTC()}
+	if err := h.subjects.Register(r.Context(), artifact, principal); err != nil {
+		_ = os.Remove(path)
+		h.writeServiceError(w, r, err)
+		return
+	}
 	if h.artifacts != nil {
-		artifact := lifecyclecontract.UploadArtifact{ID: fileID, WorkspaceID: principal.WorkspaceID, ObjectKey: objectKey, FieldKey: fieldKey, Filename: filename, ContentType: contentType, SHA256: contentSHA256, Size: size, CreatedAt: time.Now().UTC()}
 		if err := h.artifacts.RegisterUpload(r.Context(), artifact); err != nil {
 			_ = os.Remove(path)
 			h.writeError(w, r, http.StatusInternalServerError, "backend.upload.register_failed")
@@ -268,6 +275,10 @@ func (h *UploadsHandler) fileScanStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := h.access.AuthorizeUpload(r.Context(), evidence.ObjectKey, evidence.FieldKey, principal); err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	if err := h.subjects.Authorize(r.Context(), principal.WorkspaceID, principal.UserID, evidence.FileID); err != nil {
 		h.writeServiceError(w, r, err)
 		return
 	}
@@ -333,10 +344,18 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 		ticketAuthorized = true
 	}
 	storageFilename := fileIdentifier
+	if h.scans == nil {
+		h.writeError(w, r, http.StatusServiceUnavailable, "backend.upload.scan_service_unavailable")
+		return
+	}
 	if h.scans != nil {
 		evidence, err := h.scans.Status(r.Context(), principal.WorkspaceID, fileIdentifier)
 		switch {
 		case err == nil:
+			if evidence.Status != lifecyclecontract.FileScanClean {
+				h.writeError(w, r, http.StatusForbidden, "backend.upload.scan_not_clean")
+				return
+			}
 			// Ordinary download URLs remain bound to the field that authorized the
 			// upload. A signed Action ticket instead carries the exact business
 			// record binding already authorized by the Action executor.
@@ -350,6 +369,8 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 				return
 			}
 		case errors.Is(err, sql.ErrNoRows):
+			h.writeError(w, r, http.StatusForbidden, "backend.upload.scan_not_clean")
+			return
 		default:
 			h.writeServiceError(w, r, err)
 			return

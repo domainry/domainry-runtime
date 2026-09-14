@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
+	"io/fs"
 	"sort"
 	"strings"
 
@@ -25,6 +27,7 @@ type RecordSubjectLifecycleApplicationService struct {
 	objects               []definitionmodel.ObjectSchema
 	files                 lifecyclecontract.SubjectFileStore
 	profileIdentityFields map[string][]string
+	subjectUploads        func(context.Context, string, string) ([]lifecyclecontract.SubjectFileReference, error)
 }
 
 type recordSubjectExport struct {
@@ -54,6 +57,10 @@ func NewRecordSubjectLifecycleApplicationService(repository recordrepository.Rec
 	return service
 }
 
+func (s *RecordSubjectLifecycleApplicationService) BindSubjectUploads(resolve func(context.Context, string, string) ([]lifecyclecontract.SubjectFileReference, error)) {
+	s.subjectUploads = resolve
+}
+
 func (s *RecordSubjectLifecycleApplicationService) Owner(context.Context) string { return "record" }
 
 func (s *RecordSubjectLifecycleApplicationService) ResolveSubject(_ context.Context, workspaceID, subjectType, subjectID string) (string, error) {
@@ -69,7 +76,7 @@ func (s *RecordSubjectLifecycleApplicationService) PreviewSubject(ctx context.Co
 		return nil, err
 	}
 	objectCounts := map[string]int{}
-	fileCount := 0
+	fileReferences := map[string]bool{}
 	for _, object := range s.objects {
 		records := matches[object.Key]
 		if len(records) == 0 {
@@ -81,11 +88,25 @@ func (s *RecordSubjectLifecycleApplicationService) PreviewSubject(ctx context.Co
 				continue
 			}
 			for _, record := range records {
-				fileCount += len(recordSubjectFileValues(record.Data[field.Key]))
+				for _, reference := range recordSubjectFileValues(record.Data[field.Key]) {
+					fileReferences[reference] = true
+				}
 			}
 		}
 	}
-	return json.Marshal(map[string]any{"objects": objectCounts, "files": fileCount})
+	if s.subjectUploads != nil {
+		refs, err := s.subjectUploads(ctx, workspaceID, resolvedIdentity)
+		if err != nil {
+			return nil, err
+		}
+		for _, ref := range refs {
+			if ref.WorkspaceID != workspaceID {
+				return nil, fmt.Errorf("upload subject workspace mismatch")
+			}
+			fileReferences[ref.Reference] = true
+		}
+	}
+	return json.Marshal(map[string]any{"objects": objectCounts, "files": len(fileReferences)})
 }
 
 func (s *RecordSubjectLifecycleApplicationService) ExportSubject(ctx context.Context, workspaceID, resolvedIdentity string) (json.RawMessage, error) {
@@ -105,6 +126,36 @@ func (s *RecordSubjectLifecycleApplicationService) ExportSubject(ctx context.Con
 			return nil, fileErr
 		}
 		export.Files = append(export.Files, files...)
+	}
+	if s.subjectUploads != nil {
+		refs, err := s.subjectUploads(ctx, workspaceID, resolvedIdentity)
+		if err != nil {
+			return nil, err
+		}
+		seen := map[string]bool{}
+		for _, evidence := range export.Files {
+			seen[evidence.Reference] = true
+		}
+		for _, ref := range refs {
+			if ref.WorkspaceID != workspaceID {
+				return nil, fmt.Errorf("upload subject workspace mismatch")
+			}
+			if seen[ref.Reference] {
+				continue
+			}
+			if s.files == nil {
+				return nil, fmt.Errorf("record subject file store unavailable")
+			}
+			evidence, err := s.files.ExportSubjectFile(ctx, ref)
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			seen[ref.Reference] = true
+			export.Files = append(export.Files, evidence)
+		}
 	}
 	return json.Marshal(export)
 }

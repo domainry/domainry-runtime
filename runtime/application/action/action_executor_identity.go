@@ -8,6 +8,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
@@ -64,7 +65,7 @@ func (e *businessActionExecution) VerifyFileClean(ctx context.Context, request r
 	if e.dependencies.VerifyFileClean == nil {
 		return runtimeext.FileVerificationEvidence{}, missingExecutorPort("verify_file_clean")
 	}
-	return e.dependencies.VerifyFileClean(e.unitOfWork.executionContext(ctx), e.workspace.ID, request)
+	return e.dependencies.VerifyFileClean(uploadapplication.WithUploadClaimPrincipal(e.unitOfWork.executionContext(ctx), e.invocation.Principal), e.workspace.ID, request)
 }
 
 func (e *businessActionExecution) OpenVerifiedFile(ctx context.Context, request runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error) {

@@ -173,9 +173,7 @@ func TestUploadAccessAuthorizeDownloadWithoutRecord(t *testing.T) {
 			t.Fatalf("case=%+v reason=%q", test, audit.reason)
 		}
 	}
-	if err := service.AuthorizeDownload(t.Context(), "asset", "file_url", "", "file.txt", uploadAccessPrincipal("asset.read")); err != nil {
-		t.Fatal(err)
-	}
+	assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "asset", "file_url", "", "file.txt", uploadAccessPrincipal("asset.read")), apperror.KindForbidden, "backend.upload.permission_denied")
 }
 
 func TestUploadAccessAuthorizeDownloadAgainstRecord(t *testing.T) {
@@ -197,7 +195,7 @@ func TestUploadAccessAuthorizeDownloadAgainstRecord(t *testing.T) {
 
 	records.err = nil
 	for _, sensitive := range []any{true, " TRUE "} {
-		records.record.Data = map[string]any{"file_url": "file:///tmp/document.pdf?download=1", "sensitive": sensitive}
+		records.record.Data = map[string]any{"file_url": "/uploads/document.pdf", "sensitive": sensitive}
 		assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", principal), apperror.KindForbidden, "backend.upload.permission_denied")
 	}
 	workspaceAdmin := uploadAccessPrincipal("document.read", "runtime.appschema.validate_application_definition")
@@ -224,7 +222,7 @@ func TestUploadAccessPolicyHelpers(t *testing.T) {
 	for _, test := range []struct {
 		value any
 		want  bool
-	}{{"", false}, {"/uploads/a.pdf", true}, {"file:///tmp/a.pdf?x=1", true}, {"/uploads/b.pdf", false}} {
+	}{{"", false}, {"/uploads/a.pdf", true}, {"file:///tmp/a.pdf?x=1", false}, {"/uploads/b.pdf", false}} {
 		if got := uploadFileMatchesRecord("a.pdf", test.value); got != test.want {
 			t.Fatalf("fileMatchesRecord(%v)=%v", test.value, got)
 		}

@@ -17,6 +17,7 @@ import (
 
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 const maxDerivedFileBytes = 128 << 20
@@ -31,6 +32,7 @@ type FileCapabilityService struct {
 	uploadRoot string
 	clock      func() time.Time
 	tickets    *FileDownloadTicketService
+	subjects   *UploadSubjectRegistry
 }
 
 func NewFileCapabilityService(store lifecyclecontract.UploadFileArtifactStore, verifier *FileScanReceiptVerifier, uploadRoot string, clock func() time.Time, tickets ...*FileDownloadTicketService) (*FileCapabilityService, error) {
@@ -52,6 +54,11 @@ func NewFileCapabilityService(store lifecyclecontract.UploadFileArtifactStore, v
 }
 
 func (s *FileCapabilityService) VerifyClean(ctx context.Context, workspaceID string, request runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error) {
+	if principal, claiming := ctx.Value(uploadClaimPrincipalKey{}).(principalmodel.Principal); claiming && !principal.SystemScope.Valid() {
+		if err := s.subjects.Authorize(ctx, workspaceID, principal.UserID, request.FileID); err != nil {
+			return runtimeext.FileVerificationEvidence{}, err
+		}
+	}
 	evidence, err := s.verifier.VerifyClean(ctx, workspaceID, request.FileID, request.ContentSHA256, request.ScanReceipt)
 	if err != nil {
 		return runtimeext.FileVerificationEvidence{}, err
@@ -60,6 +67,10 @@ func (s *FileCapabilityService) VerifyClean(ctx context.Context, workspaceID str
 		FileID: evidence.FileID, ContentSHA256: evidence.SHA256, Filename: evidence.Filename, ContentType: evidence.ContentType,
 		Size: evidence.Size, Status: evidence.Status, Provider: evidence.Provider, EvidenceRef: evidence.EvidenceRef, ScanReceipt: evidence.Receipt,
 	}, nil
+}
+
+func (s *FileCapabilityService) BindUploadSubjects(subjects *UploadSubjectRegistry) {
+	s.subjects = subjects
 }
 
 func (s *FileCapabilityService) OpenVerified(ctx context.Context, workspaceID string, request runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error) {

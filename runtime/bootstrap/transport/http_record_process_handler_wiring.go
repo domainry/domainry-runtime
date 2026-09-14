@@ -36,6 +36,10 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 	var artifacts lifecyclecontract.UploadArtifactStore
 	var scans *uploadapplication.FileScanReceiptVerifier
 	var tickets *uploadapplication.FileDownloadTicketService
+	var uploadSubjects *uploadapplication.UploadSubjectRegistry
+	if a.dependencies.Store != nil {
+		uploadSubjects = uploadapplication.NewUploadSubjectRegistry(a.dependencies.Store)
+	}
 	if a.dependencies.Store != nil && a.dependencies.LifecycleBinding != nil {
 		fileStore, err := a.dependencies.LifecycleBinding.UploadArtifacts(lifecyclesdk.UploadArtifactOptions{
 			Root:              uploadDir,
@@ -56,10 +60,11 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 		}
 	}
 	a.handlers.Uploads = uploadhttp.NewUploadsHandler(uploadhttp.UploadsDependencies{
-		Access:    uploadapplication.NewUploadAccessApplicationService(records.Applications().Schema, records.Applications().Audit, queries),
+		Access:    uploadapplication.NewUploadAccessApplicationService(records.Applications().Schema, records.Applications().Audit, queries, uploadSubjects),
 		UploadDir: uploadDir, Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 		WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,
 		Artifacts: artifacts, Scans: scans, Tickets: tickets,
+		Subjects: uploadSubjects,
 	})
 	workflows := records.Applications().Workflows
 	a.handlers.Workflows = workflowhttp.NewWorkflowsHandler(workflowhttp.WorkflowsDependencies{

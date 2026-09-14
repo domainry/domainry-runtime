@@ -2,7 +2,6 @@ package upload
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 )
 
@@ -11,9 +10,7 @@ func uploadFileMatchesRecord(filename string, value any) bool {
 	if text == "" {
 		return false
 	}
-	text = strings.TrimPrefix(text, "file://")
-	text = strings.Split(text, "?")[0]
-	return filepath.Base(text) == filename
+	return text == "/uploads/"+filename || text == filename
 }
 
 func uploadRecordBoolean(value any) bool {

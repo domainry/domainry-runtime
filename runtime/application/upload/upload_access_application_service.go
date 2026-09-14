@@ -67,13 +67,18 @@ func (s *FileScanReceiptVerifier) sign(e lifecyclecontract.FileScanEvidence) str
 }
 
 type UploadAccessApplicationService struct {
-	catalog CatalogPort
-	audit   AuditPort
-	records RecordQueryPort
+	catalog  CatalogPort
+	audit    AuditPort
+	records  RecordQueryPort
+	subjects *UploadSubjectRegistry
 }
 
-func NewUploadAccessApplicationService(catalog CatalogPort, audit AuditPort, records RecordQueryPort) *UploadAccessApplicationService {
-	return &UploadAccessApplicationService{catalog: catalog, audit: audit, records: records}
+func NewUploadAccessApplicationService(catalog CatalogPort, audit AuditPort, records RecordQueryPort, subjects ...*UploadSubjectRegistry) *UploadAccessApplicationService {
+	s := &UploadAccessApplicationService{catalog: catalog, audit: audit, records: records}
+	if len(subjects) > 0 {
+		s.subjects = subjects[0]
+	}
+	return s
 }
 
 func (s *UploadAccessApplicationService) AuthorizeUpload(ctx context.Context, objectKey, fieldKey string, principal principalmodel.Principal) error {

@@ -12,6 +12,7 @@ import (
 	"github.com/domainry/domainry-foundation/requestcontext"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -37,6 +38,55 @@ func fixture(t *testing.T) (*database.RuntimeStore, *Handler, context.Context) {
 		return []recordmodel.SubjectRecordReference{{ObjectKey: "member_profile", RecordID: "profile-alice"}}, nil
 	})
 	return store, h, requestcontext.WithWorkspaceID(t.Context(), "workspace-a")
+}
+
+func TestUploadSubjectRegistryIsImmutableScopedAndErasedWithWriteFence(t *testing.T) {
+	store, h, ctx := fixture(t)
+	binding := uploadapplication.UploadSubjectBinding{WorkspaceID: "workspace-a", FileID: "file-alice", Filename: "private.png", ObjectKey: "member_avatar_upload", FieldKey: "file_url", UserID: "alice", SHA256: strings.Repeat("a", 64)}
+	if err := store.InsertUploadSubject(ctx, binding); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.InsertUploadSubject(ctx, binding); err == nil {
+		t.Fatal("reassigned immutable upload")
+	}
+	for _, key := range []string{binding.FileID, binding.Filename} {
+		got, err := store.FindUploadSubject(ctx, "workspace-a", key)
+		if err != nil || got != binding {
+			t.Fatalf("lookup: %+v %v", got, err)
+		}
+		if _, err := store.FindUploadSubject(ctx, "workspace-b", key); err == nil {
+			t.Fatal("cross-workspace upload exposed")
+		}
+	}
+	peer := binding
+	peer.FileID = "file-bob"
+	peer.Filename = "peer.png"
+	peer.UserID = "bob"
+	if err := store.InsertUploadSubject(ctx, peer); err != nil {
+		t.Fatal(err)
+	}
+	refs, err := store.SubjectUploadReferences(ctx, "workspace-a", "alice")
+	if err != nil || len(refs) != 1 || refs[0].Reference != "/uploads/private.png" {
+		t.Fatalf("inventory: %+v %v", refs, err)
+	}
+	plan, err := h.PrepareSubjectErasure(ctx, "erase-upload", "workspace-a", "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ErasePreparedSubject(ctx, "erase-upload", "workspace-a", "alice", plan, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.FindUploadSubject(ctx, "workspace-a", binding.FileID); err == nil {
+		t.Fatal("subject upload binding survived")
+	}
+	if _, err := store.FindUploadSubject(ctx, "workspace-a", peer.FileID); err != nil {
+		t.Fatal("peer upload removed", err)
+	}
+	binding.FileID = "new-alice"
+	binding.Filename = "late.png"
+	if err := store.InsertUploadSubject(ctx, binding); err == nil {
+		t.Fatal("erased subject uploaded after cleanup")
+	}
 }
 
 // Seed every actual required schema column, so the test uses the real persisted
@@ -135,6 +185,9 @@ func TestRuntimeEvidenceErasureUsesDurableScopeAndRollsBackBeforeRetry(t *testin
 			if s.table == "_publication_outbox" {
 				override["publication_type"] = "integration.connector"
 				override["status"] = "queued"
+			}
+			if s.table == "_upload_subject_bindings" {
+				override["filename"] = private
 			}
 			seed(t, store, s.table, id, item.workspace, override)
 			ref := rowReference{Table: s.table, ID: id}
