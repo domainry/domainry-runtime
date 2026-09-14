@@ -3,6 +3,7 @@ package workflows
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
@@ -18,6 +19,7 @@ func workflowProcessFilterFromRequest(r *http.Request) workflowmodel.WorkflowPro
 		status = ""
 	}
 	return workflowmodel.WorkflowProcessFilter{
+		PageSize: intQuery(query.Get("page_size")), Cursor: query.Get("cursor"),
 		ProcessID: query.Get("resource_id"), WorkflowKey: query.Get("workflow_key"), DefinitionVersion: intQuery(query.Get("definition_version")),
 		ObjectKey: query.Get("object_key"), RecordID: query.Get("record_id"), Status: status,
 		Statuses:    statuses,
@@ -49,6 +51,22 @@ func (h *WorkflowsHandler) listBusinessTeamWorkflowTasks(w http.ResponseWriter, 
 }
 
 func (h *WorkflowsHandler) listParticipantWorkflowProcesses(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Has("page_size") {
+		size, err := strconv.Atoi(r.URL.Query().Get("page_size"))
+		if err != nil || size < 1 || size > 200 {
+			h.writeError(w, r, http.StatusBadRequest, "backend.workflow.page_size_invalid")
+			return
+		}
+	}
+	if r.URL.Query().Has("page_size") || r.URL.Query().Has("cursor") {
+		page, err := h.processes.ParticipantWorkflowProcessPage(r.Context(), h.principal(r), workflowProcessFilterFromRequest(r))
+		if err != nil {
+			h.writeServiceError(w, r, err)
+			return
+		}
+		h.writeJSON(w, http.StatusOK, page)
+		return
+	}
 	processes, err := h.processes.ParticipantWorkflowProcesses(r.Context(), h.principal(r), workflowProcessFilterFromRequest(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
@@ -92,6 +110,22 @@ func (h *WorkflowsHandler) getParticipantWorkflowProcessRoute(w http.ResponseWri
 }
 
 func (h *WorkflowsHandler) listOpsWorkflowProcesses(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Has("page_size") {
+		size, err := strconv.Atoi(r.URL.Query().Get("page_size"))
+		if err != nil || size < 1 || size > 200 {
+			h.writeError(w, r, http.StatusBadRequest, "backend.workflow.page_size_invalid")
+			return
+		}
+	}
+	if r.URL.Query().Has("page_size") || r.URL.Query().Has("cursor") {
+		page, err := h.processes.OpsWorkflowProcessPage(r.Context(), h.principal(r), workflowProcessFilterFromRequest(r))
+		if err != nil {
+			h.writeServiceError(w, r, err)
+			return
+		}
+		h.writeJSON(w, http.StatusOK, page)
+		return
+	}
 	processes, err := h.processes.OpsWorkflowProcesses(r.Context(), h.principal(r), workflowProcessFilterFromRequest(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)

@@ -60,3 +60,13 @@ type WorkflowWorkerStore interface {
 	UpdateTask(context.Context, string, workflowmodel.WorkflowTask) error
 	InsertProcessEvent(context.Context, string, workflowmodel.WorkflowProcessEvent) error
 }
+
+// WorkflowWithdrawalStore never falls back to separate process/task writes.
+type WorkflowWithdrawalStore interface {
+	CommitWorkflowWithdrawal(context.Context, transactionmodel.WorkflowWithdrawalCommit) error
+}
+
+// WorkflowProcessRevisionStore claims a waiting process before timer side effects.
+type WorkflowProcessRevisionStore interface {
+	ClaimWorkflowTimer(context.Context, string, workflowmodel.WorkflowProcessInstance, workflowmodel.WorkflowNodeInstance, string) (bool, error)
+}

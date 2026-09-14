@@ -137,6 +137,7 @@ func addBusinessBuilderOpenAPIPaths(paths map[string]any) {
 	addBuilderPath(paths, "/workflow/definitions/{workflowKey}/simulate", "Workflow Administration", "post")
 	addBuilderPath(paths, "/automation/fragments/{capabilityKey}/validate", "Automation", "post")
 	annotateWorkflowTaskDecisionRequests(paths)
+	annotateWorkflowProcessPages(paths)
 
 }
 

@@ -240,33 +240,24 @@ func (s *WorkflowApplicationService) CancelWorkflowProcessWithKey(ctx context.Co
 	if workflowProcessHasCommand(process, "process.cancel", commandKey) {
 		return workflowprojection.WorkflowProcessForPrincipal(process, false, s.workflowProjectionActions(ctx, principal)), nil
 	}
-	if process.Status != "waiting" && process.Status != "running" {
-		return workflowmodel.WorkflowProcessInstance{}, conflict("backend.workflow.process_not_cancellable")
+	// Record-bound withdrawals must enter through the business Action so its
+	// receipt and released occupancy cannot be bypassed by the generic route.
+	if process.ObjectKey != "" && process.RecordID != "" {
+		return workflowmodel.WorkflowProcessInstance{}, conflict("backend.workflow.business_withdrawal_required")
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	process.Status = "cancelled"
-	process.CurrentNodeIDs = nil
-	process.CompletedAt = now
-	process.UpdatedAt = now
-	workflowRecordCommand(&process, "process.cancel", commandKey)
-	if err := s.processRepo.UpdateProcess(ctx, principal.WorkspaceID, process); err != nil {
-		return process, internalError("cancel workflow process", err)
+	commit, err := prepareWorkflowWithdrawal(process, callerKey, principal)
+	if err != nil {
+		return workflowmodel.WorkflowProcessInstance{}, err
 	}
-	tasks, _ := s.processRepo.ListTasks(ctx, principal.WorkspaceID, process.ID, "", "", 500)
-	updates := make([]workflowmodel.WorkflowTask, 0, len(tasks))
-	for _, task := range tasks {
-		if task.Status != "open" && task.Status != "pending" {
-			continue
-		}
-		task.Status = "cancelled"
-		task.UpdatedAt = now
-		updates = append(updates, task)
+	store, ok := s.processRepo.(workflowcontract.WorkflowWithdrawalStore)
+	if !ok {
+		return workflowmodel.WorkflowProcessInstance{}, internalError("atomic workflow withdrawal unavailable", nil)
 	}
-	_ = updateWorkflowTasks(ctx, s.processRepo, principal.WorkspaceID, updates)
-	s.processEngine.appendEvent(ctx, process.WorkspaceID, process.ID, "", "", "process_cancelled", principal.UserID, "workflow.event.process.cancelled", nil)
-	if err := s.syncWorkflowExecutionWithProcess(ctx, process, nil); err != nil {
-		return process, internalError("sync cancelled workflow execution", err)
+	if err := store.CommitWorkflowWithdrawal(ctx, commit); err != nil {
+		return workflowmodel.WorkflowProcessInstance{}, err
 	}
+	process = commit.Process
+
 	return workflowprojection.WorkflowProcessForPrincipal(process, false, s.workflowProjectionActions(ctx, principal)), nil
 }
 

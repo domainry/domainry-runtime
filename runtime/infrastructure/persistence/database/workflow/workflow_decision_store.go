@@ -335,7 +335,13 @@ func (r WorkflowDecisionStore) updateTx(ctx context.Context, tx *sql.Tx, table, 
 	for index, column := range columns {
 		builder.Set(column, values[index])
 	}
-	queryValue, args, err := builder.Where(query.And(query.Equal("id", id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id))).Build()
+	predicates := []query.Predicate{query.Equal("id", id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id)}
+	for i, column := range columns {
+		if column == "status" && values[i] != "cancelled" {
+			predicates = append(predicates, query.NotEqual("status", "cancelled"))
+		}
+	}
+	queryValue, args, err := builder.Where(query.And(predicates...)).Build()
 	if err != nil {
 		return fmt.Errorf("build %s update: %w", table, err)
 	}

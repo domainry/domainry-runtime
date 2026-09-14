@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v38"
-	ContractSHA256  = "478644a809ea3570c0bc01c607b1128abc6a64fd6ebc79935cc40e04911e75c7"
+	ContractVersion = "runtimeext-v39"
+	ContractSHA256  = "f39febca75935811416a54542efdd4a27b871d6a283536bc0de0c57c7ec866d1"
 )
 
-const contractDefinitionV38 = `runtimeext-v38
+const contractDefinitionV39 = `runtimeext-v39
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -49,7 +49,10 @@ RunBusinessJobSemantics=exact_json_payload|exact_target_object|same_action_uow_r
 FileActionGrantDeniedErrorCode=backend.upload.action_grant_denied
 WorkflowStartExecution.StageWorkflowStart(context.Context,WorkflowStart)(WorkflowStartReceipt,error)
 StageWorkflowStart(context.Context,ActionExecution,WorkflowStart)(WorkflowStartReceipt,error)
-WorkflowGrantOperation=start
+WorkflowGrantOperation=start|withdraw
+WorkflowWithdrawalExecution.StageWorkflowWithdrawal(context.Context,WorkflowWithdrawal)(WorkflowWithdrawalReceipt,error)
+StageWorkflowWithdrawal(context.Context,ActionExecution,WorkflowWithdrawal)(WorkflowWithdrawalReceipt,error)
+WorkflowWithdrawalSemantics=exact_descriptor_withdraw_grant|exact_workspace_workflow_object_record_and_initiator|waiting_decision_boundary|process_revision_compare_and_swap|cancel_all_active_children|same_action_uow|business_receipt_and_occupancy_release_by_handler|rollback_together|action_execution_replay
 WorkflowGrantDeniedErrorCode=backend.action.workflow_grant_denied
 WorkflowStartSemantics=manifest_workflow_with_instance_approval_route|descriptor_workflow_start_grant|synchronous_route_validation|same_action_uow|starting_process_and_route_steps_and_intent|activation_by_committed_intent
 StageNotification(context.Context,ActionExecution,NotificationIntent)(NotificationReceipt,error)
@@ -137,10 +140,10 @@ func ComputedContractSHA256() string {
 		Predicate{}, Arithmetic{}, RecordMutation{}, RecordMutationResult{}, ConditionalUpdateManyExactCoverage{}, ConditionalUpdateManyRequest{}, ConditionalUpdateManyResult{},
 		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ExtensionSet{},
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
-		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{},
+		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV38)
+	definition.WriteString(contractDefinitionV39)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

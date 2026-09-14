@@ -28,7 +28,7 @@ func (e *businessActionExecution) StageWorkflowStart(ctx context.Context, start 
 		return runtimeext.WorkflowStartReceipt{}, apperror.New(apperror.KindConflict, "backend.action.execution_phase_invalid", nil, map[string]string{"phase": string(phase)})
 	}
 	workflowKey := strings.TrimSpace(start.WorkflowKey)
-	if !e.hasWorkflowGrant(workflowKey) {
+	if !e.hasWorkflowOperationGrant(workflowKey, runtimeext.WorkflowStartOperation) {
 		return runtimeext.WorkflowStartReceipt{}, apperror.New(apperror.KindForbidden, runtimeext.WorkflowGrantDeniedErrorCode, nil, map[string]string{"workflow": workflowKey, "field_path": "workflow_key"})
 	}
 	request := workflowmodel.WorkflowRouteStartRequest{
@@ -54,7 +54,7 @@ func (e *businessActionExecution) StageWorkflowStart(ctx context.Context, start 
 	return receipt, nil
 }
 
-func (e *businessActionExecution) hasWorkflowGrant(workflowKey string) bool {
+func (e *businessActionExecution) hasWorkflowOperationGrant(workflowKey, requestedOperation string) bool {
 	if strings.TrimSpace(workflowKey) == "" {
 		return false
 	}
@@ -63,7 +63,7 @@ func (e *businessActionExecution) hasWorkflowGrant(workflowKey string) bool {
 			continue
 		}
 		for _, operation := range grant.Operations {
-			if strings.TrimSpace(operation) == runtimeext.WorkflowStartOperation {
+			if strings.TrimSpace(operation) == requestedOperation {
 				return true
 			}
 		}

@@ -281,6 +281,11 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			return err
 		}
 	}
+	for _, withdrawal := range commit.WorkflowWithdrawals {
+		if err := database.ApplyWorkflowWithdrawalTx(ctx, r.store, tx, workspaceID, withdrawal); err != nil {
+			return err
+		}
+	}
 	for _, event := range commit.NotificationEvents {
 		event.WorkspaceID = workspaceID
 		if err := notificationpersistence.NewInboxEventWriter(r.store).InsertEventTx(ctx, tx, event); err != nil {

@@ -10,8 +10,8 @@ import (
 
 	"github.com/domainry/domainry-orm/query"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
-
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -57,6 +57,11 @@ func (r WorkflowWorkerStore) InsertExecution(ctx context.Context, workspaceID st
 	_, scopedColumns, scopedValues, err := workflowScopedInsert(columns, values)
 	if err != nil {
 		return err
+	}
+	if execution.ProcessID != "" && execution.Status != "cancelled" {
+		if err := r.guardExecutionProcessTx(ctx, tx, workspaceID, execution.ProcessID); err != nil {
+			return err
+		}
 	}
 	if err := r.store.GuardSubjectEvidenceWrite(ctx, tx, workspaceID, "_workflow_executions", columns, values); err != nil {
 		return err
@@ -136,12 +141,14 @@ func (r WorkflowWorkerStore) UpdateExecution(ctx context.Context, workspaceID st
 	if err != nil {
 		return err
 	}
-	columns := workflowExecutionMutableColumns()
-	values, err := workflowExecutionMutableValues(execution)
+	updated, err := r.UpdateExecutionWhere(ctx, workspaceID, execution, nil)
 	if err != nil {
 		return err
 	}
-	return r.updateRow(ctx, "_workflow_executions", workspaceID, execution.ID, columns, values)
+	if !updated {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (r WorkflowWorkerStore) UpdateExecutionWhere(ctx context.Context, workspaceID string, execution workflowmodel.WorkflowExecution, conditions map[string]any) (bool, error) {
@@ -159,6 +166,9 @@ func (r WorkflowWorkerStore) UpdateExecutionWhere(ctx context.Context, workspace
 		builder.Set(column, values[i])
 	}
 	predicates := []query.Predicate{query.Equal("id", execution.ID), r.store.SubjectEvidenceWriteAllowed(workspaceID, "_workflow_executions", execution.ID)}
+	if execution.Status != "cancelled" {
+		predicates = append(predicates, query.NotEqual("status", "cancelled"))
+	}
 	keys := make([]string, 0, len(conditions))
 	for key := range conditions {
 		keys = append(keys, key)
@@ -317,7 +327,13 @@ func (r WorkflowWorkerStore) updateRow(ctx context.Context, table, workspaceID, 
 	for i, column := range columns {
 		builder.Set(column, values[i])
 	}
-	queryValue, args, err := builder.Where(query.And(query.Equal("id", id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id))).Build()
+	predicates := []query.Predicate{query.Equal("id", id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id)}
+	for i, column := range columns {
+		if column == "status" && values[i] != "cancelled" {
+			predicates = append(predicates, query.NotEqual("status", "cancelled"))
+		}
+	}
+	queryValue, args, err := builder.Where(query.And(predicates...)).Build()
 	if err != nil {
 		return fmt.Errorf("build %s update: %w", table, err)
 	}
@@ -331,6 +347,31 @@ func (r WorkflowWorkerStore) updateRow(ctx context.Context, table, workspaceID, 
 	}
 	if affected == 0 {
 		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// Lock the process before inserting a late engine receipt, following the same
+// process-then-execution lock order as withdrawal. Missing process IDs remain
+// valid for execution intents that have not created a process yet.
+func (r WorkflowWorkerStore) guardExecutionProcessTx(ctx context.Context, tx *sql.Tx, workspaceID, processID string) error {
+	statement, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).SetExpression("updated_at", query.Column("updated_at")).Where(query.Equal("id", processID)).Build()
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
+		return err
+	}
+	statement, args, err = query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns("status").Where(query.Equal("id", processID)).Build()
+	if err != nil {
+		return err
+	}
+	var status string
+	if err := tx.QueryRowContext(ctx, statement, args...).Scan(&status); err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if status == "cancelled" {
+		return workflowcontract.ErrWorkflowDecisionSnapshotChanged
 	}
 	return nil
 }

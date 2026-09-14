@@ -76,7 +76,13 @@ func (r WorkflowProcessStore) GetProcess(ctx context.Context, workspaceID, id st
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, false, err
 	}
-	row := r.database().QueryRowContext(ctx, queryValue, args...)
+	executor := database.ActionExecutionTransaction(ctx)
+	var row *sql.Row
+	if executor != nil {
+		row = executor.QueryRowContext(ctx, queryValue, args...)
+	} else {
+		row = r.database().QueryRowContext(ctx, queryValue, args...)
+	}
 	value, err := scanWorkflowProcess(row)
 	if err == sql.ErrNoRows {
 		return workflowmodel.WorkflowProcessInstance{}, false, nil
@@ -131,6 +137,9 @@ func (r WorkflowProcessStore) ListProcesses(ctx context.Context, workspaceID str
 	}
 	if value := strings.TrimSpace(filter.UpdatedTo); value != "" {
 		predicates = append(predicates, query.LessThanOrEqual("updated_at", value))
+	}
+	if filter.AfterCreatedAt != "" && filter.AfterID != "" {
+		predicates = append(predicates, query.Or(query.LessThan("created_at", filter.AfterCreatedAt), query.And(query.Equal("created_at", filter.AfterCreatedAt), query.LessThan("id", filter.AfterID))))
 	}
 	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(workflowProcessColumns...).OrderBy(query.Descending("created_at"), query.Descending("id")).Limit(limit)
 	if len(predicates) > 0 {
@@ -479,7 +488,13 @@ func (r WorkflowProcessStore) updateScopedRow(ctx context.Context, table, worksp
 	for index, column := range columns {
 		builder.Set(column, values[index])
 	}
-	queryValue, args, err := builder.Where(query.And(query.Equal("id", id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id))).Build()
+	predicates := []query.Predicate{query.Equal("id", id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id)}
+	for i, column := range columns {
+		if column == "status" && values[i] != "cancelled" {
+			predicates = append(predicates, query.NotEqual("status", "cancelled"))
+		}
+	}
+	queryValue, args, err := builder.Where(query.And(predicates...)).Build()
 	if err != nil {
 		return err
 	}

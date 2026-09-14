@@ -5,10 +5,11 @@ import (
 	"strings"
 )
 
-// WorkflowStartOperation is the only Workflow operation a Business Handler can
-// be granted. Starting is the single point where a Handler may hand Runtime a
-// per-instance approval route; every later transition belongs to Runtime.
-const WorkflowStartOperation = "start"
+// Workflow operations available inside the Business Action transaction.
+const (
+	WorkflowStartOperation    = "start"
+	WorkflowWithdrawOperation = "withdraw"
+)
 
 // WorkflowGrantDeniedErrorCode is returned when a Handler stages a Workflow
 // start its descriptor does not grant.
@@ -27,7 +28,7 @@ func (g WorkflowGrant) Valid() bool {
 	seen := map[string]bool{}
 	for _, raw := range g.Operations {
 		operation := strings.TrimSpace(raw)
-		if operation != WorkflowStartOperation || seen[operation] {
+		if (operation != WorkflowStartOperation && operation != WorkflowWithdrawOperation) || seen[operation] {
 			return false
 		}
 		seen[operation] = true
@@ -80,4 +81,32 @@ func StageWorkflowStart(ctx context.Context, execution ActionExecution, start Wo
 		return WorkflowStartReceipt{}, &BusinessError{Code: "backend.action.workflow_start_unavailable", Message: "Runtime Workflow start execution is unavailable"}
 	}
 	return capability.StageWorkflowStart(ctx, start)
+}
+
+// WorkflowWithdrawal binds withdrawal to the exact business record. Runtime
+// checks initiator ownership and the process revision at the Action commit.
+type WorkflowWithdrawal struct {
+	WorkflowKey string
+	ObjectKey   string
+	RecordID    string
+	ProcessID   string
+}
+
+// WorkflowWithdrawalReceipt is durable only when the business Action commits.
+type WorkflowWithdrawalReceipt struct {
+	ProcessID   string
+	CommandID   string
+	WithdrawnAt string
+}
+
+type WorkflowWithdrawalExecution interface {
+	StageWorkflowWithdrawal(context.Context, WorkflowWithdrawal) (WorkflowWithdrawalReceipt, error)
+}
+
+func StageWorkflowWithdrawal(ctx context.Context, execution ActionExecution, withdrawal WorkflowWithdrawal) (WorkflowWithdrawalReceipt, error) {
+	capability, ok := execution.(WorkflowWithdrawalExecution)
+	if !ok {
+		return WorkflowWithdrawalReceipt{}, &BusinessError{Code: "backend.action.workflow_withdrawal_unavailable", Message: "Runtime Workflow withdrawal execution is unavailable"}
+	}
+	return capability.StageWorkflowWithdrawal(ctx, withdrawal)
 }

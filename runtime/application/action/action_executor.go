@@ -83,6 +83,7 @@ type BusinessHandlerExecutionDependencies struct {
 	BindWorkspaceIdentityUsage        func(context.Context) (identitysdk.WorkspaceIdentityUsageAggregate, error)
 	WorkspaceCommercialConfiguration  WorkspaceCommercialConfigurationLocker
 	ResolveProfileBindingField        func(string, string) (string, bool)
+	StageWorkflowWithdrawal           func(context.Context, runtimeext.WorkflowWithdrawal, string, principalmodel.Principal) (transactionmodel.WorkflowWithdrawalCommit, error)
 	StageWorkflowStart                func(context.Context, workflowmodel.WorkflowRouteStartRequest, principalmodel.Principal) (transactionmodel.WorkflowStartCommit, error)
 }
 
@@ -224,6 +225,7 @@ type businessActionExecution struct {
 	workspaceUsageGrant      *runtimeext.WorkspaceIdentityUsageCapability
 	workflowGrants           []runtimeext.WorkflowGrant
 	workflowStarts           []transactionmodel.WorkflowStartCommit
+	workflowWithdrawals      []transactionmodel.WorkflowWithdrawalCommit
 	requestIdentity          identitysdk.RequestIdentity
 	targetOrganization       runtimeext.TargetOrganization
 	targetResolved           bool

@@ -231,14 +231,27 @@ func (e *WorkflowProcessEngine) ResumeTimerNode(ctx context.Context, workspaceID
 	if waiting == nil {
 		return process, conflict("backend.workflow.timer_node_not_waiting")
 	}
+
 	waiting.Status = "success"
 	waiting.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	if waiting.Output == nil {
 		waiting.Output = map[string]any{}
 	}
 	waiting.Output["resumed"] = true
-	if err := e.runtime.dependencies.Processes.UpdateNode(ctx, workspaceID, *waiting); err != nil {
-		return workflowmodel.WorkflowProcessInstance{}, internalError("complete timer workflow node", err)
+	// Claim the process revision before completing the timer or running its
+	// next node. Withdrawal uses the same row and cannot lose to a stale resume.
+	revisionStore, ok := e.runtime.dependencies.Processes.(workflowcontract.WorkflowProcessRevisionStore)
+	if !ok {
+		return process, internalError("workflow timer revision store unavailable", nil)
+	}
+	expectedUpdatedAt := process.UpdatedAt
+	process.Status, process.UpdatedAt = "running", time.Now().UTC().Format(time.RFC3339Nano)
+	claimed, err := revisionStore.ClaimWorkflowTimer(ctx, workspaceID, process, *waiting, expectedUpdatedAt)
+	if err != nil {
+		return process, internalError("claim workflow timer process", err)
+	}
+	if !claimed {
+		return process, conflict("backend.workflow.timer_node_not_waiting")
 	}
 	e.appendEvent(ctx, workspaceID, process.ID, nodeID, "", "timer_fired", principal.UserID, "workflow.event.timer.fired", nil)
 	waitingNodes := workflowpolicy.WorkflowRemoveString(process.CurrentNodeIDs, nodeID)

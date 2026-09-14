@@ -172,6 +172,9 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 	task.Status, task.Decision, task.Comment = decision, decision, strings.TrimSpace(req.Comment)
 	task.CompletedBy, task.CompletedAt, task.UpdatedAt = principal.UserID, now, now
 	commit := workflowApprovalDecisionCommit(process, task)
+	// Every vote shares the process revision with withdrawal, including partial
+	// votes in any/all/sequential routes. A stale vote must be recomputed.
+	commit.ExpectedProcessUpdatedAt = processSnapshot.UpdatedAt
 	if req.NextStep != nil {
 		// A configuration and a vote share one durable revision, so two
 		// approvers cannot both believe they configured the next step.

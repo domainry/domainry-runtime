@@ -74,7 +74,7 @@ func TestHandlerDescriptorRequiresStableIdentityAndContracts(t *testing.T) {
 }
 
 func TestRuntimeextContractIdentityIsCurrent(t *testing.T) {
-	if ContractVersion != "runtimeext-v38" {
+	if ContractVersion != "runtimeext-v39" {
 		t.Fatalf("contract version = %q", ContractVersion)
 	}
 	if got := ComputedContractSHA256(); got != ContractSHA256 {

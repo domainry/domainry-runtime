@@ -132,7 +132,11 @@ func (e *businessActionExecution) canonicalCommits() ([]transactionmodel.RecordM
 			})
 		}
 	}
-	return attachWorkflowStarts(commits, e.workflowStarts)
+	commits, err := attachWorkflowStarts(commits, e.workflowStarts)
+	if err != nil {
+		return nil, err
+	}
+	return attachWorkflowWithdrawals(commits, e.workflowWithdrawals)
 }
 
 func (e *businessActionExecution) ApplyRecordMutation(ctx context.Context, mutation runtimeext.RecordMutation) (runtimeext.RecordMutationResult, error) {

@@ -113,6 +113,7 @@ func TestWorkflowProcessRuntimeResumeTimerNodeEdges(t *testing.T) {
 		WorkspaceID:    principal.WorkspaceID,
 		Status:         "waiting",
 		CurrentNodeIDs: []string{"timer"},
+		UpdatedAt:      "2026-09-14T00:00:00Z",
 		DefinitionSnapshot: definitionmodel.WorkflowSchema{
 			Graph: &definitionmodel.WorkflowGraphSchema{},
 		},

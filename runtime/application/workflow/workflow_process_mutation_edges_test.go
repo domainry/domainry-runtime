@@ -61,73 +61,70 @@ func workflowMutationProcess(status string) workflowmodel.WorkflowProcessInstanc
 	}
 }
 
-func TestCancelWorkflowProcessAuthorizationLookupReplayStateTaskAndSyncOutcomes(t *testing.T) {
+type workflowAtomicWithdrawalStub struct {
+	*workflowProcessStoreEdgeStub
+	err     error
+	commits []transactionmodel.WorkflowWithdrawalCommit
+}
+
+func (s *workflowAtomicWithdrawalStub) CommitWorkflowWithdrawal(_ context.Context, commit transactionmodel.WorkflowWithdrawalCommit) error {
+	if s.err != nil {
+		return s.err
+	}
+	s.commits = append(s.commits, commit)
+	s.processes[commit.Process.ID] = commit.Process
+	return nil
+}
+
+func TestCancelWorkflowProcessAuthorizationLookupReplayAndAtomicStorage(t *testing.T) {
 	principal := workflowProcessQueryPrincipal()
 	process := workflowMutationProcess("waiting")
-	base := func() (*workflowProcessStoreEdgeStub, *workflowExecutionWorkerStub) {
-		candidate := process
-		candidate.Result = map[string]any{}
-		return &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": candidate}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}, tasks: []workflowmodel.WorkflowTask{{ID: "open", Status: "open"}, {ID: "pending", Status: "pending"}, {ID: "done", Status: "completed"}}}, &workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}
-	}
-	store, worker := base()
-	service := workflowProcessMutationService(store, worker, nil)
+	process.CreatedAt, process.UpdatedAt = "2026-09-14T00:00:00Z", "2026-09-14T00:00:00Z"
+	store := &workflowAtomicWithdrawalStub{workflowProcessStoreEdgeStub: &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": process}}}}
+	service := NewWorkflowApplicationService(WorkflowDependencies{Processes: store})
 	if _, err := service.CancelWorkflowProcess(t.Context(), "process", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization=%v", err)
 	}
-	store, worker = base()
-	store.getProcessErr = errors.New("get")
-	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", principal); apperror.CodeOf(err) != "backend.internal" {
-		t.Fatalf("get error=%v", err)
-	}
-	store, worker = base()
-	delete(store.processes, "process")
-	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", principal); apperror.CodeOf(err) != "backend.workflow.process_not_found" {
-		t.Fatalf("not found=%v", err)
-	}
-	store, worker = base()
 	other := principal
 	other.UserID = "other"
-	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", other); apperror.CodeOf(err) != "backend.workflow.process_cancel_denied" {
-		t.Fatalf("denied=%v", err)
+	if _, err := service.CancelWorkflowProcess(t.Context(), "process", other); apperror.CodeOf(err) != "backend.workflow.process_cancel_denied" {
+		t.Fatalf("ownership=%v", err)
 	}
-	operator := workflowPrincipalWithPermissions(other, "runtime.workflows.retry_workflow_process")
-	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", operator); apperror.CodeOf(err) != "backend.workflow.process_cancel_denied" {
-		t.Fatalf("unrelated action must not bypass initiator ownership: %v", err)
+	store.getProcessErr = errors.New("get")
+	if _, err := service.CancelWorkflowProcess(t.Context(), "process", principal); apperror.CodeOf(err) != "backend.internal" {
+		t.Fatalf("lookup=%v", err)
 	}
-	store.processes["process"] = workflowMutationProcess("completed")
-	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", principal); apperror.CodeOf(err) != "backend.workflow.process_not_cancellable" {
-		t.Fatalf("state error=%v", err)
+	store.getProcessErr = nil
+	if _, err := service.CancelWorkflowProcess(t.Context(), "missing", principal); apperror.CodeOf(err) != "backend.workflow.process_not_found" {
+		t.Fatalf("missing=%v", err)
 	}
-	store, worker = base()
-	replay := store.processes["process"]
-	key := workflowCommandKey("process.cancel", replay.ID, "caller", map[string]any{"command": "cancel"})
-	workflowRecordCommand(&replay, "process.cancel", key)
-	store.processes["process"] = replay
-	if actual, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcessWithKey(t.Context(), "process", "caller", principal); err != nil || actual.Status != "waiting" {
-		t.Fatalf("replay=%+v err=%v", actual, err)
+	store.err = errors.New("atomic write failed")
+	if _, err := service.CancelWorkflowProcess(t.Context(), "process", principal); err == nil || store.processes["process"].Status != "waiting" {
+		t.Fatalf("storage failure=%v", err)
 	}
-	store, worker = base()
-	store.updateProcessErr = errors.New("update")
-	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", principal); apperror.CodeOf(err) != "backend.internal" {
-		t.Fatalf("update error=%v", err)
+	store.err = nil
+	business := process
+	business.ObjectKey, business.RecordID = "invoice", "invoice-1"
+	store.processes["process"] = business
+	if _, err := service.CancelWorkflowProcess(t.Context(), "process", principal); apperror.CodeOf(err) != "backend.workflow.business_withdrawal_required" {
+		t.Fatalf("business bypass=%v", err)
 	}
-	store, worker = base()
-	running := store.processes["process"]
-	running.Status = "running"
-	store.processes["process"] = running
-	if actual, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", principal); err != nil || actual.Status != "cancelled" {
-		t.Fatalf("running cancel=%+v err=%v", actual, err)
+	store.processes["process"] = process
+	cancelled, err := service.CancelWorkflowProcessWithKey(t.Context(), "process", "caller", principal)
+	if err != nil || cancelled.Status != "cancelled" || len(store.commits) != 1 {
+		t.Fatalf("cancelled=%#v err=%v", cancelled, err)
 	}
-	store, worker = base()
-	store.updateTaskErr = errors.New("ignored task update")
-	cancelled, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), " process ", principal)
-	if err != nil || cancelled.Status != "cancelled" || len(store.updatedTasks) != 2 {
-		t.Fatalf("cancelled=%+v tasks=%v err=%v", cancelled, store.updatedTasks, err)
+	replay, err := service.CancelWorkflowProcessWithKey(t.Context(), "process", "caller", principal)
+	if err != nil || replay.Status != "cancelled" || len(store.commits) != 1 {
+		t.Fatalf("replay=%#v err=%v", replay, err)
 	}
-	store, worker = base()
-	worker.getErr = errors.New("sync")
-	if _, err := workflowProcessMutationService(store, worker, nil).CancelWorkflowProcess(t.Context(), "process", principal); apperror.CodeOf(err) != "backend.internal" {
-		t.Fatalf("sync error=%v", err)
+	if _, err := service.CancelWorkflowProcessWithKey(t.Context(), "process", "different-key", principal); apperror.CodeOf(err) != "backend.workflow.process_not_cancellable" {
+		t.Fatalf("terminal=%v", err)
+	}
+	store.processes["process"] = process
+	withoutAtomicStore := NewWorkflowApplicationService(WorkflowDependencies{Processes: store.workflowProcessStoreEdgeStub})
+	if _, err := withoutAtomicStore.CancelWorkflowProcess(t.Context(), "process", principal); apperror.CodeOf(err) != "backend.internal" {
+		t.Fatalf("non-atomic fallback=%v", err)
 	}
 }
 

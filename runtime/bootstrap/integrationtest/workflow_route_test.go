@@ -153,7 +153,7 @@ type routeWorkflowUser struct {
 	status   string
 }
 
-func newRouteWorkflowRuntime(t *testing.T, cfg config.Config, route map[string]any, users []routeWorkflowUser) *bootstrap.Runtime {
+func newRouteWorkflowRuntime(t *testing.T, cfg config.Config, route map[string]any, users []routeWorkflowUser, additionalHandlers ...runtimeext.BusinessHandler) *bootstrap.Runtime {
 	t.Helper()
 	cfg.RuntimeAllowDevIdentityHeaders = true
 	cfg = initializedIntegrationRuntimeConfig(cfg)
@@ -164,6 +164,9 @@ func newRouteWorkflowRuntime(t *testing.T, cfg config.Config, route map[string]a
 		cfg.ManifestPath = routeWorkflowManifest(t, filepath.Dir(cfg.DBPath), route)
 	}
 	permissions := append([]string{"business.access"}, routeWorkflowPermissions()...)
+	for _, handler := range additionalHandlers {
+		permissions = append(permissions, handler.Descriptor().ActionKey)
+	}
 	fixtureUsers := []identitysdk.User{}
 	assignments := map[string][]string{}
 	for _, user := range users {
@@ -198,6 +201,11 @@ func newRouteWorkflowRuntime(t *testing.T, cfg config.Config, route map[string]a
 	}
 	if err := registry.Register(&routeSubmitHandler{descriptor: descriptor}); err != nil {
 		t.Fatal(err)
+	}
+	for _, handler := range additionalHandlers {
+		if err := registry.Register(handler); err != nil {
+			t.Fatal(err)
+		}
 	}
 	registry.Freeze()
 	runtime := bootstrap.NewWithBusinessHandlersAndScheduler(t.Context(), cfg, registry, binding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory(), integrationAgentFactory())

@@ -357,3 +357,18 @@ func TestWorkflowProcessDetailLookupVisibilityAndChildFailureOutcomes(t *testing
 		t.Fatalf("detail=%+v err=%v", detail, err)
 	}
 }
+
+func (s *workflowProcessStoreEdgeStub) ClaimWorkflowTimer(ctx context.Context, workspaceID string, process workflowmodel.WorkflowProcessInstance, node workflowmodel.WorkflowNodeInstance, expectedUpdatedAt string) (bool, error) {
+	current, ok := s.processes[process.ID]
+	if !ok || current.Status != "waiting" || current.UpdatedAt != expectedUpdatedAt {
+		return false, nil
+	}
+	if s.updateProcessErr != nil {
+		return false, s.updateProcessErr
+	}
+	if err := s.UpdateNode(ctx, workspaceID, node); err != nil {
+		return false, err
+	}
+	err := s.UpdateProcess(ctx, workspaceID, process)
+	return err == nil, err
+}

@@ -12,22 +12,23 @@ import (
 )
 
 type RecordMutationCommit struct {
-	Operation          string                                     `json:"operation"`
-	Object             definitionmodel.ObjectSchema               `json:"object"`
-	Record             recordmodel.Record                         `json:"record"`
-	RecordID           string                                     `json:"record_id,omitempty"`
-	ExpectedUpdatedAt  string                                     `json:"expected_updated_at,omitempty"`
-	Optimistic         OptimisticPrecondition                     `json:"optimistic,omitempty"`
-	Conditions         map[string]any                             `json:"conditions,omitempty"`
-	Predicates         []MutationPredicate                        `json:"predicates,omitempty"`
-	AuthorizationScope *recordmodel.RecordScopeExpression         `json:"-"`
-	Audit              *auditmodel.AuditEvent                     `json:"audit,omitempty"`
-	Audits             []auditmodel.AuditEvent                    `json:"audits,omitempty"`
-	Outbox             []publicationmodel.Message                 `json:"outbox,omitempty"`
-	WorkflowIntents    []workflowmodel.WorkflowExecution          `json:"workflow_intents,omitempty"`
-	WorkflowStarts     []WorkflowStartCommit                      `json:"workflow_starts,omitempty"`
-	NotificationEvents []notificationmodel.NotificationEvent      `json:"notification_events,omitempty"`
-	LocalizedValues    []recordmodel.RecordLocalizedValueMutation `json:"localized_values,omitempty"`
+	Operation           string                                     `json:"operation"`
+	Object              definitionmodel.ObjectSchema               `json:"object"`
+	Record              recordmodel.Record                         `json:"record"`
+	RecordID            string                                     `json:"record_id,omitempty"`
+	ExpectedUpdatedAt   string                                     `json:"expected_updated_at,omitempty"`
+	Optimistic          OptimisticPrecondition                     `json:"optimistic,omitempty"`
+	Conditions          map[string]any                             `json:"conditions,omitempty"`
+	Predicates          []MutationPredicate                        `json:"predicates,omitempty"`
+	AuthorizationScope  *recordmodel.RecordScopeExpression         `json:"-"`
+	Audit               *auditmodel.AuditEvent                     `json:"audit,omitempty"`
+	Audits              []auditmodel.AuditEvent                    `json:"audits,omitempty"`
+	Outbox              []publicationmodel.Message                 `json:"outbox,omitempty"`
+	WorkflowIntents     []workflowmodel.WorkflowExecution          `json:"workflow_intents,omitempty"`
+	WorkflowWithdrawals []WorkflowWithdrawalCommit                 `json:"workflow_withdrawals,omitempty"`
+	WorkflowStarts      []WorkflowStartCommit                      `json:"workflow_starts,omitempty"`
+	NotificationEvents  []notificationmodel.NotificationEvent      `json:"notification_events,omitempty"`
+	LocalizedValues     []recordmodel.RecordLocalizedValueMutation `json:"localized_values,omitempty"`
 	// Set fields are Runtime-internal authority for one conditional update-many
 	// statement. They are assembled only from a locked, authorized record page
 	// and never accepted from project Handler JSON.
@@ -123,4 +124,14 @@ type WorkflowStateCommit struct {
 	Events            []workflowmodel.WorkflowProcessEvent   `json:"events,omitempty"`
 	WorkflowExecution *workflowmodel.WorkflowExecution       `json:"workflow_execution,omitempty"`
 	InsertExecutions  []workflowmodel.WorkflowExecution      `json:"insert_executions,omitempty"`
+}
+
+// WorkflowWithdrawalCommit compares the observed process revision and cancels
+// its active children in the same transaction as the business mutations.
+type WorkflowWithdrawalCommit struct {
+	Process           workflowmodel.WorkflowProcessInstance
+	ExpectedUpdatedAt string
+	ExpectedStatus    string
+	CommandID         string
+	ActorID           string
 }

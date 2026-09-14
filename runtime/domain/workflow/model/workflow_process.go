@@ -44,6 +44,11 @@ type WorkflowProcessFilter struct {
 	UpdatedFrom       string
 	UpdatedTo         string
 	Limit             int
+	PageSize          int
+	Cursor            string
+	// Adapter-only keyset position; HTTP input never supplies these fields.
+	AfterCreatedAt string
+	AfterID        string
 }
 
 type WorkflowNodeInstance struct {
@@ -106,4 +111,11 @@ type WorkflowTaskDecisionRequest struct {
 	// completes. It is only meaningful for a route-driven approval node and is
 	// rejected on a rejection or a return.
 	NextStep *WorkflowNextStepConfiguration `json:"next_step,omitempty"`
+}
+
+// WorkflowProcessPage preserves the existing created_at DESC, id DESC order.
+type WorkflowProcessPage struct {
+	Items      []WorkflowProcessInstance `json:"items"`
+	NextCursor string                    `json:"next_cursor,omitempty"`
+	HasMore    bool                      `json:"has_more"`
 }

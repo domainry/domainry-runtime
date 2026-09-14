@@ -284,8 +284,22 @@ func seedWorkflowHTTPProcess(processes *workflowHTTPProcessStore, status string)
 		{ID: "start", Type: "trigger"},
 		{ID: "approval", Type: "approval", Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{Mode: "all"}}},
 	}, Edges: []definitionmodel.WorkflowGraphEdge{{ID: "start-approval", Source: "start", Target: "approval"}}}
-	processes.processes["process-1"] = workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-1", ID: "process-1", WorkflowKey: "order.approve", WorkflowName: "Order approve", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "order.approve", Name: "Order approve", Graph: graph}, InitiatorID: "admin-1", Status: status, CurrentNodeIDs: []string{"approval"}, Variables: map[string]any{}, Result: map[string]any{}}
+	processes.processes["process-1"] = workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-1", ID: "process-1", WorkflowKey: "order.approve", WorkflowName: "Order approve", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "order.approve", Name: "Order approve", Graph: graph}, InitiatorID: "admin-1", Status: status, UpdatedAt: "2026-09-14T00:00:00Z", CurrentNodeIDs: []string{"approval"}, Variables: map[string]any{}, Result: map[string]any{}}
 	processes.nodes["process-1"] = []workflowmodel.WorkflowNodeInstance{{WorkspaceID: "workspace-1", ID: "node-1", ProcessID: "process-1", NodeID: "approval", NodeType: "approval", Status: "waiting"}}
 	processes.tasks["task-1"] = workflowmodel.WorkflowTask{WorkspaceID: "workspace-1", ID: "task-1", ProcessID: "process-1", NodeID: "approval", AssigneeUserID: "admin-1", Status: "open"}
 	processes.tasks["task-2"] = workflowmodel.WorkflowTask{WorkspaceID: "workspace-1", ID: "task-2", ProcessID: "process-1", NodeID: "approval", AssigneeUserID: "reviewer-2", Status: "open"}
+}
+
+func (s *workflowHTTPProcessStore) CommitWorkflowWithdrawal(_ context.Context, commit transactionmodel.WorkflowWithdrawalCommit) error {
+	if s.err != nil {
+		return s.err
+	}
+	s.processes[commit.Process.ID] = commit.Process
+	for id, task := range s.tasks {
+		if task.ProcessID == commit.Process.ID && (task.Status == "open" || task.Status == "pending") {
+			task.Status = "cancelled"
+			s.tasks[id] = task
+		}
+	}
+	return nil
 }

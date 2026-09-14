@@ -177,6 +177,12 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 					},
 				})
 			},
+			StageWorkflowWithdrawal: func(ctx context.Context, request runtimeext.WorkflowWithdrawal, callerKey string, principal principalmodel.Principal) (transactionmodel.WorkflowWithdrawalCommit, error) {
+				if records.workflowApplicationService == nil {
+					return transactionmodel.WorkflowWithdrawalCommit{}, apperror.New(apperror.KindInternal, "backend.action.workflow_withdrawal_unavailable", nil, nil)
+				}
+				return records.workflowApplicationService.StageWorkflowWithdrawal(ctx, request, callerKey, principal)
+			},
 			StageWorkflowStart: func(ctx context.Context, request workflowmodel.WorkflowRouteStartRequest, principal principalmodel.Principal) (transactionmodel.WorkflowStartCommit, error) {
 				if records.workflowApplicationService == nil {
 					return transactionmodel.WorkflowStartCommit{}, apperror.New(apperror.KindInternal, "backend.action.workflow_start_unavailable", nil, nil)
