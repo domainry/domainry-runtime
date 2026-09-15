@@ -137,9 +137,23 @@ func (s scriptedSchemaStore) RuntimeTableExists(ctx context.Context, table strin
 	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&count)
 	return count > 0, err
 }
-func (scriptedSchemaStore) ApplicationSchemaIDColumnType() string       { return "TEXT" }
-func (scriptedSchemaStore) LocalizedTextKeyColumnType() string          { return "TEXT" }
-func (scriptedSchemaStore) RuntimeColumnDefinition(value string) string { return value }
+func (scriptedSchemaStore) ApplicationSchemaIDColumnType() string { return "TEXT" }
+func (scriptedSchemaStore) LocalizedTextKeyColumnType() string    { return "TEXT" }
+func (s scriptedSchemaStore) RuntimeColumnDefinition(value string) string {
+	if s.driver != "mysql" {
+		return value
+	}
+	switch value {
+	case "TEXT NOT NULL DEFAULT ''":
+		return "TEXT NOT NULL DEFAULT ('')"
+	case "TEXT NOT NULL DEFAULT '[]'":
+		return "TEXT NOT NULL DEFAULT ('[]')"
+	case "TEXT NOT NULL DEFAULT '{}'":
+		return "TEXT NOT NULL DEFAULT ('{}')"
+	default:
+		return value
+	}
+}
 func (scriptedSchemaStore) RuntimeProfile() persistencedriver.EngineProfile {
 	return sqlite.NewEngine()
 }

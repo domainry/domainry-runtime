@@ -26,7 +26,7 @@ func EnsureApplicationSchema(ctx context.Context, s Store) error {
 		s.Identifier("status")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
 		s.Identifier("template_id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
 		s.Identifier("default_locale")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
-		s.Identifier("name")+" TEXT NOT NULL, "+
+		s.Identifier("name")+" "+s.RuntimeColumnDefinition("TEXT NOT NULL DEFAULT ''")+", "+
 		s.Identifier("materialized_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '')"); err != nil {
 		return fmt.Errorf("create application schema projection: %w", err)
 	}
