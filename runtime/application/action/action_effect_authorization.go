@@ -2,7 +2,6 @@ package action
 
 import (
 	"strings"
-	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -30,7 +29,7 @@ func actionReadEffectAuthorizationPrincipal(principal principalmodel.Principal, 
 		bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{
 			Resource: identitysdk.ResourceType(objectKey), Action: identitysdk.Action("read"),
 			SourceResource: identitysdk.ResourceType(resourceKey), SourceAction: identitysdk.Action(operationKey),
-		}, time.Now().UTC())
+		}, principal.AuthorizationEvaluationTime())
 		if err == nil {
 			authorized.AccessBundle = &bundle
 		}

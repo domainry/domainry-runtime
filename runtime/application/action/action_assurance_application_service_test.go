@@ -92,7 +92,7 @@ func TestActionAssuranceApplicationVerifiesIdentityReceiptAndIssuesBoundOneTimeG
 	service := NewActionAssuranceApplicationService(application, grants, identity)
 	principal := actionTestPrincipal("booking.reserve")
 	principal.UserID = "user-a"
-	request := ActionAssuranceChallengeRequest{ActionKey: "booking.reserve", ObjectKey: "booking", Payload: map[string]any{"amount": "12.5"}}
+	request := ActionAssuranceChallengeRequest{ActionKey: "booking.reserve", ObjectKey: "booking", Payload: map[string]any{"amount": 12.5}}
 
 	challenge, err := service.Begin(t.Context(), request, "access-token-a", principal)
 	if err != nil || challenge.State == "" || identity.beginRequest.AccessToken != "access-token-a" || identity.beginRequest.WorkspaceID != "workspace-a" {
@@ -121,7 +121,7 @@ func TestActionAssuranceApplicationVerifiesIdentityReceiptAndIssuesBoundOneTimeG
 		}
 		return map[string]string{"grant_id": evidence.GrantID}, nil
 	}
-	invocation := governedHandlerInvocation(map[string]any{"amount": "12.5"})
+	invocation := governedHandlerInvocation(map[string]any{"amount": 12.5})
 	invocation.Principal = principal
 	invocation.AssuranceToken = grant.AssuranceToken
 	if result, err := application.Invoke(t.Context(), actionmodel.ActionSourceHTTP, invocation); err != nil || result.Object == nil || handler.invoked != 1 {
@@ -141,7 +141,7 @@ func TestActionAssuranceApplicationRejectsExpiredOrMalformedIdentityReceipt(t *t
 	application.dependencies.Catalog.entries[entry.Definition.Key] = entry
 	principal := actionTestPrincipal("booking.reserve")
 	principal.UserID = "user-a"
-	request := ActionAssuranceVerificationRequest{ActionAssuranceChallengeRequest: ActionAssuranceChallengeRequest{ActionKey: "booking.reserve", ObjectKey: "booking", Payload: map[string]any{"amount": "12.5"}}, Provider: "sms", State: "challenge-a", Code: "123456"}
+	request := ActionAssuranceVerificationRequest{ActionAssuranceChallengeRequest: ActionAssuranceChallengeRequest{ActionKey: "booking.reserve", ObjectKey: "booking", Payload: map[string]any{"amount": 12.5}}, Provider: "sms", State: "challenge-a", Code: "123456"}
 	for _, expiresAt := range []string{"not-a-time", time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)} {
 		grantStore := &actionAssuranceGrantStore{}
 		identity := &actionAssuranceIdentityProbe{receiptExpiresAt: expiresAt}
@@ -165,7 +165,7 @@ func TestActionAssuranceApplicationDoesNotMintGrantWhenIdentityValidationFails(t
 	principal := actionTestPrincipal("booking.reserve")
 	principal.UserID = "user-a"
 	_, err := service.Verify(t.Context(), ActionAssuranceVerificationRequest{
-		ActionAssuranceChallengeRequest: ActionAssuranceChallengeRequest{ActionKey: "booking.reserve", ObjectKey: "booking", Payload: map[string]any{"amount": "12.5"}},
+		ActionAssuranceChallengeRequest: ActionAssuranceChallengeRequest{ActionKey: "booking.reserve", ObjectKey: "booking", Payload: map[string]any{"amount": 12.5}},
 		Provider:                        "sms", State: "challenge-a", Code: "123456",
 	}, "access-token-a", principal)
 	if !errors.Is(err, failure) || len(grantStore.grants) != 0 {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
@@ -26,6 +27,25 @@ func TestSDKDataScopeCompilerTreatsAllAsNoAdditionalPredicate(t *testing.T) {
 		if err != nil || !handled || expression != nil {
 			t.Fatalf("all action=%s expression=%#v handled=%v err=%v", action, expression, handled, err)
 		}
+	}
+}
+
+func TestSDKDataScopeCompilerUsesAdmittedAuthorizationInstant(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "case"}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
+		Known: true, UserID: "user-1", WorkspaceID: "workspace-1",
+	}}, accessfixture.Bundle{Permissions: []string{"case.read"}})
+	now := time.Now().UTC()
+	principal.AccessBundle.ExpiresAt = now.Add(-time.Minute)
+	principal.AuthorizationEvaluatedAt = now.Add(-2 * time.Minute)
+
+	expression, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, principal, "read")
+	if err != nil || !handled || expression != nil {
+		t.Fatalf("admitted snapshot expression=%#v handled=%v error=%v", expression, handled, err)
+	}
+	principal.AuthorizationEvaluatedAt = time.Time{}
+	if _, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, principal, "read"); err == nil || !handled {
+		t.Fatalf("expired unsnapshotted bundle handled=%v error=%v", handled, err)
 	}
 }
 

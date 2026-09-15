@@ -3,7 +3,6 @@ package action
 import (
 	"context"
 	"strings"
-	"time"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
@@ -105,7 +104,7 @@ func buildActionFailureAudits(ctx context.Context, action definitionmodel.Action
 		*invocation.Principal.AccessBundle,
 		identitysdk.ResourceType(objectKey),
 		identitysdk.Action(actionpolicy.ActionName(action)),
-		time.Now().UTC(),
+		invocation.Principal.AuthorizationEvaluationTime(),
 	)
 	if err != nil || !auditDenial {
 		return events

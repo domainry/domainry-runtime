@@ -3,7 +3,6 @@ package composition
 import (
 	"context"
 	"strings"
-	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
@@ -114,7 +113,7 @@ func relationReadEffectPrincipal(ctx context.Context, principal principalmodel.P
 	bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{
 		Resource: identitysdk.ResourceType(objectKey), Action: identitysdk.Action("read"),
 		SourceResource: identitysdk.ResourceType(invocation.ActionResource), SourceAction: identitysdk.Action(invocation.ActionOperation),
-	}, time.Now().UTC())
+	}, principal.AuthorizationEvaluationTime())
 	if err != nil {
 		return principal, err
 	}

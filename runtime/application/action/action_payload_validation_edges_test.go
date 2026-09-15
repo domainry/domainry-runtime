@@ -48,7 +48,7 @@ func TestActionNormalizePayloadContractDefaultsExtrasAndValidation(t *testing.T)
 		Defaults: map[string]any{"note": "action-default", "mode": "safe", "request_ref": "generated", "undeclared": "ignored", "also_undeclared": true},
 	}
 	input := map[string]any{
-		"amount":   "12.5",
+		"amount":   json.Number("12.5"),
 		"note":     "",
 		"approved": true,
 	}
@@ -92,9 +92,9 @@ func TestActionNormalizePayloadPreservesExactAndInexactNumericSemantics(t *testi
 		},
 	}
 	normalized, err := ActionNormalizePayload(action, map[string]any{
-		"required_rate":   json.Number("7.5"),
+		"required_rate":   "7.5",
 		"optional_amount": "12.3",
-		"inexact_score":   "1.25",
+		"inexact_score":   json.Number("1.25"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -104,6 +104,42 @@ func TestActionNormalizePayloadPreservesExactAndInexactNumericSemantics(t *testi
 	}
 	if score, ok := normalized["inexact_score"].(float64); !ok || score != 1.25 {
 		t.Fatalf("number did not remain inexact float64: %#v", normalized["inexact_score"])
+	}
+}
+
+func TestActionNormalizePayloadRejectsCallerScalarCoercion(t *testing.T) {
+	action := definitionmodel.ActionSchema{Key: "payroll.calculate", PayloadFields: []definitionmodel.ActionPayloadField{
+		{Key: "window", Type: "integer", Required: true},
+		{Key: "rate", Type: "number", Required: true},
+		{Key: "amount", Type: "currency", Required: true},
+		{Key: "enabled", Type: "boolean", Required: true},
+		{Key: "note", Type: "text"},
+	}}
+	tests := []struct {
+		name, field, code string
+		value             any
+	}{
+		{name: "quoted integer", field: "window", value: "0", code: "backend.validation.integer"},
+		{name: "quoted number", field: "rate", value: "0", code: "backend.validation.number"},
+		{name: "numeric decimal", field: "amount", value: json.Number("0"), code: "backend.decimal.value_invalid"},
+		{name: "quoted boolean", field: "enabled", value: "false", code: "backend.validation.boolean"},
+		{name: "numeric boolean", field: "enabled", value: json.Number("1"), code: "backend.validation.boolean"},
+		{name: "numeric text", field: "note", value: json.Number("1"), code: "backend.validation.string"},
+	}
+	valid := map[string]any{"window": json.Number("0"), "rate": json.Number("0"), "amount": "0", "enabled": false}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input := actionCloneMap(valid)
+			input[test.field] = test.value
+			_, err := ActionNormalizePayload(action, input)
+			if apperror.CodeOf(err) != test.code || apperror.ParamsOf(err)["field"] != test.field {
+				t.Fatalf("error=%v params=%v", err, apperror.ParamsOf(err))
+			}
+		})
+	}
+	normalized, err := ActionNormalizePayload(action, valid)
+	if err != nil || normalized["window"] != int64(0) || normalized["rate"] != float64(0) || normalized["amount"] != "0.00" || normalized["enabled"] != false {
+		t.Fatalf("zero/false payload=%#v error=%v", normalized, err)
 	}
 }
 

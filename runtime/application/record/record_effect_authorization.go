@@ -3,7 +3,6 @@ package record
 import (
 	"context"
 	"strings"
-	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
@@ -44,7 +43,7 @@ func recordEffectAuthorizationPrincipal(ctx context.Context, principal principal
 		bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{
 			Resource: identitysdk.ResourceType(strings.TrimSpace(objectKey)), Action: identitysdk.Action(action),
 			SourceResource: identitysdk.ResourceType(strings.TrimSpace(invocation.ActionResource)), SourceAction: identitysdk.Action(strings.TrimSpace(invocation.ActionOperation)),
-		}, time.Now().UTC())
+		}, principal.AuthorizationEvaluationTime())
 		if err == nil {
 			authorized.AccessBundle = &bundle
 		}

@@ -2,6 +2,7 @@ package action
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -39,6 +40,21 @@ func actionAuthorizeCommand(principal principalmodel.Principal) error {
 	return nil
 }
 
+func actionSnapshotAuthorization(principal principalmodel.Principal) (principalmodel.Principal, error) {
+	principal = principal.WithAuthorizationEvaluationTime(time.Now().UTC())
+	if principal.AccessBundle == nil {
+		return principal, nil
+	}
+	if err := principal.AccessBundle.Validate(principal.AuthorizationEvaluationTime()); err != nil {
+		var identityErr *identitysdk.Error
+		if errors.As(err, &identityErr) && identityErr.Code == "identity.access_bundle_expired" {
+			return principal, apperror.New(apperror.KindForbidden, "auth.session_expired", err, nil)
+		}
+		return principal, apperror.New(apperror.KindForbidden, "auth.permission_denied", err, nil)
+	}
+	return principal, nil
+}
+
 // ActionAllowed evaluates the Identity-owned permission model at the Action
 // application boundary instead of coupling the Action domain to Identity
 // behavior packages.
@@ -61,7 +77,7 @@ func ActionPersistencePrincipal(principal principalmodel.Principal, action defin
 		bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{
 			Resource: identitysdk.ResourceType(objectKey), Action: identitysdk.Action(operation),
 			SourceResource: identitysdk.ResourceType(resourceKey), SourceAction: identitysdk.Action(operationKey),
-		}, time.Now().UTC())
+		}, principal.AuthorizationEvaluationTime())
 		if err == nil {
 			principal.AccessBundle = &bundle
 		}

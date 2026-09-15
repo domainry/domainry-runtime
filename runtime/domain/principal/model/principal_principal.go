@@ -2,6 +2,7 @@ package principalmodel
 
 import (
 	"strings"
+	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
@@ -47,12 +48,31 @@ type Principal struct {
 	// BusinessAuthorizationRevision binds Identity authorization to the current
 	// business profiles and selection without changing the SDK-owned revision.
 	BusinessAuthorizationRevision string
+	// AuthorizationEvaluatedAt freezes the access-bundle validation instant for
+	// one admitted request or governed execution. Every policy evaluation in
+	// that execution uses the same instant, so a bundle cannot expire midway
+	// through an otherwise authorized transaction.
+	AuthorizationEvaluatedAt time.Time `json:"-"`
 	// SystemCapabilities are explicit, process-owned capabilities. They are
 	// honored only when SystemScope is valid and are never populated for a
 	// human, API-key, or other externally authenticated principal.
 	SystemCapabilities []string `json:"-"`
 	AutomationDepth    int
 	VisitedRuleKeys    []string
+}
+
+func (principal Principal) WithAuthorizationEvaluationTime(at time.Time) Principal {
+	if principal.AccessBundle != nil && principal.AuthorizationEvaluatedAt.IsZero() {
+		principal.AuthorizationEvaluatedAt = at.UTC()
+	}
+	return principal
+}
+
+func (principal Principal) AuthorizationEvaluationTime() time.Time {
+	if !principal.AuthorizationEvaluatedAt.IsZero() {
+		return principal.AuthorizationEvaluatedAt.UTC()
+	}
+	return time.Now().UTC()
 }
 
 // EffectiveAuthorizationRevision invalidates business evidence when either

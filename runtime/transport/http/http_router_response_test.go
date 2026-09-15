@@ -18,6 +18,8 @@ func TestDecodeJSONBodyEnforcesStrictSingleDocumentContract(t *testing.T) {
 	}{
 		{name: "valid", body: `{"name":"ok"}`, ok: true, status: http.StatusOK},
 		{name: "unknown field", body: `{"name":"ok","extra":true}`, status: http.StatusBadRequest},
+		{name: "duplicate field", body: `{"name":"first","name":"second"}`, status: http.StatusBadRequest},
+		{name: "duplicate nested field", body: `{"name":"ok","nested":{"window":1,"window":2}}`, status: http.StatusBadRequest},
 		{name: "trailing document", body: `{"name":"ok"} {"name":"again"}`, status: http.StatusBadRequest},
 		{name: "invalid", body: `{`, status: http.StatusBadRequest},
 	}
@@ -27,7 +29,8 @@ func TestDecodeJSONBodyEnforcesStrictSingleDocumentContract(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/input", strings.NewReader(test.body))
 			response := httptest.NewRecorder()
 			var target struct {
-				Name string `json:"name"`
+				Name   string         `json:"name"`
+				Nested map[string]any `json:"nested,omitempty"`
 			}
 			ok := router.decodeJSONBody(response, request, &target)
 			if ok != test.ok {

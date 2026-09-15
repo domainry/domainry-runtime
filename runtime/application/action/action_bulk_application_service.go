@@ -59,6 +59,11 @@ func (s *ActionBulkApplicationService) ExecuteBulkAction(ctx context.Context, ob
 	if err := actionAuthorizeCommand(principal); err != nil {
 		return actionmodel.ActionBulkResult{}, err
 	}
+	var err error
+	principal, err = actionSnapshotAuthorization(principal)
+	if err != nil {
+		return actionmodel.ActionBulkResult{}, err
+	}
 	objectKey, actionKey = strings.TrimSpace(objectKey), strings.TrimSpace(actionKey)
 	if s.dependencies.ValidateObject != nil {
 		if err := s.dependencies.ValidateObject(ctx, principal, objectKey); err != nil {
@@ -75,6 +80,11 @@ func (s *ActionBulkApplicationService) ExecuteBulkAction(ctx context.Context, ob
 	if s.dependencies.Allowed != nil && !s.dependencies.Allowed(principal, definition) {
 		return actionmodel.ActionBulkResult{}, actionBulkApplicationError(apperror.KindForbidden, "backend.action.permission_denied")
 	}
+	normalizedData, err := ActionNormalizePayload(definition, request.Data)
+	if err != nil {
+		return actionmodel.ActionBulkResult{}, err
+	}
+	request.Data = normalizedData
 	recordIDs := actionpolicy.ActionUniqueNonEmptyStrings(request.RecordIDs)
 	if len(recordIDs) == 0 {
 		return actionmodel.ActionBulkResult{}, actionBulkApplicationError(apperror.KindBadRequest, "backend.bulk_action.record_ids_required")

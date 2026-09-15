@@ -2,18 +2,17 @@ package service
 
 import (
 	"context"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
-	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
-
-	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-
-	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-
+	"errors"
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	collectionplatform "github.com/domainry/domainry-foundation/collection"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
+	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 )
 
 type RecordQueryPolicyDependencies struct {
@@ -151,7 +150,7 @@ func (s *RecordQueryPolicyDomainService) MutationScopeExpression(principal princ
 	expression, err, handled := RecordCompileSDKMutationScopeExpression(object, s.objects(), principal, normalizeSDKScopeAction(action))
 	if handled {
 		if err != nil {
-			return nil, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.policy.expression_invalid", Err: err}
+			return nil, recordAuthorizationEvaluationError(err)
 		}
 		return expression, nil
 	}
@@ -185,7 +184,7 @@ func (s *RecordQueryPolicyDomainService) canAccessSDKRecordScope(ctx context.Con
 		return false, nil
 	}
 	if err != nil {
-		return false, &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.policy.expression_invalid", Err: err}
+		return false, recordAuthorizationEvaluationError(err)
 	}
 	if expression == nil {
 		return true, nil
@@ -197,6 +196,14 @@ func (s *RecordQueryPolicyDomainService) canAccessSDKRecordScope(ctx context.Con
 		return false, &apperror.AppError{Kind: apperror.KindInternal, Code: "backend.policy.candidate_scope_evaluator_unavailable"}
 	}
 	return s.dependencies.CandidateScopeMatches(ctx, principal.WorkspaceID, record, *expression)
+}
+
+func recordAuthorizationEvaluationError(err error) error {
+	var identityErr *identitysdk.Error
+	if errors.As(err, &identityErr) && identityErr.Code == "identity.access_bundle_expired" {
+		return &apperror.AppError{Kind: apperror.KindForbidden, Code: "auth.session_expired", Err: err}
+	}
+	return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.policy.expression_invalid", Err: err}
 }
 
 func (s *RecordQueryPolicyDomainService) isReportSnapshotObject(object definitionmodel.ObjectSchema) bool {

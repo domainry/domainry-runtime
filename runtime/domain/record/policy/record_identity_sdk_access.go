@@ -2,7 +2,6 @@ package policy
 
 import (
 	"strings"
-	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityevaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
@@ -181,7 +180,7 @@ func RecordSDKAllowsObjectAction(principal principalmodel.Principal, objectKey, 
 		*principal.AccessBundle,
 		identitysdk.ResourceType(strings.TrimSpace(objectKey)),
 		identitysdk.Action(normalizeSDKRecordAction(action)),
-		time.Now().UTC(),
+		principal.AuthorizationEvaluationTime(),
 	)
 	if err != nil {
 		return false, true
@@ -204,7 +203,7 @@ func RecordSDKAllowsRecord(principal principalmodel.Principal, object definition
 		},
 		recordSDKResourceFacts(object, record),
 		RecordSDKEvaluationContext(principal),
-		time.Now().UTC(),
+		principal.AuthorizationEvaluationTime(),
 	)
 	return err == nil && decision.Allowed, true
 }

@@ -18,6 +18,9 @@ type runtimeAuthoringErrorSemantics struct {
 }
 
 func serviceErrorHTTPStatus(r *http.Request, err error) int {
+	if apperror.CodeOf(err) == "auth.session_expired" {
+		return http.StatusUnauthorized
+	}
 	status := http.StatusInternalServerError
 	switch apperror.KindOf(err) {
 	case apperror.KindBadRequest:

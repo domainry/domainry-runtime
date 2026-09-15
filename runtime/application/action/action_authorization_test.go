@@ -2,7 +2,9 @@ package action
 
 import (
 	"testing"
+	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
@@ -22,6 +24,31 @@ func TestActionAuthorizationAndPersistenceAuthority(t *testing.T) {
 	persist := ActionPersistencePrincipal(principal, action, "update")
 	if !persist.HasPermission("leave_request.update") || principal.HasPermission("leave_request.update") || persist.HasPermission("employee_hr_profile.update") {
 		t.Fatalf("unexpected persistence authority: caller=%#v persistence=%#v", principal.PermissionKeys(), persist.PermissionKeys())
+	}
+}
+
+func TestActionAuthorizationUsesOneEvaluationInstantForTheWholeExecution(t *testing.T) {
+	permissions := []string{"leave_request.recover"}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}}, accessfixture.Bundle{
+		Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeAll),
+	})
+	now := time.Now().UTC()
+	principal.AccessBundle.ExpiresAt = now.Add(-time.Minute)
+	principal.AuthorizationEvaluatedAt = now.Add(-2 * time.Minute)
+
+	snapshot, err := actionSnapshotAuthorization(principal)
+	if err != nil || !snapshot.AuthorizationEvaluatedAt.Equal(principal.AuthorizationEvaluatedAt) {
+		t.Fatalf("snapshot=%s error=%v", snapshot.AuthorizationEvaluatedAt, err)
+	}
+	action := definitionmodel.ActionSchema{Key: "leave_request.recover", ObjectKey: "leave_request"}
+	persist := ActionPersistencePrincipal(snapshot, action, "update")
+	if !persist.HasPermission("leave_request.update") {
+		t.Fatalf("execution authority expired after admission: %#v", persist.PermissionKeys())
+	}
+
+	principal.AuthorizationEvaluatedAt = time.Time{}
+	if _, err := actionSnapshotAuthorization(principal); apperror.CodeOf(err) != "auth.session_expired" || apperror.KindOf(err) != apperror.KindForbidden {
+		t.Fatalf("expired admission error=%v", err)
 	}
 }
 

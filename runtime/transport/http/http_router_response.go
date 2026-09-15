@@ -1,17 +1,20 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
+	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
@@ -24,6 +27,7 @@ import (
 type principalContextKey struct{}
 
 func requestWithPrincipal(r *http.Request, principal principalmodel.Principal) *http.Request {
+	principal = principal.WithAuthorizationEvaluationTime(time.Now().UTC())
 	ctx := context.WithValue(r.Context(), principalContextKey{}, principal)
 	ctx = requestcontext.WithWorkspaceID(ctx, principal.WorkspaceID)
 	ctx = requestcontext.WithActorID(ctx, principal.UserID)
@@ -41,7 +45,16 @@ func (s *HTTPRouter) decodeJSONBody(w http.ResponseWriter, r *http.Request, valu
 		limit = 2 << 20
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, limit)
-	decoder := json.NewDecoder(r.Body)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.writeJSONDecodeError(w, r, err)
+		return false
+	}
+	if err := rejectDuplicateJSONProperties(body); err != nil {
+		s.writeJSONDecodeError(w, r, err)
+		return false
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	decoder.UseNumber()
 	if err := decoder.Decode(value); err != nil {
@@ -54,6 +67,76 @@ func (s *HTTPRouter) decodeJSONBody(w http.ResponseWriter, r *http.Request, valu
 		return false
 	}
 	return true
+}
+
+func rejectDuplicateJSONProperties(body []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := consumeUniqueJSONValue(decoder); err != nil {
+		return err
+	}
+	if token, err := decoder.Token(); err != io.EOF {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("unexpected trailing JSON token %v", token)
+	}
+	return nil
+}
+
+func consumeUniqueJSONValue(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	delimiter, ok := token.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delimiter {
+	case '{':
+		seen := map[string]struct{}{}
+		for decoder.More() {
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			key, ok := keyToken.(string)
+			if !ok {
+				return fmt.Errorf("JSON object key is not a string")
+			}
+			if _, duplicate := seen[key]; duplicate {
+				return fmt.Errorf("duplicate JSON property %q", key)
+			}
+			seen[key] = struct{}{}
+			if err := consumeUniqueJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		closing, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if closing != json.Delim('}') {
+			return fmt.Errorf("JSON object is not closed")
+		}
+	case '[':
+		for decoder.More() {
+			if err := consumeUniqueJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		closing, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if closing != json.Delim(']') {
+			return fmt.Errorf("JSON array is not closed")
+		}
+	default:
+		return fmt.Errorf("unexpected JSON delimiter %q", delimiter)
+	}
+	return nil
 }
 
 func (s *HTTPRouter) writeJSONDecodeError(w http.ResponseWriter, r *http.Request, err error) {
@@ -149,6 +232,7 @@ func (s *HTTPRouter) principalFromRequest(r *http.Request) principalmodel.Princi
 }
 
 func (s *HTTPRouter) principalWithBusinessProfile(principal principalmodel.Principal, r *http.Request) principalmodel.Principal {
+	principal = principal.WithAuthorizationEvaluationTime(time.Now().UTC())
 	if !principal.Known || s.businessPrincipal == nil {
 		return principal
 	}

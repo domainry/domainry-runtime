@@ -57,7 +57,7 @@ func TestBusinessHandlerReceivesOnlyPublishedInputFields(t *testing.T) {
 	service := newGovernedHandlerApplication(t, handler, ActionAuthorization{}, ActionAssurance{}, store)
 
 	_, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, governedHandlerInvocation(map[string]any{
-		"amount": "12.5",
+		"amount": 12.5,
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestBusinessHandlerReceivesIdempotencyOnlyAsExecutionMetadata(t *testing.T)
 	handler := newGovernedHandlerProbe(&events)
 	store := &governedExecutionStoreProbe{events: &events}
 	service := newGovernedHandlerApplication(t, handler, ActionAuthorization{}, ActionAssurance{}, store)
-	invocation := governedHandlerInvocation(map[string]any{"amount": "12.5"})
+	invocation := governedHandlerInvocation(map[string]any{"amount": 12.5})
 	invocation.IdempotencyKey = "header-command-1"
 	if _, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, invocation); err != nil {
 		t.Fatal(err)
@@ -173,7 +173,7 @@ func TestBusinessHandlerRunsOnlyAfterGovernedPreflight(t *testing.T) {
 		return map[string]string{"method": "otp"}, nil
 	}}, store)
 
-	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, governedHandlerInvocation(map[string]any{"amount": "12.5"}))
+	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, governedHandlerInvocation(map[string]any{"amount": 12.5}))
 	if err != nil || result.Object == nil || handler.invoked != 1 {
 		t.Fatalf("result=%+v handler calls=%d error=%v", result, handler.invoked, err)
 	}
@@ -193,10 +193,10 @@ func TestBusinessHandlerPreflightFailuresShortCircuitBeforeInvocation(t *testing
 		beginErr      error
 		wantEvents    []string
 	}{
-		{name: "permission", input: map[string]any{"amount": "12.5"}, permissionErr: permissionErr, wantEvents: []string{"permission"}},
-		{name: "payload", input: map[string]any{"amount": "12.5", "unknown": true}, wantEvents: []string{"permission"}},
-		{name: "assurance", input: map[string]any{"amount": "12.5"}, assuranceErr: assuranceErr, wantEvents: []string{"permission", "assurance"}},
-		{name: "idempotency", input: map[string]any{"amount": "12.5"}, beginErr: idempotencyErr, wantEvents: []string{"permission", "assurance", "idempotency"}},
+		{name: "permission", input: map[string]any{"amount": 12.5}, permissionErr: permissionErr, wantEvents: []string{"permission"}},
+		{name: "payload", input: map[string]any{"amount": 12.5, "unknown": true}, wantEvents: []string{"permission"}},
+		{name: "assurance", input: map[string]any{"amount": 12.5}, assuranceErr: assuranceErr, wantEvents: []string{"permission", "assurance"}},
+		{name: "idempotency", input: map[string]any{"amount": 12.5}, beginErr: idempotencyErr, wantEvents: []string{"permission", "assurance", "idempotency"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -235,7 +235,7 @@ func TestBusinessHandlerIdempotentReplayDoesNotInvokeHandler(t *testing.T) {
 		return map[string]string{"method": "otp"}, nil
 	}}, store)
 
-	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, governedHandlerInvocation(map[string]any{"amount": "12.5"}))
+	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, governedHandlerInvocation(map[string]any{"amount": 12.5}))
 	if err != nil || result.Object == nil || result.Object.Message != "backend.action.idempotent_replay" || handler.invoked != 0 {
 		t.Fatalf("result=%+v handler calls=%d error=%v", result, handler.invoked, err)
 	}

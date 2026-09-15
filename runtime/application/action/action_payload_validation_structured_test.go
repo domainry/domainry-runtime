@@ -35,7 +35,7 @@ func TestActionNormalizePayloadLegacyGolden(t *testing.T) {
 				{Key: "note", Type: "text"},
 				{Key: "flag", Type: "boolean"},
 			}},
-			input:  map[string]any{"stage": "won", "amount": "12.5", "flag": "true", "expected_version": 7, "record_id": "r1"},
+			input:  map[string]any{"stage": "won", "amount": json.Number("12.5"), "flag": true, "expected_version": 7, "record_id": "r1"},
 			golden: `{"amount":12.5,"count":2,"expected_version":7,"flag":true,"note":"auto","record_id":"r1","stage":"won"}`,
 		},
 		{
@@ -105,7 +105,7 @@ func structuredWiringAction() definitionmodel.ActionSchema {
 func TestActionNormalizePayloadStructuredHonorsExtrasAndTopLevelDefaults(t *testing.T) {
 	action := structuredWiringAction()
 	normalized, err := ActionNormalizePayload(action, map[string]any{
-		"accounts":         []any{map[string]any{"bank": "First", "number": "1", "primary": "true"}},
+		"accounts":         []any{map[string]any{"bank": "First", "number": "1", "primary": true}},
 		"expected_version": 4,
 		"request_ref":      "ref-1",
 	})
@@ -143,6 +143,7 @@ func TestActionNormalizePayloadStructuredErrorsAreBadRequestsWithFieldPaths(t *t
 		{"nested unknown", map[string]any{"name": "a", "accounts": []any{map[string]any{"bank": "b", "number": "1", "nickname": "x"}}}, "backend.validation.unknown_field", "accounts[0].nickname"},
 		{"array expected", map[string]any{"name": "a", "accounts": "x"}, "backend.validation.array_expected", "accounts"},
 		{"nested required array", map[string]any{"name": "a", "accounts": []any{map[string]any{"bank": "b", "number": "1"}}, "steps": []any{map[string]any{"title": "t", "assignees": []any{"u"}}, map[string]any{"title": "t2"}}}, "backend.validation.required", "steps[1].assignees"},
+		{"nested quoted boolean", map[string]any{"name": "a", "accounts": []any{map[string]any{"bank": "b", "number": "1", "primary": "false"}}}, "backend.validation.boolean", "accounts[0].primary"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

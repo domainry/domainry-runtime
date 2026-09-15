@@ -3,7 +3,6 @@ package service
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityevaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
@@ -21,7 +20,7 @@ func RecordCompileSDKDataScopeExpression(object definitionmodel.ObjectSchema, ob
 		*principal.AccessBundle,
 		identitysdk.ResourceType(strings.TrimSpace(object.Key)),
 		identitysdk.Action(normalizeSDKScopeAction(action)),
-		time.Now().UTC(),
+		principal.AuthorizationEvaluationTime(),
 	)
 	if err != nil {
 		return nil, err, true

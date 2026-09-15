@@ -21,6 +21,17 @@ func ActionNormalizePayload(action definitionmodel.ActionSchema, data map[string
 	}
 	schema, hasContract := actionvalidation.ActionPayloadObject(action)
 	extraKeys := actionPayloadExtraKeys(action)
+	if hasContract {
+		declaredInput := make(map[string]any, len(payload))
+		for key, value := range payload {
+			if !extraKeys[key] {
+				declaredInput[key] = value
+			}
+		}
+		if err := actionvalidation.ActionValidatePayloadInputTypes(action, declaredInput); err != nil {
+			return nil, actionPayloadBadRequestFromError(err)
+		}
+	}
 	actionApplyPayloadDefaults(action, payload, schema, extraKeys, hasContract)
 	if !hasContract {
 		return payload, nil

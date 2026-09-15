@@ -1,8 +1,10 @@
 package validation
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -42,6 +44,135 @@ func ActionNormalizeStructuredPayload(action definitionmodel.ActionSchema, data 
 
 type actionPayloadStructureNormalizer struct {
 	actionKey string
+}
+
+// ActionValidatePayloadInputTypes rejects caller-side scalar coercion before
+// defaults and canonical normalization are applied. Defaults remain owned by
+// the published Action contract, but supplied JSON values must already have
+// the declared JSON type so a quoted number or truthy scalar cannot reach a
+// business calculation.
+func ActionValidatePayloadInputTypes(action definitionmodel.ActionSchema, data map[string]any) error {
+	if data == nil {
+		return nil
+	}
+	return actionPayloadStructureNormalizer{actionKey: strings.TrimSpace(action.Key)}.validateInputObject(action.PayloadFields, data, "")
+}
+
+func (n actionPayloadStructureNormalizer) validateInputObject(fields []definitionmodel.ActionPayloadField, data map[string]any, prefix string) error {
+	declared := make(map[string]definitionmodel.ActionPayloadField, len(fields))
+	for _, field := range fields {
+		if key := strings.TrimSpace(field.Key); key != "" {
+			declared[key] = field
+		}
+	}
+	for key, value := range data {
+		field, ok := declared[key]
+		if !ok || value == nil {
+			continue
+		}
+		path := actionPayloadJoinPath(prefix, key)
+		if field.Repeated {
+			items, ok := actionPayloadArrayValue(value)
+			if !ok {
+				continue
+			}
+			for index, item := range items {
+				itemPath := fmt.Sprintf("%s[%d]", path, index)
+				if field.IsObject() {
+					if nested, ok := item.(map[string]any); ok {
+						if err := n.validateInputObject(field.Fields, nested, itemPath); err != nil {
+							return err
+						}
+					}
+					continue
+				}
+				if err := n.validateInputLeaf(field, item, itemPath); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		if field.IsObject() {
+			if nested, ok := value.(map[string]any); ok {
+				if err := n.validateInputObject(field.Fields, nested, path); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		if err := n.validateInputLeaf(field, value, path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n actionPayloadStructureNormalizer) validateInputLeaf(field definitionmodel.ActionPayloadField, value any, path string) error {
+	fieldType := strings.TrimSpace(field.Type)
+	if fieldType == "" {
+		fieldType = "text"
+	}
+	valid := false
+	switch fieldType {
+	case "integer":
+		valid = actionPayloadJSONInteger(value)
+	case "number":
+		valid = actionPayloadJSONNumber(value)
+	case "currency", "percent":
+		_, valid = value.(string)
+	case "boolean":
+		_, valid = value.(bool)
+	default:
+		_, valid = value.(string)
+	}
+	if valid {
+		return nil
+	}
+	code := "backend.validation.string"
+	switch fieldType {
+	case "integer":
+		code = "backend.validation.integer"
+	case "number":
+		code = "backend.validation.number"
+	case "currency", "percent":
+		code = "backend.decimal.value_invalid"
+	case "boolean":
+		code = "backend.validation.boolean"
+	}
+	return n.failure(code, path, strings.TrimSpace(field.Key), nil)
+}
+
+func actionPayloadJSONNumber(value any) bool {
+	switch typed := value.(type) {
+	case json.Number:
+		_, err := typed.Float64()
+		return err == nil
+	case float64:
+		return !math.IsNaN(typed) && !math.IsInf(typed, 0)
+	case float32:
+		return !math.IsNaN(float64(typed)) && !math.IsInf(float64(typed), 0)
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return true
+	default:
+		return false
+	}
+}
+
+func actionPayloadJSONInteger(value any) bool {
+	switch typed := value.(type) {
+	case json.Number:
+		_, err := typed.Int64()
+		return err == nil
+	case float64:
+		return !math.IsNaN(typed) && !math.IsInf(typed, 0) && math.Trunc(typed) == typed
+	case float32:
+		value := float64(typed)
+		return !math.IsNaN(value) && !math.IsInf(value, 0) && math.Trunc(value) == value
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return true
+	default:
+		return false
+	}
 }
 
 func (n actionPayloadStructureNormalizer) normalizeObject(fields []definitionmodel.ActionPayloadField, data map[string]any, prefix string) (map[string]any, error) {

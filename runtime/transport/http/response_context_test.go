@@ -40,3 +40,12 @@ func TestWriteServiceErrorMapsWrappedContextErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestWriteServiceErrorMapsExpiredAuthorizationToUnauthorized(t *testing.T) {
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/records/account", nil)
+	writeServiceError(response, request, apperror.New(apperror.KindForbidden, "auth.session_expired", nil, nil))
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d want=%d body=%s", response.Code, http.StatusUnauthorized, response.Body.String())
+	}
+}

@@ -1,8 +1,6 @@
 package service
 
 import (
-	"time"
-
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -281,7 +279,7 @@ func metadataSDKAllowsObjectAction(principal principalmodel.Principal, objectKey
 		*principal.AccessBundle,
 		identitysdk.ResourceType(strings.TrimSpace(objectKey)),
 		identitysdk.Action(strings.TrimSpace(action)),
-		time.Now().UTC(),
+		principal.AuthorizationEvaluationTime(),
 	)
 	return err == nil && (filter.Unrestricted || len(filter.Allow) > 0), true
 }

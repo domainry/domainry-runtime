@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -440,7 +439,7 @@ func (e *businessActionExecution) authorizeTargetOrganization(targetID string) e
 	decision, err := identityevaluator.Evaluate(*e.invocation.Principal.AccessBundle, identitysdk.AccessRequest{
 		ObjectKey: resource,
 		Action:    operation,
-	}, identitysdk.ResourceFacts{"owner_org_id": targetID}, time.Now().UTC())
+	}, identitysdk.ResourceFacts{"owner_org_id": targetID}, e.invocation.Principal.AuthorizationEvaluationTime())
 	if err != nil {
 		return apperror.New(apperror.KindForbidden, "backend.action.target_organization_denied", err, nil)
 	}

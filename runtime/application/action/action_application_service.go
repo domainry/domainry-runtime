@@ -183,6 +183,10 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 	if err := actionAuthorizeCommand(invocation.Principal); err != nil {
 		return actionmodel.ActionInvocationResult{}, err
 	}
+	invocation.Principal, err = actionSnapshotAuthorization(invocation.Principal)
+	if err != nil {
+		return actionmodel.ActionInvocationResult{}, err
+	}
 	if invocation.ActionKey == "" {
 		return actionmodel.ActionInvocationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.key_required", nil, nil)
 	}
