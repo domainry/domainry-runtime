@@ -24,6 +24,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Configure access to private Domainry modules
+        env:
+          DOMAINRY_MODULE_TOKEN: ${{ secrets.DOMAINRY_GITHUB_TOKEN || github.token }}
+        run: |
+          git config --global url."https://x-access-token:${DOMAINRY_MODULE_TOKEN}@github.com/".insteadOf "https://github.com/"
+          go env -w GOPRIVATE=github.com/domainry/*
+          go env -w GONOSUMDB=github.com/domainry/*
+          go env -w GONOPROXY=github.com/domainry/*
       - run: ./scripts/ci/verify_runtime_composition.sh pr
 
   main-nightly-heavy:
@@ -62,4 +70,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Configure access to private Domainry modules
+        env:
+          DOMAINRY_MODULE_TOKEN: ${{ secrets.DOMAINRY_GITHUB_TOKEN || github.token }}
+        run: |
+          git config --global url."https://x-access-token:${DOMAINRY_MODULE_TOKEN}@github.com/".insteadOf "https://github.com/"
+          go env -w GOPRIVATE=github.com/domainry/*
+          go env -w GONOSUMDB=github.com/domainry/*
+          go env -w GONOPROXY=github.com/domainry/*
       - run: ./scripts/ci/verify_runtime_composition.sh heavy
