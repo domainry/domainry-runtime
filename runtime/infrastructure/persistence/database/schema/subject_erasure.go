@@ -20,7 +20,7 @@ func EnsureSubjectErasureSchema(ctx context.Context, store Store) error {
 		ormschema.NewTable(store.RuntimeRenderer(), "_subject_evidence_erasure_receipts").IfNotExists().Columns(
 			ormschema.Column("workspace_id", key).NotNull(), ormschema.Column("request_id", key).NotNull(),
 			ormschema.Column("subject_id", key).NotNull(), ormschema.Column("plan_json", ormschema.LongText()).NotNull(),
-			ormschema.Column("result_json", ormschema.LongText()).NotNull().DefaultValue(""),
+			ormschema.Column("result_json", ormschema.LongText()).NotNull(),
 		).PrimaryKey("workspace_id", "request_id"),
 	} {
 		statement, args, err := builder.Build()
