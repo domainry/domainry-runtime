@@ -66,6 +66,9 @@ func TestWorkflowRouteStepsSchemaRendersAllDialectsAndPropagatesFailures(t *test
 			if !strings.Contains(ddl, test.keyType) {
 				t.Fatalf("DDL %q lacks dialect key type %q", ddl, test.keyType)
 			}
+			if test.name == "mysql" && (strings.Contains(ddl, "`title` TEXT NOT NULL DEFAULT") || strings.Contains(ddl, "`assignee_snapshot_json` TEXT NOT NULL DEFAULT")) {
+				t.Fatalf("MySQL workflow route DDL contains an unsupported TEXT default: %q", ddl)
+			}
 			if len(store.indexes) != 2 {
 				t.Fatalf("indexes=%#v", store.indexes)
 			}

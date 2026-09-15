@@ -29,7 +29,7 @@ func EnsureReportExportPrepareReceiptSchema(ctx context.Context, store Store) er
 			ormschema.Column("idempotency_key", ormschema.TextKey(71)).NotNull(),
 			ormschema.Column("request_fingerprint", key).NotNull(),
 			ormschema.Column("status", key).NotNull(),
-			ormschema.Column("payload_json", ormschema.Text()).NotNull().DefaultValue(""),
+			ormschema.Column("payload_json", ormschema.Text()).NotNull(),
 			ormschema.Column("business_job_key", key).NotNull().DefaultValue(""),
 			ormschema.Column("job_id", key).NotNull().DefaultValue(""),
 			ormschema.Column("completion_artifact_id", key).NotNull().DefaultValue(""),

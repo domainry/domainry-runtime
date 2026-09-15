@@ -34,6 +34,9 @@ func TestReportExportPrepareReceiptSchemaRendersForSupportedDialects(t *testing.
 				!strings.Contains(strings.ToLower(db.statements[0]), "primary key") {
 				t.Fatalf("ddl=%q", db.statements)
 			}
+			if test.name == "mysql" && strings.Contains(db.statements[0], "`payload_json` TEXT NOT NULL DEFAULT") {
+				t.Fatalf("MySQL report export DDL contains an unsupported TEXT default: %q", db.statements[0])
+			}
 			if len(store.indexes) != 3 || store.indexes[0] != "uniq_report_export_prepare_operation:workspace_id,operation_id" ||
 				store.indexes[1] != "uniq_report_export_prepare_caller:workspace_id,operation_id,idempotency_key" ||
 				store.indexes[2] != "idx_report_export_prepare_lease:workspace_id,status,lease_expires_at" {
