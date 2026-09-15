@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	reportcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 )
 
@@ -115,6 +116,9 @@ func (state *validationState) validateGovernance() {
 		state.validateReportExportRecordMapping(path+".record_mapping", control)
 		if control.MaxRows < 1 {
 			state.add(path+".max_rows", "must be at least 1")
+		}
+		if _, err := reportcontract.ReportExportDownloadTTLSeconds(control, 15*60); err != nil {
+			state.add(path+".download_ttl_seconds", "%v", err)
 		}
 	}
 }

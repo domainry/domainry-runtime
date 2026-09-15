@@ -209,7 +209,11 @@ func (p *DataExchangeProvider) PlanExport(ctx context.Context, request dataexcha
 	if createdAt.IsZero() {
 		createdAt = p.dependencies.Clock().UTC()
 	}
-	return dataexchange.ExportPlan{Filename: reportcontract.SafeExportFilename(payload.ReportKey, payload.ObjectKey), ContentType: "text/csv; charset=utf-8", ExpiresAt: createdAt.Add(dataExchangeTTL(prepared.control))}, nil
+	ttl, err := dataExchangeTTL(prepared.control)
+	if err != nil {
+		return dataexchange.ExportPlan{}, err
+	}
+	return dataexchange.ExportPlan{Filename: reportcontract.SafeExportFilename(payload.ReportKey, payload.ObjectKey), ContentType: "text/csv; charset=utf-8", ExpiresAt: createdAt.Add(ttl)}, nil
 }
 
 func (p *DataExchangeProvider) ReadExportPage(ctx context.Context, request dataexchange.ExportPageRequest) (dataexchange.ExportPage, error) {
@@ -320,14 +324,12 @@ func decodeDataExchangeCursor(value string) (dataExchangeCursor, error) {
 	return cursor, nil
 }
 
-func dataExchangeTTL(control reportmodel.ReportExportControlSchema) time.Duration {
-	if seconds, ok := control.Config["download_ttl_seconds"].(float64); ok && seconds >= 60 && seconds <= 86400 {
-		return time.Duration(seconds) * time.Second
+func dataExchangeTTL(control reportmodel.ReportExportControlSchema) (time.Duration, error) {
+	seconds, err := reportcontract.ReportExportDownloadTTLSeconds(control, int64(dataExchangeDownloadTTL/time.Second))
+	if err != nil {
+		return 0, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.export_download_ttl_invalid", Err: err}
 	}
-	if seconds, ok := control.Config["download_ttl_seconds"].(int); ok && seconds >= 60 && seconds <= 86400 {
-		return time.Duration(seconds) * time.Second
-	}
-	return dataExchangeDownloadTTL
+	return time.Duration(seconds) * time.Second, nil
 }
 
 func internalError(err error) error {

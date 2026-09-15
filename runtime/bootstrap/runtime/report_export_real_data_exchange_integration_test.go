@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -24,6 +25,78 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
+
+func TestReportExportDeliveryMaterializesSmallResultWithBusinessTTL(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "report-export-inline-real-binding.db")
+	principal := realBindingReportPrincipal()
+	requestContext := identitysdk.WithRequestIdentity(t.Context(), identitysdk.RequestIdentity{Principal: principal.Principal})
+	store, err := persistence.OpenContext(t.Context(), config.Config{
+		DatabaseDriver: "sqlite", DBPath: databasePath, IntegrationSecretKey: "report-export-inline-real-binding",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err = store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	providers := recordapplication.NewDataExchangeProviders(func(context.Context, string, string) principalmodel.Principal { return principal })
+	binding, err := openDataExchangeBinding(t.Context(), dataexchangemodule.NewFactory(dataexchangemodule.Options{}), dataexchange.ApplicationRef{
+		ApplicationID: "report-export-inline-integration", RuntimeID: "runtime-integration",
+	}, dataExchangeModuleHost{store: store, providers: providers})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = binding.Close(context.Background()) })
+
+	control := realBindingReportControl()
+	control.DownloadTTLSeconds = int64((15 * 24 * time.Hour) / time.Second)
+	reportDefinition := reportmodel.ReportSchema{Key: "revenue", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{
+		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
+		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
+	}}
+	records := &realBindingReportRecords{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved",
+	}}}
+	owner := &realBindingReportExports{definition: reportmodel.ReportExportDefinition{Report: reportDefinition, Control: control}}
+	service := reportexportapplication.NewReportExportApplicationService(reportexportapplication.ReportExportApplicationDependencies{
+		Records: records, Audit: realBindingReportAudit{}, DataExchange: binding, DataExchangeProviders: providers,
+		PrepareReceipts: reportpersistence.NewReportExportPrepareReceiptStore(store),
+	})
+	if err = service.BindReportExports(owner); err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.PrepareResolvedExportDelivery(requestContext, reportmodel.ReportExportPrepareRequest{
+		ReportKey: "revenue", ObjectKey: "customer", AuditID: "audit-1", IdempotencyKey: "request-inline-1",
+		Scope: reportmodel.ReportExportScopeRequest{FieldProjection: []string{"id"}, Purpose: "inline integration", Freshness: reportmodel.ReportExportFreshness{Mode: "realtime"}},
+	}, reportDefinition, control, principal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Job.Status != "completed" || result.Job.RowsExported != 1 || result.Artifact == nil {
+		t.Fatalf("inline result=%+v", result)
+	}
+	content, err := io.ReadAll(result.Artifact.Content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = result.Artifact.Content.Close()
+	if string(content) != "id\ncustomer-1\n" {
+		t.Fatalf("inline content=%q", content)
+	}
+	createdAt, createdErr := time.Parse(time.RFC3339Nano, result.Job.CreatedAt)
+	expiresAt, expiresErr := time.Parse(time.RFC3339Nano, result.Artifact.ExpiresAt)
+	if createdErr != nil || expiresErr != nil || expiresAt.Sub(createdAt) != 15*24*time.Hour {
+		t.Fatalf("created=%q expires=%q createdErr=%v expiresErr=%v", result.Job.CreatedAt, result.Artifact.ExpiresAt, createdErr, expiresErr)
+	}
+	if records.status() != control.RecordMapping.AuditDownloadedStatus {
+		t.Fatalf("audit status=%q", records.status())
+	}
+	var jobCount int
+	if err = store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _data_exchange_jobs WHERE workspace_id = ? AND provider = ? AND operation = ?`, principal.WorkspaceID, "reports", "export").Scan(&jobCount); err != nil || jobCount != 1 {
+		t.Fatalf("data exchange jobs=%d err=%v", jobCount, err)
+	}
+}
 
 func TestReportExportDurableReceiptWithRealSQLiteDataExchangeBinding(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "report-export-real-binding.db")

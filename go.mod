@@ -11,8 +11,8 @@ require (
 	github.com/domainry/domainry-audit v0.1.11
 	github.com/domainry/domainry-audit-sdk v0.1.5
 	github.com/domainry/domainry-connector-sdk v0.1.1
-	github.com/domainry/domainry-data-exchange v0.3.9
-	github.com/domainry/domainry-data-exchange-sdk v0.3.6
+	github.com/domainry/domainry-data-exchange v0.3.10
+	github.com/domainry/domainry-data-exchange-sdk v0.3.7
 	github.com/domainry/domainry-foundation v0.1.0
 	github.com/domainry/domainry-identity v0.2.12
 	github.com/domainry/domainry-identity-bridge v0.1.2
@@ -27,8 +27,8 @@ require (
 	github.com/domainry/domainry-monitoring-sdk v0.1.3
 	github.com/domainry/domainry-notification v0.1.4
 	github.com/domainry/domainry-notification-sdk v0.1.1
-	github.com/domainry/domainry-report v0.1.12
-	github.com/domainry/domainry-report-sdk v0.1.10
+	github.com/domainry/domainry-report v0.1.13
+	github.com/domainry/domainry-report-sdk v0.1.11
 	github.com/domainry/domainry-scheduler v0.1.11
 	github.com/domainry/domainry-scheduler-sdk v0.1.8
 	github.com/go-sql-driver/mysql v1.10.0

@@ -24,4 +24,16 @@ func (h reportModuleExportHost) PrepareReportExport(ctx context.Context, request
 	return result, nil
 }
 
+func (h reportModuleExportHost) PrepareReportExportDelivery(ctx context.Context, request reportmodel.ReportExportPrepareRequest, report reportmodel.ReportSchema, control reportmodel.ReportExportControlSchema, subject reportmodel.ReportSubject) (reportmodel.ReportExportPreparation, error) {
+	if h.service == nil {
+		return reportmodel.ReportExportPreparation{}, reportadapter.StableReportHostError(nil)
+	}
+	result, err := h.service.PrepareResolvedExportDelivery(ctx, request, report, control, reportadapter.RuntimePrincipalFromReportSubject(subject))
+	if err != nil {
+		return reportmodel.ReportExportPreparation{}, reportadapter.StableReportHostError(err)
+	}
+	return result, nil
+}
+
 var _ reportmodulehost.ExportGateway = reportModuleExportHost{}
+var _ reportmodulehost.ExportDeliveryGateway = reportModuleExportHost{}
