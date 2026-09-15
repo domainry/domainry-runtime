@@ -1,15 +1,15 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "accef415c0e9a045cc9223fdd6f41eaff815f38a4fbeee04e0c59283add88041",
+  "set_sha256": "6630d6c45c1fef606249726125e90435e016204e05ee322d337edf9ee2abe78a",
   "modules": [
     {
       "key": "agent",
       "implementation": "github.com/domainry/domainry-agent",
-      "implementation_version": "v0.1.24",
-      "implementation_sum": "h1:0x5yxPZq/G4FtcnAdwlBJdYN37pVpdRyRf8YCkovZdY=",
+      "implementation_version": "v0.1.25",
+      "implementation_sum": "h1:7I2BN8I3Y8FDtsGk8ed04JOIIvuXSe8QbvbROr5maY8=",
       "sdk": "github.com/domainry/domainry-agent-sdk",
-      "sdk_version": "v0.1.16",
-      "sdk_sum": "h1:/ca4Erz1tsRSRlFSqoyklYyR43VcJT376IELyDH9jzA=",
+      "sdk_version": "v0.1.17",
+      "sdk_sum": "h1:6un1kkXsEA1AoxDI5YQVNpH7DOyZWhSIpefLbte8fyU=",
       "capability_contract_sha256": "1ab830cfcb15dad14aef651468ec442d658aa2071a917d35e389d9fe0988cd40"
     },
     {
@@ -35,8 +35,8 @@
     {
       "key": "identity",
       "implementation": "github.com/domainry/domainry-identity",
-      "implementation_version": "v0.2.12",
-      "implementation_sum": "h1:eAwb+6yaUkoeFK6fvoYA5i+FsZqAutQr8fTX17kZTEM=",
+      "implementation_version": "v0.2.13",
+      "implementation_sum": "h1:Lj4WM2xOl+W5NzEmwAniDSHhBSDb9jGeQbNZqeNPXUk=",
       "sdk": "github.com/domainry/domainry-identity-sdk",
       "sdk_version": "v0.1.11",
       "sdk_sum": "h1:qMv4HPKdG4FSBvjTMh+lbiy07dSKZsg4DWL2EZR8OF0=",
@@ -45,11 +45,11 @@
     {
       "key": "integration",
       "implementation": "github.com/domainry/domainry-integration",
-      "implementation_version": "v0.1.14",
-      "implementation_sum": "h1:TVsjBeWqVu3wrUW9IYuXaB6rv5SMcbEKRGWUTGWbAW4=",
+      "implementation_version": "v0.1.15",
+      "implementation_sum": "h1:pOjokVfMq+YdGlegWgI7DlUM1bq/dyF7HZVRcgsHiwM=",
       "sdk": "github.com/domainry/domainry-integration-sdk",
-      "sdk_version": "v0.1.6",
-      "sdk_sum": "h1:Wn2EjO831Up6XYPUCEp0gPsC92cSVgiSQsdk7YGafeU=",
+      "sdk_version": "v0.1.7",
+      "sdk_sum": "h1:LS/ve4T+izsPuGLkqkcYiRB1MvoBNuqCeNE3BZatzdI=",
       "capability_contract_sha256": "36dbad2c7eded116a1d3e66024355b45b5dbf9b4868342189e7a2b867a09c205"
     },
     {
