@@ -42,11 +42,14 @@ type RecordMutationClaimResult struct {
 }
 
 type RecordMutationCompletion struct {
-	WorkspaceID  string
-	ExecutionID  string
-	LeaseOwner   string
-	FencingToken int64
-	Result       any
-	ExpiresAt    time.Time
-	Now          time.Time
+	WorkspaceID    string
+	ExecutionID    string
+	LeaseOwner     string
+	FencingToken   int64
+	Result         any
+	ResponseStatus int
+	ErrorCode      string
+	Retryable      bool
+	ExpiresAt      time.Time
+	Now            time.Time
 }

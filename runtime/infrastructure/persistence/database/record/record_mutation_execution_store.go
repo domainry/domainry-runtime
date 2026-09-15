@@ -88,8 +88,16 @@ func (r RecordStore) tryBeginRecordMutationOnce(ctx context.Context, request rec
 		Set("status", string(idempotency.StatusProcessing)).Set("lease_owner", value.LeaseOwner).
 		Set("lease_expires_at", value.LeaseExpiresAt).
 		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).
+		Set("response_status", 0).Set("error_code", "").Set("result_json", "{}").
 		Set("updated_at", value.UpdatedAt).
-		Where(query.And(query.Equal("id", value.ID), query.Equal("request_fingerprint", value.RequestFingerprint), query.Equal("status", string(idempotency.StatusProcessing)), query.LessThanOrEqual("lease_expires_at", now.Format(time.RFC3339Nano)))).Build()
+		Where(query.And(
+			query.Equal("id", value.ID),
+			query.Equal("request_fingerprint", value.RequestFingerprint),
+			query.Or(
+				query.Equal("status", string(idempotency.StatusFailedRetryable)),
+				query.And(query.Equal("status", string(idempotency.StatusProcessing)), query.LessThanOrEqual("lease_expires_at", now.Format(time.RFC3339Nano))),
+			),
+		)).Build()
 	if err != nil {
 		return recordmodel.RecordMutationClaimResult{}, err
 	}
@@ -220,7 +228,11 @@ func (r RecordStore) CompleteRecordMutationExecution(ctx context.Context, comple
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	queryValue, args, err := recordMutationCompletionUpdate(r.store, workspaceID, completion, string(resultJSON), 200, now)
+	responseStatus := completion.ResponseStatus
+	if responseStatus == 0 {
+		responseStatus = 200
+	}
+	queryValue, args, err := recordMutationCompletionUpdate(r.store, workspaceID, completion, string(resultJSON), responseStatus, now)
 	if err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
@@ -276,8 +288,16 @@ func (r RecordStore) findRecordMutationExecutionByID(ctx context.Context, worksp
 }
 
 func recordMutationCompletionUpdate(store *database.RuntimeStore, workspaceID string, completion recordmodel.RecordMutationCompletion, resultJSON string, responseStatus int, now time.Time) (string, []any, error) {
+	status := idempotency.StatusSucceeded
+	errorCode := strings.TrimSpace(completion.ErrorCode)
+	if errorCode != "" {
+		status = idempotency.StatusFailedTerminal
+		if completion.Retryable {
+			status = idempotency.StatusFailedRetryable
+		}
+	}
 	return query.NewWorkspaceUpdateBuilder(store.SQLRenderer, "_record_mutation_executions", workspaceID).
-		Set("status", string(idempotency.StatusSucceeded)).Set("result_json", resultJSON).Set("response_status", responseStatus).
+		Set("status", string(status)).Set("result_json", resultJSON).Set("response_status", responseStatus).Set("error_code", errorCode).
 		Set("expires_at", completion.ExpiresAt.UTC().Format(time.RFC3339Nano)).Set("updated_at", now.Format(time.RFC3339Nano)).
 		Where(query.And(query.Equal("id", completion.ExecutionID), query.Equal("lease_owner", strings.TrimSpace(completion.LeaseOwner)), query.Equal("fencing_token", completion.FencingToken), query.Equal("status", string(idempotency.StatusProcessing)))).Build()
 }

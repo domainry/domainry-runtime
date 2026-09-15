@@ -6,11 +6,13 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/idempotency"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
+	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
@@ -59,6 +61,25 @@ func recordDeleteEdgeDependencies(repository recordrepository.RecordRepository, 
 		},
 		CanAccess: func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true },
 		CanWrite:  func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
+	}
+}
+
+func TestDeleteIdempotentVersionConflictCompletesAndReplaysTerminalReceipt(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
+	repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", UpdatedAt: "current-version", Data: map[string]any{"name": "Acme"}}}
+	executions := &createExecutionProbe{}
+	dependencies := recordDeleteEdgeDependencies(repository, object)
+	dependencies.ExecutionRuntime = recordruntime.NewRecordMutationExecutionRuntime(executions)
+	service := NewRecordDeleteApplicationService(dependencies)
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}, RequestID: "request-a"})
+	for attempt := 0; attempt < 2; attempt++ {
+		replayed, err := service.DeleteExpectedIdempotent(t.Context(), object.Key, "customer-1", "stale-version", "stale-delete", principal)
+		if replayed || apperror.KindOf(err) != apperror.KindConflict || apperror.CodeOf(err) != "backend.record.version_conflict" {
+			t.Fatalf("attempt=%d replayed=%v err=%v", attempt, replayed, err)
+		}
+	}
+	if executions.execution.Status != string(idempotency.StatusFailedTerminal) || executions.execution.ResponseStatus != 409 || executions.execution.ErrorCode != "backend.record.version_conflict" || executions.commitCalls != 1 || len(repository.commits) != 0 {
+		t.Fatalf("execution=%+v completions=%d commits=%+v", executions.execution, executions.commitCalls, repository.commits)
 	}
 }
 

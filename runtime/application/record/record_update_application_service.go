@@ -81,7 +81,7 @@ func (s *RecordUpdateApplicationService) UpdateLocalizedIdempotent(ctx context.C
 	return s.update(ctx, objectKey, recordID, patch, translations, idempotencyKey, principal)
 }
 
-func (s *RecordUpdateApplicationService) update(ctx context.Context, objectKey, recordID string, patch map[string]any, translations recordmodel.RecordTranslations, idempotencyKey string, principal principalmodel.Principal) (recordmodel.Record, error) {
+func (s *RecordUpdateApplicationService) update(ctx context.Context, objectKey, recordID string, patch map[string]any, translations recordmodel.RecordTranslations, idempotencyKey string, principal principalmodel.Principal) (result recordmodel.Record, err error) {
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.Record{}, err
 	}
@@ -121,6 +121,7 @@ func (s *RecordUpdateApplicationService) update(ctx context.Context, objectKey, 
 		}
 		claim = acquired
 	}
+	defer func() { err = finalizeRecordMutationFailure(ctx, s.dependencies.ExecutionRuntime, claim, err) }()
 	authorizationScope, err := resolveRecordMutationScope(s.dependencies.ScopeForAction, authorizationPrincipal, object, "update")
 	if err != nil {
 		s.denied(ctx, objectKey, recordID, principal, err, "data_scope", patch)
@@ -168,6 +169,7 @@ func (s *RecordUpdateApplicationService) update(ctx context.Context, objectKey, 
 	if err := s.dependencies.MutationKernel.CommitPlan(ctx, planned.plan, receipt); err != nil {
 		return recordmodel.Record{}, recordUpdateCommitError(err)
 	}
+	claim.Execution.ID = ""
 	if err := ctx.Err(); err != nil {
 		return recordpolicy.RecordFilterReadable(principal, object, planned.record), err
 	}

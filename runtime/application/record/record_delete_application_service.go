@@ -95,7 +95,7 @@ func (s *RecordDeleteApplicationService) DeleteExpected(ctx context.Context, obj
 	return nil
 }
 
-func (s *RecordDeleteApplicationService) DeleteExpectedIdempotent(ctx context.Context, objectKey, recordID, expectedUpdatedAt, idempotencyKey string, principal principalmodel.Principal) (bool, error) {
+func (s *RecordDeleteApplicationService) DeleteExpectedIdempotent(ctx context.Context, objectKey, recordID, expectedUpdatedAt, idempotencyKey string, principal principalmodel.Principal) (replayed bool, err error) {
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return false, err
 	}
@@ -117,6 +117,7 @@ func (s *RecordDeleteApplicationService) DeleteExpectedIdempotent(ctx context.Co
 	if err != nil || replayed {
 		return replayed, err
 	}
+	defer func() { err = finalizeRecordMutationFailure(ctx, s.dependencies.ExecutionRuntime, claim, err) }()
 	group, err := s.planDeleteMutation(ctx, objectKey, recordID, expectedUpdatedAt, principal)
 	if err != nil {
 		return false, err
@@ -127,6 +128,7 @@ func (s *RecordDeleteApplicationService) DeleteExpectedIdempotent(ctx context.Co
 	if err := s.dependencies.MutationKernel.CommitBatch(ctx, group.plans, receipt); err != nil {
 		return false, recordDeleteInternalError("commit idempotent delete mutation batch", err)
 	}
+	claim.Execution.ID = ""
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}

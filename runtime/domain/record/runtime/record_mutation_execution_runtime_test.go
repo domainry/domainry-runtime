@@ -12,6 +12,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -67,6 +68,52 @@ func (s *mutationExecutionStoreStub) CompleteRecordMutationExecution(_ context.C
 
 func completionExecution(completion recordmodel.RecordMutationCompletion) recordmodel.RecordMutationExecution {
 	return recordmodel.RecordMutationExecution{ID: completion.ExecutionID, WorkspaceID: completion.WorkspaceID}
+}
+
+func TestRecordMutationFailureCompletionIsSanitizedAndTerminalReplayPreservesHTTPError(t *testing.T) {
+	claim := recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionAcquired, Execution: recordmodel.RecordMutationExecution{
+		ID: "record_mutation:failure", WorkspaceID: "workspace-primary", Operation: "update", ObjectKey: "floor_category", TargetID: "category-1",
+		LeaseOwner: "request-a", FencingToken: 4,
+	}}
+	store := &mutationExecutionStoreStub{}
+	runtime := NewRecordMutationExecutionRuntime(store)
+	failure := apperror.New(apperror.KindConflict, "backend.record.version_conflict", errors.New("private database detail"), map[string]string{"actual": "private-version"})
+	if err := runtime.Fail(t.Context(), claim, failure); err != nil {
+		t.Fatal(err)
+	}
+	completion := store.completion
+	if completion.ResponseStatus != 409 || completion.ErrorCode != "backend.record.version_conflict" || completion.Retryable || completion.ExecutionID != claim.Execution.ID {
+		t.Fatalf("failure completion=%+v", completion)
+	}
+	result, ok := completion.Result.(map[string]any)
+	if !ok || len(result) != 0 {
+		t.Fatalf("failure result leaked details: %#v", completion.Result)
+	}
+
+	store.claim = recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionReplay, Execution: recordmodel.RecordMutationExecution{
+		Status: string(idempotency.StatusFailedTerminal), ResponseStatus: 409, ErrorCode: "backend.record.version_conflict",
+	}}
+	_, _, replayed, err := runtime.BeginUpdate(t.Context(), "floor_category", "category-1", "key", map[string]any{"expected_updated_at": "stale"}, initializedMutationPrincipal())
+	if replayed || apperror.KindOf(err) != apperror.KindConflict || apperror.CodeOf(err) != "backend.record.version_conflict" || len(apperror.ParamsOf(err)) != 0 {
+		t.Fatalf("terminal replay replayed=%v kind=%s code=%q params=%v err=%v", replayed, apperror.KindOf(err), apperror.CodeOf(err), apperror.ParamsOf(err), err)
+	}
+}
+
+func TestRecordMutationTransientFailureIsReclaimableAndUnknownCommitIsNotOverwritten(t *testing.T) {
+	claim := recordmodel.RecordMutationClaimResult{Execution: recordmodel.RecordMutationExecution{ID: "record_mutation:retry", WorkspaceID: "workspace-primary", LeaseOwner: "request-a", FencingToken: 2}}
+	store := &mutationExecutionStoreStub{}
+	runtime := NewRecordMutationExecutionRuntime(store)
+	if err := runtime.Fail(t.Context(), claim, apperror.New(apperror.KindUnavailable, "backend.storage.unavailable", nil, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if !store.completion.Retryable || store.completion.ResponseStatus != 503 || store.completion.ErrorCode != "backend.storage.unavailable" {
+		t.Fatalf("retryable completion=%+v", store.completion)
+	}
+	store.completion = recordmodel.RecordMutationCompletion{}
+	unknown := mutation.TransactionCommitUnknown("record", "category-1", errors.New("commit response lost"))
+	if err := runtime.Fail(t.Context(), claim, unknown); err != nil || store.completion.ExecutionID != "" {
+		t.Fatalf("unknown commit completion=%+v err=%v", store.completion, err)
+	}
 }
 
 func initializedMutationPrincipal() principalmodel.Principal {

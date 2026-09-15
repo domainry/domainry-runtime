@@ -67,6 +67,15 @@ func (p *importExecutionProbe) TryBeginRecordMutation(_ context.Context, request
 	if p.execution.RequestFingerprint != request.RequestFingerprint {
 		return recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionFingerprintConflict, Execution: p.execution}, nil
 	}
+	if p.execution.Status == string(idempotency.StatusFailedTerminal) {
+		return recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionReplay, Execution: p.execution}, nil
+	}
+	if p.execution.Status == string(idempotency.StatusFailedRetryable) {
+		p.execution.Status, p.execution.LeaseOwner = string(idempotency.StatusProcessing), request.LeaseOwner
+		p.execution.ResponseStatus, p.execution.ErrorCode = 0, ""
+		p.execution.FencingToken++
+		return recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionAcquired, Execution: p.execution}, nil
+	}
 	if p.completed {
 		return recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionReplay, Execution: p.execution}, nil
 	}
@@ -133,7 +142,14 @@ func (p *importExecutionProbe) CommitRecordMutationExecution(context.Context, tr
 func (p *importExecutionProbe) CompleteRecordMutationExecution(_ context.Context, completion recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error) {
 	raw, _ := json.Marshal(completion.Result)
 	_ = json.Unmarshal(raw, &p.execution.OperationResult)
-	p.execution.Status, p.completed = string(idempotency.StatusSucceeded), true
+	p.execution.ResponseStatus, p.execution.ErrorCode = completion.ResponseStatus, completion.ErrorCode
+	if completion.ErrorCode == "" {
+		p.execution.Status, p.completed = string(idempotency.StatusSucceeded), true
+	} else if completion.Retryable {
+		p.execution.Status, p.completed = string(idempotency.StatusFailedRetryable), false
+	} else {
+		p.execution.Status, p.completed = string(idempotency.StatusFailedTerminal), true
+	}
 	return p.execution, nil
 }
 
@@ -272,6 +288,9 @@ func TestImportServiceUsesOperationAndRowKeysForResumeReplayAndConflict(t *testi
 	rawCSV := []byte("name\nAcme\nBeta\n")
 	if _, _, err := service.ApplyIdempotent(t.Context(), "customer", rawCSV, "import-1", principal); err == nil {
 		t.Fatal("expected injected row failure")
+	}
+	if executions.execution.Status != string(idempotency.StatusFailedRetryable) || executions.execution.ResponseStatus != 500 || executions.execution.ErrorCode != "backend.internal" {
+		t.Fatalf("failed import execution=%+v", executions.execution)
 	}
 	executions.allowReclaim = true
 	result, replayed, err := service.ApplyIdempotent(t.Context(), "customer", rawCSV, "import-1", principal)

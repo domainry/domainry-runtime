@@ -113,7 +113,7 @@ func (s *RecordCreateApplicationService) PlanCreateMutation(ctx context.Context,
 	return planned.plan, planned.record, nil
 }
 
-func (s *RecordCreateApplicationService) create(ctx context.Context, objectKey string, data map[string]any, translations recordmodel.RecordTranslations, idempotencyKey string, preclaimed *recordmodel.RecordMutationClaimResult, principal principalmodel.Principal) (recordmodel.Record, error) {
+func (s *RecordCreateApplicationService) create(ctx context.Context, objectKey string, data map[string]any, translations recordmodel.RecordTranslations, idempotencyKey string, preclaimed *recordmodel.RecordMutationClaimResult, principal principalmodel.Principal) (result recordmodel.Record, err error) {
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.Record{}, err
 	}
@@ -155,11 +155,18 @@ func (s *RecordCreateApplicationService) create(ctx context.Context, objectKey s
 		}
 		claim = acquired
 	}
+	defer func() { err = finalizeRecordMutationFailure(ctx, s.dependencies.ExecutionRuntime, claim, err) }()
 	planned, err := s.planCreate(ctx, objectKey, object, data, inputData, s.newRecordID(objectKey), localizedValues, claim, principal, principal)
 	if err != nil {
 		return recordmodel.Record{}, err
 	}
 	if planned.replayed {
+		if strings.TrimSpace(claim.Execution.ID) != "" {
+			if err := s.dependencies.ExecutionRuntime.CompleteOperation(ctx, claim, planned.record); err != nil {
+				return recordmodel.Record{}, err
+			}
+			claim.Execution.ID = ""
+		}
 		return recordpolicy.RecordFilterReadable(principal, object, planned.record), nil
 	}
 	var receipt recordmutation.MutationReceiptCommit
@@ -174,6 +181,7 @@ func (s *RecordCreateApplicationService) create(ctx context.Context, objectKey s
 	if strings.TrimSpace(claim.Execution.ID) != "" {
 		logging.LogIdempotency(ctx, claimAuditFacts(claim, "record.create", "succeeded"), principal.RequestID)
 	}
+	claim.Execution.ID = ""
 	if err := ctx.Err(); err != nil {
 		return recordpolicy.RecordFilterReadable(principal, object, planned.record), err
 	}

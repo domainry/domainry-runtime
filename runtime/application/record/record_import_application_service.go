@@ -143,7 +143,7 @@ func (s *RecordImportApplicationService) ApplyRowsIdempotent(ctx context.Context
 	})
 }
 
-func (s *RecordImportApplicationService) applyIdempotent(ctx context.Context, objectKey string, input []byte, operationKey string, principal principalmodel.Principal, buildPreview func(definitionmodel.ObjectSchema) (recordmodel.RecordImportPreview, error)) (recordmodel.RecordImportApplyResult, bool, error) {
+func (s *RecordImportApplicationService) applyIdempotent(ctx context.Context, objectKey string, input []byte, operationKey string, principal principalmodel.Principal, buildPreview func(definitionmodel.ObjectSchema) (recordmodel.RecordImportPreview, error)) (result recordmodel.RecordImportApplyResult, replayed bool, err error) {
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return recordmodel.RecordImportApplyResult{}, false, err
 	}
@@ -184,6 +184,7 @@ func (s *RecordImportApplicationService) applyIdempotent(ctx context.Context, ob
 		s.audit(ctx, "record_import_idempotent_replayed", object.Key, "", principal, "Replayed idempotent record import", nil, nil, idempotency.AuditMetadata(claimAuditFacts(claim, "record.import", "replayed")))
 		return cached, true, nil
 	}
+	defer func() { err = finalizeRecordMutationFailure(ctx, s.dependencies.Execution, claim, err) }()
 	for index, row := range preview.Rows {
 		if err := ctx.Err(); err != nil {
 			return recordmodel.RecordImportApplyResult{}, false, err
@@ -196,10 +197,11 @@ func (s *RecordImportApplicationService) applyIdempotent(ctx context.Context, ob
 			return recordmodel.RecordImportApplyResult{}, false, err
 		}
 	}
-	result := recordmodel.RecordImportApplyResult{ObjectKey: object.Key, Created: len(preview.Rows), Preview: preview}
+	result = recordmodel.RecordImportApplyResult{ObjectKey: object.Key, Created: len(preview.Rows), Preview: preview}
 	if err := s.dependencies.Execution.CompleteOperation(ctx, claim, result); err != nil {
 		return recordmodel.RecordImportApplyResult{}, false, err
 	}
+	claim.Execution.ID = ""
 	logging.LogIdempotency(ctx, claimAuditFacts(claim, "record.import", "succeeded"), principal.RequestID)
 	s.audit(ctx, "record_import_applied", object.Key, "", principal, fmt.Sprintf("Imported %d %s records", result.Created, object.Key), nil, map[string]any{"created": result.Created}, idempotency.AuditMetadata(claimAuditFacts(claim, "record.import", "succeeded")))
 	return result, false, nil

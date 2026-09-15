@@ -1,6 +1,7 @@
 package record
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -10,7 +11,23 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 )
+
+const recordMutationFailureCompletionTimeout = 5 * time.Second
+
+func finalizeRecordMutationFailure(ctx context.Context, execution *recordruntime.RecordMutationExecutionRuntime, claim recordmodel.RecordMutationClaimResult, failure error) error {
+	if failure == nil || execution == nil || strings.TrimSpace(claim.Execution.ID) == "" {
+		return failure
+	}
+	completionContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordMutationFailureCompletionTimeout)
+	defer cancel()
+	if err := execution.Fail(completionContext, claim, failure); err != nil {
+		return err
+	}
+	return failure
+}
 
 func (s *RecordUpdateApplicationService) now() time.Time {
 	if s.dependencies.Now != nil {

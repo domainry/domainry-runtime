@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
@@ -69,6 +71,9 @@ func (s *RecordMutationExecutionRuntime) BeginCreate(ctx context.Context, object
 	case idempotency.DecisionAcquired:
 		return recordmodel.Record{}, claim, false, nil
 	case idempotency.DecisionReplay:
+		if idempotency.Status(claim.Execution.Status) == idempotency.StatusFailedTerminal {
+			return recordmodel.Record{}, claim, false, replayRecordMutationFailure(claim.Execution)
+		}
 		return claim.Execution.Result, claim, true, nil
 	case idempotency.DecisionFingerprintConflict:
 		return recordmodel.Record{}, claim, false, apperror.New(apperror.KindConflict, idempotency.ErrorCodeKeyReused, nil, map[string]string{"object_key": objectKey})
@@ -108,7 +113,7 @@ func (s *RecordMutationExecutionRuntime) Commit(ctx context.Context, claim recor
 		Result: commit.Record, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour), Now: time.Now().UTC(),
 	})
 	if err != nil {
-		return recordMutationRuntimeError("commit record mutation execution", err)
+		return recordMutationCommitRuntimeError("commit record mutation execution", err)
 	}
 	return nil
 }
@@ -127,7 +132,7 @@ func (s *RecordMutationExecutionRuntime) CommitBatch(ctx context.Context, claim 
 		Result: map[string]any{"deleted": true}, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour), Now: time.Now().UTC(),
 	})
 	if err != nil {
-		return recordMutationRuntimeError("commit record mutation batch execution", err)
+		return recordMutationCommitRuntimeError("commit record mutation batch execution", err)
 	}
 	return nil
 }
@@ -166,6 +171,9 @@ func (s *RecordMutationExecutionRuntime) ReplayImport(ctx context.Context, objec
 	if err != nil {
 		return recordmodel.RecordImportApplyResult{}, false, recordMutationRuntimeError("lookup record import replay", err)
 	}
+	if found && execution.Status == string(idempotency.StatusFailedTerminal) {
+		return recordmodel.RecordImportApplyResult{}, false, replayRecordMutationFailure(execution)
+	}
 	if !found || execution.Status != string(idempotency.StatusSucceeded) {
 		return recordmodel.RecordImportApplyResult{}, false, nil
 	}
@@ -191,6 +199,30 @@ func (s *RecordMutationExecutionRuntime) CompleteOperation(ctx context.Context, 
 	_, err := s.repository.CompleteRecordMutationExecution(ctx, recordmodel.RecordMutationCompletion{WorkspaceID: claim.Execution.WorkspaceID, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: result, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour), Now: time.Now().UTC()})
 	if err != nil {
 		return recordMutationRuntimeError("complete record operation", err)
+	}
+	return nil
+}
+
+// Fail completes a claimed Record mutation without persisting raw error text or
+// error parameters. Known client/business failures are terminal and replay the
+// same stable code; transient platform failures remain reclaimable.
+func (s *RecordMutationExecutionRuntime) Fail(ctx context.Context, claim recordmodel.RecordMutationClaimResult, failure error) error {
+	if failure == nil || mutation.IsTransactionCommitUnknown(failure) {
+		return nil
+	}
+	if s == nil || s.repository == nil || strings.TrimSpace(claim.Execution.ID) == "" {
+		return nil
+	}
+	kind := apperror.KindOf(failure)
+	_, err := s.repository.CompleteRecordMutationExecution(ctx, recordmodel.RecordMutationCompletion{
+		WorkspaceID: claim.Execution.WorkspaceID, ExecutionID: claim.Execution.ID,
+		LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		Result: map[string]any{}, ResponseStatus: recordMutationFailureResponseStatus(kind),
+		ErrorCode: apperror.CodeOf(failure), Retryable: recordMutationFailureRetryable(kind),
+		ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour), Now: time.Now().UTC(),
+	})
+	if err != nil {
+		return recordMutationRuntimeError("complete failed record mutation", err)
 	}
 	return nil
 }
@@ -230,6 +262,9 @@ func (s *RecordMutationExecutionRuntime) beginOperationTarget(ctx context.Contex
 	case idempotency.DecisionAcquired:
 		return claim, false, nil
 	case idempotency.DecisionReplay:
+		if idempotency.Status(claim.Execution.Status) == idempotency.StatusFailedTerminal {
+			return claim, false, replayRecordMutationFailure(claim.Execution)
+		}
 		return claim, true, nil
 	case idempotency.DecisionFingerprintConflict:
 		return claim, false, apperror.New(apperror.KindConflict, idempotency.ErrorCodeKeyReused, nil, map[string]string{"object_key": objectKey})
@@ -237,6 +272,64 @@ func (s *RecordMutationExecutionRuntime) beginOperationTarget(ctx context.Contex
 		return claim, false, apperror.New(apperror.KindConflict, idempotency.ErrorCodeInProgress, nil, map[string]string{"retry_after": recordMutationRetryAfter(claim.Execution.LeaseExpiresAt)})
 	default:
 		return claim, false, apperror.New(apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil, nil)
+	}
+}
+
+func replayRecordMutationFailure(execution recordmodel.RecordMutationExecution) error {
+	code := strings.TrimSpace(execution.ErrorCode)
+	kind, valid := recordMutationFailureKind(execution.ResponseStatus)
+	if code == "" || !apperror.IsI18nCode(code) || !valid {
+		return apperror.New(apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil, nil)
+	}
+	return apperror.New(kind, code, nil, nil)
+}
+
+func recordMutationFailureResponseStatus(kind apperror.ErrorKind) int {
+	switch kind {
+	case apperror.KindBadRequest:
+		return 400
+	case apperror.KindForbidden:
+		return 403
+	case apperror.KindNotFound:
+		return 404
+	case apperror.KindConflict:
+		return 409
+	case apperror.KindRateLimited:
+		return 429
+	case apperror.KindUnavailable:
+		return 503
+	default:
+		return 500
+	}
+}
+
+func recordMutationFailureKind(status int) (apperror.ErrorKind, bool) {
+	switch status {
+	case 400, 422:
+		return apperror.KindBadRequest, true
+	case 403:
+		return apperror.KindForbidden, true
+	case 404:
+		return apperror.KindNotFound, true
+	case 409:
+		return apperror.KindConflict, true
+	case 429:
+		return apperror.KindRateLimited, true
+	case 503:
+		return apperror.KindUnavailable, true
+	case 500:
+		return apperror.KindInternal, true
+	default:
+		return apperror.KindInternal, false
+	}
+}
+
+func recordMutationFailureRetryable(kind apperror.ErrorKind) bool {
+	switch kind {
+	case apperror.KindBadRequest, apperror.KindForbidden, apperror.KindNotFound, apperror.KindConflict:
+		return false
+	default:
+		return true
 	}
 }
 
@@ -254,4 +347,13 @@ func recordMutationRetryAfter(value string) string {
 
 func recordMutationRuntimeError(operation string, err error) error {
 	return &apperror.AppError{Kind: apperror.KindInternal, Code: "backend.internal", Params: map[string]string{"operation": operation}, Err: err}
+}
+
+func recordMutationCommitRuntimeError(operation string, err error) error {
+	var businessConflict *mutation.PolicyConflictError
+	var conflict *mutation.MutationConflictError
+	if errors.As(err, &businessConflict) || errors.As(err, &conflict) || mutation.IsTransactionCommitUnknown(err) {
+		return err
+	}
+	return recordMutationRuntimeError(operation, err)
 }

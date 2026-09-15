@@ -233,6 +233,52 @@ func TestUpdateIdempotentRequiresExecutionRuntime(t *testing.T) {
 	}
 }
 
+func TestUpdateIdempotentVersionConflictCompletesAndReplaysTerminalReceipt(t *testing.T) {
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "category-1", UpdatedAt: "current-version", Data: map[string]any{"name": "Current"}}}
+	executions := &createExecutionProbe{}
+	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
+		Repository: repository,
+		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
+			return definitionmodel.ObjectSchema{Key: "floor_category", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}, nil
+		},
+		CanAccess:        func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true },
+		CanWrite:         func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
+		ExecutionRuntime: recordruntime.NewRecordMutationExecutionRuntime(executions),
+	})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}, RequestID: "request-a"})
+	patch := map[string]any{"name": "Stale", "expected_updated_at": "stale-version"}
+	for attempt := 0; attempt < 2; attempt++ {
+		_, err := service.UpdateIdempotent(t.Context(), "floor_category", "category-1", patch, "stale-patch", principal)
+		if apperror.KindOf(err) != apperror.KindConflict || apperror.CodeOf(err) != "backend.record.version_conflict" {
+			t.Fatalf("attempt=%d err=%v", attempt, err)
+		}
+	}
+	if executions.execution.Status != string(idempotency.StatusFailedTerminal) || executions.execution.ResponseStatus != 409 || executions.execution.ErrorCode != "backend.record.version_conflict" || executions.commitCalls != 1 || repository.getCalls != 1 {
+		t.Fatalf("execution=%+v completions=%d gets=%d", executions.execution, executions.commitCalls, repository.getCalls)
+	}
+}
+
+func TestUpdateIdempotentCommitRaceCompletesTerminalVersionConflict(t *testing.T) {
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "category-1", UpdatedAt: "observed-version", Data: map[string]any{"name": "Current"}}}
+	executions := &createExecutionProbe{commitErr: mutation.MutationConflict("floor_category", "category-1", mutation.MutationConflictOptimistic, nil)}
+	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
+		Repository: repository,
+		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
+			return definitionmodel.ObjectSchema{Key: "floor_category", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}, nil
+		},
+		CanAccess:        func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true },
+		CanWrite:         func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
+		ExecutionRuntime: recordruntime.NewRecordMutationExecutionRuntime(executions),
+	})
+	_, err := service.UpdateIdempotent(t.Context(), "floor_category", "category-1", map[string]any{"name": "Raced"}, "racing-patch", recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}, RequestID: "request-a"}))
+	if apperror.KindOf(err) != apperror.KindConflict || apperror.CodeOf(err) != "backend.record.version_conflict" {
+		t.Fatalf("err=%v", err)
+	}
+	if executions.execution.Status != string(idempotency.StatusFailedTerminal) || executions.execution.ResponseStatus != 409 || executions.execution.ErrorCode != "backend.record.version_conflict" || executions.commitCalls != 2 {
+		t.Fatalf("execution=%+v calls=%d", executions.execution, executions.commitCalls)
+	}
+}
+
 func TestUpdateServiceRejectsVersionConflictWithoutMutatingCallerPatch(t *testing.T) {
 	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "case-1", UpdatedAt: "version-2", Data: map[string]any{"name": "Before"}}}
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{

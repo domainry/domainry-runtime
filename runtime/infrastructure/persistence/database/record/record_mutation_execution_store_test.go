@@ -290,6 +290,74 @@ func TestRecordMutationOperationCompletionIsFencedAndReplayable(t *testing.T) {
 	}
 }
 
+func TestRecordMutationTerminalFailureCompletionPersistsReplayEvidenceAtomically(t *testing.T) {
+	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "record-terminal-failure.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	repository := NewRecordStore(store)
+	now := time.Date(2026, 8, 30, 0, 30, 14, 0, time.UTC)
+	request := recordmodel.RecordMutationClaimRequest{
+		Execution:          recordmodel.RecordMutationExecution{WorkspaceID: "workspace-a", Operation: "update", ObjectKey: "floor_category", TargetID: "category-1", IdempotencyKey: "stale-patch"},
+		RequestFingerprint: "stale-patch-fingerprint", LeaseOwner: "runtime-a", LeaseTTL: time.Minute, Now: now,
+	}
+	claim, err := repository.TryBeginRecordMutation(t.Context(), request)
+	if err != nil || claim.Decision != idempotency.DecisionAcquired {
+		t.Fatalf("claim=%+v err=%v", claim, err)
+	}
+	completed, err := repository.CompleteRecordMutationExecution(t.Context(), recordmodel.RecordMutationCompletion{
+		WorkspaceID: claim.Execution.WorkspaceID, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		Result: map[string]any{}, ResponseStatus: 409, ErrorCode: "backend.record.version_conflict", ExpiresAt: now.Add(30 * 24 * time.Hour), Now: now.Add(time.Second),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed.Status != string(idempotency.StatusFailedTerminal) || completed.ResponseStatus != 409 || completed.ErrorCode != "backend.record.version_conflict" || len(completed.OperationResult) != 0 {
+		t.Fatalf("terminal completion=%+v", completed)
+	}
+	replay, err := repository.TryBeginRecordMutation(t.Context(), request)
+	if err != nil || replay.Decision != idempotency.DecisionReplay || replay.Execution.Status != string(idempotency.StatusFailedTerminal) || replay.Execution.ResponseStatus != 409 || replay.Execution.ErrorCode != "backend.record.version_conflict" {
+		t.Fatalf("terminal replay=%+v err=%v", replay, err)
+	}
+}
+
+func TestRecordMutationRetryableFailureCanBeReclaimedAndClearsPriorFailure(t *testing.T) {
+	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "record-retryable-failure.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	repository := NewRecordStore(store)
+	now := time.Date(2026, 8, 30, 1, 0, 0, 0, time.UTC)
+	request := recordmodel.RecordMutationClaimRequest{
+		Execution:          recordmodel.RecordMutationExecution{WorkspaceID: "workspace-a", Operation: "import", ObjectKey: "customer", IdempotencyKey: "retryable-import"},
+		RequestFingerprint: "same-import", LeaseOwner: "runtime-a", LeaseTTL: time.Minute, Now: now,
+	}
+	claim, err := repository.TryBeginRecordMutation(t.Context(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed, err := repository.CompleteRecordMutationExecution(t.Context(), recordmodel.RecordMutationCompletion{
+		WorkspaceID: claim.Execution.WorkspaceID, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		Result: map[string]any{}, ResponseStatus: 503, ErrorCode: "backend.storage.unavailable", Retryable: true, ExpiresAt: now.Add(time.Hour), Now: now,
+	})
+	if err != nil || failed.Status != string(idempotency.StatusFailedRetryable) {
+		t.Fatalf("failed=%+v err=%v", failed, err)
+	}
+	request.LeaseOwner, request.Now = "runtime-b", now.Add(time.Second)
+	reclaimed, err := repository.TryBeginRecordMutation(t.Context(), request)
+	if err != nil || reclaimed.Decision != idempotency.DecisionAcquired || reclaimed.Execution.Status != string(idempotency.StatusProcessing) || reclaimed.Execution.ResponseStatus != 0 || reclaimed.Execution.ErrorCode != "" || reclaimed.Execution.FencingToken != claim.Execution.FencingToken+1 {
+		t.Fatalf("reclaimed=%+v err=%v", reclaimed, err)
+	}
+}
+
 func TestRecordMutationExecutionWorkspaceScopeDoesNotConflictOrLeakReplay(t *testing.T) {
 	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "record-workspace-isolation.db")})
 	if err != nil {

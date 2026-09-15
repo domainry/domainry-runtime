@@ -57,6 +57,11 @@ func (p *createExecutionProbe) TryBeginRecordMutation(_ context.Context, request
 		decision := idempotency.DecisionReplay
 		if p.execution.RequestFingerprint != request.RequestFingerprint {
 			decision = idempotency.DecisionFingerprintConflict
+		} else if p.execution.Status == string(idempotency.StatusFailedRetryable) {
+			p.execution.Status, p.execution.LeaseOwner = string(idempotency.StatusProcessing), request.LeaseOwner
+			p.execution.ResponseStatus, p.execution.ErrorCode = 0, ""
+			p.execution.FencingToken++
+			decision = idempotency.DecisionAcquired
 		}
 		return recordmodel.RecordMutationClaimResult{Decision: decision, Execution: p.execution}, nil
 	}
@@ -77,6 +82,28 @@ func TestCreateReplayRechecksPermissionBeforeReadingReceipt(t *testing.T) {
 	})
 	if _, err := service.CreateIdempotent(t.Context(), "customer", map[string]any{"name": "Acme"}, "existing-key", principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}); apperror.CodeOf(err) != "backend.record.permission_denied" || executions.beginCalls != 0 {
 		t.Fatalf("permission replay error=%v receipt reads=%d", err, executions.beginCalls)
+	}
+}
+
+func TestCreateIdempotentValidationFailureCompletesTerminalReceipt(t *testing.T) {
+	executions := &createExecutionProbe{}
+	service := NewRecordCreateApplicationService(RecordCreateDependencies{
+		Repository: &createRepositoryProbe{},
+		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
+			return definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}, nil
+		},
+		CanWrite:         func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
+		ExecutionRuntime: recordruntime.NewRecordMutationExecutionRuntime(executions),
+	})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator"}, RequestID: "request-a"})
+	for attempt := 0; attempt < 2; attempt++ {
+		_, err := service.CreateIdempotent(t.Context(), "customer", map[string]any{"unknown": "private-value"}, "invalid-create", principal)
+		if apperror.KindOf(err) != apperror.KindBadRequest || apperror.CodeOf(err) != "backend.validation.unknown_field" {
+			t.Fatalf("attempt=%d err=%v", attempt, err)
+		}
+	}
+	if executions.execution.Status != string(idempotency.StatusFailedTerminal) || executions.execution.ResponseStatus != 400 || executions.execution.ErrorCode != "backend.validation.unknown_field" || executions.commitCalls != 1 {
+		t.Fatalf("execution=%+v completions=%d", executions.execution, executions.commitCalls)
 	}
 }
 
@@ -246,7 +273,17 @@ func (p *createExecutionProbe) CommitRecordMutationExecution(_ context.Context, 
 
 func (p *createExecutionProbe) CompleteRecordMutationExecution(_ context.Context, completion recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error) {
 	p.commitCalls++
+	p.execution.ResponseStatus, p.execution.ErrorCode = completion.ResponseStatus, completion.ErrorCode
 	p.execution.Status = string(idempotency.StatusSucceeded)
+	if result, ok := completion.Result.(recordmodel.Record); ok {
+		p.execution.Result = result
+	}
+	if completion.ErrorCode != "" {
+		p.execution.Status = string(idempotency.StatusFailedTerminal)
+		if completion.Retryable {
+			p.execution.Status = string(idempotency.StatusFailedRetryable)
+		}
+	}
 	return p.execution, nil
 }
 
@@ -369,6 +406,33 @@ func TestCreateServiceReturnsIdempotentReplayWithoutCommit(t *testing.T) {
 	}
 	if created.ID != replay.ID || !audited || repository.commit.Operation != "" {
 		t.Fatalf("replay=%#v audited=%v commit=%#v", created, audited, repository.commit)
+	}
+}
+
+func TestCreateCallerKeyCompletesSemanticReplayReceipt(t *testing.T) {
+	repository := &createRepositoryProbe{}
+	executions := &createExecutionProbe{}
+	replay := recordmodel.Record{ID: "customer-existing", Data: map[string]any{"name": "Existing"}}
+	service := NewRecordCreateApplicationService(RecordCreateDependencies{
+		Repository: repository,
+		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
+			return definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}, nil
+		},
+		CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
+		FindReplay: func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) (recordmodel.Record, bool, error) {
+			return replay, true, nil
+		},
+		ExecutionRuntime: recordruntime.NewRecordMutationExecutionRuntime(executions),
+	})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}, RequestID: "request-a"})
+	for attempt := 0; attempt < 2; attempt++ {
+		created, err := service.CreateIdempotent(t.Context(), "customer", map[string]any{"name": "Existing"}, "semantic-replay", principal)
+		if err != nil || created.ID != replay.ID {
+			t.Fatalf("attempt=%d created=%+v err=%v", attempt, created, err)
+		}
+	}
+	if executions.execution.Status != string(idempotency.StatusSucceeded) || executions.commitCalls != 1 || repository.commit.Operation != "" {
+		t.Fatalf("execution=%+v completions=%d commit=%+v", executions.execution, executions.commitCalls, repository.commit)
 	}
 }
 
