@@ -7,7 +7,6 @@ import (
 	"io"
 	"os/exec"
 	"sync"
-	"syscall"
 
 	"github.com/creack/pty"
 	agentsdk "github.com/domainry/domainry-agent-sdk"
@@ -114,7 +113,7 @@ func (r *Runtime) processStart(ctx context.Context, key string, raw json.RawMess
 		return failed("coding_process_limit")
 	}
 	r.mu.Unlock()
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	configureProcessGroup(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return failed("coding_process_unavailable")
@@ -237,9 +236,7 @@ func (r *Runtime) processStop(key string, raw json.RawMessage, terminal bool) ag
 		return failed(map[bool]string{true: "coding_terminal_unavailable", false: "coding_process_unavailable"}[terminal])
 	}
 	if p.cmd != nil && p.cmd.Process != nil {
-		if err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGTERM); err != nil {
-			_ = p.cmd.Process.Signal(syscall.SIGTERM)
-		}
+		_ = terminateProcessGroup(p.cmd.Process, false)
 	}
 	return completed(map[string]any{"kind": map[bool]string{true: "terminal", false: "process"}[terminal], map[bool]string{true: "terminal_id", false: "process_id"}[terminal]: id, "status": "stopping"})
 }

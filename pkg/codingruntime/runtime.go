@@ -16,7 +16,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -328,15 +327,11 @@ func stopProcess(p *processState) {
 		_ = p.in.Close()
 	}
 	if p.cmd != nil && p.cmd.Process != nil {
-		if err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGTERM); err != nil {
-			_ = p.cmd.Process.Signal(syscall.SIGTERM)
-		}
+		_ = terminateProcessGroup(p.cmd.Process, false)
 		select {
 		case <-p.done:
 		case <-time.After(500 * time.Millisecond):
-			if err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL); err != nil {
-				_ = p.cmd.Process.Kill()
-			}
+			_ = terminateProcessGroup(p.cmd.Process, true)
 		}
 	}
 }
