@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
@@ -25,6 +26,8 @@ type BusinessSeedReferenceCandidate struct {
 // ProjectStartupOptions carries trusted, process-local bootstrap inputs that
 // do not belong in public or persisted Runtime configuration.
 type ProjectStartupOptions struct {
+	ConversationCodeRuntime         agentsdk.ConversationCodeRuntime
+	ConversationCodingRuntime       agentsdk.ConversationCodingRuntime
 	BusinessSeedReferenceCandidates []BusinessSeedReferenceCandidate
 	ProjectNavigationCatalog        identitysdk.ProjectNavigationCatalog
 	// AnalysisTableSource is a trusted public data-owner port assembled by the

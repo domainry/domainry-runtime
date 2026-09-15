@@ -12,7 +12,7 @@ import (
 func newRecordQueryPolicyService(services *runtimeAssembly) *recordservice.RecordQueryPolicyDomainService {
 	return recordservice.NewRecordQueryPolicyDomainService(recordservice.RecordQueryPolicyDependencies{
 		Objects: func() []definitionmodel.ObjectSchema {
-			return services.Schema().Objects
+			return recordSchemaObjects(services)
 		},
 		ReportObjects: func() map[string]struct{} {
 			services.mu.RLock()

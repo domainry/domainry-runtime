@@ -24,6 +24,9 @@
 # backend.upload.subject_binding_denied. The store refuses a blank workspace or
 # identifier and then scopes every read through NewWorkspaceSelectBuilder on
 # that workspace. None of the four substitutes a workspace or tenant.
+# 2026-09-16 review: action and workflow receipt readers reject blank request, receipt or subject workspaces; workflow withdrawal refuses a blank workspace. These five additions fail closed and never select a fallback workspace.
+runtime/application/action/action_invocation_receipt_read.go|887c5c451c24ca0c
+runtime/application/action/action_invocation_receipt_read.go|f7281c25559cf6ce
 runtime/application/action/action_workspace_aggregate_execution.go|5bb28c1937a21188
 runtime/application/action/action_workspace_identity_usage_execution.go|33146e63c53c252b
 runtime/application/action/action_workspace_identity_usage_execution.go|4555daacc7fce16c
@@ -55,6 +58,8 @@ runtime/application/upload/upload_subject_registry.go|256e805788613c3d
 runtime/application/upload/upload_subject_registry.go|ce800c2d21c30df5
 runtime/application/workflow/workflow_agent_capability_completion.go|a0f007c7d608a730
 runtime/application/workflow/workflow_agent_invocation_application_service.go|4a61a3d45199a286
+runtime/application/workflow/workflow_agent_receipt_read.go|3163cd0573c216d4
+runtime/application/workflow/workflow_agent_receipt_read.go|f7281c25559cf6ce
 runtime/application/workflow/workflow_principal_resolver_application_service.go|a7621539cdd54a6e
 runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
 runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
@@ -95,6 +100,7 @@ runtime/infrastructure/persistence/database/subject_write_fence.go|3933b62c3fd70
 runtime/infrastructure/persistence/database/transaction/boundary_intent_store.go|b2e5ab60c1900c7a
 runtime/infrastructure/persistence/database/upload_subjects.go|1852fa1245f38ae5
 runtime/infrastructure/persistence/database/upload_subjects.go|293422872c41abac
+runtime/infrastructure/persistence/database/workflow_withdrawal.go|d9cd8d473cf6d978
 runtime/infrastructure/persistence/database/workspace_authority_migration.go|0b077f6dc4679960
 runtime/infrastructure/persistence/database/workspace_authority_migration.go|a6eebb2c3352d05c
 runtime/infrastructure/persistence/database/workspace_authority_migration.go|cdc02830ba5f9cbf

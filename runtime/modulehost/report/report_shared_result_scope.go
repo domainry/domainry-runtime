@@ -65,8 +65,86 @@ func sharedRecordProjectionCovered(source, reader record.RecordListQuery) bool {
 }
 
 func sharedRecordScopeCovered(source, reader *record.RecordScopeExpression, depth int) bool {
+	validationBudget := 4096
+	if !sharedRecordScopeValid(source, depth, &validationBudget) || !sharedRecordScopeValid(reader, depth, &validationBudget) {
+		return false
+	}
 	remaining := 4096
 	return sharedRecordScopeImplication(source, reader, depth, &remaining)
+}
+
+// Validate the whole compiled tree before proving any branch. These are the
+// operators accepted by the Record storage boundary; a matching valid sibling
+// cannot hide an unsupported extension or a context-dependent relation.
+func sharedRecordScopeValid(scope *record.RecordScopeExpression, depth int, remaining *int) bool {
+	if scope == nil {
+		return true
+	}
+	if depth > 32 || *remaining <= 0 || scope.RelationExists {
+		return false
+	}
+	*remaining = *remaining - 1
+	switch scope.Operator {
+	case "and", "or", "not":
+		if scope.FieldKey != "" || len(scope.Values) != 0 || len(scope.Path) != 0 || scope.Operator == "not" && len(scope.Children) != 1 || scope.Operator != "not" && len(scope.Children) < 2 {
+			return false
+		}
+		for i := range scope.Children {
+			if !sharedRecordScopeValid(&scope.Children[i], depth+1, remaining) {
+				return false
+			}
+		}
+		return true
+	case "eq", "in", "prefix", "starts_with", "exists", "not_exists":
+		if scope.FieldKey == "" || len(scope.Children) != 0 {
+			return false
+		}
+		switch scope.Operator {
+		case "eq", "prefix", "starts_with":
+			return len(scope.Values) == 1
+		case "exists", "not_exists":
+			return len(scope.Values) == 0
+		}
+		return true
+	}
+	return false
+}
+
+// Record compiles empty issued IN claims to FALSE, including at NULL rows.
+// Its negation is TRUE; do not mistake it for a normal nullable comparison.
+func sharedRecordScopeConstant(scope *record.RecordScopeExpression) (bool, bool) {
+	if scope == nil {
+		return true, true
+	}
+	if scope.Operator == "in" && len(scope.Values) == 0 && len(scope.Path) == 0 {
+		return false, true
+	}
+	if scope.Operator == "not" {
+		value, known := sharedRecordScopeConstant(&scope.Children[0])
+		return !value, known
+	}
+	return false, false
+}
+
+func sharedRecordScopeNotEquivalent(scope *record.RecordScopeExpression) *record.RecordScopeExpression {
+	if scope.Operator != "not" {
+		return nil
+	}
+	child := &scope.Children[0]
+	if child.Operator == "not" {
+		return &child.Children[0]
+	}
+	// IS NULL and IS NOT NULL are complementary only at the same direct
+	// column. A relation-membership expression is not a nullable-column test.
+	if len(child.Path) == 0 && (child.Operator == "exists" || child.Operator == "not_exists") {
+		equivalent := *child
+		equivalent.Operator = "exists"
+		if child.Operator == "exists" {
+			equivalent.Operator = "not_exists"
+		}
+		return &equivalent
+	}
+	return nil
 }
 
 func sharedRecordScopeImplication(source, reader *record.RecordScopeExpression, depth int, remaining *int) bool {
@@ -80,8 +158,26 @@ func sharedRecordScopeImplication(source, reader *record.RecordScopeExpression, 
 	if reader == nil {
 		return true
 	}
+	if value, known := sharedRecordScopeConstant(reader); known && value {
+		return true
+	}
+	if value, known := sharedRecordScopeConstant(source); known && !value {
+		return true
+	}
 	if source == nil || source.RelationExists || reader.RelationExists {
 		return false
+	}
+	if equivalent := sharedRecordScopeNotEquivalent(source); equivalent != nil {
+		return sharedRecordScopeImplication(equivalent, reader, depth+1, remaining)
+	}
+	if equivalent := sharedRecordScopeNotEquivalent(reader); equivalent != nil {
+		return sharedRecordScopeImplication(source, equivalent, depth+1, remaining)
+	}
+	if source.Operator == "not" && reader.Operator == "not" {
+		// The supported atom proofs preserve FALSE <= UNKNOWN <= TRUE;
+		// AND/OR preserve that order and SQL NOT reverses it. True-row
+		// implication alone would be insufficient at nullable fields.
+		return sharedRecordScopeImplication(&reader.Children[0], &source.Children[0], depth+1, remaining)
 	}
 	if reader.Operator == "and" && len(reader.Children) > 0 {
 		for i := range reader.Children {
@@ -117,12 +213,12 @@ func sharedRecordScopeImplication(source, reader *record.RecordScopeExpression, 
 		if source.Operator == "eq" && len(source.Values) != 1 || reader.Operator == "eq" && len(reader.Values) != 1 {
 			return false
 		}
+		allowed := make(map[string]struct{}, len(reader.Values))
+		for _, value := range reader.Values {
+			allowed[value] = struct{}{}
+		}
 		for _, value := range source.Values {
-			found := false
-			for _, allowed := range reader.Values {
-				found = found || value == allowed
-			}
-			if !found {
+			if _, found := allowed[value]; !found {
 				return false
 			}
 		}
@@ -132,7 +228,7 @@ func sharedRecordScopeImplication(source, reader *record.RecordScopeExpression, 
 	// extensions and context-dependent relationship predicates stay blocked.
 	if len(source.Children) == 0 && len(reader.Children) == 0 {
 		switch source.Operator {
-		case "lt", "lte", "gt", "gte", "prefix", "starts_with", "is_null", "is_not_null":
+		case "prefix", "starts_with", "exists", "not_exists":
 			return reflect.DeepEqual(source, reader)
 		}
 	}

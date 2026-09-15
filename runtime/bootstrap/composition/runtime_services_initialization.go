@@ -8,7 +8,6 @@ import (
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
-	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 )
@@ -89,11 +88,12 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		auditExportTokenKey:                 append([]byte(nil), deps.AuditExportTokenKey...),
 		workerDependencies:                  workerplatform.NormalizeDependencies(deps.Worker),
 	}
-	services.RecordSchemaSnapshotProvider = &RecordSchemaSnapshotProvider{snapshot: func() appschemamodel.ApplicationSchemaSnapshot { return recordSchemaSnapshot(services) }}
+	ensureRecordSchemaSnapshotProvider(services)
 	services.ActionExecutionRuntime = actionruntime.NewActionExecutionRuntime(deps.ActionExecutions)
 	identityPrincipals := deps.IdentityPrincipals
 	services.identityPrincipals = identityPrincipals
 	services.agentScheduledTasks = deps.AgentScheduledTasks
+	services.agentBusinessEvents = deps.AgentBusinessEvents
 	services.agentAuthorizationService = agentapplication.NewAgentAuthorizationApplicationService(agentapplication.AgentAuthorizationDependencies{Principals: identityPrincipals, Schema: services.RecordSchemaSnapshotProvider, Records: runtimeAgentRecordVisibility{records: services}})
 	services.agentTaskDispatchService = agentapplication.NewAgentTaskDispatchApplicationService(services.agentAuthorizationService, services.workerDependencies.Clock, services.workerDependencies.IDs)
 	services.agentTaskRunner = deps.AgentTaskRunner

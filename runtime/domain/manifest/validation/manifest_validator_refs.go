@@ -233,6 +233,10 @@ func (state *validationState) validateIntegrationEventMappings() {
 	for _, workflow := range state.manifest.Workflows {
 		workflows[strings.TrimSpace(workflow.Key)] = workflow
 	}
+	agents := map[string]bool{}
+	for _, agent := range state.manifest.Agents {
+		agents[strings.TrimSpace(agent.Key)] = true
+	}
 	connectionsByProvider := map[string]bool{}
 	for _, connection := range state.manifest.Integrations.Connections {
 		connectionsByProvider[strings.TrimSpace(connection.ProviderKey)] = true
@@ -276,8 +280,32 @@ func (state *validationState) validateIntegrationEventMappings() {
 			if strings.TrimSpace(mapping.RecordID) == "" && strings.TrimSpace(mapping.RecordIDPath) == "" {
 				state.add(path+".record_id", "record_id or record_id_path is required")
 			}
+		case "agent_task":
+			if !agents[strings.TrimSpace(mapping.AgentID)] {
+				state.add(path+".agent_id", "must reference a finite Agent declared by this manifest")
+			}
+			if strings.TrimSpace(mapping.ConversationID) == "" {
+				state.add(path+".conversation_id", "is required")
+			}
+			switch strings.TrimSpace(mapping.AgentTaskMode) {
+			case "start":
+				if strings.TrimSpace(mapping.RelatedTaskID) != "" || strings.TrimSpace(mapping.RelatedTaskIDPath) != "" {
+					state.add(path+".related_task_id", "must be empty for start mode")
+				}
+			case "wake":
+				if strings.TrimSpace(mapping.RelatedTaskID) == "" && strings.TrimSpace(mapping.RelatedTaskIDPath) == "" {
+					state.add(path+".related_task_id", "related_task_id or related_task_id_path is required for wake mode")
+				}
+			default:
+				state.add(path+".agent_task_mode", "must be start or wake")
+			}
+			if _, mappedGoal := mapping.AgentInput["goal"]; !mappedGoal {
+				if goal, present := mapping.Payload["goal"]; !present || strings.TrimSpace(fmt.Sprint(goal)) == "" {
+					state.add(path+".agent_input", "goal must be supplied by agent_input or payload")
+				}
+			}
 		default:
-			state.add(path+".target_type", "must be action or workflow")
+			state.add(path+".target_type", "must be action, workflow or agent_task")
 		}
 	}
 }

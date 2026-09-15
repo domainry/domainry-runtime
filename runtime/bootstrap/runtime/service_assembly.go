@@ -331,6 +331,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	reportExportPrepareReceipts := reportpersistence.NewReportExportPrepareReceiptStore(store)
 	var agentTaskRunner agentsdk.TaskRunner
 	var agentScheduledTasks agentsdk.ScheduledConversationTaskService
+	var agentBusinessEvents agentsdk.BusinessEventConversationTaskService
 	if agentBinding != nil {
 		agentTaskRunner = agentBinding.TaskRunner()
 		if agentBinding.Descriptor().HasCapability(agentsdk.CapabilityScheduledConversationTask) {
@@ -341,6 +342,16 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			agentScheduledTasks, ok = conversations.Conversations().(agentsdk.ScheduledConversationTaskService)
 			if !ok || agentScheduledTasks == nil {
 				return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding advertises scheduled conversation tasks without the task service")
+			}
+		}
+		if agentBinding.Descriptor().HasCapability(agentsdk.CapabilityBusinessEventConversationTask) {
+			conversations, ok := agentBinding.(agentsdk.ConversationBinding)
+			if !ok || conversations.Conversations() == nil {
+				return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding advertises business-event conversation tasks without a conversation binding")
+			}
+			agentBusinessEvents, ok = conversations.Conversations().(agentsdk.BusinessEventConversationTaskService)
+			if !ok || agentBusinessEvents == nil {
+				return runtimeServiceAssembly{}, fmt.Errorf("Agent Binding advertises business-event conversation tasks without the task service")
 			}
 		}
 	}
@@ -378,6 +389,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			IdentityPrincipals:                  identityPrincipals,
 			AgentTaskRunner:                     agentTaskRunner,
 			AgentScheduledTasks:                 agentScheduledTasks,
+			AgentBusinessEvents:                 agentBusinessEvents,
 			ActionRuntimeRevision:               cfg.RuntimeVersion,
 			ActionProjectRevision:               projectRevision,
 			ActionMetadataRevision:              metadataRevision,

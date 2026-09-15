@@ -1,12 +1,17 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	apperror "github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -49,6 +54,7 @@ type runtimeIntegrationTriggerSink struct {
 	workflows interface {
 		RunIntegrationWorkflow(context.Context, string, map[string]any, principalmodel.Principal) (workflowmodel.WorkflowRunResult, error)
 	}
+	agents     agentsdk.BusinessEventConversationTaskService
 	principals identitysdk.PrincipalResolver
 }
 
@@ -57,7 +63,7 @@ func newRuntimeIntegrationTriggerSink(records *composition.RuntimeServices, prin
 		return runtimeIntegrationTriggerSink{principals: principals}
 	}
 	applications := records.Applications()
-	return runtimeIntegrationTriggerSink{actions: applications.Actions, workflows: applications.Workflows, principals: principals}
+	return runtimeIntegrationTriggerSink{actions: applications.Actions, workflows: applications.Workflows, agents: records.AgentBusinessEvents(), principals: principals}
 }
 
 func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request integrationsdk.TriggerRequest) (integrationsdk.RuntimeExecutionReceipt, error) {
@@ -101,6 +107,41 @@ func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request inte
 			receipt.Status, receipt.ErrorCode = "failed", apperror.CodeOf(runErr)
 		}
 		return receipt, runErr
+	case "agent_task":
+		if s.agents == nil {
+			err := fmt.Errorf("Runtime Agent business-event task application is unavailable")
+			return runtimeIntegrationReceipt(request, "", "failed", "backend.integration.runtime_agent_unavailable"), err
+		}
+		if !principal.Known || strings.TrimSpace(principal.UserID) == "" || strings.TrimSpace(request.Principal.ActorID) == "" {
+			err := fmt.Errorf("Runtime Integration Agent trigger requires a currently resolved human principal")
+			return runtimeIntegrationReceipt(request, "", "failed", "backend.integration.runtime_agent_principal_required"), err
+		}
+		start, decodeErr := integrationAgentConversationTaskStart(request.Target.Input)
+		if decodeErr != nil {
+			return runtimeIntegrationReceipt(request, "", "failed", "backend.integration.runtime_agent_input_invalid"), decodeErr
+		}
+		receivedAt, parseErr := time.Parse(time.RFC3339Nano, request.Source.ReceivedAt)
+		if parseErr != nil {
+			return runtimeIntegrationReceipt(request, "", "failed", "backend.integration.runtime_agent_source_invalid"), parseErr
+		}
+		serviceContext := agentsdk.WithAuthorizedServiceAction(ctx, agentsdk.ActionAgentBusinessEventConversationTaskAccept, agentsdk.AgentRuntimeServiceAudience)
+		receipt, acceptErr := s.agents.AcceptBusinessEventConversationTask(serviceContext, agentsdk.BusinessEventConversationTaskRequest{
+			ContractVersion: agentsdk.BusinessEventConversationTaskContractVersion,
+			Authority:       agentsdk.ConversationAuthority{Known: true, WorkspaceID: principal.WorkspaceID, UserID: principal.UserID, RoleKey: principal.RoleKey},
+			ConversationID:  request.Target.ConversationID, AgentID: request.Target.AgentID, Mode: request.Target.AgentTaskMode, RelatedTaskID: request.Target.RelatedTaskID,
+			IdempotencyKey: request.IdempotencyKey,
+			Source:         agentsdk.ConversationBusinessEventSource{EventID: request.EventID, Provider: request.Source.Provider, EventType: request.Source.EventType, ExternalID: request.Source.ExternalID, ReceivedAt: receivedAt},
+			Rule:           agentsdk.ConversationBusinessEventRule{Key: request.MappingKey, Revision: request.MappingRevision}, Input: start,
+		})
+		status := "accepted"
+		if receipt.Replay {
+			status = "replayed"
+		}
+		result := runtimeIntegrationReceipt(request, receipt.Task.ID, status, "")
+		if acceptErr != nil {
+			result.Status, result.ErrorCode = "failed", apperror.CodeOf(acceptErr)
+		}
+		return result, acceptErr
 	default:
 		return integrationsdk.RuntimeExecutionReceipt{}, fmt.Errorf("Runtime Integration trigger target type %q is unsupported", request.Target.Type)
 	}
@@ -152,10 +193,75 @@ func validateRuntimeIntegrationTrigger(request integrationsdk.TriggerRequest) er
 		if strings.TrimSpace(request.Target.WorkflowKey) == "" {
 			return fmt.Errorf("Runtime Integration workflow trigger requires workflow_key")
 		}
+	case "agent_task":
+		if strings.TrimSpace(request.Target.AgentID) == "" || strings.TrimSpace(request.Target.ConversationID) == "" {
+			return fmt.Errorf("Runtime Integration Agent trigger requires agent_id and conversation_id")
+		}
+		switch strings.TrimSpace(request.Target.AgentTaskMode) {
+		case "start":
+			if strings.TrimSpace(request.Target.RelatedTaskID) != "" {
+				return fmt.Errorf("Runtime Integration Agent start trigger cannot include related_task_id")
+			}
+		case "wake":
+			if strings.TrimSpace(request.Target.RelatedTaskID) == "" {
+				return fmt.Errorf("Runtime Integration Agent wake trigger requires related_task_id")
+			}
+		default:
+			return fmt.Errorf("Runtime Integration Agent trigger mode is invalid")
+		}
+		if strings.TrimSpace(request.MappingRevision) == "" || len(request.MappingRevision) != 64 {
+			return fmt.Errorf("Runtime Integration trigger mapping_revision is invalid")
+		}
+		if decoded, err := hex.DecodeString(request.MappingRevision); err != nil || len(decoded) != 32 || strings.ToLower(request.MappingRevision) != request.MappingRevision {
+			return fmt.Errorf("Runtime Integration trigger mapping_revision is invalid")
+		}
+		for name, value := range map[string]string{"source.provider": request.Source.Provider, "source.event_type": request.Source.EventType, "source.external_id": request.Source.ExternalID, "source.received_at": request.Source.ReceivedAt} {
+			if strings.TrimSpace(value) == "" {
+				return fmt.Errorf("Runtime Integration trigger %s is required", name)
+			}
+		}
+		if _, err := time.Parse(time.RFC3339Nano, request.Source.ReceivedAt); err != nil {
+			return fmt.Errorf("Runtime Integration trigger source.received_at is invalid")
+		}
 	default:
 		return fmt.Errorf("Runtime Integration trigger target type %q is unsupported", request.Target.Type)
 	}
 	return nil
+}
+
+func integrationAgentConversationTaskStart(input map[string]any) (agentsdk.ConversationTaskStart, error) {
+	raw, err := json.Marshal(input)
+	if err != nil || len(raw) == 0 {
+		return agentsdk.ConversationTaskStart{}, fmt.Errorf("encode mapped Agent input")
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || fields == nil {
+		return agentsdk.ConversationTaskStart{}, fmt.Errorf("decode mapped Agent input")
+	}
+	var start agentsdk.ConversationTaskStart
+	if goal, ok := fields["goal"]; !ok || json.Unmarshal(goal, &start.Goal) != nil || strings.TrimSpace(start.Goal) == "" {
+		return agentsdk.ConversationTaskStart{}, fmt.Errorf("mapped Agent goal is required")
+	}
+	for key, target := range map[string]any{"allowed_tools": &start.AllowedTools, "budget": &start.Budget, "model": &start.Model, "brief": &start.Brief} {
+		value, ok := fields[key]
+		if !ok {
+			continue
+		}
+		decoder := json.NewDecoder(bytes.NewReader(value))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(target) != nil {
+			return agentsdk.ConversationTaskStart{}, fmt.Errorf("mapped Agent %s is invalid", key)
+		}
+		if err := decoder.Decode(new(any)); err != io.EOF {
+			return agentsdk.ConversationTaskStart{}, fmt.Errorf("mapped Agent %s is invalid", key)
+		}
+	}
+	var compact bytes.Buffer
+	if json.Compact(&compact, raw) != nil {
+		return agentsdk.ConversationTaskStart{}, fmt.Errorf("compact mapped Agent input")
+	}
+	start.Input = compact.String()
+	return start, nil
 }
 
 func runtimeIntegrationReceipt(request integrationsdk.TriggerRequest, executionID, status, errorCode string) integrationsdk.RuntimeExecutionReceipt {

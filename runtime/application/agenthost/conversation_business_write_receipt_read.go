@@ -19,6 +19,14 @@ type conversationBusinessActionReceiptReader interface {
 	ReadInvocationReceipt(context.Context, actionmodel.ActionInvocation) (actionapplication.ActionInvocationReceipt, error)
 }
 
+type conversationBusinessSharedActionReceiptReader interface {
+	ReadSharedInvocationReceipt(context.Context, actionmodel.ActionInvocation, principalmodel.Principal) (actionapplication.ActionInvocationReceipt, error)
+}
+
+type conversationBusinessSharedWorkflowReceiptReader interface {
+	ReadSharedAgentWorkflowReceipt(context.Context, string, map[string]any, string, principalmodel.Principal, principalmodel.Principal) (workflowapplication.AgentWorkflowReceipt, bool, error)
+}
+
 type conversationBusinessWorkflowReceiptReader interface {
 	AgentWorkflowReceiptDefinition(context.Context, string, principalmodel.Principal) (definitionmodel.WorkflowSchema, error)
 	ReadAgentWorkflowReceipt(context.Context, string, map[string]any, string, principalmodel.Principal) (workflowapplication.AgentWorkflowReceipt, bool, error)
@@ -46,13 +54,17 @@ func (h *ConversationBusinessHost) unchangedReceiptReadAuthority(ctx context.Con
 }
 
 func (h *ConversationBusinessHost) readBusinessActionReceipt(ctx context.Context, e agent.ConversationBusinessEvidence, a agent.ConversationAuthority) error {
+	return h.readBusinessActionReceiptForProducer(ctx, e, a, a)
+}
+
+func (h *ConversationBusinessHost) readBusinessActionReceiptForProducer(ctx context.Context, e agent.ConversationBusinessEvidence, a, producer agent.ConversationAuthority) error {
 	reader, ok := h.actions.(conversationBusinessActionReceiptReader)
 	if !ok {
 		return &agent.Error{Class: "unavailable", Code: agent.BusinessResultReadUnsupportedCode}
 	}
 	var q agent.ConversationBusinessAction
 	var saved agent.ConversationBusinessActionResult
-	if !h.ownedWriteEvidence(e, a) || !decodeBusinessReceipt(e.Input, &q) || !decodeBusinessReceipt(e.Data, &saved) || saved.Status != "completed" || saved.InvocationID == "" || len(saved.InvocationID) > 256 {
+	if !h.ownedWriteEvidence(e, producer) || !decodeBusinessReceipt(e.Input, &q) || !decodeBusinessReceipt(e.Data, &saved) || saved.Status != "completed" || saved.InvocationID == "" || len(saved.InvocationID) > 256 {
 		return conversationBusinessError("forbidden")
 	}
 	_, in, err := h.prepareBusinessActionAccess(ctx, q, a, true)
@@ -61,7 +73,23 @@ func (h *ConversationBusinessHost) readBusinessActionReceipt(ctx context.Context
 	}
 	policy := h.businessPolicyDigest(ctx, in.Principal)
 	in.IdempotencyKey = saved.InvocationID
-	stored, err := reader.ReadInvocationReceipt(ctx, in)
+	var stored actionapplication.ActionInvocationReceipt
+	if producer == a {
+		stored, err = reader.ReadInvocationReceipt(ctx, in)
+	} else {
+		shared, ok := h.actions.(conversationBusinessSharedActionReceiptReader)
+		if !ok {
+			return &agent.Error{Class: "unavailable", Code: agent.BusinessResultReadUnsupportedCode}
+		}
+		p, resolveErr := h.principal(ctx, producer)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		if err := h.readBusinessActionReceipt(ctx, e, producer); err != nil {
+			return err
+		}
+		stored, err = shared.ReadSharedInvocationReceipt(ctx, in, p)
+	}
 	if err != nil || !stored.Found || stored.Status != string(idempotency.StatusSucceeded) {
 		return conversationBusinessError("forbidden")
 	}
@@ -81,13 +109,17 @@ func (h *ConversationBusinessHost) readBusinessActionReceipt(ctx context.Context
 }
 
 func (h *ConversationBusinessHost) readBusinessWorkflowStartReceipt(ctx context.Context, e agent.ConversationBusinessEvidence, a agent.ConversationAuthority) error {
+	return h.readBusinessWorkflowStartReceiptForProducer(ctx, e, a, a)
+}
+
+func (h *ConversationBusinessHost) readBusinessWorkflowStartReceiptForProducer(ctx context.Context, e agent.ConversationBusinessEvidence, a, producer agent.ConversationAuthority) error {
 	reader, ok := h.workflows.(conversationBusinessWorkflowReceiptReader)
 	if !ok {
 		return &agent.Error{Class: "unavailable", Code: agent.BusinessResultReadUnsupportedCode}
 	}
 	var start agent.ConversationWorkflowStart
 	var saved agent.ConversationWorkflowReceipt
-	if !h.ownedWriteEvidence(e, a) || !decodeBusinessReceipt(e.Input, &start) || !decodeBusinessReceipt(e.Data, &saved) || saved.Status != "accepted" || saved.InvocationID == "" || len(saved.InvocationID) > 256 {
+	if !h.ownedWriteEvidence(e, producer) || !decodeBusinessReceipt(e.Input, &start) || !decodeBusinessReceipt(e.Data, &saved) || saved.Status != "accepted" || saved.InvocationID == "" || len(saved.InvocationID) > 256 {
 		return conversationBusinessError("forbidden")
 	}
 	p, data, err := h.prepareBusinessWorkflowAccess(ctx, start, a, true)
@@ -95,7 +127,24 @@ func (h *ConversationBusinessHost) readBusinessWorkflowStartReceipt(ctx context.
 		return err
 	}
 	policy := h.businessPolicyDigest(ctx, p)
-	stored, found, err := reader.ReadAgentWorkflowReceipt(ctx, start.WorkflowKey, data, saved.InvocationID, p)
+	var stored workflowapplication.AgentWorkflowReceipt
+	var found bool
+	if producer == a {
+		stored, found, err = reader.ReadAgentWorkflowReceipt(ctx, start.WorkflowKey, data, saved.InvocationID, p)
+	} else {
+		shared, ok := h.workflows.(conversationBusinessSharedWorkflowReceiptReader)
+		if !ok {
+			return &agent.Error{Class: "unavailable", Code: agent.BusinessResultReadUnsupportedCode}
+		}
+		original, resolveErr := h.principal(ctx, producer)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		if err := h.readBusinessWorkflowStartReceipt(ctx, e, producer); err != nil {
+			return err
+		}
+		stored, found, err = shared.ReadSharedAgentWorkflowReceipt(ctx, start.WorkflowKey, data, saved.InvocationID, p, original)
+	}
 	if err != nil || !found || stored.WorkflowKey != start.WorkflowKey || stored.ExecutionID == "" || stored.ProcessID == "" {
 		return conversationBusinessError("forbidden")
 	}
@@ -113,3 +162,5 @@ func (h *ConversationBusinessHost) readBusinessWorkflowStartReceipt(ctx context.
 
 var _ conversationBusinessActionReceiptReader = (*actionapplication.ActionApplicationService)(nil)
 var _ conversationBusinessWorkflowReceiptReader = (*workflowapplication.WorkflowApplicationService)(nil)
+var _ conversationBusinessSharedActionReceiptReader = (*actionapplication.ActionApplicationService)(nil)
+var _ conversationBusinessSharedWorkflowReceiptReader = (*workflowapplication.WorkflowApplicationService)(nil)

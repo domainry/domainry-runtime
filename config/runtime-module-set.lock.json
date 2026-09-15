@@ -1,6 +1,6 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "97418d07751fee2baf334b7cbe8f96271da4495322a253c33d35b0eaf2f17c88",
+  "set_sha256": "accef415c0e9a045cc9223fdd6f41eaff815f38a4fbeee04e0c59283add88041",
   "modules": [
     {
       "key": "agent",
@@ -10,7 +10,7 @@
       "sdk": "github.com/domainry/domainry-agent-sdk",
       "sdk_version": "v0.1.16",
       "sdk_sum": "h1:/ca4Erz1tsRSRlFSqoyklYyR43VcJT376IELyDH9jzA=",
-      "capability_contract_sha256": "2c887da570ce8809012e3392be039a740e5167d94b6698fa3cb0c5cb92cbbb34"
+      "capability_contract_sha256": "1ab830cfcb15dad14aef651468ec442d658aa2071a917d35e389d9fe0988cd40"
     },
     {
       "key": "audit",
@@ -25,11 +25,11 @@
     {
       "key": "data_exchange",
       "implementation": "github.com/domainry/domainry-data-exchange",
-      "implementation_version": "v0.3.9",
-      "implementation_sum": "h1:qseN/mF4igB+D6ZPVG9HxJZ70+eDjpK/zkxrIR0qlBk=",
+      "implementation_version": "v0.3.10",
+      "implementation_sum": "h1:A+rzbwM+DbQyd6dJmJemoQpZw5DuTWlIKF5t7eGewXI=",
       "sdk": "github.com/domainry/domainry-data-exchange-sdk",
-      "sdk_version": "v0.3.6",
-      "sdk_sum": "h1:8wd/2+AO6VWk4uhOLwIjHlDIai8oYdZ97jw7JJopuG0=",
+      "sdk_version": "v0.3.7",
+      "sdk_sum": "h1:15DeHMrP9M0QKYKUzG6188wqV5QMlcJTdB/qeJ+VcY4=",
       "capability_contract_sha256": "77320bfee8672be5587bf29f82865a9e144ed315479f4b173e4993549bdec218"
     },
     {
@@ -95,12 +95,12 @@
     {
       "key": "report",
       "implementation": "github.com/domainry/domainry-report",
-      "implementation_version": "v0.1.12",
-      "implementation_sum": "h1:td3oHqh5gWirUe2B5zb1uAgSEwwG0ODEDLEuUTmfFXE=",
+      "implementation_version": "v0.1.13",
+      "implementation_sum": "h1:4llnqg1A3rL17jSKOyUtNSGrngQZPSqdaSG3iWgVrtY=",
       "sdk": "github.com/domainry/domainry-report-sdk",
-      "sdk_version": "v0.1.10",
-      "sdk_sum": "h1:eEzRJyxfDu1OvwKg98zda+dk0Qb6daKL80yU66r/gpg=",
-      "capability_contract_sha256": "656e35762f56dd908c2a418344ba96b6969cbffaae65fc5380da228e2f0c5246"
+      "sdk_version": "v0.1.11",
+      "sdk_sum": "h1:IWDuebRiFECUZhErey4XHhzbGe6/GXGktTdRCktoW98=",
+      "capability_contract_sha256": "57f2291c9d3589c372dcac704e85a9457ab22fed739d1b891debf3f41448a69c"
     },
     {
       "key": "scheduler",

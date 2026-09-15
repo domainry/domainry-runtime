@@ -15,6 +15,8 @@ import (
 	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/ratelimit"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	identityevaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
@@ -43,15 +45,18 @@ func (a agentRecordVisibilityAdapter) CanReadAgentRecord(ctx context.Context, ob
 // needed to finish Agent's product Adapter before authorization reconciliation.
 // HTTP mounting remains a later transport step.
 type AgentApplicationHostDependencies struct {
-	RuntimeID            string
-	Application          identitysdk.ApplicationScope
-	Binding              agentsdk.Binding
-	Records              *composition.RuntimeServices
-	Principals           identitysdk.PrincipalResolver
-	RateLimiter          ratelimit.Limiter
-	IntegrationSecretKey string
-	IdentityIssuer       string
-	NotificationEvents   func(context.Context, notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, bool, error)
+	RuntimeID                 string
+	Application               identitysdk.ApplicationScope
+	Binding                   agentsdk.Binding
+	Integration               integrationsdk.Binding
+	Records                   *composition.RuntimeServices
+	Principals                identitysdk.PrincipalResolver
+	RateLimiter               ratelimit.Limiter
+	IntegrationSecretKey      string
+	IdentityIssuer            string
+	NotificationEvents        func(context.Context, notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, bool, error)
+	ConversationCodeRuntime   agentsdk.ConversationCodeRuntime
+	ConversationCodingRuntime agentsdk.ConversationCodingRuntime
 }
 
 // BindAgentApplicationHost closes Agent's application boundary before Runtime
@@ -90,14 +95,69 @@ func BindAgentApplicationHost(dependencies AgentApplicationHostDependencies) err
 	if err != nil {
 		return err
 	}
+	var accounts integrationsdk.ConnectionAccounts
+	var accountReads integrationsdk.ConnectionAccountReads
+	var accountWrites integrationsdk.ConnectionAccountWrites
+	if dependencies.Integration != nil {
+		accountBinding, accountsOK := dependencies.Integration.(integrationsdk.ConnectionAccountsBinding)
+		readBinding, readsOK := dependencies.Integration.(integrationsdk.ConnectionAccountReadsBinding)
+		writeBinding, writesOK := dependencies.Integration.(integrationsdk.ConnectionAccountWritesBinding)
+		if !accountsOK || !readsOK || !writesOK {
+			return fmt.Errorf("Integration Binding does not expose MCP account execution ports")
+		}
+		accounts, accountReads, accountWrites = accountBinding.ConnectionAccounts(), readBinding.ConnectionAccountReads(), writeBinding.ConnectionAccountWrites()
+		if accounts == nil || accountReads == nil || accountWrites == nil {
+			return fmt.Errorf("Integration Binding returned incomplete MCP account execution ports")
+		}
+	}
+	subject := func(ctx context.Context, authority agentsdk.ConversationAuthority, action string) (integrationsdk.ConnectionAccountSubject, error) {
+		principal, err := conversations.ResolveConversationIdentityPrincipal(ctx, authority)
+		if err != nil {
+			return integrationsdk.ConnectionAccountSubject{}, err
+		}
+		return connectionAccountSubjectForPrincipal(principal, action)
+	}
 	followUps := agentFollowUpNotificationPublisher{runtimeID: dependencies.RuntimeID, application: dependencies.Application, principals: dependencies.Principals, publish: dependencies.NotificationEvents}
-	if err := binder.BindApplicationHost(runtimeAgentApplicationHost{interactive: interactive, task: task, proposal: proposal, audit: audit, analysis: analysis, conversations: conversations, followUps: followUps}); err != nil {
+	if err := binder.BindApplicationHost(runtimeAgentApplicationHost{interactive: interactive, task: task, proposal: proposal, audit: audit, analysis: analysis, conversations: conversations, followUps: followUps, accounts: accounts, accountReads: accountReads, accountWrites: accountWrites, accountSubject: subject, codeRuntime: dependencies.ConversationCodeRuntime, codingRuntime: dependencies.ConversationCodingRuntime}); err != nil {
 		return fmt.Errorf("bind Agent application host: %w", err)
 	}
 	if err := validateAgentAuthorizationProjection(dependencies.Binding); err != nil {
 		return fmt.Errorf("validate bound Agent authorization contract: %w", err)
 	}
 	return nil
+}
+
+func connectionAccountSubjectForPrincipal(principal identitysdk.Principal, permissionKey string) (integrationsdk.ConnectionAccountSubject, error) {
+	permissionKey = strings.TrimSpace(permissionKey)
+	separator := strings.LastIndexByte(permissionKey, '.')
+	if separator <= 0 || separator == len(permissionKey)-1 || !principal.Known || principal.AccessBundle == nil {
+		return integrationsdk.ConnectionAccountSubject{}, fmt.Errorf("Integration account subject is unavailable")
+	}
+	workspaceID, userID := strings.TrimSpace(principal.WorkspaceID), strings.TrimSpace(principal.UserID)
+	if workspaceID == "" || userID == "" || strings.TrimSpace(string(principal.AccessBundle.Subject.WorkspaceID)) != workspaceID || strings.TrimSpace(string(principal.AccessBundle.Subject.SubjectID)) != userID {
+		return integrationsdk.ConnectionAccountSubject{}, fmt.Errorf("Integration account subject does not match the principal")
+	}
+	resource, action := permissionKey[:separator], permissionKey[separator+1:]
+	access := integrationsdk.ConnectionAccountAccess{}
+	for _, shared := range []bool{false, true} {
+		ownerUserID := userID
+		if shared {
+			ownerUserID = ""
+		}
+		decision, err := identityevaluator.Evaluate(*principal.AccessBundle, identitysdk.AccessRequest{ObjectKey: resource, Action: action}, identitysdk.ResourceFacts{"workspace_id": workspaceID, "owner_user_id": ownerUserID}, time.Now().UTC())
+		if err != nil {
+			return integrationsdk.ConnectionAccountSubject{}, err
+		}
+		if shared {
+			access.Workspace = decision.Allowed
+		} else {
+			access.Personal = decision.Allowed
+		}
+	}
+	if !access.Personal && !access.Workspace {
+		return integrationsdk.ConnectionAccountSubject{}, fmt.Errorf("Integration connection account scope is denied")
+	}
+	return integrationsdk.ConnectionAccountSubject{WorkspaceID: workspaceID, UserID: userID, Access: access}, nil
 }
 
 func agentAuthorizationProjectionComplete(binding agentsdk.Binding) (bool, error) {
@@ -133,7 +193,7 @@ func (a *httpServerAssembly) bindAgentApplicationHost() {
 	if err := BindAgentApplicationHost(AgentApplicationHostDependencies{
 		RuntimeID:   a.dependencies.RuntimeInstanceID,
 		Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(a.dependencies.Config.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(a.dependencies.Config.IdentityAudience)},
-		Binding:     a.dependencies.AgentBinding, Records: a.dependencies.Records, Principals: a.principals,
+		Binding:     a.dependencies.AgentBinding, Integration: a.dependencies.IntegrationBinding, Records: a.dependencies.Records, Principals: a.principals,
 		RateLimiter: a.dependencies.RateLimiter, IntegrationSecretKey: a.dependencies.Config.IntegrationSecretKey,
 		IdentityIssuer:     a.dependencies.IdentityBinding.Descriptor().Issuer,
 		NotificationEvents: a.dependencies.Records.NotificationEventPublisher(),
@@ -155,13 +215,27 @@ func (a *httpServerAssembly) bindAgentApplicationHost() {
 }
 
 type runtimeAgentApplicationHost struct {
-	conversations *agentapplication.ConversationBusinessHost
-	interactive   agentmodulehost.InteractiveHost
-	task          agentmodulehost.TaskHost
-	proposal      agentmodulehost.ProposalHost
-	audit         agentmodulehost.AuditHost
-	analysis      agentmodulehost.AnalysisHost
-	followUps     agentsdk.ConversationFollowUpPublisher
+	codeRuntime    agentsdk.ConversationCodeRuntime
+	codingRuntime  agentsdk.ConversationCodingRuntime
+	conversations  *agentapplication.ConversationBusinessHost
+	interactive    agentmodulehost.InteractiveHost
+	task           agentmodulehost.TaskHost
+	proposal       agentmodulehost.ProposalHost
+	audit          agentmodulehost.AuditHost
+	analysis       agentmodulehost.AnalysisHost
+	followUps      agentsdk.ConversationFollowUpPublisher
+	accounts       integrationsdk.ConnectionAccounts
+	accountReads   integrationsdk.ConnectionAccountReads
+	accountWrites  integrationsdk.ConnectionAccountWrites
+	accountSubject func(context.Context, agentsdk.ConversationAuthority, string) (integrationsdk.ConnectionAccountSubject, error)
+}
+
+func (h runtimeAgentApplicationHost) ConversationCodeRuntime() agentsdk.ConversationCodeRuntime {
+	return h.codeRuntime
+}
+
+func (h runtimeAgentApplicationHost) ConversationCodingRuntime() agentsdk.ConversationCodingRuntime {
+	return h.codingRuntime
 }
 
 func (h runtimeAgentApplicationHost) ConversationAuthorizer() agentsdk.ConversationToolAuthorizer {

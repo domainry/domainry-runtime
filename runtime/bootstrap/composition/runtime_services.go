@@ -139,6 +139,7 @@ type RuntimeServicesDependencies struct {
 	IdentityPrincipals                  identitysdk.PrincipalResolver
 	AgentTaskRunner                     agentsdk.TaskRunner
 	AgentScheduledTasks                 agentsdk.ScheduledConversationTaskService
+	AgentBusinessEvents                 agentsdk.BusinessEventConversationTaskService
 	BusinessHandlers                    *runtimeext.BusinessHandlerRegistry
 	VerifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 	OpenVerifiedFile                    func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
@@ -202,6 +203,27 @@ func (s *RuntimeServices) BindAgentScheduledTasks(tasks agentsdk.ScheduledConver
 	s.assembly.agentScheduledTasks = tasks
 	s.assembly.targetExecutionService.UseAgentTargetRuntime(scheduledAgentTargetRuntimeAdapter{runtime: s.assembly, principals: s.assembly.identityPrincipals, tasks: tasks})
 	return nil
+}
+
+// BindAgentBusinessEvents completes the same startup cycle for verified
+// Integration events. Integration remains the durable webhook/event owner;
+// Runtime only maps the current Identity principal into Agent's trusted port.
+func (s *RuntimeServices) BindAgentBusinessEvents(events agentsdk.BusinessEventConversationTaskService) error {
+	if s == nil || s.assembly == nil || events == nil {
+		return fmt.Errorf("business-event Agent task binding is incomplete")
+	}
+	if s.assembly.agentBusinessEvents != nil && s.assembly.agentBusinessEvents != events {
+		return fmt.Errorf("business-event Agent task binding already completed")
+	}
+	s.assembly.agentBusinessEvents = events
+	return nil
+}
+
+func (s *RuntimeServices) AgentBusinessEvents() agentsdk.BusinessEventConversationTaskService {
+	if s == nil || s.assembly == nil {
+		return nil
+	}
+	return s.assembly.agentBusinessEvents
 }
 
 func newRuntimeServicesAssembly(ctx context.Context, config RuntimeServicesConfig) *runtimeAssembly {

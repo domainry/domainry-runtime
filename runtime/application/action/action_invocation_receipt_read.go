@@ -40,13 +40,36 @@ func (s *ActionApplicationService) receiptRecordReadable(ctx context.Context, ob
 }
 
 func (s *ActionApplicationService) authorizeInvocationReceipt(ctx context.Context, in actionmodel.ActionInvocation, action definitionmodel.ActionSchema) error {
+	return s.authorizeInvocationReceiptOwner(ctx, in, action, in.Principal.UserID)
+}
+
+// Receipt discovery discloses only the current published contract. It uses the
+// original owner for receipt scope and the actual reader for object permission;
+// it never queries an invocation, acquires a claim or authorizes execution.
+func (s *ActionApplicationService) AgentSharedActionReceiptDefinition(ctx context.Context, key string, reader, producer principalmodel.Principal) (definitionmodel.ActionSchema, error) {
+	if !reader.Known || !producer.Known || reader.UserID == "" || producer.UserID == "" || reader.WorkspaceID == "" || producer.WorkspaceID != reader.WorkspaceID {
+		return definitionmodel.ActionSchema{}, receiptReadDenied()
+	}
+	entry, ok := s.dependencies.Catalog.Entry(key)
+	if !ok {
+		return definitionmodel.ActionSchema{}, receiptReadDenied()
+	}
+	action := entry.Definition
+	in := actionmodel.ActionInvocation{Principal: reader, ObjectKey: action.ObjectKey, ActionKey: action.Key}
+	if err := s.authorizeInvocationReceiptOwner(ctx, in, action, producer.UserID); err != nil {
+		return definitionmodel.ActionSchema{}, err
+	}
+	return action, nil
+}
+
+func (s *ActionApplicationService) authorizeInvocationReceiptOwner(ctx context.Context, in actionmodel.ActionInvocation, action definitionmodel.ActionSchema, ownerUserID string) error {
 	p := in.Principal
 	if !p.Known || p.UserID == "" || p.AccessBundle == nil || s.dependencies.Authorization.ObjectForAction == nil {
 		return receiptReadDenied()
 	}
 	key := actioncontract.ReceiptReadActionKey(action.Key)
 	decision, err := evaluator.Evaluate(*p.AccessBundle, identitysdk.AccessRequest{ObjectKey: strings.TrimSuffix(key, ".read"), Action: "read"}, identitysdk.ResourceFacts{
-		"owner_user_id": p.UserID, "workspace_id": p.WorkspaceID,
+		"owner_user_id": ownerUserID, "workspace_id": p.WorkspaceID,
 		"object_key": in.ObjectKey, "record_id": in.RecordID, "action_key": in.ActionKey,
 	}, time.Now().UTC())
 	if err != nil || !decision.Allowed {
@@ -72,6 +95,22 @@ func (s *ActionApplicationService) ReadInvocationReceipt(ctx context.Context, in
 	}
 	in = ActionNormalizeInvocation(in)
 	stored, err := s.inspectInvocation(ctx, in, true)
+	return s.projectInvocationReceipt(ctx, in, stored, err)
+}
+
+// Producer locates the immutable execution ledger. Principal remains the
+// actual reader, whose receipt policy is evaluated against the original actor.
+func (s *ActionApplicationService) ReadSharedInvocationReceipt(ctx context.Context, in actionmodel.ActionInvocation, producer principalmodel.Principal) (ActionInvocationReceipt, error) {
+	if in.RunAs.Known || !in.Principal.Known || !producer.Known || in.Principal.UserID == "" || producer.UserID == "" || in.Principal.WorkspaceID == "" || producer.WorkspaceID != in.Principal.WorkspaceID || in.Actor.Known && (in.Actor.UserID != producer.UserID || in.Actor.WorkspaceID != producer.WorkspaceID) {
+		return ActionInvocationReceipt{}, receiptReadDenied()
+	}
+	in.Actor = producer
+	in = ActionNormalizeInvocation(in)
+	stored, err := s.inspectInvocationForProducer(ctx, in, true, producer)
+	return s.projectInvocationReceipt(ctx, in, stored, err)
+}
+
+func (s *ActionApplicationService) projectInvocationReceipt(ctx context.Context, in actionmodel.ActionInvocation, stored ActionInvocationInspection, err error) (ActionInvocationReceipt, error) {
 	if err != nil {
 		return ActionInvocationReceipt{}, err
 	}

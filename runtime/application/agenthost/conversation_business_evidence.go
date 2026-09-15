@@ -8,10 +8,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 )
@@ -40,6 +42,67 @@ func (h *ConversationBusinessHost) businessPolicyDigest(ctx context.Context, p p
 	return conversationBusinessDigest([]any{bundle, recordpolicy.RecordSDKEvaluationContext(p), h.schema.ForPrincipal(ctx, p).Objects})
 }
 
+// A historical read binds data visibility, rather than the rights to execute
+// its producing tool. Full current policy digests still guard each read call.
+func (h *ConversationBusinessHost) businessReadPolicyDigest(ctx context.Context, p principalmodel.Principal) string {
+	bundle := *p.AccessBundle
+	bundle.AuthorizationRevision = ""
+	bundle.ExpiresAt = time.Time{}
+	bundle.FunctionGrants = nil
+	for _, grant := range p.AccessBundle.FunctionGrants {
+		if grant.Action == "read" {
+			bundle.FunctionGrants = append(bundle.FunctionGrants, grant)
+		}
+	}
+	bundle.DataPolicies = nil
+	for _, policy := range p.AccessBundle.DataPolicies {
+		if policy.Action == "read" {
+			bundle.DataPolicies = append(bundle.DataPolicies, policy)
+		}
+	}
+	bundle.FieldPolicies = nil
+	for _, field := range p.AccessBundle.FieldPolicies {
+		field.Write, field.Export = false, false
+		rules := field.Rules
+		field.Rules = nil
+		for _, rule := range rules {
+			if slices.Contains(rule.Actions, identitysdk.Action("read")) {
+				rule.Actions = []identitysdk.Action{"read"}
+				field.Rules = append(field.Rules, rule)
+			}
+		}
+		bundle.FieldPolicies = append(bundle.FieldPolicies, field)
+	}
+	bundle.ExportPolicies = nil
+	bundle.Guardrails = nil
+	for _, guard := range p.AccessBundle.Guardrails {
+		if guard.Action == "" || guard.Action == "read" {
+			bundle.Guardrails = append(bundle.Guardrails, guard)
+		}
+	}
+	return conversationBusinessDigest([]any{bundle, recordpolicy.RecordSDKEvaluationContext(p), h.objects(ctx, p)})
+}
+
+func (h *ConversationBusinessHost) businessSnapshotPolicy(ctx context.Context, p principalmodel.Principal, version string) string {
+	if version == "2" {
+		return h.businessReadPolicyDigest(ctx, p)
+	}
+	return h.businessPolicyDigest(ctx, p)
+}
+
+func (h *ConversationBusinessHost) validBusinessSnapshotMAC(e agentsdk.ConversationBusinessEvidence) (string, string, bool) {
+	parts := strings.Split(e.HostProof, ":")
+	if len(h.evidenceKey) < sha256.Size || len(parts) != 3 || (parts[0] != "1" && parts[0] != "2") || len(parts[1]) != 64 || len(parts[2]) != 64 {
+		return "", "", false
+	}
+	mac, err := hex.DecodeString(parts[2])
+	policy := parts[1]
+	if parts[0] == "2" {
+		policy = "read2:" + policy
+	}
+	return parts[0], parts[1], err == nil && hmac.Equal(mac, h.businessEvidenceMAC(e, policy))
+}
+
 func (h *ConversationBusinessHost) businessEvidenceMAC(e agentsdk.ConversationBusinessEvidence, policy string) []byte {
 	e.HostProof = ""
 	raw, _ := json.Marshal(e)
@@ -64,6 +127,7 @@ func (h *ConversationBusinessHost) SealBusinessEvidence(ctx context.Context, e a
 		return "", err
 	}
 	policy := h.businessPolicyDigest(ctx, p)
+	readPolicy := h.businessReadPolicyDigest(ctx, p)
 	// Never attest arbitrary caller content. Exact rereading also closes races
 	// between obtaining a result and issuing its integrity proof.
 	if err := h.RevalidateBusiness(ctx, e, a); err != nil {
@@ -73,23 +137,19 @@ func (h *ConversationBusinessHost) SealBusinessEvidence(ctx context.Context, e a
 	if err != nil || policy != h.businessPolicyDigest(ctx, p) {
 		return "", conversationBusinessError("forbidden")
 	}
-	return "1:" + policy + ":" + hex.EncodeToString(h.businessEvidenceMAC(e, policy)), nil
+	return "2:" + readPolicy + ":" + hex.EncodeToString(h.businessEvidenceMAC(e, "read2:"+readPolicy)), nil
 }
 
 func (h *ConversationBusinessHost) revalidateBusinessSnapshot(ctx context.Context, e agentsdk.ConversationBusinessEvidence, a agentsdk.ConversationAuthority) error {
-	parts := strings.Split(e.HostProof, ":")
-	if len(h.evidenceKey) < sha256.Size || len(parts) != 3 || parts[0] != "1" || len(parts[1]) != 64 || len(parts[2]) != 64 {
-		return conversationBusinessError("forbidden")
-	}
-	mac, err := hex.DecodeString(parts[2])
-	if err != nil || !hmac.Equal(mac, h.businessEvidenceMAC(e, parts[1])) {
+	version, policy, valid := h.validBusinessSnapshotMAC(e)
+	if !valid {
 		return conversationBusinessError("forbidden")
 	}
 	p, err := h.principal(ctx, a)
 	if err != nil {
 		return err
 	}
-	if parts[1] != h.businessPolicyDigest(ctx, p) {
+	if policy != h.businessSnapshotPolicy(ctx, p, version) {
 		// A changed effective policy cannot authorize an old snapshot merely
 		// because some rows are still readable. Fall back to the full result.
 		return h.revalidateBusinessExact(ctx, e, a)
@@ -155,7 +215,7 @@ func (h *ConversationBusinessHost) revalidateBusinessSnapshot(ctx context.Contex
 		}
 	}
 	p, err = h.principal(ctx, a)
-	if err != nil || parts[1] != h.businessPolicyDigest(ctx, p) {
+	if err != nil || policy != h.businessSnapshotPolicy(ctx, p, version) {
 		return conversationBusinessError("forbidden")
 	}
 	return nil

@@ -42,12 +42,14 @@ func (r runtimeWorkflowRegistry) Set(key string, value definitionmodel.WorkflowS
 	r.records.mu.Lock()
 	defer r.records.mu.Unlock()
 	r.records.workflows[strings.TrimSpace(key)] = value
+	r.records.schemaGeneration++
 }
 
 func (r runtimeWorkflowRegistry) Delete(key string) {
 	r.records.mu.Lock()
 	defer r.records.mu.Unlock()
 	delete(r.records.workflows, strings.TrimSpace(key))
+	r.records.schemaGeneration++
 }
 
 func (r runtimeWorkflowRegistry) Count() int {

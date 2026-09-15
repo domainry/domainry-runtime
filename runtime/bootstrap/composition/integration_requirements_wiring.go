@@ -56,6 +56,9 @@ func IntegrationEventMappingRequirements(mappings []connectormodel.IntegrationEv
 			RecordID: mapping.RecordID, RecordIDPath: mapping.RecordIDPath,
 			ActionKey: mapping.ActionKey, ActionKeyPath: mapping.ActionKeyPath,
 			ActionInput: cloneIntegrationPathBindings(mapping.ActionInput), WorkflowInput: cloneIntegrationPathBindings(mapping.WorkflowInput),
+			AgentID: mapping.AgentID, ConversationID: mapping.ConversationID, AgentTaskMode: mapping.AgentTaskMode,
+			RelatedTaskID: mapping.RelatedTaskID, RelatedTaskIDPath: mapping.RelatedTaskIDPath,
+			AgentInput:  cloneIntegrationPathBindings(mapping.AgentInput),
 			EventFields: eventFields,
 			ExternalIdentity: integrationsdk.ExternalIdentityMappingRequirement{
 				Provider: mapping.ExternalIdentity.Provider, SubjectPath: mapping.ExternalIdentity.SubjectPath,

@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 )
@@ -46,47 +47,9 @@ func (h *ConversationBusinessHost) queryBusinessRecords(ctx context.Context, q a
 	for _, field := range object.Fields {
 		definitions[field.Key] = businessField(field, object.Key, p)
 	}
-	nodes := make([]recordmodel.RecordFilterExpression, 0, len(q.Filters))
-	for _, filter := range q.Filters {
-		field, ok := definitions[filter.Field]
-		if !ok || !businessOperatorAllowed(field, filter.Operator) {
-			return out, conversationBusinessError("bad_request")
-		}
-		var value any
-		decoder := json.NewDecoder(bytes.NewReader(filter.Value))
-		decoder.UseNumber()
-		if decoder.Decode(&value) != nil || decoder.Decode(new(any)) != io.EOF {
-			return out, conversationBusinessError("bad_request")
-		}
-		node := recordmodel.RecordFilterExpression{Field: filter.Field, Operator: filter.Operator}
-		switch filter.Operator {
-		case "in", "not_in":
-			values, ok := value.([]any)
-			if !ok || len(values) == 0 || len(values) > 1000 {
-				return out, conversationBusinessError("bad_request")
-			}
-			node.Values = values
-		case "is_null", "is_not_null":
-			if value != nil {
-				return out, conversationBusinessError("bad_request")
-			}
-		default:
-			node.Value = value
-		}
-		nodes = append(nodes, node)
-	}
-	if required != nil {
-		nodes = append(nodes, *required)
-	}
-	if len(nodes) == 1 {
-		query.FilterExpression = &nodes[0]
-	}
-	if len(nodes) > 1 {
-		query.FilterExpression = &recordmodel.RecordFilterExpression{Operator: "and", Children: nodes}
-	}
 	// Validate before Runtime's legacy normalizer, which drops invalid filters
 	// and sort keys. A malformed model request must never become a broader read.
-	query.FilterExpression, err = recordvalidation.RecordNormalizeFilterExpression(object, query.FilterExpression)
+	query.FilterExpression, err = businessQueryFilterExpression(object, definitions, q.Filters, required)
 	if err != nil {
 		return out, conversationBusinessError("bad_request")
 	}
@@ -147,4 +110,58 @@ func (h *ConversationBusinessHost) queryBusinessRecords(ctx context.Context, q a
 		}
 	}
 	return out, nil
+}
+
+// Both real queries and saved-page scope proofs use the same field/operator,
+// JSON and value normalization boundary. required remains host-resolved.
+func businessQueryFilterExpression(object definitionmodel.ObjectSchema, definitions map[string]agentsdk.ConversationBusinessField, filters []agentsdk.ConversationBusinessFilter, required *recordmodel.RecordFilterExpression) (*recordmodel.RecordFilterExpression, error) {
+	badRequest := func() (*recordmodel.RecordFilterExpression, error) {
+		return nil, conversationBusinessError("bad_request")
+	}
+	if len(filters) > 20 {
+		return badRequest()
+	}
+	nodes := make([]recordmodel.RecordFilterExpression, 0, len(filters)+1)
+	for _, filter := range filters {
+		field, ok := definitions[filter.Field]
+		if !ok || !businessOperatorAllowed(field, filter.Operator) {
+			return badRequest()
+		}
+		var value any
+		decoder := json.NewDecoder(bytes.NewReader(filter.Value))
+		decoder.UseNumber()
+		if decoder.Decode(&value) != nil || decoder.Decode(new(any)) != io.EOF {
+			return badRequest()
+		}
+		node := recordmodel.RecordFilterExpression{Field: filter.Field, Operator: filter.Operator}
+		switch filter.Operator {
+		case "in", "not_in":
+			values, ok := value.([]any)
+			if !ok || len(values) == 0 || len(values) > 1000 {
+				return badRequest()
+			}
+			node.Values = values
+		case "is_null", "is_not_null":
+			if value != nil {
+				return badRequest()
+			}
+		default:
+			node.Value = value
+		}
+		nodes = append(nodes, node)
+	}
+	if required != nil {
+		nodes = append(nodes, *required)
+	}
+	var expression *recordmodel.RecordFilterExpression
+	if len(nodes) == 1 {
+		expression = &nodes[0]
+	} else if len(nodes) > 1 {
+		expression = &recordmodel.RecordFilterExpression{Operator: "and", Children: nodes}
+	}
+	normalized, err := recordvalidation.RecordNormalizeFilterExpression(object, expression)
+	if err != nil {
+		return badRequest()
+	}
+	return normalized, nil
 }

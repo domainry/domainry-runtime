@@ -26,7 +26,7 @@ type recordRuntimeState struct {
 }
 
 func (s *runtimeAssembly) reportRecordSchemaMap() map[string]definitionmodel.ObjectSchema {
-	return schemaObjectMap(s.Schema().Objects)
+	return schemaObjectMap(recordSchemaObjects(s))
 }
 
 func initializeRecordApplications(s *runtimeAssembly) {

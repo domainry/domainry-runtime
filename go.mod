@@ -6,6 +6,7 @@ toolchain go1.26.6
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
+	github.com/creack/pty v1.1.24
 	github.com/domainry/domainry-agent v0.1.24
 	github.com/domainry/domainry-agent-sdk v0.1.16
 	github.com/domainry/domainry-audit v0.1.11
@@ -19,6 +20,7 @@ require (
 	github.com/domainry/domainry-identity-sdk v0.1.11
 	github.com/domainry/domainry-integration v0.1.14
 	github.com/domainry/domainry-integration-sdk v0.1.6
+	github.com/domainry/domainry-knowledge v0.1.3
 	github.com/domainry/domainry-lifecycle v0.1.12
 	github.com/domainry/domainry-lifecycle-sdk v0.1.11
 	github.com/domainry/domainry-metadata v0.1.7
@@ -36,6 +38,7 @@ require (
 	github.com/microsoft/go-mssqldb v1.10.0
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/shopspring/decimal v1.4.0
+	github.com/yuin/gopher-lua v1.1.1
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/sdk v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
@@ -49,7 +52,6 @@ require (
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/crewjam/saml v0.5.1 // indirect
 	github.com/domainry/domainry-connectors v0.1.3 // indirect
-	github.com/domainry/domainry-knowledge v0.1.3 // indirect
 	github.com/domainry/domainry-todo v0.1.1 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
@@ -57,7 +59,6 @@ require (
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/russellhaering/goxmldsig v1.6.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
-	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	vitess.io/vitess v0.23.3 // indirect

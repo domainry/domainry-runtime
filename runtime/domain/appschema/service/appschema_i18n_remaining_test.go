@@ -49,7 +49,7 @@ func TestApplicationSchemaLocaleProjectsAllOwnedShapes(t *testing.T) {
 	if localized.Name != "Anwendung" || !strings.HasSuffix(localized.SchemaHash, ":de") || len(localized.Objects) != 2 || len(localized.Agents) != 1 {
 		t.Fatalf("localized snapshot=%#v", localized)
 	}
-	if got := service.ForPrincipalLocale(t.Context(), principalmodel.Principal{}, ""); got.SchemaHash != "hash" {
+	if got := service.ForPrincipalLocale(t.Context(), principalmodel.Principal{}, ""); got.SchemaHash != "hash" || got.Name != "App" || got.Objects[1].Name != "Order" || got.Objects[1].Fields[0].Name != "Status" || got.Actions[0].Label != "Approve" || got.Workflows[0].Name != "Notify" {
 		t.Fatalf("empty locale changed snapshot=%#v", got)
 	}
 }

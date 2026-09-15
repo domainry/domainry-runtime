@@ -241,11 +241,16 @@ func (h *ConversationBusinessHost) revalidateBusinessWorkflow(ctx context.Contex
 		return nil
 	}
 	parts := strings.Split(e.HostProof, ":")
-	if len(h.evidenceKey) < sha256.Size || len(parts) != 3 || parts[0] != "workflow1" || len(parts[1]) != 64 || len(parts[2]) != 64 {
+	if len(h.evidenceKey) < sha256.Size || len(parts) != 3 || (parts[0] != "workflow1" && parts[0] != "workflow2") || len(parts[1]) != 64 || len(parts[2]) != 64 {
 		return conversationBusinessError("forbidden")
 	}
 	mac, err := hex.DecodeString(parts[2])
-	if err != nil || !hmac.Equal(mac, h.businessEvidenceMAC(e, "workflow:"+parts[1])) {
+	macPolicy := "workflow:" + parts[1]
+	version := "1"
+	if parts[0] == "workflow2" {
+		macPolicy, version = "workflow-read2:"+parts[1], "2"
+	}
+	if err != nil || !hmac.Equal(mac, h.businessEvidenceMAC(e, macPolicy)) {
 		return conversationBusinessError("forbidden")
 	}
 	var saved agentsdk.ConversationWorkflowState
@@ -256,7 +261,7 @@ func (h *ConversationBusinessHost) revalidateBusinessWorkflow(ctx context.Contex
 	if err != nil {
 		return err
 	}
-	if parts[1] != h.businessPolicyDigest(ctx, p) {
+	if parts[1] != h.businessSnapshotPolicy(ctx, p, version) {
 		// A policy change (including removal of the producing tool grant)
 		// may still permit the exact currently visible process projection.
 		// Verify the signature first; never ignore a forged proof or replace
@@ -280,6 +285,7 @@ func (h *ConversationBusinessHost) sealWorkflowEvidence(ctx context.Context, e a
 		return "", err
 	}
 	policy := h.businessPolicyDigest(ctx, p)
+	readPolicy := h.businessReadPolicyDigest(ctx, p)
 	if err := h.RevalidateBusinessWorkflow(ctx, e, a); err != nil {
 		return "", err
 	}
@@ -287,7 +293,7 @@ func (h *ConversationBusinessHost) sealWorkflowEvidence(ctx context.Context, e a
 	if err != nil || policy != h.businessPolicyDigest(ctx, p) {
 		return "", conversationBusinessError("forbidden")
 	}
-	return "workflow1:" + policy + ":" + hex.EncodeToString(h.businessEvidenceMAC(e, "workflow:"+policy)), nil
+	return "workflow2:" + readPolicy + ":" + hex.EncodeToString(h.businessEvidenceMAC(e, "workflow-read2:"+readPolicy)), nil
 }
 
 var _ agentsdk.ConversationBusinessWorkflowSource = (*ConversationBusinessHost)(nil)

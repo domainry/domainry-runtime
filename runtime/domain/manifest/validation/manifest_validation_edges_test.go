@@ -2,6 +2,7 @@ package validation
 
 import (
 	"fmt"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"strings"
@@ -350,6 +351,32 @@ func TestManifestIntegrationEventContractTypesInvocationPaths(t *testing.T) {
 	state.validateIntegrationEventMappings()
 	if len(state.errs) == 0 || !strings.Contains(state.errs.Error(), "integration.event_path_undeclared") {
 		t.Fatalf("undeclared event path errors=%#v", state.errs)
+	}
+}
+
+func TestManifestIntegrationAgentEventHasFiniteTargetAndMappedIdentity(t *testing.T) {
+	manifest := manifestmodel.ManifestSchema{
+		Agents: []agentsdk.AgentSchema{{Key: "support-agent", Name: "Support"}},
+		Integrations: connectormodel.IntegrationSchema{
+			Connections: []connectormodel.ConnectionSchema{{Key: "source", ProviderKey: "support"}},
+			EventMappings: []connectormodel.IntegrationEventMappingSchema{{
+				Key: "ticket-escalated", Provider: "support", TargetType: "agent_task", AgentID: "support-agent", ConversationID: "conversation-support", AgentTaskMode: "wake", RelatedTaskIDPath: "ticket.agent_task_id",
+				AgentInput: map[string]string{"goal": "ticket.title"}, Payload: map[string]any{"allowed_tools": []any{}},
+				EventFields:      []connectormodel.IntegrationEventFieldSchema{{Path: "ticket.agent_task_id", Type: "text"}, {Path: "ticket.title", Type: "text"}, {Path: "actor.id", Type: "text"}},
+				ExternalIdentity: connectormodel.IntegrationExternalIdentityMappingSchema{SubjectPath: "actor.id", OnUnmapped: "error"}, Enabled: true,
+			}},
+		},
+	}
+	state := newValidationState(manifest, nil)
+	state.validateIntegrationEventMappings()
+	if len(state.errs) != 0 {
+		t.Fatalf("valid Agent event mapping errors=%#v", state.errs)
+	}
+	manifest.Integrations.EventMappings[0].AgentID = "invented-agent"
+	state = newValidationState(manifest, nil)
+	state.validateIntegrationEventMappings()
+	if len(state.errs) == 0 || !strings.Contains(state.errs.Error(), "finite Agent") {
+		t.Fatalf("unknown Agent target errors=%#v", state.errs)
 	}
 }
 

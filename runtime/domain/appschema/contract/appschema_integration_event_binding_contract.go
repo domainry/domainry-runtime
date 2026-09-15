@@ -74,7 +74,11 @@ func IntegrationEventBindings(mapping appschemamodel.IntegrationEventMappingSche
 	for inputKey, path := range mapping.WorkflowInput {
 		requirePath("workflow_input."+inputKey, path, bindingcontract.TypeUnknown)
 	}
+	for inputKey, path := range mapping.AgentInput {
+		requirePath("agent_input."+inputKey, path, bindingcontract.TypeUnknown)
+	}
 	requirePath("record_id_path", mapping.RecordIDPath, bindingcontract.TypeRelation)
+	requirePath("related_task_id_path", mapping.RelatedTaskIDPath, bindingcontract.TypeText)
 	sort.SliceStable(issues, func(i, j int) bool {
 		if issues[i].Field != issues[j].Field {
 			return issues[i].Field < issues[j].Field

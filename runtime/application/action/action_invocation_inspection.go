@@ -8,6 +8,7 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type ActionInvocationInspection struct {
@@ -25,6 +26,11 @@ func (s *ActionApplicationService) InspectInvocation(ctx context.Context, in act
 }
 
 func (s *ActionApplicationService) inspectInvocation(ctx context.Context, in actionmodel.ActionInvocation, resultRead bool) (ActionInvocationInspection, error) {
+	in = ActionNormalizeInvocation(in)
+	return s.inspectInvocationForProducer(ctx, in, resultRead, in.Principal)
+}
+
+func (s *ActionApplicationService) inspectInvocationForProducer(ctx context.Context, in actionmodel.ActionInvocation, resultRead bool, producer principalmodel.Principal) (ActionInvocationInspection, error) {
 	var out ActionInvocationInspection
 	in = ActionNormalizeInvocation(in)
 	if err := actionAuthorizeQuery(in.Principal); err != nil {
@@ -39,7 +45,7 @@ func (s *ActionApplicationService) inspectInvocation(ctx context.Context, in act
 		return out, apperror.New(apperror.KindBadRequest, "backend.action.object_mismatch", nil, nil)
 	}
 	if resultRead {
-		if err := s.authorizeInvocationReceipt(ctx, in, action); err != nil {
+		if err := s.authorizeInvocationReceiptOwner(ctx, in, action, producer.UserID); err != nil {
 			return out, err
 		}
 	} else {
@@ -52,7 +58,7 @@ func (s *ActionApplicationService) inspectInvocation(ctx context.Context, in act
 		return out, err
 	}
 	in.Input = payload
-	execution, found, err := s.dependencies.UnitOfWork.executions.ReadReceipt(ctx, action.ObjectKey, in.RecordID, action.Key, in.IdempotencyKey, actionInvocationFingerprint(in, action.Key), in.Principal)
+	execution, found, err := s.dependencies.UnitOfWork.executions.ReadReceipt(ctx, action.ObjectKey, in.RecordID, action.Key, in.IdempotencyKey, actionInvocationFingerprint(in, action.Key), producer)
 	if err != nil || !found {
 		return out, err
 	}

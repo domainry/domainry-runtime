@@ -2,13 +2,29 @@ package runtime
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
+
+type integrationAgentProbe struct {
+	request    agentsdk.BusinessEventConversationTaskRequest
+	authorized bool
+	calls      int
+}
+
+func (p *integrationAgentProbe) AcceptBusinessEventConversationTask(ctx context.Context, request agentsdk.BusinessEventConversationTaskRequest) (agentsdk.BusinessEventConversationTaskReceipt, error) {
+	p.request = request
+	p.calls++
+	p.authorized = agentsdk.HasAuthorizedServiceAction(ctx, agentsdk.ActionAgentBusinessEventConversationTaskAccept, agentsdk.AgentRuntimeServiceAudience)
+	return agentsdk.BusinessEventConversationTaskReceipt{Task: agentsdk.ConversationTask{ID: "task-event-1"}}, nil
+}
 
 type integrationActionProbe struct {
 	source     actionmodel.ActionSource
@@ -59,5 +75,30 @@ func TestRuntimeIntegrationTriggerSinkExecutesOnlyRuntimeOwnedTargets(t *testing
 	}
 	if !workflows.principal.HasExactPermission("workflow.contact-sync.run") || workflows.principal.HasPermission("anything.execute") {
 		t.Fatalf("workflow principal=%#v", workflows.principal)
+	}
+}
+
+func TestRuntimeIntegrationTriggerSinkMapsVerifiedEventToCurrentAgentIdentity(t *testing.T) {
+	agent := &integrationAgentProbe{}
+	sink := runtimeIntegrationTriggerSink{agents: agent, principals: runtimeIdentityPrincipalResolverStub{}}
+	received := time.Date(2026, 9, 16, 9, 30, 0, 0, time.UTC)
+	request := integrationsdk.TriggerRequest{
+		EventID: "event-42", WorkspaceID: "workspace-a", MappingKey: "ticket-escalated", MappingRevision: strings.Repeat("a", 64), IdempotencyKey: "event-42:ticket-escalated",
+		Source:    integrationsdk.TriggerSource{Provider: "support", EventType: "ticket.escalated", ExternalID: "ticket-42", ReceivedAt: received.Format(time.RFC3339Nano)},
+		Principal: integrationsdk.TriggerPrincipal{ActorID: "user-7", RoleKey: "support"},
+		Target:    integrationsdk.TriggerTarget{Type: "agent_task", AgentID: "support-agent", ConversationID: "conversation-7", AgentTaskMode: "wake", RelatedTaskID: "task-previous", Input: map[string]any{"goal": "Handle escalation", "ticket_id": "42", "allowed_tools": []any{}}},
+	}
+	receipt, err := sink.Trigger(t.Context(), request)
+	if err != nil || receipt.ExecutionID != "task-event-1" || receipt.Status != "accepted" || !agent.authorized {
+		t.Fatalf("receipt=%+v authorized=%t err=%v", receipt, agent.authorized, err)
+	}
+	actual := agent.request
+	if actual.ContractVersion != agentsdk.BusinessEventConversationTaskContractVersion || actual.Authority.UserID != "user-7" || actual.Authority.RoleKey != "support" || actual.Authority.WorkspaceID != "workspace-a" ||
+		actual.AgentID != "support-agent" || actual.ConversationID != "conversation-7" || actual.Mode != "wake" || actual.RelatedTaskID != "task-previous" || actual.Source.EventID != "event-42" || actual.Rule.Revision != request.MappingRevision || actual.Input.Goal != "Handle escalation" || !strings.Contains(actual.Input.Input, `"ticket_id":"42"`) {
+		t.Fatalf("Agent request=%+v", actual)
+	}
+	request.Principal = integrationsdk.TriggerPrincipal{}
+	if _, err = sink.Trigger(t.Context(), request); err == nil || agent.calls != 1 {
+		t.Fatalf("unmapped Agent identity reached task service: err=%v request=%+v", err, agent.request)
 	}
 }

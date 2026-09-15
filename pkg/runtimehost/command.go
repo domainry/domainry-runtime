@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 
+	"github.com/domainry/domainry-runtime/pkg/coderuntime"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 )
 
@@ -13,6 +15,9 @@ import (
 // the server. Runtime configuration remains environment-owned; command
 // arguments are intentionally unsupported.
 func RunCommand(arguments []string, stdout io.Writer, stderr io.Writer, options Options) int {
+	if len(arguments) == 1 && arguments[0] == coderuntime.WorkerArgument {
+		return coderuntime.RunWorker(os.Stdin, stdout, stderr)
+	}
 	return runCommand(arguments, stdout, stderr, func() error { return Run(options) })
 }
 

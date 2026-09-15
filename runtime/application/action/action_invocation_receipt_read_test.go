@@ -115,6 +115,56 @@ func TestActionIndependentReceiptReadPreservesOwnershipAllReferencesAndNoEffects
 			}
 		})
 	}
+	t.Run("shared-original-actor-and-actual-reader", func(t *testing.T) {
+		old := store.value
+		defer func() { store.value = old; denied = "" }()
+		store.value.ActorID = "producer"
+		producer := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "producer", WorkspaceID: "workspace"}}, accessfixture.Bundle{})
+		metadataReads := store.reads
+		if _, err := service.AgentSharedActionReceiptDefinition(t.Context(), definition.Key, in.Principal, producer); err == nil {
+			t.Fatal("self-only metadata receipt scope authorized another owner")
+		}
+		if _, err := service.ReadSharedInvocationReceipt(t.Context(), in, producer); err == nil {
+			t.Fatal("self-only receipt scope authorized another actor")
+		}
+		read := in
+		read.Principal = accessfixture.Attach(in.Principal, accessfixture.Bundle{Permissions: []string{permission, "order.read"}, DataPolicies: accessfixture.DataPoliciesForPermissions([]string{permission, "order.read"}, identitysdk.DataScopeAll)})
+		metadata, err := service.AgentSharedActionReceiptDefinition(t.Context(), definition.Key, read.Principal, producer)
+		if err != nil || metadata.Key != definition.Key || store.reads != metadataReads {
+			t.Fatal("metadata discovery queried ledger or required write permission", metadata, err, store.reads)
+		}
+		for _, invalid := range []principalmodel.Principal{{}, principal("order.read"), principal(permission)} {
+			if _, err := service.AgentSharedActionReceiptDefinition(t.Context(), definition.Key, invalid, producer); err == nil {
+				t.Fatal("metadata bypassed current identity, receipt or object read")
+			}
+		}
+		foreign := producer
+		foreign.WorkspaceID = "foreign"
+		if _, err := service.AgentSharedActionReceiptDefinition(t.Context(), definition.Key, read.Principal, foreign); err == nil {
+			t.Fatal("metadata producer crossed workspace")
+		}
+		out, err := service.ReadSharedInvocationReceipt(t.Context(), read, producer)
+		if err != nil || !out.Found || out.InvocationID != "original" || len(out.CreatedRecords) != 101 {
+			t.Fatal("actual reader did not locate original actor ledger", out, err)
+		}
+		if _, err := service.ReadInvocationReceipt(t.Context(), read); err == nil {
+			t.Fatal("ordinary receipt read acquired foreign ledger")
+		}
+		denied = "ref-100"
+		if _, err := service.ReadSharedInvocationReceipt(t.Context(), read, producer); err == nil {
+			t.Fatal("shared read ignored actual reader reference after presentation limit")
+		}
+		denied = ""
+		wrong := producer
+		wrong.UserID = "unrelated"
+		if _, err := service.ReadSharedInvocationReceipt(t.Context(), read, wrong); err == nil {
+			t.Fatal("wrong original actor acquired ledger")
+		}
+		read.RunAs = producer
+		if _, err := service.ReadSharedInvocationReceipt(t.Context(), read, producer); err == nil {
+			t.Fatal("shared read accepted run-as")
+		}
+	})
 	if store.claims != 0 || store.beginTransactionCalls != 0 || store.completeCalls != 0 || assurance != 0 {
 		t.Fatal("read caused execution effects", store, assurance)
 	}

@@ -297,7 +297,7 @@ func publishDomainryDependencyClosure(repository, proxy string) ([]publishedDepe
 	}{
 		{path: "github.com/domainry/domainry-orm", rootEnvironment: "DOMAINRY_ORM_REPO_ROOT", label: "ORM", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-foundation", rootEnvironment: "DOMAINRY_FOUNDATION_REPO_ROOT", label: "Foundation", patterns: []string{"./..."}},
-		{path: "github.com/domainry/domainry-connector-sdk", rootEnvironment: "DOMAINRY_CONNECTOR_SDK_REPO_ROOT", label: "Connector SDK", patterns: []string{".", "./calendar", "./calendarwrite", "./mail", "./mailwrite", "./web"}},
+		{path: "github.com/domainry/domainry-connector-sdk", rootEnvironment: "DOMAINRY_CONNECTOR_SDK_REPO_ROOT", label: "Connector SDK", patterns: []string{".", "./calendar", "./calendarwrite", "./mail", "./mailwrite", "./mcptool", "./web"}},
 		{path: "github.com/domainry/domainry-identity-sdk", rootEnvironment: "DOMAINRY_IDENTITY_SDK_REPO_ROOT", label: "Identity SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-identity-bridge", rootEnvironment: "DOMAINRY_IDENTITY_BRIDGE_REPO_ROOT", label: "External Identity", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-tools-sdk", rootEnvironment: "DOMAINRY_TOOLS_SDK_REPO_ROOT", label: "Tools SDK", patterns: []string{"./..."}},
@@ -456,7 +456,7 @@ func dependencyModule(repository, path, version string) (downloadedModule, error
 	for _, candidate := range []localModule{
 		{path: "github.com/domainry/domainry-orm", rootEnvironment: "DOMAINRY_ORM_REPO_ROOT", label: "ORM", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-foundation", rootEnvironment: "DOMAINRY_FOUNDATION_REPO_ROOT", label: "Foundation", patterns: []string{"./..."}},
-		{path: "github.com/domainry/domainry-connector-sdk", rootEnvironment: "DOMAINRY_CONNECTOR_SDK_REPO_ROOT", label: "Connector SDK", patterns: []string{".", "./calendar", "./calendarwrite", "./mail", "./mailwrite", "./web"}},
+		{path: "github.com/domainry/domainry-connector-sdk", rootEnvironment: "DOMAINRY_CONNECTOR_SDK_REPO_ROOT", label: "Connector SDK", patterns: []string{".", "./calendar", "./calendarwrite", "./mail", "./mailwrite", "./mcptool", "./web"}},
 		{path: "github.com/domainry/domainry-identity-sdk", rootEnvironment: "DOMAINRY_IDENTITY_SDK_REPO_ROOT", label: "Identity SDK", patterns: []string{"./..."}},
 		{path: "github.com/domainry/domainry-identity-bridge", rootEnvironment: "DOMAINRY_IDENTITY_BRIDGE_REPO_ROOT", label: "External Identity", patterns: []string{"./module"}},
 		{path: "github.com/domainry/domainry-tools-sdk", rootEnvironment: "DOMAINRY_TOOLS_SDK_REPO_ROOT", label: "Tools SDK", patterns: []string{"./..."}},

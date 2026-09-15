@@ -60,6 +60,7 @@ import (
 // runtimeAssembly is the private, constructor-only composition graph.
 type runtimeAssembly struct {
 	templateID, templateVersion, name, timeZone string
+	schemaGeneration                            uint64
 	productBrandName                            string
 	actionRuntimeRevision                       string
 	actionProjectRevision                       string
@@ -169,6 +170,7 @@ type runtimeAssembly struct {
 	agentTaskRunner                     agentsdk.TaskRunner
 	identityPrincipals                  identitysdk.PrincipalResolver
 	agentScheduledTasks                 agentsdk.ScheduledConversationTaskService
+	agentBusinessEvents                 agentsdk.BusinessEventConversationTaskService
 	mu                                  sync.RWMutex // guards concurrent schema reads vs. hot-reload writes
 	workerDependencies                  workerplatform.Dependencies
 }

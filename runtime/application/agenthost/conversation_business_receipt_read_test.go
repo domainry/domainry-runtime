@@ -3,7 +3,9 @@ package agenthost
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	agent "github.com/domainry/domainry-agent-sdk"
@@ -48,6 +50,9 @@ func TestBusinessReceiptReadUsesCurrentRecordsWithoutAgentToolGrants(t *testing.
 		t.Fatal(err)
 	}
 	eGet := sealedBusinessEvidence(t, h, a, "get_record", get, row)
+	legacy := eGet
+	legacyPolicy := h.businessPolicyDigest(t.Context(), resolver.principal)
+	legacy.HostProof = "1:" + legacyPolicy + ":" + fmt.Sprintf("%x", h.businessEvidenceMAC(legacy, legacyPolicy))
 	cq := agent.ConversationBusinessCatalogQuery{ObjectKey: "customer"}
 	catalog, err := h.BusinessCatalog(t.Context(), cq, a)
 	if err != nil {
@@ -77,11 +82,14 @@ func TestBusinessReceiptReadUsesCurrentRecordsWithoutAgentToolGrants(t *testing.
 			t.Fatal("foreign owner accepted")
 		}
 	}
-	// No new value is substituted into an old proof when the effective policy
-	// changed. Reinstating the original policy allows its signed old values.
+	// Removing execution grants keeps the signed historical value readable.
+	// Legacy proofs retain their original full-policy/exact fallback behavior.
 	mutateBusinessEvidenceRow(t, reads, a, reads.object, get.RecordID, func(r *recordmodel.Record) { r.Data["name"] = "Updated" })
-	if err := agent.AuthorizeBusinessResultRead(t.Context(), h, eGet, a); err == nil {
-		t.Fatal("changed-policy read substituted new value")
+	if err := agent.AuthorizeBusinessResultRead(t.Context(), h, eGet, a); err != nil || strings.Contains(string(eGet.Data), "Updated") {
+		t.Fatal("execution revocation lost or replaced signed historical value", err)
+	}
+	if err := agent.AuthorizeBusinessResultRead(t.Context(), h, legacy, a); err == nil {
+		t.Fatal("legacy changed-policy exact check was bypassed")
 	}
 	resolver.principal = original
 	if err := agent.AuthorizeBusinessResultRead(t.Context(), h, eGet, a); err != nil {

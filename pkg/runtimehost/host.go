@@ -24,6 +24,8 @@ import (
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
+	"github.com/domainry/domainry-runtime/pkg/coderuntime"
+	"github.com/domainry/domainry-runtime/pkg/codingruntime"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -527,7 +529,24 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 					return nil, fmt.Errorf("open project analysis table source: %w", err)
 				}
 			}
+			var codeRuntime agentsdk.ConversationCodeRuntime
+			if strings.TrimSpace(executablePath) != "" {
+				codeRuntime, err = coderuntime.NewProcess(executablePath)
+				if err != nil {
+					return nil, fmt.Errorf("prepare Agent code Runtime: %w", err)
+				}
+			}
+			var codingRuntime agentsdk.ConversationCodingRuntime
+			if options.AgentCodingWorkspace != nil {
+				configured := *options.AgentCodingWorkspace
+				codingRuntime, err = codingruntime.New(configured)
+				if err != nil {
+					return nil, fmt.Errorf("prepare Agent coding Runtime: %w", err)
+				}
+			}
 			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, businessHandlers, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, notificationFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, agentFactory, integrationFactory, reportFactory, projectDatabase, bootstrap.ProjectStartupOptions{
+				ConversationCodeRuntime:         codeRuntime,
+				ConversationCodingRuntime:       codingRuntime,
 				BusinessSeedReferenceCandidates: businessSeedReferences,
 				ProjectNavigationCatalog:        projectNavigation,
 				AnalysisTableSource:             analysisTableSource,

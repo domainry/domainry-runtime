@@ -26,14 +26,42 @@ func (s *WorkflowApplicationService) AgentWorkflowReceiptDefinition(ctx context.
 	return s.agentWorkflowDefinition(ctx, key, p, true)
 }
 
+// Metadata receipt discovery has no process participation grant. The exact
+// original owner still controls owner/conditional receipt scopes; reading a
+// process or start acknowledgement retains its separate participation checks.
+func (s *WorkflowApplicationService) AgentSharedWorkflowReceiptDefinition(ctx context.Context, key string, reader, producer principalmodel.Principal) (definitionmodel.WorkflowSchema, error) {
+	if !reader.Known || !producer.Known || reader.UserID == "" || producer.UserID == "" || reader.WorkspaceID == "" || producer.WorkspaceID != reader.WorkspaceID {
+		return definitionmodel.WorkflowSchema{}, forbidden("backend.workflow.receipt_read_denied")
+	}
+	w, err := s.AgentWorkflowReceiptDefinition(ctx, key, reader)
+	if err != nil {
+		return w, err
+	}
+	action := workflowcontract.ReceiptReadActionKey(w.Key)
+	decision, err := evaluator.Evaluate(*reader.AccessBundle, identitysdk.AccessRequest{ObjectKey: strings.TrimSuffix(action, ".read"), Action: "read"}, identitysdk.ResourceFacts{"owner_user_id": producer.UserID, "workspace_id": reader.WorkspaceID, "workflow_key": w.Key}, time.Now().UTC())
+	if err != nil || !decision.Allowed {
+		return definitionmodel.WorkflowSchema{}, forbidden("backend.workflow.receipt_read_denied")
+	}
+	return w, nil
+}
+
 // ReadAgentWorkflowReceipt reads the original start ledger and rechecks current
 // process participation. Neither a start nor a receipt reconciliation is run.
 func (s *WorkflowApplicationService) ReadAgentWorkflowReceipt(ctx context.Context, workflowKey string, payload map[string]any, callerKey string, p principalmodel.Principal) (AgentWorkflowReceipt, bool, error) {
+	return s.ReadSharedAgentWorkflowReceipt(ctx, workflowKey, payload, callerKey, p, p)
+}
+
+// The producer is used only for the actor-bound original start ledger. All
+// current process participation and receipt scope checks use the actual reader.
+func (s *WorkflowApplicationService) ReadSharedAgentWorkflowReceipt(ctx context.Context, workflowKey string, payload map[string]any, callerKey string, p, producer principalmodel.Principal) (AgentWorkflowReceipt, bool, error) {
+	if !p.Known || !producer.Known || p.UserID == "" || producer.UserID == "" || p.WorkspaceID == "" || producer.WorkspaceID != p.WorkspaceID {
+		return AgentWorkflowReceipt{}, false, forbidden("backend.workflow.receipt_read_denied")
+	}
 	workflow, err := s.AgentWorkflowReceiptDefinition(ctx, workflowKey, p)
 	if err != nil {
 		return AgentWorkflowReceipt{}, false, err
 	}
-	execution, found, err := s.inspectAgentWorkflowInvocation(ctx, workflow, payload, callerKey, p)
+	execution, found, err := s.inspectAgentWorkflowInvocation(ctx, workflow, payload, callerKey, producer)
 	if err != nil || !found {
 		return AgentWorkflowReceipt{}, found, err
 	}

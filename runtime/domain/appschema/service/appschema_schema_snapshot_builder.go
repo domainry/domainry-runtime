@@ -33,16 +33,23 @@ type SchemaSnapshotState struct {
 	IdentityProfileExtensions                   []profilebindingmodel.Binding
 }
 
-func BuildSchemaSnapshot(state SchemaSnapshotState) appschemamodel.ApplicationSchemaSnapshot {
-	objects := append([]definitionmodel.ObjectSchema(nil), state.Objects...)
+// ProjectSchemaObjects normalizes the current owner definitions without
+// assembling unrelated application domains or computing a snapshot hash.
+func ProjectSchemaObjects(ownerObjects []definitionmodel.ObjectSchema) []definitionmodel.ObjectSchema {
+	objects := append([]definitionmodel.ObjectSchema(nil), ownerObjects...)
 	for index := range objects {
 		capabilities := definitionmodel.EffectiveObjectCapabilities(objects[index])
 		objects[index].Capabilities = &capabilities
 	}
+	sort.Slice(objects, func(i, j int) bool { return objects[i].Key < objects[j].Key })
+	return objects
+}
+
+func BuildSchemaSnapshot(state SchemaSnapshotState) appschemamodel.ApplicationSchemaSnapshot {
+	objects := ProjectSchemaObjects(state.Objects)
 	actions := append([]definitionmodel.ActionSchema(nil), state.Actions...)
 	workflows := append([]definitionmodel.WorkflowSchema(nil), state.Workflows...)
 	automationRules := append([]automationmodel.AutomationRuleSchema(nil), state.AutomationRules...)
-	sort.Slice(objects, func(i, j int) bool { return objects[i].Key < objects[j].Key })
 	sort.Slice(actions, func(i, j int) bool { return actions[i].Key < actions[j].Key })
 	sort.Slice(workflows, func(i, j int) bool { return workflows[i].Key < workflows[j].Key })
 	sort.Slice(automationRules, func(i, j int) bool { return automationRules[i].Key < automationRules[j].Key })

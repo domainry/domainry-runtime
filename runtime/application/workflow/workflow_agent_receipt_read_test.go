@@ -87,6 +87,57 @@ func TestWorkflowIndependentReceiptReadRequiresCurrentParticipantAndOriginalLedg
 			}
 		})
 	}
+	t.Run("shared-original-ledger-and-actual-participant", func(t *testing.T) {
+		probe.receipt, probe.found, probe.executions[execution.ID] = receipt, true, execution
+		processes.processes[process.ID] = process
+		service.registry.(*workflowRegistryStub).items[definition.Key] = definition
+		participants := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: *processes}
+		service.processRepo = participants
+		defer func() { service.processRepo = processes }()
+		reader := principal
+		reader.UserID = "shared-reader"
+		reader = accessfixture.Attach(reader, accessfixture.Bundle{Permissions: []string{permission}, DataPolicies: accessfixture.DataPoliciesForPermissions([]string{permission}, identitysdk.DataScopeOwner)})
+		metadataReads := probe.reads
+		if _, err := service.AgentSharedWorkflowReceiptDefinition(t.Context(), definition.Key, reader, principal); err == nil {
+			t.Fatal("self-only workflow metadata authorized another owner")
+		}
+		participants.tasks = []workflowmodel.WorkflowTask{{ProcessID: process.ID, AssigneeUserID: reader.UserID}}
+		if _, found, err := service.ReadSharedAgentWorkflowReceipt(t.Context(), definition.Key, payload, "original", reader, principal); err == nil && found {
+			t.Fatal("self-only receipt policy authorized original producer")
+		}
+		reader = accessfixture.Attach(reader, accessfixture.Bundle{Permissions: []string{permission}, DataPolicies: accessfixture.DataPoliciesForPermissions([]string{permission}, identitysdk.DataScopeAll)})
+		metadataReads = probe.reads
+		metadata, err := service.AgentSharedWorkflowReceiptDefinition(t.Context(), definition.Key, reader, principal)
+		if err != nil || metadata.Key != definition.Key || probe.reads != metadataReads {
+			t.Fatal("workflow metadata required run permission or queried original ledger", metadata, err, probe.reads)
+		}
+		deniedMetadata := accessfixture.Attach(reader, accessfixture.Bundle{Permissions: []string{permission}, DataPolicies: accessfixture.DataPoliciesForPermissions([]string{permission}, identitysdk.DataScopeAll), Guardrails: []accessfixture.GuardrailFixture{{Key: "metadata-deny", DeniedPermissionKeys: []string{permission}}}})
+		if _, err := service.AgentSharedWorkflowReceiptDefinition(t.Context(), definition.Key, deniedMetadata, principal); err == nil {
+			t.Fatal("metadata ignored receipt guardrail")
+		}
+		foreign := principal
+		foreign.WorkspaceID = "foreign"
+		if _, err := service.AgentSharedWorkflowReceiptDefinition(t.Context(), definition.Key, reader, foreign); err == nil {
+			t.Fatal("metadata producer crossed workspace")
+		}
+		out, found, err := service.ReadSharedAgentWorkflowReceipt(t.Context(), definition.Key, payload, "original", reader, principal)
+		if err != nil || !found || out.ExecutionID != execution.ID || out.ProcessID != process.ID {
+			t.Fatal("current participant could not read original producer start ledger", out, found, err)
+		}
+		if _, found, err := service.ReadAgentWorkflowReceipt(t.Context(), definition.Key, payload, "original", reader); err == nil && found {
+			t.Fatal("ordinary receipt read acquired foreign actor ledger")
+		}
+		participants.tasks = nil
+		if _, found, err := service.ReadSharedAgentWorkflowReceipt(t.Context(), definition.Key, payload, "original", reader, principal); err == nil && found {
+			t.Fatal("original producer participation authorized actual reader after withdrawal")
+		}
+		participants.tasks = []workflowmodel.WorkflowTask{{ProcessID: process.ID, AssigneeUserID: reader.UserID}}
+		wrong := principal
+		wrong.UserID = "unrelated-actor"
+		if _, found, err := service.ReadSharedAgentWorkflowReceipt(t.Context(), definition.Key, payload, "original", reader, wrong); err == nil && found {
+			t.Fatal("wrong producer acquired ledger")
+		}
+	})
 	if len(probe.claimRequests) != 0 || len(probe.inserted) != 0 || len(probe.updated) != 0 {
 		t.Fatal("read touched execution state", probe)
 	}

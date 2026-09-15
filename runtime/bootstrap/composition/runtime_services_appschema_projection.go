@@ -21,6 +21,7 @@ func (s *runtimeAssembly) applyManifestMetadata(templateID, templateVersion, nam
 	objects = appschemaprojection.ApplicationSchemaEnrichObjectsWithFieldValueDomains(objects, dictionaries)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.schemaGeneration++
 	s.templateID = strings.TrimSpace(templateID)
 	s.templateVersion = strings.TrimSpace(templateVersion)
 	s.name = strings.TrimSpace(name)
@@ -65,6 +66,7 @@ func (s *runtimeAssembly) applyManifestMetadata(templateID, templateVersion, nam
 func (s *runtimeAssembly) applyManifestAgentMetadata(tasks []agentsdk.AgentTaskDefinition, entrypoints []agentsdk.AgentEntrypointAssignment, principals []agentsdk.AgentServicePrincipalBinding) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.schemaGeneration++
 	s.agentTasks = append([]agentsdk.AgentTaskDefinition(nil), tasks...)
 	s.agentEntrypoints = append([]agentsdk.AgentEntrypointAssignment(nil), entrypoints...)
 	s.agentServicePrincipals = append([]agentsdk.AgentServicePrincipalBinding(nil), principals...)

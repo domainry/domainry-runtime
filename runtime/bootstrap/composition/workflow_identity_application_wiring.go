@@ -24,6 +24,9 @@ func (p runtimeWorkflowSchemaProvider) WorkflowSchemaSnapshot(ctx context.Contex
 		snapshot = appschemaservice.SnapshotForPrincipal(snapshot, principal)
 	}
 	if p.records.actionService != nil {
+		// Schema() is an immutable generation snapshot. The workflow adapter
+		// substitutes its executable action view in a private slice.
+		snapshot.Actions = append([]definitionmodel.ActionSchema(nil), snapshot.Actions...)
 		executable := make(map[string]definitionmodel.ActionSchema)
 		for _, action := range p.records.actionService.Definitions() {
 			executable[strings.TrimSpace(action.Key)] = action

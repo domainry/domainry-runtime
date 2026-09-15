@@ -3,13 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
-	metadatasdk "github.com/domainry/domainry-metadata-sdk"
-
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-
 	"strings"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 func (s *ApplicationSchemaDomainService) ForPrincipalLocale(ctx context.Context, principal principalmodel.Principal, locale string) appschemamodel.ApplicationSchemaSnapshot {
@@ -25,6 +26,10 @@ func (s *ApplicationSchemaDomainService) ForPrincipalLocale(ctx context.Context,
 	if err != nil || len(values) == 0 {
 		return snapshot
 	}
+	// Schema providers may return a shared immutable projection. Localization
+	// owns a derived value and must not rewrite that cached source through
+	// shared slice backing arrays.
+	snapshot = cloneSchemaSnapshotForLocalization(snapshot)
 	lookup := localizedTextLookup(values)
 	localize := func(entityType string, entityKey string, property string, fallback string) string {
 		if value := lookup[localizedTextLookupKey(entityType, entityKey, property)]; value != "" {
@@ -94,6 +99,28 @@ func (s *ApplicationSchemaDomainService) ForPrincipalLocale(ctx context.Context,
 		agent.Description = localize("agent", agent.Key, "description", agent.Description)
 	}
 	snapshot.SchemaHash = snapshot.SchemaHash + ":" + locale
+	return snapshot
+}
+
+func cloneSchemaSnapshotForLocalization(snapshot appschemamodel.ApplicationSchemaSnapshot) appschemamodel.ApplicationSchemaSnapshot {
+	snapshot.Objects = append([]definitionmodel.ObjectSchema(nil), snapshot.Objects...)
+	for index := range snapshot.Objects {
+		snapshot.Objects[index].Fields = append([]definitionmodel.FieldSchema(nil), snapshot.Objects[index].Fields...)
+		snapshot.Objects[index].Validations = append([]definitionmodel.ValidationSchema(nil), snapshot.Objects[index].Validations...)
+	}
+	snapshot.Actions = append([]definitionmodel.ActionSchema(nil), snapshot.Actions...)
+	for index := range snapshot.Actions {
+		snapshot.Actions[index].PayloadFields = append([]definitionmodel.ActionPayloadField(nil), snapshot.Actions[index].PayloadFields...)
+	}
+	snapshot.GuardedWrites = append([]appschemamodel.ApplicationSchemaGuardedWriteContract(nil), snapshot.GuardedWrites...)
+	snapshot.Workflows = append([]definitionmodel.WorkflowSchema(nil), snapshot.Workflows...)
+	snapshot.Dictionaries = append([]appschemamodel.DictionarySchema(nil), snapshot.Dictionaries...)
+	for index := range snapshot.Dictionaries {
+		snapshot.Dictionaries[index].Items = append([]appschemamodel.DictionaryItemSchema(nil), snapshot.Dictionaries[index].Items...)
+	}
+	snapshot.Reports = append([]reportmodel.ReportSchema(nil), snapshot.Reports...)
+	snapshot.Skills = append([]agentsdk.SkillSchema(nil), snapshot.Skills...)
+	snapshot.Agents = append([]agentsdk.AgentSchema(nil), snapshot.Agents...)
 	return snapshot
 }
 

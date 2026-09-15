@@ -149,6 +149,8 @@ func (h *ConversationBusinessHost) AuthorizeConversationTool(ctx context.Context
 	}
 	definitions := append(agentsdk.PersonalConversationTools(), agentsdk.ArtifactConversationTools()...)
 	definitions = append(definitions, agentsdk.KnowledgeConversationTools()...)
+	definitions = append(definitions, agentsdk.LibraryKnowledgeConversationTools()...)
+	definitions = append(definitions, agentsdk.KnowledgeExtractionTool())
 	definitions = append(definitions, agentsdk.BusinessConversationTools()...)
 	definitions = append(definitions, agentsdk.BusinessRelationConversationTools()...)
 	definitions = append(definitions, agentsdk.BusinessActionConversationTools()...)
@@ -156,6 +158,7 @@ func (h *ConversationBusinessHost) AuthorizeConversationTool(ctx context.Context
 	definitions = append(definitions, agentsdk.ConversationCollaborationTools()...)
 	definitions = append(definitions, toolsdk.ReportQueryDefinitions()...)
 	definitions = append(definitions, toolsdk.AnalysisDefinitions()...)
+	definitions = append(definitions, toolsdk.MCPDefinitions()...)
 	for _, definition := range definitions {
 		if definition.Key == in.Definition.Key && definition.ActionKey == in.Definition.ActionKey && definition.Version == in.Definition.Version {
 			return h.authorizeAction(ctx, in.Authority, definition.ActionKey)
@@ -165,6 +168,17 @@ func (h *ConversationBusinessHost) AuthorizeConversationTool(ctx context.Context
 }
 func (h *ConversationBusinessHost) AuthorizeConversationInteraction(ctx context.Context, a agentsdk.ConversationAuthority, _ agentsdk.ConversationInteraction) (agentsdk.ConversationToolAuthorization, error) {
 	return h.authorizeAction(ctx, a, agentsdk.ConversationInteractionPermission().Key)
+}
+
+// ResolveConversationIdentityPrincipal reuses the exact live Identity lookup
+// used by Agent authorization so product adapters can compile owner-specific
+// Integration account scope without accepting identity facts from tool input.
+func (h *ConversationBusinessHost) ResolveConversationIdentityPrincipal(ctx context.Context, authority agentsdk.ConversationAuthority) (identitysdk.Principal, error) {
+	principal, err := h.principal(ctx, authority)
+	if err != nil {
+		return identitysdk.Principal{}, err
+	}
+	return principal.Principal, nil
 }
 
 func (h *ConversationBusinessHost) AuthorizeConversationExecution(ctx context.Context, in agentsdk.ConversationExecutionAuthorizationRequest) (bool, error) {

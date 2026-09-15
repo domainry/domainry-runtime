@@ -16,6 +16,10 @@ import (
 )
 
 func (h *ConversationBusinessHost) BusinessCatalog(ctx context.Context, q agentsdk.ConversationBusinessCatalogQuery, a agentsdk.ConversationAuthority) (agentsdk.ConversationBusinessCatalogPage, error) {
+	return h.businessCatalogAccess(ctx, q, a, nil)
+}
+
+func (h *ConversationBusinessHost) businessCatalogAccess(ctx context.Context, q agentsdk.ConversationBusinessCatalogQuery, a agentsdk.ConversationAuthority, receiptProducer *principalmodel.Principal) (agentsdk.ConversationBusinessCatalogPage, error) {
 	out := agentsdk.ConversationBusinessCatalogPage{Items: []agentsdk.ConversationBusinessObject{}, Complete: true}
 	p, err := h.principal(ctx, a)
 	if err != nil {
@@ -41,10 +45,10 @@ func (h *ConversationBusinessHost) BusinessCatalog(ctx context.Context, q agents
 		return out, conversationBusinessError("forbidden")
 	}
 	if q.Kind == "actions" {
-		return h.businessActionCatalog(snapshot, p, q, out)
+		return h.businessActionCatalog(ctx, snapshot, p, q, out, receiptProducer)
 	}
 	if q.Kind == "workflows" {
-		return h.businessWorkflowCatalog(ctx, snapshot, p, visible, q, out)
+		return h.businessWorkflowCatalog(ctx, snapshot, p, visible, q, out, receiptProducer)
 	}
 	if q.Kind == "relations" {
 		return businessRelationCatalog(snapshot, p, q, out)
@@ -92,11 +96,29 @@ func (h *ConversationBusinessHost) BusinessCatalog(ctx context.Context, q agents
 	return out, nil
 }
 
-func (h *ConversationBusinessHost) businessActionCatalog(snapshot appschemamodel.ApplicationSchemaSnapshot, p principalmodel.Principal, q agentsdk.ConversationBusinessCatalogQuery, out agentsdk.ConversationBusinessCatalogPage) (agentsdk.ConversationBusinessCatalogPage, error) {
+func (h *ConversationBusinessHost) businessActionCatalog(ctx context.Context, snapshot appschemamodel.ApplicationSchemaSnapshot, p principalmodel.Principal, q agentsdk.ConversationBusinessCatalogQuery, out agentsdk.ConversationBusinessCatalogPage, receiptProducer *principalmodel.Principal) (agentsdk.ConversationBusinessCatalogPage, error) {
 	actions := append([]definitionmodel.ActionSchema(nil), snapshot.Actions...)
+	var reader conversationBusinessActionCatalogReceiptReader
+	if receiptProducer != nil {
+		var ok bool
+		reader, ok = h.actions.(conversationBusinessActionCatalogReceiptReader)
+		if !ok {
+			return out, &agentsdk.Error{Class: "unavailable", Code: agentsdk.BusinessResultReadUnsupportedCode}
+		}
+		actions = append([]definitionmodel.ActionSchema(nil), h.actions.Definitions()...)
+	}
 	sort.Slice(actions, func(i, j int) bool { return actions[i].Key < actions[j].Key })
 	for _, action := range actions {
-		if action.Key <= q.After || q.ActionKey != "" && action.Key != q.ActionKey || q.ObjectKey != "" && action.ObjectKey != q.ObjectKey || len(invocationcontract.ValidateActionPermission(action, p)) != 0 {
+		if action.Key <= q.After || q.ActionKey != "" && action.Key != q.ActionKey || q.ObjectKey != "" && action.ObjectKey != q.ObjectKey {
+			continue
+		}
+		if receiptProducer != nil {
+			actual, err := reader.AgentSharedActionReceiptDefinition(ctx, action.Key, p, *receiptProducer)
+			if err != nil || actual.Key != action.Key || actual.ObjectKey != action.ObjectKey {
+				continue
+			}
+			action = actual
+		} else if len(invocationcontract.ValidateActionPermission(action, p)) != 0 {
 			continue
 		}
 		if len(out.Actions) == q.Limit {
@@ -132,7 +154,15 @@ func (h *ConversationBusinessHost) businessActionCatalog(snapshot appschemamodel
 	return out, nil
 }
 
-func (h *ConversationBusinessHost) businessWorkflowCatalog(ctx context.Context, snapshot appschemamodel.ApplicationSchemaSnapshot, p principalmodel.Principal, visible map[string]bool, q agentsdk.ConversationBusinessCatalogQuery, out agentsdk.ConversationBusinessCatalogPage) (agentsdk.ConversationBusinessCatalogPage, error) {
+func (h *ConversationBusinessHost) businessWorkflowCatalog(ctx context.Context, snapshot appschemamodel.ApplicationSchemaSnapshot, p principalmodel.Principal, visible map[string]bool, q agentsdk.ConversationBusinessCatalogQuery, out agentsdk.ConversationBusinessCatalogPage, receiptProducer *principalmodel.Principal) (agentsdk.ConversationBusinessCatalogPage, error) {
+	var reader conversationBusinessWorkflowCatalogReceiptReader
+	if receiptProducer != nil {
+		var ok bool
+		reader, ok = h.workflows.(conversationBusinessWorkflowCatalogReceiptReader)
+		if !ok {
+			return out, &agentsdk.Error{Class: "unavailable", Code: agentsdk.BusinessResultReadUnsupportedCode}
+		}
+	}
 	workflows := append([]definitionmodel.WorkflowSchema(nil), snapshot.Workflows...)
 	sort.Slice(workflows, func(i, j int) bool { return workflows[i].Key < workflows[j].Key })
 	for _, workflow := range workflows {
@@ -143,7 +173,13 @@ func (h *ConversationBusinessHost) businessWorkflowCatalog(ctx context.Context, 
 		// detail. Do not mix stale schema labels/objects with a current contract.
 		executionVersion := ""
 		if h.workflows != nil && len(h.evidenceKey) > 0 {
-			actual, err := h.workflows.AgentWorkflowDefinition(ctx, workflow.Key, p)
+			var actual definitionmodel.WorkflowSchema
+			var err error
+			if receiptProducer != nil {
+				actual, err = reader.AgentSharedWorkflowReceiptDefinition(ctx, workflow.Key, p, *receiptProducer)
+			} else {
+				actual, err = h.workflows.AgentWorkflowDefinition(ctx, workflow.Key, p)
+			}
 			if err != nil || actual.Key != workflow.Key {
 				continue
 			}
@@ -152,7 +188,7 @@ func (h *ConversationBusinessHost) businessWorkflowCatalog(ctx context.Context, 
 		}
 		// SchemaForPrincipal does not filter workflows. Apply the same target
 		// mode and exact run permission used by the actual invocation boundary.
-		if len(invocationcontract.ValidateWorkflowTarget(workflow, invocationcontract.WorkflowEntryAgent)) != 0 || len(invocationcontract.ValidateWorkflowPermission(workflow, p)) != 0 {
+		if len(invocationcontract.ValidateWorkflowTarget(workflow, invocationcontract.WorkflowEntryAgent)) != 0 || receiptProducer == nil && len(invocationcontract.ValidateWorkflowPermission(workflow, p)) != 0 {
 			continue
 		}
 		keys := workflowpolicy.WorkflowTriggerObjectKeys(workflow)

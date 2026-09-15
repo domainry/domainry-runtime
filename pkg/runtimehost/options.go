@@ -13,6 +13,7 @@ import (
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
+	"github.com/domainry/domainry-runtime/pkg/codingruntime"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
@@ -55,6 +56,9 @@ type Options struct {
 	// ConnectorProcesses is an explicit host policy for optional Provider
 	// subprocesses. The zero value denies every executable.
 	ConnectorProcesses ConnectorProcessPolicy
+	// AgentCodingWorkspace explicitly enables the local coding execution world.
+	// Nil leaves filesystem, terminal, process and LSP tools unpublished.
+	AgentCodingWorkspace *codingruntime.Options
 	// InitialWorkspaceCredentialDelivery is the process-local, one-shot sink
 	// used only while creating the first Workspace. It never becomes a Runtime
 	// HTTP, manifest, audit, receipt, or logging surface.

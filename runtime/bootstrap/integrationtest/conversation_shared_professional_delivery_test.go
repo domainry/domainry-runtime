@@ -305,20 +305,27 @@ func verifyProfessionalDispatchAndCurrentSourceRead(t *testing.T, sameUser bool)
 	unpublished := refs[0]
 	unpublished.CallID = "unpublished-professional-call"
 	issuer.call("POST", readPath, agent.ConversationDeliveryResultRead{ConversationResultRead: agent.ConversationResultRead{Reference: unpublished}}, 403)
+	sharedExecutionRead := verifyProfessionalExecutionSharing(t, issuer, receiver, detail, execution, refs)
+	if err := json.Unmarshal(issuer.call("GET", "/agent/delegations/"+detail.ID, nil, 200).Body.Bytes(), &published); err != nil {
+		t.Fatal(err)
+	}
 	issuer.call("POST", "/agent/delegations/"+detail.ID+"/decisions", agent.ConversationDelegationUpdate{ClientID: "accept-professional-delivery", ExpectedRevision: published.Revision, Action: "accept_delivery", Reason: "Checked both original professional results and their exact totals", Review: &agent.ConversationDeliveryReview{DeliveryDigest: published.Verification.DeliveryDigest}}, 200)
 	f.close()
 	f.open()
 	issuer.call("POST", "/auth/login", map[string]any{"login": "admin@example.com", "password": businessWebPassword}, 200)
 	issuer.session()
 	read(200)
+	sharedExecutionRead(200)
 	assignReader("results_field_denied")
 	issuer.session()
 	read(403)
+	sharedExecutionRead(403)
 	assignReader("results_reader")
 	issuer.session()
 	read(200)
 	assignReader("results_narrow")
 	issuer.session()
+	sharedExecutionRead(403)
 	narrowReads := 0
 	for _, condition := range published.Delivery.Conditions {
 		for _, ref := range condition.Receipts {
@@ -340,4 +347,5 @@ func verifyProfessionalDispatchAndCurrentSourceRead(t *testing.T, sameUser bool)
 		assignSharedResultProducer(t, f, issuer, "results_data_denied")
 	}
 	read(403)
+	sharedExecutionRead(403)
 }
