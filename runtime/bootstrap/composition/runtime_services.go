@@ -16,6 +16,7 @@ import (
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
@@ -49,6 +50,7 @@ type RuntimeServices struct {
 	reportModule               ReportModuleApplicationPorts
 	schedulerDefinitionSource  SchedulerDefinitionSource
 	notificationEventPublisher func(context.Context, notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, bool, error)
+	agentTaskAttachmentFiles   *uploadapplication.AgentTaskAttachmentFileService
 	assembly                   *runtimeAssembly
 }
 
@@ -140,6 +142,7 @@ type RuntimeServicesDependencies struct {
 	AgentTaskRunner                     agentsdk.TaskRunner
 	AgentScheduledTasks                 agentsdk.ScheduledConversationTaskService
 	AgentBusinessEvents                 agentsdk.BusinessEventConversationTaskService
+	AgentTaskAttachmentFiles            *uploadapplication.AgentTaskAttachmentFileService
 	BusinessHandlers                    *runtimeext.BusinessHandlerRegistry
 	VerifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 	OpenVerifiedFile                    func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
@@ -177,6 +180,7 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *Runt
 		applications: assembly.Applications(), schema: assembly.RecordSchemaSnapshotProvider,
 		schedulerDefinitionSource:  assembly.schedulerDefinitionSource,
 		notificationEventPublisher: assembly.notificationEventPublisher,
+		agentTaskAttachmentFiles:   config.Dependencies.AgentTaskAttachmentFiles,
 		assembly:                   assembly,
 		reportModule: ReportModuleApplicationPorts{
 			Subjects:  assembly.reportModuleQueryHost,

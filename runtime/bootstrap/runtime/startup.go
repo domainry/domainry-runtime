@@ -640,6 +640,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		dataExchangeBinding:  serviceAssembly.dataExchangeBinding,
 		lifecycleBinding:     serviceAssembly.lifecycleBinding,
 		fileScanProcessor:    serviceAssembly.fileScanProcessor,
+		publicResources:      serviceAssembly.publicResources,
 		manifest:             manifest,
 		workspaceRolePolicy:  workspaceRolePolicy,
 		recordRepository:     recordRepository,

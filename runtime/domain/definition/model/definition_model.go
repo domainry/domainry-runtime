@@ -106,8 +106,36 @@ type ObjectSchema struct {
 	// ExportAssurancePolicy applies the shared assurance grant contract to
 	// object exports. Record-bound selector fields are intentionally not used.
 	ExportAssurancePolicy *ActionAssurancePolicy `json:"export_assurance_policy,omitempty"`
+	PublicResources       []ObjectPublicResource `json:"public_resources,omitempty"`
 	UX                    map[string]any         `json:"ux,omitempty"`
 	Config                map[string]any         `json:"config,omitempty"`
+}
+
+// ObjectPublicResource is a manifest-governed anonymous projection of one
+// business Object. AccessKeyField is an opaque capability key, StateField and
+// ActiveState are the revocation gate, and Fields is the complete public JSON
+// allowlist. No generic Record identity is part of the response contract.
+type ObjectPublicResource struct {
+	Key            string                     `json:"key"`
+	AccessKeyField string                     `json:"access_key_field"`
+	StateField     string                     `json:"state_field"`
+	ActiveState    string                     `json:"active_state"`
+	Fields         []string                   `json:"fields"`
+	Files          []ObjectPublicResourceFile `json:"files,omitempty"`
+}
+
+// ObjectPublicResourceFile binds a public relation to immutable upload
+// evidence on its target Object. Runtime serves bytes only after the current
+// relation, target metadata, clean scan receipt, size and SHA-256 all agree.
+type ObjectPublicResourceFile struct {
+	FieldKey               string `json:"field_key"`
+	FileIDField            string `json:"file_id_field"`
+	FilenameField          string `json:"filename_field"`
+	MediaTypeField         string `json:"media_type_field"`
+	ByteSizeField          string `json:"byte_size_field"`
+	ContentSHA256Field     string `json:"content_sha256_field"`
+	DisabledBooleanField   string `json:"disabled_boolean_field,omitempty"`
+	DisabledTimestampField string `json:"disabled_timestamp_field,omitempty"`
 }
 
 // ObjectCapabilitySet declares which generic record operations are real for

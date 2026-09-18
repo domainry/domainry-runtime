@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -22,6 +23,7 @@ import (
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
+	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -86,7 +88,10 @@ func BindAgentApplicationHost(dependencies AgentApplicationHostDependencies) err
 		Queries: agentTaskToolQueryAdapter{records: applications.Records}, Actions: agentTaskToolActionAdapter{actions: applications.Actions},
 		Risk: agentTaskToolRiskAdapter{actions: applications.Actions}, RateLimiter: dependencies.RateLimiter,
 	})
-	interactive := runtimeAgentInteractiveHost{authorization: applications.AgentAuthorization, tools: tools, workflows: applications.Workflows}
+	interactive := runtimeAgentInteractiveHost{
+		authorization: applications.AgentAuthorization, tools: tools, workflows: applications.Workflows,
+		records: applications.Records, attachmentFiles: dependencies.Records.AgentTaskAttachmentFiles(),
+	}
 	task := runtimeAgentTaskHost{authorization: applications.AgentAuthorization, credentials: credentials, tools: tools, workflows: applications.Workflows}
 	proposal := runtimeAgentProposalHost{records: dependencies.Records, principals: dependencies.Principals}
 	audit := runtimeAgentAuditHost{audit: applications.Audit}
@@ -472,9 +477,11 @@ func (h runtimeAgentAnalysisHost) ListAnalysisRecords(ctx context.Context, objec
 }
 
 type runtimeAgentInteractiveHost struct {
-	authorization *agentapplication.AgentAuthorizationApplicationService
-	tools         *agentapplication.AgentToolGateway
-	workflows     *workflowapplication.WorkflowApplicationService
+	authorization   *agentapplication.AgentAuthorizationApplicationService
+	tools           *agentapplication.AgentToolGateway
+	workflows       *workflowapplication.WorkflowApplicationService
+	records         *recordapplication.RecordApplicationService
+	attachmentFiles *uploadapplication.AgentTaskAttachmentFileService
 }
 
 func (h runtimeAgentInteractiveHost) ResolveInteractiveContext(ctx context.Context, request agentmodulehost.InteractiveContextRequest) (agentsdk.GlobalContext, error) {
@@ -505,6 +512,66 @@ func (h runtimeAgentInteractiveHost) AuthorizeInteractiveTask(ctx context.Contex
 		return agentmodulehost.InteractiveTaskAuthorization{}, err
 	}
 	return agentmodulehost.InteractiveTaskAuthorization{Identity: result.Identity, Task: result.Task, Evidence: result.Evidence}, nil
+}
+
+func (h runtimeAgentInteractiveHost) ResolveTaskAttachmentSource(ctx context.Context, request agentmodulehost.TaskAttachmentSourceRequest) (agentsdk.TaskAttachment, error) {
+	source := request.Source
+	if h.authorization == nil || h.records == nil || h.attachmentFiles == nil {
+		return agentsdk.TaskAttachment{}, runtimeAgentSDKError(apperror.New(apperror.KindUnavailable, "agent.task.attachment_source_unavailable", nil, nil))
+	}
+	if source.Kind != agentmodulehost.TaskAttachmentSourceKindRuntimeRecordFile {
+		return agentsdk.TaskAttachment{}, runtimeAgentSDKError(apperror.New(apperror.KindBadRequest, "agent.task.attachment_source_invalid", nil, nil))
+	}
+	principal, _, err := h.authorization.ResolveExecutionIdentity(ctx, agentapplication.AgentExecutionIdentityRequest{
+		Initiator: runtimeAgentPrincipal(request.Principal), Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit},
+	})
+	if err != nil {
+		return agentsdk.TaskAttachment{}, runtimeAgentSDKError(err)
+	}
+	objectKey, recordID, fieldKey := strings.TrimSpace(source.ObjectKey), strings.TrimSpace(source.RecordID), strings.TrimSpace(source.FieldKey)
+	if !principal.Known || objectKey == "" || recordID == "" || fieldKey == "" || strings.TrimSpace(source.Filename) == "" {
+		return agentsdk.TaskAttachment{}, runtimeAgentSDKError(apperror.New(apperror.KindBadRequest, "agent.task.attachment_source_invalid", nil, nil))
+	}
+	record, err := h.records.GetRecord(ctx, objectKey, recordID, principal)
+	if err != nil {
+		return agentsdk.TaskAttachment{}, runtimeAgentSDKError(err)
+	}
+	fileID, ok := record.Data[fieldKey].(string)
+	fileID = strings.TrimSpace(fileID)
+	if !ok || record.Deleted || record.ID != recordID || record.WorkspaceID != principal.WorkspaceID || fileID == "" {
+		return agentsdk.TaskAttachment{}, runtimeAgentSDKError(apperror.New(apperror.KindForbidden, "agent.task.attachment_source_denied", nil, nil))
+	}
+	filename := strings.TrimSpace(source.Filename)
+	if recorded, exists := record.Data["filename"]; exists {
+		authoritative, valid := recorded.(string)
+		authoritative = strings.TrimSpace(authoritative)
+		if !valid || authoritative == "" || authoritative != filename {
+			return agentsdk.TaskAttachment{}, runtimeAgentSDKError(apperror.New(apperror.KindForbidden, "agent.task.attachment_source_mismatch", nil, nil))
+		}
+	}
+	resolved, err := h.attachmentFiles.Open(ctx, uploadapplication.AgentTaskAttachmentFileRequest{
+		WorkspaceID: principal.WorkspaceID, OwnerUserID: record.OwnerUserID,
+		ObjectKey: objectKey, RecordID: recordID, FieldKey: fieldKey, FileID: fileID,
+		Filename: filename, MaxBytes: agentsdk.TaskAttachmentMaxBytes,
+	})
+	if err != nil {
+		return agentsdk.TaskAttachment{}, runtimeAgentSDKError(err)
+	}
+	return agentsdk.TaskAttachment{
+		Filename: resolved.Filename, ContentType: resolved.ContentType, Bytes: resolved.Bytes,
+		SHA256: resolved.SHA256, Detail: source.Detail, Data: resolved.Data,
+	}, nil
+}
+
+func runtimeAgentSDKError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var sdkError *agentsdk.Error
+	if errors.As(err, &sdkError) {
+		return err
+	}
+	return &agentsdk.Error{Class: string(apperror.KindOf(err)), Code: apperror.CodeOf(err), Cause: err}
 }
 
 func (h runtimeAgentInteractiveHost) InvokeInteractiveTool(ctx context.Context, request agentmodulehost.InteractiveToolInvocationRequest) (agentmodulehost.InteractiveToolInvocationResult, error) {

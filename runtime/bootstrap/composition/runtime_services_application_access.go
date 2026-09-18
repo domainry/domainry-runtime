@@ -19,6 +19,7 @@ import (
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
+	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -96,6 +97,16 @@ func (s *RuntimeServices) Applications() RuntimeApplications {
 		return RuntimeApplications{TargetExecutions: targetExecutions, RecordTimers: recordtimerapplication.NewRecordTimerApplicationService(nil, nil, nil)}
 	}
 	return s.applications
+}
+
+// AgentTaskAttachmentFiles exposes only the verified byte materializer needed
+// by the Runtime-owned Agent host. Agent never receives Runtime storage paths,
+// repositories, or scanner implementations.
+func (s *RuntimeServices) AgentTaskAttachmentFiles() *uploadapplication.AgentTaskAttachmentFileService {
+	if s == nil {
+		return nil
+	}
+	return s.agentTaskAttachmentFiles
 }
 
 // NotificationEventPublisher exposes the assembled Notification SDK producer

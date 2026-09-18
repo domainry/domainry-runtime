@@ -293,6 +293,27 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 			}
 		}
 	}
+	desiredPublicIndexes := make(map[string]bool, len(object.PublicResources))
+	for _, resource := range object.PublicResources {
+		indexName := r.publicResourceAccessIndexName(object.Key, resource)
+		desiredPublicIndexes[indexName] = true
+		if indexes[indexName] {
+			continue
+		}
+		if err := r.createIndexIfMissing(ctx, object.Key, indexName, true, strings.TrimSpace(resource.AccessKeyField)); err != nil {
+			return fmt.Errorf("create public resource access index %s: %w", indexName, err)
+		}
+		indexes[indexName] = true
+	}
+	for existingIndex := range indexes {
+		if !strings.HasPrefix(existingIndex, "uidx_public_") || desiredPublicIndexes[existingIndex] {
+			continue
+		}
+		if err := r.dropManagedIndex(ctx, object.Key, existingIndex); err != nil {
+			return err
+		}
+		delete(indexes, existingIndex)
+	}
 	for _, validation := range object.Validations {
 		kind := strings.TrimSpace(validation.Type)
 		if kind != "composite_unique" || len(validation.Fields) == 0 {

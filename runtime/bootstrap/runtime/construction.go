@@ -19,6 +19,7 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
+	publicresourceapplication "github.com/domainry/domainry-runtime/runtime/application/publicresource"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
@@ -49,6 +50,7 @@ type runtimeConstructionInput struct {
 	dataExchangeBinding  dataexchangesdk.Binding
 	lifecycleBinding     lifecyclesdk.Binding
 	fileScanProcessor    *uploadapplication.FileScanProcessor
+	publicResources      *publicresourceapplication.Service
 	manifest             manifestmodel.ManifestSchema
 	workspaceRolePolicy  workspaceprovision.WorkspaceBootstrapRolePolicyEvidence
 	recordRepository     recordrepository.RecordRepository
@@ -91,6 +93,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		dataExchangeBinding:  input.dataExchangeBinding,
 		lifecycleBinding:     input.lifecycleBinding,
 		fileScanProcessor:    input.fileScanProcessor,
+		publicResources:      input.publicResources,
 		manifest:             input.manifest,
 		workspaceRolePolicy:  input.workspaceRolePolicy,
 		recordRepo:           input.recordRepository,

@@ -2,12 +2,16 @@ package runtime
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+	"strings"
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
+	publicresourceapplication "github.com/domainry/domainry-runtime/runtime/application/publicresource"
 	hostsurfacemodel "github.com/domainry/domainry-runtime/runtime/domain/hostsurface/model"
 )
 
@@ -22,6 +26,7 @@ func (runtime *Runtime) ModuleHTTPAdapters() []modulehttp.Adapter {
 	adapters = append(adapters,
 		runtimeDiscoveryHTTPAdapter{runtime: runtime},
 		runtimeActionHTTPAdapter{runtime: runtime},
+		runtimePublicResourceHTTPAdapter{runtime: runtime},
 	)
 	return append([]modulehttp.Adapter(nil), adapters...)
 }
@@ -119,6 +124,8 @@ func (runtimeDiscoveryHTTPAdapter) Routes() []modulehttp.Route {
 
 type runtimeActionHTTPAdapter struct{ runtime *Runtime }
 
+type runtimePublicResourceHTTPAdapter struct{ runtime *Runtime }
+
 func (runtimeActionHTTPAdapter) ContractVersion() string { return modulehttp.ContractVersion }
 func (runtimeActionHTTPAdapter) Owner() string           { return "action" }
 func (runtimeActionHTTPAdapter) Name() string            { return "permission_usage" }
@@ -130,8 +137,15 @@ func (adapter runtimeActionHTTPAdapter) Routes() []modulehttp.Route {
 	return []modulehttp.Route{{Action: runtimePermissionUsageQueryAction(audience)}}
 }
 
+func (runtimePublicResourceHTTPAdapter) ContractVersion() string { return modulehttp.ContractVersion }
+func (runtimePublicResourceHTTPAdapter) Owner() string           { return "public-resources" }
+func (runtimePublicResourceHTTPAdapter) Name() string            { return "resources" }
+func (runtimePublicResourceHTTPAdapter) Routes() []modulehttp.Route {
+	return []modulehttp.Route{{Action: hostsurfacemodel.PublicResourceReadAction()}, {Action: hostsurfacemodel.PublicResourceFileReadAction()}}
+}
+
 func runtimeModuleInventoryActions(identityAudience string) []actioncontract.ActionDefinition {
-	return []actioncontract.ActionDefinition{runtimeModuleInventoryAction(), runtimePermissionUsageQueryAction(identityAudience)}
+	return []actioncontract.ActionDefinition{runtimeModuleInventoryAction(), runtimePermissionUsageQueryAction(identityAudience), hostsurfacemodel.PublicResourceReadAction(), hostsurfacemodel.PublicResourceFileReadAction()}
 }
 
 func runtimeModuleInventoryAction() actioncontract.ActionDefinition {
@@ -198,6 +212,61 @@ func (s runtimeActionHTTPAdapter) Handler() http.Handler {
 	return mux
 }
 
+func (s runtimePublicResourceHTTPAdapter) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /public-resources/{resourceKey}/{accessKey}", func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		response.Header().Set("Cache-Control", "no-store")
+		if s.runtime == nil || s.runtime.publicResources == nil {
+			response.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.public_resource_unavailable"})
+			return
+		}
+		resource, err := s.runtime.publicResources.Get(request.Context(), request.PathValue("resourceKey"), request.PathValue("accessKey"))
+		if err != nil {
+			writePublicResourceError(response, err)
+			return
+		}
+		_ = json.NewEncoder(response).Encode(resource)
+	})
+	mux.HandleFunc("GET /public-resources/{resourceKey}/{accessKey}/files/{fieldKey}", func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Cache-Control", "no-store")
+		response.Header().Set("X-Content-Type-Options", "nosniff")
+		response.Header().Set("Content-Security-Policy", "sandbox")
+		if s.runtime == nil || s.runtime.publicResources == nil {
+			response.Header().Set("Content-Type", "application/json")
+			response.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.public_resource_unavailable"})
+			return
+		}
+		file, err := s.runtime.publicResources.OpenFile(request.Context(), request.PathValue("resourceKey"), request.PathValue("accessKey"), request.PathValue("fieldKey"))
+		if err != nil {
+			response.Header().Set("Content-Type", "application/json")
+			writePublicResourceError(response, err)
+			return
+		}
+		disposition := "attachment"
+		if strings.HasPrefix(strings.ToLower(file.ContentType), "image/") {
+			disposition = "inline"
+		}
+		response.Header().Set("Content-Type", file.ContentType)
+		response.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": file.Filename}))
+		response.Header().Set("Content-Length", fmt.Sprint(len(file.Content)))
+		_, _ = response.Write(file.Content)
+	})
+	return mux
+}
+
+func writePublicResourceError(response http.ResponseWriter, err error) {
+	if errors.Is(err, publicresourceapplication.ErrNotFound) || errors.Is(err, publicresourceapplication.ErrRequestInvalid) {
+		response.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.public_resource_not_found"})
+		return
+	}
+	response.WriteHeader(http.StatusServiceUnavailable)
+	_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.public_resource_unavailable"})
+}
+
 func ensureRuntimeUsageRequestEOF(decoder *json.Decoder) error {
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
@@ -211,3 +280,4 @@ func ensureRuntimeUsageRequestEOF(decoder *json.Decoder) error {
 
 var _ modulehttp.Adapter = runtimeDiscoveryHTTPAdapter{}
 var _ modulehttp.Adapter = runtimeActionHTTPAdapter{}
+var _ modulehttp.Adapter = runtimePublicResourceHTTPAdapter{}

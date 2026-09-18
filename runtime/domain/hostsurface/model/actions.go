@@ -34,3 +34,23 @@ func PermissionUsageQueryAction(identityAudience string) actioncontract.ActionDe
 		EffectClass:   actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "runtime_action_usage_read", LifecycleStatus: actioncontract.LifecycleActive,
 	}
 }
+
+func PublicResourceReadAction() actioncontract.ActionDefinition {
+	return actioncontract.ActionDefinition{
+		Key: "runtime.public_resources.read", Owner: "runtime:builtin", SourceKind: "builtin_http", CapabilityKey: "runtime.public_resources", CapabilityLabel: "Public resources",
+		OperationKey: "read", OperationLabel: "Read public resource", Label: "Read public resource", Exposures: []actioncontract.Exposure{actioncontract.ExposurePublic},
+		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAnonymous},
+		HTTP:          &actioncontract.HTTPBinding{Method: http.MethodGet, RouteTemplate: "/public-resources/{resourceKey}/{accessKey}"},
+		EffectClass:   actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "public_resource_read", LifecycleStatus: actioncontract.LifecycleActive,
+	}
+}
+
+func PublicResourceFileReadAction() actioncontract.ActionDefinition {
+	return actioncontract.ActionDefinition{
+		Key: "runtime.public_resources.files.read", Owner: "runtime:builtin", SourceKind: "builtin_http", CapabilityKey: "runtime.public_resources.files", CapabilityLabel: "Public resource files",
+		OperationKey: "read", OperationLabel: "Read public resource file", Label: "Read public resource file", Exposures: []actioncontract.Exposure{actioncontract.ExposurePublic},
+		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAnonymous},
+		HTTP:          &actioncontract.HTTPBinding{Method: http.MethodGet, RouteTemplate: "/public-resources/{resourceKey}/{accessKey}/files/{fieldKey}"},
+		EffectClass:   actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "public_resource_file_read", LifecycleStatus: actioncontract.LifecycleActive,
+	}
+}

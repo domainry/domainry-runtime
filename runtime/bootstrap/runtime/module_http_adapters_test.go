@@ -86,7 +86,7 @@ func TestRuntimeCollectsModuleOwnedHTTPAdapters(t *testing.T) {
 		),
 	}
 	adapters := runtime.ModuleHTTPAdapters()
-	if len(adapters) != 4 || adapters[0].Owner() != "notification" || adapters[1].Owner() != "data_exchange" || adapters[2].Owner() != "discovery" || adapters[3].Owner() != "action" {
+	if len(adapters) != 5 || adapters[0].Owner() != "notification" || adapters[1].Owner() != "data_exchange" || adapters[2].Owner() != "discovery" || adapters[3].Owner() != "action" || adapters[4].Owner() != "public-resources" {
 		t.Fatalf("adapters=%#v", adapters)
 	}
 	for _, adapter := range adapters {
@@ -99,6 +99,9 @@ func TestRuntimeCollectsModuleOwnedHTTPAdapters(t *testing.T) {
 	}
 	if routes := adapters[3].Routes(); len(routes) != 1 || routes[0].Action.Key != "runtime.action.permission_usages.query" {
 		t.Fatalf("Runtime authorization routes=%#v", routes)
+	}
+	if routes := adapters[4].Routes(); len(routes) != 2 || routes[0].Action.Key != "runtime.public_resources.read" || routes[1].Action.Key != "runtime.public_resources.files.read" {
+		t.Fatalf("Runtime public resource routes=%#v", routes)
 	}
 	response := httptest.NewRecorder()
 	runtimeDiscoveryHTTPAdapter{runtime: &Runtime{}}.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/discovery/modules", nil))

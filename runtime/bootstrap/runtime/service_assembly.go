@@ -36,6 +36,7 @@ import (
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
+	publicresourceapplication "github.com/domainry/domainry-runtime/runtime/application/publicresource"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
@@ -54,6 +55,7 @@ import (
 	notificationpublicationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
+	publicresourcepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicresource"
 	ratelimitpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/ratelimit"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
@@ -74,6 +76,7 @@ type runtimeServiceAssembly struct {
 	dataExchangeBinding dataexchangesdk.Binding
 	lifecycleBinding    lifecyclesdk.Binding
 	fileScanProcessor   *uploadapplication.FileScanProcessor
+	publicResources     *publicresourceapplication.Service
 }
 
 type runtimeExtensionRegistries struct {
@@ -310,7 +313,10 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 		_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
 		return runtimeServiceAssembly{}, fmt.Errorf("initialize file capabilities: %w", err)
 	}
-	fileCapabilities.BindUploadSubjects(uploadapplication.NewUploadSubjectRegistry(store))
+	uploadSubjects := uploadapplication.NewUploadSubjectRegistry(store)
+	fileCapabilities.BindUploadSubjects(uploadSubjects)
+	agentTaskAttachmentFiles := uploadapplication.NewAgentTaskAttachmentFileService(uploadSubjects, fileScans, fileCapabilities)
+	publicResources := publicresourceapplication.NewService(manifest, publicresourcepersistence.NewStore(store), records, fileCapabilities, fileScans)
 	recordSubjectLifecycle := recordapplication.NewRecordSubjectLifecycleApplicationService(records, manifest.Objects, lifecycleArtifacts, manifest.IdentityProfileExtensions)
 	recordSubjectLifecycle.BindSubjectUploads(store.SubjectUploadReferences)
 	if audit, ok := auditSubjectLifecycle.(*runtimeauditmodule.SubjectLifecycle); ok {
@@ -390,6 +396,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 			AgentTaskRunner:                     agentTaskRunner,
 			AgentScheduledTasks:                 agentScheduledTasks,
 			AgentBusinessEvents:                 agentBusinessEvents,
+			AgentTaskAttachmentFiles:            agentTaskAttachmentFiles,
 			ActionRuntimeRevision:               cfg.RuntimeVersion,
 			ActionProjectRevision:               projectRevision,
 			ActionMetadataRevision:              metadataRevision,
@@ -491,7 +498,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, manifest ma
 	lifecyclePrincipal := lifecycleaccess.NewSystemPrincipal("runtime-lifecycle", lifecycleScope)
 	services.Applications().RuntimeStatus.ConfigureLifecycleHealth(ctx, lifecycleBinding.System())
 	return completeRuntimeServiceAssembly(
-		runtimeServiceAssembly{services: services, records: records, worker: workerDependencies, dataExchangeBinding: dataExchangeBinding, lifecycleBinding: lifecycleBinding, fileScanProcessor: fileScanProcessor},
+		runtimeServiceAssembly{services: services, records: records, worker: workerDependencies, dataExchangeBinding: dataExchangeBinding, lifecycleBinding: lifecycleBinding, fileScanProcessor: fileScanProcessor, publicResources: publicResources},
 		func() error {
 			return lifecycleBinding.System().InstallDefaultPolicies(ctx, principalmodel.InstallationWorkspaceID, lifecyclePrincipal, time.Now().UTC())
 		},

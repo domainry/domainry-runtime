@@ -239,7 +239,7 @@ func TestRuntimeAgentRetentionAndSubjectErasureEndToEnd(t *testing.T) {
 		t.Context(), cfg, handlers, connectors, runtimehttp.RuntimeReleaseIdentity{}, deploymentapplication.RuntimeReleaseArtifactEvidence{},
 		identityBinding, notificationmodule.NewFactory(notificationmodule.Options{}), moduleSetMonitoringModuleFactory(t), schedulermodule.NewFactory(schedulermodule.Options{}),
 		dataexchangemodule.NewFactory(dataexchangemodule.Options{}), integrationmodule.NewFactory(), reportmodule.NewFactory(), store,
-		agentmodule.NewFactory(agentmodule.Options{BaseURL: "http://127.0.0.1", APIKey: "subject-erasure-test", AgentID: 1}),
+		agentmodule.NewFactory(agentmodule.Options{BaseURL: "http://127.0.0.1", APIKey: "subject-erasure-test", AgentID: 1, ConversationEnabled: true}),
 	)
 	t.Cleanup(func() { _ = application.CloseContext(context.Background()) })
 	conversationBinding, ok := application.agentBinding.(agentsdk.ConversationBinding)

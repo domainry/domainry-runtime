@@ -122,6 +122,9 @@ func (state *validationState) validateAgents() {
 			state.add(path+".instruction", "is required")
 		}
 		validateAgentJSONSchema(state, path+".input_schema", task.InputSchema)
+		if err := agentsdk.ValidateAgentTaskAttachmentSchema(task.AttachmentSchema); err != nil {
+			state.add(path+".attachment_schema", "%s", err)
+		}
 		validateAgentJSONSchema(state, path+".output_schema", task.OutputSchema)
 		allowedObjects := agentAllowedObjects(agent, skills)
 		validateAgentStringSet(state, path+".allowed_objects", task.AllowedObjects)

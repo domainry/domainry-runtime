@@ -19,6 +19,7 @@ import (
 
 func (state *validationState) validateObjects() {
 	seen := map[string]bool{}
+	publicResources := map[string]bool{}
 	for index, object := range state.manifest.Objects {
 		path := fmt.Sprintf("objects[%d]", index)
 		key := strings.TrimSpace(object.Key)
@@ -39,6 +40,7 @@ func (state *validationState) validateObjects() {
 		state.validateObjectLifecyclePolicy(path, object)
 		state.validateObjectLedgerPolicy(path, object)
 		state.validateObjectExportAssurancePolicy(path, object)
+		state.validateObjectPublicResources(path, object, publicResources)
 		if err := recordmodel.RecordValidateLocalizedFieldContract(object); err != nil {
 			state.add(path+".fields", "%s", err)
 		}
@@ -106,6 +108,129 @@ func (state *validationState) validateObjects() {
 					state.add(validationPath+".config.transitions", "%s", code)
 				}
 			}
+		}
+	}
+}
+
+func (state *validationState) validateObjectPublicResources(path string, object definitionmodel.ObjectSchema, resourceKeys map[string]bool) {
+	for index, resource := range object.PublicResources {
+		resourcePath := fmt.Sprintf("%s.public_resources[%d]", path, index)
+		key := strings.TrimSpace(resource.Key)
+		if key == "" || key != resource.Key || !storageValuePattern.MatchString(key) || strings.ContainsAny(key, ".-") {
+			state.add(resourcePath+".key", "must be a canonical lower_snake_case public route key")
+		} else if resourceKeys[key] {
+			state.add(resourcePath+".key", "duplicate public resource key %q", key)
+		}
+		resourceKeys[key] = true
+
+		accessKey := state.fields[object.Key][strings.TrimSpace(resource.AccessKeyField)]
+		if strings.TrimSpace(resource.AccessKeyField) == "" || accessKey.Key == "" {
+			state.add(resourcePath+".access_key_field", "references unknown field %q", resource.AccessKeyField)
+		} else if resource.AccessKeyField != strings.TrimSpace(resource.AccessKeyField) || accessKey.Type != "text" || !accessKey.Required || !accessKey.Unique || accessKey.Sensitive || strings.TrimSpace(accessKey.DisabledAt) != "" {
+			state.add(resourcePath+".access_key_field", "field %q must be an enabled, required, unique, non-sensitive text field", resource.AccessKeyField)
+		}
+
+		stateField := state.fields[object.Key][strings.TrimSpace(resource.StateField)]
+		activeState := strings.TrimSpace(resource.ActiveState)
+		if strings.TrimSpace(resource.StateField) == "" || stateField.Key == "" {
+			state.add(resourcePath+".state_field", "references unknown field %q", resource.StateField)
+		} else if resource.StateField != strings.TrimSpace(resource.StateField) || (stateField.Type != "select" && stateField.Type != "text") || !stateField.Required || stateField.Sensitive || strings.TrimSpace(stateField.DisabledAt) != "" {
+			state.add(resourcePath+".state_field", "field %q must be an enabled, required, non-sensitive select or text field", resource.StateField)
+		}
+		if activeState == "" || activeState != resource.ActiveState || !storageValuePattern.MatchString(activeState) {
+			state.add(resourcePath+".active_state", "must be a canonical non-empty storage value")
+		} else if stateField.Type == "select" && len(stateField.Validation.Options) > 0 && !containsTrimmedString(stateField.Validation.Options, activeState) {
+			state.add(resourcePath+".active_state", "value %q is absent from state field %q options", activeState, resource.StateField)
+		}
+
+		if len(resource.Fields) == 0 || len(resource.Fields) > 32 {
+			state.add(resourcePath+".fields", "must contain between 1 and 32 public scalar fields")
+		}
+		seenFields := map[string]bool{}
+		for fieldIndex, rawFieldKey := range resource.Fields {
+			fieldPath := fmt.Sprintf("%s.fields[%d]", resourcePath, fieldIndex)
+			fieldKey := strings.TrimSpace(rawFieldKey)
+			field := state.fields[object.Key][fieldKey]
+			switch {
+			case fieldKey == "" || fieldKey != rawFieldKey:
+				state.add(fieldPath, "must be a canonical field key")
+			case seenFields[fieldKey]:
+				state.add(fieldPath, "duplicate public field %q", fieldKey)
+			case field.Key == "":
+				state.add(fieldPath, "references unknown field %q", fieldKey)
+			case fieldKey == strings.TrimSpace(resource.AccessKeyField) || fieldKey == strings.TrimSpace(resource.StateField):
+				state.add(fieldPath, "access and publication-state fields are Runtime gates and cannot be returned")
+			case field.Type == "relation":
+				state.add(fieldPath, "relation field %q must use a files binding instead of the scalar projection", fieldKey)
+			case field.Sensitive || strings.TrimSpace(field.DisabledAt) != "":
+				state.add(fieldPath, "field %q must be enabled and non-sensitive", fieldKey)
+			}
+			seenFields[fieldKey] = true
+		}
+
+		if len(resource.Files) > 8 {
+			state.add(resourcePath+".files", "may contain at most 8 public file bindings")
+		}
+		seenFiles := map[string]bool{}
+		for fileIndex, file := range resource.Files {
+			filePath := fmt.Sprintf("%s.files[%d]", resourcePath, fileIndex)
+			fieldKey := strings.TrimSpace(file.FieldKey)
+			relation := state.fields[object.Key][fieldKey]
+			if fieldKey == "" || fieldKey != file.FieldKey || relation.Key == "" {
+				state.add(filePath+".field_key", "references unknown canonical field %q", file.FieldKey)
+				continue
+			}
+			if seenFiles[fieldKey] {
+				state.add(filePath+".field_key", "duplicate public file field %q", fieldKey)
+			}
+			seenFiles[fieldKey] = true
+			if relation.Type != "relation" || relation.Sensitive || strings.TrimSpace(relation.DisabledAt) != "" {
+				state.add(filePath+".field_key", "field %q must be an enabled, non-sensitive relation", fieldKey)
+				continue
+			}
+			targetKey := runtimeRelationTargetObject(relation)
+			target, ok := state.objects[targetKey]
+			if !ok {
+				state.add(filePath+".field_key", "relation field %q must target a declared Object", fieldKey)
+				continue
+			}
+			state.validateObjectPublicResourceFile(filePath, target, file)
+		}
+	}
+}
+
+func (state *validationState) validateObjectPublicResourceFile(path string, target definitionmodel.ObjectSchema, file definitionmodel.ObjectPublicResourceFile) {
+	checks := []struct {
+		path     string
+		fieldKey string
+		kind     string
+		optional bool
+	}{
+		{"file_id_field", file.FileIDField, "text", false},
+		{"filename_field", file.FilenameField, "text", false},
+		{"media_type_field", file.MediaTypeField, "text", false},
+		{"byte_size_field", file.ByteSizeField, "integer", false},
+		{"content_sha256_field", file.ContentSHA256Field, "text", false},
+		{"disabled_boolean_field", file.DisabledBooleanField, "boolean", true},
+		{"disabled_timestamp_field", file.DisabledTimestampField, "datetime", true},
+	}
+	seen := map[string]bool{}
+	for _, check := range checks {
+		fieldKey := strings.TrimSpace(check.fieldKey)
+		if fieldKey == "" && check.optional {
+			continue
+		}
+		field := state.fields[target.Key][fieldKey]
+		if fieldKey == "" || fieldKey != check.fieldKey || field.Key == "" {
+			state.add(path+"."+check.path, "references unknown canonical field %q on target Object %q", check.fieldKey, target.Key)
+			continue
+		}
+		if seen[fieldKey] {
+			state.add(path+"."+check.path, "reuses target field %q", fieldKey)
+		}
+		seen[fieldKey] = true
+		if field.Type != check.kind || field.Sensitive || strings.TrimSpace(field.DisabledAt) != "" {
+			state.add(path+"."+check.path, "field %q on target Object %q must be enabled, non-sensitive and type %s", fieldKey, target.Key, check.kind)
 		}
 	}
 }

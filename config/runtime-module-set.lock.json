@@ -1,6 +1,6 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "6630d6c45c1fef606249726125e90435e016204e05ee322d337edf9ee2abe78a",
+  "set_sha256": "d2b6fb52c495b74f4081af9618c502a8c955ce8499661c1fe2d29bed64fddc64",
   "modules": [
     {
       "key": "agent",
@@ -10,7 +10,7 @@
       "sdk": "github.com/domainry/domainry-agent-sdk",
       "sdk_version": "v0.1.17",
       "sdk_sum": "h1:6un1kkXsEA1AoxDI5YQVNpH7DOyZWhSIpefLbte8fyU=",
-      "capability_contract_sha256": "1ab830cfcb15dad14aef651468ec442d658aa2071a917d35e389d9fe0988cd40"
+      "capability_contract_sha256": "499dccbc612177a205957201ba914d5364e4adf69562ca0990606d5b817a343f"
     },
     {
       "key": "audit",

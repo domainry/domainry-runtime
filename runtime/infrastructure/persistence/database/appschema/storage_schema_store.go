@@ -36,6 +36,11 @@ func (s ApplicationSchemaStore) metadataFieldIndexName(table string, field strin
 	return prefix + "_field_" + hex.EncodeToString(hash[:])[:16]
 }
 
+func (s ApplicationSchemaStore) publicResourceAccessIndexName(table string, resource definitionmodel.ObjectPublicResource) string {
+	hash := sha256.Sum256([]byte(strings.TrimSpace(table) + "|" + strings.TrimSpace(resource.Key) + "|" + strings.TrimSpace(resource.AccessKeyField)))
+	return "uidx_public_" + hex.EncodeToString(hash[:])[:16]
+}
+
 // uniqueIndexName returns a deterministic index name for a composite_unique validation.
 func (s ApplicationSchemaStore) uniqueIndexName(table string, fields []string) string {
 	h := sha256.New()
