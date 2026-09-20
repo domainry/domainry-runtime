@@ -1,6 +1,6 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "54470233562dfc012894f106765d633c9a5fab9c80d562bbaafdb42d6382b33f",
+  "set_sha256": "756b2c73f112d062b5b335f5511e2d237b0ab7c62e4c811afc72b154b71adb18",
   "modules": [
     {
       "key": "agent",
@@ -45,12 +45,12 @@
     {
       "key": "integration",
       "implementation": "github.com/domainry/domainry-integration",
-      "implementation_version": "v0.1.16",
-      "implementation_sum": "h1:UPx50MJjcvf3KHSGTtFKoqii9STsPiHWZxGcGkRn3ho=",
+      "implementation_version": "v0.1.17",
+      "implementation_sum": "h1:5HN6MN8apxHIGARXO7lV23pk1arU2jmAG6WD9u0bbNA=",
       "sdk": "github.com/domainry/domainry-integration-sdk",
       "sdk_version": "v0.1.7",
       "sdk_sum": "h1:LS/ve4T+izsPuGLkqkcYiRB1MvoBNuqCeNE3BZatzdI=",
-      "capability_contract_sha256": "36dbad2c7eded116a1d3e66024355b45b5dbf9b4868342189e7a2b867a09c205"
+      "capability_contract_sha256": "ebec492ef9ac28a144fe3e075f4b3dc931461ebde52d1547d5f65565d1fb322b"
     },
     {
       "key": "lifecycle",
