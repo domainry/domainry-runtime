@@ -1,0 +1,82 @@
+{
+  "contract_version": "domainry-agent-guide-index-v2",
+  "owner": {"kind": "runtime", "key": "runtime"},
+  "model_schema_version": "domainry.model/v3",
+  "guides": [
+    {
+      "key": "domain_truth",
+      "question": "Who should own this business concept?",
+      "path": "capability/agent/domain-truth.md",
+      "problems_solved": ["Prevents one business concept from being copied into project tables, Runtime metadata, and module state with competing lifecycle and authorization rules."],
+      "business_scenarios": ["Deciding whether tenant wording maps to the Runtime Workspace boundary or to an independent business Object.", "Separating login users and organization hierarchy from customer, order, and other project-owned business facts."],
+      "requirement_signals": ["business entity", "tenant", "workspace", "source of truth", "ownership boundary"],
+      "use_when": ["A requirement names a durable concept but its source of truth is unclear"],
+      "do_not_use_when": ["The owner and authoring contract are already confirmed"],
+      "related_guides": ["records", "business_operations"]
+    },
+    {
+      "key": "records",
+      "question": "When should I model a Runtime Object and use CRUD?",
+      "path": "capability/agent/records.md",
+      "problems_solved": ["Provides governed persistence, validation, relations, Workspace isolation, and ordinary CRUD without building a project-local data framework."],
+      "business_scenarios": ["Maintaining customers, products, contracts, orders, or other durable business records with list, detail, create, and edit experiences.", "Relating one project-owned Object to another while Runtime owns identity, versioning, and audit timestamps."],
+      "requirement_signals": ["business record", "field", "relation", "CRUD", "list", "detail"],
+      "use_when": ["A project-owned business entity has durable facts and ordinary persistence"],
+      "do_not_use_when": ["The concept is owned by Runtime or an installed module"],
+      "capability_keys": ["schema.object", "schema.field", "schema.relation"],
+      "required_compiler_capabilities": ["schema.object", "schema.field", "schema.relation"],
+      "related_guides": ["domain_truth", "business_operations"]
+    },
+    {
+      "key": "business_operations",
+      "question": "When does behavior need a Business Operation and Handler?",
+      "path": "capability/agent/business-operations.md",
+      "problems_solved": ["Gives named business commands one atomic, least-privilege boundary for validation, coordinated writes, concurrency control, and stable refusals."],
+      "business_scenarios": ["Activating an account only from an eligible state and returning a stable conflict when the record changed concurrently.", "Issuing an invoice, reserving inventory, or submitting a case when several records must succeed or roll back together."],
+      "requirement_signals": ["named command", "business validation", "atomic multi-record change", "derived write", "stable business error"],
+      "use_when": ["A named command has rules or writes that ordinary CRUD cannot express"],
+      "do_not_use_when": ["The change is ordinary field persistence with no business command"],
+      "capability_keys": ["action.definition"],
+      "required_compiler_capabilities": ["action.definition"],
+      "related_guides": ["records", "workflow", "automation"]
+    },
+    {
+      "key": "workflow",
+      "question": "When does a process need Workflow instead of one Operation?",
+      "path": "capability/agent/workflow.md",
+      "problems_solved": ["Preserves durable process state across people, services, waits, retries, and resumptions that cannot finish inside one transaction."],
+      "business_scenarios": ["Routing a purchase request through requester, manager, and finance approval tasks.", "Pausing an onboarding or compliance process until a deadline, external result, or authorized human decision arrives."],
+      "requirement_signals": ["approval", "human task", "multi-step process", "wait", "resume", "escalation"],
+      "use_when": ["One business process spans steps, actors, waits, or resumable state"],
+      "do_not_use_when": ["The command completes atomically in one Handler"],
+      "capability_keys": ["workflow.definition"],
+      "required_compiler_capabilities": ["workflow.definition"],
+      "related_guides": ["business_operations", "automation"]
+    },
+    {
+      "key": "automation",
+      "question": "When should automatic behavior use Automation?",
+      "path": "capability/agent/automation.md",
+      "problems_solved": ["Expresses a deterministic lifecycle reaction once at the Runtime boundary without hiding it in browser hooks or project-local event plumbing."],
+      "business_scenarios": ["Publishing one fulfillment event after an order commit.", "Applying a bounded before-save rule or dispatching an after-commit reaction tied to a known Runtime lifecycle event."],
+      "requirement_signals": ["before save rule", "after save callback", "automatic reaction"],
+      "use_when": ["A deterministic reaction is tied to a Runtime lifecycle event"],
+      "do_not_use_when": ["The behavior is a user command, a long-running process, or recurring calendar work"],
+      "capability_keys": ["automation.rule"],
+      "required_compiler_capabilities": ["automation.rule"],
+      "related_guides": ["business_operations", "workflow"]
+    },
+    {
+      "key": "change_safety",
+      "question": "How should I inspect an existing system before changing resources?",
+      "path": "capability/agent/change-safety.md",
+      "problems_solved": ["Prevents an Agent from planning destructive metadata changes against stale state or overlooking definitions that reference the resource."],
+      "business_scenarios": ["Checking Workflow and Report consumers before deleting or renaming a field.", "Reading the deployed schema and snapshot hashes before preparing an upgrade to an existing system."],
+      "requirement_signals": ["existing system", "change plan", "reference impact", "deletion safety", "current state"],
+      "use_when": ["An Agent must plan a change against deployed metadata or determine what references a resource"],
+      "do_not_use_when": ["The Agent is selecting a business capability for a new requirement"],
+      "capability_keys": ["maintenance.current_state_snapshot", "maintenance.reference_impact"],
+      "related_guides": ["domain_truth"]
+    }
+  ]
+}
