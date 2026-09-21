@@ -15,6 +15,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
+	appschemastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema/storage"
 )
 
 // metadataColumnPlan is the shared column inspection used by MigrationPlan
@@ -113,15 +114,48 @@ func (r ApplicationSchemaStore) SyncManifest(ctx context.Context, scope principa
 	return r.syncManifestForUpgrade(ctx, manifest, metadataUpgradeExecution{toVersion: strings.TrimSpace(manifest.Version)})
 }
 
+func (r ApplicationSchemaStore) loadPhysicalSchemaSnapshot(ctx context.Context, objects []definitionmodel.ObjectSchema) (*appschemastorage.PhysicalSchemaSnapshot, error) {
+	inspector, ok := r.storage.(appschemastorage.BulkPhysicalSchemaInspector)
+	if !ok {
+		return nil, nil
+	}
+	tables := make([]string, 0, len(objects))
+	seen := map[string]bool{}
+	for _, object := range objects {
+		table := strings.TrimSpace(object.Key)
+		if table != "" && !seen[table] {
+			tables = append(tables, table)
+			seen[table] = true
+		}
+	}
+	snapshot, err := inspector.PhysicalSchema(ctx, r.database(), r.store.SQLRenderer, r.store.DatabaseSchema(), tables)
+	if err != nil {
+		return nil, err
+	}
+	return &snapshot, nil
+}
+
 func (r ApplicationSchemaStore) syncManifestForUpgrade(ctx context.Context, manifest manifestmodel.ManifestSchema, execution metadataUpgradeExecution) error {
-	if err := r.migrateExactDecimalStorage(ctx, manifest); err != nil {
+	physicalSchema, err := r.loadPhysicalSchemaSnapshot(ctx, manifest.Objects)
+	if err != nil {
+		return err
+	}
+	if err := r.migrateExactDecimalStorage(ctx, manifest, physicalSchema); err != nil {
 		return err
 	}
 	for _, object := range manifest.Objects {
 		if strings.TrimSpace(object.Key) == "" {
 			continue
 		}
-		if err := r.ensureObjectStorage(ctx, object, execution); err != nil {
+		var existingTypes map[string]string
+		var indexes map[string]bool
+		if physicalSchema != nil {
+			existingTypes = physicalSchema.ColumnsByTable[strings.TrimSpace(object.Key)]
+			if len(existingTypes) > 0 {
+				indexes = physicalSchema.IndexesByTable[strings.TrimSpace(object.Key)]
+			}
+		}
+		if err := r.ensureObjectStorageWithPhysicalSchema(ctx, object, execution, existingTypes, indexes); err != nil {
 			return err
 		}
 	}
@@ -129,6 +163,10 @@ func (r ApplicationSchemaStore) syncManifestForUpgrade(ctx context.Context, mani
 }
 
 func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object definitionmodel.ObjectSchema, execution metadataUpgradeExecution) error {
+	return r.ensureObjectStorageWithPhysicalSchema(ctx, object, execution, nil, nil)
+}
+
+func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx context.Context, object definitionmodel.ObjectSchema, execution metadataUpgradeExecution, existingTypes map[string]string, indexes map[string]bool) error {
 	schemaDB := r.schemaDatabase()
 	constraintIndexed := metadataConstraintIndexedFields(object)
 	// Core identity/time columns may be declared by metadata so callers can
@@ -148,22 +186,47 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 	// actor metadata are owned by domainry-orm. Runtime only adds business
 	// fields below; redeclaring system columns here would override the ORM's
 	// canonical cross-dialect types and defaults.
-	createStatement, createArgs, buildErr := recordschema.NewTable(r.store.SQLRenderer, object.Key).IfNotExists().Build()
-	if buildErr != nil {
-		return fmt.Errorf("build object table %s: %w", object.Key, buildErr)
+	if len(existingTypes) == 0 {
+		createStatement, createArgs, buildErr := recordschema.NewTable(r.store.SQLRenderer, object.Key).IfNotExists().Build()
+		if buildErr != nil {
+			return fmt.Errorf("build object table %s: %w", object.Key, buildErr)
+		}
+		if _, err := schemaDB.ExecContext(ctx, createStatement, createArgs...); err != nil {
+			return fmt.Errorf("ensure object table %s: %w", object.Key, err)
+		}
 	}
-	if _, err := schemaDB.ExecContext(ctx, createStatement, createArgs...); err != nil {
-		return fmt.Errorf("ensure object table %s: %w", object.Key, err)
-	}
-	existing, err := r.tableColumns(ctx, object.Key)
-	if err != nil {
-		return err
+	existing := map[string]bool{}
+	if len(existingTypes) > 0 {
+		for column := range existingTypes {
+			existing[column] = true
+		}
+	} else {
+		var err error
+		existing, err = r.tableColumns(ctx, object.Key)
+		if err != nil {
+			return err
+		}
 	}
 	if err := r.migrateLegacyRecordActorColumns(ctx, object.Key, existing); err != nil {
 		return err
 	}
-	var existingTypes map[string]string
-	indexes, _ := r.tableIndexes(ctx, object.Key)
+	if indexes == nil {
+		var err error
+		indexes, err = r.tableIndexes(ctx, object.Key)
+		if err != nil {
+			return err
+		}
+	}
+	ensureIndex := func(name string, unique bool, columns ...string) error {
+		if indexes[name] {
+			return nil
+		}
+		if err := r.createIndexKnownMissing(ctx, object.Key, name, unique, columns...); err != nil {
+			return err
+		}
+		indexes[name] = true
+		return nil
+	}
 	if !existing["workspace_id"] {
 		if _, err := schemaDB.ExecContext(ctx, "ALTER TABLE "+r.store.TableIdentifier(object.Key)+" ADD COLUMN "+r.store.Identifier("workspace_id")+" "+r.metadataIDColumnType()); err != nil {
 			return fmt.Errorf("add column %s.workspace_id: %w", object.Key, err)
@@ -193,13 +256,13 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 		}
 		existing[columnName] = true
 	}
-	if err := r.createIndexIfMissing(ctx, object.Key, r.metadataFieldIndexName(object.Key, "workspace_id_id", true), true, "workspace_id", "id"); err != nil {
+	if err := ensureIndex(r.metadataFieldIndexName(object.Key, "workspace_id_id", true), true, "workspace_id", "id"); err != nil {
 		return fmt.Errorf("create workspace record identity index for %s: %w", object.Key, err)
 	}
-	if err := r.createIndexIfMissing(ctx, object.Key, r.metadataFieldIndexName(object.Key, "owner_user_id", false), false, "workspace_id", "owner_user_id"); err != nil {
+	if err := ensureIndex(r.metadataFieldIndexName(object.Key, "owner_user_id", false), false, "workspace_id", "owner_user_id"); err != nil {
 		return fmt.Errorf("create owner user index for %s: %w", object.Key, err)
 	}
-	if err := r.createIndexIfMissing(ctx, object.Key, r.metadataFieldIndexName(object.Key, "owner_org_id", false), false, "workspace_id", "owner_org_id"); err != nil {
+	if err := ensureIndex(r.metadataFieldIndexName(object.Key, "owner_org_id", false), false, "workspace_id", "owner_org_id"); err != nil {
 		return fmt.Errorf("create owner organization index for %s: %w", object.Key, err)
 	}
 	for _, field := range object.Fields {
@@ -210,9 +273,10 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 		}
 		if existing[fieldKey] && metadataRequiresExactPhysicalType(field) {
 			if existingTypes == nil {
-				existingTypes, err = r.tableColumnTypes(ctx, object.Key)
-				if err != nil {
-					return err
+				var typeErr error
+				existingTypes, typeErr = r.tableColumnTypes(ctx, object.Key)
+				if typeErr != nil {
+					return typeErr
 				}
 			}
 			currentType := existingTypes[fieldKey]
@@ -265,7 +329,7 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 				delete(indexes, indexName)
 			}
 			if !indexes[uniqueIndexName] {
-				if err := r.createIndexIfMissing(ctx, object.Key, uniqueIndexName, true, "workspace_id", fieldKey); err != nil {
+				if err := ensureIndex(uniqueIndexName, true, "workspace_id", fieldKey); err != nil {
 					return fmt.Errorf("create unique field index %s: %w", uniqueIndexName, err)
 				}
 				indexes[uniqueIndexName] = true
@@ -278,7 +342,7 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 				delete(indexes, uniqueIndexName)
 			}
 			if !indexes[indexName] {
-				if err := r.createIndexIfMissing(ctx, object.Key, indexName, false, fieldKey); err != nil {
+				if err := ensureIndex(indexName, false, fieldKey); err != nil {
 					return fmt.Errorf("create field index %s: %w", indexName, err)
 				}
 				indexes[indexName] = true
@@ -301,7 +365,7 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 		if indexes[indexName] {
 			continue
 		}
-		if err := r.createIndexIfMissing(ctx, object.Key, indexName, true, strings.TrimSpace(resource.AccessKeyField)); err != nil {
+		if err := ensureIndex(indexName, true, strings.TrimSpace(resource.AccessKeyField)); err != nil {
 			return fmt.Errorf("create public resource access index %s: %w", indexName, err)
 		}
 		indexes[indexName] = true
@@ -334,7 +398,7 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 			continue
 		}
 		fields = append([]string{"workspace_id"}, fields...)
-		if err := r.createIndexIfMissing(ctx, object.Key, indexName, true, fields...); err != nil {
+		if err := ensureIndex(indexName, true, fields...); err != nil {
 			return fmt.Errorf("create unique index %s: %w", indexName, err)
 		}
 	}
@@ -371,7 +435,7 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 		if indexes[indexName] {
 			continue
 		}
-		if err := r.createConditionalUniqueIndex(ctx, object.Key, indexName, policy); err != nil {
+		if err := r.createConditionalUniqueIndexWithSnapshot(ctx, object.Key, indexName, policy, indexes); err != nil {
 			return fmt.Errorf("create conditional unique index %s: %w", indexName, err)
 		}
 		indexes[indexName] = true
@@ -387,7 +451,7 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 		if indexes[indexName] {
 			continue
 		}
-		if err := r.createIndexIfMissing(ctx, object.Key, indexName, false, fields...); err != nil {
+		if err := ensureIndex(indexName, false, fields...); err != nil {
 			return fmt.Errorf("create temporal exclusion index %s: %w", indexName, err)
 		}
 	}
@@ -404,7 +468,7 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 		if indexes[indexName] {
 			continue
 		}
-		if err := r.createIndexIfMissing(ctx, object.Key, indexName, false, fields...); err != nil {
+		if err := ensureIndex(indexName, false, fields...); err != nil {
 			return fmt.Errorf("create related aggregate index %s: %w", indexName, err)
 		}
 	}
@@ -443,6 +507,10 @@ func metadataConstraintIndexedFields(object definitionmodel.ObjectSchema) map[st
 }
 
 func (r ApplicationSchemaStore) createConditionalUniqueIndex(ctx context.Context, table, indexName string, policy recordvalidation.RecordConditionalUniquePolicy) error {
+	return r.createConditionalUniqueIndexWithSnapshot(ctx, table, indexName, policy, nil)
+}
+
+func (r ApplicationSchemaStore) createConditionalUniqueIndexWithSnapshot(ctx context.Context, table, indexName string, policy recordvalidation.RecordConditionalUniquePolicy, indexes map[string]bool) error {
 	plan := r.storage.ConditionalUniquePlan(r.store.SQLRenderer, table, indexName, policy)
 	if plan.GuardColumn != "" {
 		columns, err := r.tableColumns(ctx, table)
@@ -454,7 +522,10 @@ func (r ApplicationSchemaStore) createConditionalUniqueIndex(ctx context.Context
 				return fmt.Errorf("add conditional unique guard %s: %w", plan.GuardColumn, err)
 			}
 		}
-		return r.createIndexIfMissing(ctx, table, indexName, true, plan.IndexFields...)
+		if indexes == nil {
+			return r.createIndexIfMissing(ctx, table, indexName, true, plan.IndexFields...)
+		}
+		return r.createIndexKnownMissing(ctx, table, indexName, true, plan.IndexFields...)
 	}
 	if _, err := r.schemaDatabase().ExecContext(ctx, plan.PartialStatement); err != nil {
 		return fmt.Errorf("create partial unique index: %w", err)

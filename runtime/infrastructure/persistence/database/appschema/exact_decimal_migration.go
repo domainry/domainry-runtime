@@ -74,15 +74,24 @@ func (mysqlExactDecimalMigrator) Migrate(ctx context.Context, store ApplicationS
 	return nil
 }
 
-func (r ApplicationSchemaStore) migrateExactDecimalStorage(ctx context.Context, manifest manifestmodel.ManifestSchema) error {
+func (r ApplicationSchemaStore) migrateExactDecimalStorage(ctx context.Context, manifest manifestmodel.ManifestSchema, physicalSchema *appschemastorage.PhysicalSchemaSnapshot) error {
 	migrations := []metadataExactDecimalTableMigration{}
 	for _, object := range manifest.Objects {
 		table := strings.TrimSpace(object.Key)
 		if table == "" {
 			continue
 		}
-		types, err := r.tableColumnTypes(ctx, table)
-		if err != nil {
+		var types map[string]string
+		if physicalSchema != nil {
+			types = physicalSchema.ColumnsByTable[table]
+		} else {
+			var err error
+			types, err = r.tableColumnTypes(ctx, table)
+			if err != nil {
+				continue
+			}
+		}
+		if len(types) == 0 {
 			continue
 		}
 		columns := []metadataExactDecimalColumn{}
@@ -116,7 +125,17 @@ func (r ApplicationSchemaStore) migrateExactDecimalStorage(ctx context.Context, 
 	if r.exactDecimalMigrator == nil {
 		return fmt.Errorf("exact decimal migrator is required")
 	}
-	return r.exactDecimalMigrator.Migrate(ctx, r, migrations)
+	if err := r.exactDecimalMigrator.Migrate(ctx, r, migrations); err != nil {
+		return err
+	}
+	if physicalSchema != nil {
+		for _, migration := range migrations {
+			for _, column := range migration.columns {
+				physicalSchema.ColumnsByTable[migration.table][strings.TrimSpace(column.field.Key)] = column.target
+			}
+		}
+	}
+	return nil
 }
 
 func (r ApplicationSchemaStore) migrateSQLiteExactDecimalTables(ctx context.Context, migrations []metadataExactDecimalTableMigration) error {

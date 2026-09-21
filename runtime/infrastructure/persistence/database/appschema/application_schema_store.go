@@ -104,6 +104,13 @@ func (r ApplicationSchemaStore) createIndexIfMissing(ctx context.Context, table,
 	return r.store.CreateIndexIfMissing(ctx, table, name, unique, columns...)
 }
 
+func (r ApplicationSchemaStore) createIndexKnownMissing(ctx context.Context, table, name string, unique bool, columns ...string) error {
+	if r.createIndex != nil {
+		return r.createIndex(ctx, table, name, unique, columns...)
+	}
+	return runtimeschema.CreateIndex(ctx, r.store, table, name, unique, columns...)
+}
+
 func recordMutationTxOptions() *sql.TxOptions {
 	return &sql.TxOptions{Isolation: sql.LevelSerializable}
 }

@@ -14,6 +14,13 @@ func CreateIndexIfMissing(ctx context.Context, s Store, table, index string, uni
 	if existing[index] {
 		return nil
 	}
+	return CreateIndex(ctx, s, table, index, unique, columns...)
+}
+
+// CreateIndex creates an index without performing another physical-schema
+// lookup. Callers that already hold an index snapshot should use this helper
+// and update their snapshot after it succeeds.
+func CreateIndex(ctx context.Context, s Store, table, index string, unique bool, columns ...string) error {
 	builder := ormschema.NewIndex(s.RuntimeRenderer(), index, table).Columns(columns...)
 	if unique {
 		builder = builder.Unique()

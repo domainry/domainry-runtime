@@ -12,7 +12,6 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	appschemastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema/storage"
 )
 
 const (
@@ -48,22 +47,9 @@ func (r ApplicationSchemaStore) UpgradePlan(ctx context.Context, scope principal
 		plan.Steps = append(plan.Steps, steps...)
 		typeChanges = changed
 	}
-	var physicalSchema *appschemastorage.PhysicalSchemaSnapshot
-	if inspector, ok := r.storage.(appschemastorage.BulkPhysicalSchemaInspector); ok {
-		tables := make([]string, 0, len(next.Objects))
-		seen := map[string]bool{}
-		for _, object := range next.Objects {
-			table := strings.TrimSpace(object.Key)
-			if table != "" && !seen[table] {
-				tables = append(tables, table)
-				seen[table] = true
-			}
-		}
-		snapshot, err := inspector.PhysicalSchema(ctx, r.database(), r.store.SQLRenderer, r.store.DatabaseSchema(), tables)
-		if err != nil {
-			return plan, err
-		}
-		physicalSchema = &snapshot
+	physicalSchema, err := r.loadPhysicalSchemaSnapshot(ctx, next.Objects)
+	if err != nil {
+		return plan, err
 	}
 	for _, object := range next.Objects {
 		table := strings.TrimSpace(object.Key)
