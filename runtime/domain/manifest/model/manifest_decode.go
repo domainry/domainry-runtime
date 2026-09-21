@@ -17,8 +17,11 @@ const CurrentManifestSchemaVersion = "2"
 func DecodeManifest(raw []byte) (ManifestSchema, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	var manifest ManifestSchema
-	if err := decoder.Decode(&manifest); err != nil {
+	var source struct {
+		ManifestSchema
+		InitialWorkspaceAdministratorPassword string `json:"initial_workspace_administrator_password"`
+	}
+	if err := decoder.Decode(&source); err != nil {
 		return ManifestSchema{}, err
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
@@ -27,6 +30,8 @@ func DecodeManifest(raw []byte) (ManifestSchema, error) {
 		}
 		return ManifestSchema{}, err
 	}
+	manifest := source.ManifestSchema
+	manifest.InitialWorkspaceAdministratorPassword = source.InitialWorkspaceAdministratorPassword
 	if version := strings.TrimSpace(manifest.SchemaVersion); version != CurrentManifestSchemaVersion {
 		return ManifestSchema{}, fmt.Errorf("unsupported manifest schema_version %q", version)
 	}

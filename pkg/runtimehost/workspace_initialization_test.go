@@ -21,6 +21,8 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
+const testInitialWorkspaceAdministratorPassword = "domainry!123"
+
 type hostWorkspaceBootstrapParticipant struct{}
 
 type initializedWorkspaceBootstrapBindingProbe struct {
@@ -124,8 +126,9 @@ func TestWorkspaceManagerMaterializesApplicationSchemaBeforeAtomicBootstrap(t *t
 				{Key: "label", Type: "text", Required: true, DefaultValue: "Default Store"},
 			},
 		}},
-		Roles:                             workspaceRolesForTest(),
-		InitialWorkspaceAdministratorRole: "headquarters_admin",
+		Roles:                                 workspaceRolesForTest(),
+		InitialWorkspaceAdministratorRole:     "headquarters_admin",
+		InitialWorkspaceAdministratorPassword: testInitialWorkspaceAdministratorPassword,
 	}
 	if err := manager.Activate(t.Context(), manifest, hostWorkspaceBootstrapParticipant{}); err != nil {
 		t.Fatal(err)
@@ -168,8 +171,9 @@ func TestWorkspaceManagerInitializesM1HumanRolesAndPublishesInternalRoles(t *tes
 		t.Fatal(err)
 	}
 	manifest := manifestmodel.ManifestSchema{
-		Roles:                             m1WorkspaceRolesForTest(),
-		InitialWorkspaceAdministratorRole: "crm_acceptance_admin",
+		Roles:                                 m1WorkspaceRolesForTest(),
+		InitialWorkspaceAdministratorRole:     "crm_acceptance_admin",
+		InitialWorkspaceAdministratorPassword: testInitialWorkspaceAdministratorPassword,
 	}
 	provisionDescriptor := runtimeext.HandlerDescriptor{
 		ActionKey: "department_anchor.provision", InputType: "runtimehost.DepartmentAnchorProvisionInput", OutputType: "runtimehost.DepartmentAnchorProvisionOutput",
@@ -253,6 +257,9 @@ func TestWorkspaceManagerInitializesM1HumanRolesAndPublishesInternalRoles(t *tes
 	if err := database.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM "_identity_user_role_assignments" a JOIN "_identity_roles" r ON r."workspace_id" = a."workspace_id" AND r."id" = a."role_id" WHERE a."workspace_id" = ? AND a."user_id" = ? AND r."role_key" <> ?`, workspaceID, initialAdministratorID, manifest.InitialWorkspaceAdministratorRole).Scan(&otherAssignments); err != nil || otherAssignments != 0 {
 		t.Fatalf("initial administrator received another role: count=%d err=%v", otherAssignments, err)
 	}
+	if credentialDelivery.credential.InitialPassword != manifest.InitialWorkspaceAdministratorPassword {
+		t.Fatal("Identity did not use the compiler-owned manifest initial administrator password")
+	}
 	application := identitysdk.ApplicationRef{WorkspaceID: identitysdk.WorkspaceID(workspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)}
 	if _, err := manager.Binding().Applications().Register(t.Context(), identitysdk.ApplicationRegistration{
 		Application: application, RedirectURLs: []string{"http://localhost:3100/auth/callback"},
@@ -306,7 +313,8 @@ func TestWorkspaceManagerPublishesOrganizationUnitDeliveryPermissionWithoutRepla
 				{PermissionKey: "department.provision", DataScope: identitysdk.DataScopeAll},
 			},
 		}},
-		InitialWorkspaceAdministratorRole: "organization_operator",
+		InitialWorkspaceAdministratorRole:     "organization_operator",
+		InitialWorkspaceAdministratorPassword: testInitialWorkspaceAdministratorPassword,
 	}
 	storeDescriptor := runtimeext.HandlerDescriptor{
 		ActionKey: "store.provision", InputType: "runtimehost.StoreProvisionInput", OutputType: "runtimehost.StoreProvisionOutput",
@@ -373,7 +381,7 @@ func TestWorkspaceManagerAuthoritySurvivesRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := manager.Activate(t.Context(), manifestmodel.ManifestSchema{Roles: workspaceRolesForTest(), InitialWorkspaceAdministratorRole: "headquarters_admin"}, nil); err != nil {
+	if err := manager.Activate(t.Context(), manifestmodel.ManifestSchema{Roles: workspaceRolesForTest(), InitialWorkspaceAdministratorRole: "headquarters_admin", InitialWorkspaceAdministratorPassword: testInitialWorkspaceAdministratorPassword}, nil); err != nil {
 		t.Fatal(err)
 	}
 	installation, found, err := workspaceprovision.LoadInstallation(t.Context(), database)
@@ -409,7 +417,7 @@ func TestWorkspaceManagerAuthoritySurvivesRestart(t *testing.T) {
 	if err := restarted.SetProjectNavigationCatalog(navigation); err != nil {
 		t.Fatal(err)
 	}
-	if err := restarted.Activate(t.Context(), manifestmodel.ManifestSchema{Roles: workspaceRolesForTest(), InitialWorkspaceAdministratorRole: "headquarters_admin"}, nil); err != nil {
+	if err := restarted.Activate(t.Context(), manifestmodel.ManifestSchema{Roles: workspaceRolesForTest(), InitialWorkspaceAdministratorRole: "headquarters_admin", InitialWorkspaceAdministratorPassword: testInitialWorkspaceAdministratorPassword}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(initializedBinding.navigationCatalog.Menus) != 1 || initializedBinding.navigationCatalog.Menus[0].Key != "business.orders" || len(initializedBinding.roleCatalog.Roles) == 0 {
@@ -445,10 +453,11 @@ func TestWorkspaceManagerPlanModeReturnsFreshDatabasePlanWithoutWriting(t *testi
 	}
 	t.Cleanup(func() { _ = manager.Close(t.Context()) })
 	manifest := manifestmodel.ManifestSchema{
-		Version:                           "0.0.0+manifest.plan",
-		Objects:                           []definitionmodel.ObjectSchema{{Key: "store_configuration", Fields: []definitionmodel.FieldSchema{{Key: "currency", Type: "text", Required: true}}}},
-		Roles:                             workspaceRolesForTest(),
-		InitialWorkspaceAdministratorRole: "headquarters_admin",
+		Version:                               "0.0.0+manifest.plan",
+		Objects:                               []definitionmodel.ObjectSchema{{Key: "store_configuration", Fields: []definitionmodel.FieldSchema{{Key: "currency", Type: "text", Required: true}}}},
+		Roles:                                 workspaceRolesForTest(),
+		InitialWorkspaceAdministratorRole:     "headquarters_admin",
+		InitialWorkspaceAdministratorPassword: testInitialWorkspaceAdministratorPassword,
 	}
 	err = manager.Activate(t.Context(), manifest, hostWorkspaceBootstrapParticipant{})
 	var requested *bootstrap.DefinitionUpgradePlanRequested

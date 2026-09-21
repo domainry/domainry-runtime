@@ -89,7 +89,7 @@ func TestManifestRestorationProjection(t *testing.T) {
 		Integrations: connectormodel.IntegrationSchema{Connectors: []connectormodel.ConnectorSchema{{Key: "existing"}}},
 	}
 	installed := manifestmodel.ManifestSchema{
-		ManifestHash: "hash", Description: "description", InitialWorkspaceAdministratorRole: "crm_acceptance_admin", Dictionaries: []appschemamodel.DictionarySchema{{Key: ""}, {Key: " existing "}, {Key: "new"}, {Key: "new"}},
+		ManifestHash: "hash", Description: "description", InitialWorkspaceAdministratorRole: "crm_acceptance_admin", InitialWorkspaceAdministratorPassword: "domainry!123", Dictionaries: []appschemamodel.DictionarySchema{{Key: ""}, {Key: " existing "}, {Key: "new"}, {Key: "new"}},
 		AutomationRules: []automationmodel.AutomationRuleSchema{{Key: ""}, {Key: " existing "}, {Key: "new"}, {Key: "new"}},
 		Workflows:       []definitionmodel.WorkflowSchema{{Key: ""}, {Key: " existing "}, {Key: "new"}, {Key: "new"}},
 		Integrations: connectormodel.IntegrationSchema{
@@ -106,7 +106,7 @@ func TestManifestRestorationProjection(t *testing.T) {
 		}},
 	}
 	merged := MergeInstalledEnvelope(persisted, installed, []notificationmodel.NotificationTemplate{{Key: "template"}})
-	if merged.ManifestHash != "hash" || merged.Description != "description" || merged.InitialWorkspaceAdministratorRole != "crm_acceptance_admin" || len(merged.Dictionaries) != 2 || len(merged.AutomationRules) != 2 || len(merged.Workflows) != 2 || len(merged.NotificationTemplates) != 1 || len(merged.Integrations.Connectors) != 1 || merged.Integrations.Connectors[0].Key != "new" || len(merged.Integrations.Connections) != 1 || len(merged.SchedulerDefinitions) != 1 || len(merged.Reports) != 1 || len(merged.Skills) != 1 || len(merged.Agents) != 1 || len(merged.WorkspaceProvisioning) != 1 || merged.WorkspaceProvisioning[0].Key != "baseline" {
+	if merged.ManifestHash != "hash" || merged.Description != "description" || merged.InitialWorkspaceAdministratorRole != "crm_acceptance_admin" || merged.InitialWorkspaceAdministratorPassword != "domainry!123" || len(merged.Dictionaries) != 2 || len(merged.AutomationRules) != 2 || len(merged.Workflows) != 2 || len(merged.NotificationTemplates) != 1 || len(merged.Integrations.Connectors) != 1 || merged.Integrations.Connectors[0].Key != "new" || len(merged.Integrations.Connections) != 1 || len(merged.SchedulerDefinitions) != 1 || len(merged.Reports) != 1 || len(merged.Skills) != 1 || len(merged.Agents) != 1 || len(merged.WorkspaceProvisioning) != 1 || merged.WorkspaceProvisioning[0].Key != "baseline" {
 		t.Fatalf("merged envelope = %#v", merged)
 	}
 }

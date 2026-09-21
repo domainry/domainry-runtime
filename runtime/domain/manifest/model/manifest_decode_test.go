@@ -1,6 +1,7 @@
 package manifestmodel
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -30,6 +31,20 @@ func TestDecodeManifestAcceptsOnlyCurrentStrictContract(t *testing.T) {
 				t.Fatalf("err=%v want substring %q", err, test.wantError)
 			}
 		})
+	}
+}
+
+func TestInitialWorkspaceAdministratorPasswordIsManifestInputOnly(t *testing.T) {
+	manifest, err := DecodeManifest([]byte(`{"schema_version":"2","template_id":"crm","version":"1","objects":[],"initial_workspace_administrator_password":"domainry!123"}`))
+	if err != nil || manifest.InitialWorkspaceAdministratorPassword != "domainry!123" {
+		t.Fatalf("manifest=%#v err=%v", manifest, err)
+	}
+	raw, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "initial_workspace_administrator_password") || strings.Contains(string(raw), "domainry!123") {
+		t.Fatalf("internal bootstrap password escaped through manifest serialization: %s", raw)
 	}
 }
 

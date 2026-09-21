@@ -41,7 +41,8 @@ type ManifestSchema struct {
 	Objects                  []definitionmodel.ObjectSchema     `json:"objects"`
 	Roles                    []RoleSchema                       `json:"roles"`
 
-	InitialWorkspaceAdministratorRole string `json:"initial_workspace_administrator_role,omitempty"`
+	InitialWorkspaceAdministratorRole     string `json:"initial_workspace_administrator_role,omitempty"`
+	InitialWorkspaceAdministratorPassword string `json:"-"`
 
 	Actions                   []definitionmodel.ActionSchema                  `json:"actions,omitempty"`
 	Workflows                 []definitionmodel.WorkflowSchema                `json:"workflows,omitempty"`

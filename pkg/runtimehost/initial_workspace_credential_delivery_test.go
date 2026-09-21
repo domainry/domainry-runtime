@@ -88,7 +88,7 @@ func TestWorkspaceManagerDeliversCredentialOnceAndDeliveryFailureKeepsCommittedW
 			if err != nil {
 				t.Fatal(err)
 			}
-			manifest := manifestmodel.ManifestSchema{Roles: workspaceRolesForTest(), InitialWorkspaceAdministratorRole: "headquarters_admin"}
+			manifest := manifestmodel.ManifestSchema{Roles: workspaceRolesForTest(), InitialWorkspaceAdministratorRole: "headquarters_admin", InitialWorkspaceAdministratorPassword: testInitialWorkspaceAdministratorPassword}
 			activateErr := manager.Activate(t.Context(), manifest, nil)
 			var deliveryErr *InitialWorkspaceCredentialDeliveryError
 			if test.wantErr != errors.As(activateErr, &deliveryErr) {

@@ -69,7 +69,7 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 	if err := bootstrap.BindBootstrapProjectRoleCatalog(ctx, catalog); err != nil {
 		t.Fatal(err)
 	}
-	request := identitysdk.WorkspaceIdentityBootstrapRequest{ContractVersion: identitysdk.WorkspaceIdentityBootstrapContractVersion, ContractHash: identitysdk.WorkspaceIdentityBootstrapContractHash, InvocationID: "export-identity", WorkspaceID: "workspace-export", CompanyID: "company", CompanyCode: "COMPANY", CompanyName: "Company", FirstStoreID: "store", FirstStoreCode: "STORE", FirstStoreName: "Store", InitialAdminUserID: "member-user", InitialAdminLoginID: "member@example.test", InitialAdminName: "Member"}
+	request := identitysdk.WorkspaceIdentityBootstrapRequest{ContractVersion: identitysdk.WorkspaceIdentityBootstrapContractVersion, ContractHash: identitysdk.WorkspaceIdentityBootstrapContractHash, InvocationID: "export-identity", WorkspaceID: "workspace-export", CompanyID: "company", CompanyCode: "COMPANY", CompanyName: "Company", FirstStoreID: "store", FirstStoreCode: "STORE", FirstStoreName: "Store", InitialAdminUserID: "member-user", InitialAdminLoginID: "member@example.test", InitialAdminName: "Member", InitialAdminPassword: "domainry!123"}
 	tx, err := store.DB().BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)

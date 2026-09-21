@@ -221,6 +221,7 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 		CompanyID: result.CompanyID, CompanyCode: request.WorkspaceCode + "-company", CompanyName: request.WorkspaceName,
 		FirstStoreID: result.FirstStoreID, FirstStoreCode: request.FirstStoreCode, FirstStoreName: request.FirstStoreName,
 		InitialAdminUserID: result.InitialAdminUserID, InitialAdminLoginID: request.AdminLoginID, InitialAdminName: request.AdminName,
+		InitialAdminPassword: store.manifest.InitialWorkspaceAdministratorPassword,
 	}, identitysdk.EmbeddedTransaction{Executor: tx, WorkspaceProvisionFailures: store.identityFailureInjector()})
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, err

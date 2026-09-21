@@ -105,7 +105,8 @@ func TestAccountErasureActionRollbackCommitAndControlledWorker(t *testing.T) {
 	}
 	manifest := map[string]any{
 		"template_id": "account_erasure_integration", "version": "0.1.0", "name": "Account erasure integration", "schema_version": "2",
-		"initial_workspace_administrator_role": "operator",
+		"initial_workspace_administrator_role":     "operator",
+		"initial_workspace_administrator_password": "domainry!123",
 		"objects": []any{
 			map[string]any{"key": "member_profile", "name": "Member", "ux": map[string]any{"kind": "identity_profile_extension"}, "fields": []any{profileUser, field("private_name", "text", "anonymize", nil)}},
 			map[string]any{"key": "erase_request", "name": "Erasure request", "fields": []any{requestProfile, field("requested_by", "user", "anonymize", nil), field("status", "text", "retain", nil)}},
@@ -165,6 +166,7 @@ func TestAccountErasureActionRollbackCommitAndControlledWorker(t *testing.T) {
 		ContractVersion: identitysdk.WorkspaceIdentityBootstrapContractVersion, ContractHash: identitysdk.WorkspaceIdentityBootstrapContractHash,
 		InvocationID: "account-erasure-bootstrap", WorkspaceID: cfg.IdentityWorkspaceID, CompanyID: "company-a", CompanyCode: "COMPANY", CompanyName: "Company",
 		FirstStoreID: "store-a", FirstStoreCode: "STORE", FirstStoreName: "Store", InitialAdminUserID: "operator", InitialAdminLoginID: "operator@example.test", InitialAdminName: "Operator",
+		InitialAdminPassword: "domainry!123",
 	}
 	tx, err := store.DB().BeginTx(t.Context(), nil)
 	if err != nil {

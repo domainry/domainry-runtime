@@ -5,6 +5,7 @@
   "name": "M1 CRM baseline 26 role gate",
   "objects": [],
   "initial_workspace_administrator_role": "crm_acceptance_admin",
+  "initial_workspace_administrator_password": "domainry!123",
   "roles": [
     {
       "key": "conversion_workflow_service",

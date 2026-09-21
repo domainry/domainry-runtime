@@ -221,7 +221,7 @@ func serverManifestJSON(t *testing.T, target *manifestmodel.GeneratedDomainSDKId
 	manifest := manifestmodel.ManifestSchema{
 		SchemaVersion: manifestmodel.CurrentManifestSchemaVersion, TemplateID: "server-test", Version: "1.0.0", Name: "Server Test",
 		SourceBlueprintID: provision.DirectAuthoringSourceID, Objects: []definitionmodel.ObjectSchema{}, Roles: workspaceRolesForTest(),
-		InitialWorkspaceAdministratorRole: "headquarters_admin", GeneratedDomainSDK: target,
+		InitialWorkspaceAdministratorRole: "headquarters_admin", InitialWorkspaceAdministratorPassword: testInitialWorkspaceAdministratorPassword, GeneratedDomainSDK: target,
 	}
 	manifest.Roles = append(manifest.Roles, workspaceInternalServiceRoleForTest())
 	payload, err := json.Marshal(manifest)

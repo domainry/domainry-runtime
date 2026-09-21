@@ -51,7 +51,7 @@ func TestExplicitInstallationAdministratorAuthenticatesAndReachesCommercialCatal
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = manager.Close(context.Background()) })
-	if err := manager.Activate(t.Context(), manifestmodel.ManifestSchema{Roles: workspaceRolesForTest(), InitialWorkspaceAdministratorRole: "headquarters_admin"}, nil); err != nil {
+	if err := manager.Activate(t.Context(), manifestmodel.ManifestSchema{Roles: workspaceRolesForTest(), InitialWorkspaceAdministratorRole: "headquarters_admin", InitialWorkspaceAdministratorPassword: testInitialWorkspaceAdministratorPassword}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if installationDelivery.credential.LoginID != cfg.InstallationAdministratorLoginID || installationDelivery.credential.InitialPassword == "" {

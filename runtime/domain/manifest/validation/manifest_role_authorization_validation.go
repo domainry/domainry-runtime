@@ -193,14 +193,23 @@ func (state *validationState) validateRoleDataPolicy(path, objectKey string, pol
 }
 
 func (state *validationState) validateInitialWorkspaceAdministratorRole() {
+	requiresWorkspaceAdministrator := false
+	for _, role := range state.manifest.Roles {
+		if role.ProvisionToWorkspaces {
+			requiresWorkspaceAdministrator = true
+			break
+		}
+	}
+	if !requiresWorkspaceAdministrator {
+		return
+	}
+	password := state.manifest.InitialWorkspaceAdministratorPassword
+	if password == "" || len(password) > 72 {
+		state.add("initial_workspace_administrator_password", "must contain between 1 and 72 bytes")
+	}
 	key := strings.TrimSpace(state.manifest.InitialWorkspaceAdministratorRole)
 	if key == "" {
-		for _, role := range state.manifest.Roles {
-			if role.ProvisionToWorkspaces {
-				state.add("initial_workspace_administrator_role", "is required when Workspace login roles are declared")
-				return
-			}
-		}
+		state.add("initial_workspace_administrator_role", "is required when Workspace login roles are declared")
 		return
 	}
 	for _, role := range state.manifest.Roles {

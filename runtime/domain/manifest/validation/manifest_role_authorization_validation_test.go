@@ -175,8 +175,11 @@ func TestInitialWorkspaceAdministratorRoleIsExplicitAndProvisionable(t *testing.
 		}
 		return state.errs
 	}
-	if err := validate(manifestmodel.ManifestSchema{Roles: []manifestmodel.RoleSchema{human, service}, InitialWorkspaceAdministratorRole: human.Key}); err != nil {
+	if err := validate(manifestmodel.ManifestSchema{Roles: []manifestmodel.RoleSchema{human, service}, InitialWorkspaceAdministratorRole: human.Key, InitialWorkspaceAdministratorPassword: "domainry!123"}); err != nil {
 		t.Fatalf("valid initial Workspace administrator role rejected: %v", err)
+	}
+	if err := validate(manifestmodel.ManifestSchema{Roles: []manifestmodel.RoleSchema{human, service}, InitialWorkspaceAdministratorRole: human.Key}); err == nil || !strings.Contains(err.Error(), "initial_workspace_administrator_password") {
+		t.Fatalf("missing initial Workspace administrator password accepted: %v", err)
 	}
 
 	for name, manifest := range map[string]manifestmodel.ManifestSchema{

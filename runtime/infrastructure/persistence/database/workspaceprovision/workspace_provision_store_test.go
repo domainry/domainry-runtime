@@ -163,7 +163,8 @@ func (probe *workspaceBootstrapParticipantProbe) BuildWorkspaceBootstrap(_ conte
 
 func TestWorkspaceInitializationCompletesThenClaimsOnceAndReplayHasNoSecret(t *testing.T) {
 	store, probe := newWorkspaceProvisionTestStore(t)
-	repository := NewWorkspaceInitializationStore(store, probe, manifestmodel.ManifestSchema{}, probe.rolePolicy)
+	manifest := manifestmodel.ManifestSchema{InitialWorkspaceAdministratorPassword: "domainry!123"}
+	repository := NewWorkspaceInitializationStore(store, probe, manifest, probe.rolePolicy)
 	request := validWorkspaceRequest("bootstrap")
 	result, err := repository.Initialize(t.Context(), request)
 	if err != nil {
@@ -177,6 +178,9 @@ func TestWorkspaceInitializationCompletesThenClaimsOnceAndReplayHasNoSecret(t *t
 	}
 	if probe.request.ContractVersion != identitysdk.WorkspaceIdentityBootstrapContractVersion || probe.request.ContractHash != identitysdk.WorkspaceIdentityBootstrapContractHash {
 		t.Fatalf("bootstrap contract=%q hash=%q", probe.request.ContractVersion, probe.request.ContractHash)
+	}
+	if probe.request.InitialAdminPassword != manifest.InitialWorkspaceAdministratorPassword {
+		t.Fatal("bootstrap password was not sourced from the compiler-owned Runtime manifest")
 	}
 	if len(probe.completions) != 1 || probe.completions[0].Outcome != identitysdk.WorkspaceIdentityBootstrapTransactionCommitted {
 		t.Fatalf("completions=%#v", probe.completions)
