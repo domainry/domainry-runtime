@@ -307,6 +307,15 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	artifactEvidence := bootstrap.RuntimeReleaseArtifactEvidence{Verified: true}
 	executablePath := ""
 	frontendBundleSHA256 := ""
+	if releaseIdentity.BuildMode != "packaged" && dependencies.executable != nil {
+		// Development builds do not have a signed Runtime attestation, but they
+		// may still ship the project-owned frontend beside the executable. The
+		// frontend loader intentionally accepts an empty expected digest for this
+		// case; keep packaged builds on the strict attestation path below.
+		if resolvedExecutablePath, executableErr := dependencies.executable(); executableErr == nil {
+			executablePath = resolvedExecutablePath
+		}
+	}
 	if releaseIdentity.BuildMode == "packaged" {
 		if dependencies.executable == nil {
 			evidenceErr := fmt.Errorf("%w: executable path provider is unavailable", ErrRuntimeArtifactAttestation)

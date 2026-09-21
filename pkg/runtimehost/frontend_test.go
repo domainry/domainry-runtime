@@ -52,6 +52,10 @@ func TestPackagedFrontendServesHTMLNavigationAndAssetsWithoutOwningAPIRoutes(t *
 	if err != nil {
 		t.Fatal(err)
 	}
+	developmentAssets, err := loadProjectFrontendAssets(binary, "", os.ReadFile)
+	if err != nil || developmentAssets == nil {
+		t.Fatalf("load development frontend assets: assets=%v err=%v", developmentAssets, err)
+	}
 	if _, err := loadProjectFrontendAssets(binary, strings.Repeat("0", 64), os.ReadFile); err == nil {
 		t.Fatal("tampered packaged frontend identity must be rejected")
 	}
