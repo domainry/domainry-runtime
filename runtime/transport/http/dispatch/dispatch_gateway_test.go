@@ -26,8 +26,9 @@ import (
 )
 
 type dispatchGatewayStub struct {
-	calls int
-	err   error
+	calls   int
+	err     error
+	request dispatchapplication.ExecutionRequest
 }
 
 type dispatchCallbackReceiptStub struct{}
@@ -52,10 +53,30 @@ func (dispatchCallbackReceiptStub) FailCallbackRetryable(context.Context, dispat
 
 func (d *dispatchGatewayStub) Execute(_ context.Context, request dispatchapplication.ExecutionRequest) (dispatchapplication.ExecutionReceipt, error) {
 	d.calls++
+	d.request = request
 	if d.err != nil {
 		return dispatchapplication.ExecutionReceipt{}, d.err
 	}
 	return dispatchapplication.ExecutionReceipt{ID: "receipt-1", Owner: request.Target.Owner, Status: "accepted"}, nil
+}
+
+func TestTargetExecutionGatewayPreservesBusinessActionAuthorizationFields(t *testing.T) {
+	dispatcher := &dispatchGatewayStub{}
+	now := time.Date(2026, time.September, 20, 1, 2, 3, 0, time.UTC)
+	secret := []byte("runtime-signing-secret")
+	handler := NewExecutionHandler(TargetExecutionDependencies{Executor: dispatcher, Receipts: dispatchCallbackReceiptStub{}, RuntimeID: "runtime-a", SigningSecret: secret, Now: func() time.Time { return now }})
+	body, _ := json.Marshal(executionRequest{
+		RuntimeID: "runtime-a", ExecutionID: "run-1", DefinitionKey: "expire-orders", IdempotencyKey: "window-1",
+		Target: executionTarget{Type: "runtime_operation", Owner: "business_action", Operation: "order.expire", ObjectKey: "order", RunAsRole: "order_automation", Payload: json.RawMessage(`{"status":"expired"}`)},
+	})
+	request := httptest.NewRequest(http.MethodPost, RuntimeExecutionPath, bytes.NewReader(body))
+	request.Header.Set(schedulergateway.RuntimeIDHeader, "runtime-a")
+	signSchedulerRequest(t, request, body, "window-1", secret, now)
+	response := httptest.NewRecorder()
+	handler.acceptExecution(response, request)
+	if response.Code != http.StatusOK || dispatcher.calls != 1 || dispatcher.request.DefinitionKey != "expire-orders" || dispatcher.request.Target.ObjectKey != "order" || dispatcher.request.Target.RunAsRole != "order_automation" || string(dispatcher.request.Target.Payload) != `{"status":"expired"}` {
+		t.Fatalf("status=%d calls=%d request=%+v", response.Code, dispatcher.calls, dispatcher.request)
+	}
 }
 
 func TestTargetExecutionGatewayAuthenticatesScopesAndReturnsReceipt(t *testing.T) {
@@ -73,7 +94,7 @@ func TestTargetExecutionGatewayAuthenticatesScopesAndReturnsReceipt(t *testing.T
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	target := executionTarget{Type: "runtime_operation", Owner: "workflow", Operation: "start", Payload: json.RawMessage(`{}`)}
-	body, _ := json.Marshal(executionRequest{RuntimeID: "runtime-a", ExecutionID: "run-1", IdempotencyKey: "run-1", Target: target})
+	body, _ := json.Marshal(executionRequest{RuntimeID: "runtime-a", ExecutionID: "run-1", DefinitionKey: "daily", IdempotencyKey: "run-1", Target: target})
 
 	unauthorized := httptest.NewRequest(http.MethodPost, RuntimeExecutionPath, bytes.NewReader(body))
 	unauthorized.Header.Set("X-Domainry-Runtime-ID", "runtime-a")
@@ -105,7 +126,7 @@ func TestTargetExecutionGatewayRejectsTamperedAndStaleSignatures(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	target := executionTarget{Type: "runtime_operation", Owner: "workflow", Operation: "start", Payload: json.RawMessage(`{}`)}
-	body, _ := json.Marshal(executionRequest{RuntimeID: "runtime-a", ExecutionID: "run-1", IdempotencyKey: "run-1", Target: target})
+	body, _ := json.Marshal(executionRequest{RuntimeID: "runtime-a", ExecutionID: "run-1", DefinitionKey: "daily", IdempotencyKey: "run-1", Target: target})
 
 	tamperedBody := bytes.Replace(body, []byte("run-1"), []byte("run-2"), 1)
 	tampered := httptest.NewRequest(http.MethodPost, RuntimeExecutionPath, bytes.NewReader(tamperedBody))
@@ -147,7 +168,7 @@ func TestTargetExecutionGatewayV2SignatureBindsCompleteRequest(t *testing.T) {
 	now := time.Date(2026, time.September, 4, 1, 2, 3, 0, time.UTC)
 	secret := []byte("runtime-signing-secret")
 	body, _ := json.Marshal(executionRequest{
-		RuntimeID: "runtime-a", ExecutionID: "run-1", IdempotencyKey: "key-1",
+		RuntimeID: "runtime-a", ExecutionID: "run-1", DefinitionKey: "daily", IdempotencyKey: "key-1",
 		Target: executionTarget{Type: "runtime_operation", Owner: "workflow", Operation: "start", Payload: json.RawMessage(`{"value":1}`)},
 	})
 	tests := []struct {
@@ -205,7 +226,7 @@ func TestTargetExecutionGatewayHandlesExecutorErrorsWithoutPanicking(t *testing.
 	now := time.Date(2026, time.September, 4, 1, 2, 3, 0, time.UTC)
 	secret := []byte("runtime-signing-secret")
 	body, _ := json.Marshal(executionRequest{
-		RuntimeID: "runtime-a", ExecutionID: "run-1", IdempotencyKey: "key-1",
+		RuntimeID: "runtime-a", ExecutionID: "run-1", DefinitionKey: "daily", IdempotencyKey: "key-1",
 		Target: executionTarget{Type: "runtime_operation", Owner: "workflow", Operation: "start"},
 	})
 	executionErr := errors.New("downstream failed")
@@ -348,7 +369,7 @@ func TestTargetExecutionGatewayDurablyReplaysConflictsAndReclaims(t *testing.T) 
 func callbackExecutionBody(t *testing.T, key, payload string) []byte {
 	t.Helper()
 	body, err := json.Marshal(executionRequest{
-		RuntimeID: "runtime-a", ExecutionID: "run-" + key, IdempotencyKey: key,
+		RuntimeID: "runtime-a", ExecutionID: "run-" + key, DefinitionKey: "daily", IdempotencyKey: key,
 		Target: executionTarget{Type: "runtime_operation", Owner: "workflow", Operation: "start", Payload: json.RawMessage(payload)},
 	})
 	if err != nil {

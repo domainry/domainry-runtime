@@ -116,7 +116,7 @@ func TestBusinessCombinedScopeProofRejectsUntranslatableAndUnboundedTrees(t *tes
 			narrow := eq
 			switch scenario {
 			case "unsupported branch":
-				predicate = identity.Predicate{Any: []identity.Predicate{eq, {Fact: "name", Operator: identity.OperatorContains, Value: "A"}}}
+				predicate = identity.Predicate{Any: []identity.Predicate{eq, {Fact: "name", Operator: identity.Operator("contains"), Value: "A"}}}
 			case "relation branch":
 				predicate = identity.Predicate{Any: []identity.Predicate{eq, {Fact: "name", Operator: identity.OperatorEqual, Value: "Alpha", Path: []identity.RelationSegment{{Direction: identity.RelationForward, Reference: "customer", TargetResource: "customer"}}}}}
 			case "clause expansion":

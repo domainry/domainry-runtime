@@ -142,15 +142,16 @@ func scanWorkflowProcess(scanner workflowScanner) (workflowmodel.WorkflowProcess
 }
 
 func workflowTaskColumns() []string {
-	return []string{"workspace_id", "id", "process_id", "node_instance_id", "node_id", "title", "assignee_user_id", "assignee_name", "assignee_role_key", "resolver_snapshot_json", "candidate_source", "node_definition_version", "sequence_no", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "created_at", "updated_at"}
+	return []string{"workspace_id", "id", "process_id", "node_instance_id", "node_id", "title", "assignee_user_id", "assignee_name", "assignee_role_key", "assignee_resolver_key", "assignee_evidence_json", "resolver_snapshot_json", "candidate_source", "node_definition_version", "sequence_no", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "created_at", "updated_at"}
 }
 
 func scanWorkflowTask(scanner workflowScanner) (workflowmodel.WorkflowTask, error) {
 	var task workflowmodel.WorkflowTask
-	var assigneeUserID, assigneeName, assigneeRoleKey, candidateSource, decision, comment, dueAt, completedBy, completedAt sql.NullString
-	var resolverSnapshot string
-	err := scanner.Scan(&task.WorkspaceID, &task.ID, &task.ProcessID, &task.NodeInstanceID, &task.NodeID, &task.Title, &assigneeUserID, &assigneeName, &assigneeRoleKey, &resolverSnapshot, &candidateSource, &task.NodeDefinitionVersion, &task.Sequence, &task.Status, &decision, &comment, &dueAt, &completedBy, &completedAt, &task.CreatedAt, &task.UpdatedAt)
-	task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.CandidateSource = assigneeUserID.String, assigneeName.String, assigneeRoleKey.String, candidateSource.String
+	var assigneeUserID, assigneeName, assigneeRoleKey, assigneeResolverKey, candidateSource, decision, comment, dueAt, completedBy, completedAt sql.NullString
+	var assigneeEvidence, resolverSnapshot string
+	err := scanner.Scan(&task.WorkspaceID, &task.ID, &task.ProcessID, &task.NodeInstanceID, &task.NodeID, &task.Title, &assigneeUserID, &assigneeName, &assigneeRoleKey, &assigneeResolverKey, &assigneeEvidence, &resolverSnapshot, &candidateSource, &task.NodeDefinitionVersion, &task.Sequence, &task.Status, &decision, &comment, &dueAt, &completedBy, &completedAt, &task.CreatedAt, &task.UpdatedAt)
+	task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, task.CandidateSource = assigneeUserID.String, assigneeName.String, assigneeRoleKey.String, assigneeResolverKey.String, candidateSource.String
+	_ = json.Unmarshal([]byte(assigneeEvidence), &task.AssigneeEvidence)
 	_ = json.Unmarshal([]byte(resolverSnapshot), &task.ResolverSnapshot)
 	task.Decision, task.Comment, task.DueAt, task.CompletedBy, task.CompletedAt = decision.String, comment.String, dueAt.String, completedBy.String, completedAt.String
 	return task, err

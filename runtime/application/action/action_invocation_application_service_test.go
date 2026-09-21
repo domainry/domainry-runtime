@@ -24,7 +24,7 @@ func TestActionInvocationNormalizationAndProjection(t *testing.T) {
 	if normalized.ActionKey != "approve" || normalized.ObjectKey != "order" || normalized.RecordID != "one" || normalized.Principal.WorkspaceID != "run-as-space" || normalized.RequestID != "run-as-request" || normalized.Input == nil || normalized.Source != "" {
 		t.Fatalf("normalized=%+v", normalized)
 	}
-	for _, source := range []actionmodel.ActionSource{ActionSourceHTTP, ActionSourceWorkflow, ActionSourceAutomation, actionmodel.ActionSourceRecordTimer, ActionSourceIntegration, ActionSourceAgent, ActionSourceNested, ActionSourceBulk} {
+	for _, source := range []actionmodel.ActionSource{ActionSourceHTTP, ActionSourceWorkflow, ActionSourceAutomation, actionmodel.ActionSourceRecordTimer, ActionSourceScheduler, ActionSourceIntegration, ActionSourceAgent, ActionSourceNested, ActionSourceBulk} {
 		if !actionSourceValid(source) {
 			t.Fatalf("valid source rejected: %q", source)
 		}
@@ -61,7 +61,7 @@ func TestEveryInvocationSourceUsesTheSameExactActionPermissionBoundary(t *testin
 	executor := NewSystemOperationExecutor(system, SystemOperationBinding{Key: "record.update", Handler: func(_ context.Context, invocation actionmodel.ActionInvocation, action definitionmodel.ActionSchema, _ map[string]any) (ActionExecutionResult, error) {
 		return ActionExecutionResult{Record: &actionmodel.ActionResult{ActionKey: action.Key, ObjectKey: action.ObjectKey, RecordID: invocation.RecordID}}, nil
 	}})
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	service := NewActionApplication(ActionApplicationDependencies{
 		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, handlers), SystemOperations: executor,
@@ -70,7 +70,7 @@ func TestEveryInvocationSourceUsesTheSameExactActionPermissionBoundary(t *testin
 			return auditmodel.AuditEvent{ID: "audit", Event: "action.executed", WorkspaceID: "workspace-a", CreatedAt: "2026-09-02T00:00:00Z"}
 		}},
 	})
-	sources := []actionmodel.ActionSource{ActionSourceHTTP, ActionSourceWorkflow, ActionSourceAutomation, actionmodel.ActionSourceRecordTimer, ActionSourceIntegration, ActionSourceAgent, ActionSourceNested, ActionSourceBulk}
+	sources := []actionmodel.ActionSource{ActionSourceHTTP, ActionSourceWorkflow, ActionSourceAutomation, actionmodel.ActionSourceRecordTimer, ActionSourceScheduler, ActionSourceIntegration, ActionSourceAgent, ActionSourceNested, ActionSourceBulk}
 	for index, source := range sources {
 		t.Run(string(source), func(t *testing.T) {
 			invocation := actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, RecordID: "order-1", IdempotencyKey: fmt.Sprintf("%s-%d", source, index), Source: ActionSourceHTTP}

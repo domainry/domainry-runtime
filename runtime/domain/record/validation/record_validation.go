@@ -1,6 +1,9 @@
 package validation
 
-import definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+import (
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+)
 
 import (
 	"fmt"
@@ -43,7 +46,11 @@ func RecordValidateDataWithPrev(object definitionmodel.ObjectSchema, data map[st
 		return nil
 	}
 	for _, field := range object.Fields {
-		if field.Required && RecordIsEmptyValue(data[field.Key]) {
+		empty := RecordIsEmptyValue(data[field.Key])
+		if field.Type == recordmodel.RecordFileListFieldType || field.Type == recordmodel.RecordMultiSelectFieldType {
+			empty = recordCollectionEmpty(data[field.Key])
+		}
+		if field.Required && empty {
 			if hasPrev && field.FieldExemptsExistingRows() && RecordIsEmptyValue(prev[field.Key]) {
 				continue
 			}
@@ -54,6 +61,19 @@ func RecordValidateDataWithPrev(object definitionmodel.ObjectSchema, data map[st
 		return err
 	}
 	return nil
+}
+
+func recordCollectionEmpty(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case []any:
+		return len(typed) == 0
+	case []string:
+		return len(typed) == 0
+	default:
+		return false
+	}
 }
 
 func validateObjectRules(object definitionmodel.ObjectSchema, data map[string]any, prev map[string]any) error {

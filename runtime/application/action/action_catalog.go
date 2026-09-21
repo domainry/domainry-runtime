@@ -125,10 +125,10 @@ type ActionCatalog struct {
 	entries          map[string]ActionCatalogEntry
 	validationErrors []error
 	system           *SystemOperationCatalog
-	handlers         *runtimeext.BusinessHandlerRegistry
+	handlers         *runtimeext.ProjectExtensionRegistry
 }
 
-func NewActionCatalog(actions []definitionmodel.ActionSchema, system *SystemOperationCatalog, handlers *runtimeext.BusinessHandlerRegistry) *ActionCatalog {
+func NewActionCatalog(actions []definitionmodel.ActionSchema, system *SystemOperationCatalog, handlers *runtimeext.ProjectExtensionRegistry) *ActionCatalog {
 	catalog := &ActionCatalog{system: system, handlers: handlers, entries: map[string]ActionCatalogEntry{}}
 	catalog.Replace(actions)
 	return catalog
@@ -155,7 +155,7 @@ func (c *ActionCatalog) Replace(actions []definitionmodel.ActionSchema) {
 		system, systemFound, systemErr := c.system.Resolve(definition)
 		binding, handlerFound := runtimeext.BusinessHandlerBinding{}, false
 		if c.handlers != nil {
-			binding, handlerFound = c.handlers.Binding(key)
+			binding, handlerFound = c.handlers.BusinessHandlerBinding(key)
 		}
 		switch {
 		case systemErr != nil:
@@ -178,8 +178,6 @@ func (c *ActionCatalog) Replace(actions []definitionmodel.ActionSchema) {
 func normalizePublishedActionContract(definition definitionmodel.ActionSchema) definitionmodel.ActionSchema {
 	definition.InputType = strings.TrimSpace(definition.InputType)
 	definition.OutputType = strings.TrimSpace(definition.OutputType)
-	definition.InputContractSHA256 = strings.TrimSpace(definition.InputContractSHA256)
-	definition.OutputContractSHA256 = strings.TrimSpace(definition.OutputContractSHA256)
 	if definition.TargetOrganization != nil {
 		policy := *definition.TargetOrganization
 		policy.Source = strings.TrimSpace(policy.Source)
@@ -222,8 +220,6 @@ func validatePublishedActionContract(entry ActionCatalogEntry) error {
 	}{
 		{name: "input_type", catalog: definition.InputType, registry: entry.HandlerBinding.Descriptor.InputType},
 		{name: "output_type", catalog: definition.OutputType, registry: entry.HandlerBinding.Descriptor.OutputType},
-		{name: "input_contract_sha256", catalog: definition.InputContractSHA256, registry: entry.HandlerBinding.Descriptor.InputContractSHA256},
-		{name: "output_contract_sha256", catalog: definition.OutputContractSHA256, registry: entry.HandlerBinding.Descriptor.OutputContractSHA256},
 	}
 	if entry.Owner == ActionOwnerSystemOperation {
 		if definition.TargetOrganization != nil || definition.OrganizationUnitDelivery != nil || definition.StoreOrganizationMutation != nil {
@@ -428,9 +424,9 @@ func (c *ActionCatalog) ValidationErrors() []error {
 	}
 	if c.handlers != nil {
 		if !c.handlers.Frozen() {
-			validationErrors = append(validationErrors, fmt.Errorf("business handler registry must be frozen before Action Catalog validation"))
+			validationErrors = append(validationErrors, fmt.Errorf("project extension registry must be frozen before Action Catalog validation"))
 		}
-		for _, descriptor := range c.handlers.Descriptors() {
+		for _, descriptor := range c.handlers.BusinessHandlerDescriptors() {
 			entry, ok := c.entries[strings.TrimSpace(descriptor.ActionKey)]
 			if !ok {
 				validationErrors = append(validationErrors, fmt.Errorf("business handler %s has no published action", descriptor.ActionKey))

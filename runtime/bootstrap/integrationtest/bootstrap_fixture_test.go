@@ -342,7 +342,7 @@ func TestRuntimeCRMOverdueWorkflowOnlyProcessesOverduePayments(t *testing.T) {
 	handler := application.Routes()
 	publishSchedulerDefinitionFixture(t, cfg, "scheduler_daily_workflow_scan_seed", map[string]any{
 		"key": "scheduler_daily_workflow_scan_seed", "name": "Daily Workflow Scan", "status": "enabled", "target_type": "workflow", "target_key": "scheduled:*",
-		"schedule_expression": "daily", "timezone": "UTC", "max_attempts": 3, "retry_backoff": "fixed", "retry_delay_seconds": 60, "retry_max_delay_seconds": 3600, "timeout_seconds": 300, "next_run_at": "2026-01-01T00:00:00Z",
+		"schedule_type": "interval", "interval_seconds": 86400, "timezone": "UTC", "max_attempts": 3, "retry_delay_seconds": 60, "retry_max_delay_seconds": 3600, "timeout_seconds": 300, "next_run_at": "2026-01-01T00:00:00Z",
 	})
 
 	result := runtimeFixtureRequestWithHeaders[map[string]any](t, handler, "platform_admin", http.MethodPost, "/workflow/recovery/executions/process?limit=25", nil, map[string]string{

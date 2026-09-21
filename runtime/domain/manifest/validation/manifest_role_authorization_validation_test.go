@@ -93,6 +93,77 @@ func TestManifestRolePoliciesResolveAgainstCurrentRuntimeObjectSchema(t *testing
 	}
 }
 
+func TestManifestRelationalDataPolicyValidatesAgainstRuntimeSchemaGraph(t *testing.T) {
+	manifest := manifestmodel.ManifestSchema{
+		Objects: []definitionmodel.ObjectSchema{
+			{Key: "booking", Fields: []definitionmodel.FieldSchema{{Key: "customer_id", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "customer"}}}},
+			{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "organization_id", Type: "text"}, {Key: "booking_id", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "booking"}}}},
+			{Key: "approval", Fields: []definitionmodel.FieldSchema{{Key: "booking_id", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "booking"}}, {Key: "reviewer_id", Type: "text"}}},
+		},
+		Roles: []manifestmodel.RoleSchema{{
+			Key: "operator", Name: "Operator", Permissions: []manifestmodel.RolePermission{{
+				PermissionKey: "booking.read",
+				DataPolicy: &identitysdk.ProjectDataPolicy{Operator: identitysdk.ProjectDataPolicyOr, Children: []identitysdk.ProjectDataPolicy{
+					{Operator: identitysdk.ProjectDataPolicyIn, Path: []identitysdk.ProjectDataPolicyRelationSegment{{Direction: identitysdk.RelationForward, RelationFieldKey: "customer_id", TargetObjectKey: "customer"}}, FieldKey: "organization_id", SubjectClaim: identitysdk.ProjectSubjectClaimOrgScopeIDs},
+					{Operator: identitysdk.ProjectDataPolicyEq, Path: []identitysdk.ProjectDataPolicyRelationSegment{{Direction: identitysdk.RelationReverse, RelationFieldKey: "booking_id", TargetObjectKey: "approval"}}, FieldKey: "reviewer_id", SubjectClaim: identitysdk.ProjectSubjectClaimID},
+				}},
+			}},
+		}},
+	}
+	validate := func(candidate manifestmodel.ManifestSchema) error {
+		state := newValidationState(candidate, nil)
+		state.validateObjects()
+		state.validateRoles()
+		if len(state.errs) == 0 {
+			return nil
+		}
+		return state.errs
+	}
+	if err := validate(manifest); err != nil {
+		t.Fatalf("valid relational data policy rejected: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		edit func(*identitysdk.ProjectDataPolicy, *manifestmodel.RolePermission)
+		want string
+	}{
+		{name: "scope and policy", edit: func(_ *identitysdk.ProjectDataPolicy, grant *manifestmodel.RolePermission) {
+			grant.DataScope = identitysdk.DataScopeAll
+		}, want: "exactly one valid data_scope or data_policy"},
+		{name: "unknown final field", edit: func(policy *identitysdk.ProjectDataPolicy, _ *manifestmodel.RolePermission) {
+			policy.Children[0].FieldKey = "missing"
+		}, want: `unknown or disabled field "missing" on object "customer"`},
+		{name: "wrong forward relation", edit: func(policy *identitysdk.ProjectDataPolicy, _ *manifestmodel.RolePermission) {
+			policy.Children[0].Path[0].RelationFieldKey = "organization_id"
+		}, want: "must reference an enabled relation field"},
+		{name: "wrong reverse relation", edit: func(policy *identitysdk.ProjectDataPolicy, _ *manifestmodel.RolePermission) {
+			policy.Children[1].Path[0].TargetObjectKey = "customer"
+			policy.Children[1].Path[0].RelationFieldKey = "organization_id"
+		}, want: "must reference an enabled relation field"},
+		{name: "cycle", edit: func(policy *identitysdk.ProjectDataPolicy, _ *manifestmodel.RolePermission) {
+			policy.Children[0].Path = append(policy.Children[0].Path, identitysdk.ProjectDataPolicyRelationSegment{Direction: identitysdk.RelationForward, RelationFieldKey: "booking_id", TargetObjectKey: "booking"})
+		}, want: "creates a cyclic relation path"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := manifest
+			candidate.Roles = append([]manifestmodel.RoleSchema(nil), manifest.Roles...)
+			candidate.Roles[0].Permissions = append([]manifestmodel.RolePermission(nil), manifest.Roles[0].Permissions...)
+			policy := *manifest.Roles[0].Permissions[0].DataPolicy
+			policy.Children = append([]identitysdk.ProjectDataPolicy(nil), policy.Children...)
+			for index := range policy.Children {
+				policy.Children[index].Path = append([]identitysdk.ProjectDataPolicyRelationSegment(nil), policy.Children[index].Path...)
+			}
+			candidate.Roles[0].Permissions[0].DataPolicy = &policy
+			test.edit(&policy, &candidate.Roles[0].Permissions[0])
+			if err := validate(candidate); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error=%v want substring %q", err, test.want)
+			}
+		})
+	}
+}
+
 func TestInitialWorkspaceAdministratorRoleIsExplicitAndProvisionable(t *testing.T) {
 	human := manifestmodel.RoleSchema{Key: "sales_director", Name: "Sales director", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true}
 	service := manifestmodel.RoleSchema{Key: "conversion_workflow_service", Name: "Conversion workflow service", Audience: "service", AssignmentMode: "system_managed"}

@@ -35,8 +35,8 @@ func TestWorkflowPermissionProjectionRedactsInternalFields(t *testing.T) {
 	}
 	assertParticipantWorkflow(t, process.DefinitionSnapshot)
 
-	task := WorkflowTaskForPrincipal(workflowmodel.WorkflowTask{ResolverSnapshot: []definitionmodel.WorkflowAssigneeResolver{{Type: "role"}}, CandidateSource: "policy", NodeDefinitionVersion: 2, Title: "visible"}, false)
-	if task.ResolverSnapshot != nil || task.CandidateSource != "" || task.NodeDefinitionVersion != 0 || task.Title != "visible" {
+	task := WorkflowTaskForPrincipal(workflowmodel.WorkflowTask{AssigneeResolverKey: "role", AssigneeEvidence: workflowmodel.AssigneeEvidence{Matches: []workflowmodel.AssigneeEvidenceMatch{{ResolverType: "role"}}}, ResolverSnapshot: []definitionmodel.WorkflowAssigneeResolver{{Type: "role"}}, CandidateSource: "policy", NodeDefinitionVersion: 2, Title: "visible"}, false)
+	if task.AssigneeResolverKey != "" || len(task.AssigneeEvidence.Matches) != 0 || task.ResolverSnapshot != nil || task.CandidateSource != "" || task.NodeDefinitionVersion != 0 || task.Title != "visible" {
 		t.Fatalf("task projection = %#v", task)
 	}
 	node := WorkflowNodeForPrincipal(workflowmodel.WorkflowNodeInstance{Input: map[string]any{"secret": true}, Output: map[string]any{"secret": true}, ErrorCode: "internal", Status: "failed"}, false)
@@ -111,7 +111,7 @@ func permissionProjectionActions() []definitionmodel.ActionSchema {
 }
 
 func permissionProjectionResolvers() []definitionmodel.WorkflowAssigneeResolver {
-	return []definitionmodel.WorkflowAssigneeResolver{{Type: "users"}, {Type: "role"}, {Type: "manager_of"}, {Type: "record_field"}, {Type: "custom"}}
+	return []definitionmodel.WorkflowAssigneeResolver{{Type: "users"}, {Type: "role"}, {Type: "manager_of"}, {Type: "record_user_field"}, {Type: "custom"}}
 }
 
 func assertParticipantWorkflow(t *testing.T, workflow definitionmodel.WorkflowSchema) {

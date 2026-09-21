@@ -59,6 +59,12 @@ func normalizeRecordFilterNode(expression recordmodel.RecordFilterExpression, fi
 		if len(expression.Children) != 0 || len(expression.Values) != 0 || expression.Value == nil {
 			return recordmodel.RecordFilterExpression{}, fmt.Errorf("record filter %s %s requires one non-null value", path, expression.Operator)
 		}
+		if recordFileFieldType(field.Type) {
+			return recordmodel.RecordFilterExpression{}, fmt.Errorf("record filter %s does not support file-field comparison", path)
+		}
+		if field.Type == recordmodel.RecordJSONFieldType || field.Type == recordmodel.RecordMultiSelectFieldType && expression.Operator != "eq" && expression.Operator != "ne" {
+			return recordmodel.RecordFilterExpression{}, fmt.Errorf("record filter %s does not support %s for structured field %q", path, expression.Operator, field.Key)
+		}
 		expression.Field = field.Key
 		expression.Value, err = normalizeRecordFilterValue(field, expression.Value)
 		if err != nil {
@@ -92,6 +98,12 @@ func normalizeRecordFilterNode(expression recordmodel.RecordFilterExpression, fi
 		if len(expression.Children) != 0 || expression.Value != nil || len(expression.Values) == 0 || len(expression.Values) > recordFilterMaximumValues {
 			return recordmodel.RecordFilterExpression{}, fmt.Errorf("record filter %s %s requires 1..%d values", path, expression.Operator, recordFilterMaximumValues)
 		}
+		if recordFileFieldType(field.Type) {
+			return recordmodel.RecordFilterExpression{}, fmt.Errorf("record filter %s does not support file-field comparison", path)
+		}
+		if field.Type == recordmodel.RecordJSONFieldType {
+			return recordmodel.RecordFilterExpression{}, fmt.Errorf("record filter %s does not support set comparison for JSON field %q", path, field.Key)
+		}
 		expression.Field = field.Key
 		for index, value := range expression.Values {
 			expression.Values[index], err = normalizeRecordFilterValue(field, value)
@@ -121,6 +133,15 @@ func normalizeRecordFilterNode(expression recordmodel.RecordFilterExpression, fi
 		}
 	}
 	return expression, nil
+}
+
+func recordFileFieldType(value string) bool {
+	value = strings.TrimSpace(value)
+	return value == recordmodel.RecordFileFieldType || value == recordmodel.RecordFileListFieldType
+}
+
+func recordStructuredFieldType(value string) bool {
+	return recordmodel.RecordIsStructuredFieldType(value)
 }
 
 func recordFilterField(fields map[string]definitionmodel.FieldSchema, raw, path string) (definitionmodel.FieldSchema, error) {

@@ -33,22 +33,18 @@ type mutationHandler struct {
 const (
 	actionTestInputType  = "example.com/domainry-project/actions.BookingReserveInput"
 	actionTestOutputType = "example.com/domainry-project/actions.BookingReserveOutput"
-	actionTestInputHash  = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	actionTestOutputHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 )
 
 func actionTestPublishedContract(action definitionmodel.ActionSchema) definitionmodel.ActionSchema {
 	action.InputType = actionTestInputType
 	action.OutputType = actionTestOutputType
-	action.InputContractSHA256 = actionTestInputHash
-	action.OutputContractSHA256 = actionTestOutputHash
 	return action
 }
 
 func actionTestHandlerIdentity() runtimeext.HandlerDescriptor {
 	return runtimeext.HandlerDescriptor{
 		InputType: actionTestInputType, OutputType: actionTestOutputType,
-		InputContractSHA256: actionTestInputHash, OutputContractSHA256: actionTestOutputHash, HandlerRevision: "handler-v1",
+		HandlerRevision: "handler-v1",
 	}
 }
 
@@ -92,10 +88,10 @@ func (h *catalogHandler) Invoke(_ context.Context, execution runtimeext.ActionEx
 	return json.RawMessage(`{"accepted":true}`), nil
 }
 
-func TestActionCatalogRejectsMutableBusinessHandlerRegistry(t *testing.T) {
-	registry := runtimeext.NewBusinessHandlerRegistry()
+func TestActionCatalogRejectsMutableProjectExtensionRegistry(t *testing.T) {
+	registry := runtimeext.NewProjectExtensionRegistry()
 	catalog := NewActionCatalog(nil, NewSystemOperationCatalog(), registry)
-	if errors := catalog.ValidationErrors(); len(errors) != 1 || errors[0].Error() != "business handler registry must be frozen before Action Catalog validation" {
+	if errors := catalog.ValidationErrors(); len(errors) != 1 || errors[0].Error() != "project extension registry must be frozen before Action Catalog validation" {
 		t.Fatalf("mutable registry validation errors=%v", errors)
 	}
 }
@@ -127,8 +123,8 @@ func TestActionCatalogRequiresGeneratedCredentialOutputWithoutSourceLineage(t *t
 		Operations: []runtimeext.IdentityHandlerOperation{runtimeext.IdentityHandlerCreate}, InitialCredentialOutputField: "initial_credential",
 	}
 	handler := &catalogHandler{descriptor: descriptor}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -168,8 +164,8 @@ func TestActionCatalogRequiresExactStoreOrganizationMutationGrant(t *testing.T) 
 	descriptor := actionTestHandlerDescriptor("store.settings.replace", nil)
 	descriptor.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceRecordOwner}
 	descriptor.StoreOrganizationMutation = &runtimeext.ActionStoreOrganizationMutationCapability{Operations: []runtimeext.StoreOrganizationMutationOperation{runtimeext.StoreOrganizationMutationRename}}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(&catalogHandler{descriptor: descriptor}); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(&catalogHandler{descriptor: descriptor}); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -198,8 +194,8 @@ func TestActionCatalogRequiresExactOrganizationUnitDeliveryGrant(t *testing.T) {
 		NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
 		ParentSource: runtimeext.OrganizationUnitParentSourceWorkspaceCompany,
 	}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(&catalogHandler{descriptor: descriptor}); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(&catalogHandler{descriptor: descriptor}); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -239,9 +235,9 @@ func TestActionCatalogRejectsEmptyAndDuplicatePublishedActionKeys(t *testing.T) 
 }
 
 func TestActionCatalogRejectsBusinessHandlerContractMismatch(t *testing.T) {
-	registry := runtimeext.NewBusinessHandlerRegistry()
+	registry := runtimeext.NewProjectExtensionRegistry()
 	handler := &catalogHandler{descriptor: actionTestHandlerDescriptor("booking.reserve", []runtimeext.ActionObjectCapability{{ObjectKey: "booking", Operations: []string{"update"}}})}
-	if err := registry.Register(handler); err != nil {
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -254,8 +250,6 @@ func TestActionCatalogRejectsBusinessHandlerContractMismatch(t *testing.T) {
 		{name: "missing input type", mutate: func(action *definitionmodel.ActionSchema) { action.InputType = "" }, field: "requires input_type"},
 		{name: "input type", mutate: func(action *definitionmodel.ActionSchema) { action.InputType += "Changed" }, field: "input_type mismatch"},
 		{name: "output type", mutate: func(action *definitionmodel.ActionSchema) { action.OutputType += "Changed" }, field: "output_type mismatch"},
-		{name: "input hash", mutate: func(action *definitionmodel.ActionSchema) { action.InputContractSHA256 = strings.Repeat("c", 64) }, field: "input_contract_sha256 mismatch"},
-		{name: "output hash", mutate: func(action *definitionmodel.ActionSchema) { action.OutputContractSHA256 = strings.Repeat("d", 64) }, field: "output_contract_sha256 mismatch"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -379,8 +373,8 @@ func TestActionCatalogRemainingNilAmbiguityAndOwnershipEdges(t *testing.T) {
 	handler := &catalogHandler{descriptor: actionTestHandlerDescriptor("customer.create", []runtimeext.ActionObjectCapability{{
 		ObjectKey: "customer", Operations: []string{"create"},
 	}})}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -451,8 +445,8 @@ func TestActionCatalogFixesExactlyOneOwner(t *testing.T) {
 		{ObjectKey: "booking", Operations: []string{"create"}},
 		{ObjectKey: "class", Operations: []string{"update"}},
 	})}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -486,8 +480,8 @@ func TestActionCatalogUsesPublishedWriteSetToFixOneOwner(t *testing.T) {
 		{ObjectKey: "booking", Operations: []string{"create"}},
 		{ObjectKey: "class", Operations: []string{"update"}},
 	})}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -499,11 +493,8 @@ func TestActionCatalogUsesPublishedWriteSetToFixOneOwner(t *testing.T) {
 		}},
 	})
 	entry, _ := NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry).Entry(action.Key)
-	if entry.Owner != ActionOwnerBusinessHandler || entry.SystemOperation != "" || entry.HandlerBinding.Handler != handler || entry.ResolutionError != nil {
-		t.Fatalf("multi-object capability owner=%+v", entry)
-	}
-	if got := []string{entry.Definition.EffectSet.Write[0].ObjectKey, entry.Definition.EffectSet.Write[1].ObjectKey}; !reflect.DeepEqual(got, []string{"booking", "class"}) {
-		t.Fatalf("normalized write set=%v", got)
+	if entry.Owner != "" || entry.ResolutionError == nil || !strings.Contains(entry.ResolutionError.Error(), "both system operation") {
+		t.Fatalf("system kind with Handler owner=%+v", entry)
 	}
 }
 
@@ -513,30 +504,30 @@ func TestActionCatalogDerivesMultiObjectOwnerFromGeneratedHandlerCapability(t *t
 		{ObjectKey: "booking", Operations: []string{"create"}},
 		{ObjectKey: "class", Operations: []string{"update"}},
 	})}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
 	action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.reserve", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectCreate})
 	entry, _ := NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry).Entry(action.Key)
-	if entry.Owner != ActionOwnerBusinessHandler || entry.ResolutionError != nil || entry.Definition.EffectSet == nil || len(entry.Definition.EffectSet.Write) != 2 {
-		t.Fatalf("generated capability owner=%+v", entry)
+	if entry.Owner != "" || entry.ResolutionError == nil || !strings.Contains(entry.ResolutionError.Error(), "both system operation") {
+		t.Fatalf("system kind with generated Handler owner=%+v", entry)
 	}
 }
 
 func TestActionCatalogUsesTypedConnectorCapabilityToRequireBusinessOwner(t *testing.T) {
 	system := NewRuntimeSystemOperationCatalog()
 	handler := &catalogHandler{descriptor: actionTestHandlerDescriptor("customer.notify", []runtimeext.ActionObjectCapability{{ObjectKey: "customer", Operations: []string{"update"}}}, runtimeext.ActionConnectorCapability{ConnectorKey: "email", ConnectionKey: "primary", OperationKey: "send", ContractSHA256: strings.Repeat("c", 64), Mode: runtimeext.ConnectorModeEnqueue, Effect: runtimeext.ConnectorEffectWrite})}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
 	action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "customer.notify", ObjectKey: "customer", Kind: definitionmodel.ActionKindRecordUpdate})
 	entry, _ := NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry).Entry(action.Key)
-	if entry.Owner != ActionOwnerBusinessHandler || entry.ResolutionError != nil || entry.HandlerBinding.Handler != handler {
-		t.Fatalf("typed Connector capability owner=%+v", entry)
+	if entry.Owner != "" || entry.ResolutionError == nil || !strings.Contains(entry.ResolutionError.Error(), "both system operation") {
+		t.Fatalf("system kind with Connector Handler owner=%+v", entry)
 	}
 }
 
@@ -555,8 +546,8 @@ func TestActionCatalogRejectsWriteSetCapabilityMismatch(t *testing.T) {
 func TestActionCatalogRejectsRuntimeOwnerFallback(t *testing.T) {
 	system := NewSystemOperationCatalog(SystemOperationDescriptor{Key: "record.update", Matches: func(definitionmodel.ActionSchema) bool { return true }, WriteOperation: "update"})
 	handler := &catalogHandler{descriptor: actionTestHandlerDescriptor("customer.rename", []runtimeext.ActionObjectCapability{{ObjectKey: "customer", Operations: []string{"update"}}})}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -570,10 +561,10 @@ func TestActionCatalogRejectsRuntimeOwnerFallback(t *testing.T) {
 	}
 }
 
-func TestActionApplicationInvokesFrozenBusinessHandlerRegistry(t *testing.T) {
+func TestActionApplicationInvokesFrozenProjectExtensionRegistry(t *testing.T) {
 	handler := &catalogHandler{descriptor: actionTestHandlerDescriptor("booking.reserve", []runtimeext.ActionObjectCapability{{ObjectKey: "booking", Operations: []string{"update"}}})}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -583,7 +574,7 @@ func TestActionApplicationInvokesFrozenBusinessHandlerRegistry(t *testing.T) {
 		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: NewSystemOperationExecutor(system),
 		BusinessHandlers: newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{}), UnitOfWork: newActionTestUnitOfWork().manager,
 	})
-	handler.descriptor = runtimeext.HandlerDescriptor{ActionKey: "booking.mutated", InputContractSHA256: "mutated", OutputContractSHA256: "mutated", HandlerRevision: "mutated"}
+	handler.descriptor = runtimeext.HandlerDescriptor{ActionKey: "booking.mutated", HandlerRevision: "mutated"}
 	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, Input: map[string]any{"booking_id": "booking-1"}, IdempotencyKey: "execution-1", Principal: actionTestPrincipal("booking.reserve")})
 	if err != nil || !handler.invoked || handler.identity.ActionKey != action.Key || handler.identity.ExecutionID != "execution-1" || handler.identity.ReceiptID != "execution-1" || handler.identity.RuntimeRevision != "runtime-test" || handler.identity.ProjectRevision != "project-test" || handler.identity.ApplicationSchemaRevision != "snapshot-test" || handler.identity.HandlerRevision != "handler-v1" || result.Object == nil || result.Object.Output["accepted"] != true {
 		t.Fatalf("result=%+v invoked=%v identity=%+v error=%v", result, handler.invoked, handler.identity, err)

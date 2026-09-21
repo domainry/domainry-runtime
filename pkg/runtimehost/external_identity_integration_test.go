@@ -101,7 +101,7 @@ func TestExternalIdentityRealRuntime(t *testing.T) {
 	}
 	cfg = manager.Config()
 	binding := manager.Binding()
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()

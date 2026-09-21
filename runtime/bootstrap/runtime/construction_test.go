@@ -11,7 +11,7 @@ import (
 )
 
 func TestConstructRuntimeMapsProcessState(t *testing.T) {
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
@@ -23,7 +23,7 @@ func TestConstructRuntimeMapsProcessState(t *testing.T) {
 		templateID:          "template",
 		manifest:            manifestmodel.ManifestSchema{TemplateID: "template", Version: "1.0.0"},
 		workspaceRolePolicy: rolePolicy,
-		businessHandlers:    handlers,
+		projectExtensions:   handlers,
 		connectorProviders:  connectors,
 	})
 	if runtime.cfg.RuntimeVersion != "test-version" || runtime.templateID != "template" {
@@ -35,8 +35,8 @@ func TestConstructRuntimeMapsProcessState(t *testing.T) {
 	if runtime.workspaceRolePolicy != rolePolicy {
 		t.Fatalf("workspace role policy = %#v", runtime.workspaceRolePolicy)
 	}
-	if runtime.businessHandlers != handlers {
-		t.Fatal("runtime did not retain the frozen business handler registry")
+	if runtime.projectExtensions != handlers {
+		t.Fatal("runtime did not retain the frozen project extension registry")
 	}
 	if runtime.connectorProviders != connectors {
 		t.Fatal("runtime did not retain the frozen connector provider registry")

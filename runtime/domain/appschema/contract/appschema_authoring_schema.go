@@ -119,6 +119,27 @@ func metadataFieldPayloadSchema(fieldTypes []string) capabilitycontract.Capabili
 			"currency_code": {Type: "string", Format: "iso-4217", Default: "XXX"},
 			"target":        {Type: "string"}, "cardinality": {Type: "string", Enum: []any{"many_to_one", "one_to_one"}, Default: "many_to_one"},
 			"on_delete": {Type: "string", Enum: []any{"cascade", "restrict", "set_null"}, Default: "restrict"}, "inverse_name": {Type: "string"}, "indexed": {Type: "boolean", Default: true},
+			"allowed_mime_types": {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}},
+			"max_size_bytes":     {Type: "integer", Minimum: metadataFloatPointer(1), Maximum: metadataFloatPointer(5 << 20), Default: 5 << 20},
+			"max_files":          {Type: "integer", Minimum: metadataFloatPointer(1), Maximum: metadataFloatPointer(100)},
+			"scan_required":      {Type: "boolean", Default: true},
+			"max_items":          {Type: "integer", Minimum: metadataFloatPointer(1), Maximum: metadataFloatPointer(1000), Default: 100},
+			"json_shape":         {Type: "string", Enum: []any{"array", "object"}, Default: "object"},
+			"max_json_bytes":     {Type: "integer", Minimum: metadataFloatPointer(1), Maximum: metadataFloatPointer(1 << 20), Default: 64 << 10},
+		},
+	}
+	option := capabilitycontract.CapabilityAuthoringSchema{
+		Type: "object", AdditionalProperties: metadataBoolPointer(false), Required: []string{"value", "label"},
+		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+			"value": metadataNonEmptyStringSchema("Stable stored value."), "label": metadataNonEmptyStringSchema("Human-readable label."),
+		},
+	}
+	validation := capabilitycontract.CapabilityAuthoringSchema{
+		Type: "object", AdditionalProperties: metadataBoolPointer(false),
+		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
+			"min_length": {Type: "integer", Minimum: metadataFloatPointer(0)}, "max_length": {Type: "integer", Minimum: metadataFloatPointer(0)},
+			"min": {Type: "number"}, "max": {Type: "number"}, "pattern": {Type: "string"},
+			"options": {Type: "array", Items: &capabilitycontract.CapabilityAuthoringSchema{Type: "string"}}, "target": {Type: "string"},
 		},
 	}
 	// upgrade declares how rows written before this field existed are treated
@@ -137,7 +158,8 @@ func metadataFieldPayloadSchema(fieldTypes []string) capabilitycontract.Capabili
 		Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 			"key": metadataNonEmptyStringSchema("Compatibility input only; Runtime materializes the authoritative resourceKey path value when omitted."), "name": metadataNonEmptyStringSchema("Human-readable field name."), "description": {Type: "string"},
 			"type": {Type: "string", Enum: values}, "required": {Type: "boolean", Default: false}, "unique": {Type: "boolean", Default: false},
-			"default": {}, "default_value": {}, "config": config, "upgrade": upgrade,
+			"default": {}, "default_value": {}, "config": config, "validation": validation,
+			"options": {Type: "array", Items: &option}, "upgrade": upgrade,
 			"sensitive": {Type: "boolean", Default: false, Description: "Closes the field for every principal without an explicit field policy for it: read, write and export are refused instead of inheriting the object-level grant."},
 		},
 	}

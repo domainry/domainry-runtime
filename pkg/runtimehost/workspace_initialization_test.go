@@ -173,7 +173,7 @@ func TestWorkspaceManagerInitializesM1HumanRolesAndPublishesInternalRoles(t *tes
 	}
 	provisionDescriptor := runtimeext.HandlerDescriptor{
 		ActionKey: "department_anchor.provision", InputType: "runtimehost.DepartmentAnchorProvisionInput", OutputType: "runtimehost.DepartmentAnchorProvisionOutput",
-		InputContractSHA256: strings.Repeat("a", 64), OutputContractSHA256: strings.Repeat("b", 64), HandlerRevision: "revision-1",
+		HandlerRevision:    "revision-1",
 		TargetOrganization: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceProvisionedStore},
 	}
 	if err := manager.Activate(t.Context(), manifest, nil, provisionDescriptor); err != nil {
@@ -310,12 +310,12 @@ func TestWorkspaceManagerPublishesOrganizationUnitDeliveryPermissionWithoutRepla
 	}
 	storeDescriptor := runtimeext.HandlerDescriptor{
 		ActionKey: "store.provision", InputType: "runtimehost.StoreProvisionInput", OutputType: "runtimehost.StoreProvisionOutput",
-		InputContractSHA256: strings.Repeat("a", 64), OutputContractSHA256: strings.Repeat("b", 64), HandlerRevision: "revision-1",
+		HandlerRevision:    "revision-1",
 		TargetOrganization: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceProvisionedStore},
 	}
 	departmentDescriptor := runtimeext.HandlerDescriptor{
 		ActionKey: "department.provision", InputType: "runtimehost.DepartmentProvisionInput", OutputType: "runtimehost.DepartmentProvisionOutput",
-		InputContractSHA256: strings.Repeat("c", 64), OutputContractSHA256: strings.Repeat("d", 64), HandlerRevision: "revision-1",
+		HandlerRevision:    "revision-1",
 		TargetOrganization: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit},
 		OrganizationUnitDelivery: &runtimeext.OrganizationUnitDeliveryCapability{
 			Operations:   []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryCreate},

@@ -18,10 +18,49 @@ import (
 
 type releaseIdentityTestHandler struct{ revision string }
 
+type releaseIdentityWorkspaceBootstrap struct {
+	descriptor runtimeext.WorkspaceBootstrapDescriptor
+}
+
+type releaseIdentityAssigneeResolver struct {
+	descriptor runtimeext.AssigneeResolverDescriptor
+}
+
+func (r releaseIdentityAssigneeResolver) Descriptor() runtimeext.AssigneeResolverDescriptor {
+	return r.descriptor
+}
+
+func (releaseIdentityAssigneeResolver) Resolve(context.Context, runtimeext.AssigneeResolverCapabilities, runtimeext.AssigneeResolverContext) ([]runtimeext.AssigneeResolverCandidate, error) {
+	return nil, nil
+}
+
+func releaseIdentityResolver(revision string) releaseIdentityAssigneeResolver {
+	descriptor := runtimeext.AssigneeResolverDescriptor{ResolverKey: "finance.approver", ResolverRevision: revision, MaxReadOperations: 1, MaxCandidates: 1, TimeoutMilliseconds: 100}
+	descriptor.ConfigContractSHA256 = descriptor.ComputedConfigContractSHA256()
+	return releaseIdentityAssigneeResolver{descriptor: descriptor}
+}
+
+func (p releaseIdentityWorkspaceBootstrap) Descriptor() runtimeext.WorkspaceBootstrapDescriptor {
+	return p.descriptor
+}
+
+func (releaseIdentityWorkspaceBootstrap) BuildWorkspaceBootstrap(context.Context, runtimeext.WorkspaceBootstrapContext, map[string]any) ([]runtimeext.WorkspaceBootstrapRecord, error) {
+	return nil, nil
+}
+
+func releaseIdentityBootstrapParticipant(revision string) releaseIdentityWorkspaceBootstrap {
+	descriptor := runtimeext.WorkspaceBootstrapDescriptor{
+		Key: "workspace.bootstrap", InputType: "generated/bootstrap.WorkspaceInput", ParticipantRevision: revision,
+		Records: []runtimeext.WorkspaceBootstrapRecordCapability{{Key: "settings", ObjectKey: "settings", Fields: []string{"name"}}},
+	}
+	descriptor.InputContractSHA256 = descriptor.ComputedInputContractSHA256()
+	return releaseIdentityWorkspaceBootstrap{descriptor: descriptor}
+}
+
 func (h releaseIdentityTestHandler) Descriptor() runtimeext.HandlerDescriptor {
 	return runtimeext.HandlerDescriptor{
 		ActionKey: "booking.reserve", InputType: "generated/booking.ReserveInput", OutputType: "generated/booking.ReserveOutput",
-		InputContractSHA256: strings.Repeat("a", 64), OutputContractSHA256: strings.Repeat("b", 64), HandlerRevision: h.revision,
+		HandlerRevision: h.revision,
 	}
 }
 
@@ -30,8 +69,8 @@ func (releaseIdentityTestHandler) Invoke(context.Context, runtimeext.ActionExecu
 }
 
 func TestRuntimeReleaseIdentityPublishesDeterministicComposition(t *testing.T) {
-	handlers := runtimeext.NewBusinessHandlerRegistry()
-	if err := handlers.Register(releaseIdentityTestHandler{revision: "revision-1"}); err != nil {
+	handlers := runtimeext.NewProjectExtensionRegistry()
+	if err := handlers.RegisterBusinessHandler(releaseIdentityTestHandler{revision: "revision-1"}); err != nil {
 		t.Fatal(err)
 	}
 	handlers.Freeze()
@@ -45,12 +84,12 @@ func TestRuntimeReleaseIdentityPublishesDeterministicComposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first != second || first.ContractVersion != RuntimeReleaseIdentityVersion || first.BuildMode != "development" || !lowerSHA256(first.HandlerRegistrySHA256) || !lowerSHA256(first.ConnectorRegistrySHA256) || !lowerSHA256(first.CombinationSHA256) {
+	if first != second || first.ContractVersion != RuntimeReleaseIdentityVersion || first.BuildMode != "development" || !lowerSHA256(first.ProjectExtensionRegistrySHA256) || !lowerSHA256(first.ConnectorRegistrySHA256) || !lowerSHA256(first.CombinationSHA256) {
 		t.Fatalf("release identity=%+v second=%+v", first, second)
 	}
 
-	changedHandlers := runtimeext.NewBusinessHandlerRegistry()
-	if err := changedHandlers.Register(releaseIdentityTestHandler{revision: "revision-2"}); err != nil {
+	changedHandlers := runtimeext.NewProjectExtensionRegistry()
+	if err := changedHandlers.RegisterBusinessHandler(releaseIdentityTestHandler{revision: "revision-2"}); err != nil {
 		t.Fatal(err)
 	}
 	changedHandlers.Freeze()
@@ -58,15 +97,64 @@ func TestRuntimeReleaseIdentityPublishesDeterministicComposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if changed.HandlerRegistrySHA256 == first.HandlerRegistrySHA256 || changed.CombinationSHA256 == first.CombinationSHA256 {
+	if changed.ProjectExtensionRegistrySHA256 == first.ProjectExtensionRegistrySHA256 || changed.CombinationSHA256 == first.CombinationSHA256 {
 		t.Fatalf("registry drift did not change combination: first=%+v changed=%+v", first, changed)
+	}
+
+	withBootstrap := runtimeext.NewProjectExtensionRegistry()
+	if err := withBootstrap.RegisterProjectExtensions(runtimeext.ProjectExtensions{
+		BusinessHandlers:              []runtimeext.BusinessHandler{releaseIdentityTestHandler{revision: "revision-1"}},
+		WorkspaceBootstrapParticipant: releaseIdentityBootstrapParticipant("bootstrap-revision-1"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	withBootstrap.Freeze()
+	bootstrapIdentity, err := runtimeReleaseIdentity(validOptions().Identity, withBootstrap, connectors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changedBootstrap := runtimeext.NewProjectExtensionRegistry()
+	if err := changedBootstrap.RegisterProjectExtensions(runtimeext.ProjectExtensions{
+		BusinessHandlers:              []runtimeext.BusinessHandler{releaseIdentityTestHandler{revision: "revision-1"}},
+		WorkspaceBootstrapParticipant: releaseIdentityBootstrapParticipant("bootstrap-revision-2"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	changedBootstrap.Freeze()
+	changedBootstrapIdentity, err := runtimeReleaseIdentity(validOptions().Identity, changedBootstrap, connectors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changedBootstrapIdentity.ProjectExtensionRegistrySHA256 == bootstrapIdentity.ProjectExtensionRegistrySHA256 || changedBootstrapIdentity.CombinationSHA256 == bootstrapIdentity.CombinationSHA256 {
+		t.Fatalf("Workspace Bootstrap drift did not change release identity: first=%+v changed=%+v", bootstrapIdentity, changedBootstrapIdentity)
+	}
+	withResolver := runtimeext.NewProjectExtensionRegistry()
+	if err := withResolver.RegisterAssigneeResolver(releaseIdentityResolver("resolver-revision-1")); err != nil {
+		t.Fatal(err)
+	}
+	withResolver.Freeze()
+	resolverIdentity, err := runtimeReleaseIdentity(validOptions().Identity, withResolver, connectors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changedResolver := runtimeext.NewProjectExtensionRegistry()
+	if err := changedResolver.RegisterAssigneeResolver(releaseIdentityResolver("resolver-revision-2")); err != nil {
+		t.Fatal(err)
+	}
+	changedResolver.Freeze()
+	changedResolverIdentity, err := runtimeReleaseIdentity(validOptions().Identity, changedResolver, connectors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changedResolverIdentity.ProjectExtensionRegistrySHA256 == resolverIdentity.ProjectExtensionRegistrySHA256 || changedResolverIdentity.CombinationSHA256 == resolverIdentity.CombinationSHA256 {
+		t.Fatalf("Assignee Resolver drift did not change release identity: first=%+v changed=%+v", resolverIdentity, changedResolverIdentity)
 	}
 }
 
 func TestRuntimeReleaseIdentityValidatesPackagedLinkerFacts(t *testing.T) {
 	restore := setRuntimeReleaseLinkerFactsForTest()
 	defer restore()
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()

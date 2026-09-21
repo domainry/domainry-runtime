@@ -288,8 +288,9 @@ func (r WorkflowWorkerStore) UpdateTask(ctx context.Context, workspaceID string,
 	if err != nil {
 		return err
 	}
-	columns := []string{"assignee_user_id", "assignee_name", "assignee_role_key", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}
-	values := []any{task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.UpdatedAt}
+	evidence, _ := json.Marshal(task.AssigneeEvidence)
+	columns := []string{"assignee_user_id", "assignee_name", "assignee_role_key", "assignee_resolver_key", "assignee_evidence_json", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}
+	values := []any{task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.UpdatedAt}
 	return r.updateRow(ctx, "_workflow_tasks", workspaceID, task.ID, columns, values)
 }
 

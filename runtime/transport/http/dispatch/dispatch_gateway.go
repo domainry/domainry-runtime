@@ -26,7 +26,7 @@ func (h *ExecutionHandler) acceptExecution(w http.ResponseWriter, r *http.Reques
 		h.writeDispatchError(w, http.StatusBadRequest, "dispatch.request_invalid")
 		return
 	}
-	if request.RuntimeID != runtimeID || strings.TrimSpace(request.ExecutionID) == "" || strings.TrimSpace(request.IdempotencyKey) == "" || !validExecutionTarget(request.Target) {
+	if request.RuntimeID != runtimeID || strings.TrimSpace(request.ExecutionID) == "" || strings.TrimSpace(request.DefinitionKey) == "" || strings.TrimSpace(request.IdempotencyKey) == "" || !validExecutionTarget(request.Target) {
 		h.writeDispatchError(w, http.StatusBadRequest, "dispatch.request_invalid")
 		return
 	}
@@ -48,8 +48,8 @@ func (h *ExecutionHandler) acceptExecution(w http.ResponseWriter, r *http.Reques
 			IdempotencyKey: identity.IdempotencyKey, BodySHA256: identity.BodySHA256,
 		},
 		Execution: dispatchapplication.ExecutionRequest{
-			ExecutionID: request.ExecutionID, IdempotencyKey: request.IdempotencyKey, DueAt: request.DueAt,
-			Target: dispatchapplication.Target{Type: request.Target.Type, Owner: request.Target.Owner, Operation: request.Target.Operation, ConnectionKey: request.Target.ConnectionKey, Payload: append([]byte(nil), request.Target.Payload...)},
+			ExecutionID: request.ExecutionID, DefinitionKey: request.DefinitionKey, IdempotencyKey: request.IdempotencyKey, DueAt: request.DueAt,
+			Target: dispatchapplication.Target{Type: request.Target.Type, Owner: request.Target.Owner, Operation: request.Target.Operation, ObjectKey: request.Target.ObjectKey, RunAsRole: request.Target.RunAsRole, ConnectionKey: request.Target.ConnectionKey, Payload: append([]byte(nil), request.Target.Payload...)},
 		},
 	})
 	if err != nil {
@@ -64,7 +64,7 @@ func validExecutionTarget(target executionTarget) bool {
 	if targetType == "" {
 		targetType = "runtime_operation"
 	}
-	if strings.TrimSpace(target.Operation) == "" || (targetType == "runtime_operation" && strings.TrimSpace(target.Owner) == "") || (targetType == "http" && strings.TrimSpace(target.ConnectionKey) == "") {
+	if strings.TrimSpace(target.Operation) == "" || (targetType == "runtime_operation" && strings.TrimSpace(target.Owner) == "") || (targetType == "runtime_operation" && strings.TrimSpace(target.Owner) == "business_action" && (strings.TrimSpace(target.ObjectKey) == "" || strings.TrimSpace(target.RunAsRole) == "")) || (targetType == "http" && strings.TrimSpace(target.ConnectionKey) == "") {
 		return false
 	}
 	return targetType == "runtime_operation" || targetType == "http"

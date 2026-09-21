@@ -254,8 +254,8 @@ func newGovernedHandlerProbe(events *[]string) *governedHandlerProbe {
 
 func newGovernedHandlerApplication(t *testing.T, handler runtimeext.BusinessHandler, authorization ActionAuthorization, assurance ActionAssurance, store *governedExecutionStoreProbe) *ActionApplicationService {
 	t.Helper()
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()

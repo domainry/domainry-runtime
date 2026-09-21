@@ -8,6 +8,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 )
 
@@ -56,8 +57,21 @@ func (state *validationState) validateFieldOptions(path string, field definition
 			state.add(path+".default_value", "relation defaults are unsupported; supply record identity explicitly")
 			continue
 		}
-		if len(allowed) > 0 && !containsString(allowed, strings.TrimSpace(fmt.Sprint(defaultValue))) {
-			state.add(path+".default_value", "must match one of the stable option values")
+		if len(allowed) > 0 {
+			if field.Type == recordmodel.RecordMultiSelectFieldType {
+				normalized, err := recordmodel.RecordNormalizeStructuredFieldValue(field, defaultValue)
+				if err != nil {
+					state.add(path+".default_value", "must be a valid multi_select set")
+					continue
+				}
+				for _, item := range normalized.([]string) {
+					if !containsString(allowed, item) {
+						state.add(path+".default_value", "must contain only stable option values")
+					}
+				}
+			} else if !containsString(allowed, strings.TrimSpace(fmt.Sprint(defaultValue))) {
+				state.add(path+".default_value", "must match one of the stable option values")
+			}
 		}
 	}
 	if dictionaryKey := mapString(field.Config, "dictionary_key"); dictionaryKey != "" {

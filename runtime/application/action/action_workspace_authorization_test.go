@@ -21,7 +21,7 @@ func TestActionApplicationAuthorizesWorkspaceBeforeExecutor(t *testing.T) {
 		calls++
 		return ActionExecutionResult{}, nil
 	}})
-	registry := runtimeext.NewBusinessHandlerRegistry()
+	registry := runtimeext.NewProjectExtensionRegistry()
 	registry.Freeze()
 	service := NewActionApplication(ActionApplicationDependencies{Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: executor})
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}

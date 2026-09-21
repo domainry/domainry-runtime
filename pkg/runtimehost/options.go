@@ -14,6 +14,7 @@ import (
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/pkg/codingruntime"
+	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
@@ -50,15 +51,20 @@ type Options struct {
 	DataExchangeFactory dataexchangesdk.Factory
 	// AgentFactory selects the in-process domainry-agent Module or its SaaS
 	// Remote Binding. Runtime receives the topology only through this factory.
-	AgentFactory     agentsdk.Factory
-	BusinessHandlers BusinessHandlerFactory
-	Connectors       connector.ProviderSetFactory
+	AgentFactory      agentsdk.Factory
+	ProjectExtensions ProjectExtensionFactory
+	Connectors        connector.ProviderSetFactory
 	// ConnectorProcesses is an explicit host policy for optional Provider
 	// subprocesses. The zero value denies every executable.
 	ConnectorProcesses ConnectorProcessPolicy
 	// AgentCodingWorkspace explicitly enables the local coding execution world.
 	// Nil leaves filesystem, terminal, process and LSP tools unpublished.
 	AgentCodingWorkspace *codingruntime.Options
+	// BlobStore and FileScanner are deployment-owned infrastructure adapters.
+	// They do not participate in project extension identity or receive business
+	// repositories. Nil selects Runtime's local filesystem and built-in scanner.
+	BlobStore   runtimefile.BlobStore
+	FileScanner runtimefile.FileScanner
 	// InitialWorkspaceCredentialDelivery is the process-local, one-shot sink
 	// used only while creating the first Workspace. It never becomes a Runtime
 	// HTTP, manifest, audit, receipt, or logging surface.

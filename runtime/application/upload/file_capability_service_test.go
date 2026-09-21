@@ -3,24 +3,112 @@ package upload
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
 )
 
 type fileCapabilityStoreStub struct {
+	mu            sync.Mutex
 	evidence      map[string]lifecyclecontract.FileScanEvidence
 	registerCalls int
 }
 
+func TestFileCapabilityValidatesRecordReferenceAgainstUploadSubjectAndCleanEvidence(t *testing.T) {
+	owner := uploadAccessPrincipal("asset.create")
+	store := &fileCapabilityStoreStub{evidence: map[string]lifecyclecontract.FileScanEvidence{}}
+	verifier := NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32))
+	blobs, err := blobstore.NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewFileCapabilityService(store, verifier, blobs, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := NewUploadSubjectRegistry(uploadSubjectMemory{})
+	service.BindUploadSubjects(registry)
+	artifact := lifecyclecontract.UploadArtifact{
+		ID: "file-1", WorkspaceID: owner.WorkspaceID, ObjectKey: "asset", FieldKey: "attachment", Filename: "stored.pdf",
+		ContentType: "application/pdf", SHA256: strings.Repeat("a", 64), Size: 7, CreatedAt: time.Now().UTC(),
+	}
+	if err := registry.Register(t.Context(), artifact, owner); err != nil {
+		t.Fatal(err)
+	}
+	evidence := lifecyclecontract.FileScanEvidence{
+		FileID: artifact.ID, WorkspaceID: artifact.WorkspaceID, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey,
+		Filename: artifact.Filename, ContentType: artifact.ContentType, SHA256: artifact.SHA256, Size: artifact.Size,
+		Status: lifecyclecontract.FileScanClean, Provider: "test", EvidenceRef: "scan-1", ScannedAt: time.Now().UTC(),
+	}
+	store.evidence[owner.WorkspaceID+"\x00"+artifact.ID] = evidence
+	clean, err := verifier.Status(t.Context(), owner.WorkspaceID, artifact.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	object := definitionmodel.ObjectSchema{Key: "asset", Fields: []definitionmodel.FieldSchema{{
+		Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"allowed_mime_types": []any{"application/pdf"}},
+	}}}
+	values := map[string]any{"attachment": map[string]any{
+		"file_id": artifact.ID, "filename": artifact.Filename, "content_type": artifact.ContentType, "size": artifact.Size,
+		"content_sha256": artifact.SHA256, "scan_receipt": clean.Receipt,
+	}}
+	if err := service.ValidateRecordReferences(t.Context(), object, values, owner); err != nil {
+		t.Fatal(err)
+	}
+	peer := owner
+	peer.UserID = "peer"
+	if err := service.ValidateRecordReferences(t.Context(), object, values, peer); apperror.CodeOf(err) != "backend.upload.subject_binding_denied" {
+		t.Fatalf("foreign uploader error=%v", err)
+	}
+	forged := definitionmodel.ObjectSchema{Key: "other", Fields: object.Fields}
+	if err := service.ValidateRecordReferences(t.Context(), forged, values, owner); apperror.CodeOf(err) != "backend.upload.file_identity_mismatch" {
+		t.Fatalf("forged object binding error=%v", err)
+	}
+	store.evidence[owner.WorkspaceID+"\x00"+artifact.ID] = lifecyclecontract.FileScanEvidence{
+		FileID: artifact.ID, WorkspaceID: artifact.WorkspaceID, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey,
+		Filename: artifact.Filename, ContentType: artifact.ContentType, SHA256: artifact.SHA256, Size: artifact.Size, Status: lifecyclecontract.FileScanPending,
+	}
+	if err := service.ValidateRecordReferences(t.Context(), object, values, owner); apperror.CodeOf(err) != "backend.upload.scan_not_clean" {
+		t.Fatalf("pending scan error=%v", err)
+	}
+}
+
+func TestFileCapabilityVerifyCleanFailsClosedWithoutSubjectRegistry(t *testing.T) {
+	store := &fileCapabilityStoreStub{evidence: map[string]lifecyclecontract.FileScanEvidence{}}
+	blobs, err := blobstore.NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewFileCapabilityService(store, NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32)), blobs, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal := uploadAccessPrincipal("asset.create")
+	_, err = service.VerifyClean(WithUploadClaimPrincipal(t.Context(), principal), principal.WorkspaceID, runtimeext.FileVerificationRequest{FileID: "file-1"})
+	if apperror.CodeOf(err) != "backend.upload.subject_binding_denied" {
+		t.Fatalf("missing subject registry error=%v", err)
+	}
+}
+
 func (s *fileCapabilityStoreStub) RegisterUpload(_ context.Context, artifact lifecyclecontract.UploadArtifact) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.registerCalls++
 	s.evidence[artifact.WorkspaceID+"\x00"+artifact.ID] = lifecyclecontract.FileScanEvidence{
 		FileID: artifact.ID, WorkspaceID: artifact.WorkspaceID, Filename: artifact.Filename, ContentType: artifact.ContentType,
@@ -34,6 +122,8 @@ func (*fileCapabilityStoreStub) ReconcileUploadArtifacts(context.Context, lifecy
 }
 
 func (s *fileCapabilityStoreStub) FindFileScan(_ context.Context, workspaceID, fileID string) (lifecyclecontract.FileScanEvidence, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	evidence, ok := s.evidence[workspaceID+"\x00"+fileID]
 	if !ok {
 		return lifecyclecontract.FileScanEvidence{}, sql.ErrNoRows
@@ -42,13 +132,20 @@ func (s *fileCapabilityStoreStub) FindFileScan(_ context.Context, workspaceID, f
 }
 
 func (s *fileCapabilityStoreStub) RecordFileScan(_ context.Context, evidence lifecyclecontract.FileScanEvidence) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.evidence[evidence.WorkspaceID+"\x00"+evidence.FileID] = evidence
 	return nil
 }
 
 func TestFileCapabilityCreateDerivedIsImmutableAndIdempotent(t *testing.T) {
 	store := &fileCapabilityStoreStub{evidence: map[string]lifecyclecontract.FileScanEvidence{}}
-	service, err := NewFileCapabilityService(store, NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32)), t.TempDir(), func() time.Time {
+	blobRoot := t.TempDir()
+	blobs, err := blobstore.NewLocalStore(blobRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewFileCapabilityService(store, NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32)), blobs, func() time.Time {
 		return time.Date(2026, 9, 13, 1, 2, 3, 0, time.UTC)
 	})
 	if err != nil {
@@ -79,9 +176,63 @@ func TestFileCapabilityCreateDerivedIsImmutableAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestFileCapabilityCreateDerivedSupportsConcurrentIdempotentReplay(t *testing.T) {
+	store := &fileCapabilityStoreStub{evidence: map[string]lifecyclecontract.FileScanEvidence{}}
+	blobs, err := blobstore.NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 13, 1, 2, 3, 0, time.UTC)
+	service, err := NewFileCapabilityService(store, NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32)), blobs, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	results := make(chan runtimeext.DerivedFileEvidence, 2)
+	errors := make(chan error, 2)
+	var workers sync.WaitGroup
+	for range 2 {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			result, createErr := service.CreateDerived(t.Context(), "workspace-a", runtimeext.DerivedFileRequest{
+				IdempotencyKey: "import-1/page-1", ObjectKey: "document_version", FieldKey: "file_id",
+				Filename: "page.pdf", ContentType: "application/pdf", Content: bytes.NewReader([]byte("same-content")),
+			})
+			results <- result
+			errors <- createErr
+		}()
+	}
+	close(start)
+	workers.Wait()
+	close(results)
+	close(errors)
+	for createErr := range errors {
+		if createErr != nil {
+			t.Fatalf("concurrent replay failed: %v", createErr)
+		}
+	}
+	var first runtimeext.DerivedFileEvidence
+	for result := range results {
+		if first.FileID == "" {
+			first = result
+			continue
+		}
+		if result.FileID != first.FileID || result.ContentSHA256 != first.ContentSHA256 || result.ScanReceipt != first.ScanReceipt {
+			t.Fatalf("concurrent results differ: first=%+v result=%+v", first, result)
+		}
+	}
+}
+
 func TestFileCapabilityOpenVerifiedRehashesStoredBytes(t *testing.T) {
 	store := &fileCapabilityStoreStub{evidence: map[string]lifecyclecontract.FileScanEvidence{}}
-	service, err := NewFileCapabilityService(store, NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32)), t.TempDir(), time.Now)
+	blobRoot := t.TempDir()
+	blobs, err := blobstore.NewLocalStore(blobRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewFileCapabilityService(store, NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32)), blobs, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,10 +255,8 @@ func TestFileCapabilityOpenVerifiedRehashesStoredBytes(t *testing.T) {
 	if err != nil || string(content) != "png-content" {
 		t.Fatalf("content=%q err=%v", content, err)
 	}
-	path, err := service.artifactPath("workspace-a", created.FileVerificationEvidence.Filename)
-	if err != nil {
-		t.Fatal(err)
-	}
+	workspaceDigest := sha256.Sum256([]byte("workspace-a"))
+	path := filepath.Join(blobRoot, "workspace-"+hex.EncodeToString(workspaceDigest[:16]), created.FileVerificationEvidence.Filename)
 	if err := os.WriteFile(path, []byte("tampered"), 0o640); err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +272,11 @@ func TestFileCapabilityIssuesTicketForActionAuthorizedRecordBinding(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := NewFileCapabilityService(store, NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32)), t.TempDir(), func() time.Time { return now }, tickets)
+	blobs, err := blobstore.NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewFileCapabilityService(store, NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32)), blobs, func() time.Time { return now }, tickets)
 	if err != nil {
 		t.Fatal(err)
 	}

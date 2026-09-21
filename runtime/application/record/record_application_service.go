@@ -68,6 +68,7 @@ type RecordApplicationDependencies struct {
 	DataExchangeProviders        *DataExchangeProviders
 	ResolveBatchPrincipal        func(context.Context, string, string) principalmodel.Principal
 	ValidateExportAssurance      func(context.Context, definitionmodel.ObjectSchema, principalmodel.Principal, map[string]any, string) (map[string]string, error)
+	ValidateFileReferences       func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
 }
 
 func (s *RecordApplicationService) objectForAction(principal principalmodel.Principal, objectKey, action string) (definitionmodel.ObjectSchema, error) {
@@ -162,6 +163,7 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		ValidatePipeline: func(ctx context.Context, object definitionmodel.ObjectSchema, recordID string, data map[string]any, principal principalmodel.Principal) error {
 			return dependencies.Pipeline.ValidateDefaults(ctx, object, recordID, data, principal)
 		},
+		ValidateFiles: dependencies.ValidateFileReferences,
 		ApplyPipelineDefaults: func(ctx context.Context, object definitionmodel.ObjectSchema, data map[string]any, principal principalmodel.Principal, stagePatched bool) error {
 			return dependencies.Pipeline.ApplyItemDefaults(ctx, object, data, principal, stagePatched)
 		},
@@ -226,6 +228,7 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		ValidatePipeline: func(ctx context.Context, object definitionmodel.ObjectSchema, recordID string, data map[string]any, principal principalmodel.Principal) error {
 			return dependencies.Pipeline.ValidateDefaults(ctx, object, recordID, data, principal)
 		},
+		ValidateFiles: dependencies.ValidateFileReferences,
 		ApplyPipelineDefaults: func(ctx context.Context, object definitionmodel.ObjectSchema, data map[string]any, principal principalmodel.Principal, stagePatched bool) error {
 			return dependencies.Pipeline.ApplyItemDefaults(ctx, object, data, principal, stagePatched)
 		},

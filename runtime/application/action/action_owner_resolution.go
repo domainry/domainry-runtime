@@ -45,10 +45,7 @@ func resolvePublishedActionOwner(definition definitionmodel.ActionSchema, system
 		handlerEligible = (published == nil || effectCapabilityMatches(published, handlerEffect)) && actionFileCapabilitiesMatch(definition.FileOperations, binding.Descriptor.FileCapabilities)
 	}
 	switch {
-	case systemEligible && handlerEligible && handlerCapabilityRequiresBusinessOwner(definition.ObjectKey, systemEffect, handlerEffect, binding.Descriptor):
-		definition.EffectSet = selectedPublishedEffectSet(published, handlerEffect)
-		return definition, ActionOwnerBusinessHandler, "", binding, nil
-	case systemEligible && handlerEligible:
+	case systemFound && handlerFound:
 		return definition, "", "", runtimeext.BusinessHandlerBinding{}, fmt.Errorf("action %s has both system operation %s and business handler owners", definition.Key, system.Key)
 	case systemEligible:
 		definition.EffectSet = selectedPublishedEffectSet(published, systemEffect)
@@ -83,19 +80,6 @@ func actionFileCapabilitiesMatch(published, descriptor []string) bool {
 	return true
 }
 
-func handlerCapabilityRequiresBusinessOwner(primaryObject string, systemEffect, handlerEffect *definitionmodel.ActionEffectSet, descriptor runtimeext.HandlerDescriptor) bool {
-	if !effectWriteCapabilityMatches(handlerEffect, systemEffect) || len(descriptor.ConnectorCapabilities) > 0 {
-		return true
-	}
-	primaryObject = strings.TrimSpace(primaryObject)
-	for _, effect := range handlerEffect.Read {
-		if strings.TrimSpace(effect.ObjectKey) != primaryObject {
-			return true
-		}
-	}
-	return false
-}
-
 func selectedPublishedEffectSet(published, derived *definitionmodel.ActionEffectSet) *definitionmodel.ActionEffectSet {
 	if published != nil {
 		return published
@@ -115,7 +99,8 @@ func effectSetFromHandlerCapabilities(capabilities []runtimeext.ActionObjectCapa
 			operation := strings.TrimSpace(raw)
 			if actionReadCapabilityOperation(operation) {
 				read = append(read, operation)
-			} else if actionCapabilityWriteOperation(operation) {
+			}
+			if actionCapabilityWriteOperation(operation) {
 				write = append(write, operation)
 			}
 		}
@@ -191,13 +176,6 @@ func normalizedUniqueStrings(values []string) ([]string, error) {
 	}
 	sort.Strings(result)
 	return result, nil
-}
-
-func effectWriteCapabilityMatches(published, capability *definitionmodel.ActionEffectSet) bool {
-	if published == nil || capability == nil {
-		return false
-	}
-	return effectCapabilityListMatches(published.Write, capability.Write)
 }
 
 func effectCapabilityMatches(published, capability *definitionmodel.ActionEffectSet) bool {

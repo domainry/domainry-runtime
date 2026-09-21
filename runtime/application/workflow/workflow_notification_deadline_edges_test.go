@@ -152,7 +152,7 @@ func TestWorkflowTaskEscalationRecipientAndEventOutcomes(t *testing.T) {
 	if err := service.escalateWorkflowTask(t.Context(), process, node, &task, contract, actor); err != nil {
 		t.Fatal(err)
 	}
-	if task.AssigneeUserID != "new" || task.AssigneeName != "" || len(worker.events) != 1 {
+	if task.AssigneeUserID != "new" || task.AssigneeName != "" || task.AssigneeResolverKey != "users" || len(task.AssigneeEvidence.Matches) != 1 || len(worker.events) != 1 {
 		t.Fatalf("task=%+v events=%+v", task, worker.events)
 	}
 	service.identity = workflowIdentityEdgeStub{user: identitysdk.User{ID: "new", Name: "New User"}, found: true}

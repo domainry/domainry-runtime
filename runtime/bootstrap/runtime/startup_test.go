@@ -77,7 +77,7 @@ type startupContractMismatchHandler struct{}
 func (startupContractMismatchHandler) Descriptor() runtimeext.HandlerDescriptor {
 	return runtimeext.HandlerDescriptor{
 		ActionKey: "booking.reserve", InputType: "example.com/project/actions.BookingReserveInput", OutputType: "example.com/project/actions.BookingReserveOutput",
-		InputContractSHA256: strings.Repeat("a", 64), OutputContractSHA256: strings.Repeat("b", 64), HandlerRevision: "handler-v1",
+		HandlerRevision: "handler-v1",
 	}
 }
 
@@ -86,15 +86,14 @@ func (startupContractMismatchHandler) Invoke(context.Context, runtimeext.ActionE
 }
 
 func TestRuntimeActionReadinessFailsClosedOnPublishedContractMismatch(t *testing.T) {
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(startupContractMismatchHandler{}); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(startupContractMismatchHandler{}); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
 	action := definitionmodel.ActionSchema{
 		Key: "booking.reserve", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation,
-		InputType: "example.com/project/actions.BookingReserveInput", OutputType: "example.com/project/actions.BookingReserveOutput",
-		InputContractSHA256: strings.Repeat("a", 64), OutputContractSHA256: strings.Repeat("c", 64),
+		InputType: "example.com/project/actions.BookingReserveInput", OutputType: "example.com/project/actions.BookingReserveOutputChanged",
 	}
 	system := actionapplication.NewSystemOperationCatalog()
 	application := actionapplication.NewActionApplication(actionapplication.ActionApplicationDependencies{
@@ -102,7 +101,7 @@ func TestRuntimeActionReadinessFailsClosedOnPublishedContractMismatch(t *testing
 		SystemOperations: actionapplication.NewSystemOperationExecutor(system),
 	})
 	err := validateRuntimeActionReadiness(application)
-	if err == nil || !strings.Contains(err.Error(), "output_contract_sha256 mismatch") {
+	if err == nil || !strings.Contains(err.Error(), "output_type mismatch") {
 		t.Fatalf("readiness error=%v", err)
 	}
 }
@@ -116,7 +115,7 @@ func TestRuntimeStartupRegistryAndReadinessBoundaryGuards(t *testing.T) {
 		t.Fatalf("artifact evidence=%+v", got)
 	}
 
-	frozenHandlers := runtimeext.NewBusinessHandlerRegistry()
+	frozenHandlers := runtimeext.NewProjectExtensionRegistry()
 	frozenHandlers.Freeze()
 	frozenConnectors := connector.NewRegistry()
 	frozenConnectors.Freeze()
@@ -125,7 +124,7 @@ func TestRuntimeStartupRegistryAndReadinessBoundaryGuards(t *testing.T) {
 			newWithExtensions(t.Context(), bootstrapTestConfig(t), nil, frozenConnectors, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 		},
 		"unfrozen handlers": func() {
-			newWithExtensions(t.Context(), bootstrapTestConfig(t), runtimeext.NewBusinessHandlerRegistry(), frozenConnectors, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
+			newWithExtensions(t.Context(), bootstrapTestConfig(t), runtimeext.NewProjectExtensionRegistry(), frozenConnectors, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
 		},
 		"nil connectors": func() {
 			newWithExtensions(t.Context(), bootstrapTestConfig(t), frozenHandlers, nil, runtimehttp.RuntimeReleaseIdentity{}, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
@@ -183,11 +182,11 @@ func TestNewBuildsRunnableRuntimeAndClosesStartedWorkers(t *testing.T) {
 	}
 }
 
-func TestNewWithBusinessHandlersBuildsRuntime(t *testing.T) {
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+func TestNewWithProjectExtensionsBuildsRuntime(t *testing.T) {
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
-	runtime := NewWithBusinessHandlers(t.Context(), bootstrapTestConfig(t), handlers, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
-	if runtime.businessHandlers != handlers {
+	runtime := NewWithProjectExtensions(t.Context(), bootstrapTestConfig(t), handlers, runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
+	if runtime.projectExtensions != handlers {
 		t.Fatal("Runtime did not retain supplied business handlers")
 	}
 	if err := runtime.CloseContext(t.Context()); err != nil {
@@ -196,7 +195,7 @@ func TestNewWithBusinessHandlersBuildsRuntime(t *testing.T) {
 }
 
 func TestProjectRuntimeOpensOneNotificationModuleBinding(t *testing.T) {
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
@@ -219,7 +218,7 @@ func TestProjectRuntimeOpensOneNotificationModuleBinding(t *testing.T) {
 func TestProjectRuntimeOpensMonitoringModuleAndSaaSBindings(t *testing.T) {
 	build := func(t *testing.T, factory monitoringsdk.Factory) *Runtime {
 		t.Helper()
-		handlers := runtimeext.NewBusinessHandlerRegistry()
+		handlers := runtimeext.NewProjectExtensionRegistry()
 		handlers.Freeze()
 		connectors := connector.NewRegistry()
 		connectors.Freeze()
@@ -267,7 +266,7 @@ func TestProjectRuntimeOpensMonitoringModuleAndSaaSBindings(t *testing.T) {
 }
 
 func TestProjectRuntimeOpensExtractedSchedulerModuleBinding(t *testing.T) {
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
@@ -286,7 +285,7 @@ func TestProjectRuntimeJoinsSharedReleaseCohortBeforeServingTraffic(t *testing.T
 	cfg := bootstrapTestConfig(t)
 	cfg.RuntimeInstanceID = "runtime-release-a"
 	identity := bootstrapRuntimeReleaseIdentity(t, '1')
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
@@ -334,7 +333,7 @@ func bootstrapRuntimeReleaseIdentity(t *testing.T, marker byte) deploymentmodel.
 		ContractVersion: deploymentmodel.RuntimeReleaseIdentityVersion, BuildMode: "development", RuntimeVersion: "runtime-test",
 		RuntimeextContractVersion: "runtimeext-test", RuntimeextContractSHA256: hash('a'), ConnectorContractVersion: "connector-test", ConnectorContractSHA256: hash('b'),
 		DomainSDKContractVersion: "sdk-test", DomainSDKContractSHA256: hash('c'), DomainSDKGeneratorVersion: "generator-test", DomainSDKBuildConstraint: "constraint-test",
-		ApplicationSchemaSnapshotSHA256: hash(marker), GeneratedSDKSHA256: hash('d'), HandlerRegistrySHA256: hash('e'), ConnectorRegistrySHA256: hash('f'),
+		ApplicationSchemaSnapshotSHA256: hash(marker), GeneratedSDKSHA256: hash('d'), ProjectExtensionRegistrySHA256: hash('e'), ConnectorRegistrySHA256: hash('f'),
 	}
 	combination, err := deploymentapplication.RuntimeReleaseCombinationSHA256(identity)
 	if err != nil {
@@ -347,13 +346,13 @@ func bootstrapRuntimeReleaseIdentity(t *testing.T, marker byte) deploymentmodel.
 func TestProjectRuntimeReleaseIntegrityTracksLiveSchemaAndFrozenRegistries(t *testing.T) {
 	cfg := bootstrapTestConfig(t)
 	cfg.RuntimeInstanceID = "runtime-integrity"
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
 	identity := bootstrapRuntimeReleaseIdentity(t, '1')
 	var err error
-	identity.HandlerRegistrySHA256, err = deploymentmodel.RuntimeRegistrySHA256("domainry-handler-registry-v1", handlers.Descriptors())
+	identity.ProjectExtensionRegistrySHA256, err = deploymentmodel.RuntimeRegistrySHA256("domainry-project-extension-registry-v1", handlers.Descriptors())
 	if err != nil {
 		t.Fatal(err)
 	}

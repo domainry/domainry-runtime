@@ -13,6 +13,7 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -317,10 +318,12 @@ func TestWorkflowSchemaWiringHandlesOptionalIdentityProjection(t *testing.T) {
 func TestWorkflowRecordTimerModeAndFailureEdges(t *testing.T) {
 	repository := &pipelineFailureRepository{records: map[string]map[string]recordmodel.Record{}}
 	runtime := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
-		Manifest:     manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "record_timer", Name: "Record timer"}}},
+		Manifest: manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "record_timer", Name: "Record timer"}}, BusinessCalendars: []businesscalendarmodel.BusinessCalendarSchema{{
+			Key: "weekday", Name: "Weekday", Revision: "1", Timezone: "UTC", WeeklyWorkingIntervals: []businesscalendarmodel.BusinessCalendarWeeklySchedule{{Weekday: "monday", Intervals: []businesscalendarmodel.BusinessCalendarTimeInterval{{Start: "00:00", End: "24:00"}}}},
+		}}},
 		Dependencies: RuntimeServicesDependencies{Records: repository},
 	})
-	recordTimers := runtimeWorkflowRecordTimers{recordTimers: runtime.recordTimerService}
+	recordTimers := runtimeWorkflowRecordTimers{recordTimers: runtime.recordTimerService, calendars: runtime.businessCalendarSnapshot}
 	createdAt := time.Date(2026, 7, 27, 10, 0, 0, 0, time.UTC)
 	request := workflowapplication.WorkflowWaitTimerRequest{
 		WorkspaceID: "workspace-primary", ProcessID: "process", NodeID: "timer", ObjectKey: "order", RecordID: "order-1",

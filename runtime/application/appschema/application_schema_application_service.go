@@ -19,6 +19,7 @@ import (
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
@@ -111,7 +112,7 @@ type ApplicationSchemaReferenceGraphProvider interface {
 type ApplicationSchemaAuditAppender func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 
 type LifecycleRuntime interface {
-	ApplyManifestMetadata(string, string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []automationmodel.AutomationRuleSchema, []appschemamodel.DictionarySchema, connectormodel.IntegrationSchema, []reportmodel.ReportSchema, []agentsdk.SkillSchema, []agentsdk.AgentSchema, []profilebindingmodel.Binding)
+	ApplyManifestMetadata(string, string, string, string, []definitionmodel.ObjectSchema, []definitionmodel.ActionSchema, []definitionmodel.WorkflowSchema, []businesscalendarmodel.BusinessCalendarSchema, []automationmodel.AutomationRuleSchema, []appschemamodel.DictionarySchema, connectormodel.IntegrationSchema, []reportmodel.ReportSchema, []agentsdk.SkillSchema, []agentsdk.AgentSchema, []profilebindingmodel.Binding)
 	Schema() appschemamodel.ApplicationSchemaSnapshot
 }
 

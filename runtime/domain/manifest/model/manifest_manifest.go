@@ -18,6 +18,7 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 )
 
 type ManifestSchema struct {
@@ -44,6 +45,7 @@ type ManifestSchema struct {
 
 	Actions                   []definitionmodel.ActionSchema                  `json:"actions,omitempty"`
 	Workflows                 []definitionmodel.WorkflowSchema                `json:"workflows,omitempty"`
+	BusinessCalendars         []businesscalendarmodel.BusinessCalendarSchema  `json:"business_calendars,omitempty"`
 	SchedulerDefinitions      []map[string]any                                `json:"scheduler_definitions,omitempty"`
 	AutomationRules           []automationmodel.AutomationRuleSchema          `json:"automation_rules,omitempty"`
 	NotificationTemplates     []notificationmodel.NotificationTemplate        `json:"notification_templates,omitempty"`

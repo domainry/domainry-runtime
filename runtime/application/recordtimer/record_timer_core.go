@@ -21,7 +21,9 @@ import (
 type RecordTimerSchedule = recordtimermodel.Schedule
 type RecordTimerLease = recordtimermodel.Lease
 type RecordTimerBusinessCalendar = recordtimerpolicy.BusinessCalendar
-type StandardRecordTimerBusinessCalendar = recordtimerpolicy.StandardBusinessCalendar
+type RecordTimerBusinessCalendarCatalog = recordtimerpolicy.BusinessCalendarCatalog
+
+var NewRecordTimerBusinessCalendarCatalog = recordtimerpolicy.NewBusinessCalendarCatalog
 
 func (s *RecordTimerApplicationService) BuildRecordTimerMutationFromSource(ctx context.Context, workspaceID string, request RecordTimerSchedule, source recordmodel.Record, calendar RecordTimerBusinessCalendar, now time.Time) (transactionmodel.RecordMutationCommit, error) {
 	resolved, err := recordtimerpolicy.ResolveSchedule(ctx, request, source, calendar)
@@ -70,7 +72,7 @@ func (s *RecordTimerApplicationService) BuildRecordTimerMutation(ctx context.Con
 		"timer_key": request.TimerKey, "object_key": request.ObjectKey, "record_id": request.RecordID, "purpose": request.Purpose,
 		"status": "scheduled", "schedule_mode": request.ScheduleMode, "due_at": request.DueAt.UTC().Format(time.RFC3339Nano),
 		"source_field": request.SourceField, "offset_seconds": request.OffsetSeconds, "timezone": request.Timezone,
-		"business_calendar_key": request.BusinessCalendarKey, "target_type": request.TargetType, "target_key": request.TargetKey,
+		"business_calendar_key": request.BusinessCalendarKey, "business_calendar_revision": request.BusinessCalendarRevision, "target_type": request.TargetType, "target_key": request.TargetKey,
 		"payload_json": request.PayloadJSON, "priority": request.Priority, "sequence": request.Sequence,
 		"lease_owner": "", "lease_expires_at": "", "fencing_token": 0, "attempt": 0,
 		"max_attempts": request.MaxAttempts, "retry_delay_seconds": request.RetryDelaySeconds, "retry_max_delay_seconds": request.RetryMaxDelaySeconds,

@@ -68,12 +68,12 @@ func (e *WorkflowProcessEngine) simulateNode(ctx context.Context, process workfl
 		preview.Details = map[string]any{"matched": matched}
 		return preview, []string{preview.Outcome}, nil
 	case "approval":
-		assignees, roleKey, err := e.resolveApprovalAssignees(ctx, process, node, principal)
+		assignees, err := e.resolveApprovalAssignees(ctx, process, node, principal)
 		if err != nil {
 			return preview, nil, err
 		}
-		preview.ResolvedAssignees = assignees
-		preview.Details = map[string]any{"resolver_mode": workflowpolicy.WorkflowApprovalNodeContract(node).ResolverMode, "role_key": roleKey, "empty_assignee_policy": workflowpolicy.WorkflowApprovalNodeContract(node).EmptyAssigneePolicy}
+		preview.ResolvedAssignees = resolvedAssigneeUserIDs(assignees)
+		preview.Details = map[string]any{"resolver_mode": workflowpolicy.WorkflowApprovalNodeContract(node).ResolverMode, "resolved_assignees": assignees, "empty_assignee_policy": workflowpolicy.WorkflowApprovalNodeContract(node).EmptyAssigneePolicy}
 		contract := workflowpolicy.WorkflowApprovalNodeContract(node)
 		preview.Details["mode"] = contract.Mode
 		if contract.Mode == "quorum" {
@@ -107,11 +107,12 @@ func (e *WorkflowProcessEngine) simulateNode(ctx context.Context, process workfl
 	case "cc":
 		contract := workflowpolicy.WorkflowCCNodeContract(node)
 		preview.ActionKey = contract.NotificationActionKey
-		assignees, err := e.resolveWorkflowRecipients(ctx, process, contract.Resolvers, principal)
+		assignees, err := e.resolveWorkflowAssignees(ctx, process, node.ID, contract.Resolvers, principal)
 		if err != nil {
 			return preview, nil, err
 		}
-		preview.ResolvedAssignees = assignees
+		preview.ResolvedAssignees = resolvedAssigneeUserIDs(assignees)
+		preview.Details = map[string]any{"resolved_assignees": assignees}
 		return preview, []string{"success"}, nil
 	case "wait_until", "wait_duration", "timer":
 		contract := workflowpolicy.WorkflowTimerNodeContract(node)

@@ -26,6 +26,7 @@ const (
 	ConnectorActionSideEffectOutboxErrorCode  = "backend.connector.action_side_effect_requires_outbox"
 	FileActionGrantDeniedErrorCode            = "backend.upload.action_grant_denied"
 	RecordNotificationRecipientOperation      = "notification_recipient"
+	MaximumBusinessJobPayloadBytes            = 64 << 10
 )
 
 // SynchronousConnectorCallLease keeps the Action UoW in prewrite for the
@@ -159,8 +160,8 @@ type FileVerificationRequest struct {
 }
 
 type FileVerificationEvidence struct {
-	FileID, ContentSHA256, Filename, ContentType, Status, Provider, EvidenceRef, ScanReceipt string
-	Size                                                                                     int64
+	FileID, ObjectKey, FieldKey, ContentSHA256, Filename, ContentType, Status, Provider, EvidenceRef, ScanReceipt string
+	Size                                                                                                          int64
 }
 
 // FileRecordBinding binds an opaque Runtime file to one caller-readable

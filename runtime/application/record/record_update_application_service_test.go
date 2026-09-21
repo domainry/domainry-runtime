@@ -66,6 +66,50 @@ func TestRecordApplicationAuthorizesWorkspaceBeforeRepositoryAccess(t *testing.T
 	}
 }
 
+func TestUpdateValidatesOnlyChangedStructuredFileReferencesBeforeCommit(t *testing.T) {
+	current := map[string]any{
+		"file_id": "file-1", "filename": "old.pdf", "content_type": "application/pdf", "size": int64(7),
+		"content_sha256": strings.Repeat("a", 64),
+	}
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "document-1", UpdatedAt: "v1", Data: map[string]any{"title": "Old", "attachment": current}}}
+	object := definitionmodel.ObjectSchema{Key: "document", Fields: []definitionmodel.FieldSchema{
+		{Key: "title", Type: "text"},
+		{Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"scan_required": false}},
+	}}
+	var verified []map[string]any
+	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
+		Repository: repository,
+		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
+			return object, nil
+		},
+		CanAccess: func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true },
+		CanWrite:  func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
+		ValidateFiles: func(_ context.Context, _ definitionmodel.ObjectSchema, values map[string]any, _ principalmodel.Principal) error {
+			verified = append(verified, values)
+			return nil
+		},
+	})
+	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "uploader"}})
+	if _, err := service.Update(t.Context(), object.Key, repository.record.ID, map[string]any{"title": "New"}, principal); err != nil {
+		t.Fatal(err)
+	}
+	if len(verified) != 1 || len(verified[0]) != 0 {
+		t.Fatalf("unchanged file was reverified: %#v", verified)
+	}
+	repository.record = repository.commit.Record
+	repository.commit = transactionmodel.RecordMutationCommit{}
+	next := map[string]any{
+		"file_id": "file-2", "filename": "new.pdf", "content_type": "application/pdf", "size": float64(8),
+		"content_sha256": strings.Repeat("b", 64),
+	}
+	if _, err := service.Update(t.Context(), object.Key, repository.record.ID, map[string]any{"attachment": next}, principal); err != nil {
+		t.Fatal(err)
+	}
+	if len(verified) != 2 || len(verified[1]) != 1 {
+		t.Fatalf("changed file verification=%#v", verified)
+	}
+}
+
 func (r *updateRepositoryProbe) CommitRecordMutation(_ context.Context, _ string, commit transactionmodel.RecordMutationCommit) error {
 	if r.commitHook != nil {
 		r.commitHook()

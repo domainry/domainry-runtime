@@ -256,7 +256,7 @@ func runDefinitionUpgradeScenario(t *testing.T, databaseConfig func(*testing.T) 
 
 	// Boot 4: v3 changes tier to an exact physical type and must be refused
 	// with a clear code before anything is written.
-	if _, err := definitionUpgradeBoot(t, base, v3); err == nil || !strings.Contains(err.Error(), "backend.metadata.definition_upgrade_blocked") || !strings.Contains(err.Error(), "backend.metadata.physical_schema_incompatible") {
+	if _, err := definitionUpgradeBoot(t, base, v3); err == nil || !strings.Contains(err.Error(), "backend.metadata.definition_upgrade_blocked") || !strings.Contains(err.Error(), "backend.metadata.upgrade_field_type_change_unsupported(customer.tier)") {
 		t.Fatalf("boot v3 err=%v", err)
 	}
 	store = openStore()

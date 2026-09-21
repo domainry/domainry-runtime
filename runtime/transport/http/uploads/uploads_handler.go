@@ -1,6 +1,8 @@
 package uploads
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -8,37 +10,24 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	requestcontext "github.com/domainry/domainry-foundation/requestcontext"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 const maxUploadBytes = 5 << 20
 const maxUploadRequestBytes = maxUploadBytes + (1 << 20)
 
 var errUploadTooLarge = errors.New("upload exceeds configured file limit")
-
-type uploadTemporaryFile interface {
-	io.Writer
-	Name() string
-	Close() error
-}
-
-var (
-	uploadMkdirAll   = os.MkdirAll
-	uploadCreateTemp = func(dir, pattern string) (uploadTemporaryFile, error) {
-		return os.CreateTemp(dir, pattern)
-	}
-	uploadRename = os.Rename
-	uploadAbs    = filepath.Abs
-)
 
 var allowedUploadContentTypes = map[string]string{
 	"application/json":         ".json",
@@ -58,12 +47,11 @@ var allowedUploadContentTypes = map[string]string{
 
 type UploadsHandler struct {
 	access            *uploadapplication.UploadAccessApplicationService
-	uploadDir         string
+	blobs             runtimefile.BlobStore
 	principal         func(*http.Request) principalmodel.Principal
 	writeJSON         func(http.ResponseWriter, int, any)
 	writeError        func(http.ResponseWriter, *http.Request, int, string, ...string)
 	writeServiceError func(http.ResponseWriter, *http.Request, error)
-	copyUpload        func(io.Writer, io.Reader) (int64, error)
 	readPrefix        func(io.Reader) ([]byte, error)
 	artifacts         lifecyclecontract.UploadArtifactStore
 	scans             *uploadapplication.FileScanReceiptVerifier
@@ -73,7 +61,7 @@ type UploadsHandler struct {
 
 type UploadsDependencies struct {
 	Access            *uploadapplication.UploadAccessApplicationService
-	UploadDir         string
+	Blobs             runtimefile.BlobStore
 	Principal         func(*http.Request) principalmodel.Principal
 	WriteJSON         func(http.ResponseWriter, int, any)
 	WriteError        func(http.ResponseWriter, *http.Request, int, string, ...string)
@@ -86,9 +74,9 @@ type UploadsDependencies struct {
 
 func NewUploadsHandler(deps UploadsDependencies) *UploadsHandler {
 	return &UploadsHandler{
-		access: deps.Access, uploadDir: deps.UploadDir, principal: deps.Principal, artifacts: deps.Artifacts, scans: deps.Scans, tickets: deps.Tickets, subjects: deps.Subjects,
+		access: deps.Access, blobs: deps.Blobs, principal: deps.Principal, artifacts: deps.Artifacts, scans: deps.Scans, tickets: deps.Tickets, subjects: deps.Subjects,
 		writeJSON: deps.WriteJSON, writeError: deps.WriteError, writeServiceError: deps.WriteServiceError,
-		copyUpload: io.Copy, readPrefix: readUploadPrefix,
+		readPrefix: readUploadPrefix,
 	}
 }
 
@@ -122,12 +110,17 @@ func (h *UploadsHandler) uploadFile(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, http.StatusBadRequest, "backend.upload.object_field_required")
 		return
 	}
-	if err := h.access.AuthorizeUpload(r.Context(), objectKey, fieldKey, principal); err != nil {
+	policy, err := h.access.UploadPolicy(r.Context(), objectKey, fieldKey, principal)
+	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadRequestBytes)
-	if err := r.ParseMultipartForm(maxUploadRequestBytes); err != nil {
+	requestLimit := policy.MaxSizeBytes + (1 << 20)
+	if requestLimit > maxUploadRequestBytes {
+		requestLimit = maxUploadRequestBytes
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, requestLimit)
+	if err := r.ParseMultipartForm(requestLimit); err != nil {
 		var maxBytesError *http.MaxBytesError
 		if errors.As(err, &maxBytesError) {
 			h.writeError(w, r, http.StatusRequestEntityTooLarge, "backend.upload.file_too_large")
@@ -166,64 +159,45 @@ func (h *UploadsHandler) uploadFile(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, http.StatusBadRequest, "backend.upload.unsupported_file_type")
 		return
 	}
-	workspaceDir, err := h.workspaceUploadDir(principal.WorkspaceID)
-	if err != nil {
+	if !policy.AllowsContentType(contentType) {
+		h.writeError(w, r, http.StatusBadRequest, "backend.upload.mime_type_denied")
+		return
+	}
+	if _, err := principalmodel.NewWorkspaceID(principal.WorkspaceID); err != nil {
 		h.writeError(w, r, http.StatusForbidden, "backend.workspace_scope_required")
 		return
 	}
-	if err := uploadMkdirAll(workspaceDir, 0o700); err != nil {
-		if uploadStorageExhausted(err) {
-			h.writeError(w, r, http.StatusInsufficientStorage, "backend.upload.storage_exhausted")
-			return
-		}
-		h.writeError(w, r, http.StatusInternalServerError, "backend.upload.create_directory_failed")
+	if h.blobs == nil {
+		h.writeError(w, r, http.StatusServiceUnavailable, "backend.upload.storage_unavailable")
 		return
 	}
-	temporary, err := uploadCreateTemp(workspaceDir, ".upload-*")
+	fileID := requestcontext.NewRequestID()
+	staged, err := h.blobs.Stage(r.Context(), runtimefile.BlobStageRequest{
+		WorkspaceID: principal.WorkspaceID, StageID: fileID, Content: io.MultiReader(bytes.NewReader(prefix), file), MaxBytes: policy.MaxSizeBytes,
+	})
 	if err != nil {
 		if uploadStorageExhausted(err) {
 			h.writeError(w, r, http.StatusInsufficientStorage, "backend.upload.storage_exhausted")
 			return
 		}
-		h.writeError(w, r, http.StatusInternalServerError, "backend.upload.save_failed")
-		return
-	}
-	temporaryPath := temporary.Name()
-	keepTemporary := false
-	defer func() {
-		_ = temporary.Close()
-		if !keepTemporary {
-			_ = os.Remove(temporaryPath)
-		}
-	}()
-	hash := sha256.New()
-	writer := io.MultiWriter(temporary, hash)
-	size, err := copyBoundedUpload(writer, prefix, file, h.copyUpload)
-	if err != nil {
-		if uploadStorageExhausted(err) {
-			h.writeError(w, r, http.StatusInsufficientStorage, "backend.upload.storage_exhausted")
-			return
-		}
-		if errors.Is(err, errUploadTooLarge) {
+		if errors.Is(err, runtimefile.ErrBlobTooLarge) {
 			h.writeError(w, r, http.StatusRequestEntityTooLarge, "backend.upload.file_too_large")
 			return
 		}
 		h.writeError(w, r, http.StatusBadRequest, "backend.upload.read_failed")
 		return
 	}
-	if err := temporary.Close(); err != nil {
-		if uploadStorageExhausted(err) {
-			h.writeError(w, r, http.StatusInsufficientStorage, "backend.upload.storage_exhausted")
-			return
-		}
-		h.writeError(w, r, http.StatusInternalServerError, "backend.upload.save_failed")
-		return
-	}
-	fileID := requestcontext.NewRequestID()
+	defer func() { _ = h.blobs.Delete(context.WithoutCancel(r.Context()), principal.WorkspaceID, staged.BlobKey) }()
+	size, contentSHA256 := staged.Size, staged.ContentSHA256
 	fileIdentityDigest := sha256.Sum256([]byte(fileID))
-	filename := hex.EncodeToString(hash.Sum(nil)[:16]) + "-" + hex.EncodeToString(fileIdentityDigest[:8]) + extension
-	path := filepath.Join(workspaceDir, filename)
-	if err := uploadRename(temporaryPath, path); err != nil {
+	filename := contentSHA256 + "-" + hex.EncodeToString(fileIdentityDigest[:8]) + extension
+	if err := h.access.ValidateUploadContent(r.Context(), objectKey, fieldKey, contentType, size, principal); err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	if _, err := h.blobs.Commit(r.Context(), runtimefile.BlobCommitRequest{
+		WorkspaceID: principal.WorkspaceID, StageKey: staged.BlobKey, BlobKey: filename, ContentSHA256: contentSHA256, Size: size,
+	}); err != nil {
 		if uploadStorageExhausted(err) {
 			h.writeError(w, r, http.StatusInsufficientStorage, "backend.upload.storage_exhausted")
 			return
@@ -231,23 +205,23 @@ func (h *UploadsHandler) uploadFile(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, http.StatusInternalServerError, "backend.upload.save_failed")
 		return
 	}
-	contentSHA256 := hex.EncodeToString(hash.Sum(nil))
 	artifact := lifecyclecontract.UploadArtifact{ID: fileID, WorkspaceID: principal.WorkspaceID, ObjectKey: objectKey, FieldKey: fieldKey, Filename: filename, ContentType: contentType, SHA256: contentSHA256, Size: size, CreatedAt: time.Now().UTC()}
 	if err := h.subjects.Register(r.Context(), artifact, principal); err != nil {
-		_ = os.Remove(path)
+		_ = h.blobs.Delete(context.WithoutCancel(r.Context()), principal.WorkspaceID, filename)
 		h.writeServiceError(w, r, err)
 		return
 	}
 	if h.artifacts != nil {
 		if err := h.artifacts.RegisterUpload(r.Context(), artifact); err != nil {
-			_ = os.Remove(path)
+			_ = h.blobs.Delete(context.WithoutCancel(r.Context()), principal.WorkspaceID, filename)
 			h.writeError(w, r, http.StatusInternalServerError, "backend.upload.register_failed")
 			return
 		}
 	}
-	keepTemporary = true
-	url := "/uploads/" + filename
-	h.access.RecordUploaded(r.Context(), objectKey, fieldKey, filename, contentType, int(size), principal)
+	url := "/uploads/" + fileID
+	h.access.RecordUploaded(r.Context(), objectKey, fieldKey, recordmodel.RecordFileReference{
+		FileID: fileID, Filename: filename, ContentType: contentType, Size: size, ContentSHA256: contentSHA256,
+	}, principal)
 	h.writeJSON(w, http.StatusCreated, uploadResponse{
 		FileID: fileID, SHA256: contentSHA256, ScanStatus: lifecyclecontract.FileScanPending,
 		URL:         url,
@@ -301,15 +275,22 @@ func readUploadPrefix(reader io.Reader) ([]byte, error) {
 }
 
 func copyBoundedUpload(writer io.Writer, prefix []byte, reader io.Reader, copyFn func(io.Writer, io.Reader) (int64, error)) (int64, error) {
+	return copyBoundedUploadLimit(writer, prefix, reader, copyFn, maxUploadBytes)
+}
+
+func copyBoundedUploadLimit(writer io.Writer, prefix []byte, reader io.Reader, copyFn func(io.Writer, io.Reader) (int64, error), maximum int64) (int64, error) {
+	if maximum < 1 || int64(len(prefix)) > maximum {
+		return 0, errUploadTooLarge
+	}
 	if _, err := writer.Write(prefix); err != nil {
 		return 0, err
 	}
-	written, err := copyFn(writer, io.LimitReader(reader, maxUploadBytes-int64(len(prefix))+1))
+	written, err := copyFn(writer, io.LimitReader(reader, maximum-int64(len(prefix))+1))
 	if err != nil {
 		return 0, err
 	}
 	size := int64(len(prefix)) + written
-	if size > maxUploadBytes {
+	if size > maximum {
 		return 0, errUploadTooLarge
 	}
 	return size, nil
@@ -321,7 +302,7 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 		h.writeError(w, r, http.StatusForbidden, "backend.role.unknown")
 		return
 	}
-	fileIdentifier := filepath.Base(strings.TrimSpace(r.PathValue("filename")))
+	fileIdentifier := filepath.Base(strings.TrimSpace(r.PathValue("fileID")))
 	if fileIdentifier == "." || strings.Contains(fileIdentifier, "..") {
 		http.NotFound(w, r)
 		return
@@ -330,6 +311,7 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 	fieldKey := strings.TrimSpace(r.URL.Query().Get("field_key"))
 	recordID := strings.TrimSpace(r.URL.Query().Get("record_id"))
 	ticketAuthorized := false
+	var scanEvidence lifecyclecontract.FileScanEvidence
 	if token := strings.TrimSpace(r.URL.Query().Get("download_ticket")); token != "" {
 		if h.tickets == nil {
 			h.writeError(w, r, http.StatusServiceUnavailable, "backend.upload.download_ticket_unavailable")
@@ -352,6 +334,7 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 		evidence, err := h.scans.Status(r.Context(), principal.WorkspaceID, fileIdentifier)
 		switch {
 		case err == nil:
+			scanEvidence = evidence
 			if evidence.Status != lifecyclecontract.FileScanClean {
 				h.writeError(w, r, http.StatusForbidden, "backend.upload.scan_not_clean")
 				return
@@ -384,27 +367,26 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
-	workspaceDir, err := h.workspaceUploadDir(principal.WorkspaceID)
-	if err != nil {
-		h.writeError(w, r, http.StatusForbidden, "backend.workspace_scope_required")
+	if h.blobs == nil {
+		h.writeError(w, r, http.StatusServiceUnavailable, "backend.upload.storage_unavailable")
 		return
 	}
-	path := filepath.Join(workspaceDir, storageFilename)
+	info, err := h.blobs.Stat(r.Context(), principal.WorkspaceID, storageFilename)
+	if err != nil || info.Size != scanEvidence.Size || !strings.EqualFold(info.ContentSHA256, scanEvidence.SHA256) {
+		h.writeError(w, r, http.StatusNotFound, "backend.upload.file_unavailable")
+		return
+	}
+	content, err := h.blobs.Open(r.Context(), principal.WorkspaceID, storageFilename)
+	if err != nil {
+		h.writeError(w, r, http.StatusNotFound, "backend.upload.file_unavailable")
+		return
+	}
+	defer content.Close()
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Disposition", "inline; filename="+storageFilename)
-	http.ServeFile(w, r, path)
-}
-
-func (h *UploadsHandler) workspaceUploadDir(workspaceID string) (string, error) {
-	workspaceID = strings.TrimSpace(workspaceID)
-	if _, err := principalmodel.NewWorkspaceID(workspaceID); err != nil {
-		return "", err
+	w.Header().Set("Content-Type", scanEvidence.ContentType)
+	w.Header().Set("Content-Length", strconv.FormatInt(info.Size, 10))
+	if _, err := io.Copy(w, content); err != nil {
+		return
 	}
-	digest := sha256.Sum256([]byte(workspaceID))
-	segment := "workspace-" + hex.EncodeToString(digest[:16])
-	root, err := uploadAbs(strings.TrimSpace(h.uploadDir))
-	if err != nil || strings.TrimSpace(h.uploadDir) == "" {
-		return "", errors.New("upload root is required")
-	}
-	return filepath.Join(root, segment), nil
 }

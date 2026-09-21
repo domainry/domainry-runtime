@@ -8,6 +8,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -36,8 +37,12 @@ func TestConditionalUpdateManyIsOneSetCallWithoutPerRecordLookupOrMutation(t *te
 				}
 				return recordmodel.RecordPageResult{Items: records, PageSize: 2}, nil
 			},
-			PlanConditionalUpdateLockedRecord: func(_ context.Context, objectKey string, before recordmodel.Record, input transactionmodel.ConditionalUpdateInput, _ principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
+			PlanConditionalUpdateLockedRecord: func(ctx context.Context, objectKey string, before recordmodel.Record, input transactionmodel.ConditionalUpdateInput, _ principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 				planCalls++
+				invocation, ok := recordmutation.MutationInvocationFromContext(ctx)
+				if !ok || invocation.ActionResource != "shift" || invocation.ActionOperation != "bulk_clock_out" {
+					t.Fatalf("set mutation authorization source=%+v found=%t", invocation, ok)
+				}
 				updated := before
 				updated.UpdatedAt = "v2"
 				updated.UpdateBy = "manager"

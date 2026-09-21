@@ -154,12 +154,15 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 	if len(principal.Roles) != 2 || requestcontext.WorkspaceID(requestContext) != "" {
 		t.Fatal("fixture must exercise multi-role recovery without a Foundation workspace")
 	}
-	providers := recordapplication.NewDataExchangeProviders(nil)
-	composition.NewRuntimeServices(ctx, composition.RuntimeServicesConfig{Dependencies: composition.RuntimeServicesDependencies{IdentityPrincipals: identity.Principals(), DataExchangeProviders: providers}})
-	recovered := providers.ResolvePrincipal(requestContext, dataexchange.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, RoleKey: principal.RoleKey})
+	resolutionProviders := recordapplication.NewDataExchangeProviders(nil)
+	composition.NewRuntimeServices(ctx, composition.RuntimeServicesConfig{Dependencies: composition.RuntimeServicesDependencies{IdentityPrincipals: identity.Principals(), DataExchangeProviders: resolutionProviders}})
+	recovered := resolutionProviders.ResolvePrincipal(requestContext, dataexchange.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, RoleKey: principal.RoleKey})
 	if !recovered.Known || recovered.AuthorizationRevision != principal.AuthorizationRevision || recovered.RoleKey != principal.RoleKey {
 		t.Fatalf("recovery differs: HTTP=%+v recovered=%+v", principal, recovered)
 	}
+	providers := recordapplication.NewDataExchangeProviders(func(ctx context.Context, actorID, roleKey string) principalmodel.Principal {
+		return resolutionProviders.ResolvePrincipal(ctx, dataexchange.Scope{WorkspaceID: requestcontext.WorkspaceID(ctx), ActorID: actorID, RoleKey: roleKey})
+	})
 	binding, err := openDataExchangeBinding(ctx, dataexchangemodule.NewFactory(dataexchangemodule.Options{}), dataexchange.ApplicationRef{ApplicationID: "export-test", RuntimeID: "runtime-test"}, dataExchangeModuleHost{store: store, providers: providers})
 	if err != nil {
 		t.Fatal(err)

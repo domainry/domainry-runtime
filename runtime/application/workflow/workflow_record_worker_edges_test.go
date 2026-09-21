@@ -330,7 +330,10 @@ func TestWorkflowExecutionHeartbeatRefreshSuccessRepositoryFailureAndLeaseLoss(t
 			if !testCase.wantErr && err != nil {
 				t.Fatal(err)
 			}
-			if len(worker.whereUpdates) != 1 || worker.whereUpdates[0].LeaseExpiresAt == "" {
+			// Heartbeats intentionally repeat until stop has joined the worker.
+			// Under load another tick may run after the first-call signal, so the
+			// contract here is at least one valid refresh rather than exactly one.
+			if len(worker.whereUpdates) < 1 || worker.whereUpdates[0].LeaseExpiresAt == "" {
 				t.Fatalf("updates=%v", worker.whereUpdates)
 			}
 			if second := stop(); (second != nil) != (err != nil) {

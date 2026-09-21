@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	notificationsdkcontract "github.com/domainry/domainry-notification-sdk/contract"
+	hostsurfacemodel "github.com/domainry/domainry-runtime/runtime/domain/hostsurface/model"
 )
 
 var storageValuePattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]*$`)
@@ -74,6 +75,7 @@ func ValidateRuntimeDefinitionGraph(manifest manifestmodel.ManifestSchema) error
 // validationState without becoming Connector source definitions.
 func ValidateRuntimeDefinitionGraphWithConnectorCatalog(manifest manifestmodel.ManifestSchema, connectorCatalog []connectormodel.ConnectorSchema) error {
 	state := newValidationState(manifest, connectorCatalog)
+	state.validateBusinessCalendars()
 	state.validateSchedulerOwnershipAndDefinitions()
 	state.validateObjects()
 	state.validateRoles()
@@ -103,6 +105,7 @@ func ValidateManifestWithConnectorCatalog(manifest manifestmodel.ManifestSchema,
 	state := newValidationState(manifest, connectorCatalog)
 	state.validateRequiredShell()
 	state.validateSourceIntentCoverage()
+	state.validateBusinessCalendars()
 	state.validateSchedulerOwnershipAndDefinitions()
 	state.validateObjects()
 	state.validateRoles()
@@ -131,6 +134,9 @@ func (state *validationState) validateNotificationTemplates() {
 		state.add("notification_templates", "%v", err)
 	}
 	if err := notificationsdkcontract.ValidateEventTypes(state.manifest.NotificationEventTypes, state.manifest.NotificationRules); err != nil {
+		state.add("notification_event_types", "%v", err)
+	}
+	if err := ValidateNotificationAudienceResolverReferences(state.manifest.NotificationEventTypes, state.manifest.NotificationRules, hostsurfacemodel.NotificationAudienceResolverKeys()); err != nil {
 		state.add("notification_event_types", "%v", err)
 	}
 }

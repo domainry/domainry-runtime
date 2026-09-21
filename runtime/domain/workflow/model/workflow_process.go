@@ -66,6 +66,31 @@ type WorkflowNodeInstance struct {
 	CompletedAt string         `json:"completed_at,omitempty"`
 }
 
+// AssigneeEvidence is the immutable explanation of why one user entered a
+// workflow electorate. Matches remain ordered by resolver execution order so
+// duplicate hits can be merged without discarding their independent sources.
+type AssigneeEvidence struct {
+	Matches []AssigneeEvidenceMatch `json:"matches"`
+}
+
+type AssigneeEvidenceMatch struct {
+	ResolverType  string                 `json:"resolver_type"`
+	ResolverKey   string                 `json:"resolver_key"`
+	ResolverIndex int                    `json:"resolver_index"`
+	RoleKey       string                 `json:"role_key,omitempty"`
+	VariableKey   string                 `json:"variable_key,omitempty"`
+	ObjectKey     string                 `json:"object_key,omitempty"`
+	RecordID      string                 `json:"record_id,omitempty"`
+	FieldKey      string                 `json:"field_key,omitempty"`
+	SubjectUserID string                 `json:"subject_user_id,omitempty"`
+	Facts         []AssigneeEvidenceFact `json:"facts,omitempty"`
+}
+
+type AssigneeEvidenceFact struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 type WorkflowTask struct {
 	WorkspaceID           string                                     `json:"workspace_id"`
 	ID                    string                                     `json:"id"`
@@ -76,6 +101,8 @@ type WorkflowTask struct {
 	AssigneeUserID        string                                     `json:"assignee_user_id,omitempty"`
 	AssigneeName          string                                     `json:"assignee_name,omitempty"`
 	AssigneeRoleKey       string                                     `json:"assignee_role_key,omitempty"`
+	AssigneeResolverKey   string                                     `json:"assignee_resolver_key,omitempty"`
+	AssigneeEvidence      AssigneeEvidence                           `json:"assignee_evidence"`
 	ResolverSnapshot      []definitionmodel.WorkflowAssigneeResolver `json:"resolver_snapshot,omitempty"`
 	CandidateSource       string                                     `json:"candidate_source,omitempty"`
 	NodeDefinitionVersion int                                        `json:"node_definition_version,omitempty"`

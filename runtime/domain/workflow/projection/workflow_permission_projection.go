@@ -43,6 +43,7 @@ func WorkflowTaskForPrincipal(task workflowmodel.WorkflowTask, advanced bool) wo
 		return task
 	}
 	visible := task
+	visible.AssigneeResolverKey, visible.AssigneeEvidence = "", workflowmodel.AssigneeEvidence{}
 	visible.ResolverSnapshot, visible.CandidateSource, visible.NodeDefinitionVersion = nil, "", 0
 	return visible
 }
@@ -115,9 +116,15 @@ func workflowAssigneeBusinessSummaryKeys(resolvers []definitionmodel.WorkflowAss
 			parts = append(parts, "workflow.assignee.users")
 		case "role":
 			parts = append(parts, "workflow.assignee.role")
-		case "manager", "manager_of", "initiator_manager":
+		case "manager", "manager_chain", "manager_of", "initiator_manager":
 			parts = append(parts, "workflow.assignee.manager")
-		case "record_field":
+		case "record_user_field":
+			parts = append(parts, "workflow.assignee.recordOwner")
+		case "variable_user":
+			parts = append(parts, "workflow.assignee.variableUser")
+		case "project":
+			parts = append(parts, "workflow.assignee.configured")
+		case "relation_user", "relation_role":
 			parts = append(parts, "workflow.assignee.recordOwner")
 		default:
 			parts = append(parts, "workflow.assignee.configured")

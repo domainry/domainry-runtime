@@ -275,15 +275,17 @@ func (r WorkflowDecisionStore) updateNodeTx(ctx context.Context, tx *sql.Tx, nod
 }
 
 func (r WorkflowDecisionStore) insertTaskTx(ctx context.Context, tx *sql.Tx, task workflowmodel.WorkflowTask) error {
+	evidence, _ := json.Marshal(task.AssigneeEvidence)
 	resolver, _ := json.Marshal(task.ResolverSnapshot)
 	columns := workflowTaskColumns()
-	values := []any{task.WorkspaceID, task.ID, task.ProcessID, task.NodeInstanceID, task.NodeID, task.Title, task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, string(resolver), task.CandidateSource, task.NodeDefinitionVersion, task.Sequence, task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.CreatedAt, task.UpdatedAt}
+	values := []any{task.WorkspaceID, task.ID, task.ProcessID, task.NodeInstanceID, task.NodeID, task.Title, task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), string(resolver), task.CandidateSource, task.NodeDefinitionVersion, task.Sequence, task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.CreatedAt, task.UpdatedAt}
 	return r.insertTx(ctx, tx, "_workflow_tasks", columns, values)
 }
 
 func (r WorkflowDecisionStore) updateTaskTx(ctx context.Context, tx *sql.Tx, task workflowmodel.WorkflowTask) error {
-	columns := []string{"assignee_user_id", "assignee_name", "assignee_role_key", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}
-	values := []any{task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.UpdatedAt}
+	evidence, _ := json.Marshal(task.AssigneeEvidence)
+	columns := []string{"assignee_user_id", "assignee_name", "assignee_role_key", "assignee_resolver_key", "assignee_evidence_json", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}
+	values := []any{task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.UpdatedAt}
 	return r.updateTx(ctx, tx, "_workflow_tasks", task.WorkspaceID, task.ID, columns, values)
 }
 

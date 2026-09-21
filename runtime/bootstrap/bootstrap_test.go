@@ -62,13 +62,13 @@ func TestBootstrapExtensionAndProjectFacadeEntrypoints(t *testing.T) {
 
 		AuditExportTokenKey: "test-audit-export-signing-key",
 	}
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
 	constructors := []func(config.Config) *Runtime{
 		func(cfg config.Config) *Runtime {
-			return NewWithBusinessHandlers(t.Context(), cfg, handlers, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
+			return NewWithProjectExtensions(t.Context(), cfg, handlers, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())
 		},
 		func(cfg config.Config) *Runtime {
 			return NewWithExtensions(t.Context(), cfg, handlers, connectors, bootstrapIdentityBindingStub{}, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory())

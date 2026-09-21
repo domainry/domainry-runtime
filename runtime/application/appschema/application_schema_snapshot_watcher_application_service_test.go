@@ -2,6 +2,7 @@ package appschema
 
 import (
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
@@ -61,7 +62,7 @@ type metadataWatcherRuntime struct {
 	zones []string
 }
 
-func (r *metadataWatcherRuntime) ApplyManifestMetadata(_ string, _ string, name string, zone string, _ []definitionmodel.ObjectSchema, _ []definitionmodel.ActionSchema, _ []definitionmodel.WorkflowSchema, _ []automationmodel.AutomationRuleSchema, _ []appschemamodel.DictionarySchema, _ connectormodel.IntegrationSchema, _ []reportmodel.ReportSchema, _ []agentsdk.SkillSchema, _ []agentsdk.AgentSchema, _ []profilebindingmodel.Binding) {
+func (r *metadataWatcherRuntime) ApplyManifestMetadata(_ string, _ string, name string, zone string, _ []definitionmodel.ObjectSchema, _ []definitionmodel.ActionSchema, _ []definitionmodel.WorkflowSchema, _ []businesscalendarmodel.BusinessCalendarSchema, _ []automationmodel.AutomationRuleSchema, _ []appschemamodel.DictionarySchema, _ connectormodel.IntegrationSchema, _ []reportmodel.ReportSchema, _ []agentsdk.SkillSchema, _ []agentsdk.AgentSchema, _ []profilebindingmodel.Binding) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.names = append(r.names, name)

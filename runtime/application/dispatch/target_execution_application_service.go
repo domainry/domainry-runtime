@@ -18,12 +18,15 @@ type Target struct {
 	Type          string
 	Owner         string
 	Operation     string
+	ObjectKey     string
+	RunAsRole     string
 	ConnectionKey string
 	Payload       []byte
 }
 
 type ExecutionRequest struct {
 	ExecutionID    string
+	DefinitionKey  string
 	IdempotencyKey string
 	DueAt          time.Time
 	Target         Target
@@ -94,11 +97,35 @@ type NotificationTargetRuntime interface {
 	ExecuteNotificationTarget(context.Context, NotificationTargetRequest) (NotificationTargetReceipt, error)
 }
 
+type BusinessActionTargetRequest struct {
+	ExecutionID     string
+	DefinitionKey   string
+	IdempotencyKey  string
+	Operation       string
+	ObjectKey       string
+	RunAsRole       string
+	ScheduledFor    time.Time
+	AuthorizationID string
+	Payload         []byte
+}
+
+type BusinessActionTargetReceipt struct {
+	ID     string
+	Status string
+}
+
+// BusinessActionTargetRuntime is implemented by Runtime composition so the
+// schedule-agnostic dispatcher never imports the Action or Identity owners.
+type BusinessActionTargetRuntime interface {
+	ExecuteBusinessActionTarget(context.Context, BusinessActionTargetRequest) (BusinessActionTargetReceipt, error)
+}
+
 type TargetExecutionApplicationService struct {
 	workflows       WorkflowTargetRuntime
 	reportSnapshots ReportSnapshotRuntime
 	agent           AgentTargetRuntime
 	notifications   NotificationTargetRuntime
+	businessActions BusinessActionTargetRuntime
 }
 
 func NewTargetExecutionApplicationService(workflows WorkflowTargetRuntime) *TargetExecutionApplicationService {
@@ -123,6 +150,12 @@ func (s *TargetExecutionApplicationService) UseNotificationTargetRuntime(runtime
 	}
 }
 
+func (s *TargetExecutionApplicationService) UseBusinessActionTargetRuntime(runtime BusinessActionTargetRuntime) {
+	if s != nil {
+		s.businessActions = runtime
+	}
+}
+
 func (s *TargetExecutionApplicationService) Execute(ctx context.Context, request ExecutionRequest) (ExecutionReceipt, error) {
 	if s == nil {
 		return ExecutionReceipt{}, dispatchError(apperror.KindUnavailable, "backend.dispatch.target_executor_unavailable")
@@ -136,6 +169,27 @@ func (s *TargetExecutionApplicationService) Execute(ctx context.Context, request
 	executionID := strings.TrimSpace(request.ExecutionID)
 
 	switch strings.TrimSpace(request.Target.Owner) {
+	case "business_action":
+		if s.businessActions == nil {
+			return ExecutionReceipt{}, dispatchError(apperror.KindUnavailable, "backend.dispatch.business_action_target_unavailable")
+		}
+		receipt, err := s.businessActions.ExecuteBusinessActionTarget(ctx, BusinessActionTargetRequest{
+			ExecutionID: executionID, DefinitionKey: strings.TrimSpace(request.DefinitionKey), IdempotencyKey: strings.TrimSpace(request.IdempotencyKey),
+			Operation: strings.TrimSpace(request.Target.Operation), ObjectKey: strings.TrimSpace(request.Target.ObjectKey), RunAsRole: strings.TrimSpace(request.Target.RunAsRole),
+			ScheduledFor: request.DueAt.UTC(), Payload: append([]byte(nil), request.Target.Payload...),
+		})
+		if err != nil {
+			return ExecutionReceipt{}, err
+		}
+		receiptID := strings.TrimSpace(receipt.ID)
+		if receiptID == "" {
+			receiptID = executionID
+		}
+		status := strings.TrimSpace(receipt.Status)
+		if status == "" {
+			status = "accepted"
+		}
+		return ExecutionReceipt{ID: receiptID, Owner: "business_action", Status: status}, nil
 	case "workflow":
 		if s.workflows == nil {
 			return ExecutionReceipt{}, dispatchError(apperror.KindUnavailable, "backend.dispatch.workflow_target_unavailable")

@@ -37,6 +37,7 @@ func EnsureWorkflowProcessSchema(ctx context.Context, s Store) error {
 		"_workflow_tasks": {
 			"workspace_id " + text + " NOT NULL", "id " + text + " NOT NULL", "process_id " + text + " NOT NULL", "node_instance_id " + text + " NOT NULL", "node_id " + text + " NOT NULL",
 			"title TEXT NOT NULL", "assignee_user_id " + text, "assignee_name TEXT", "assignee_role_key " + text,
+			"assignee_resolver_key " + text, "assignee_evidence_json TEXT NOT NULL DEFAULT '{\"matches\":[]}'",
 			"resolver_snapshot_json TEXT NOT NULL DEFAULT '[]'", "candidate_source " + text, "node_definition_version INTEGER NOT NULL DEFAULT 0", "sequence_no INTEGER NOT NULL",
 			"status " + text + " NOT NULL", "decision " + text, "comment TEXT", "due_at " + text,
 			"completed_by " + text, "completed_at " + text, "created_at " + text + " NOT NULL", "updated_at " + text + " NOT NULL",

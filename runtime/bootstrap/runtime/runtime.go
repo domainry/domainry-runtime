@@ -22,6 +22,7 @@ import (
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
 	publicresourceapplication "github.com/domainry/domainry-runtime/runtime/application/publicresource"
@@ -58,6 +59,7 @@ type Runtime struct {
 	dataExchangeBinding  dataexchangesdk.Binding
 	lifecycleBinding     lifecyclesdk.Binding
 	fileScanProcessor    *uploadapplication.FileScanProcessor
+	blobStore            runtimefile.BlobStore
 	publicResources      *publicresourceapplication.Service
 	manifest             manifestmodel.ManifestSchema
 	workspaceRolePolicy  workspaceprovision.WorkspaceBootstrapRolePolicyEvidence
@@ -75,7 +77,7 @@ type Runtime struct {
 	notificationRelay    *notificationpublication.Relay
 	worker               workerplatform.Dependencies
 	api                  *runtimehttp.HTTPRouter
-	businessHandlers     *runtimeext.BusinessHandlerRegistry
+	projectExtensions    *runtimeext.ProjectExtensionRegistry
 	connectorProviders   *connector.Registry
 	releaseIdentity      runtimehttp.RuntimeReleaseIdentity
 	releaseCohort        *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService

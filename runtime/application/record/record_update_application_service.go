@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
+	"reflect"
 	"strings"
 	"time"
 
@@ -37,6 +38,7 @@ type RecordUpdateDependencies struct {
 	LoadTargetForAction   RecordMutationTargetLoader
 	Denied                RecordUpdateDeniedObserver
 	ValidatePipeline      func(context.Context, definitionmodel.ObjectSchema, string, map[string]any, principalmodel.Principal) error
+	ValidateFiles         func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
 	ApplyPipelineDefaults func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal, bool) error
 	RunBefore             func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error
 	ValidateRelations     func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
@@ -355,6 +357,18 @@ func (s *RecordUpdateApplicationService) applyDerivedAndPipeline(ctx context.Con
 func (s *RecordUpdateApplicationService) validateCandidate(ctx context.Context, objectKey string, object definitionmodel.ObjectSchema, record recordmodel.Record, beforeData, nextData, patch map[string]any, principal, authorizationPrincipal principalmodel.Principal, includePolicies bool) error {
 	if err := recordvalidation.RecordValidateDataWithPrev(object, nextData, beforeData, false); err != nil {
 		return recordUpdateErrorFrom(apperror.KindBadRequest, err)
+	}
+	if s.dependencies.ValidateFiles != nil {
+		changed := map[string]any{}
+		for _, field := range object.Fields {
+			if field.Type != recordmodel.RecordFileFieldType && field.Type != recordmodel.RecordFileListFieldType || reflect.DeepEqual(beforeData[field.Key], nextData[field.Key]) {
+				continue
+			}
+			changed[field.Key] = nextData[field.Key]
+		}
+		if err := s.dependencies.ValidateFiles(ctx, object, changed, principal); err != nil {
+			return err
+		}
 	}
 	candidate := record
 	candidate.Data = nextData

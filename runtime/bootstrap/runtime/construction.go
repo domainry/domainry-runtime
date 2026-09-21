@@ -17,6 +17,7 @@ import (
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
 	publicresourceapplication "github.com/domainry/domainry-runtime/runtime/application/publicresource"
@@ -50,6 +51,7 @@ type runtimeConstructionInput struct {
 	dataExchangeBinding  dataexchangesdk.Binding
 	lifecycleBinding     lifecyclesdk.Binding
 	fileScanProcessor    *uploadapplication.FileScanProcessor
+	blobStore            runtimefile.BlobStore
 	publicResources      *publicresourceapplication.Service
 	manifest             manifestmodel.ManifestSchema
 	workspaceRolePolicy  workspaceprovision.WorkspaceBootstrapRolePolicyEvidence
@@ -66,7 +68,7 @@ type runtimeConstructionInput struct {
 	notificationWorkers  notificationsdk.LocalWorkers
 	notificationRelay    *notificationpublication.Relay
 	worker               workerplatform.Dependencies
-	businessHandlers     *runtimeext.BusinessHandlerRegistry
+	projectExtensions    *runtimeext.ProjectExtensionRegistry
 	connectorProviders   *connector.Registry
 	releaseIdentity      runtimehttp.RuntimeReleaseIdentity
 	releaseCohort        *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
@@ -93,6 +95,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		dataExchangeBinding:  input.dataExchangeBinding,
 		lifecycleBinding:     input.lifecycleBinding,
 		fileScanProcessor:    input.fileScanProcessor,
+		blobStore:            input.blobStore,
 		publicResources:      input.publicResources,
 		manifest:             input.manifest,
 		workspaceRolePolicy:  input.workspaceRolePolicy,
@@ -109,7 +112,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		notificationWorkers:  input.notificationWorkers,
 		notificationRelay:    input.notificationRelay,
 		worker:               workerplatform.NormalizeDependencies(input.worker),
-		businessHandlers:     input.businessHandlers,
+		projectExtensions:    input.projectExtensions,
 		connectorProviders:   input.connectorProviders,
 		releaseIdentity:      input.releaseIdentity,
 		releaseCohort:        input.releaseCohort,

@@ -179,7 +179,7 @@ func applyRouteDecision(ctx context.Context, records *WorkflowProcessRuntime, co
 	contract := workflowpolicy.WorkflowApprovalNodeContract(node)
 	for _, task := range WorkflowRouteStepTasks(ctx, *process, node, contract, next, instance.ID, now) {
 		commit.InsertTasks = append(commit.InsertTasks, task)
-		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, node.ID, task.ID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": task.AssigneeUserID, "mode": next.Mode, "sequence": task.Sequence, "step_key": next.StepKey}, now))
+		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, node.ID, task.ID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": task.AssigneeUserID, "assignee_role_key": task.AssigneeRoleKey, "resolver_key": task.AssigneeResolverKey, "assignee_evidence": task.AssigneeEvidence, "mode": next.Mode, "sequence": task.Sequence, "step_key": next.StepKey}, now))
 	}
 	next.Status, next.NodeInstanceID, next.UpdatedAt = "active", instance.ID, now
 	commit.UpdateRouteSteps = append(commit.UpdateRouteSteps, next)

@@ -12,12 +12,13 @@ import (
 	appschemaprojection "github.com/domainry/domainry-runtime/runtime/domain/appschema/projection"
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
 // applyManifestMetadata replaces the RuntimeServices-owned schema indexes. It is
 // mutable composition state, not a Metadata application use case.
-func (s *runtimeAssembly) applyManifestMetadata(templateID, templateVersion, name, timeZone string, objects []definitionmodel.ObjectSchema, actions []definitionmodel.ActionSchema, workflows []definitionmodel.WorkflowSchema, automationRules []automationmodel.AutomationRuleSchema, dictionaries []appschemamodel.DictionarySchema, integrations connectormodel.IntegrationSchema, reports []reportmodel.ReportSchema, skills []agentsdk.SkillSchema, agents []agentsdk.AgentSchema, profileBindings []profilebindingmodel.Binding) {
+func (s *runtimeAssembly) applyManifestMetadata(templateID, templateVersion, name, timeZone string, objects []definitionmodel.ObjectSchema, actions []definitionmodel.ActionSchema, workflows []definitionmodel.WorkflowSchema, businessCalendars []businesscalendarmodel.BusinessCalendarSchema, automationRules []automationmodel.AutomationRuleSchema, dictionaries []appschemamodel.DictionarySchema, integrations connectormodel.IntegrationSchema, reports []reportmodel.ReportSchema, skills []agentsdk.SkillSchema, agents []agentsdk.AgentSchema, profileBindings []profilebindingmodel.Binding) {
 	objects = appschemaprojection.ApplicationSchemaEnrichObjectsWithFieldValueDomains(objects, dictionaries)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -29,6 +30,7 @@ func (s *runtimeAssembly) applyManifestMetadata(templateID, templateVersion, nam
 	s.schema = make(map[string]definitionmodel.ObjectSchema, len(objects))
 	s.actions = make(map[string]definitionmodel.ActionSchema, len(actions))
 	s.workflows = make(map[string]definitionmodel.WorkflowSchema, len(workflows))
+	s.businessCalendars = append([]businesscalendarmodel.BusinessCalendarSchema(nil), businessCalendars...)
 	s.automationRules = make(map[string]automationmodel.AutomationRuleSchema, len(automationRules))
 	s.dictionaries = append([]appschemamodel.DictionarySchema(nil), dictionaries...)
 	s.integrations = appschemaservice.CloneIntegrationSchema(integrations)
@@ -70,4 +72,10 @@ func (s *runtimeAssembly) applyManifestAgentMetadata(tasks []agentsdk.AgentTaskD
 	s.agentTasks = append([]agentsdk.AgentTaskDefinition(nil), tasks...)
 	s.agentEntrypoints = append([]agentsdk.AgentEntrypointAssignment(nil), entrypoints...)
 	s.agentServicePrincipals = append([]agentsdk.AgentServicePrincipalBinding(nil), principals...)
+}
+
+func (s *runtimeAssembly) businessCalendarSnapshot() []businesscalendarmodel.BusinessCalendarSchema {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]businesscalendarmodel.BusinessCalendarSchema(nil), s.businessCalendars...)
 }

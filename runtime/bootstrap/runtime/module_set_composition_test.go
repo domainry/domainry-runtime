@@ -231,7 +231,7 @@ func TestRuntimeAgentRetentionAndSubjectErasureEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = identityBinding.Close(context.Background()) })
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
@@ -526,7 +526,7 @@ func runPinnedModuleSet(t *testing.T, cfg config.Config, monitoringFactory monit
 		_ = store.Close()
 		t.Fatal(err)
 	}
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 const (
@@ -29,7 +30,7 @@ func RecordSubjectIdentityFields(object definitionmodel.ObjectSchema) []definiti
 
 func RecordSubjectFileField(field definitionmodel.FieldSchema) bool {
 	value, configured := recordLifecycleBool(field.Config, "lifecycle_subject_file")
-	return configured && value
+	return configured && value && (field.Type == recordmodel.RecordFileFieldType || field.Type == recordmodel.RecordFileListFieldType)
 }
 
 func RecordSubjectEraseMode(field definitionmodel.FieldSchema) string {
@@ -49,8 +50,12 @@ func RecordValidateSubjectLifecycle(object definitionmodel.ObjectSchema) error {
 			}
 		}
 		if raw, ok := field.Config["lifecycle_subject_file"]; ok {
-			if _, valid := raw.(bool); !valid {
+			enabled, valid := raw.(bool)
+			if !valid {
 				return fmt.Errorf("%s.%s lifecycle_subject_file must be boolean", object.Key, field.Key)
+			}
+			if enabled && field.Type != recordmodel.RecordFileFieldType && field.Type != recordmodel.RecordFileListFieldType {
+				return fmt.Errorf("%s.%s lifecycle_subject_file requires file or file_list type", object.Key, field.Key)
 			}
 		}
 		if raw, ok := field.Config["lifecycle_subject_relation"]; ok {

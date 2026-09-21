@@ -1,6 +1,7 @@
 package action
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -39,13 +40,12 @@ func TestResolvePublishedActionOwnerEdges(t *testing.T) {
 		runtimeext.ActionObjectCapability{ObjectKey: "order", Operations: []string{"update"}},
 		runtimeext.ActionObjectCapability{ObjectKey: "inventory", Operations: []string{"get"}},
 	)
-	resolved, owner, _, _, err := resolvePublishedActionOwner(definition, system, true, extraRead, true)
-	if err != nil || owner != ActionOwnerBusinessHandler || len(resolved.EffectSet.Read) != 1 {
-		t.Fatalf("business-required owner=%q effect=%+v error=%v", owner, resolved.EffectSet, err)
+	if _, _, _, _, err := resolvePublishedActionOwner(definition, system, true, extraRead, true); err == nil || !strings.Contains(err.Error(), "both system operation") {
+		t.Fatalf("system kind with business handler error=%v", err)
 	}
 	mismatch := definition
 	mismatch.EffectSet = actionOwnerEffect(nil, []definitionmodel.ActionObjectEffect{{ObjectKey: "order", Operations: []string{"delete"}}})
-	if _, _, _, _, err := resolvePublishedActionOwner(mismatch, system, true, sameHandler, true); err == nil || !strings.Contains(err.Error(), "does not match") {
+	if _, _, _, _, err := resolvePublishedActionOwner(mismatch, system, true, sameHandler, true); err == nil || !strings.Contains(err.Error(), "both system operation") {
 		t.Fatalf("mismatch error=%v", err)
 	}
 	if _, _, _, _, err := resolvePublishedActionOwner(mismatch, SystemOperationDescriptor{}, false, sameHandler, true); err == nil || !strings.Contains(err.Error(), "does not match") {
@@ -100,11 +100,21 @@ func TestActionOwnerCapabilityDerivationEdges(t *testing.T) {
 	if systemEffect.Write[0].ObjectKey != "order" || systemEffect.Write[0].Operations[0] != "update" {
 		t.Fatalf("system effect=%+v", systemEffect)
 	}
-	if !handlerCapabilityRequiresBusinessOwner("order", systemEffect, effect, runtimeext.HandlerDescriptor{}) {
-		t.Fatal("extra read object did not require business owner")
-	}
 	if selectedPublishedEffectSet(systemEffect, effect) != systemEffect || selectedPublishedEffectSet(nil, effect) != effect {
 		t.Fatal("selected effect set changed")
+	}
+}
+
+func TestHandlerEffectSetClassifiesConditionalUpdateManyAsReadAndWrite(t *testing.T) {
+	effect := effectSetFromHandlerCapabilities([]runtimeext.ActionObjectCapability{
+		{ObjectKey: "work_item", Operations: []string{"conditional_update_many"}},
+	})
+	if len(effect.Read) != 1 || len(effect.Write) != 1 {
+		t.Fatalf("conditional update many effect=%+v", effect)
+	}
+	if !reflect.DeepEqual(effect.Read[0].Operations, []string{"conditional_update_many"}) ||
+		!reflect.DeepEqual(effect.Write[0].Operations, []string{"conditional_update_many"}) {
+		t.Fatalf("conditional update many operations read=%v write=%v", effect.Read[0].Operations, effect.Write[0].Operations)
 	}
 }
 
@@ -138,8 +148,7 @@ func TestNormalizePublishedEffectSetRejectsMalformedCapabilities(t *testing.T) {
 
 func TestActionOwnerEffectComparisonEdges(t *testing.T) {
 	base := actionOwnerEffect(nil, []definitionmodel.ActionObjectEffect{{ObjectKey: "order", Operations: []string{"update"}}})
-	if effectWriteCapabilityMatches(nil, base) || effectWriteCapabilityMatches(base, nil) ||
-		effectCapabilityMatches(nil, base) || effectCapabilityMatches(base, nil) {
+	if effectCapabilityMatches(nil, base) || effectCapabilityMatches(base, nil) {
 		t.Fatal("nil effect sets matched")
 	}
 	if effectCapabilityListMatches(base.Write, nil) {

@@ -53,7 +53,7 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 		Decisions:              records.workflowDecisionRepo,
 		Routes:                 records.workflowRouteRepo,
 		WorkflowRegistry:       runtimeWorkflowRegistry{records: records},
-		WaitTimers:             runtimeWorkflowRecordTimers{recordTimers: records.recordTimerService},
+		WaitTimers:             runtimeWorkflowRecordTimers{recordTimers: records.recordTimerService, calendars: records.businessCalendarSnapshot},
 		ApprovalDeadlineTimers: runtimeWorkflowRecordTimers{recordTimers: records.recordTimerService},
 		CompileNotification:    records.workflowNotificationCompiler,
 		TaskNotificationCommit: records.workflowTaskNotificationCommitter,
@@ -83,10 +83,11 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 		WakeWorkflowContinuation: func(workspaceID, executionID string) {
 			workflowapplication.WakeWorkflowContinuation(records.workflowApplicationService, workflowapplication.WorkflowContinuationLocator{WorkspaceID: workspaceID, ExecutionID: executionID})
 		},
-		Identity:     records.identityProjection,
-		Principals:   records.identityPrincipals,
-		Schema:       runtimeWorkflowSchemaProvider{records: records},
-		RecordReader: workflowapplication.NewWorkflowRecordReaderAdapter(records.recordRepo, records.RecordQueryPolicyDomainService.NormalizeListQuery),
+		Identity:          records.identityProjection,
+		ProjectExtensions: records.projectExtensions,
+		Principals:        records.identityPrincipals,
+		Schema:            runtimeWorkflowSchemaProvider{records: records},
+		RecordReader:      workflowapplication.NewWorkflowRecordReaderAdapter(records.recordRepo, records.RecordQueryPolicyDomainService.NormalizeListQuery),
 		ObjectForAction: func(ctx context.Context, principal principalmodel.Principal, objectKey, action string) (definitionmodel.ObjectSchema, error) {
 			if err := ctx.Err(); err != nil {
 				return definitionmodel.ObjectSchema{}, err

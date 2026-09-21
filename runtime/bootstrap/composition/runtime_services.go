@@ -31,6 +31,7 @@ import (
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -143,11 +144,12 @@ type RuntimeServicesDependencies struct {
 	AgentScheduledTasks                 agentsdk.ScheduledConversationTaskService
 	AgentBusinessEvents                 agentsdk.BusinessEventConversationTaskService
 	AgentTaskAttachmentFiles            *uploadapplication.AgentTaskAttachmentFileService
-	BusinessHandlers                    *runtimeext.BusinessHandlerRegistry
+	ProjectExtensions                   *runtimeext.ProjectExtensionRegistry
 	VerifyFileClean                     func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 	OpenVerifiedFile                    func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
 	IssueFileDownload                   func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)
 	CreateDerivedFile                   func(context.Context, string, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
+	ValidateFileReferences              func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
 	WorkspaceAggregateCatalog           workspaceaggregatecontract.Catalog
 	WorkspaceActiveResolver             workspaceaggregatecontract.ActiveResolver
 	WorkspaceUsageResolver              workspaceaggregatecontract.UsageResolver
@@ -239,10 +241,16 @@ func newRuntimeServicesAssembly(ctx context.Context, config RuntimeServicesConfi
 	queryPolicy := initializeSchemaAndRecordFoundation(services, deps)
 	initializeWorkflowAutomationAndGovernance(services, deps)
 	initializeRecordApplications(services)
-	services.applyManifestMetadata(manifest.TemplateID, manifest.Version, manifest.Name, manifest.EffectiveTimeZone(), manifest.Objects, manifest.Actions, manifest.Workflows, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
+	if services.dataExchangeProviders != nil {
+		services.dataExchangeProviders.Freeze()
+	}
+	services.applyManifestMetadata(manifest.TemplateID, manifest.Version, manifest.Name, manifest.EffectiveTimeZone(), manifest.Objects, manifest.Actions, manifest.Workflows, manifest.BusinessCalendars, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
 	services.applyManifestAgentMetadata(manifest.AgentTasks, manifest.AgentEntrypoints, manifest.AgentServicePrincipals)
 	services.targetExecutionService.UseAgentTargetRuntime(scheduledAgentTargetRuntimeAdapter{runtime: services, principals: services.identityPrincipals, tasks: services.agentScheduledTasks})
 	services.targetExecutionService.UseNotificationTargetRuntime(scheduledNotificationTargetRuntimeAdapter{runtime: services, principals: services.identityPrincipals, publish: services.notificationEventPublisher})
 	initializeIntegrationAndBusinessSystem(ctx, services, manifest, deps, queryPolicy)
+	// The Scheduler adapter captures the Action Application by interface value,
+	// so bind it only after Action composition has completed.
+	services.targetExecutionService.UseBusinessActionTargetRuntime(newSchedulerBusinessActionRuntime(services))
 	return services
 }

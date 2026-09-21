@@ -10,6 +10,7 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
@@ -135,6 +136,12 @@ func (s ApplicationSchemaStore) loadProjectedManifest(ctx context.Context) (mani
 				return manifestmodel.ManifestSchema{}, err
 			}
 			result.SchedulerDefinitions = append(result.SchedulerDefinitions, value)
+		case "business_calendar":
+			var value businesscalendarmodel.BusinessCalendarSchema
+			if err := decode(&value); err != nil {
+				return manifestmodel.ManifestSchema{}, err
+			}
+			result.BusinessCalendars = append(result.BusinessCalendars, value)
 		}
 	}
 	fieldsByObject := map[string][]definitionmodel.FieldSchema{}

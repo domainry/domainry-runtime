@@ -39,7 +39,7 @@ func prepareNextApprovalNodes(ctx context.Context, records *WorkflowProcessRunti
 		nodes = append(nodes, node)
 	}
 	for _, node := range nodes {
-		assignees, roleKey, err := records.processEngine.resolveApprovalAssignees(ctx, process, node, principal)
+		assignees, err := records.processEngine.resolveApprovalAssignees(ctx, process, node, principal)
 		if err != nil {
 			return false, err
 		}
@@ -60,12 +60,12 @@ func prepareNextApprovalNodes(ctx context.Context, records *WorkflowProcessRunti
 				status = "pending"
 			}
 			title := valueOrDefault(strings.TrimSpace(contract.Title), node.Name)
-			task := workflowmodel.WorkflowTask{ID: workflowProcessID(ctx, "task"), ProcessID: process.ID, NodeInstanceID: instance.ID, NodeID: node.ID, Title: title, AssigneeUserID: assignee, AssigneeRoleKey: roleKey, ResolverSnapshot: workflowpolicy.WorkflowOrderedApprovalResolvers(contract.Resolvers), CandidateSource: workflowpolicy.WorkflowCandidateSource(workflowpolicy.WorkflowOrderedApprovalResolvers(contract.Resolvers)), NodeDefinitionVersion: workflowpolicy.WorkflowGraphContractVersion(process.DefinitionSnapshot), Sequence: index + 1, Status: status, DueAt: workflowpolicy.WorkflowApprovalDueAt(contract, node, time.Now().UTC()), CreatedAt: now, UpdatedAt: now}
-			if name, ok := assigneeNames[assignee]; ok {
+			task := workflowmodel.WorkflowTask{ID: workflowProcessID(ctx, "task"), ProcessID: process.ID, NodeInstanceID: instance.ID, NodeID: node.ID, Title: title, AssigneeUserID: assignee.UserID, AssigneeRoleKey: assignee.RoleKey, AssigneeResolverKey: assignee.ResolverKey, AssigneeEvidence: assignee.Evidence, ResolverSnapshot: workflowpolicy.WorkflowOrderedApprovalResolvers(contract.Resolvers), CandidateSource: workflowpolicy.WorkflowCandidateSource(workflowpolicy.WorkflowOrderedApprovalResolvers(contract.Resolvers)), NodeDefinitionVersion: workflowpolicy.WorkflowGraphContractVersion(process.DefinitionSnapshot), Sequence: index + 1, Status: status, DueAt: workflowpolicy.WorkflowApprovalDueAt(contract, node, time.Now().UTC()), CreatedAt: now, UpdatedAt: now}
+			if name, ok := assigneeNames[assignee.UserID]; ok {
 				task.AssigneeName = name
 			}
 			commit.InsertTasks = append(commit.InsertTasks, task)
-			commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, node.ID, task.ID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": assignee, "mode": mode, "sequence": task.Sequence}, now))
+			commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, node.ID, task.ID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": assignee.UserID, "assignee_role_key": assignee.RoleKey, "resolver_key": assignee.ResolverKey, "assignee_evidence": assignee.Evidence, "mode": mode, "sequence": task.Sequence}, now))
 		}
 	}
 	return true, nil

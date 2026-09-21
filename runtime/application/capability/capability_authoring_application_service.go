@@ -11,8 +11,17 @@ import (
 
 // CapabilityAuthoringApplicationService exposes authoring capabilities.
 type CapabilityAuthoringApplicationService struct {
-	schema             func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema
-	identityReferences func(context.Context, principalmodel.Principal) (CapabilityIdentityReferences, error)
+	schema                     func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema
+	identityReferences         func(context.Context, principalmodel.Principal) (CapabilityIdentityReferences, error)
+	assigneeResolverReferences func() []capabilitycontract.CapabilityAuthoringAssigneeResolver
+}
+
+// UseAssigneeResolverReferenceSource binds the frozen project extension
+// inventory to the public authoring instance contract.
+func (s *CapabilityAuthoringApplicationService) UseAssigneeResolverReferenceSource(source func() []capabilitycontract.CapabilityAuthoringAssigneeResolver) {
+	if s != nil {
+		s.assigneeResolverReferences = source
+	}
 }
 
 func capabilityAuthorizePrincipal(principal principalmodel.Principal) error {

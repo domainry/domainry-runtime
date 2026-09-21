@@ -15,6 +15,40 @@ type testBusinessHandler struct {
 	descriptor HandlerDescriptor
 }
 
+type testWorkspaceBootstrapParticipant struct {
+	descriptor WorkspaceBootstrapDescriptor
+}
+
+type testAssigneeResolver struct {
+	descriptor AssigneeResolverDescriptor
+}
+
+func (r testAssigneeResolver) Descriptor() AssigneeResolverDescriptor { return r.descriptor }
+
+func (testAssigneeResolver) Resolve(context.Context, AssigneeResolverCapabilities, AssigneeResolverContext) ([]AssigneeResolverCandidate, error) {
+	return []AssigneeResolverCandidate{{UserID: "user-1"}}, nil
+}
+
+func validTestAssigneeResolver(key, revision string) testAssigneeResolver {
+	descriptor := AssigneeResolverDescriptor{
+		ResolverKey: key, ResolverRevision: revision,
+		ConfigFields:         []AssigneeResolverConfigField{{Key: "threshold", Type: AssigneeResolverConfigInteger, Required: true}},
+		RecordCapabilities:   []AssigneeResolverRecordCapability{{Key: "request", ObjectKey: "request", Fields: []string{"amount", "owner"}, FilterFields: []string{"region"}, MaxRows: 10}},
+		RelationCapabilities: []AssigneeResolverRelationCapability{{Key: "members", SourceObjectKey: "request", RelationFieldKey: "project_id", TargetObjectKey: "project_member", TargetFields: []string{"user_id"}, MaxTargets: 20}},
+		IdentityProjections:  []string{AssigneeIdentityProjectionFindUser}, MaxReadOperations: 10, MaxCandidates: 20, TimeoutMilliseconds: 500,
+	}
+	descriptor.ConfigContractSHA256 = descriptor.ComputedConfigContractSHA256()
+	return testAssigneeResolver{descriptor: descriptor}
+}
+
+func (p testWorkspaceBootstrapParticipant) Descriptor() WorkspaceBootstrapDescriptor {
+	return p.descriptor
+}
+
+func (testWorkspaceBootstrapParticipant) BuildWorkspaceBootstrap(context.Context, WorkspaceBootstrapContext, map[string]any) ([]WorkspaceBootstrapRecord, error) {
+	return nil, nil
+}
+
 func (h testBusinessHandler) Descriptor() HandlerDescriptor { return h.descriptor }
 
 func (h testBusinessHandler) Invoke(context.Context, ActionExecution, json.RawMessage) (json.RawMessage, error) {
@@ -24,7 +58,7 @@ func (h testBusinessHandler) Invoke(context.Context, ActionExecution, json.RawMe
 func validTestBusinessHandler(key string) testBusinessHandler {
 	return testBusinessHandler{descriptor: HandlerDescriptor{
 		ActionKey: key, InputType: "example.com/domainry-project/actions.BookClassInput", OutputType: "example.com/domainry-project/actions.BookClassOutput",
-		InputContractSHA256: strings.Repeat("a", 64), OutputContractSHA256: strings.Repeat("b", 64), HandlerRevision: "handler-revision",
+		HandlerRevision:       "handler-revision",
 		ObjectCapabilities:    []ActionObjectCapability{{ObjectKey: "member", Operations: []string{"update", "get"}}},
 		ConnectorCapabilities: []ActionConnectorCapability{{ConnectorKey: "email", ConnectionKey: "primary", OperationKey: "send", ContractSHA256: strings.Repeat("c", 64), Mode: ConnectorModeEnqueue, Effect: ConnectorEffectWrite}},
 	}}
@@ -42,7 +76,7 @@ func TestHandlerDescriptorRequiresStableIdentityAndContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalidContract := validTestBusinessHandler("group_class.book_class").Descriptor()
-	invalidContract.InputContractSHA256 = "not-a-sha256"
+	invalidContract.InputType = "not a Go type"
 	if err := invalidContract.Validate(); !errors.Is(err, ErrHandlerContractInvalid) {
 		t.Fatalf("invalid contract error = %v", err)
 	}
@@ -74,7 +108,7 @@ func TestHandlerDescriptorRequiresStableIdentityAndContracts(t *testing.T) {
 }
 
 func TestRuntimeextContractIdentityIsCurrent(t *testing.T) {
-	if ContractVersion != "runtimeext-v39" {
+	if ContractVersion != "runtimeext-v42" {
 		t.Fatalf("contract version = %q", ContractVersion)
 	}
 	if got := ComputedContractSHA256(); got != ContractSHA256 {
@@ -302,19 +336,19 @@ func TestWorkspaceBootstrapExactDecimalNormalizationNeverUsesBinaryFloat(t *test
 	}
 }
 
-func TestBusinessHandlerRegistryRejectsInvalidDuplicateAndPostFreezeRegistration(t *testing.T) {
-	registry := NewBusinessHandlerRegistry()
-	if err := registry.Register(nil); !errors.Is(err, ErrBusinessHandlerRequired) {
+func TestProjectExtensionRegistryRejectsInvalidDuplicateAndPostFreezeRegistration(t *testing.T) {
+	registry := NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(nil); !errors.Is(err, ErrBusinessHandlerRequired) {
 		t.Fatalf("nil handler error = %v", err)
 	}
 	handler := validTestBusinessHandler("group_class.book_class")
-	if err := registry.Register(handler); err != nil {
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Register(handler); !errors.Is(err, ErrBusinessHandlerDuplicate) {
+	if err := registry.RegisterBusinessHandler(handler); !errors.Is(err, ErrBusinessHandlerDuplicate) {
 		t.Fatalf("duplicate error = %v", err)
 	}
-	binding, ok := registry.Binding(" group_class.book_class ")
+	binding, ok := registry.BusinessHandlerBinding(" group_class.book_class ")
 	if !ok || binding.Handler == nil || binding.Descriptor.ActionKey != handler.Descriptor().ActionKey {
 		t.Fatalf("resolved binding = %#v, %t", binding, ok)
 	}
@@ -322,15 +356,15 @@ func TestBusinessHandlerRegistryRejectsInvalidDuplicateAndPostFreezeRegistration
 	if !registry.Frozen() {
 		t.Fatal("registry must report frozen")
 	}
-	if err := registry.Register(validTestBusinessHandler("group_class.cancel_booking")); !errors.Is(err, ErrBusinessHandlerRegistryFrozen) {
+	if err := registry.RegisterBusinessHandler(validTestBusinessHandler("group_class.cancel_booking")); !errors.Is(err, ErrProjectExtensionRegistryFrozen) {
 		t.Fatalf("post-freeze error = %v", err)
 	}
 }
 
-func TestBusinessHandlerRegistrySnapshotsBindingIdentityAtRegistration(t *testing.T) {
+func TestProjectExtensionRegistrySnapshotsBindingIdentityAtRegistration(t *testing.T) {
 	handler := &testBusinessHandler{descriptor: validTestBusinessHandler("group_class.book_class").descriptor}
-	registry := NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	handler.descriptor.ActionKey = "group_class.changed_after_registration"
@@ -339,15 +373,15 @@ func TestBusinessHandlerRegistrySnapshotsBindingIdentityAtRegistration(t *testin
 	handler.descriptor.ObjectCapabilities[0].Operations[0] = "delete"
 	handler.descriptor.ConnectorCapabilities[0].OperationKey = "changed"
 
-	binding, found := registry.Binding("group_class.book_class")
+	binding, found := registry.BusinessHandlerBinding("group_class.book_class")
 	if !found || binding.Handler != handler || binding.Descriptor.ActionKey != "group_class.book_class" || binding.Descriptor.HandlerRevision != "handler-revision" || binding.Descriptor.ObjectCapabilities[0].ObjectKey != "member" || binding.Descriptor.ConnectorCapabilities[0].OperationKey != "send" {
 		t.Fatalf("registration-time binding drifted: found=%v binding=%+v", found, binding)
 	}
-	if _, found := registry.Binding("group_class.changed_after_registration"); found {
+	if _, found := registry.BusinessHandlerBinding("group_class.changed_after_registration"); found {
 		t.Fatal("mutable Handler descriptor changed the registered Action key")
 	}
 	binding.Descriptor.ObjectCapabilities[0].Operations[0] = "restore"
-	if descriptors := registry.Descriptors(); len(descriptors) != 1 || !reflect.DeepEqual(descriptors[0].ObjectCapabilities[0].Operations, []string{"get", "update"}) {
+	if descriptors := registry.BusinessHandlerDescriptors(); len(descriptors) != 1 || !reflect.DeepEqual(descriptors[0].ObjectCapabilities[0].Operations, []string{"get", "update"}) {
 		t.Fatalf("descriptor snapshot=%+v binding=%+v", descriptors, binding)
 	}
 }
@@ -355,18 +389,18 @@ func TestBusinessHandlerRegistrySnapshotsBindingIdentityAtRegistration(t *testin
 func TestWorkspaceIdentityUsageGrantIsBoundedAndFrozen(t *testing.T) {
 	handler := validTestBusinessHandler("billing.invoice.generate")
 	handler.descriptor.WorkspaceIdentityUsage = &WorkspaceIdentityUsageCapability{MaxPageSize: 25}
-	registry := NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	handler.descriptor.WorkspaceIdentityUsage.MaxPageSize = 99
 	registry.Freeze()
-	binding, ok := registry.Binding("billing.invoice.generate")
+	binding, ok := registry.BusinessHandlerBinding("billing.invoice.generate")
 	if !ok || binding.Descriptor.WorkspaceIdentityUsage == nil || binding.Descriptor.WorkspaceIdentityUsage.MaxPageSize != 25 {
 		t.Fatalf("binding=%#v", binding)
 	}
 	binding.Descriptor.WorkspaceIdentityUsage.MaxPageSize = 1
-	again, _ := registry.Binding("billing.invoice.generate")
+	again, _ := registry.BusinessHandlerBinding("billing.invoice.generate")
 	if again.Descriptor.WorkspaceIdentityUsage.MaxPageSize != 25 {
 		t.Fatal("Workspace identity usage grant was mutable")
 	}
@@ -394,14 +428,14 @@ func TestCrossWorkspaceAggregateGrantIsValidatedNormalizedAndFrozen(t *testing.T
 		Filters:       []CrossWorkspaceAggregateFilterCapability{{Field: " status ", Operators: []string{" in ", "eq"}}},
 		MaxWorkspaces: 10, MaxSourceRows: 1000, MaxResultRows: 100, TimeoutMilliseconds: 500,
 	}}
-	registry := NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
 	handler.descriptor.CrossWorkspaceAggregates[0].Dimensions[0].Field = "workspace_id"
 	handler.descriptor.CrossWorkspaceAggregates[0].Filters[0].Operators[0] = "sql"
-	binding, ok := registry.Binding("sales.daily_totals")
+	binding, ok := registry.BusinessHandlerBinding("sales.daily_totals")
 	if !ok {
 		t.Fatal("frozen binding is missing")
 	}
@@ -410,7 +444,7 @@ func TestCrossWorkspaceAggregateGrantIsValidatedNormalizedAndFrozen(t *testing.T
 		t.Fatalf("normalized grant=%#v", grant)
 	}
 	binding.Descriptor.CrossWorkspaceAggregates[0].Measures[0].Field = "changed"
-	again, _ := registry.Binding("sales.daily_totals")
+	again, _ := registry.BusinessHandlerBinding("sales.daily_totals")
 	if again.Descriptor.CrossWorkspaceAggregates[0].Measures[0].Field == "changed" {
 		t.Fatal("registry aggregate grant was mutable")
 	}
@@ -430,12 +464,12 @@ func TestCrossWorkspaceDateBucketGrantIsStaticValidatedAndFrozen(t *testing.T) {
 		Measures:      []CrossWorkspaceAggregateMeasure{{Key: "count", Operation: AggregateCount}},
 		MaxWorkspaces: 2, MaxSourceRows: 10, MaxResultRows: 10, TimeoutMilliseconds: 100,
 	}}
-	registry := NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	handler.descriptor.CrossWorkspaceAggregates[0].Dimensions[0].Transform.DateBucket.TimeZone = "Local"
-	binding, ok := registry.Binding("sales.hourly_totals")
+	binding, ok := registry.BusinessHandlerBinding("sales.hourly_totals")
 	if !ok {
 		t.Fatal("date-bucket binding is missing")
 	}
@@ -444,7 +478,7 @@ func TestCrossWorkspaceDateBucketGrantIsStaticValidatedAndFrozen(t *testing.T) {
 		t.Fatalf("normalized transform=%#v", transform)
 	}
 	transform.Grain = "sql"
-	again, _ := registry.Binding("sales.hourly_totals")
+	again, _ := registry.BusinessHandlerBinding("sales.hourly_totals")
 	if again.Descriptor.CrossWorkspaceAggregates[0].Dimensions[0].Transform.DateBucket.Grain != "hour" {
 		t.Fatal("registry date-bucket grant was mutable")
 	}
@@ -462,30 +496,100 @@ func TestCrossWorkspaceDateBucketGrantIsStaticValidatedAndFrozen(t *testing.T) {
 	}
 }
 
-func TestBusinessHandlerRegistryExtensionSetAndDescriptorsAreDeterministic(t *testing.T) {
-	registry := NewBusinessHandlerRegistry()
-	set := ExtensionSet{BusinessHandlers: []BusinessHandler{
+func TestProjectExtensionRegistryProjectExtensionsAndDescriptorsAreDeterministic(t *testing.T) {
+	registry := NewProjectExtensionRegistry()
+	descriptor := WorkspaceBootstrapDescriptor{
+		Key: " store_settings ", InputType: "example.com/project.StoreSettingsInput", ParticipantRevision: " revision-1 ",
+		InputFields: []WorkspaceBootstrapInputField{{Key: " locale ", Type: WorkspaceBootstrapInputString, Enum: []string{"ja-JP", "en-US"}}},
+		Records:     []WorkspaceBootstrapRecordCapability{{Key: " settings ", ObjectKey: " store_settings ", Fields: []string{"timezone", "locale"}}},
+	}
+	descriptor.InputContractSHA256 = descriptor.ComputedInputContractSHA256()
+	participant := testWorkspaceBootstrapParticipant{descriptor: descriptor}
+	set := ProjectExtensions{BusinessHandlers: []BusinessHandler{
 		validTestBusinessHandler("group_class.cancel_booking"),
 		validTestBusinessHandler("group_class.book_class"),
-	}}
-	if err := registry.RegisterExtensionSet(set); err != nil {
+	}, AssigneeResolvers: []AssigneeResolver{validTestAssigneeResolver("finance.approver", "resolver-revision-1")}, WorkspaceBootstrapParticipant: participant}
+	if err := registry.RegisterProjectExtensions(set); err != nil {
 		t.Fatal(err)
 	}
-	descriptors := registry.Descriptors()
-	keys := []string{descriptors[0].ActionKey, descriptors[1].ActionKey}
+	handlers := registry.BusinessHandlerDescriptors()
+	keys := []string{handlers[0].ActionKey, handlers[1].ActionKey}
 	if !reflect.DeepEqual(keys, []string{"group_class.book_class", "group_class.cancel_booking"}) {
 		t.Fatalf("descriptor keys = %v", keys)
 	}
+	descriptors := registry.Descriptors()
+	identities := make([]string, 0, len(descriptors))
+	for _, current := range descriptors {
+		identities = append(identities, current.Kind+":"+current.Key)
+	}
+	if !reflect.DeepEqual(identities, []string{"business_handler:group_class.book_class", "business_handler:group_class.cancel_booking", "workflow_assignee_resolver:finance.approver", "workspace_bootstrap:store_settings"}) {
+		t.Fatalf("project extension descriptors = %#v", descriptors)
+	}
+	descriptors[2].AssigneeResolver.RecordCapabilities[0].Fields[0] = "changed"
+	descriptors[3].WorkspaceBootstrap.Records[0].Fields[0] = "changed"
+	again := registry.Descriptors()
+	if again[2].AssigneeResolver.RecordCapabilities[0].Fields[0] == "changed" || again[3].WorkspaceBootstrap.Records[0].Fields[0] == "changed" {
+		t.Fatal("workspace bootstrap descriptor snapshot was mutable")
+	}
 }
 
-func TestBusinessHandlerRegistryExtensionSetRegistrationIsAtomic(t *testing.T) {
-	registry := NewBusinessHandlerRegistry()
+func TestAssigneeResolverDescriptorConfigAndRegistryGovernance(t *testing.T) {
+	resolver := validTestAssigneeResolver("finance.approver", "revision-1")
+	if err := resolver.descriptor.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if config, err := NormalizeAssigneeResolverConfig(resolver.descriptor, map[string]any{"threshold": 10}); err != nil || config["threshold"] != int64(10) {
+		t.Fatalf("config=%#v err=%v", config, err)
+	}
+	if _, err := NormalizeAssigneeResolverConfig(resolver.descriptor, map[string]any{"unknown": true}); !errors.Is(err, ErrAssigneeResolverConfigInvalid) {
+		t.Fatalf("unknown config error=%v", err)
+	}
+	if config, err := NormalizeAssigneeResolverConfig(resolver.descriptor, map[string]any{"threshold": float64(10)}); err != nil || config["threshold"] != int64(10) {
+		t.Fatalf("JSON integer config=%#v err=%v", config, err)
+	}
+	if config, err := NormalizeAssigneeResolverConfig(resolver.descriptor, map[string]any{"threshold": json.Number("9007199254740993")}); err != nil || config["threshold"] != int64(9007199254740993) {
+		t.Fatalf("exact JSON integer config=%#v err=%v", config, err)
+	}
+	if _, err := NormalizeAssigneeResolverConfig(resolver.descriptor, map[string]any{"threshold": 10.5}); !errors.Is(err, ErrAssigneeResolverConfigInvalid) {
+		t.Fatalf("fractional integer config error=%v", err)
+	}
+	if _, err := NormalizeAssigneeResolverConfig(resolver.descriptor, map[string]any{"threshold": float64(9007199254740992)}); !errors.Is(err, ErrAssigneeResolverConfigInvalid) {
+		t.Fatalf("unsafe binary-float integer config error=%v", err)
+	}
+	if _, err := NormalizeAssigneeResolverConfig(resolver.descriptor, map[string]any{"threshold": 1, " threshold ": 2}); !errors.Is(err, ErrAssigneeResolverConfigInvalid) {
+		t.Fatalf("duplicate normalized config error=%v", err)
+	}
+	numberDescriptor := resolver.descriptor
+	numberDescriptor.ConfigFields = []AssigneeResolverConfigField{{Key: "score", Type: AssigneeResolverConfigNumber}}
+	numberDescriptor.ConfigContractSHA256 = numberDescriptor.ComputedConfigContractSHA256()
+	if _, err := NormalizeAssigneeResolverConfig(numberDescriptor, map[string]any{"score": math.NaN()}); !errors.Is(err, ErrAssigneeResolverConfigInvalid) {
+		t.Fatalf("non-finite number config error=%v", err)
+	}
+	registry := NewProjectExtensionRegistry()
+	if err := registry.RegisterAssigneeResolver(resolver); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.RegisterAssigneeResolver(resolver); !errors.Is(err, ErrAssigneeResolverDuplicate) {
+		t.Fatalf("duplicate resolver error=%v", err)
+	}
+	binding, found := registry.AssigneeResolverBinding(" finance.approver ")
+	if !found || binding.Resolver == nil || binding.Descriptor.ResolverRevision != "revision-1" {
+		t.Fatalf("binding=%#v found=%v", binding, found)
+	}
+	registry.Freeze()
+	if err := registry.RegisterAssigneeResolver(validTestAssigneeResolver("finance.backup", "revision-1")); !errors.Is(err, ErrProjectExtensionRegistryFrozen) {
+		t.Fatalf("post-freeze resolver error=%v", err)
+	}
+}
+
+func TestProjectExtensionRegistryProjectExtensionsRegistrationIsAtomic(t *testing.T) {
+	registry := NewProjectExtensionRegistry()
 	duplicate := validTestBusinessHandler("group_class.book_class")
-	err := registry.RegisterExtensionSet(ExtensionSet{BusinessHandlers: []BusinessHandler{duplicate, duplicate}})
+	err := registry.RegisterProjectExtensions(ProjectExtensions{BusinessHandlers: []BusinessHandler{duplicate, duplicate}})
 	if !errors.Is(err, ErrBusinessHandlerDuplicate) {
 		t.Fatalf("duplicate extension set error = %v", err)
 	}
-	if len(registry.Descriptors()) != 0 {
+	if len(registry.BusinessHandlerDescriptors()) != 0 || len(registry.Descriptors()) != 0 {
 		t.Fatal("failed extension set must not partially register handlers")
 	}
 }

@@ -46,9 +46,11 @@ import (
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
@@ -68,6 +70,7 @@ type runtimeAssembly struct {
 	schema                                      map[string]definitionmodel.ObjectSchema
 	actions                                     map[string]definitionmodel.ActionSchema
 	workflows                                   map[string]definitionmodel.WorkflowSchema
+	businessCalendars                           []businesscalendarmodel.BusinessCalendarSchema
 	schedulerDefinitions                        []map[string]any
 	automationRules                             map[string]automationmodel.AutomationRuleSchema
 	dictionaries                                []appschemamodel.DictionarySchema
@@ -80,6 +83,7 @@ type runtimeAssembly struct {
 	agentEntrypoints                            []agentsdk.AgentEntrypointAssignment
 	agentServicePrincipals                      []agentsdk.AgentServicePrincipalBinding
 	identityProfileExtensions                   []profilebindingmodel.Binding
+	projectExtensions                           *runtimeext.ProjectExtensionRegistry
 	recordRepo                                  recordrepository.RecordRepository
 	dataExchange                                dataexchange.Binding
 	dataExchangeProviders                       *recordapplication.DataExchangeProviders
@@ -150,6 +154,7 @@ type runtimeAssembly struct {
 	openVerifiedFile                    func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
 	issueFileDownload                   func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)
 	createDerivedFile                   func(context.Context, string, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
+	validateFileReferences              func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
 	workspaceAggregateCatalog           workspaceaggregatecontract.Catalog
 	workspaceActiveResolver             workspaceaggregatecontract.ActiveResolver
 	workspaceUsageResolver              workspaceaggregatecontract.UsageResolver

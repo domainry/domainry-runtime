@@ -1,8 +1,4 @@
-// Package capabilityprovider adapts Runtime-owned domains to the same
-// deployment-neutral capability Binding implemented by external module SDKs.
-// These adapters are immutable contract constructors; they do not open a
-// Runtime, mount transport, or introduce another provider lifecycle.
-package capabilityprovider
+package capability
 
 import (
 	"encoding/json"
@@ -41,14 +37,14 @@ type categorySpec struct {
 
 type providerSpec struct {
 	key, sourceOwner, name, description string
-	scenarios                           modulecapability.AdaptationScenarios
+	composition                         modulecapability.ModuleComposition
 	categories                          []categorySpec
 	validator                           modulecapability.Validator
 }
 
-// Bindings constructs the complete deterministic Runtime-owned provider set.
+// openContract constructs the complete deterministic Runtime-owned provider set.
 // External SDK modules are deliberately not included here.
-func Bindings() ([]modulecapability.Binding, error) {
+func openContract(_ Inputs) ([]modulecapability.Binding, error) {
 	specs, err := providerSpecs()
 	if err != nil {
 		return nil, err
@@ -80,7 +76,7 @@ func providerSpecs() ([]providerSpec, error) {
 		}
 		return authoringProjections(selected)
 	}
-	schema, err := projection(appschemacontract.ApplicationSchemaAuthoringDomain(), "schema.object")
+	schema, err := projection(appschemacontract.ApplicationSchemaAuthoringDomain())
 	if err != nil {
 		return nil, err
 	}
@@ -120,30 +116,22 @@ func providerSpecs() ([]providerSpec, error) {
 	return []providerSpec{
 		{
 			key: "action_registry", sourceOwner: "action", name: "Runtime Action registry", description: "Signed host query for live uses of source-owned Action permissions before Identity governance changes.",
-			scenarios: scenarios(
-				[]string{"Identity must inspect live Runtime uses before changing or retiring an Action permission"},
-				[]string{"The caller wants to author a business Action or invoke one against a record"},
-				[]string{"Action permission usage", "permission retirement impact"},
+			composition: composition(
 				[]string{"action.permission_usage"}, []string{"identity"}, []string{"records"},
-				[]string{"identity_permission_change_to_runtime_usage_query"}, nil,
-				"Check whether a permission is still used before retiring it", "The Runtime Action registry owns the live installed-use projection",
-				"Approve an order", "Records and the source-owned Action handler own business execution"),
+				[]string{"identity_permission_change_to_runtime_usage_query"}, nil),
 			categories: []categorySpec{{key: "action_registry.usage", name: "Action permission usage", description: "Query live Runtime Action permission uses through the signed Identity-to-Runtime protocol.", chains: []string{"identity_permission_change_to_runtime_usage_query"}, actions: []actioncontract.ActionDefinition{hostsurfacemodel.PermissionUsageQueryAction("")}}},
 		},
 		{
 			key: "runtime_schema", sourceOwner: "appschema", name: "Runtime schema", description: "Business-neutral object definitions with embedded fields, relations, validations, and exact-number metadata owned by Runtime Application Schema.",
-			scenarios: scenarios(
-				[]string{"A PRD needs business objects, typed fields, relations, dictionaries, validation constraints, or exact decimal metadata"},
-				[]string{"The requirement only consumes records from an already-defined object or only localizes an owner definition"},
-				[]string{"business object", "field type", "relation", "currency precision"},
-				[]string{"schema.object", "schema.field", "schema.relation"}, []string{"identity"}, []string{"metadata"},
-				[]string{"prd_entity_to_runtime_schema", "schema_before_records_actions_workflow_and_report"}, []string{"schema.object"},
-				"Define orders and line items with an exact currency amount and a customer relation", "Runtime schema owns the complete object fragment, including fields, relations, and validation metadata",
-				"Translate an existing field label", "Metadata projects localization; it does not own the field definition"),
+			composition: composition(
+				[]string{"schema.object", "schema.field", "schema.relation", "schema.business_calendar", "schema.dictionary"}, []string{"identity"}, []string{"metadata"},
+				[]string{"prd_entity_to_runtime_schema", "schema_before_records_actions_workflow_and_report"}, []string{"schema.object", "schema.business_calendar", "schema.dictionary"}),
 			categories: []categorySpec{
-				{key: "schema.authoring", name: "Schema authoring", description: "Author and validate complete project object fragments and inspect the embedded field, relation, and dictionary schemas owned by Runtime Application Schema.", chains: []string{"prd_entity_to_runtime_schema"}, scopes: []string{"schema.object"}, validationContracts: []modulecapability.ValidationScopeContract{{
-					Kind: "schema.object", Description: "Validate one complete project object definition, including its embedded fields and relations.", Coverage: modulecapability.ValidationCoverageAllCandidates, CandidateCollections: []string{"objects"}, ReferencedCollections: []string{"objects"},
-				}}, selectEndpoints: ownerAndPath("appschema", func(path string) bool {
+				{key: "schema.authoring", name: "Schema authoring", description: "Author and validate project objects, versioned Business Calendars, and Runtime-owned dictionaries while inspecting embedded field and relation schemas.", chains: []string{"prd_entity_to_runtime_schema"}, scopes: []string{"schema.object", "schema.business_calendar", "schema.dictionary"}, validationContracts: []modulecapability.ValidationScopeContract{
+					{Kind: "schema.object", Description: "Validate one complete project object definition, including its embedded fields and relations.", Coverage: modulecapability.ValidationCoverageAllCandidates, CandidateCollections: []string{"objects"}, ReferencedCollections: []string{"objects"}},
+					{Kind: "schema.business_calendar", Description: "Validate one immutable Business Calendar revision with timezone, working intervals, holidays, and date exceptions.", Coverage: modulecapability.ValidationCoverageAllCandidates, CandidateCollections: []string{"business_calendars"}},
+					{Kind: "schema.dictionary", Description: "Validate one Runtime-owned reusable dictionary and its stable item hierarchy.", Coverage: modulecapability.ValidationCoverageAllCandidates, CandidateCollections: []string{"dictionaries"}},
+				}, selectEndpoints: ownerAndPath("appschema", func(path string) bool {
 					return strings.Contains(path, "/definitions/") && strings.HasSuffix(path, "/validate")
 				}), projections: schema},
 				{key: "schema.instances", name: "Application schema instance evidence", description: "Inspect installed-schema migration planning, object record counts, and Runtime-local schema diagnostics.", chains: []string{"schema_before_records_actions_workflow_and_report"}, selectEndpoints: ownerAndPath("appschema", func(path string) bool {
@@ -153,14 +141,9 @@ func providerSpecs() ([]providerSpec, error) {
 		},
 		{
 			key: "records", sourceOwner: "records", name: "Records and Actions", description: "Transactional business records and source-owned Action invocation over Runtime schema.",
-			scenarios: scenarios(
-				[]string{"A PRD needs CRUD, filtered record lists, related records, bulk record jobs, or deterministic business Actions"},
-				[]string{"The requirement is analytical aggregation, a human approval graph, or external-provider integration rather than transactional record behavior"},
-				[]string{"create update delete record", "record list", "record export", "business action", "bulk records", "related records"},
+			composition: composition(
 				[]string{"records.crud", "records.query", "records.batch", "action.definition", "action.execute"}, []string{"identity", "runtime_schema"}, []string{"audit", "data_exchange", "workflow"},
-				[]string{"schema_to_records", "action_definition_to_guarded_execution", "record_mutation_to_audit_and_realtime"}, []string{"action.definition"},
-				"Maintain orders and expose a guarded approve Action", "Records owns transactional state while the Action definition and generated handler own the business effect",
-				"Show monthly revenue grouped by region", "Report owns analytical definitions and grouped execution"),
+				[]string{"schema_to_records", "action_definition_to_guarded_execution", "record_mutation_to_audit_and_realtime"}, []string{"action.definition"}),
 			categories: []categorySpec{
 				{key: "records.authoring", name: "Action authoring", description: "Author Runtime Action metadata while project-owned handlers retain business behavior.", chains: []string{"action_definition_to_guarded_execution"}, scopes: []string{"action.definition"}, validationContracts: []modulecapability.ValidationScopeContract{{
 					Kind: "action.definition", Description: "Validate one project Action definition against its referenced object contract.", Coverage: modulecapability.ValidationCoverageAllCandidates, CandidateCollections: []string{"actions"}, ReferencedCollections: []string{"objects"},
@@ -175,14 +158,9 @@ func providerSpecs() ([]providerSpec, error) {
 		},
 		{
 			key: "workflow", sourceOwner: "workflows", name: "Workflow", description: "Published human and system workflow graphs, tasks, decisions, timers, and execution evidence.",
-			scenarios: scenarios(
-				[]string{"A PRD needs approvals, assignments, branching, human tasks, workflow timers, or durable process state"},
-				[]string{"The requirement is one deterministic source-owned Action or a simple recurring clock trigger"},
-				[]string{"approval flow", "human task", "assignee", "workflow graph", "branch", "process status"},
+			composition: composition(
 				[]string{"workflow.definition", "workflow.graph_v2", "workflow.task", "workflow.decision", "workflow.timer"}, []string{"identity", "records"}, []string{"agent", "notification", "scheduler"},
-				[]string{"record_or_action_to_workflow_process", "workflow_task_to_identity_assignee", "workflow_timer_to_scheduler_clock"}, []string{"workflow.definition"},
-				"Route an expense through manager approval and finance review", "Workflow owns the graph, assignments, task decisions, and durable process evidence",
-				"Recalculate a field as part of a governed record mutation", "A source-owned Handler owns the mutation and derived business value"),
+				[]string{"record_or_action_to_workflow_process", "workflow_task_to_identity_assignee", "workflow_timer_to_scheduler_clock"}, []string{"workflow.definition"}),
 			categories: []categorySpec{
 				{key: "workflow.authoring", name: "Workflow authoring", description: "Author and validate one complete workflow definition and inspect the embedded graph, node, resolver, trigger, condition, and edge schemas.", chains: []string{"record_or_action_to_workflow_process"}, scopes: []string{"workflow.definition"}, validationContracts: []modulecapability.ValidationScopeContract{{
 					Kind: "workflow.definition", Description: "Validate one complete project workflow definition.", Coverage: modulecapability.ValidationCoverageAllCandidates, CandidateCollections: []string{"workflows"}, ReferencedCollections: []string{"actions", "objects"},
@@ -197,150 +175,90 @@ func providerSpecs() ([]providerSpec, error) {
 		},
 		{
 			key: "automation", sourceOwner: "automation", name: "Automation", description: "Deterministic record-lifecycle rules, conditions, instructions, simulation, and execution evidence.",
-			scenarios: scenarios(
-				[]string{"A PRD needs an automatic reaction to record creation, update, deletion, or field transition with deterministic instructions"},
-				[]string{"The requirement needs a human approval graph, natural-language reasoning, or a recurring time schedule without a record event"},
-				[]string{"when record changes", "automatic rule", "condition and instruction", "derive fields", "emit event"},
+			composition: composition(
 				[]string{"automation.rule", "automation.trigger", "automation.condition_group", "automation.instruction"}, []string{"identity", "records", "runtime_schema"}, []string{"integration", "notification", "workflow"},
-				[]string{"record_lifecycle_to_automation_rule", "automation_instruction_to_action_workflow_or_event"}, []string{"automation.rule"},
-				"When an order becomes ready, derive its routing state and start an approval", "Automation owns deterministic lifecycle triggers, conditions, and instruction dispatch",
-				"Run a report every weekday morning", "Scheduler owns clock-based recurrence"),
+				[]string{"record_lifecycle_to_automation_rule", "automation_instruction_to_action_workflow_or_event"}, []string{"automation.rule"}),
 			categories: []categorySpec{{key: "automation.rules", name: "Automation rules", description: "Author, validate, simulate, inspect, and execute record-lifecycle automation rules.", chains: []string{"record_lifecycle_to_automation_rule", "automation_instruction_to_action_workflow_or_event"}, scopes: []string{"automation.rule"}, validationContracts: []modulecapability.ValidationScopeContract{{
 				Kind: "automation.rule", Description: "Validate one complete project Automation rule against referenced objects, Actions, and Workflows.", Coverage: modulecapability.ValidationCoverageAllCandidates, CandidateCollections: []string{"automation_rules"}, ReferencedCollections: []string{"actions", "objects", "workflows"},
 			}}, selectEndpoints: owner("automation"), projections: automations}}, validator: validateAutomationCandidate,
 		},
 		{
 			key: "realtime", sourceOwner: "businessevents", name: "Realtime business events", description: "Tenant-scoped SSE refresh signals that instruct clients to refetch authorized durable state.",
-			scenarios: scenarios(
-				[]string{"A PRD needs live refresh after business changes or resumable tenant-scoped update signals"},
-				[]string{"The requirement needs durable event processing, notification delivery, or an immutable audit history rather than UI refresh"},
-				[]string{"live refresh", "SSE", "resume cursor", "real-time record updates"},
+			composition: composition(
 				[]string{"realtime.business_refresh"}, []string{"identity"}, []string{"records"},
-				[]string{"business_mutation_to_realtime_refresh_to_authorized_refetch"}, nil,
-				"Refresh an order workbench when another actor changes the order", "Realtime emits bounded refresh signals and the client refetches through authorized APIs",
-				"Send an email when an order changes", "Notification and Integration own durable user delivery, not Realtime refresh"),
+				[]string{"business_mutation_to_realtime_refresh_to_authorized_refetch"}, nil),
 			categories: []categorySpec{{key: "realtime.events", name: "Realtime refresh stream", description: "Subscribe to resumable business refresh and resync signals.", chains: []string{"business_mutation_to_realtime_refresh_to_authorized_refetch"}, selectEndpoints: owner("businessevents")}},
 		},
 		{
 			key: "uploads", sourceOwner: "uploads", name: "Uploads", description: "Authorized file upload, content access, and scan-status contracts for participant workflows.",
-			scenarios: scenarios(
-				[]string{"A PRD needs users to attach files to business records or requires virus-scan status before use"},
-				[]string{"The requirement is asynchronous bulk import/export or durable report artifact generation"},
-				[]string{"file attachment", "upload", "download file", "virus scan"},
+			composition: composition(
 				[]string{"uploads.create", "uploads.read", "uploads.scan_status"}, []string{"identity"}, []string{"data_exchange", "records"},
-				[]string{"business_attachment_to_upload_to_scan_gate"}, nil,
-				"Attach a signed document to a case and block use until scanning completes", "Uploads owns file acceptance, authorized content access, and scan status",
-				"Import a million CSV rows with progress and cancellation", "Data Exchange owns durable batch transfer jobs"),
+				[]string{"business_attachment_to_upload_to_scan_gate"}, nil),
 			categories: []categorySpec{{key: "uploads.files", name: "Business files", description: "Upload, read, and inspect scan status for business files.", chains: []string{"business_attachment_to_upload_to_scan_gate"}, selectEndpoints: owner("uploads")}},
 		},
 		{
 			key: "discovery", sourceOwner: "discovery", name: "Runtime discovery", description: "Principal-shaped Runtime schema and localization resources for dynamic clients.",
-			scenarios: scenarios(
-				[]string{"A product client must discover its visible Runtime schema or localized resource catalog dynamically"},
-				[]string{"The model is defining schema, or an operator only needs liveness and diagnostics"},
-				[]string{"runtime schema discovery", "dynamic client metadata", "locale resources"},
+			composition: composition(
 				[]string{"discovery.runtime_schema", "discovery.localization"}, []string{"identity"}, []string{"metadata"},
-				[]string{"identity_visibility_to_runtime_schema_to_dynamic_client"}, nil,
-				"Build a workbench from the current principal-visible object and action catalog", "Discovery owns principal-shaped Runtime schema projection",
-				"Define a new order object", "Runtime schema authoring owns the definition; Discovery only projects installed state"),
+				[]string{"identity_visibility_to_runtime_schema_to_dynamic_client"}, nil),
 			categories: []categorySpec{{key: "discovery.runtime", name: "Runtime schema discovery", description: "Read principal-shaped Runtime schema, localization resources, and the installed module inventory.", chains: []string{"identity_visibility_to_runtime_schema_to_dynamic_client"}, selectEndpoints: owner("discovery"), actions: []actioncontract.ActionDefinition{hostsurfacemodel.ModuleInventoryAction()}}},
 		},
 		{
 			key: "publication", sourceOwner: "publicationhandoff", name: "Publication handoff", description: "Durable acceptance and lookup of source-owner publication messages across Runtime boundaries.",
-			scenarios: scenarios(
-				[]string{"A PRD needs a durable source-owner publication handoff whose receipt is inspected by a business client"},
-				[]string{"The requirement only emits a transient UI refresh signal or directly invokes a synchronous Action"},
-				[]string{"publication handoff", "durable publication receipt", "message acceptance"},
+			composition: composition(
 				[]string{"publication.handoff_receipt"}, []string{"identity"}, []string{"integration", "notification"},
-				[]string{"source_publication_to_runtime_handoff_receipt"}, nil,
-				"Show whether an accepted source publication handoff completed", "Publication owns the durable handoff receipt exposed to business clients",
-				"Refresh a screen after a record update", "Realtime refresh is sufficient without a durable publication handoff"),
+				[]string{"source_publication_to_runtime_handoff_receipt"}, nil),
 			categories: []categorySpec{{key: "publication.handoffs", name: "Publication handoffs", description: "Inspect durable business publication handoff receipts.", chains: []string{"source_publication_to_runtime_handoff_receipt"}, selectEndpoints: owner("publicationhandoff")}},
 		},
 		{
 			key: "profile_binding", sourceOwner: "profilebinding", name: "Business profile binding", description: "Bind an Identity principal to a Runtime business-profile object and its lifecycle semantics.",
-			scenarios: scenarios(
-				[]string{"A PRD extends authenticated users with business profile fields, claim mappings, profile listings, or profile activation state"},
-				[]string{"The requirement only stores a business person without login or only configures authentication roles"},
-				[]string{"employee profile extension", "identity relation field", "business profile claim", "profile listing"},
+			composition: composition(
 				[]string{"principal.profile_binding"}, []string{"identity", "records", "runtime_schema"}, nil,
-				[]string{"identity_principal_to_business_profile_binding"}, []string{"principal.profile_binding"},
-				"Give each signed-in employee a one-to-one staff profile with business claims", "Profile binding owns the bridge between Identity and the Runtime business object",
-				"Store external customer contacts who never sign in", "Runtime Records owns business data without an Identity profile binding"),
+				[]string{"identity_principal_to_business_profile_binding"}, []string{"principal.profile_binding"}),
 			categories: []categorySpec{{key: "profile_binding.authoring", name: "Profile binding authoring", description: "Validate the Identity-to-business-profile binding embedded in a project object's ux.config.", chains: []string{"identity_principal_to_business_profile_binding"}, scopes: []string{"principal.profile_binding"}, validationContracts: []modulecapability.ValidationScopeContract{{
 				Kind: "principal.profile_binding", Description: "Validate a project object whose ux.kind is identity_profile_extension.", Coverage: modulecapability.ValidationCoverageExplicit, CandidateCollections: []string{"objects"}, ReferencedCollections: []string{"objects"},
 			}}, projections: profileBindings}}, validator: validateProfileBindingCandidate,
 		},
 		{
 			key: "business_references", sourceOwner: "businessreferences", name: "Business references", description: "Dependency graph and direct or transitive impact evidence for installed business definitions.",
-			scenarios: scenarios(
-				[]string{"An existing product model must be changed safely using dependency and reference-impact evidence"},
-				[]string{"The requirement is ordinary CRUD or infrastructure health monitoring"},
-				[]string{"reference impact", "dependency graph", "definition consumers"},
+			composition: composition(
 				[]string{"business_references.graph", "business_references.impact"}, []string{"identity"}, []string{"audit"},
-				[]string{"business_reference_to_safe_model_change"}, nil,
-				"Determine every consumer before removing an existing field", "Business References owns direct and transitive dependency evidence",
-				"Investigate database latency", "Monitoring owns operational health and metrics"),
+				[]string{"business_reference_to_safe_model_change"}, nil),
 			categories: []categorySpec{{key: "business_references.read", name: "Business reference discovery", description: "Inspect direct and transitive dependencies between installed definitions.", chains: []string{"business_reference_to_safe_model_change"}, selectEndpoints: owner("businessreferences")}},
 		},
 		{
 			key: "business_system", sourceOwner: "businesssystem", name: "Business system", description: "Installed Runtime system snapshot plus source-controlled delivery validation and verification.",
-			scenarios: scenarios(
-				[]string{"A tool must inspect or validate the installed business-system model and its source delivery evidence"},
-				[]string{"The requirement is one business record mutation or an infrastructure-only health probe"},
-				[]string{"business system snapshot", "delivery verification", "model validation"},
+			composition: composition(
 				[]string{"business_system.snapshot", "business_system.validation", "business_system.delivery_verification"}, []string{"identity"}, []string{"audit"},
-				[]string{"source_delivery_to_business_system_verification"}, nil,
-				"Verify the installed source-controlled model before a governed change", "Business System owns the assembled installed-state evidence",
-				"Update one order", "Records owns transactional business data"),
+				[]string{"source_delivery_to_business_system_verification"}, nil),
 			categories: []categorySpec{{key: "business_system.read", name: "Business-system evidence", description: "Read and validate the installed business-system snapshot and delivery evidence.", chains: []string{"source_delivery_to_business_system_verification"}, selectEndpoints: owner("businesssystem")}},
 		},
 		{
 			key: "runtime_dispatch", sourceOwner: "dispatch", name: "Runtime target execution", description: "Authenticated target-execution boundary for Runtime-resident downstream executors; scheduling remains owned by the Scheduler service.",
-			scenarios: scenarios(
-				[]string{"An upstream service must invoke an already authorized Runtime-owned Workflow or Report target"},
-				[]string{"A caller wants to author schedules, inspect runs, or recover dead letters"},
-				[]string{"target execution", "downstream workflow dispatch", "downstream report dispatch"},
+			composition: composition(
 				[]string{"dispatch.execution"}, []string{"scheduler"}, []string{"report", "workflow"},
-				[]string{"scheduler_run_to_runtime_target_execution"}, nil,
-				"Execute a workflow target selected by a Scheduler-owned run", "Runtime Dispatch owns only target acceptance and routing, never scheduling",
-				"Create or retry a schedule", "Scheduler owns schedule authoring and execution evidence"),
+				[]string{"scheduler_run_to_runtime_target_execution"}, nil),
 			categories: []categorySpec{{key: "runtime_dispatch.execution", name: "Runtime target execution", description: "Accept one authenticated request for a Runtime-resident downstream target.", chains: []string{"scheduler_run_to_runtime_target_execution"}, selectEndpoints: owner("dispatch")}},
 		},
 		{
 			key: "notification_bridge", sourceOwner: "notifications", name: "Notification action bridge", description: "Runtime-specific bridge from Notification inbox and delivery evidence to installed business Actions.",
-			scenarios: scenarios(
-				[]string{"A Runtime client must resolve an installed business Action from an Inbox item or inspect Runtime delivery evidence"},
-				[]string{"The requirement authors templates, preferences, policies, providers, or Notification delivery itself"},
-				[]string{"inbox business action", "runtime notification delivery evidence"},
+			composition: composition(
 				[]string{"notification_bridge.resolve_action", "notification_bridge.delivery_evidence"}, []string{"identity", "notification"}, []string{"records"},
-				[]string{"notification_inbox_to_business_action"}, nil,
-				"Resolve the approve Action attached to an Inbox notification", "The bridge binds Notification evidence to an installed Runtime Action",
-				"Create a notification template", "Notification owns template authoring and delivery"),
+				[]string{"notification_inbox_to_business_action"}, nil),
 			categories: []categorySpec{{key: "notification_bridge.runtime", name: "Notification Runtime bridge", description: "Resolve Inbox actions and inspect Runtime notification delivery evidence.", chains: []string{"notification_inbox_to_business_action"}, selectEndpoints: owner("notifications")}},
 		},
 		{
 			key: "runtime_openapi", sourceOwner: "openapi", name: "Runtime OpenAPI", description: "Machine-readable contract for the exact assembled Runtime HTTP surface.",
-			scenarios: scenarios(
-				[]string{"A client generator or diagnostic tool needs the assembled Runtime HTTP contract"},
-				[]string{"The requirement needs source capability selection or live business data"},
-				[]string{"OpenAPI", "HTTP contract", "client generation"},
+			composition: composition(
 				[]string{"runtime.openapi"}, nil, nil,
-				[]string{"runtime_contract_to_client_generation"}, nil,
-				"Generate a client for the assembled Runtime", "Runtime OpenAPI owns the deployed HTTP description",
-				"Choose modules for a PRD", "Plane capability aggregation owns module selection"),
+				[]string{"runtime_contract_to_client_generation"}, nil),
 			categories: []categorySpec{{key: "runtime_openapi.document", name: "Runtime OpenAPI document", description: "Read the assembled Runtime OpenAPI document.", chains: []string{"runtime_contract_to_client_generation"}, selectEndpoints: owner("openapi")}},
 		},
 		{
 			key: "runtime_operations", sourceOwner: "operations", name: "Runtime operations", description: "Runtime-local operational receipts, controls, diagnostics, recovery, break-glass, and database-retirement evidence.",
-			scenarios: scenarios(
-				[]string{"An operator must inspect or recover Runtime-local execution and infrastructure state"},
-				[]string{"The requirement is a source module's business operation or Scheduler-owned run recovery"},
-				[]string{"operation receipt", "dead letter", "break glass", "diagnostics", "database retirement", "lease recovery"},
+			composition: composition(
 				[]string{"runtime.operations.receipts", "runtime.operations.controls", "runtime.operations.recovery"}, []string{"identity"}, []string{"audit", "monitoring"},
-				[]string{"runtime_failure_to_operator_recovery"}, nil,
-				"Recover a stuck Runtime-owned operation from durable evidence", "Runtime Operations owns host-local recovery controls",
-				"Retry a Scheduler run", "Scheduler owns its runs and dead letters"),
+				[]string{"runtime_failure_to_operator_recovery"}, nil),
 			categories: []categorySpec{
 				{key: "runtime_operations.controls", name: "Runtime operations controls", description: "Mutate Runtime-local controls, recovery, break-glass, lease, idempotency, and database-retirement state.", chains: []string{"runtime_failure_to_operator_recovery"}, selectEndpoints: func(contract endpointmodel.RuntimeEndpointContractV1) bool {
 					return endpointOwner(contract) == "operations" && contract.EffectClass == endpointmodel.EndpointEffectWrite
@@ -352,26 +270,16 @@ func providerSpecs() ([]providerSpec, error) {
 		},
 		{
 			key: "runtime_core", sourceOwner: "root", name: "Runtime core", description: "Runtime listener identity, liveness, readiness, startup, health, and process metrics.",
-			scenarios: scenarios(
-				[]string{"Infrastructure must probe or observe one Runtime process"},
-				[]string{"The requirement concerns business monitoring definitions or source module operations"},
-				[]string{"liveness", "readiness", "startup probe", "runtime health", "process metrics"},
+			composition: composition(
 				[]string{"runtime.core.identity", "runtime.core.health", "runtime.core.metrics"}, nil, []string{"monitoring"},
-				[]string{"runtime_process_to_operational_probe"}, nil,
-				"Check whether a Runtime process is ready to receive traffic", "Runtime Core owns process-level probes",
-				"Define an alert policy", "Monitoring owns monitoring policy and evidence"),
+				[]string{"runtime_process_to_operational_probe"}, nil),
 			categories: []categorySpec{{key: "runtime_core.operations", name: "Runtime process operations", description: "Read Runtime process identity, probe state, health, and metrics.", chains: []string{"runtime_process_to_operational_probe"}, selectEndpoints: owner("root")}},
 		},
 		{
 			key: "workspace_provision", sourceOwner: "workspaceprovision", name: "Workspace provision", description: "Runtime-local Workspace initialization.",
-			scenarios: scenarios(
-				[]string{"An operator must initialize a Runtime Workspace"},
-				[]string{"The requirement authors a project manifest or manages ordinary Identity users"},
-				[]string{"provision Workspace"},
+			composition: composition(
 				[]string{"workspace.provision"}, []string{"identity"}, []string{"audit"},
-				[]string{"workspace_manifest_to_runtime_provision"}, nil,
-				"Initialize a Workspace", "Workspace Provision owns Runtime-local initialization",
-				"Author the project model", "Plane and source control own project authoring"),
+				[]string{"workspace_manifest_to_runtime_provision"}, nil),
 			categories: []categorySpec{{key: "workspace_provision.runtime", name: "Runtime Workspace provision", description: "Provision a Runtime Workspace with its fixed Identity bootstrap graph and typed configuration.", chains: []string{"workspace_manifest_to_runtime_provision"}, selectEndpoints: owner("workspaceprovision")}},
 		},
 	}, nil
@@ -487,7 +395,7 @@ func buildProvider(document map[string]any, spec providerSpec) (*modulecapabilit
 	}
 	summary := modulecapability.ModuleSummary{
 		Identity: modulecapability.ModuleIdentity{Key: spec.key, SourceOwner: spec.sourceOwner, ModuleVersion: capabilitycontract.RuntimeCapabilityContractVersion, ValidationRevision: runtimeProviderRevision + "-" + spec.key, SupportedDeploymentModes: []modulecapability.DeploymentMode{modulecapability.DeploymentModeModule}},
-		Name:     spec.name, Description: spec.description, Scenarios: spec.scenarios,
+		Name:     spec.name, Description: spec.description, Composition: spec.composition,
 	}
 	return modulecapability.NewStaticBinding(summary, documents, spec.validator)
 }
@@ -560,12 +468,14 @@ func cloneMap(value map[string]any) (map[string]any, error) {
 	return result, nil
 }
 
-func scenarios(useWhen, doNotUseWhen, signals, provided, required, optional, chains, scopes []string, selectRequirement, selectReason, rejectRequirement, rejectReason string) modulecapability.AdaptationScenarios {
-	return modulecapability.AdaptationScenarios{
-		UseWhen: useWhen, DoNotUseWhen: doNotUseWhen, RequirementSignals: signals, ProvidedCapabilities: provided,
-		RequiredModules: required, OptionalModules: optional, ConflictingModules: []string{}, AssemblyChains: chains, ValidationScopes: scopes,
-		SelectionExamples: []modulecapability.ScenarioExample{{Requirement: selectRequirement, Reason: selectReason}},
-		RejectionExamples: []modulecapability.ScenarioExample{{Requirement: rejectRequirement, Reason: rejectReason}},
+func composition(provided, required, optional, chains, scopes []string) modulecapability.ModuleComposition {
+	return modulecapability.ModuleComposition{
+		ProvidedCapabilities: provided,
+		RequiredModules:      required,
+		OptionalModules:      optional,
+		ConflictingModules:   []string{},
+		AssemblyChains:       chains,
+		ValidationScopes:     scopes,
 	}
 }
 

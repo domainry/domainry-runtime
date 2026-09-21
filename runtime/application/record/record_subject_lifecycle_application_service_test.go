@@ -32,7 +32,7 @@ func TestRecordSubjectLifecycleExportsRecordsAndFilesThenErasesDeclaredFields(t 
 		{Key: "employee", Type: "user", Config: map[string]any{"lifecycle_erase": "retain"}},
 		{Key: "owner", Type: "user", Config: map[string]any{"lifecycle_erase": "retain"}},
 		{Key: "email", Type: "email", Config: map[string]any{"lifecycle_erase": "anonymize"}},
-		{Key: "attachment", Type: "text", Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete"}},
+		{Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete", "scan_required": false}},
 	}}
 	manifest := manifestmodel.ManifestSchema{TemplateID: "record-subject", Version: "1", Name: "Record Subject", Objects: []definitionmodel.ObjectSchema{object}}
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
@@ -43,7 +43,7 @@ func TestRecordSubjectLifecycleExportsRecordsAndFilesThenErasesDeclaredFields(t 
 	}
 	repository := recordpersistence.NewRecordStore(store)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	if err := repository.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{ID: "document-1", CreatedAt: now, UpdatedAt: now, Data: map[string]any{"employee": "user-1", "owner": "user-1", "email": "person@example.com", "attachment": "/uploads/evidence.txt"}}); err != nil {
+	if err := repository.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{ID: "document-1", CreatedAt: now, UpdatedAt: now, Data: map[string]any{"employee": "user-1", "owner": "user-1", "email": "person@example.com", "attachment": subjectLifecycleStructuredFile("evidence.txt")}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := repository.InsertRecord(t.Context(), "workspace-b", object, recordmodel.Record{ID: "document-1", CreatedAt: now, UpdatedAt: now, Data: map[string]any{"employee": "user-1", "owner": "user-1", "email": "other@example.com", "attachment": nil}}); err != nil {
@@ -112,5 +112,12 @@ func TestRecordSubjectLifecycleExportsRecordsAndFilesThenErasesDeclaredFields(t 
 	other, found, err := repository.GetRecord(t.Context(), "workspace-b", object, "document-1")
 	if err != nil || !found || other.Data["email"] != "other@example.com" {
 		t.Fatalf("cross-workspace record changed: %#v err=%v", other, err)
+	}
+}
+
+func subjectLifecycleStructuredFile(filename string) map[string]any {
+	return map[string]any{
+		"file_id": filename, "filename": filename, "content_type": "text/plain",
+		"size": int64(1), "content_sha256": strings.Repeat("a", 64),
 	}
 }

@@ -41,9 +41,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		Identity: runtimehost.BuildIdentity{
 			RuntimeVersion: runtimeVersion,
 			RuntimeextContractVersion: runtimeext.ContractVersion,
-			RuntimeextContractSHA256: runtimeext.ContractSHA256,
 			ConnectorContractVersion: connector.ContractVersion,
-			ConnectorContractSHA256: connector.ContractSHA256,
 		},
 		IdentityFactory: identitymodule.NewFactory(identitymodule.OptionsFromEnvironment()),
 		IntegrationFactory: integrationmodule.NewFactory(integrationmodule.OptionsFromEnvironment()),
@@ -96,9 +94,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		Identity: runtimehost.BuildIdentity{
 			RuntimeVersion: runtimeVersion,
 			RuntimeextContractVersion: runtimeext.ContractVersion,
-			RuntimeextContractSHA256: runtimeext.ContractSHA256,
 			ConnectorContractVersion: connector.ContractVersion,
-			ConnectorContractSHA256: connector.ContractSHA256,
 		},
 		IdentityFactory: identityremote.NewFactory(identityremote.ConfigFromEnvironment()),
 		IntegrationFactory: integrationmodule.NewSaaSFactory(integrationremote.NewFactory(integrationremote.Options{})),

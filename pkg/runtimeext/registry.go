@@ -9,16 +9,34 @@ import (
 )
 
 var (
-	ErrBusinessHandlerRegistryFrozen = errors.New("business handler registry is frozen")
-	ErrBusinessHandlerRequired       = errors.New("business handler is required")
-	ErrBusinessHandlerDuplicate      = errors.New("business handler is already registered")
+	ErrProjectExtensionRegistryFrozen = errors.New("project extension registry is frozen")
+	ErrBusinessHandlerRequired        = errors.New("business handler is required")
+	ErrBusinessHandlerDuplicate       = errors.New("business handler is already registered")
 )
 
-// ExtensionSet is generated project composition input. Runtime freezes its
-// handlers before accepting traffic.
-type ExtensionSet struct {
+const (
+	ProjectExtensionKindBusinessHandler    = "business_handler"
+	ProjectExtensionKindAssigneeResolver   = "workflow_assignee_resolver"
+	ProjectExtensionKindWorkspaceBootstrap = "workspace_bootstrap"
+)
+
+// ProjectExtensions is the complete generated project composition input.
+// Runtime validates and freezes every extension before accepting traffic.
+type ProjectExtensions struct {
 	BusinessHandlers              []BusinessHandler
+	AssigneeResolvers             []AssigneeResolver
 	WorkspaceBootstrapParticipant WorkspaceBootstrapParticipant
+}
+
+// ProjectExtensionDescriptor is the canonical release-identity envelope for
+// one executable project extension. Exactly one typed descriptor is populated
+// according to Kind; generic payloads are deliberately unsupported.
+type ProjectExtensionDescriptor struct {
+	Kind               string
+	Key                string
+	BusinessHandler    *HandlerDescriptor
+	AssigneeResolver   *AssigneeResolverDescriptor
+	WorkspaceBootstrap *WorkspaceBootstrapDescriptor
 }
 
 // BusinessHandlerBinding is the immutable registration-time association
@@ -28,20 +46,22 @@ type BusinessHandlerBinding struct {
 	Handler    BusinessHandler
 }
 
-// BusinessHandlerRegistry owns startup-time Business Handler registration. It
-// intentionally has no runtime replacement or unregister operation.
-type BusinessHandlerRegistry struct {
-	mu                 sync.RWMutex
-	frozen             bool
-	bindings           map[string]BusinessHandlerBinding
-	workspaceBootstrap WorkspaceBootstrapParticipant
+// ProjectExtensionRegistry owns startup-time project extension registration.
+// It intentionally has no runtime replacement or unregister operation.
+type ProjectExtensionRegistry struct {
+	mu                           sync.RWMutex
+	frozen                       bool
+	businessHandlerBindings      map[string]BusinessHandlerBinding
+	assigneeResolverBindings     map[string]AssigneeResolverBinding
+	workspaceBootstrap           WorkspaceBootstrapParticipant
+	workspaceBootstrapDescriptor *WorkspaceBootstrapDescriptor
 }
 
-func NewBusinessHandlerRegistry() *BusinessHandlerRegistry {
-	return &BusinessHandlerRegistry{bindings: map[string]BusinessHandlerBinding{}}
+func NewProjectExtensionRegistry() *ProjectExtensionRegistry {
+	return &ProjectExtensionRegistry{businessHandlerBindings: map[string]BusinessHandlerBinding{}, assigneeResolverBindings: map[string]AssigneeResolverBinding{}}
 }
 
-func (r *BusinessHandlerRegistry) Register(handler BusinessHandler) error {
+func (r *ProjectExtensionRegistry) RegisterBusinessHandler(handler BusinessHandler) error {
 	if handler == nil {
 		return ErrBusinessHandlerRequired
 	}
@@ -53,23 +73,30 @@ func (r *BusinessHandlerRegistry) Register(handler BusinessHandler) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.frozen {
-		return ErrBusinessHandlerRegistryFrozen
+		return ErrProjectExtensionRegistryFrozen
 	}
-	if r.bindings == nil {
-		r.bindings = map[string]BusinessHandlerBinding{}
+	if r.businessHandlerBindings == nil {
+		r.businessHandlerBindings = map[string]BusinessHandlerBinding{}
 	}
-	if _, exists := r.bindings[key]; exists {
+	if _, exists := r.businessHandlerBindings[key]; exists {
 		return fmt.Errorf("%w: %s", ErrBusinessHandlerDuplicate, key)
 	}
-	r.bindings[key] = BusinessHandlerBinding{Descriptor: descriptor, Handler: handler}
+	r.businessHandlerBindings[key] = BusinessHandlerBinding{Descriptor: descriptor, Handler: handler}
 	return nil
 }
 
-func (r *BusinessHandlerRegistry) RegisterExtensionSet(set ExtensionSet) error {
+func (r *ProjectExtensionRegistry) RegisterAssigneeResolver(resolver AssigneeResolver) error {
+	return r.RegisterProjectExtensions(ProjectExtensions{AssigneeResolvers: []AssigneeResolver{resolver}})
+}
+
+func (r *ProjectExtensionRegistry) RegisterProjectExtensions(set ProjectExtensions) error {
+	var workspaceBootstrapDescriptor *WorkspaceBootstrapDescriptor
 	if set.WorkspaceBootstrapParticipant != nil {
-		if err := set.WorkspaceBootstrapParticipant.Descriptor().Validate(); err != nil {
+		descriptor := normalizeWorkspaceBootstrapDescriptor(set.WorkspaceBootstrapParticipant.Descriptor())
+		if err := descriptor.Validate(); err != nil {
 			return err
 		}
+		workspaceBootstrapDescriptor = &descriptor
 	}
 	type registration struct {
 		key     string
@@ -92,65 +119,156 @@ func (r *BusinessHandlerRegistry) RegisterExtensionSet(set ExtensionSet) error {
 		seen[key] = true
 		registrations = append(registrations, registration{key: key, binding: BusinessHandlerBinding{Descriptor: descriptor, Handler: handler}})
 	}
+	type resolverRegistration struct {
+		key     string
+		binding AssigneeResolverBinding
+	}
+	resolverRegistrations := make([]resolverRegistration, 0, len(set.AssigneeResolvers))
+	seenResolvers := map[string]bool{}
+	for _, resolver := range set.AssigneeResolvers {
+		if resolver == nil {
+			return ErrAssigneeResolverContractInvalid
+		}
+		descriptor := normalizeAssigneeResolverDescriptor(resolver.Descriptor())
+		if err := descriptor.Validate(); err != nil {
+			return err
+		}
+		key := strings.TrimSpace(descriptor.ResolverKey)
+		if seenResolvers[key] {
+			return fmt.Errorf("%w: %s", ErrAssigneeResolverDuplicate, key)
+		}
+		seenResolvers[key] = true
+		resolverRegistrations = append(resolverRegistrations, resolverRegistration{key: key, binding: AssigneeResolverBinding{Descriptor: descriptor, Resolver: resolver}})
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.frozen {
-		return ErrBusinessHandlerRegistryFrozen
+		return ErrProjectExtensionRegistryFrozen
 	}
 	if set.WorkspaceBootstrapParticipant != nil && r.workspaceBootstrap != nil {
 		return ErrWorkspaceBootstrapParticipantDuplicate
 	}
-	if r.bindings == nil {
-		r.bindings = map[string]BusinessHandlerBinding{}
+	if r.businessHandlerBindings == nil {
+		r.businessHandlerBindings = map[string]BusinessHandlerBinding{}
+	}
+	if r.assigneeResolverBindings == nil {
+		r.assigneeResolverBindings = map[string]AssigneeResolverBinding{}
 	}
 	for _, current := range registrations {
-		if _, exists := r.bindings[current.key]; exists {
+		if _, exists := r.businessHandlerBindings[current.key]; exists {
 			return fmt.Errorf("%w: %s", ErrBusinessHandlerDuplicate, current.key)
 		}
 	}
+	for _, current := range resolverRegistrations {
+		if _, exists := r.assigneeResolverBindings[current.key]; exists {
+			return fmt.Errorf("%w: %s", ErrAssigneeResolverDuplicate, current.key)
+		}
+	}
 	for _, current := range registrations {
-		r.bindings[current.key] = current.binding
+		r.businessHandlerBindings[current.key] = current.binding
+	}
+	for _, current := range resolverRegistrations {
+		r.assigneeResolverBindings[current.key] = current.binding
 	}
 	if set.WorkspaceBootstrapParticipant != nil {
 		r.workspaceBootstrap = set.WorkspaceBootstrapParticipant
+		r.workspaceBootstrapDescriptor = workspaceBootstrapDescriptor
 	}
 	return nil
 }
 
-func (r *BusinessHandlerRegistry) Freeze() {
+func (r *ProjectExtensionRegistry) Freeze() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.frozen = true
 }
 
-func (r *BusinessHandlerRegistry) Frozen() bool {
+func (r *ProjectExtensionRegistry) Frozen() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.frozen
 }
 
-func (r *BusinessHandlerRegistry) Binding(actionKey string) (BusinessHandlerBinding, bool) {
+func (r *ProjectExtensionRegistry) BusinessHandlerBinding(actionKey string) (BusinessHandlerBinding, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	binding, ok := r.bindings[strings.TrimSpace(actionKey)]
+	binding, ok := r.businessHandlerBindings[strings.TrimSpace(actionKey)]
 	if ok {
 		binding.Descriptor = cloneHandlerDescriptor(binding.Descriptor)
 	}
 	return binding, ok
 }
 
-func (r *BusinessHandlerRegistry) Descriptors() []HandlerDescriptor {
+func (r *ProjectExtensionRegistry) BusinessHandlerDescriptors() []HandlerDescriptor {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	result := make([]HandlerDescriptor, 0, len(r.bindings))
-	for _, binding := range r.bindings {
+	result := make([]HandlerDescriptor, 0, len(r.businessHandlerBindings))
+	for _, binding := range r.businessHandlerBindings {
 		result = append(result, cloneHandlerDescriptor(binding.Descriptor))
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].ActionKey < result[j].ActionKey })
 	return result
 }
 
-func (r *BusinessHandlerRegistry) WorkspaceBootstrapParticipant() WorkspaceBootstrapParticipant {
+func (r *ProjectExtensionRegistry) AssigneeResolverBinding(resolverKey string) (AssigneeResolverBinding, bool) {
+	if r == nil {
+		return AssigneeResolverBinding{}, false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	binding, ok := r.assigneeResolverBindings[strings.TrimSpace(resolverKey)]
+	if ok {
+		binding.Descriptor = cloneAssigneeResolverDescriptor(binding.Descriptor)
+	}
+	return binding, ok
+}
+
+func (r *ProjectExtensionRegistry) AssigneeResolverDescriptors() []AssigneeResolverDescriptor {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := make([]AssigneeResolverDescriptor, 0, len(r.assigneeResolverBindings))
+	for _, binding := range r.assigneeResolverBindings {
+		result = append(result, cloneAssigneeResolverDescriptor(binding.Descriptor))
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ResolverKey < result[j].ResolverKey })
+	return result
+}
+
+func (r *ProjectExtensionRegistry) Descriptors() []ProjectExtensionDescriptor {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := make([]ProjectExtensionDescriptor, 0, len(r.businessHandlerBindings)+len(r.assigneeResolverBindings)+1)
+	for _, binding := range r.businessHandlerBindings {
+		descriptor := cloneHandlerDescriptor(binding.Descriptor)
+		result = append(result, ProjectExtensionDescriptor{
+			Kind: ProjectExtensionKindBusinessHandler, Key: descriptor.ActionKey, BusinessHandler: &descriptor,
+		})
+	}
+	for _, binding := range r.assigneeResolverBindings {
+		descriptor := cloneAssigneeResolverDescriptor(binding.Descriptor)
+		result = append(result, ProjectExtensionDescriptor{
+			Kind: ProjectExtensionKindAssigneeResolver, Key: descriptor.ResolverKey, AssigneeResolver: &descriptor,
+		})
+	}
+	if r.workspaceBootstrapDescriptor != nil {
+		descriptor := cloneWorkspaceBootstrapDescriptor(*r.workspaceBootstrapDescriptor)
+		result = append(result, ProjectExtensionDescriptor{
+			Kind: ProjectExtensionKindWorkspaceBootstrap, Key: descriptor.Key, WorkspaceBootstrap: &descriptor,
+		})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Kind+"\x00"+result[i].Key < result[j].Kind+"\x00"+result[j].Key
+	})
+	return result
+}
+
+func (r *ProjectExtensionRegistry) WorkspaceBootstrapParticipant() WorkspaceBootstrapParticipant {
 	if r == nil {
 		return nil
 	}
@@ -159,13 +277,139 @@ func (r *BusinessHandlerRegistry) WorkspaceBootstrapParticipant() WorkspaceBoots
 	return r.workspaceBootstrap
 }
 
+func normalizeAssigneeResolverDescriptor(descriptor AssigneeResolverDescriptor) AssigneeResolverDescriptor {
+	result := cloneAssigneeResolverDescriptor(descriptor)
+	result.ResolverKey = strings.TrimSpace(result.ResolverKey)
+	result.ResolverRevision = strings.TrimSpace(result.ResolverRevision)
+	result.ConfigContractSHA256 = strings.TrimSpace(result.ConfigContractSHA256)
+	for index := range result.ConfigFields {
+		result.ConfigFields[index].Key = strings.TrimSpace(result.ConfigFields[index].Key)
+		sort.Strings(result.ConfigFields[index].Enum)
+	}
+	sort.Slice(result.ConfigFields, func(i, j int) bool { return result.ConfigFields[i].Key < result.ConfigFields[j].Key })
+	for index := range result.RecordCapabilities {
+		capability := &result.RecordCapabilities[index]
+		capability.Key = strings.TrimSpace(capability.Key)
+		capability.ObjectKey = strings.TrimSpace(capability.ObjectKey)
+		for fieldIndex := range capability.Fields {
+			capability.Fields[fieldIndex] = strings.TrimSpace(capability.Fields[fieldIndex])
+		}
+		for fieldIndex := range capability.FilterFields {
+			capability.FilterFields[fieldIndex] = strings.TrimSpace(capability.FilterFields[fieldIndex])
+		}
+		sort.Strings(capability.Fields)
+		sort.Strings(capability.FilterFields)
+	}
+	sort.Slice(result.RecordCapabilities, func(i, j int) bool { return result.RecordCapabilities[i].Key < result.RecordCapabilities[j].Key })
+	for index := range result.RelationCapabilities {
+		capability := &result.RelationCapabilities[index]
+		capability.Key = strings.TrimSpace(capability.Key)
+		capability.SourceObjectKey = strings.TrimSpace(capability.SourceObjectKey)
+		capability.RelationFieldKey = strings.TrimSpace(capability.RelationFieldKey)
+		capability.TargetObjectKey = strings.TrimSpace(capability.TargetObjectKey)
+		for fieldIndex := range capability.TargetFields {
+			capability.TargetFields[fieldIndex] = strings.TrimSpace(capability.TargetFields[fieldIndex])
+		}
+		sort.Strings(capability.TargetFields)
+	}
+	sort.Slice(result.RelationCapabilities, func(i, j int) bool { return result.RelationCapabilities[i].Key < result.RelationCapabilities[j].Key })
+	for index := range result.IdentityProjections {
+		result.IdentityProjections[index] = strings.TrimSpace(result.IdentityProjections[index])
+	}
+	sort.Strings(result.IdentityProjections)
+	for index := range result.CandidateRoleKeys {
+		result.CandidateRoleKeys[index] = strings.TrimSpace(result.CandidateRoleKeys[index])
+	}
+	sort.Strings(result.CandidateRoleKeys)
+	return result
+}
+
+func cloneAssigneeResolverDescriptor(descriptor AssigneeResolverDescriptor) AssigneeResolverDescriptor {
+	result := descriptor
+	result.ConfigFields = make([]AssigneeResolverConfigField, len(descriptor.ConfigFields))
+	for index, field := range descriptor.ConfigFields {
+		result.ConfigFields[index] = field
+		result.ConfigFields[index].Enum = append([]string(nil), field.Enum...)
+	}
+	result.RecordCapabilities = make([]AssigneeResolverRecordCapability, len(descriptor.RecordCapabilities))
+	for index, capability := range descriptor.RecordCapabilities {
+		result.RecordCapabilities[index] = capability
+		result.RecordCapabilities[index].Fields = append([]string(nil), capability.Fields...)
+		result.RecordCapabilities[index].FilterFields = append([]string(nil), capability.FilterFields...)
+	}
+	result.RelationCapabilities = make([]AssigneeResolverRelationCapability, len(descriptor.RelationCapabilities))
+	for index, capability := range descriptor.RelationCapabilities {
+		result.RelationCapabilities[index] = capability
+		result.RelationCapabilities[index].TargetFields = append([]string(nil), capability.TargetFields...)
+	}
+	result.IdentityProjections = append([]string(nil), descriptor.IdentityProjections...)
+	result.CandidateRoleKeys = append([]string(nil), descriptor.CandidateRoleKeys...)
+	return result
+}
+
+func normalizeWorkspaceBootstrapDescriptor(descriptor WorkspaceBootstrapDescriptor) WorkspaceBootstrapDescriptor {
+	result := cloneWorkspaceBootstrapDescriptor(descriptor)
+	result.Key = strings.TrimSpace(result.Key)
+	result.InputType = strings.TrimSpace(result.InputType)
+	result.InputContractSHA256 = strings.TrimSpace(result.InputContractSHA256)
+	result.ParticipantRevision = strings.TrimSpace(result.ParticipantRevision)
+	for index := range result.InputFields {
+		field := &result.InputFields[index]
+		field.Key = strings.TrimSpace(field.Key)
+		field.Pattern = strings.TrimSpace(field.Pattern)
+		field.Format = strings.TrimSpace(field.Format)
+		sort.Strings(field.Enum)
+	}
+	sort.Slice(result.InputFields, func(i, j int) bool { return result.InputFields[i].Key < result.InputFields[j].Key })
+	for index := range result.Records {
+		record := &result.Records[index]
+		record.Key = strings.TrimSpace(record.Key)
+		record.ObjectKey = strings.TrimSpace(record.ObjectKey)
+		for fieldIndex := range record.Fields {
+			record.Fields[fieldIndex] = strings.TrimSpace(record.Fields[fieldIndex])
+		}
+		sort.Strings(record.Fields)
+	}
+	sort.Slice(result.Records, func(i, j int) bool { return result.Records[i].Key < result.Records[j].Key })
+	return result
+}
+
+func cloneWorkspaceBootstrapDescriptor(descriptor WorkspaceBootstrapDescriptor) WorkspaceBootstrapDescriptor {
+	result := descriptor
+	result.InputFields = make([]WorkspaceBootstrapInputField, len(descriptor.InputFields))
+	for index, field := range descriptor.InputFields {
+		result.InputFields[index] = field
+		result.InputFields[index].Enum = append([]string(nil), field.Enum...)
+		if field.Minimum != nil {
+			value := *field.Minimum
+			result.InputFields[index].Minimum = &value
+		}
+		if field.Maximum != nil {
+			value := *field.Maximum
+			result.InputFields[index].Maximum = &value
+		}
+		if field.MinLength != nil {
+			value := *field.MinLength
+			result.InputFields[index].MinLength = &value
+		}
+		if field.MaxLength != nil {
+			value := *field.MaxLength
+			result.InputFields[index].MaxLength = &value
+		}
+	}
+	result.Records = make([]WorkspaceBootstrapRecordCapability, len(descriptor.Records))
+	for index, record := range descriptor.Records {
+		result.Records[index] = record
+		result.Records[index].Fields = append([]string(nil), record.Fields...)
+	}
+	return result
+}
+
 func normalizeHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor {
 	result := cloneHandlerDescriptor(descriptor)
 	result.ActionKey = strings.TrimSpace(result.ActionKey)
 	result.InputType = strings.TrimSpace(result.InputType)
 	result.OutputType = strings.TrimSpace(result.OutputType)
-	result.InputContractSHA256 = strings.TrimSpace(result.InputContractSHA256)
-	result.OutputContractSHA256 = strings.TrimSpace(result.OutputContractSHA256)
 	result.HandlerRevision = strings.TrimSpace(result.HandlerRevision)
 	for index := range result.ObjectCapabilities {
 		capability := &result.ObjectCapabilities[index]

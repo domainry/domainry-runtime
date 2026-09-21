@@ -10,7 +10,7 @@ import (
 
 var (
 	ErrHandlerKeyRequired       = errors.New("business handler key is required")
-	ErrHandlerContractRequired  = errors.New("business handler input/output type identities and contract hashes are required")
+	ErrHandlerContractRequired  = errors.New("business handler input/output type identities are required")
 	ErrHandlerContractInvalid   = errors.New("business handler contract identity is invalid")
 	ErrHandlerRevisionRequired  = errors.New("business handler revision is required")
 	ErrHandlerCapabilityInvalid = errors.New("business handler capability is invalid")
@@ -95,8 +95,6 @@ type HandlerDescriptor struct {
 	ActionKey                 string
 	InputType                 string
 	OutputType                string
-	InputContractSHA256       string
-	OutputContractSHA256      string
 	HandlerRevision           string
 	ObjectCapabilities        []ActionObjectCapability
 	ConnectorCapabilities     []ActionConnectorCapability
@@ -118,11 +116,10 @@ func (d HandlerDescriptor) Validate() error {
 		return ErrHandlerKeyRequired
 	}
 	inputType, outputType := strings.TrimSpace(d.InputType), strings.TrimSpace(d.OutputType)
-	inputHash, outputHash := strings.TrimSpace(d.InputContractSHA256), strings.TrimSpace(d.OutputContractSHA256)
-	if inputType == "" || outputType == "" || inputHash == "" || outputHash == "" {
+	if inputType == "" || outputType == "" {
 		return ErrHandlerContractRequired
 	}
-	if !handlerTypeIdentityPattern.MatchString(inputType) || !handlerTypeIdentityPattern.MatchString(outputType) || !handlerContractHashPattern.MatchString(inputHash) || !handlerContractHashPattern.MatchString(outputHash) {
+	if !handlerTypeIdentityPattern.MatchString(inputType) || !handlerTypeIdentityPattern.MatchString(outputType) {
 		return ErrHandlerContractInvalid
 	}
 	if strings.TrimSpace(d.HandlerRevision) == "" {

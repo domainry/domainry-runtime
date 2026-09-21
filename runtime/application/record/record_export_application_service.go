@@ -13,6 +13,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -245,6 +246,24 @@ func RecordExportAssuranceIntent(options RecordExportOptions) map[string]any {
 func recordExportFieldValue(principal principalmodel.Principal, objectKey string, field definitionmodel.FieldSchema, value any) (string, error) {
 	if recordpolicy.RecordFieldExportMaskedForPrincipal(principal, objectKey, field.Key) {
 		return recordpolicy.RecordMaskFieldValue(field, value), nil
+	}
+	if field.Type == recordmodel.RecordFileFieldType || field.Type == recordmodel.RecordFileListFieldType {
+		normalized, err := recordmodel.RecordNormalizeFileFieldValue(field, value)
+		if err != nil {
+			return "", recordExportError(apperror.KindInternal, "backend.export.file_reference_invalid", err, "field", field.Key)
+		}
+		encoded, err := json.Marshal(normalized)
+		if err != nil {
+			return "", recordExportError(apperror.KindInternal, "backend.export.file_reference_invalid", err, "field", field.Key)
+		}
+		return string(encoded), nil
+	}
+	if recordmodel.RecordIsStructuredFieldType(field.Type) {
+		encoded, err := recordmodel.RecordEncodeStructuredFieldValue(field, value)
+		if err != nil {
+			return "", recordExportError(apperror.KindInternal, "backend.export.structured_value_invalid", err, "field", field.Key)
+		}
+		return encoded, nil
 	}
 	if strings.TrimSpace(field.Type) != "currency" {
 		return fmt.Sprint(value), nil

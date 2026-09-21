@@ -129,7 +129,7 @@ func TestRecordSchemaSnapshotProviderReusesStableProjectionAndInvalidatesEveryMu
 	if builds != 1 || len(first.Objects) != 1 || len(second.Objects) != 1 || first.SchemaHash != second.SchemaHash || &first.Objects[0] != &second.Objects[0] {
 		t.Fatalf("stable immutable projection rebuilt: builds=%d first=%+v second=%+v", builds, first, second)
 	}
-	records.applyManifestMetadata("template", "2", "Updated", "UTC", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Updated", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}}, nil, nil, nil, nil, appschemamodel.IntegrationSchema{}, nil, nil, nil, nil)
+	records.applyManifestMetadata("template", "2", "Updated", "UTC", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Updated", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}}, nil, nil, nil, nil, nil, appschemamodel.IntegrationSchema{}, nil, nil, nil, nil)
 	updated := records.RecordSchemaSnapshotProvider.SchemaForPrincipal(t.Context(), p)
 	if builds != 2 || len(updated.Objects) != 1 || updated.Objects[0].Name != "Updated" || updated.SchemaHash == first.SchemaHash {
 		t.Fatalf("metadata mutation retained cached projection: builds=%d snapshot=%+v", builds, updated)
@@ -207,7 +207,7 @@ func TestRecordSchemaSnapshotProviderBoundsPrincipalsAndHandlesConcurrentPublica
 			}
 		}(i)
 	}
-	records.applyManifestMetadata("template", "3", "Concurrent", "UTC", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Concurrent", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}}, nil, nil, nil, nil, appschemamodel.IntegrationSchema{}, nil, nil, nil, nil)
+	records.applyManifestMetadata("template", "3", "Concurrent", "UTC", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Concurrent", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}}, nil, nil, nil, nil, nil, appschemamodel.IntegrationSchema{}, nil, nil, nil, nil)
 	wait.Wait()
 	if snapshot := records.RecordSchemaSnapshotProvider.SchemaForPrincipal(t.Context(), principal(0)); len(snapshot.Objects) != 1 || snapshot.Objects[0].Name != "Concurrent" {
 		t.Fatal("publication did not invalidate concurrent projection", snapshot)

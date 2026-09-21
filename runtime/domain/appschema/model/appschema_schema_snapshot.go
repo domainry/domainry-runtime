@@ -4,31 +4,33 @@ import (
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 )
 
 type ApplicationSchemaSnapshot struct {
-	TemplateID                string                                  `json:"template_id"`
-	TemplateVersion           string                                  `json:"template_version"`
-	Name                      string                                  `json:"name,omitempty"`
-	TimeZone                  string                                  `json:"time_zone"`
-	SchemaHash                string                                  `json:"schema_hash"`
-	SnapshotVersion           string                                  `json:"snapshot_version"`
-	Objects                   []definitionmodel.ObjectSchema          `json:"objects"`
-	Actions                   []definitionmodel.ActionSchema          `json:"actions"`
-	GuardedWrites             []ApplicationSchemaGuardedWriteContract `json:"guarded_writes,omitempty"`
-	Workflows                 []definitionmodel.WorkflowSchema        `json:"workflows"`
-	AutomationRules           []automationmodel.AutomationRuleSchema  `json:"automation_rules,omitempty"`
-	Dictionaries              []DictionarySchema                      `json:"dictionaries,omitempty"`
-	Integrations              IntegrationSchema                       `json:"integrations,omitempty"`
-	Reports                   []reportmodel.ReportSchema              `json:"reports,omitempty"`
-	Skills                    []agentsdk.SkillSchema                  `json:"skills,omitempty"`
-	Agents                    []agentsdk.AgentSchema                  `json:"agents,omitempty"`
-	AgentTasks                []agentsdk.AgentTaskDefinition          `json:"agent_tasks,omitempty"`
-	AgentEntrypoints          []agentsdk.AgentEntrypointAssignment    `json:"agent_entrypoints,omitempty"`
-	AgentServicePrincipals    []agentsdk.AgentServicePrincipalBinding `json:"agent_service_principals,omitempty"`
-	IdentityProfileExtensions []profilebindingmodel.Binding           `json:"identity_profile_extensions,omitempty"`
+	TemplateID                string                                         `json:"template_id"`
+	TemplateVersion           string                                         `json:"template_version"`
+	Name                      string                                         `json:"name,omitempty"`
+	TimeZone                  string                                         `json:"time_zone"`
+	SchemaHash                string                                         `json:"schema_hash"`
+	SnapshotVersion           string                                         `json:"snapshot_version"`
+	Objects                   []definitionmodel.ObjectSchema                 `json:"objects"`
+	Actions                   []definitionmodel.ActionSchema                 `json:"actions"`
+	GuardedWrites             []ApplicationSchemaGuardedWriteContract        `json:"guarded_writes,omitempty"`
+	Workflows                 []definitionmodel.WorkflowSchema               `json:"workflows"`
+	BusinessCalendars         []businesscalendarmodel.BusinessCalendarSchema `json:"business_calendars,omitempty"`
+	AutomationRules           []automationmodel.AutomationRuleSchema         `json:"automation_rules,omitempty"`
+	Dictionaries              []DictionarySchema                             `json:"dictionaries,omitempty"`
+	Integrations              IntegrationSchema                              `json:"integrations,omitempty"`
+	Reports                   []reportmodel.ReportSchema                     `json:"reports,omitempty"`
+	Skills                    []agentsdk.SkillSchema                         `json:"skills,omitempty"`
+	Agents                    []agentsdk.AgentSchema                         `json:"agents,omitempty"`
+	AgentTasks                []agentsdk.AgentTaskDefinition                 `json:"agent_tasks,omitempty"`
+	AgentEntrypoints          []agentsdk.AgentEntrypointAssignment           `json:"agent_entrypoints,omitempty"`
+	AgentServicePrincipals    []agentsdk.AgentServicePrincipalBinding        `json:"agent_service_principals,omitempty"`
+	IdentityProfileExtensions []profilebindingmodel.Binding                  `json:"identity_profile_extensions,omitempty"`
 }
 
 type ApplicationSchemaGuardedWriteContract struct {

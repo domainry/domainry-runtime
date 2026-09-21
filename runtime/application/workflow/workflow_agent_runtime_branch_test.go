@@ -80,7 +80,7 @@ func TestWorkflowExecuteAgentTaskFailureBranches(t *testing.T) {
 func TestWorkflowAgentReferenceAndContinuationFailureBranches(t *testing.T) {
 	validator := NewWorkflowReferenceValidator(workflowSchemaProviderEdgeStub{}, func(context.Context) map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{}
-	}, nil)
+	}, nil, nil)
 	workflow := definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{Nodes: []definitionmodel.WorkflowGraphNode{{ID: "agent", Type: "agent_task"}}}}
 	_ = validator.validateWorkflowReferences(t.Context(), workflow)
 	if issues := validator.validateWorkflowAgentTaskReference(t.Context(), definitionmodel.WorkflowGraphNode{}); len(issues) != 0 {
@@ -92,7 +92,7 @@ func TestWorkflowAgentReferenceAndContinuationFailureBranches(t *testing.T) {
 	referenceValidator := NewWorkflowReferenceValidator(workflowSchemaProviderEdgeStub{snapshot: WorkflowSchemaSnapshot{
 		AgentTasks:             []agentsdk.AgentTaskDefinition{{Key: "disabled", Version: "1", Enabled: false}, {Key: "other", Version: "1", Enabled: true}, {Key: "task", Version: "1", Enabled: true, AllowedActions: []string{"missing"}}},
 		AgentServicePrincipals: []agentsdk.AgentServicePrincipalBinding{{Key: "other", Enabled: true}, {Key: "principal", Enabled: true}},
-	}}, nil, nil)
+	}}, nil, nil, nil)
 	for _, contract := range []definitionmodel.WorkflowAgentTaskNodeContract{
 		{TaskKey: "task", TaskVersion: "1", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, AllowedActions: []string{"missing"}},
 		{TaskKey: "task", TaskVersion: "1", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityService, PrincipalKey: "principal"}},

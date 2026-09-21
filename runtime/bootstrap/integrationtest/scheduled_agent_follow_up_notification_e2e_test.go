@@ -127,7 +127,7 @@ func g06SendScheduledWindow(t *testing.T, handler http.Handler, cfg config.Confi
 		t.Fatal(err)
 	}
 	body, err := json.Marshal(map[string]any{
-		"runtime_id": cfg.RuntimeInstanceID, "execution_id": fmt.Sprintf("scheduler-g06-%d", window), "idempotency_key": idempotency, "due_at": dueAt,
+		"runtime_id": cfg.RuntimeInstanceID, "execution_id": fmt.Sprintf("scheduler-g06-%d", window), "definition_key": "g06-agent-follow-up", "idempotency_key": idempotency, "due_at": dueAt,
 		"target": map[string]any{"type": "runtime_operation", "owner": "agent", "operation": "conversation_task_start", "payload": json.RawMessage(dispatch)},
 	})
 	if err != nil {

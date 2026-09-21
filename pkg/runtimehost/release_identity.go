@@ -32,8 +32,8 @@ var (
 
 var ErrRuntimeReleaseIdentity = errors.New("runtime release identity is invalid")
 
-func runtimeReleaseIdentity(build BuildIdentity, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry) (runtimehttp.RuntimeReleaseIdentity, error) {
-	handlerHash, err := runtimeRegistrySHA256("domainry-handler-registry-v1", handlers.Descriptors())
+func runtimeReleaseIdentity(build BuildIdentity, extensions *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry) (runtimehttp.RuntimeReleaseIdentity, error) {
+	extensionHash, err := runtimeRegistrySHA256("domainry-project-extension-registry-v1", extensions.Descriptors())
 	if err != nil {
 		return runtimehttp.RuntimeReleaseIdentity{}, err
 	}
@@ -44,12 +44,12 @@ func runtimeReleaseIdentity(build BuildIdentity, handlers *runtimeext.BusinessHa
 	identity := runtimehttp.RuntimeReleaseIdentity{
 		ContractVersion: RuntimeReleaseIdentityVersion, BuildMode: "development",
 		RuntimeVersion:            build.RuntimeVersion,
-		RuntimeextContractVersion: build.RuntimeextContractVersion, RuntimeextContractSHA256: build.RuntimeextContractSHA256,
-		ConnectorContractVersion: build.ConnectorContractVersion, ConnectorContractSHA256: build.ConnectorContractSHA256,
+		RuntimeextContractVersion: build.RuntimeextContractVersion, RuntimeextContractSHA256: runtimeext.ContractSHA256,
+		ConnectorContractVersion: build.ConnectorContractVersion, ConnectorContractSHA256: connector.ContractSHA256,
 		DomainSDKContractVersion: build.DomainSDK.ContractVersion, DomainSDKContractSHA256: build.DomainSDK.ContractSHA256,
 		DomainSDKGeneratorVersion: build.DomainSDK.GeneratorVersion, DomainSDKBuildConstraint: build.DomainSDK.BuildConstraint,
 		ApplicationSchemaSnapshotSHA256: build.DomainSDK.ApplicationSchemaSnapshotSHA256, GeneratedSDKSHA256: build.DomainSDK.ArtifactSHA256,
-		HandlerRegistrySHA256: handlerHash, ConnectorRegistrySHA256: connectorHash,
+		ProjectExtensionRegistrySHA256: extensionHash, ConnectorRegistrySHA256: connectorHash,
 	}
 	packaged := []string{
 		builtProjectModule, builtVerificationReceiptSHA256, builtProjectInputSHA256, builtProjectSourceSHA256,

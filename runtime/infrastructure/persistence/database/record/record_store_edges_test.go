@@ -3,7 +3,8 @@ package record
 import (
 	"database/sql/driver"
 	"errors"
-	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
+	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -82,6 +84,37 @@ func TestCurrencyDatabaseCodecIsExactAndSQLiteSortable(t *testing.T) {
 	}
 	if values, ok := got.Filters["amount__in_strings"].([]string); !ok || len(values) != 1 || values[0] == "1.2" {
 		t.Fatalf("string values=%#v", got.Filters["amount__in_strings"])
+	}
+}
+
+func TestStructuredFieldDatabaseCodecAndQueryValuesAreCanonical(t *testing.T) {
+	multi := definitionmodel.FieldSchema{Key: "tags", Type: recordmodel.RecordMultiSelectFieldType}
+	jsonField := definitionmodel.FieldSchema{Key: "payload", Type: recordmodel.RecordJSONFieldType}
+	for _, profile := range []string{"sqlite", "postgres", "mysql"} {
+		stored := dbFieldValue(testEngineProfile(profile), multi, []any{"z", "a", "z"})
+		if stored != `["a","z"]` {
+			t.Fatalf("%s multi stored=%#v", profile, stored)
+		}
+		if decoded := normalizeDBValue(testEngineProfile(profile), multi, stored); !reflect.DeepEqual(decoded, []string{"a", "z"}) {
+			t.Fatalf("%s multi decoded=%#v", profile, decoded)
+		}
+		stored = dbFieldValue(testEngineProfile(profile), jsonField, map[string]any{"b": 2, "a": 1})
+		if stored != `{"a":1,"b":2}` {
+			t.Fatalf("%s json stored=%#v", profile, stored)
+		}
+		decoded, ok := normalizeDBValue(testEngineProfile(profile), jsonField, []byte(stored.(string))).(map[string]any)
+		if !ok || fmt.Sprint(decoded["a"]) != "1" {
+			t.Fatalf("%s json decoded=%#v", profile, decoded)
+		}
+	}
+	object := definitionmodel.ObjectSchema{Fields: []definitionmodel.FieldSchema{multi, jsonField}}
+	query := recordmodel.RecordListQuery{
+		Filters:          map[string]any{"tags": []any{"z", "a"}},
+		FilterExpression: &recordmodel.RecordFilterExpression{Operator: "in", Field: "tags", Values: []any{[]any{"b", "a"}, []any{"c"}}},
+	}
+	got := recordQueryDBValues(testEngineProfile("postgres"), object, query)
+	if got.Filters["tags"] != `["a","z"]` || !reflect.DeepEqual(got.FilterExpression.Values, []any{`["a","b"]`, `["c"]`}) {
+		t.Fatalf("structured query=%#v", got)
 	}
 }
 

@@ -99,8 +99,8 @@ func (w *actionPayloadStructureWalker) walk(fields []definitionmodel.ActionPaylo
 			if fieldType != "" && !w.allowedTypes[fieldType] {
 				w.add(path+".type", fmt.Sprintf("unknown payload field type %q", fieldType))
 			}
-			if len(field.Options) > 0 && fieldType != "select" {
-				w.add(path+".options", "options are only valid for select fields")
+			if len(field.Options) > 0 && fieldType != "select" && fieldType != "multi_select" {
+				w.add(path+".options", "options are only valid for select and multi_select fields")
 			}
 			if fieldType == "relation" && strings.TrimSpace(field.TargetObjectKey) == "" {
 				w.add(path+".target_object_key", "relation fields require target_object_key")

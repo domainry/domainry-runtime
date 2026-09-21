@@ -12,11 +12,11 @@ import (
 )
 
 func TestRuntimeReleaseIntegrityReadinessChecksIndependentFacts(t *testing.T) {
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()
-	handlerHash, err := deploymentmodel.RuntimeRegistrySHA256("domainry-handler-registry-v1", handlers.Descriptors())
+	extensionHash, err := deploymentmodel.RuntimeRegistrySHA256("domainry-project-extension-registry-v1", handlers.Descriptors())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestRuntimeReleaseIntegrityReadinessChecksIndependentFacts(t *testing.T) {
 	}
 	identity := deploymentmodel.RuntimeReleaseIdentity{
 		BuildMode: "packaged", DomainSDKContractVersion: "sdk-v1",
-		HandlerRegistrySHA256: handlerHash, ConnectorRegistrySHA256: connectorHash,
+		ProjectExtensionRegistrySHA256: extensionHash, ConnectorRegistrySHA256: connectorHash,
 	}
 	currentSchema := "schema-1"
 	service := NewRuntimeReleaseIntegrity(
@@ -57,7 +57,7 @@ func TestRuntimeReleaseIntegrityReadinessChecksIndependentFacts(t *testing.T) {
 		t.Fatalf("schema drift error=%v", err)
 	}
 	currentSchema = "schema-1"
-	service.identity.HandlerRegistrySHA256 = strings.Repeat("a", 64)
+	service.identity.ProjectExtensionRegistrySHA256 = strings.Repeat("a", 64)
 	if err := service.RegistryReadiness(t.Context()); !errors.Is(err, ErrRuntimeReleaseRegistryIntegrity) {
 		t.Fatalf("registry drift error=%v", err)
 	}

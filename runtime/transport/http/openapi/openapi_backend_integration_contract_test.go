@@ -20,7 +20,7 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 		{path: "/records/exports/jobs/{jobID}", method: "get", client: "downloadRecordExport"},
 		{path: "/records/{objectKey}/actions/{actionKey}/bulk", method: "post", client: "runBulkAction"},
 		{path: "/uploads", method: "post", client: "uploadFile"},
-		{path: "/uploads/{filename}", method: "get", client: "downloadUpload"},
+		{path: "/uploads/{fileID}", method: "get", client: "downloadUpload"},
 	} {
 		operation := openAPITestOperation(t, paths, item.path, item.method)
 		if operation["x-domainry-runtime-client-method"] != item.client {
@@ -56,7 +56,7 @@ func TestBackendIntegrationRoutesPublishTypedRuntimeClientContracts(t *testing.T
 	if uploadContent["multipart/form-data"] == nil || !openAPITestRequiredParameter(upload, "query", "object_key") || !openAPITestRequiredParameter(upload, "query", "field_key") {
 		t.Fatalf("multipart upload authorization contract=%#v", upload)
 	}
-	download := openAPITestOperation(t, paths, "/uploads/{filename}", "get")
+	download := openAPITestOperation(t, paths, "/uploads/{fileID}", "get")
 	if !openAPITestRequiredParameter(download, "query", "object_key") || !openAPITestRequiredParameter(download, "query", "field_key") || !openAPITestResponseContentType(download, "application/octet-stream") {
 		t.Fatalf("authorized file download contract=%#v", download)
 	}

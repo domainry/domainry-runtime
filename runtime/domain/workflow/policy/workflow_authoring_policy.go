@@ -62,10 +62,14 @@ func workflowAuthoringComponentCapabilities() []capabilitycontract.CapabilityAut
 		{
 			Key: "workflow.assignee_resolver", Status: "supported", Lifecycle: "workflow_node",
 			Parameters: []capabilitycontract.CapabilityAuthoringParameter{
-				{Key: "type", Type: "string", Required: true, Enum: []string{"initiator_manager", "manager", "manager_of", "record_field", "role", "users"}},
+				{Key: "type", Type: "string", Required: true, Enum: []string{"initiator_manager", "manager", "manager_chain", "manager_of", "project", "record_user_field", "relation_role", "relation_user", "role", "users", "variable_user"}},
 				{Key: "priority", Type: "integer", Minimum: workflowAuthoringFloatPointer(1)}, {Key: "user_ids", Type: "array", ItemSchema: "user_id", RequiredWhen: map[string]any{"type": "users"}},
-				{Key: "role_key", Type: "role_key", RequiredWhen: map[string]any{"type": "role"}}, {Key: "field", Type: "field_key", RequiredWhen: map[string]any{"type": "record_field"}},
+				{Key: "role_key", Type: "role_key", RequiredWhen: map[string]any{"type": "role"}}, {Key: "field", Type: "field_key", RequiredWhen: map[string]any{"type": []string{"record_user_field", "variable_user"}}},
 				{Key: "user_field", Type: "field_key", RequiredWhen: map[string]any{"type": []string{"manager", "manager_of"}}},
+				{Key: "resolver_key", Type: "assignee_resolver_key", RequiredWhen: map[string]any{"type": "project"}}, {Key: "config", Type: "object"},
+				{Key: "source", Type: "string", RequiredWhen: map[string]any{"type": "manager_chain"}, Enum: []string{"initiator", "record", "variable"}},
+				{Key: "relation_path", Type: "array", ItemSchema: "field_key", RequiredWhen: map[string]any{"type": []string{"relation_role", "relation_user"}}},
+				{Key: "role_field", Type: "field_key", RequiredWhen: map[string]any{"type": "relation_role"}}, {Key: "max_depth", Type: "integer", Minimum: workflowAuthoringFloatPointer(1)},
 			}, Requires: []string{"workflow.graph_v2"}, Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/workflow/policy/workflow_node_contract_policy.go", Symbol: "WorkflowAssigneeResolverIsValid"}},
 		},
 		{
@@ -103,7 +107,7 @@ func workflowAuthoringComponentCapabilities() []capabilitycontract.CapabilityAut
 				{Key: "node_type", Type: "string", Required: true, Enum: []string{"timer", "wait_duration", "wait_until"}},
 				{Key: "timer_key", Type: "string"}, {Key: "purpose", Type: "string"}, {Key: "at", Type: "string"},
 				{Key: "duration_seconds", Type: "integer", Minimum: workflowAuthoringFloatPointer(1)}, {Key: "source_field", Type: "field_key"},
-				{Key: "offset_seconds", Type: "integer"}, {Key: "timezone", Type: "string", Default: "UTC"}, {Key: "business_calendar_key", Type: "string"},
+				{Key: "offset_seconds", Type: "integer"}, {Key: "timezone", Type: "string"}, {Key: "business_calendar_key", Type: "business_calendar_key"},
 			}, Requires: []string{"workflow.graph_v2"}, ValidationEndpoint: workflowAuthoringFragmentValidationEndpoint,
 			Sources: []capabilitycontract.CapabilityAuthoringSource{{Kind: "validation", Path: "runtime/domain/workflow/policy/workflow_graph_policy.go", Symbol: "WorkflowTimerNodeContract"}},
 		},
@@ -166,6 +170,10 @@ func workflowComponentReferenceContracts(parameters []capabilitycontract.Capabil
 			resolver = "/discovery/references/action_key"
 		case "role_key":
 			resolver = "/discovery/references/role_key"
+		case "assignee_resolver_key":
+			resolver = "/discovery/references/assignee_resolver_key"
+		case "business_calendar_key":
+			resolver = "/discovery/references/business_calendar_key"
 		}
 		if resolver != "" {
 			result = append(result, capabilitycontract.CapabilityAuthoringReference{Kind: parameter.Type, InputJSONPointer: "/" + parameter.Key, ScopeFrom: scope, ResolverEndpoint: resolver})
@@ -181,7 +189,7 @@ func workflowComponentInputSchema(parameters []capabilitycontract.CapabilityAuth
 	for _, parameter := range parameters {
 		property := capabilitycontract.CapabilityAuthoringSchema{Minimum: parameter.Minimum, Maximum: parameter.Maximum, Default: parameter.Default}
 		switch parameter.Type {
-		case "string", "object_key", "field_key", "event_key", "role_key", "action_key", "node_id":
+		case "string", "object_key", "field_key", "event_key", "role_key", "assignee_resolver_key", "business_calendar_key", "action_key", "node_id":
 			property.Type = "string"
 		case "integer":
 			property.Type = "integer"
@@ -216,9 +224,10 @@ func workflowComponentSchemaDefinitions() map[string]capabilitycontract.Capabili
 	closed := false
 	stringItem := capabilitycontract.CapabilityAuthoringSchema{Type: "string"}
 	resolver := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"type"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
-		"type":     {Type: "string", Enum: []any{"initiator_manager", "manager", "manager_of", "record_field", "role", "users"}},
+		"type":     {Type: "string", Enum: []any{"initiator_manager", "manager", "manager_chain", "manager_of", "project", "record_user_field", "relation_role", "relation_user", "role", "users", "variable_user"}},
 		"priority": {Type: "integer", Minimum: workflowAuthoringFloatPointer(1)}, "user_ids": {Type: "array", Items: &stringItem, MinItems: workflowAuthoringIntPointer(1)},
-		"role_key": {Type: "string"}, "field": {Type: "string"}, "user_field": {Type: "string"},
+		"role_key": {Type: "string"}, "field": {Type: "string"}, "user_field": {Type: "string"}, "resolver_key": {Type: "string"}, "config": {Type: "object"},
+		"source": {Type: "string", Enum: []any{"initiator", "record", "variable"}}, "relation_path": {Type: "array", Items: &stringItem, MinItems: workflowAuthoringIntPointer(1)}, "role_field": {Type: "string"}, "max_depth": {Type: "integer", Minimum: workflowAuthoringFloatPointer(1)},
 	}}
 	conditionItem := capabilitycontract.CapabilityAuthoringSchema{Ref: "#/$defs/workflow_condition"}
 	condition := capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Required: []string{"type"}, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{

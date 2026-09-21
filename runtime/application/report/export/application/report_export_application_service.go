@@ -74,7 +74,9 @@ func NewReportExportApplicationService(dependencies ReportExportApplicationDepen
 			ReadPage: service.readReportExportPage, SourceVersion: service.readReportExportSourceVersion,
 			Watermark: service.reportExportWatermark, Clock: clock,
 		})
-		dependencies.DataExchangeProviders.RegisterExportProvider(reportexport.DataExchangeProviderKey, service.dataExchangeProvider)
+		if err := dependencies.DataExchangeProviders.RegisterExportProvider(reportexport.DataExchangeProviderKey, service.dataExchangeProvider); err != nil {
+			panic(fmt.Errorf("register Report Data Exchange provider: %w", err))
+		}
 	}
 	return service
 }

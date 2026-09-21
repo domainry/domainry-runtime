@@ -7,6 +7,6 @@ func ApplicationSchemaAuthoringDomain() capabilitycontract.CapabilityAuthoringDo
 }
 
 func ApplicationSchemaAuthoringCapabilities() []capabilitycontract.CapabilityAuthoringDefinition {
-	capabilities := []capabilitycontract.CapabilityAuthoringDefinition{ApplicationSchemaObjectAuthoringCapability(), ApplicationSchemaFieldAuthoringCapability(), ApplicationSchemaRelationAuthoringCapability()}
+	capabilities := []capabilitycontract.CapabilityAuthoringDefinition{ApplicationSchemaObjectAuthoringCapability(), ApplicationSchemaFieldAuthoringCapability(), ApplicationSchemaRelationAuthoringCapability(), ApplicationSchemaBusinessCalendarAuthoringCapability()}
 	return append(capabilities, ApplicationSchemaDictionaryAuthoringCapabilities()...)
 }

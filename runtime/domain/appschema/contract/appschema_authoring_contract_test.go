@@ -8,7 +8,7 @@ import (
 
 func TestMetadataAuthoringCapabilitiesAreOwnerOwnedAndComplete(t *testing.T) {
 	capabilities := ApplicationSchemaAuthoringCapabilities()
-	wantKeys := []string{"schema.object", "schema.field", "schema.relation", "schema.dictionary"}
+	wantKeys := []string{"schema.object", "schema.field", "schema.relation", "schema.business_calendar", "schema.dictionary"}
 	if len(capabilities) != len(wantKeys) {
 		t.Fatalf("metadata authoring capability count=%d want=%d", len(capabilities), len(wantKeys))
 	}
@@ -28,7 +28,7 @@ func TestMetadataAuthoringCapabilitiesAreOwnerOwnedAndComplete(t *testing.T) {
 			}
 		}
 	}
-	if fieldTypes := ApplicationSchemaAuthoringFieldTypes(); !reflect.DeepEqual(fieldTypes, []string{"boolean", "currency", "date", "datetime", "email", "integer", "long_text", "number", "percent", "phone", "relation", "select", "text", "url", "user"}) {
+	if fieldTypes := ApplicationSchemaAuthoringFieldTypes(); !reflect.DeepEqual(fieldTypes, []string{"boolean", "currency", "date", "datetime", "email", "file", "file_list", "integer", "json", "long_text", "multi_select", "number", "percent", "phone", "relation", "select", "text", "url", "user"}) {
 		t.Fatalf("metadata field types=%v", fieldTypes)
 	}
 }
@@ -53,6 +53,26 @@ func TestMetadataObjectAuthoringPublishesConsumedUXContract(t *testing.T) {
 	}
 }
 
+func TestMetadataFieldAuthoringPublishesStructuredFieldContract(t *testing.T) {
+	capability := ApplicationSchemaFieldAuthoringCapability()
+	payload := capability.InputSchema.Properties["payload"]
+	types := payload.Properties["type"].Enum
+	if !reflect.DeepEqual(types, []any{"boolean", "currency", "date", "datetime", "email", "file", "file_list", "integer", "json", "long_text", "multi_select", "number", "percent", "phone", "relation", "select", "text", "url", "user"}) {
+		t.Fatalf("types=%#v", types)
+	}
+	config := payload.Properties["config"].Properties
+	if config["max_items"].Maximum == nil || *config["max_items"].Maximum != 1000 || !reflect.DeepEqual(config["json_shape"].Enum, []any{"array", "object"}) || config["max_json_bytes"].Maximum == nil || *config["max_json_bytes"].Maximum != 1<<20 {
+		t.Fatalf("structured config=%#v", config)
+	}
+	options := payload.Properties["options"]
+	if options.Type != "array" || options.Items == nil || !reflect.DeepEqual(options.Items.Required, []string{"value", "label"}) {
+		t.Fatalf("options=%#v", options)
+	}
+	if payload.Properties["validation"].Properties["options"].Type != "array" {
+		t.Fatalf("validation schema=%#v", payload.Properties["validation"])
+	}
+}
+
 func TestMetadataObjectAuthoringPublishesWriteOwnershipChoice(t *testing.T) {
 	capability := ApplicationSchemaObjectAuthoringCapability()
 	payload := capability.InputSchema.Properties["payload"]
@@ -72,6 +92,7 @@ func TestMetadataRouteOwnedResourceKeysAreNotModelRequired(t *testing.T) {
 		{name: "dictionary", required: ApplicationSchemaDictionaryAuthoringCapabilities()[0].InputSchema.Properties["payload"].Required},
 		{name: "field", required: ApplicationSchemaFieldAuthoringCapability().InputSchema.Properties["payload"].Required},
 		{name: "relation", required: ApplicationSchemaRelationAuthoringCapability().InputSchema.Properties["payload"].Required},
+		{name: "business_calendar", required: ApplicationSchemaBusinessCalendarAuthoringCapability().InputSchema.Properties["payload"].Required},
 	} {
 		for _, field := range capability.required {
 			if field == "key" {

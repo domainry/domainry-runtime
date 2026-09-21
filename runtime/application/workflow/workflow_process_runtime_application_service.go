@@ -283,11 +283,11 @@ func (engine *WorkflowProcessEngine) RunWithContext(ctx context.Context, process
 	return engine.runWithContext(ctx, process, queue, waiting, principal)
 }
 
-func (engine *WorkflowProcessEngine) ResolveRecipients(ctx context.Context, process workflowmodel.WorkflowProcessInstance, resolvers []definitionmodel.WorkflowAssigneeResolver, principal principalmodel.Principal) ([]string, error) {
+func (engine *WorkflowProcessEngine) ResolveAssignees(ctx context.Context, process workflowmodel.WorkflowProcessInstance, nodeID string, resolvers []definitionmodel.WorkflowAssigneeResolver, principal principalmodel.Principal) ([]ResolvedAssignee, error) {
 	if err := workflowAuthorizeQuery(principal); err != nil {
 		return nil, err
 	}
-	return engine.resolveWorkflowRecipients(ctx, process, resolvers, principal)
+	return engine.resolveWorkflowAssignees(ctx, process, nodeID, resolvers, principal)
 }
 
 func WorkflowDefinitionHash(workflow definitionmodel.WorkflowSchema) string {

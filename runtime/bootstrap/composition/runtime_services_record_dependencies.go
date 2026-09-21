@@ -54,6 +54,7 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 		RecordMutationExecution: s.RecordMutationExecutionRuntime,
 		DataExchange:            s.dataExchange,
 		DataExchangeProviders:   s.dataExchangeProviders,
+		ValidateFileReferences:  s.validateFileReferences,
 		ValidateExportAssurance: func(ctx context.Context, object definitionmodel.ObjectSchema, principal principalmodel.Principal, intent map[string]any, token string) (map[string]string, error) {
 			policy := object.ExportAssurancePolicy
 			if policy == nil || len(policy.RequiredMethods) == 0 {
@@ -131,7 +132,7 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 }
 
 func initializeIntegrationAndBusinessSystem(ctx context.Context, s *runtimeAssembly, manifest manifestmodel.ManifestSchema, deps RuntimeServicesDependencies, queryPolicy recordQueryPolicyAdapter) {
-	s.actionService = assembleActionApplication(s, s, queryPolicy, s.applicationSchemaService, deps.BusinessHandlers, func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, metadata map[string]any) {
+	s.actionService = assembleActionApplication(s, s, queryPolicy, s.applicationSchemaService, deps.ProjectExtensions, func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, metadata map[string]any) {
 		s.auditApplicationService.AppendWithMetadata(ctx, event, objectKey, recordID, principal, summary, nil, nil, metadata)
 	})
 	s.runtimeStatusService = deployment.NewDeploymentRuntimeStatusApplicationServiceWithWorker(s, s.schedulerDefinitionSource, deps.RuntimeStatus, deps.Records, s.auditApplicationService, deps.WorkflowWorker, nil, s.workerDependencies)

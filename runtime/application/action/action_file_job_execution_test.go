@@ -3,6 +3,7 @@ package action
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -111,5 +112,30 @@ func TestRunBusinessJobRequiresGrantAndBusinessMutation(t *testing.T) {
 	commits, err := granted.canonicalCommits()
 	if err != nil || len(commits) != 2 || commits[1].Record.ID != "job-1" {
 		t.Fatalf("commits=%+v err=%v", commits, err)
+	}
+}
+
+func TestRunBusinessJobRejectsInvalidOrUnboundedRequestsBeforeStaging(t *testing.T) {
+	stageCalls := 0
+	execution := &businessActionExecution{
+		dependencies: BusinessHandlerExecutionDependencies{StageBusinessJob: func(context.Context, string, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
+			stageCalls++
+			return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, nil
+		}},
+		workspace: runtimeext.Workspace{ID: "workspace-a"}, unitOfWork: newActionTestUnitOfWork(), fileGrants: []string{runtimeext.FileOperationRunJob},
+	}
+	for _, request := range []runtimeext.BusinessJobRequest{
+		{JobKey: "job", ObjectKey: "object", RecordID: "record", ActionKey: "action", Payload: json.RawMessage(`[]`)},
+		{JobKey: "job", ObjectKey: "object", RecordID: "record", ActionKey: "action", Payload: json.RawMessage(`null`)},
+		{JobKey: "job", ObjectKey: "object", RecordID: "record", ActionKey: "action", Payload: json.RawMessage(`{"valid":true}`), MaxAttempts: 101},
+		{JobKey: "job", ObjectKey: "object", RecordID: "record", ActionKey: "action", Payload: json.RawMessage(`{"valid":true}`), RetryDelaySeconds: 10, RetryMaxDelaySeconds: 5},
+		{JobKey: "job", ObjectKey: "object", RecordID: "record", ActionKey: "action", Payload: json.RawMessage(`{"value":"` + strings.Repeat("x", runtimeext.MaximumBusinessJobPayloadBytes) + `"}`)},
+	} {
+		if _, err := execution.RunBusinessJob(t.Context(), request); apperror.CodeOf(err) != "backend.business_job.request_invalid" {
+			t.Fatalf("request=%+v code=%q err=%v", request, apperror.CodeOf(err), err)
+		}
+	}
+	if stageCalls != 0 {
+		t.Fatalf("invalid requests reached staging: calls=%d", stageCalls)
 	}
 }

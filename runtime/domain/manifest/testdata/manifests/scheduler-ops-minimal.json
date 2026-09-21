@@ -44,7 +44,6 @@
       "key": "scheduler_ops_probe",
       "name": "Scheduler Operations Probe",
       "status": "disabled",
-      "trigger_type": "scheduled",
       "schedule_type": "interval",
       "interval_seconds": 3600,
       "timezone": "UTC",
@@ -53,7 +52,6 @@
       "missed_window_policy": "skip",
       "max_attempts": 3,
       "timeout_seconds": 300,
-      "retry_backoff": "fixed",
       "retry_delay_seconds": 60,
       "retry_max_delay_seconds": 3600
     }

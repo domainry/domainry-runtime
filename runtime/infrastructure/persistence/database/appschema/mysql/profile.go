@@ -29,8 +29,10 @@ func (ApplicationSchemaStorageProfile) FieldColumnType(field definitionmodel.Fie
 		return "DOUBLE"
 	case "boolean":
 		return "BOOLEAN"
-	case "json":
+	case "json", "file", "file_list":
 		return "JSON"
+	case "multi_select":
+		return "TEXT"
 	default:
 		if strings.TrimSpace(field.Type) != "long_text" && indexed {
 			return fmt.Sprintf("VARCHAR(%d)", appschemastorage.IndexedTextLength(field))

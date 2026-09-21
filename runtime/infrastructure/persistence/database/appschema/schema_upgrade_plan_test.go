@@ -102,8 +102,8 @@ func TestUpgradePlanClassifiesEveryStepKind(t *testing.T) {
 	if _, found := steps["create_unique_index:customer.email"]; found {
 		t.Fatalf("unique index on a new column must not be probed: %+v", steps)
 	}
-	level := expect("alter_column:customer.level", appschemamodel.ApplicationSchemaUpgradeIncompatible, true, "backend.metadata.physical_schema_incompatible")
-	if level.Params["object_key"] != "customer" || level.Params["column_key"] != "level" || level.Params["expected_type"] != "INTEGER" || level.Params["actual_type"] != "TEXT" {
+	level := expect("change_field_type:customer.level", appschemamodel.ApplicationSchemaUpgradeIncompatible, true, appschemamodel.ApplicationSchemaUpgradeFieldTypeChangeCode)
+	if level.Params["object"] != "customer" || level.Params["field"] != "level" || level.Params["from_type"] != "text" || level.Params["to_type"] != "integer" {
 		t.Fatalf("incompatible step=%+v", level)
 	}
 	legacy := expect("retain_column:customer.legacy", appschemamodel.ApplicationSchemaUpgradeRetained, false, "")
@@ -130,6 +130,15 @@ func TestUpgradePlanClassifiesEveryStepKind(t *testing.T) {
 	}
 	if steps = upgradePlanStepsByOperation(plan); steps["add_column:customer.segment"].Classification != appschemamodel.ApplicationSchemaUpgradeCompatible || steps["create_unique_index:customer.code"].Params["duplicates"] != "0" {
 		t.Fatalf("empty table steps=%+v", steps)
+	}
+}
+
+func TestFieldTypeChangeIsBlockedEvenWhenPhysicalTypesMatch(t *testing.T) {
+	previous := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "item", Fields: []definitionmodel.FieldSchema{{Key: "payload", Type: "text"}}}}}
+	next := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "item", Fields: []definitionmodel.FieldSchema{{Key: "payload", Type: "json"}}}}}
+	steps, changed := fieldTypeChangeUpgradeSteps(previous, next)
+	if len(steps) != 1 || !steps[0].Blocking || steps[0].Operation != "change_field_type" || steps[0].ErrorCode != appschemamodel.ApplicationSchemaUpgradeFieldTypeChangeCode || !changed["item\x00payload"] {
+		t.Fatalf("steps=%#v changed=%#v", steps, changed)
 	}
 }
 

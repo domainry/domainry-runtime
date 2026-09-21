@@ -60,6 +60,11 @@ func (s ApplicationSchemaStore) syncMetadataModuleDefinitions(ctx context.Contex
 			return err
 		}
 	}
+	for _, calendar := range manifest.BusinessCalendars {
+		if err := appendDefinition("business_calendar", calendar.Key, "", calendar.Name, calendar); err != nil {
+			return err
+		}
+	}
 	for _, rule := range manifest.AutomationRules {
 		if err := appendDefinition("automation_rule", rule.Key, rule.ObjectKey, rule.Name, rule); err != nil {
 			return err

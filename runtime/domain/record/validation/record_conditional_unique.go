@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 const ConditionalUniqueValidationType = "conditional_unique"
@@ -42,6 +43,9 @@ func RecordConditionalUniquePolicies(object definitionmodel.ObjectSchema) ([]Rec
 			if field == "" || fields[field].Key == "" || strings.TrimSpace(fields[field].DisabledAt) != "" {
 				return nil, fmt.Errorf("conditional unique %s.%s has invalid field %q", object.Key, policy.Key, raw)
 			}
+			if recordmodel.RecordIsStructuredFieldType(fields[field].Type) {
+				return nil, fmt.Errorf("conditional unique %s.%s cannot index structured field %q", object.Key, policy.Key, field)
+			}
 			if seenFields[field] {
 				return nil, fmt.Errorf("conditional unique %s.%s repeats field %q", object.Key, policy.Key, field)
 			}
@@ -54,6 +58,9 @@ func RecordConditionalUniquePolicies(object definitionmodel.ObjectSchema) ([]Rec
 		condition, ok := fields[policy.ConditionField]
 		if policy.ConditionField == "" || !ok || strings.TrimSpace(condition.DisabledAt) != "" {
 			return nil, fmt.Errorf("conditional unique %s.%s has invalid condition field %q", object.Key, policy.Key, policy.ConditionField)
+		}
+		if recordmodel.RecordIsStructuredFieldType(condition.Type) {
+			return nil, fmt.Errorf("conditional unique %s.%s cannot index structured condition field %q", object.Key, policy.Key, policy.ConditionField)
 		}
 		seenValues := map[string]bool{}
 		for _, value := range recordConfigStrings(rule.Config["condition_values"]) {

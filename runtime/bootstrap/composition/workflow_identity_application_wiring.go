@@ -10,6 +10,7 @@ import (
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -50,6 +51,7 @@ func (p runtimeWorkflowSchemaProvider) ConnectorAdapterExists(ctx context.Contex
 
 type runtimeWorkflowRecordTimers struct {
 	recordTimers *recordtimerapplication.RecordTimerApplicationService
+	calendars    func() []businesscalendarmodel.BusinessCalendarSchema
 }
 
 func (s runtimeWorkflowRecordTimers) ScheduleWorkflowWaitTimer(ctx context.Context, request workflowapplication.WorkflowWaitTimerRequest) (string, error) {
@@ -75,6 +77,8 @@ func (s runtimeWorkflowRecordTimers) ScheduleWorkflowWaitTimer(ctx context.Conte
 		schedule.ScheduleMode = "business_calendar"
 		if strings.TrimSpace(contract.At) != "" {
 			schedule.DueAt, _ = time.Parse(time.RFC3339Nano, strings.TrimSpace(contract.At))
+		} else if schedule.SourceField == "" {
+			schedule.DueAt = request.CreatedAt
 		}
 	case schedule.SourceField != "":
 		schedule.ScheduleMode = "relative_field"
@@ -86,7 +90,19 @@ func (s runtimeWorkflowRecordTimers) ScheduleWorkflowWaitTimer(ctx context.Conte
 	if nested, ok := request.Variables["after"].(map[string]any); ok {
 		sourceData = nested
 	}
-	timer, err := s.recordTimers.Schedule(ctx, request.WorkspaceID, schedule, recordmodel.Record{ID: request.RecordID, Data: sourceData}, recordtimerapplication.StandardRecordTimerBusinessCalendar{}, request.CreatedAt, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, fmt.Sprintf("schedule workflow timer %s", request.NodeID)))
+	var calendar recordtimerapplication.RecordTimerBusinessCalendar
+	if schedule.ScheduleMode == "business_calendar" {
+		definitions := []businesscalendarmodel.BusinessCalendarSchema{}
+		if s.calendars != nil {
+			definitions = s.calendars()
+		}
+		catalog, catalogErr := recordtimerapplication.NewRecordTimerBusinessCalendarCatalog(definitions)
+		if catalogErr != nil {
+			return "", catalogErr
+		}
+		calendar = catalog
+	}
+	timer, err := s.recordTimers.Schedule(ctx, request.WorkspaceID, schedule, recordmodel.Record{ID: request.RecordID, Data: sourceData}, calendar, request.CreatedAt, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, fmt.Sprintf("schedule workflow timer %s", request.NodeID)))
 	if err != nil {
 		return "", err
 	}

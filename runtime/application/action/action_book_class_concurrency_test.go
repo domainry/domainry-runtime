@@ -144,8 +144,8 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 		},
 		connectorGrant,
 	)}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()

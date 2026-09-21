@@ -6,8 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"syscall"
 	"testing"
 
@@ -25,15 +23,6 @@ func (reader uploadErrorReader) Read([]byte) (int, error) { return 0, reader.err
 type uploadErrorWriter struct{ err error }
 
 func (writer uploadErrorWriter) Write([]byte) (int, error) { return 0, writer.err }
-
-type uploadTemporaryFileStub struct {
-	bytes.Buffer
-	name     string
-	closeErr error
-}
-
-func (file *uploadTemporaryFileStub) Name() string { return file.name }
-func (file *uploadTemporaryFileStub) Close() error { return file.closeErr }
 
 func TestUploadRequestLimitPrefixAndWriterFailures(t *testing.T) {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
@@ -66,11 +55,7 @@ func TestUploadRequestLimitPrefixAndWriterFailures(t *testing.T) {
 	}
 }
 
-func TestUploadStorageFailureMappingAtEveryFilesystemStage(t *testing.T) {
-	originalMkdirAll, originalCreateTemp, originalRename, originalAbs := uploadMkdirAll, uploadCreateTemp, uploadRename, uploadAbs
-	t.Cleanup(func() {
-		uploadMkdirAll, uploadCreateTemp, uploadRename, uploadAbs = originalMkdirAll, originalCreateTemp, originalRename, originalAbs
-	})
+func TestUploadStorageFailureMappingAtAdapterStages(t *testing.T) {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
 
 	request := func(t *testing.T, handler *UploadsHandler) *httptest.ResponseRecorder {
@@ -86,9 +71,21 @@ func TestUploadStorageFailureMappingAtEveryFilesystemStage(t *testing.T) {
 		}
 	}
 
-	uploadMkdirAll = func(string, os.FileMode) error { return syscall.ENOSPC }
-	assertError(t, request(t, uploadTestHandler(t, principal)), http.StatusInsufficientStorage, "backend.upload.storage_exhausted")
-	uploadMkdirAll = originalMkdirAll
+	for _, test := range []struct {
+		name   string
+		err    error
+		status int
+		code   string
+	}{
+		{name: "stage exhausted", err: syscall.EDQUOT, status: http.StatusInsufficientStorage, code: "backend.upload.storage_exhausted"},
+		{name: "stage read failed", err: errors.New("stage failed"), status: http.StatusBadRequest, code: "backend.upload.read_failed"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			handler := uploadTestHandler(t, principal)
+			handler.blobs.(*uploadBlobStoreStub).stageErr = test.err
+			assertError(t, request(t, handler), test.status, test.code)
+		})
+	}
 
 	for _, test := range []struct {
 		name   string
@@ -96,57 +93,22 @@ func TestUploadStorageFailureMappingAtEveryFilesystemStage(t *testing.T) {
 		status int
 		code   string
 	}{
-		{name: "create temp exhausted", err: syscall.EDQUOT, status: http.StatusInsufficientStorage, code: "backend.upload.storage_exhausted"},
-		{name: "create temp failed", err: errors.New("create failed"), status: http.StatusInternalServerError, code: "backend.upload.save_failed"},
+		{name: "commit exhausted", err: syscall.ENOSPC, status: http.StatusInsufficientStorage, code: "backend.upload.storage_exhausted"},
+		{name: "commit failed", err: errors.New("commit failed"), status: http.StatusInternalServerError, code: "backend.upload.save_failed"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			uploadCreateTemp = func(string, string) (uploadTemporaryFile, error) { return nil, test.err }
-			assertError(t, request(t, uploadTestHandler(t, principal)), test.status, test.code)
+			handler := uploadTestHandler(t, principal)
+			handler.blobs.(*uploadBlobStoreStub).commitErr = test.err
+			assertError(t, request(t, handler), test.status, test.code)
 		})
 	}
-	uploadCreateTemp = originalCreateTemp
 
-	for _, test := range []struct {
-		name   string
-		err    error
-		status int
-		code   string
-	}{
-		{name: "close exhausted", err: syscall.ENOSPC, status: http.StatusInsufficientStorage, code: "backend.upload.storage_exhausted"},
-		{name: "close failed", err: errors.New("close failed"), status: http.StatusInternalServerError, code: "backend.upload.save_failed"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			uploadCreateTemp = func(dir, _ string) (uploadTemporaryFile, error) {
-				return &uploadTemporaryFileStub{name: filepath.Join(dir, "temporary"), closeErr: test.err}, nil
-			}
-			assertError(t, request(t, uploadTestHandler(t, principal)), test.status, test.code)
-		})
-	}
-	uploadCreateTemp = originalCreateTemp
-
-	uploadRename = func(string, string) error { return syscall.EDQUOT }
-	assertError(t, request(t, uploadTestHandler(t, principal)), http.StatusInsufficientStorage, "backend.upload.storage_exhausted")
-	uploadRename = originalRename
-
-	uploadAbs = func(string) (string, error) { return "", errors.New("absolute path failed") }
-	assertError(t, request(t, uploadTestHandler(t, principal)), http.StatusForbidden, "backend.workspace_scope_required")
-	downloadHandler := uploadTestHandler(t, accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("asset.read")))
-	downloadRequest := httptest.NewRequest(http.MethodGet, "/uploads/file.txt?object_key=asset&field_key=file_url&record_id=file.txt", nil)
-	downloadRequest.SetPathValue("filename", "file.txt")
-	downloadResponse := httptest.NewRecorder()
-	downloadHandler.serveUploadedFile(downloadResponse, downloadRequest)
-	assertError(t, downloadResponse, http.StatusForbidden, "backend.workspace_scope_required")
+	handler := uploadTestHandler(t, principal)
+	handler.blobs = nil
+	assertError(t, request(t, handler), http.StatusServiceUnavailable, "backend.upload.storage_unavailable")
 }
 
-func TestWorkspaceUploadDirValidationAndStorageErrorClassification(t *testing.T) {
-	handler := uploadTestHandler(t, principalmodel.Principal{})
-	if _, err := handler.workspaceUploadDir(" "); err == nil {
-		t.Fatal("blank workspace was accepted")
-	}
-	handler.uploadDir = " "
-	if _, err := handler.workspaceUploadDir("workspace-a"); err == nil {
-		t.Fatal("blank upload root was accepted")
-	}
+func TestUploadStorageErrorClassification(t *testing.T) {
 	if uploadStorageExhausted(errors.New("ordinary failure")) {
 		t.Fatal("ordinary failure classified as storage exhaustion")
 	}

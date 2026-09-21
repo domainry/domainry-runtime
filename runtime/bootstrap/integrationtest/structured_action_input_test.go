@@ -111,10 +111,9 @@ func (h *structuredActionHandler) Invoke(ctx context.Context, execution runtimee
 
 func structuredActionManifest(t *testing.T, directory string) string {
 	t.Helper()
-	contract := func(actionKey, suffix string) map[string]any {
+	contract := func(_ string, suffix string) map[string]any {
 		return map[string]any{
 			"input_type": structuredInputTypeBase + suffix + "Input", "output_type": structuredInputTypeBase + suffix + "Output",
-			"input_contract_sha256": sourceOwnedFixtureContractHash(actionKey + ":input"), "output_contract_sha256": sourceOwnedFixtureContractHash(actionKey + ":output"),
 		}
 	}
 	register := map[string]any{
@@ -203,7 +202,7 @@ func newStructuredActionRuntime(t *testing.T, cfg config.Config) (*bootstrap.Run
 	}
 	t.Cleanup(func() { _ = binding.Close(context.Background()) })
 	handler := &structuredActionHandler{}
-	registry := runtimeext.NewBusinessHandlerRegistry()
+	registry := runtimeext.NewProjectExtensionRegistry()
 	for _, spec := range []struct {
 		key, suffix  string
 		capabilities []runtimeext.ActionObjectCapability
@@ -213,15 +212,14 @@ func newStructuredActionRuntime(t *testing.T, cfg config.Config) (*bootstrap.Run
 	} {
 		descriptor := runtimeext.HandlerDescriptor{
 			ActionKey: spec.key, InputType: structuredInputTypeBase + spec.suffix + "Input", OutputType: structuredInputTypeBase + spec.suffix + "Output",
-			InputContractSHA256: sourceOwnedFixtureContractHash(spec.key + ":input"), OutputContractSHA256: sourceOwnedFixtureContractHash(spec.key + ":output"),
 			HandlerRevision: "structured-action-fixture-v1", ObjectCapabilities: spec.capabilities,
 		}
-		if err := registry.Register(&structuredActionBoundHandler{shared: handler, descriptor: descriptor}); err != nil {
+		if err := registry.RegisterBusinessHandler(&structuredActionBoundHandler{shared: handler, descriptor: descriptor}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	registry.Freeze()
-	runtime := bootstrap.NewWithBusinessHandlersAndScheduler(t.Context(), cfg, registry, binding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory(), integrationAgentFactory())
+	runtime := bootstrap.NewWithProjectExtensionsAndScheduler(t.Context(), cfg, registry, binding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory(), integrationAgentFactory())
 	t.Cleanup(func() { _ = runtime.CloseContext(context.Background()) })
 	return runtime, handler
 }

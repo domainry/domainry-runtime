@@ -22,10 +22,11 @@ import (
 // this state, so a replaced or disabled workflow cannot keep using an old
 // workload binding after a metadata reload.
 type WorkflowWorkloadReleaseState struct {
-	mu          sync.RWMutex
-	configured  bool
-	application identitysdk.ApplicationScope
-	bindings    map[string]identitysdk.WorkflowWorkloadBinding
+	mu           sync.RWMutex
+	configured   bool
+	application  identitysdk.ApplicationScope
+	bindings     map[string]identitysdk.WorkflowWorkloadBinding
+	supplemental map[string]identitysdk.WorkflowWorkloadBindingSpec
 }
 
 func (s *WorkflowWorkloadReleaseState) Configured() bool {
@@ -47,7 +48,7 @@ func (s *WorkflowWorkloadReleaseState) configure(application identitysdk.Applica
 }
 
 func NewWorkflowWorkloadReleaseState() *WorkflowWorkloadReleaseState {
-	return &WorkflowWorkloadReleaseState{bindings: map[string]identitysdk.WorkflowWorkloadBinding{}}
+	return &WorkflowWorkloadReleaseState{bindings: map[string]identitysdk.WorkflowWorkloadBinding{}, supplemental: map[string]identitysdk.WorkflowWorkloadBindingSpec{}}
 }
 
 func (s *WorkflowWorkloadReleaseState) Application() identitysdk.ApplicationScope {
@@ -73,6 +74,55 @@ func (s *WorkflowWorkloadReleaseState) Resolution(workflow definitionmodel.Workf
 		WorkflowKey: binding.WorkflowKey, DefinitionVersionID: binding.DefinitionVersionID, DefinitionVersion: binding.DefinitionVersion,
 		ReleaseID: binding.ReleaseID, ReleaseDigest: binding.ReleaseDigest,
 	}, true
+}
+
+func (s *WorkflowWorkloadReleaseState) managedBinding(workloadKey, definitionVersionID string, definitionVersion int) (identitysdk.WorkflowWorkloadBinding, bool) {
+	if s == nil {
+		return identitysdk.WorkflowWorkloadBinding{}, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	binding, found := s.bindings[strings.TrimSpace(workloadKey)]
+	if !found || binding.Status != identitysdk.WorkflowWorkloadBindingActive || binding.DefinitionVersionID != strings.TrimSpace(definitionVersionID) || binding.DefinitionVersion != definitionVersion {
+		return identitysdk.WorkflowWorkloadBinding{}, false
+	}
+	return binding, true
+}
+
+func (s *WorkflowWorkloadReleaseState) supplementalBindings() []identitysdk.WorkflowWorkloadBindingSpec {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]identitysdk.WorkflowWorkloadBindingSpec, 0, len(s.supplemental))
+	for _, binding := range s.supplemental {
+		binding.ActionKeys = append([]string(nil), binding.ActionKeys...)
+		result = append(result, binding)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].WorkflowKey < result[j].WorkflowKey })
+	return result
+}
+
+func (s *WorkflowWorkloadReleaseState) replaceSupplementalBindings(bindings []identitysdk.WorkflowWorkloadBindingSpec) []identitysdk.WorkflowWorkloadBindingSpec {
+	if s == nil {
+		return nil
+	}
+	next := make(map[string]identitysdk.WorkflowWorkloadBindingSpec, len(bindings))
+	for _, binding := range bindings {
+		binding.ActionKeys = append([]string(nil), binding.ActionKeys...)
+		next[strings.TrimSpace(binding.WorkflowKey)] = binding
+	}
+	s.mu.Lock()
+	previous := make([]identitysdk.WorkflowWorkloadBindingSpec, 0, len(s.supplemental))
+	for _, binding := range s.supplemental {
+		binding.ActionKeys = append([]string(nil), binding.ActionKeys...)
+		previous = append(previous, binding)
+	}
+	s.supplemental = next
+	s.mu.Unlock()
+	sort.Slice(previous, func(i, j int) bool { return previous[i].WorkflowKey < previous[j].WorkflowKey })
+	return previous
 }
 
 func (s *WorkflowWorkloadReleaseState) store(application identitysdk.ApplicationScope, bindings []identitysdk.WorkflowWorkloadBinding) {
@@ -159,7 +209,7 @@ func workflowWorkloadActionKeys(workflow definitionmodel.WorkflowSchema) []strin
 	return result
 }
 
-func workflowWorkloadReleaseRequest(application identitysdk.ApplicationScope, workflows map[string]definitionmodel.WorkflowSchema) (identitysdk.ApplyWorkflowWorkloadBindingsRequest, error) {
+func workflowWorkloadReleaseRequest(application identitysdk.ApplicationScope, workflows map[string]definitionmodel.WorkflowSchema, supplemental ...[]identitysdk.WorkflowWorkloadBindingSpec) (identitysdk.ApplyWorkflowWorkloadBindingsRequest, error) {
 	request := identitysdk.ApplyWorkflowWorkloadBindingsRequest{Application: application}
 	for _, workflow := range workflows {
 		roleKey := workflowpolicy.WorkflowRunAs(workflow)
@@ -175,6 +225,15 @@ func workflowWorkloadReleaseRequest(application identitysdk.ApplicationScope, wo
 			DefinitionVersion: workflowpolicy.WorkflowPublishedVersion(workflow), RoleKey: roleKey, ActionKeys: actionKeys,
 		})
 	}
+	if len(supplemental) > 0 {
+		for _, binding := range supplemental[0] {
+			binding.WorkflowKey = strings.TrimSpace(binding.WorkflowKey)
+			binding.DefinitionVersionID = strings.TrimSpace(binding.DefinitionVersionID)
+			binding.RoleKey = strings.TrimSpace(binding.RoleKey)
+			binding.ActionKeys = append([]string(nil), binding.ActionKeys...)
+			request.Bindings = append(request.Bindings, binding)
+		}
+	}
 	sort.Slice(request.Bindings, func(i, j int) bool { return request.Bindings[i].WorkflowKey < request.Bindings[j].WorkflowKey })
 	digest, err := identitysdk.WorkflowWorkloadReleaseDigest(request.Bindings)
 	if err != nil {
@@ -186,13 +245,16 @@ func workflowWorkloadReleaseRequest(application identitysdk.ApplicationScope, wo
 }
 
 func (s *WorkflowApplicationService) synchronizeWorkflowWorkloadBindings(ctx context.Context, workflows map[string]definitionmodel.WorkflowSchema) error {
-	request, err := workflowWorkloadReleaseRequest(s.workloadApplication, workflows)
+	request, err := workflowWorkloadReleaseRequest(s.workloadApplication, workflows, s.workloadReleases.supplementalBindings())
 	if err != nil {
 		return err
 	}
 	if len(request.Bindings) == 0 && s.workloads == nil {
 		s.workloadReleases.store(s.workloadApplication, nil)
 		return nil
+	}
+	if err := request.Validate(); err != nil {
+		return fmt.Errorf("validate workload release: %w", err)
 	}
 	if s.workloads == nil {
 		return apperror.New(apperror.KindUnavailable, "backend.workflow.workload_identity_unavailable", nil, nil)
@@ -237,6 +299,52 @@ func (s *WorkflowApplicationService) synchronizeWorkflowWorkloadBindings(ctx con
 	}
 	s.workloadReleases.store(request.Application, result.Bindings)
 	return nil
+}
+
+// ManagedWorkloadBinding declares a non-human Runtime execution identity that
+// shares Identity's atomic workload release with Workflow bindings. Keys must
+// be owner-qualified (for example, scheduler:daily-settlement).
+type ManagedWorkloadBinding struct {
+	WorkloadKey         string
+	DefinitionVersionID string
+	DefinitionVersion   int
+	RoleKey             string
+	ActionKeys          []string
+}
+
+// ReplaceManagedWorkloadBindings replaces the declarations consumed by the
+// next workflow-definition synchronization and returns a restore closure. It
+// does not publish independently, so Workflow and other Runtime workloads
+// cannot overwrite each other's complete Identity release.
+func (s *WorkflowApplicationService) ReplaceManagedWorkloadBindings(bindings []ManagedWorkloadBinding) (func(), error) {
+	if s == nil || s.workloadReleases == nil {
+		return nil, apperror.New(apperror.KindUnavailable, "backend.workload.release_state_unavailable", nil, nil)
+	}
+	specs := make([]identitysdk.WorkflowWorkloadBindingSpec, 0, len(bindings))
+	seen := make(map[string]struct{}, len(bindings))
+	for _, binding := range bindings {
+		key := strings.TrimSpace(binding.WorkloadKey)
+		definitionVersionID := strings.TrimSpace(binding.DefinitionVersionID)
+		roleKey := strings.TrimSpace(binding.RoleKey)
+		if key == "" || !strings.Contains(key, ":") || definitionVersionID == "" || binding.DefinitionVersion <= 0 || roleKey == "" || len(binding.ActionKeys) == 0 {
+			return nil, apperror.New(apperror.KindBadRequest, "backend.workload.binding_invalid", nil, map[string]string{"workload": key})
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return nil, apperror.New(apperror.KindBadRequest, "backend.workload.binding_duplicate", nil, map[string]string{"workload": key})
+		}
+		seen[key] = struct{}{}
+		actions := append([]string(nil), binding.ActionKeys...)
+		for index := range actions {
+			actions[index] = strings.TrimSpace(actions[index])
+			if actions[index] == "" {
+				return nil, apperror.New(apperror.KindBadRequest, "backend.workload.binding_invalid", nil, map[string]string{"workload": key})
+			}
+		}
+		sort.Strings(actions)
+		specs = append(specs, identitysdk.WorkflowWorkloadBindingSpec{WorkflowKey: key, DefinitionVersionID: definitionVersionID, DefinitionVersion: binding.DefinitionVersion, RoleKey: roleKey, ActionKeys: actions})
+	}
+	previous := s.workloadReleases.replaceSupplementalBindings(specs)
+	return func() { s.workloadReleases.replaceSupplementalBindings(previous) }, nil
 }
 
 func (s *WorkflowApplicationService) failWorkflowWorkloadSynchronization(ctx context.Context, cause error) error {

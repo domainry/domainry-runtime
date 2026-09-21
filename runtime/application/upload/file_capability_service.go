@@ -3,21 +3,25 @@ package upload
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	"github.com/domainry/domainry-runtime/pkg/runtimefile"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 const maxDerivedFileBytes = 128 << 20
@@ -27,21 +31,20 @@ var derivedContentTypePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9!#$&^_.+-]*/
 // FileCapabilityService is the Runtime-owned byte boundary used by generated
 // project Actions. It never accepts a workspace path or a host filesystem path.
 type FileCapabilityService struct {
-	store      lifecyclecontract.UploadFileArtifactStore
-	verifier   *FileScanReceiptVerifier
-	uploadRoot string
-	clock      func() time.Time
-	tickets    *FileDownloadTicketService
-	subjects   *UploadSubjectRegistry
+	store    lifecyclecontract.UploadFileArtifactStore
+	verifier *FileScanReceiptVerifier
+	blobs    runtimefile.BlobStore
+	clock    func() time.Time
+	tickets  *FileDownloadTicketService
+	subjects *UploadSubjectRegistry
 }
 
-func NewFileCapabilityService(store lifecyclecontract.UploadFileArtifactStore, verifier *FileScanReceiptVerifier, uploadRoot string, clock func() time.Time, tickets ...*FileDownloadTicketService) (*FileCapabilityService, error) {
-	root, err := filepath.Abs(strings.TrimSpace(uploadRoot))
-	if err != nil || strings.TrimSpace(uploadRoot) == "" {
-		return nil, fmt.Errorf("file capability upload root is required")
+func NewFileCapabilityService(store lifecyclecontract.UploadFileArtifactStore, verifier *FileScanReceiptVerifier, blobs runtimefile.BlobStore, clock func() time.Time, tickets ...*FileDownloadTicketService) (*FileCapabilityService, error) {
+	if store == nil || verifier == nil || blobs == nil {
+		return nil, fmt.Errorf("file capability artifact store, verifier and blob store are required")
 	}
-	if store == nil || verifier == nil {
-		return nil, fmt.Errorf("file capability artifact store and verifier are required")
+	if !validFileAdapterDescriptor(blobs.Descriptor()) {
+		return nil, fmt.Errorf("file capability blob store descriptor is required")
 	}
 	if clock == nil {
 		clock = time.Now
@@ -50,11 +53,14 @@ func NewFileCapabilityService(store lifecyclecontract.UploadFileArtifactStore, v
 	if len(tickets) > 0 {
 		downloadTickets = tickets[0]
 	}
-	return &FileCapabilityService{store: store, verifier: verifier, uploadRoot: root, clock: clock, tickets: downloadTickets}, nil
+	return &FileCapabilityService{store: store, verifier: verifier, blobs: blobs, clock: clock, tickets: downloadTickets}, nil
 }
 
 func (s *FileCapabilityService) VerifyClean(ctx context.Context, workspaceID string, request runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error) {
 	if principal, claiming := ctx.Value(uploadClaimPrincipalKey{}).(principalmodel.Principal); claiming && !principal.SystemScope.Valid() {
+		if s == nil || s.subjects == nil {
+			return runtimeext.FileVerificationEvidence{}, uploadAccessError(apperror.KindForbidden, "backend.upload.subject_binding_denied")
+		}
 		if err := s.subjects.Authorize(ctx, workspaceID, principal.UserID, request.FileID); err != nil {
 			return runtimeext.FileVerificationEvidence{}, err
 		}
@@ -64,9 +70,67 @@ func (s *FileCapabilityService) VerifyClean(ctx context.Context, workspaceID str
 		return runtimeext.FileVerificationEvidence{}, err
 	}
 	return runtimeext.FileVerificationEvidence{
-		FileID: evidence.FileID, ContentSHA256: evidence.SHA256, Filename: evidence.Filename, ContentType: evidence.ContentType,
+		FileID: evidence.FileID, ObjectKey: evidence.ObjectKey, FieldKey: evidence.FieldKey, ContentSHA256: evidence.SHA256, Filename: evidence.Filename, ContentType: evidence.ContentType,
 		Size: evidence.Size, Status: evidence.Status, Provider: evidence.Provider, EvidenceRef: evidence.EvidenceRef, ScanReceipt: evidence.Receipt,
 	}, nil
+}
+
+// VerifyRecordReference validates a structured Record file reference against
+// Runtime-owned upload, subject and scanner evidence. Direct Record writes may
+// only claim the exact Object/Field that authorized the upload.
+func (s *FileCapabilityService) VerifyRecordReference(ctx context.Context, workspaceID string, principal principalmodel.Principal, objectKey, fieldKey string, reference recordmodel.RecordFileReference, scanRequired bool) error {
+	if s == nil || s.verifier == nil || s.subjects == nil {
+		return errors.New("backend.upload.file_reference_verifier_unavailable")
+	}
+	if err := s.subjects.Authorize(ctx, workspaceID, principal.UserID, reference.FileID); err != nil {
+		return err
+	}
+	evidence, err := s.verifier.Status(ctx, workspaceID, reference.FileID)
+	if err != nil {
+		return err
+	}
+	if evidence.ObjectKey != strings.TrimSpace(objectKey) || evidence.FieldKey != strings.TrimSpace(fieldKey) || evidence.FileID != reference.FileID || evidence.Filename != reference.Filename || !strings.EqualFold(evidence.ContentType, reference.ContentType) || evidence.Size != reference.Size || !strings.EqualFold(evidence.SHA256, reference.ContentSHA256) {
+		return errors.New("backend.upload.file_identity_mismatch")
+	}
+	if scanRequired {
+		if _, err := s.verifier.VerifyClean(ctx, workspaceID, reference.FileID, reference.ContentSHA256, reference.ScanReceipt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *FileCapabilityService) ValidateRecordReferences(ctx context.Context, object definitionmodel.ObjectSchema, values map[string]any, principal principalmodel.Principal) error {
+	for _, field := range object.Fields {
+		if _, changed := values[field.Key]; !changed || field.Type != recordmodel.RecordFileFieldType && field.Type != recordmodel.RecordFileListFieldType {
+			continue
+		}
+		policy, err := recordmodel.RecordFileFieldPolicyFor(field)
+		if err != nil {
+			return apperror.New(apperror.KindBadRequest, "backend.upload.field_policy_invalid", err, map[string]string{"field": field.Key})
+		}
+		references, err := recordmodel.RecordFileReferences(field, values[field.Key])
+		if err != nil {
+			code := "backend.validation.file_reference"
+			if contract, ok := err.(*recordmodel.RecordFileContractError); ok {
+				code = contract.Code
+			}
+			return apperror.New(apperror.KindBadRequest, code, err, map[string]string{"field": field.Key})
+		}
+		for _, reference := range references {
+			if err := s.VerifyRecordReference(ctx, principal.WorkspaceID, principal, object.Key, field.Key, reference, policy.ScanRequired); err != nil {
+				kind := apperror.KindBadRequest
+				code := "backend.upload.file_identity_mismatch"
+				if apperror.CodeOf(err) == "backend.upload.subject_binding_denied" {
+					kind, code = apperror.KindForbidden, "backend.upload.subject_binding_denied"
+				} else if errors.Is(err, ErrFileNotClean) || errors.Is(err, ErrFileScanReceiptInvalid) {
+					code = "backend.upload.scan_not_clean"
+				}
+				return apperror.New(kind, code, err, map[string]string{"field": field.Key, "file_id": reference.FileID})
+			}
+		}
+	}
+	return nil
 }
 
 func (s *FileCapabilityService) BindUploadSubjects(subjects *UploadSubjectRegistry) {
@@ -83,11 +147,12 @@ func (s *FileCapabilityService) OpenVerified(ctx context.Context, workspaceID st
 	// caller-readable record that currently references this immutable file ID.
 	// Those bindings legitimately differ after a trusted Action promotes an
 	// upload into a source, version, or other business record.
-	path, err := s.artifactPath(workspaceID, evidence.Filename)
+	reader, err := s.blobs.Open(ctx, workspaceID, evidence.Filename)
 	if err != nil {
-		return runtimeext.VerifiedFile{}, err
+		return runtimeext.VerifiedFile{}, fmt.Errorf("backend.upload.file_unavailable: %w", err)
 	}
-	content, err := os.ReadFile(path)
+	defer reader.Close()
+	content, err := io.ReadAll(io.LimitReader(reader, evidence.Size+1))
 	if err != nil {
 		return runtimeext.VerifiedFile{}, fmt.Errorf("backend.upload.file_unavailable: %w", err)
 	}
@@ -117,60 +182,34 @@ func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID s
 	if workspaceID == "" || idempotencyKey == "" || strings.TrimSpace(request.ObjectKey) == "" || strings.TrimSpace(request.FieldKey) == "" || filename == "" || filepath.Base(filename) != filename || !derivedContentTypePattern.MatchString(contentType) || request.Content == nil {
 		return runtimeext.DerivedFileEvidence{}, errors.New("backend.upload.derived_file_request_invalid")
 	}
-	workspaceDir, err := s.workspaceDirectory(workspaceID)
-	if err != nil {
-		return runtimeext.DerivedFileEvidence{}, err
-	}
-	if err := os.MkdirAll(workspaceDir, 0o750); err != nil {
-		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_storage_unavailable: %w", err)
-	}
-	temporary, err := os.CreateTemp(workspaceDir, ".derived-*")
-	if err != nil {
-		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_storage_unavailable: %w", err)
-	}
-	temporaryPath := temporary.Name()
-	keep := false
-	defer func() {
-		_ = temporary.Close()
-		if !keep {
-			_ = os.Remove(temporaryPath)
-		}
-	}()
-	hash := sha256.New()
-	size, err := io.Copy(io.MultiWriter(temporary, hash), io.LimitReader(request.Content, maxDerivedFileBytes+1))
-	if err != nil {
-		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_read_failed: %w", err)
-	}
-	if size > maxDerivedFileBytes {
-		return runtimeext.DerivedFileEvidence{}, errors.New("backend.upload.derived_file_too_large")
-	}
-	if err := temporary.Sync(); err != nil {
-		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_save_failed: %w", err)
-	}
-	if err := temporary.Close(); err != nil {
-		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_save_failed: %w", err)
-	}
-	digest := hex.EncodeToString(hash.Sum(nil))
 	identity := sha256.Sum256([]byte(strings.Join([]string{workspaceID, idempotencyKey, strings.TrimSpace(request.ObjectKey), strings.TrimSpace(request.FieldKey)}, "\x00")))
 	fileID := "derived_" + hex.EncodeToString(identity[:16])
+	stageNonce := [16]byte{}
+	if _, err := rand.Read(stageNonce[:]); err != nil {
+		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_storage_unavailable: %w", err)
+	}
+	staged, err := s.blobs.Stage(ctx, runtimefile.BlobStageRequest{WorkspaceID: workspaceID, StageID: fileID + ":" + hex.EncodeToString(stageNonce[:]), Content: request.Content, MaxBytes: maxDerivedFileBytes})
+	if err != nil {
+		if errors.Is(err, runtimefile.ErrBlobTooLarge) {
+			return runtimeext.DerivedFileEvidence{}, errors.New("backend.upload.derived_file_too_large")
+		}
+		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_read_failed: %w", err)
+	}
+	defer func() { _ = s.blobs.Delete(context.WithoutCancel(ctx), workspaceID, staged.BlobKey) }()
+	digest, size := staged.ContentSHA256, staged.Size
 	extension := filepath.Ext(filename)
 	filenameDigest := sha256.Sum256([]byte(filename))
-	storageName := digest[:24] + "-" + hex.EncodeToString(identity[16:24]) + "-" + hex.EncodeToString(filenameDigest[:4]) + extension
+	storageName := digest + "-" + hex.EncodeToString(identity[16:24]) + "-" + hex.EncodeToString(filenameDigest[:4]) + extension
 	existing, lookupErr := s.store.FindFileScan(ctx, workspaceID, fileID)
 	if lookupErr == nil {
 		if existing.Filename != storageName || existing.ContentType != contentType || existing.ObjectKey != strings.TrimSpace(request.ObjectKey) || existing.FieldKey != strings.TrimSpace(request.FieldKey) || existing.Size != size || !strings.EqualFold(existing.SHA256, digest) {
 			return runtimeext.DerivedFileEvidence{}, errors.New("backend.upload.derived_file_idempotency_conflict")
 		}
-		path, pathErr := s.artifactPath(workspaceID, existing.Filename)
-		if pathErr != nil {
-			return runtimeext.DerivedFileEvidence{}, pathErr
+		current, statErr := s.blobs.Stat(ctx, workspaceID, existing.Filename)
+		if statErr != nil {
+			return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_unavailable: %w", statErr)
 		}
-		current, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_unavailable: %w", readErr)
-		}
-		currentDigest := sha256.Sum256(current)
-		if int64(len(current)) != size || hex.EncodeToString(currentDigest[:]) != digest {
+		if current.Size != size || !strings.EqualFold(current.ContentSHA256, digest) {
 			return runtimeext.DerivedFileEvidence{}, errors.New("backend.upload.derived_file_identity_mismatch")
 		}
 		if existing.Status == lifecyclecontract.FileScanClean {
@@ -179,19 +218,14 @@ func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID s
 	} else if !errors.Is(lookupErr, sql.ErrNoRows) {
 		return runtimeext.DerivedFileEvidence{}, lookupErr
 	}
-	path := filepath.Join(workspaceDir, storageName)
-	if current, readErr := os.ReadFile(path); readErr == nil {
-		currentDigest := sha256.Sum256(current)
-		if int64(len(current)) != size || hex.EncodeToString(currentDigest[:]) != digest {
+	if _, err := s.blobs.Commit(ctx, runtimefile.BlobCommitRequest{
+		WorkspaceID: workspaceID, StageKey: staged.BlobKey, BlobKey: storageName, ContentSHA256: digest, Size: size,
+	}); err != nil {
+		if errors.Is(err, runtimefile.ErrBlobIdentityConflict) {
 			return runtimeext.DerivedFileEvidence{}, errors.New("backend.upload.derived_file_idempotency_conflict")
 		}
-		_ = os.Remove(temporaryPath)
-	} else if !os.IsNotExist(readErr) {
-		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_save_failed: %w", readErr)
-	} else if err := os.Rename(temporaryPath, path); err != nil {
 		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_save_failed: %w", err)
 	}
-	keep = true
 	now := s.clock().UTC()
 	artifact := lifecyclecontract.UploadArtifact{ID: fileID, WorkspaceID: workspaceID, ObjectKey: strings.TrimSpace(request.ObjectKey), FieldKey: strings.TrimSpace(request.FieldKey), Filename: storageName, ContentType: contentType, SHA256: digest, Size: size, CreatedAt: now}
 	if errors.Is(lookupErr, sql.ErrNoRows) {
@@ -215,23 +249,4 @@ func (s *FileCapabilityService) derivedFileResult(ctx context.Context, workspace
 		FileVerificationEvidence: runtimeext.FileVerificationEvidence{FileID: verified.FileID, ContentSHA256: verified.SHA256, Filename: verified.Filename, ContentType: verified.ContentType, Size: verified.Size, Status: verified.Status, Provider: verified.Provider, EvidenceRef: verified.EvidenceRef, ScanReceipt: verified.Receipt},
 		Filename:                 filename, ContentType: contentType, ProtectedDownload: "/uploads/" + verified.Filename,
 	}, nil
-}
-
-func (s *FileCapabilityService) artifactPath(workspaceID, filename string) (string, error) {
-	if filename = strings.TrimSpace(filename); filename == "" || filepath.Base(filename) != filename {
-		return "", errors.New("backend.upload.file_identity_invalid")
-	}
-	directory, err := s.workspaceDirectory(workspaceID)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(directory, filename), nil
-}
-
-func (s *FileCapabilityService) workspaceDirectory(workspaceID string) (string, error) {
-	if strings.TrimSpace(workspaceID) == "" {
-		return "", errors.New("backend.workspace_scope_required")
-	}
-	digest := sha256.Sum256([]byte(strings.TrimSpace(workspaceID)))
-	return filepath.Join(s.uploadRoot, "workspace-"+hex.EncodeToString(digest[:16])), nil
 }

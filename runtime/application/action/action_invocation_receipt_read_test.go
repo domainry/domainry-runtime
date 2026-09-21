@@ -53,7 +53,7 @@ func TestActionIndependentReceiptReadPreservesOwnershipAllReferencesAndNoEffects
 	_ = json.Unmarshal(raw, &saved)
 	store := &receiptReadStore{value: actionmodel.ActionBusinessExecution{WorkspaceID: "workspace", ActorID: "reader", ActionKey: definition.Key, ObjectKey: "order", RecordID: "target", IdempotencyKey: "original", RequestFingerprint: fingerprint, Status: string(idempotency.StatusSucceeded), Result: saved, ExpiresAt: time.Now().Add(time.Hour).Format(time.RFC3339Nano)}}
 	system := NewRuntimeSystemOperationCatalog()
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	denied, assurance := "", 0
 	service := NewActionApplication(ActionApplicationDependencies{Catalog: NewActionCatalog([]definitionmodel.ActionSchema{definition}, system, handlers), UnitOfWork: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)), Authorization: ActionAuthorization{ObjectForAction: func(p principalmodel.Principal, key, op string) (definitionmodel.ObjectSchema, error) {

@@ -7,6 +7,12 @@ func RecordIsEmptyValue(value any) bool {
 	if value == nil {
 		return true
 	}
+	switch typed := value.(type) {
+	case []any:
+		return len(typed) == 0
+	case []string:
+		return len(typed) == 0
+	}
 	text, ok := value.(string)
 	return ok && strings.TrimSpace(text) == ""
 }

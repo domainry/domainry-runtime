@@ -74,6 +74,7 @@ const (
 const (
 	ApplicationSchemaUpgradeRequiredFieldRuleMissingCode = "backend.metadata.upgrade_required_field_rule_missing"
 	ApplicationSchemaUpgradeUniqueConflictCode           = "backend.metadata.upgrade_unique_conflict"
+	ApplicationSchemaUpgradeFieldTypeChangeCode          = "backend.metadata.upgrade_field_type_change_unsupported"
 	ApplicationSchemaUpgradeBackupUnavailableCode        = "backend.metadata.upgrade_backup_unavailable"
 	ApplicationSchemaRetainedMigrationDescription        = "backend.metadata.migration.retained"
 )

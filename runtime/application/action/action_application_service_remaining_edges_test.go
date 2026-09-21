@@ -304,7 +304,7 @@ func TestActionCatalogValidationSkipsBusinessExecutorWithoutBusinessOwners(t *te
 	service := NewActionApplication(ActionApplicationDependencies{
 		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{{
 			Key: "order.create", ObjectKey: "order", Kind: definitionmodel.ActionKindObjectCreate,
-		}}, system, runtimeext.NewBusinessHandlerRegistry()),
+		}}, system, runtimeext.NewProjectExtensionRegistry()),
 		SystemOperations: NewSystemOperationExecutor(system),
 	})
 	_ = service.CatalogValidationErrors()

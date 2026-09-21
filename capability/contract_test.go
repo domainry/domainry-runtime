@@ -1,4 +1,4 @@
-package capabilityprovider
+package capability
 
 import (
 	"encoding/json"
@@ -19,11 +19,11 @@ import (
 )
 
 func TestBindingsConformAndAreDeterministic(t *testing.T) {
-	first, err := Bindings()
+	first, err := Open(Inputs{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := Bindings()
+	second, err := Open(Inputs{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,6 +196,8 @@ func TestOwnerValidatorsRejectMalformedAndSemanticInvalidCandidates(t *testing.T
 	}{
 		{name: "schema closed fragment", moduleKey: "runtime_schema", categoryKey: "schema.authoring", kind: "schema.object", candidate: authoringFragment("objects", "order", `{"key":"order","name":"Order","description":"","fields":[],"unknown":true}`), wantRule: "runtime.authoring.fragment_invalid"},
 		{name: "schema owner policy", moduleKey: "runtime_schema", categoryKey: "schema.authoring", kind: "schema.object", candidate: authoringFragment("objects", "order", `{"key":"order","name":"","description":"","fields":[]}`), wantRule: "backend.metadata.object_name_required"},
+		{name: "business calendar timezone", moduleKey: "runtime_schema", categoryKey: "schema.authoring", kind: "schema.business_calendar", candidate: authoringFragment("business_calendars", "operations", `{"key":"operations","name":"Operations","revision":"2026.1","timezone":"Mars/Olympus","weekly_working_intervals":[{"weekday":"monday","intervals":[{"start":"09:00","end":"18:00"}]}]}`), wantRule: "backend.business_calendar.timezone_invalid"},
+		{name: "dictionary item value", moduleKey: "runtime_schema", categoryKey: "schema.authoring", kind: "schema.dictionary", candidate: authoringFragment("dictionaries", "status", `{"key":"status","items":[{"key":"open"}]}`), wantRule: "backend.dictionary.item_key_value_required"},
 		{name: "action kind", moduleKey: "records", categoryKey: "records.authoring", kind: "action.definition", candidate: authoringFragment("actions", "order.run", `{"key":"order.run","name":"Run","object_key":"order","kind":"script","audit_event":"order_ran"}`), wantRule: "backend.action.kind_invalid"},
 		{name: "workflow graph", moduleKey: "workflow", categoryKey: "workflow.authoring", kind: "workflow.definition", candidate: authoringFragment("workflows", "order.complete", `{"key":"order.complete","name":"Complete order","trigger":{},"condition":{},"action":{},"enabled":true,"trigger_contract":{"type":"manual"},"graph":{"version":2,"nodes":[{"id":"same","type":"trigger"},{"id":"same","type":"action","contract":{"action":{"action_key":"order.complete"}}}],"edges":[]}}`), wantRule: "backend.workflow.graph_node_invalid"},
 		{name: "automation instruction", moduleKey: "automation", categoryKey: "automation.rules", kind: "automation.rule", candidate: authoringFragment("automation_rules", "order.ready", `{"key":"order.ready","name":"Order ready","object_key":"order","enabled":true,"trigger":{"phase":"after","operation":"update"},"instructions":[{"key":"","type":"emit_event","config":{"event_type":"order.ready"}}]}`), referencedContext: []modulecapability.AuthoringFragment{authoringFragment("objects", "order", `{"key":"order","name":"Order","description":"","fields":[]}`)}, wantRule: "backend.automation.instruction_key_invalid"},
@@ -224,6 +226,8 @@ func TestOwnerValidatorsAcceptRepresentativeValidCandidates(t *testing.T) {
 		{name: "object", moduleKey: "runtime_schema", categoryKey: "schema.authoring", kind: "schema.object", candidate: authoringFragment("objects", "order", `{"key":"order","name":"Order","description":"","fields":[]}`)},
 		{name: "object public resource", moduleKey: "runtime_schema", categoryKey: "schema.authoring", kind: "schema.object", candidate: authoringFragment("objects", "card", `{"key":"card","name":"Card","description":"","fields":[{"key":"share_key","name":"Share key","type":"text","required":true,"unique":true},{"key":"status","name":"Status","type":"text","required":true},{"key":"full_name","name":"Full name","type":"text","required":true}],"public_resources":[{"key":"digital_card","access_key_field":"share_key","state_field":"status","active_state":"published","fields":["full_name"]}]}`)},
 		{name: "object governance", moduleKey: "runtime_schema", categoryKey: "schema.authoring", kind: "schema.object", candidate: authoringFragment("objects", "audit_entry", `{"key":"audit_entry","name":"Audit entry","description":"","fields":[],"capabilities":{"create":true,"read":true,"update":false,"delete":false,"export":true},"lifecycle_policy":{"mode":"append_only"},"ledger_policy":{"integrity":"sha256_chain","signature":"hmac_sha256"},"export_assurance_policy":{"required_methods":["otp"]}}`)},
+		{name: "business calendar", moduleKey: "runtime_schema", categoryKey: "schema.authoring", kind: "schema.business_calendar", candidate: authoringFragment("business_calendars", "operations", `{"key":"operations","name":"Operations","revision":"2026.1","timezone":"Asia/Shanghai","weekly_working_intervals":[{"weekday":"monday","intervals":[{"start":"09:00","end":"18:00"}]}]}`)},
+		{name: "dictionary", moduleKey: "runtime_schema", categoryKey: "schema.authoring", kind: "schema.dictionary", candidate: authoringFragment("dictionaries", "status", `{"key":"status","items":[{"key":"open","value":"open"}]}`)},
 		{name: "action", moduleKey: "records", categoryKey: "records.authoring", kind: "action.definition", candidate: action, referencedContext: []modulecapability.AuthoringFragment{order}},
 		{name: "workflow", moduleKey: "workflow", categoryKey: "workflow.authoring", kind: "workflow.definition", candidate: authoringFragment("workflows", "order.complete", `{"key":"order.complete","name":"Complete order","trigger":{},"condition":{},"action":{},"enabled":true,"trigger_contract":{"type":"manual"},"graph":{"version":2,"nodes":[{"id":"trigger","type":"trigger"},{"id":"action","type":"action","contract":{"action":{"action_key":"order.complete"}}}],"edges":[{"id":"start","source":"trigger","target":"action"}]}}`), referencedContext: []modulecapability.AuthoringFragment{action, order}},
 		{name: "automation", moduleKey: "automation", categoryKey: "automation.rules", kind: "automation.rule", candidate: authoringFragment("automation_rules", "order.ready", `{"key":"order.ready","name":"Order ready","object_key":"order","enabled":true,"trigger":{"phase":"after","operation":"update"},"instructions":[{"key":"event","type":"emit_event","config":{"event_type":"order.ready"}}]}`), referencedContext: []modulecapability.AuthoringFragment{order}},
@@ -241,7 +245,7 @@ func TestOwnerValidatorsAcceptRepresentativeValidCandidates(t *testing.T) {
 
 func runtimeBindingsByKey(t *testing.T) map[string]modulecapability.Binding {
 	t.Helper()
-	bindings, err := Bindings()
+	bindings, err := Open(Inputs{})
 	if err != nil {
 		t.Fatal(err)
 	}

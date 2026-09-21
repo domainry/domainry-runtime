@@ -14,6 +14,7 @@ const (
 	ActionSourceHTTP        = actionmodel.ActionSourceHTTP
 	ActionSourceWorkflow    = actionmodel.ActionSourceWorkflow
 	ActionSourceAutomation  = actionmodel.ActionSourceAutomation
+	ActionSourceScheduler   = actionmodel.ActionSourceScheduler
 	ActionSourceIntegration = actionmodel.ActionSourceIntegration
 	ActionSourceAgent       = actionmodel.ActionSourceAgent
 	ActionSourceNested      = actionmodel.ActionSourceNested
@@ -26,6 +27,7 @@ func actionSourceValid(source actionmodel.ActionSource) bool {
 		actionmodel.ActionSourceWorkflow,
 		actionmodel.ActionSourceAutomation,
 		actionmodel.ActionSourceRecordTimer,
+		actionmodel.ActionSourceScheduler,
 		actionmodel.ActionSourceIntegration,
 		actionmodel.ActionSourceAgent,
 		actionmodel.ActionSourceNested,

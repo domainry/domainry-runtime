@@ -108,7 +108,8 @@ func recordSchemaSnapshot(s *runtimeAssembly) appschemamodel.ApplicationSchemaSn
 	return appschemaservice.BuildSchemaSnapshot(appschemaservice.SchemaSnapshotState{
 		TemplateID: s.templateID, TemplateVersion: s.templateVersion, Name: s.name, TimeZone: s.timeZone,
 		Objects: objects, Actions: actions, Workflows: workflows, AutomationRules: automationRules,
-		Dictionaries: s.dictionaries, Integrations: s.integrations, Reports: s.reports,
+		BusinessCalendars: s.businessCalendars,
+		Dictionaries:      s.dictionaries, Integrations: s.integrations, Reports: s.reports,
 		Skills: s.skills, Agents: s.agents, AgentTasks: s.agentTasks, AgentEntrypoints: s.agentEntrypoints, AgentServicePrincipals: s.agentServicePrincipals,
 		IdentityProfileExtensions: s.identityProfileExtensions,
 	})

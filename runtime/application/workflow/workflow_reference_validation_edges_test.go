@@ -21,7 +21,7 @@ func TestWorkflowPublishValidatesAgentTaskServicePrincipalAndActionRiskReference
 	}}
 	validator := NewWorkflowReferenceValidator(schema, func(context.Context) map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"order": {Key: "order"}}
-	}, nil)
+	}, nil, nil)
 	node := definitionmodel.WorkflowGraphNode{ID: "agent", Type: "agent_task", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityService, PrincipalKey: "review-service"}}}}
 	if issues := validator.validateWorkflowAgentTaskReference(t.Context(), node); len(issues) != 0 {
 		t.Fatalf("published high-risk task should rely on forced Proposal policy: %#v", issues)
@@ -93,7 +93,7 @@ func workflowReferenceValidatorFixture(identity identitysdk.Projection) *Workflo
 	}, adapters: map[string]bool{"email": true, "webhook": true, "custom": true}}
 	return NewWorkflowReferenceValidator(schema, func(context.Context) map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"order": object}
-	}, identity)
+	}, identity, nil)
 }
 
 func TestWorkflowReferenceTriggerObjectFieldDictionaryAndConnectorOutcomes(t *testing.T) {
@@ -232,16 +232,16 @@ func TestWorkflowReferenceIdentityResolversRunAsAndGraphNodeOutcomes(t *testing.
 	resolvers := []definitionmodel.WorkflowAssigneeResolver{
 		{Type: "users", UserIDs: []string{"user", "missing"}},
 		{Type: "role", RoleKey: "missing"},
-		{Type: "record_field", Field: "missing"},
+		{Type: "record_user_field", Field: "missing"},
 		{Type: "manager", UserField: "missing"},
 		{Type: "manager_of", UserField: "owner"},
-		{Type: "record_field", Field: "status"},
+		{Type: "record_user_field", Field: "status"},
 		{Type: "unknown"},
 	}
 	if issues := validator.validateWorkflowResolvers(t.Context(), workflow, "node", resolvers, catalogUsers, catalogRoles); len(issues) != 5 {
 		t.Fatalf("resolver issues=%v", issues)
 	}
-	validResolvers := []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"unchecked"}}, {Type: "role", RoleKey: "sender"}, {Type: "record_field", Field: "owner"}, {Type: "manager_of", UserField: "owner"}, {Type: "initiator_manager"}}
+	validResolvers := []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"unchecked"}}, {Type: "role", RoleKey: "sender"}, {Type: "record_user_field", Field: "owner"}, {Type: "variable_user", Field: "owner_variable"}, {Type: "manager_of", UserField: "owner"}, {Type: "initiator_manager"}}
 	validValidator := workflowReferenceValidatorFixture(workflowReferenceIdentityEdgeStub{
 		users: []identitysdk.User{{ID: "unchecked"}},
 		roles: []identitysdk.Role{{Key: "sender"}},

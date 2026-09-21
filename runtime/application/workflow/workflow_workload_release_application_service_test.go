@@ -127,6 +127,42 @@ func TestWorkflowWorkloadReleaseSynchronizesAndCarriesExecutionLineage(t *testin
 	}
 }
 
+func TestManagedWorkloadSharesAtomicReleaseAndResolvesExactAuthorizationVersion(t *testing.T) {
+	workload := &workflowWorkloadIdentityTestStub{}
+	principals := &workflowWorkloadPrincipalTestStub{permissions: []string{"order.expire"}}
+	state := NewWorkflowWorkloadReleaseState()
+	application := identitysdk.ApplicationScope{WorkspaceID: "workspace-1", ApplicationKey: "runtime"}
+	state.configure(application)
+	service := &WorkflowApplicationService{workloads: workload, workloadApplication: application, workloadReleases: state, principals: principals}
+	restore, err := service.ReplaceManagedWorkloadBindings([]ManagedWorkloadBinding{{
+		WorkloadKey: "scheduler:expire-orders", DefinitionVersionID: strings.Repeat("a", 64), DefinitionVersion: 1,
+		RoleKey: "order_automation", ActionKeys: []string{"order.expire"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.synchronizeWorkflowWorkloadBindings(t.Context(), map[string]definitionmodel.WorkflowSchema{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(workload.requests) != 1 || len(workload.requests[0].Bindings) != 1 || workload.requests[0].Bindings[0].WorkflowKey != "scheduler:expire-orders" {
+		t.Fatalf("release requests=%+v", workload.requests)
+	}
+	principal, err := service.ResolveManagedWorkloadPrincipal(t.Context(), ManagedWorkloadExecution{
+		WorkloadKey: "scheduler:expire-orders", DefinitionVersionID: strings.Repeat("a", 64), DefinitionVersion: 1, RoleKey: "order_automation",
+		ExecutionID: "run-7", SourceEventID: "run-7", IdempotencyKey: "window-7",
+	})
+	if err != nil || principal.UserID != "workflow:scheduler:expire-orders" || principal.RoleKey != "order_automation" || principal.RequestID != "window-7" || principal.Workload == nil || principal.Workload.TaskID != "run-7" {
+		t.Fatalf("principal=%+v err=%v", principal, err)
+	}
+	if _, err := service.ResolveManagedWorkloadPrincipal(t.Context(), ManagedWorkloadExecution{WorkloadKey: "scheduler:expire-orders", DefinitionVersionID: strings.Repeat("b", 64), DefinitionVersion: 1, RoleKey: "order_automation"}); apperror.CodeOf(err) != "backend.workload.release_not_active" {
+		t.Fatalf("stale authorization version err=%v", err)
+	}
+	restore()
+	if got := state.supplementalBindings(); len(got) != 0 {
+		t.Fatalf("restore retained supplemental bindings: %+v", got)
+	}
+}
+
 func TestWorkflowWorkloadReleaseRejectsIncompleteRolePermissionAndRestoresPreviousRelease(t *testing.T) {
 	workload := &workflowWorkloadIdentityTestStub{}
 	principals := &workflowWorkloadPrincipalTestStub{permissions: []string{"payment.settle"}}

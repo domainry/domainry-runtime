@@ -100,9 +100,9 @@ func normalizeListFilters(object definitionmodel.ObjectSchema, raw map[string]an
 // filter had matched: a client reading "the record I asked for" from it reads
 // somebody else's. The refusal names the key so the caller fixes the query.
 func RecordValidateListFilters(object definitionmodel.ObjectSchema, raw map[string]any) error {
-	fields := map[string]bool{"id": true, "workspace_id": true}
+	fields := map[string]definitionmodel.FieldSchema{"id": {Key: "id"}, "workspace_id": {Key: "workspace_id"}}
 	for _, field := range object.Fields {
-		fields[field.Key] = true
+		fields[field.Key] = field
 	}
 	keys := make([]string, 0, len(raw))
 	for key := range raw {
@@ -115,8 +115,21 @@ func RecordValidateListFilters(object definitionmodel.ObjectSchema, raw map[stri
 			continue
 		}
 		baseKey, _, _ := splitFilterOperator(key)
-		if !fields[baseKey] {
+		field, found := fields[baseKey]
+		if !found {
 			return validationError("backend.validation.filter_field_unknown", "field", baseKey, "object_key", object.Key)
+		}
+		if recordFileFieldType(field.Type) {
+			return validationError("backend.validation.file_filter_unsupported", "field", baseKey, "object_key", object.Key)
+		}
+		if field.Type == recordmodel.RecordJSONFieldType {
+			return validationError("backend.validation.json_filter_unsupported", "field", baseKey, "object_key", object.Key)
+		}
+		if field.Type == recordmodel.RecordMultiSelectFieldType {
+			_, operator, hasOperator := splitFilterOperator(key)
+			if hasOperator && operator != "in" {
+				return validationError("backend.validation.multi_select_filter_unsupported", "field", baseKey, "operator", operator, "object_key", object.Key)
+			}
 		}
 	}
 	return nil
@@ -176,7 +189,7 @@ func allowedFieldKeys(object definitionmodel.ObjectSchema, values []string) []st
 	out := []string{}
 	for _, value := range values {
 		value = strings.TrimSpace(value)
-		if RecordFieldExists(object, value) || metaFieldExists(value) {
+		if (RecordFieldExists(object, value) && !recordObjectUnsearchableField(object, value)) || metaFieldExists(value) {
 			out = append(out, value)
 		}
 	}
@@ -198,7 +211,7 @@ func allowedSortRules(object definitionmodel.ObjectSchema, values []recordmodel.
 	out := []recordmodel.RecordSortRule{}
 	for _, value := range values {
 		field := strings.TrimSpace(value.Field)
-		if !RecordFieldExists(object, field) && !metaFieldExists(field) {
+		if (!RecordFieldExists(object, field) && !metaFieldExists(field)) || recordObjectUnsortableField(object, field) {
 			continue
 		}
 		direction := strings.ToLower(strings.TrimSpace(value.Direction))
@@ -208,6 +221,28 @@ func allowedSortRules(object definitionmodel.ObjectSchema, values []recordmodel.
 		out = append(out, recordmodel.RecordSortRule{Field: field, Direction: direction})
 	}
 	return out
+}
+
+func recordObjectFileField(object definitionmodel.ObjectSchema, fieldKey string) bool {
+	for _, field := range object.Fields {
+		if field.Key == fieldKey {
+			return recordFileFieldType(field.Type)
+		}
+	}
+	return false
+}
+
+func recordObjectUnsearchableField(object definitionmodel.ObjectSchema, fieldKey string) bool {
+	for _, field := range object.Fields {
+		if field.Key == fieldKey {
+			return recordFileFieldType(field.Type) || recordStructuredFieldType(field.Type)
+		}
+	}
+	return false
+}
+
+func recordObjectUnsortableField(object definitionmodel.ObjectSchema, fieldKey string) bool {
+	return recordObjectUnsearchableField(object, fieldKey)
 }
 
 func RecordFieldExists(object definitionmodel.ObjectSchema, fieldKey string) bool {

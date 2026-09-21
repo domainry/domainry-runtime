@@ -114,7 +114,7 @@ type serverRunDependencies struct {
 	stat                 func(string) (os.FileInfo, error)
 	readFile             func(string) ([]byte, error)
 	prepareDatabase      func(context.Context, config.Config) (*bootstrap.ProjectDatabase, error)
-	newRuntime           func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, bootstrap.ProjectStartupOptions) runtimeProcess
+	newRuntime           func(context.Context, config.Config, *runtimeext.ProjectExtensionRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, bootstrap.ProjectStartupOptions) runtimeProcess
 	listenAndServe       func(*http.Server) error
 	shutdown             func(context.Context, *http.Server) error
 }
@@ -130,7 +130,7 @@ func defaultServerRunDependencies() serverRunDependencies {
 		stat:                 os.Stat,
 		readFile:             os.ReadFile,
 		prepareDatabase:      bootstrap.PrepareProjectDatabase,
-		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, integrationFactory integrationsdk.Factory, reportFactory reportsdk.Factory, database *bootstrap.ProjectDatabase, startupOptions bootstrap.ProjectStartupOptions) runtimeProcess {
+		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, integrationFactory integrationsdk.Factory, reportFactory reportsdk.Factory, database *bootstrap.ProjectDatabase, startupOptions bootstrap.ProjectStartupOptions) runtimeProcess {
 			return bootstrapRuntimeProcess{Runtime: bootstrap.NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx, cfg, handlers, connectors, identity, evidence, binding, notificationFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, integrationFactory, reportFactory, database, startupOptions, agentFactory)}
 		},
 		listenAndServe: func(server *http.Server) error { return server.ListenAndServe() },
@@ -253,21 +253,21 @@ func (a *runtimeActivator) closeRuntime(runtime runtimeProcess) error {
 	return fmt.Errorf("Runtime activator close requires its lifecycle callback")
 }
 
-func prepareBusinessHandlers(options Options) (*runtimeext.BusinessHandlerRegistry, *bindableConnectorGateway, error) {
+func prepareProjectExtensions(options Options) (*runtimeext.ProjectExtensionRegistry, *bindableConnectorGateway, error) {
 	if err := options.Identity.Validate(); err != nil {
 		return nil, nil, err
 	}
 	gateway := &bindableConnectorGateway{}
-	extensions := runtimeext.ExtensionSet{}
-	if options.BusinessHandlers != nil {
+	extensions := runtimeext.ProjectExtensions{}
+	if options.ProjectExtensions != nil {
 		var err error
-		extensions, err = options.BusinessHandlers(gateway)
+		extensions, err = options.ProjectExtensions(gateway)
 		if err != nil {
-			return nil, nil, fmt.Errorf("build project business handlers: %w", err)
+			return nil, nil, fmt.Errorf("build project extensions: %w", err)
 		}
 	}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.RegisterExtensionSet(extensions); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterProjectExtensions(extensions); err != nil {
 		return nil, nil, fmt.Errorf("register project extensions: %w", err)
 	}
 	registry.Freeze()
@@ -292,7 +292,7 @@ func prepareConnectorProviders(options Options) (*connector.Registry, error) {
 }
 
 func runWithDependencies(options Options, dependencies serverRunDependencies) error {
-	businessHandlers, connectorGateway, err := prepareBusinessHandlers(options)
+	projectExtensions, connectorGateway, err := prepareProjectExtensions(options)
 	if err != nil {
 		return fmt.Errorf("validate project Runtime composition: %w", err)
 	}
@@ -300,7 +300,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	if err != nil {
 		return fmt.Errorf("validate project Runtime composition: %w", err)
 	}
-	releaseIdentity, err := runtimeReleaseIdentity(options.Identity, businessHandlers, connectorProviders)
+	releaseIdentity, err := runtimeReleaseIdentity(options.Identity, projectExtensions, connectorProviders)
 	if err != nil {
 		return fmt.Errorf("validate project Runtime release identity: %w", err)
 	}
@@ -498,7 +498,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			if err := validateDomainSDKTarget(options.Identity.DomainSDK, manifest.GeneratedDomainSDK); err != nil {
 				return nil, err
 			}
-			if err := workspaceManager.Activate(context.WithoutCancel(lifecycleCtx), manifest, businessHandlers.WorkspaceBootstrapParticipant(), businessHandlers.Descriptors()...); err != nil {
+			if err := workspaceManager.Activate(context.WithoutCancel(lifecycleCtx), manifest, projectExtensions.WorkspaceBootstrapParticipant(), projectExtensions.BusinessHandlerDescriptors()...); err != nil {
 				return nil, err
 			}
 			businessSeedReferences, err := workspaceManager.BusinessSeedReferenceCandidates()
@@ -544,12 +544,14 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 					return nil, fmt.Errorf("prepare Agent coding Runtime: %w", err)
 				}
 			}
-			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, businessHandlers, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, notificationFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, agentFactory, integrationFactory, reportFactory, projectDatabase, bootstrap.ProjectStartupOptions{
+			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, projectExtensions, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, notificationFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, agentFactory, integrationFactory, reportFactory, projectDatabase, bootstrap.ProjectStartupOptions{
 				ConversationCodeRuntime:         codeRuntime,
 				ConversationCodingRuntime:       codingRuntime,
 				BusinessSeedReferenceCandidates: businessSeedReferences,
 				ProjectNavigationCatalog:        projectNavigation,
 				AnalysisTableSource:             analysisTableSource,
+				BlobStore:                       options.BlobStore,
+				FileScanner:                     options.FileScanner,
 			})
 			if runtime == nil {
 				return nil, errors.New("Runtime bootstrap returned no process")

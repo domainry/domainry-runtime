@@ -30,6 +30,6 @@ type ConnectorGateway interface {
 	Call(context.Context, runtimeext.ActionExecution, ConnectorCallRequest) (ConnectorCallResult, error)
 }
 
-// BusinessHandlerFactory binds generated typed clients to the Runtime-owned
-// Connector gateway and returns the complete immutable project Handler set.
-type BusinessHandlerFactory func(ConnectorGateway) (runtimeext.ExtensionSet, error)
+// ProjectExtensionFactory binds generated typed clients to the Runtime-owned
+// Connector gateway and returns the complete immutable project extension set.
+type ProjectExtensionFactory func(ConnectorGateway) (runtimeext.ProjectExtensions, error)

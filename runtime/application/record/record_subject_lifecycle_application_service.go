@@ -88,7 +88,7 @@ func (s *RecordSubjectLifecycleApplicationService) PreviewSubject(ctx context.Co
 				continue
 			}
 			for _, record := range records {
-				for _, reference := range recordSubjectFileValues(record.Data[field.Key]) {
+				for _, reference := range recordSubjectFileValues(field, record.Data[field.Key]) {
 					fileReferences[reference] = true
 				}
 			}
@@ -293,7 +293,7 @@ func (s *RecordSubjectLifecycleApplicationService) exportRecordFiles(ctx context
 			return nil, fmt.Errorf("record subject file store unavailable")
 		}
 		for _, record := range records {
-			for _, value := range recordSubjectFileValues(record.Data[field.Key]) {
+			for _, value := range recordSubjectFileValues(field, record.Data[field.Key]) {
 				evidence, err := s.files.ExportSubjectFile(ctx, lifecyclecontract.SubjectFileReference{WorkspaceID: workspaceID, ObjectKey: object.Key, RecordID: record.ID, FieldKey: field.Key, Reference: value})
 				if err != nil {
 					return nil, err
@@ -305,21 +305,14 @@ func (s *RecordSubjectLifecycleApplicationService) exportRecordFiles(ctx context
 	return result, nil
 }
 
-func recordSubjectFileValues(value any) []string {
-	result := []string{}
-	switch typed := value.(type) {
-	case string:
-		if strings.TrimSpace(typed) != "" {
-			result = append(result, strings.TrimSpace(typed))
-		}
-	case []string:
-		for _, item := range typed {
-			result = append(result, recordSubjectFileValues(item)...)
-		}
-	case []any:
-		for _, item := range typed {
-			result = append(result, recordSubjectFileValues(item)...)
-		}
+func recordSubjectFileValues(field definitionmodel.FieldSchema, value any) []string {
+	references, err := recordmodel.RecordFileReferences(field, value)
+	if err != nil {
+		return nil
+	}
+	result := make([]string, 0, len(references))
+	for _, reference := range references {
+		result = append(result, "/uploads/"+reference.Filename)
 	}
 	return result
 }

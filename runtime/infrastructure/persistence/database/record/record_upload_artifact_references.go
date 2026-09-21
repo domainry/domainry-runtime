@@ -28,9 +28,16 @@ func (r *UploadArtifactReferences) UploadArtifactReferenced(ctx context.Context,
 	if !ok || !recordObjectHasField(object, fieldKey) {
 		return false, nil
 	}
-	reference := "/uploads/" + filename
+	field, found := recordObjectField(object, fieldKey)
+	if !found || field.Type != "file" && field.Type != "file_list" {
+		return false, nil
+	}
+	// Lifecycle currently supplies the immutable storage filename. The closed
+	// file-reference JSON stores that exact value, so reference checks no longer
+	// guess from arbitrary strings or legacy /uploads URLs.
+	reference := `%"filename":"` + filename + `"%`
 	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, objectKey, workspaceID).Projections(query.Project(query.CountAll())).
-		Where(query.Or(query.Equal(fieldKey, reference), query.Like(fieldKey, "%\""+reference+"\"%"))).Build()
+		Where(query.Like(fieldKey, reference)).Build()
 	if buildErr != nil {
 		return false, fmt.Errorf("build upload artifact reference query: %w", buildErr)
 	}
@@ -42,10 +49,15 @@ func (r *UploadArtifactReferences) UploadArtifactReferenced(ctx context.Context,
 }
 
 func recordObjectHasField(object definitionmodel.ObjectSchema, fieldKey string) bool {
+	_, found := recordObjectField(object, fieldKey)
+	return found
+}
+
+func recordObjectField(object definitionmodel.ObjectSchema, fieldKey string) (definitionmodel.FieldSchema, bool) {
 	for _, field := range object.Fields {
 		if strings.TrimSpace(field.Key) == fieldKey {
-			return true
+			return field, true
 		}
 	}
-	return false
+	return definitionmodel.FieldSchema{}, false
 }

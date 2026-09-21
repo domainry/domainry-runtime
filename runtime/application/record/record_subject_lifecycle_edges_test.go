@@ -73,15 +73,22 @@ func subjectLifecycleObject() definitionmodel.ObjectSchema {
 		{Key: "employee", Type: "user"},
 		{Key: "owner", Type: "user"},
 		{Key: "email", Type: "email", Config: map[string]any{"lifecycle_erase": "anonymize"}},
-		{Key: "attachments", Type: "text", Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete"}},
+		{Key: "attachments", Type: recordmodel.RecordFileListFieldType, Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete", "scan_required": false}},
 		{Key: "notes", Type: "text", Config: map[string]any{"lifecycle_erase": "retain"}},
 	}}
+}
+
+func subjectLifecycleFile(fileID, filename string) map[string]any {
+	return map[string]any{
+		"file_id": fileID, "filename": filename, "content_type": "text/plain",
+		"size": int64(1), "content_sha256": strings.Repeat("a", 64),
+	}
 }
 
 func TestRecordSubjectOwnerAndPreviewCountsDeduplicatedRecordsAndFiles(t *testing.T) {
 	object := subjectLifecycleObject()
 	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{ID: "document-1", Data: map[string]any{
-		"employee": "user-1", "owner": "user-1", "attachments": []any{" file-a ", []string{"file-b", " "}},
+		"employee": "user-1", "owner": "user-1", "attachments": []any{subjectLifecycleFile("file-a", "file-a"), subjectLifecycleFile("file-b", "file-b")},
 	}}}}
 	service := NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, nil)
 	if owner := service.Owner(t.Context()); owner != "record" {
@@ -142,7 +149,7 @@ func TestRecordSubjectRepositoryAndFileExportFailures(t *testing.T) {
 		t.Fatalf("list err=%v", err)
 	}
 
-	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{ID: "document-1", Data: map[string]any{"employee": "user-1", "attachments": "file-a"}}}}
+	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{ID: "document-1", Data: map[string]any{"employee": "user-1", "attachments": []any{subjectLifecycleFile("file-a", "file-a")}}}}}
 	service = NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, nil)
 	if _, err := service.ExportSubject(t.Context(), "workspace-a", "user-1"); err == nil || !strings.Contains(err.Error(), "file store unavailable") {
 		t.Fatalf("missing file store err=%v", err)
@@ -171,11 +178,11 @@ func TestRecordSubjectEmptyObjectsPaginationAndEraseValueEdges(t *testing.T) {
 		{Key: "missing", Type: "text", Config: map[string]any{"lifecycle_erase": "anonymize"}},
 		{Key: "nil_value", Type: "text", Config: map[string]any{"lifecycle_erase": "anonymize"}},
 		{Key: "empty_value", Type: "text", Config: map[string]any{"lifecycle_erase": "anonymize"}},
-		{Key: "file_token", Type: "text", Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "anonymize"}},
+		{Key: "file_token", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete", "scan_required": false}},
 		{Key: "delete_value", Type: "text", Config: map[string]any{"lifecycle_erase": "delete"}},
 	}}
 	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{ID: "profile-1", Data: map[string]any{
-		"employee": "user-1", "nil_value": nil, "empty_value": " ", "file_token": "file-a", "delete_value": "secret",
+		"employee": "user-1", "nil_value": nil, "empty_value": " ", "file_token": subjectLifecycleFile("file-a", "file-a"), "delete_value": "secret",
 	}}}, hasNext: true}
 	service = NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, nil)
 	if _, err := service.PreviewSubject(t.Context(), "workspace-a", "user-1"); err != nil || repository.pages != 2 {
@@ -185,7 +192,7 @@ func TestRecordSubjectEmptyObjectsPaginationAndEraseValueEdges(t *testing.T) {
 }
 
 func TestRecordSubjectUnpreparedErasureNeverMutatesRecordsOrFiles(t *testing.T) {
-	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{ID: "one", Data: map[string]any{"employee": "user-one", "attachments": "file-a"}}}}
+	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{ID: "one", Data: map[string]any{"employee": "user-one", "attachments": []any{subjectLifecycleFile("file-a", "file-a")}}}}}
 	files := &subjectLifecycleFileStore{}
 	service := NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{subjectLifecycleObject()}, files)
 	if _, err := service.EraseSubject(t.Context(), "workspace-one", "user-one", nil); err == nil {
@@ -200,11 +207,12 @@ func TestRecordSubjectUnpreparedErasureNeverMutatesRecordsOrFiles(t *testing.T) 
 }
 
 func TestRecordSubjectFileValuesAndAnonymousValues(t *testing.T) {
-	values := recordSubjectFileValues([]any{" a ", []string{"b", " "}, 3, nil})
-	if !reflect.DeepEqual(values, []string{"a", "b"}) {
+	listField := definitionmodel.FieldSchema{Key: "files", Type: recordmodel.RecordFileListFieldType, Config: map[string]any{"scan_required": false}}
+	values := recordSubjectFileValues(listField, []any{subjectLifecycleFile("file-a", "a"), subjectLifecycleFile("file-b", "b")})
+	if !reflect.DeepEqual(values, []string{"/uploads/a", "/uploads/b"}) {
 		t.Fatalf("values=%#v", values)
 	}
-	if values := recordSubjectFileValues(map[string]any{"path": "ignored"}); len(values) != 0 {
+	if values := recordSubjectFileValues(listField, map[string]any{"path": "ignored"}); len(values) != 0 {
 		t.Fatalf("unsupported values=%#v", values)
 	}
 	emailField := definitionmodel.FieldSchema{Key: "email", Type: " EMAIL "}

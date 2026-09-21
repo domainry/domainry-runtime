@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -245,7 +246,7 @@ func (s *WorkflowReferenceValidator) validateWorkflowResolvers(ctx context.Conte
 			if len(roleKeys) > 0 && !roleKeys[resolver.RoleKey] {
 				issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_role_not_found", nodeID, resolver.RoleKey))
 			}
-		case "record_field":
+		case "record_user_field":
 			field, found := s.workflowObjectField(ctx, workflow, resolver.Field)
 			if !found {
 				issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_field_not_found", nodeID, resolver.Field))
@@ -259,6 +260,119 @@ func (s *WorkflowReferenceValidator) validateWorkflowResolvers(ctx context.Conte
 			} else if !workflowResolverIdentityField(field) {
 				issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_field_type_invalid", nodeID, resolver.UserField))
 			}
+		case "relation_user":
+			issues = append(issues, s.validateWorkflowRelationResolver(ctx, workflow, nodeID, resolver, true)...)
+		case "relation_role":
+			issues = append(issues, s.validateWorkflowRelationResolver(ctx, workflow, nodeID, resolver, false)...)
+		case "manager_chain":
+			if strings.TrimSpace(resolver.Source) == "record" {
+				field, found := s.workflowObjectField(ctx, workflow, resolver.Field)
+				if !found {
+					issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_field_not_found", nodeID, resolver.Field))
+				} else if !workflowResolverIdentityField(field) {
+					issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_field_type_invalid", nodeID, resolver.Field))
+				}
+			}
+		case "project":
+			issues = append(issues, s.validateProjectAssigneeResolver(ctx, nodeID, resolver, roleKeys)...)
+		}
+	}
+	return issues
+}
+
+func (s *WorkflowReferenceValidator) validateWorkflowRelationResolver(ctx context.Context, workflow definitionmodel.WorkflowSchema, nodeID string, resolver definitionmodel.WorkflowAssigneeResolver, userTerminal bool) []workflowmodel.WorkflowValidationIssue {
+	objects := s.objectMap(ctx)
+	objectKeys := workflowpolicy.WorkflowTriggerObjectKeys(workflow)
+	if len(objectKeys) == 0 {
+		return []workflowmodel.WorkflowValidationIssue{workflowReferenceIssue("backend.workflow.resolver_object_not_found", nodeID, "")}
+	}
+	path := normalizedWorkflowRelationPath(resolver.RelationPath)
+	issues := []workflowmodel.WorkflowValidationIssue{}
+	for _, rootObjectKey := range objectKeys {
+		objectKey := rootObjectKey
+		for index, fieldKey := range path {
+			object, exists := objects[objectKey]
+			if !exists {
+				issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_object_not_found", nodeID, objectKey))
+				break
+			}
+			field, found := workflowAssigneeObjectField(object, fieldKey)
+			isLast := index == len(path)-1
+			if !found {
+				issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_field_not_found", nodeID, objectKey+"."+fieldKey))
+				break
+			}
+			if userTerminal && isLast {
+				if !workflowResolverIdentityField(field) {
+					issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_field_type_invalid", nodeID, objectKey+"."+fieldKey))
+				}
+				break
+			}
+			targetObjectKey := workflowAssigneeRelationTarget(field)
+			if strings.TrimSpace(field.Type) != "relation" || targetObjectKey == "" || targetObjectKey == "identity_user" || targetObjectKey == "identity_role" {
+				issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_field_type_invalid", nodeID, objectKey+"."+fieldKey))
+				break
+			}
+			objectKey = targetObjectKey
+			if _, exists := objects[objectKey]; !exists {
+				issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_object_not_found", nodeID, objectKey))
+				break
+			}
+			if !userTerminal && isLast {
+				terminal, found := workflowAssigneeObjectField(objects[objectKey], resolver.RoleField)
+				if !found {
+					issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_field_not_found", nodeID, objectKey+"."+resolver.RoleField))
+				} else if !workflowResolverRoleField(terminal) {
+					issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_field_type_invalid", nodeID, objectKey+"."+resolver.RoleField))
+				}
+			}
+		}
+	}
+	return issues
+}
+
+func (s *WorkflowReferenceValidator) validateProjectAssigneeResolver(ctx context.Context, nodeID string, resolver definitionmodel.WorkflowAssigneeResolver, roleKeys map[string]bool) []workflowmodel.WorkflowValidationIssue {
+	resolverKey := strings.TrimSpace(resolver.ResolverKey)
+	if s.extensions == nil {
+		return []workflowmodel.WorkflowValidationIssue{workflowReferenceIssue("backend.workflow.resolver_not_registered", nodeID, resolverKey)}
+	}
+	binding, found := s.extensions.AssigneeResolverBinding(resolverKey)
+	if !found {
+		return []workflowmodel.WorkflowValidationIssue{workflowReferenceIssue("backend.workflow.resolver_not_registered", nodeID, resolverKey)}
+	}
+	if _, err := runtimeext.NormalizeAssigneeResolverConfig(binding.Descriptor, resolver.Config); err != nil {
+		return []workflowmodel.WorkflowValidationIssue{workflowReferenceIssue("backend.workflow.resolver_config_invalid", nodeID, resolverKey)}
+	}
+	objects := s.objectMap(ctx)
+	issues := []workflowmodel.WorkflowValidationIssue{}
+	validateFields := func(objectKey string, fieldKeys []string) {
+		object, exists := objects[strings.TrimSpace(objectKey)]
+		if !exists {
+			issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_object_not_found", nodeID, objectKey))
+			return
+		}
+		fields := map[string]bool{}
+		for _, field := range object.Fields {
+			if field.DisabledAt == "" {
+				fields[field.Key] = true
+			}
+		}
+		for _, fieldKey := range fieldKeys {
+			if !fields[strings.TrimSpace(fieldKey)] {
+				issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_field_not_found", nodeID, objectKey+"."+fieldKey))
+			}
+		}
+	}
+	for _, capability := range binding.Descriptor.RecordCapabilities {
+		validateFields(capability.ObjectKey, append(append([]string(nil), capability.Fields...), capability.FilterFields...))
+	}
+	for _, capability := range binding.Descriptor.RelationCapabilities {
+		validateFields(capability.SourceObjectKey, []string{capability.RelationFieldKey})
+		validateFields(capability.TargetObjectKey, capability.TargetFields)
+	}
+	for _, roleKey := range binding.Descriptor.CandidateRoleKeys {
+		if len(roleKeys) > 0 && !roleKeys[roleKey] {
+			issues = append(issues, workflowReferenceIssue("backend.workflow.resolver_role_not_found", nodeID, roleKey))
 		}
 	}
 	return issues

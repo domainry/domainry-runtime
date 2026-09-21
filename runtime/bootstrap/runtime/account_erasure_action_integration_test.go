@@ -120,7 +120,6 @@ func TestAccountErasureActionRollbackCommitAndControlledWorker(t *testing.T) {
 			"key": h.descriptor.ActionKey, "object_key": "erase_request", "label": "Approve erasure", "kind": "record_operation", "audit_event": "account_erasure_approved",
 			"target_organization": map[string]any{"source": "record_owner"},
 			"input_type":          h.descriptor.InputType, "output_type": h.descriptor.OutputType,
-			"input_contract_sha256": h.descriptor.InputContractSHA256, "output_contract_sha256": h.descriptor.OutputContractSHA256,
 			"payload_fields": []any{
 				map[string]any{"key": "Abort", "name": "Abort", "type": "boolean"},
 				map[string]any{"key": "RequestID", "name": "RequestID", "type": "text"},
@@ -193,8 +192,8 @@ func TestAccountErasureActionRollbackCommitAndControlledWorker(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = identity.Close(context.Background()) })
-	handlers := runtimeext.NewBusinessHandlerRegistry()
-	if err = handlers.Register(h); err != nil {
+	handlers := runtimeext.NewProjectExtensionRegistry()
+	if err = handlers.RegisterBusinessHandler(h); err != nil {
 		t.Fatal(err)
 	}
 	handlers.Freeze()

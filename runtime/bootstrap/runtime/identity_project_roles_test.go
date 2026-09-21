@@ -244,10 +244,36 @@ func TestRuntimeWorkspaceCapabilityClosureIsSharedStableAndFailClosed(t *testing
 	}
 }
 
+func TestRuntimeWorkspaceRoleCatalogPreservesRelationalPolicyAndRejectsUnsafeCapabilityClosure(t *testing.T) {
+	policy := identitysdk.ProjectDataPolicy{
+		Operator: identitysdk.ProjectDataPolicyIn,
+		Path:     []identitysdk.ProjectDataPolicyRelationSegment{{Direction: identitysdk.RelationForward, RelationFieldKey: "customer_id", TargetObjectKey: "customer"}},
+		FieldKey: "organization_id", SubjectClaim: identitysdk.ProjectSubjectClaimOrgScopeIDs,
+	}
+	roles := []manifestmodel.RoleSchema{{
+		Key: "operator", Name: "Operator", Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true,
+		Permissions: []manifestmodel.RolePermission{{PermissionKey: "order.read", DataPolicy: &policy, AuditDenial: true}},
+	}}
+	catalog, err := RuntimeWorkspaceProjectRoleCatalog(nil, roles, "workspace-primary", "runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	grant := catalog.Roles[0].Permissions[0]
+	if grant.DataPolicy == nil || grant.DataScope != "" || grant.DataPolicy.FieldKey != "organization_id" || !grant.AuditDenial {
+		t.Fatalf("relational data policy changed at Runtime-to-Identity boundary: %#v", grant)
+	}
+	descriptor := runtimeRoleCapabilityDescriptor("order.read", func(value *runtimeext.HandlerDescriptor) {
+		value.StoreOrganizationCatalog = &runtimeext.StoreOrganizationCatalogCapability{MaxPageSize: 25}
+	})
+	if _, err := RuntimeWorkspaceProjectRoleCatalog(nil, roles, "workspace-primary", "runtime", descriptor); err == nil || !strings.Contains(err.Error(), "cannot project relational data policy") {
+		t.Fatalf("relational policy was widened onto an Identity-owned capability: %v", err)
+	}
+}
+
 func runtimeRoleCapabilityDescriptor(actionKey string, mutate func(*runtimeext.HandlerDescriptor)) runtimeext.HandlerDescriptor {
 	descriptor := runtimeext.HandlerDescriptor{
 		ActionKey: actionKey, InputType: "generated." + strings.ReplaceAll(actionKey, ".", "_") + "Input", OutputType: "generated." + strings.ReplaceAll(actionKey, ".", "_") + "Output",
-		InputContractSHA256: strings.Repeat("a", 64), OutputContractSHA256: strings.Repeat("b", 64), HandlerRevision: "revision-1",
+		HandlerRevision: "revision-1",
 	}
 	if mutate != nil {
 		mutate(&descriptor)

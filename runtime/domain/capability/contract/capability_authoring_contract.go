@@ -3,6 +3,7 @@ package contract
 import (
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 	"crypto/sha256"
@@ -17,7 +18,7 @@ const (
 	RuntimeAuthoringContractVersion = "runtime-authoring-v1"
 	// RuntimeAuthoringContractHash identifies the published, canonical authoring catalog.
 	// The Application catalog test fails whenever catalog content changes without updating it.
-	RuntimeAuthoringContractHash = "0fca48a34b7cbf2d0df2f2eee4442b0ae4811b7d10d260f3c8e999bbfe83eaec"
+	RuntimeAuthoringContractHash = "f04fef01b6adefdde3abbd0f3b48196951fb64ecdb6db3195b8296fb649f49f7"
 )
 
 type CapabilityRuntimeAuthoringContract struct {
@@ -223,20 +224,66 @@ type CapabilityAuthoringSource struct {
 }
 
 type CapabilityAuthoringInstance struct {
-	ObjectKeys          []string                              `json:"object_keys"`
-	FieldKeys           []CapabilityAuthoringScopedValues     `json:"field_keys"`
-	ActionKeys          []string                              `json:"action_keys"`
-	WorkflowKeys        []string                              `json:"workflow_keys"`
-	ReportKeys          []string                              `json:"report_keys"`
-	RoleKeys            []string                              `json:"role_keys"`
-	PermissionKeys      []string                              `json:"permission_keys"`
-	UserIDs             []string                              `json:"user_ids"`
-	OrgIDs              []string                              `json:"org_ids"`
-	RoleIDs             []string                              `json:"role_ids"`
-	MenuIDs             []string                              `json:"menu_ids"`
-	ConnectorKeys       []string                              `json:"connector_keys"`
-	ConnectionKeys      []string                              `json:"connection_keys"`
-	ConnectorOperations []CapabilityAuthoringConnectorBinding `json:"connector_operations"`
+	ObjectKeys           []string                              `json:"object_keys"`
+	BusinessCalendarKeys []string                              `json:"business_calendar_keys"`
+	FieldKeys            []CapabilityAuthoringScopedValues     `json:"field_keys"`
+	ActionKeys           []string                              `json:"action_keys"`
+	WorkflowKeys         []string                              `json:"workflow_keys"`
+	ReportKeys           []string                              `json:"report_keys"`
+	RoleKeys             []string                              `json:"role_keys"`
+	PermissionKeys       []string                              `json:"permission_keys"`
+	UserIDs              []string                              `json:"user_ids"`
+	OrgIDs               []string                              `json:"org_ids"`
+	RoleIDs              []string                              `json:"role_ids"`
+	MenuIDs              []string                              `json:"menu_ids"`
+	ConnectorKeys        []string                              `json:"connector_keys"`
+	ConnectionKeys       []string                              `json:"connection_keys"`
+	ConnectorOperations  []CapabilityAuthoringConnectorBinding `json:"connector_operations"`
+	AssigneeResolvers    []CapabilityAuthoringAssigneeResolver `json:"assignee_resolvers"`
+	// NotificationAudienceResolverKeys is the closed set of resolver keys a
+	// project Notification event type or rule may reference in this Runtime.
+	NotificationAudienceResolverKeys []string `json:"notification_audience_resolver_keys"`
+}
+
+// CapabilityAuthoringAssigneeResolver is the public, immutable projection of
+// one project resolver descriptor. It lets authoring clients select only
+// installed resolver keys and construct config without importing Go types.
+type CapabilityAuthoringAssigneeResolver struct {
+	ResolverKey          string                                        `json:"resolver_key"`
+	ResolverRevision     string                                        `json:"resolver_revision"`
+	ConfigContractSHA256 string                                        `json:"config_contract_sha256"`
+	ConfigFields         []CapabilityAuthoringAssigneeResolverConfig   `json:"config_fields"`
+	RecordCapabilities   []CapabilityAuthoringAssigneeRecordCapability `json:"record_capabilities"`
+	RelationCapabilities []CapabilityAuthoringAssigneeRelation         `json:"relation_capabilities"`
+	IdentityProjections  []string                                      `json:"identity_projections"`
+	CandidateRoleKeys    []string                                      `json:"candidate_role_keys"`
+	MaxReadOperations    int                                           `json:"max_read_operations"`
+	MaxCandidates        int                                           `json:"max_candidates"`
+	TimeoutMilliseconds  int                                           `json:"timeout_milliseconds"`
+}
+
+type CapabilityAuthoringAssigneeResolverConfig struct {
+	Key      string   `json:"key"`
+	Type     string   `json:"type"`
+	Required bool     `json:"required"`
+	Enum     []string `json:"enum"`
+}
+
+type CapabilityAuthoringAssigneeRecordCapability struct {
+	Key          string   `json:"key"`
+	ObjectKey    string   `json:"object_key"`
+	Fields       []string `json:"fields"`
+	FilterFields []string `json:"filter_fields"`
+	MaxRows      int      `json:"max_rows"`
+}
+
+type CapabilityAuthoringAssigneeRelation struct {
+	Key              string   `json:"key"`
+	SourceObjectKey  string   `json:"source_object_key"`
+	RelationFieldKey string   `json:"relation_field_key"`
+	TargetObjectKey  string   `json:"target_object_key"`
+	TargetFields     []string `json:"target_fields"`
+	MaxTargets       int      `json:"max_targets"`
 }
 
 type CapabilityAuthoringScopedValues struct {
@@ -252,11 +299,12 @@ type CapabilityAuthoringConnectorBinding struct {
 }
 
 type CapabilityInstanceSchema struct {
-	Objects      []definitionmodel.ObjectSchema
-	Actions      []definitionmodel.ActionSchema
-	Workflows    []definitionmodel.WorkflowSchema
-	Reports      []reportmodel.ReportSchema
-	Integrations connectormodel.IntegrationSchema
+	Objects           []definitionmodel.ObjectSchema
+	BusinessCalendars []businesscalendarmodel.BusinessCalendarSchema
+	Actions           []definitionmodel.ActionSchema
+	Workflows         []definitionmodel.WorkflowSchema
+	Reports           []reportmodel.ReportSchema
+	Integrations      connectormodel.IntegrationSchema
 }
 
 func authoringContractHash(contract CapabilityRuntimeAuthoringContract) string {
@@ -283,6 +331,7 @@ func authoringInstanceHash(instance CapabilityAuthoringInstance) string {
 }
 
 func sortAuthoringContract(contract *CapabilityRuntimeAuthoringContract) {
+	sort.Strings(contract.Instance.NotificationAudienceResolverKeys)
 	sort.Slice(contract.Domains, func(i, j int) bool { return contract.Domains[i].Key < contract.Domains[j].Key })
 	for index := range contract.Domains {
 		domainContract := &contract.Domains[index]

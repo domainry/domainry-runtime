@@ -20,7 +20,7 @@ import (
 
 func (e *WorkflowProcessEngine) createApprovalTasks(ctx context.Context, process workflowmodel.WorkflowProcessInstance, node definitionmodel.WorkflowGraphNode, nodeInstance workflowmodel.WorkflowNodeInstance, principal principalmodel.Principal) (int, error) {
 	ctx = requestcontext.WithWorkspaceID(ctx, process.WorkspaceID)
-	assignees, roleKey, err := e.resolveApprovalAssignees(ctx, process, node, principal)
+	assignees, err := e.resolveApprovalAssignees(ctx, process, node, principal)
 	if err != nil {
 		return 0, err
 	}
@@ -49,8 +49,10 @@ func (e *WorkflowProcessEngine) createApprovalTasks(ctx context.Context, process
 			NodeInstanceID:        nodeInstance.ID,
 			NodeID:                node.ID,
 			Title:                 title,
-			AssigneeUserID:        assignee,
-			AssigneeRoleKey:       roleKey,
+			AssigneeUserID:        assignee.UserID,
+			AssigneeRoleKey:       assignee.RoleKey,
+			AssigneeResolverKey:   assignee.ResolverKey,
+			AssigneeEvidence:      assignee.Evidence,
 			ResolverSnapshot:      workflowpolicy.WorkflowOrderedApprovalResolvers(contract.Resolvers),
 			CandidateSource:       workflowpolicy.WorkflowCandidateSource(workflowpolicy.WorkflowOrderedApprovalResolvers(contract.Resolvers)),
 			NodeDefinitionVersion: workflowpolicy.WorkflowGraphContractVersion(process.DefinitionSnapshot),
@@ -61,7 +63,7 @@ func (e *WorkflowProcessEngine) createApprovalTasks(ctx context.Context, process
 			UpdatedAt:             now,
 		}
 		assigneeLocale := ""
-		if user, ok, getErr := e.runtime.dependencies.Identity.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(assignee)}); getErr == nil && ok {
+		if user, ok, getErr := e.runtime.dependencies.Identity.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(assignee.UserID)}); getErr == nil && ok {
 			task.AssigneeName = user.Name
 			assigneeLocale = user.Locale
 		}
@@ -71,7 +73,7 @@ func (e *WorkflowProcessEngine) createApprovalTasks(ctx context.Context, process
 		if err := e.scheduleApprovalDeadlineTimers(ctx, process, task, contract, nowTime); err != nil {
 			return 0, err
 		}
-		e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, task.ID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": assignee, "mode": mode, "sequence": task.Sequence})
+		e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, task.ID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": assignee.UserID, "assignee_role_key": assignee.RoleKey, "resolver_key": assignee.ResolverKey, "assignee_evidence": assignee.Evidence, "mode": mode, "sequence": task.Sequence})
 	}
 	return len(assignees), nil
 }
@@ -110,86 +112,413 @@ func (e *WorkflowProcessEngine) scheduleApprovalDeadlineTimers(ctx context.Conte
 	return nil
 }
 
-func (e *WorkflowProcessEngine) resolveApprovalAssignees(ctx context.Context, process workflowmodel.WorkflowProcessInstance, node definitionmodel.WorkflowGraphNode, principal principalmodel.Principal) ([]string, string, error) {
+// ResolvedAssignee preserves the primary resolver identity and every matching
+// evidence item for one candidate. The first ordered resolver is authoritative
+// for RoleKey and ResolverKey; later duplicate hits only append evidence.
+type ResolvedAssignee struct {
+	UserID      string                         `json:"user_id"`
+	RoleKey     string                         `json:"role_key,omitempty"`
+	ResolverKey string                         `json:"resolver_key"`
+	Evidence    workflowmodel.AssigneeEvidence `json:"evidence"`
+}
+
+func (e *WorkflowProcessEngine) resolveApprovalAssignees(ctx context.Context, process workflowmodel.WorkflowProcessInstance, node definitionmodel.WorkflowGraphNode, principal principalmodel.Principal) ([]ResolvedAssignee, error) {
 	ctx = requestcontext.WithWorkspaceID(ctx, process.WorkspaceID)
 	if e.runtime.dependencies.Identity == nil {
-		return nil, "", badRequest("backend.workflow.approval_identity_unavailable")
+		return nil, badRequest("backend.workflow.approval_identity_unavailable")
 	}
 	contract := workflowpolicy.WorkflowApprovalNodeContract(node)
-	resolved := []string{}
-	roleKey := ""
-	for _, resolver := range workflowpolicy.WorkflowOrderedApprovalResolvers(contract.Resolvers) {
-		users, resolvedRole, err := e.resolveApprovalAssigneeStrategy(ctx, process, resolver, principal)
+	resolved := []ResolvedAssignee{}
+	for index, resolver := range workflowpolicy.WorkflowOrderedApprovalResolvers(contract.Resolvers) {
+		candidates, err := e.resolveApprovalAssigneeStrategyAt(ctx, process, node.ID, resolver, index, principal)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
-		if resolvedRole != "" {
-			roleKey = resolvedRole
-		}
-		resolved = append(resolved, users...)
-		if strings.TrimSpace(contract.ResolverMode) == "first_match" && len(users) > 0 {
+		resolved = mergeResolvedAssignees(resolved, candidates)
+		if strings.TrimSpace(contract.ResolverMode) == "first_match" && len(candidates) > 0 {
 			break
 		}
 	}
-	resolved = workflowpolicy.WorkflowUniqueAssignees(resolved)
 	if len(resolved) == 0 && valueOrDefault(strings.TrimSpace(contract.EmptyAssigneePolicy), "fail") == "admin" {
 		admins, err := e.usersForApprovalRole(ctx, "admin")
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
-		resolved, roleKey = admins, "admin"
+		resolved = resolvedAssigneesForUsers(admins, "admin", "role", 0, workflowmodel.AssigneeEvidenceMatch{ResolverType: "role", ResolverKey: "role", ResolverIndex: 0, RoleKey: "admin"})
 	}
 	if err := workflowpolicy.WorkflowValidateApprovalAssigneeCount(node, len(resolved)); err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	return resolved, roleKey, nil
+	return resolved, nil
 }
 
-func (e *WorkflowProcessEngine) resolveApprovalAssigneeStrategy(ctx context.Context, process workflowmodel.WorkflowProcessInstance, resolver definitionmodel.WorkflowAssigneeResolver, principal principalmodel.Principal) ([]string, string, error) {
-	switch strings.TrimSpace(resolver.Type) {
+func (e *WorkflowProcessEngine) resolveApprovalAssigneeStrategy(ctx context.Context, process workflowmodel.WorkflowProcessInstance, resolver definitionmodel.WorkflowAssigneeResolver, principal principalmodel.Principal) ([]ResolvedAssignee, error) {
+	return e.resolveApprovalAssigneeStrategyAt(ctx, process, "", resolver, 0, principal)
+}
+
+func (e *WorkflowProcessEngine) resolveApprovalAssigneeStrategyAt(ctx context.Context, process workflowmodel.WorkflowProcessInstance, nodeID string, resolver definitionmodel.WorkflowAssigneeResolver, resolverIndex int, principal principalmodel.Principal) ([]ResolvedAssignee, error) {
+	resolverType := strings.TrimSpace(resolver.Type)
+	match := workflowmodel.AssigneeEvidenceMatch{ResolverType: resolverType, ResolverKey: resolverType, ResolverIndex: resolverIndex}
+	switch resolverType {
 	case "users":
-		return uniqueSortedStrings(resolver.UserIDs), "", nil
+		return resolvedAssigneesForUsers(uniqueSortedStrings(resolver.UserIDs), "", resolverType, resolverIndex, match), nil
 	case "manager", "manager_of", "initiator_manager":
 		userID := strings.TrimSpace(process.InitiatorID)
 		if resolver.Type != "initiator_manager" {
 			userID = workflowpolicy.WorkflowApprovalSubjectUserID(process.Variables, strings.TrimSpace(resolver.UserField))
 		}
 		if userID == "" {
-			return nil, "", nil
+			return nil, nil
 		}
 		user, userExists, err := e.runtime.dependencies.Identity.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(userID)})
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		if !userExists {
-			return nil, "", nil
+			return nil, nil
 		}
 		managerID := strings.TrimSpace(user.ManagerUserID)
 		if managerID == "" {
-			return nil, "", nil
+			return nil, nil
 		}
 		manager, managerExists, managerErr := e.runtime.dependencies.Identity.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(managerID)})
 		if managerErr != nil {
-			return nil, "", managerErr
+			return nil, managerErr
 		}
 		if !managerExists || manager.Status != identitysdk.UserStatusActive {
-			return nil, "", nil
+			return nil, nil
 		}
-		return []string{managerID}, "", nil
-	case "record_field":
+		match.SubjectUserID = userID
+		match.FieldKey = strings.TrimSpace(resolver.UserField)
+		return resolvedAssigneesForUsers([]string{managerID}, "", resolverType, resolverIndex, match), nil
+	case "variable_user":
 		field := strings.TrimSpace(resolver.Field)
 		userID := workflowpolicy.WorkflowPayloadString(process.Variables, field)
 		if userID == "" {
-			return nil, "", nil
+			return nil, nil
 		}
-		return []string{userID}, "", nil
+		match.VariableKey = field
+		return resolvedAssigneesForUsers([]string{userID}, "", resolverType, resolverIndex, match), nil
+	case "record_user_field":
+		field := strings.TrimSpace(resolver.Field)
+		users, err := e.resolveRecordUserField(ctx, process, field, principal)
+		if err != nil {
+			return nil, err
+		}
+		match.ObjectKey, match.RecordID, match.FieldKey = strings.TrimSpace(process.ObjectKey), strings.TrimSpace(process.RecordID), field
+		return resolvedAssigneesForUsers(users, "", resolverType, resolverIndex, match), nil
+	case "relation_user":
+		return e.resolveRelationUsers(ctx, process, resolver, resolverIndex, principal)
+	case "relation_role":
+		return e.resolveRelationRoles(ctx, process, resolver, resolverIndex, principal)
+	case "manager_chain":
+		return e.resolveManagerChain(ctx, process, resolver, resolverIndex, principal)
 	case "role":
 		roleKey := strings.TrimSpace(resolver.RoleKey)
 		users, err := e.usersForApprovalRole(ctx, roleKey)
-		return users, roleKey, err
+		match.RoleKey = roleKey
+		return resolvedAssigneesForUsers(users, roleKey, resolverType, resolverIndex, match), err
+	case "project":
+		return e.resolveProjectAssignees(ctx, process, nodeID, resolver, resolverIndex, principal)
 	default:
-		return nil, "", badRequest("backend.workflow.approval_resolver_invalid", "resolver", resolver.Type)
+		return nil, badRequest("backend.workflow.approval_resolver_invalid", "resolver", resolver.Type)
 	}
+}
+
+const workflowAssigneeRelationTargetLimit = 100
+
+type workflowAssigneeRelatedRecord struct {
+	ObjectKey string
+	RecordID  string
+	Data      map[string]any
+}
+
+func (e *WorkflowProcessEngine) resolveRelationUsers(ctx context.Context, process workflowmodel.WorkflowProcessInstance, resolver definitionmodel.WorkflowAssigneeResolver, resolverIndex int, principal principalmodel.Principal) ([]ResolvedAssignee, error) {
+	path := normalizedWorkflowRelationPath(resolver.RelationPath)
+	if len(path) == 0 {
+		return nil, badRequest("backend.workflow.approval_resolver_invalid", "resolver", resolver.Type)
+	}
+	terminalField := path[len(path)-1]
+	records, err := e.followWorkflowAssigneeRelations(ctx, process, path[:len(path)-1], principal)
+	if err != nil {
+		return nil, err
+	}
+	result := []ResolvedAssignee{}
+	for _, record := range records {
+		object, exists := e.runtime.dependencies.ObjectMap(ctx)[record.ObjectKey]
+		field, found := workflowAssigneeObjectField(object, terminalField)
+		if !exists || !found || !workflowResolverIdentityField(field) {
+			return nil, badRequest("backend.workflow.resolver_field_type_invalid", "field", record.ObjectKey+"."+terminalField)
+		}
+		match := workflowmodel.AssigneeEvidenceMatch{
+			ResolverType: "relation_user", ResolverKey: "relation_user", ResolverIndex: resolverIndex,
+			ObjectKey: record.ObjectKey, RecordID: record.RecordID, FieldKey: terminalField,
+			Facts: []workflowmodel.AssigneeEvidenceFact{{Key: "relation_path", Value: strings.Join(path, ".")}},
+		}
+		result = mergeResolvedAssignees(result, resolvedAssigneesForUsers(workflowAssigneeUserIDs(record.Data[terminalField]), "", "relation_user", resolverIndex, match))
+	}
+	return result, nil
+}
+
+func (e *WorkflowProcessEngine) resolveRelationRoles(ctx context.Context, process workflowmodel.WorkflowProcessInstance, resolver definitionmodel.WorkflowAssigneeResolver, resolverIndex int, principal principalmodel.Principal) ([]ResolvedAssignee, error) {
+	path := normalizedWorkflowRelationPath(resolver.RelationPath)
+	roleField := strings.TrimSpace(resolver.RoleField)
+	if len(path) == 0 || roleField == "" {
+		return nil, badRequest("backend.workflow.approval_resolver_invalid", "resolver", resolver.Type)
+	}
+	records, err := e.followWorkflowAssigneeRelations(ctx, process, path, principal)
+	if err != nil {
+		return nil, err
+	}
+	result := []ResolvedAssignee{}
+	for _, record := range records {
+		object, exists := e.runtime.dependencies.ObjectMap(ctx)[record.ObjectKey]
+		field, found := workflowAssigneeObjectField(object, roleField)
+		if !exists || !found || !workflowResolverRoleField(field) {
+			return nil, badRequest("backend.workflow.resolver_field_type_invalid", "field", record.ObjectKey+"."+roleField)
+		}
+		for _, roleKey := range workflowAssigneeUserIDs(record.Data[roleField]) {
+			users, roleErr := e.usersForApprovalRole(ctx, roleKey)
+			if roleErr != nil {
+				return nil, roleErr
+			}
+			match := workflowmodel.AssigneeEvidenceMatch{
+				ResolverType: "relation_role", ResolverKey: "relation_role", ResolverIndex: resolverIndex, RoleKey: roleKey,
+				ObjectKey: record.ObjectKey, RecordID: record.RecordID, FieldKey: roleField,
+				Facts: []workflowmodel.AssigneeEvidenceFact{{Key: "relation_path", Value: strings.Join(path, ".")}},
+			}
+			result = mergeResolvedAssignees(result, resolvedAssigneesForUsers(users, roleKey, "relation_role", resolverIndex, match))
+		}
+	}
+	return result, nil
+}
+
+func (e *WorkflowProcessEngine) resolveManagerChain(ctx context.Context, process workflowmodel.WorkflowProcessInstance, resolver definitionmodel.WorkflowAssigneeResolver, resolverIndex int, principal principalmodel.Principal) ([]ResolvedAssignee, error) {
+	var sourceUsers []string
+	match := workflowmodel.AssigneeEvidenceMatch{ResolverType: "manager_chain", ResolverKey: "manager_chain", ResolverIndex: resolverIndex}
+	switch strings.TrimSpace(resolver.Source) {
+	case "initiator":
+		sourceUsers = workflowAssigneeUserIDs(process.InitiatorID)
+	case "variable":
+		match.VariableKey = strings.TrimSpace(resolver.Field)
+		sourceUsers = workflowAssigneeUserIDs(process.Variables[match.VariableKey])
+	case "record":
+		match.ObjectKey, match.RecordID, match.FieldKey = strings.TrimSpace(process.ObjectKey), strings.TrimSpace(process.RecordID), strings.TrimSpace(resolver.Field)
+		users, err := e.resolveRecordUserField(ctx, process, match.FieldKey, principal)
+		if err != nil {
+			return nil, err
+		}
+		sourceUsers = users
+	default:
+		return nil, badRequest("backend.workflow.approval_resolver_invalid", "resolver", resolver.Type)
+	}
+	if resolver.MaxDepth < 1 || resolver.MaxDepth > 20 {
+		return nil, badRequest("backend.workflow.approval_resolver_invalid", "resolver", resolver.Type)
+	}
+	result := []ResolvedAssignee{}
+	for _, sourceUserID := range sourceUsers {
+		currentID := sourceUserID
+		visited := map[string]bool{currentID: true}
+		for depth := 1; depth <= resolver.MaxDepth; depth++ {
+			current, exists, err := e.runtime.dependencies.Identity.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(currentID)})
+			if err != nil {
+				return nil, err
+			}
+			if !exists || strings.TrimSpace(current.ManagerUserID) == "" {
+				break
+			}
+			managerID := strings.TrimSpace(current.ManagerUserID)
+			if visited[managerID] {
+				return nil, badRequest("backend.workflow.resolver_manager_cycle", "user", managerID)
+			}
+			visited[managerID] = true
+			manager, managerExists, managerErr := e.runtime.dependencies.Identity.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(managerID)})
+			if managerErr != nil {
+				return nil, managerErr
+			}
+			if !managerExists || manager.Status != identitysdk.UserStatusActive {
+				break
+			}
+			candidateMatch := match
+			candidateMatch.SubjectUserID = sourceUserID
+			candidateMatch.Facts = []workflowmodel.AssigneeEvidenceFact{{Key: "depth", Value: fmt.Sprint(depth)}, {Key: "manager_of", Value: currentID}}
+			result = mergeResolvedAssignees(result, resolvedAssigneesForUsers([]string{managerID}, "", "manager_chain", resolverIndex, candidateMatch))
+			currentID = managerID
+		}
+	}
+	return result, nil
+}
+
+func (e *WorkflowProcessEngine) followWorkflowAssigneeRelations(ctx context.Context, process workflowmodel.WorkflowProcessInstance, path []string, principal principalmodel.Principal) ([]workflowAssigneeRelatedRecord, error) {
+	if e.runtime.dependencies.RecordReader == nil || e.runtime.dependencies.ObjectMap == nil {
+		return nil, internalError("resolve workflow assignee relation", fmt.Errorf("workflow record reader is required"))
+	}
+	root, err := e.workflowAssigneeRecord(ctx, process.WorkspaceID, strings.TrimSpace(process.ObjectKey), strings.TrimSpace(process.RecordID), principal)
+	if err != nil {
+		return nil, err
+	}
+	records := []workflowAssigneeRelatedRecord{root}
+	for _, fieldKey := range path {
+		next := []workflowAssigneeRelatedRecord{}
+		for _, record := range records {
+			object := e.runtime.dependencies.ObjectMap(ctx)[record.ObjectKey]
+			field, found := workflowAssigneeObjectField(object, fieldKey)
+			targetObjectKey := workflowAssigneeRelationTarget(field)
+			if !found || strings.TrimSpace(field.Type) != "relation" || targetObjectKey == "" || targetObjectKey == "identity_user" || targetObjectKey == "identity_role" {
+				return nil, badRequest("backend.workflow.resolver_field_type_invalid", "field", record.ObjectKey+"."+fieldKey)
+			}
+			for _, recordID := range workflowAssigneeUserIDs(record.Data[fieldKey]) {
+				target, readErr := e.workflowAssigneeRecord(ctx, process.WorkspaceID, targetObjectKey, recordID, principal)
+				if readErr != nil {
+					return nil, readErr
+				}
+				next = append(next, target)
+				if len(next) > workflowAssigneeRelationTargetLimit {
+					return nil, badRequest("backend.workflow.resolver_relation_limit_exceeded", "limit", fmt.Sprint(workflowAssigneeRelationTargetLimit))
+				}
+			}
+		}
+		records = uniqueWorkflowAssigneeRecords(next)
+		if len(records) == 0 {
+			break
+		}
+	}
+	return records, nil
+}
+
+func (e *WorkflowProcessEngine) workflowAssigneeRecord(ctx context.Context, workspaceID, objectKey, recordID string, principal principalmodel.Principal) (workflowAssigneeRelatedRecord, error) {
+	object, exists := e.runtime.dependencies.ObjectMap(ctx)[objectKey]
+	if !exists || objectKey == "" || recordID == "" {
+		return workflowAssigneeRelatedRecord{}, badRequest("backend.workflow.resolver_record_not_found", "object", objectKey, "record", recordID)
+	}
+	record, found, err := e.runtime.dependencies.RecordReader.GetWorkflowRecord(ctx, workspaceID, object, recordID, principal)
+	if err != nil {
+		return workflowAssigneeRelatedRecord{}, err
+	}
+	if !found {
+		return workflowAssigneeRelatedRecord{}, badRequest("backend.workflow.resolver_record_not_found", "object", objectKey, "record", recordID)
+	}
+	return workflowAssigneeRelatedRecord{ObjectKey: objectKey, RecordID: record.ID, Data: record.Data}, nil
+}
+
+func normalizedWorkflowRelationPath(path []string) []string {
+	result := make([]string, 0, len(path))
+	for _, field := range path {
+		if field = strings.TrimSpace(field); field != "" {
+			result = append(result, field)
+		}
+	}
+	return result
+}
+
+func uniqueWorkflowAssigneeRecords(records []workflowAssigneeRelatedRecord) []workflowAssigneeRelatedRecord {
+	seen := map[string]bool{}
+	result := make([]workflowAssigneeRelatedRecord, 0, len(records))
+	for _, record := range records {
+		key := record.ObjectKey + "\x00" + record.RecordID
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, record)
+		}
+	}
+	return result
+}
+
+func workflowAssigneeObjectField(object definitionmodel.ObjectSchema, fieldKey string) (definitionmodel.FieldSchema, bool) {
+	for _, field := range object.Fields {
+		if field.Key == strings.TrimSpace(fieldKey) && field.DisabledAt == "" {
+			return field, true
+		}
+	}
+	return definitionmodel.FieldSchema{}, false
+}
+
+func workflowAssigneeRelationTarget(field definitionmodel.FieldSchema) string {
+	for _, target := range []string{strings.TrimSpace(fmt.Sprint(field.Config["object_key"])), strings.TrimSpace(fmt.Sprint(field.Config["target"])), strings.TrimSpace(field.Validation.Target)} {
+		if target != "" && target != "<nil>" {
+			return target
+		}
+	}
+	return ""
+}
+
+func workflowResolverRoleField(field definitionmodel.FieldSchema) bool {
+	switch strings.TrimSpace(field.Type) {
+	case "text", "select", "multi_select", "role", "identity_role":
+		return true
+	case "relation":
+		return workflowAssigneeRelationTarget(field) == "identity_role"
+	default:
+		return false
+	}
+}
+
+func (e *WorkflowProcessEngine) resolveRecordUserField(ctx context.Context, process workflowmodel.WorkflowProcessInstance, field string, principal principalmodel.Principal) ([]string, error) {
+	if e.runtime.dependencies.RecordReader == nil || e.runtime.dependencies.ObjectMap == nil {
+		return nil, internalError("resolve workflow record user field", fmt.Errorf("workflow record reader is required"))
+	}
+	objectKey, recordID := strings.TrimSpace(process.ObjectKey), strings.TrimSpace(process.RecordID)
+	object, exists := e.runtime.dependencies.ObjectMap(ctx)[objectKey]
+	if objectKey == "" || recordID == "" || !exists {
+		return nil, badRequest("backend.workflow.resolver_record_not_found", "object", objectKey, "record", recordID)
+	}
+	record, found, err := e.runtime.dependencies.RecordReader.GetWorkflowRecord(ctx, process.WorkspaceID, object, recordID, principal)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, badRequest("backend.workflow.resolver_record_not_found", "object", objectKey, "record", recordID)
+	}
+	return workflowAssigneeUserIDs(record.Data[field]), nil
+}
+
+func workflowAssigneeUserIDs(value any) []string {
+	switch typed := value.(type) {
+	case string:
+		return uniqueSortedStrings([]string{typed})
+	case []string:
+		return uniqueSortedStrings(typed)
+	case []any:
+		values := make([]string, 0, len(typed))
+		for _, current := range typed {
+			if value, ok := current.(string); ok {
+				values = append(values, value)
+			}
+		}
+		return uniqueSortedStrings(values)
+	default:
+		return nil
+	}
+}
+
+func resolvedAssigneesForUsers(userIDs []string, roleKey, resolverKey string, resolverIndex int, match workflowmodel.AssigneeEvidenceMatch) []ResolvedAssignee {
+	result := make([]ResolvedAssignee, 0, len(userIDs))
+	for _, userID := range uniqueSortedStrings(userIDs) {
+		current := match
+		current.ResolverIndex = resolverIndex
+		result = append(result, ResolvedAssignee{UserID: userID, RoleKey: roleKey, ResolverKey: resolverKey, Evidence: workflowmodel.AssigneeEvidence{Matches: []workflowmodel.AssigneeEvidenceMatch{current}}})
+	}
+	return result
+}
+
+func mergeResolvedAssignees(existing, candidates []ResolvedAssignee) []ResolvedAssignee {
+	positions := make(map[string]int, len(existing)+len(candidates))
+	for index := range existing {
+		positions[existing[index].UserID] = index
+	}
+	for _, candidate := range candidates {
+		candidate.UserID = strings.TrimSpace(candidate.UserID)
+		if candidate.UserID == "" {
+			continue
+		}
+		if index, exists := positions[candidate.UserID]; exists {
+			existing[index].Evidence.Matches = append(existing[index].Evidence.Matches, candidate.Evidence.Matches...)
+			continue
+		}
+		positions[candidate.UserID] = len(existing)
+		existing = append(existing, candidate)
+	}
+	return existing
 }
 
 func (e *WorkflowProcessEngine) usersForApprovalRole(ctx context.Context, roleKey string) ([]string, error) {

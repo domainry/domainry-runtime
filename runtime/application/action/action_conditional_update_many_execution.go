@@ -99,6 +99,7 @@ func (e *businessActionExecution) planConditionalUpdateMany(ctx context.Context,
 	ids := make([]string, 0, len(records))
 	seen := map[string]bool{}
 	var commonPatch map[string]any
+	actionResource, actionOperation := definitionmodel.ActionPermissionSubject(e.action)
 	for index, before := range records {
 		if strings.TrimSpace(before.ID) == "" || seen[before.ID] {
 			return result, nil, apperror.New(apperror.KindConflict, "backend.action.conditional_update_many_record_set_invalid", nil, nil)
@@ -107,7 +108,9 @@ func (e *businessActionExecution) planConditionalUpdateMany(ctx context.Context,
 		e.observeRecord(request.ObjectKey, before)
 		planCtx := recordmutation.WithMutationInvocation(ctx, recordmutation.MutationInvocation{
 			Source: transactionmodel.MutationSourceAction, ActionKey: e.action.Key, IdempotencyKey: e.invocation.IdempotencyKey,
-			EffectAuthority: actionEffectAuthority(e.action.EffectSet), ReadEffectAuthority: actionReadEffectAuthority(e.action.EffectSet), TargetOrganizationID: e.targetOrganization.ID,
+			ActionResource: actionResource, ActionOperation: actionOperation,
+			EffectAuthority: actionEffectAuthority(e.action.EffectSet), ReadEffectAuthority: actionReadEffectAuthority(e.action.EffectSet), AssuranceEvidence: e.invocation.AssuranceEvidence,
+			WorkflowTriggers: []string{"action_executed:" + e.action.Key}, TargetOrganizationID: e.targetOrganization.ID,
 		})
 		plan, _, err := e.dependencies.PlanConditionalUpdateLockedRecord(planCtx, request.ObjectKey, before, transactionmodel.ConditionalUpdateInput{Patch: request.Fields}, e.actionMutationPrincipal())
 		if err != nil {

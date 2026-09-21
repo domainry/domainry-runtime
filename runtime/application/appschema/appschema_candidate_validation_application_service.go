@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	"reflect"
 	"strings"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
+	businesscalendarpolicy "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/policy"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	manifestvalidation "github.com/domainry/domainry-runtime/runtime/domain/manifest/validation"
@@ -26,11 +28,11 @@ func (s *ApplicationSchemaApplicationService) ValidateMetadataCandidate(ctx cont
 // ValidateCurrentRuntimeDefinitions reuses the Change Plan candidate boundary
 // for the active graph while resolving connector references against the live
 // Runtime catalog, matching bootstrap and manifest validation semantics.
-func (s *ApplicationSchemaApplicationService) ValidateCurrentRuntimeDefinitions(ctx context.Context, connectorCatalog []connectormodel.ConnectorSchema) error {
+func (s *ApplicationSchemaApplicationService) ValidateCurrentRuntimeDefinitions(ctx context.Context, connectorCatalog []appschemamodel.ConnectorSchema) error {
 	return s.validateMetadataCandidateWithConnectorCatalog(ctx, nil, connectorCatalog)
 }
 
-func (s *ApplicationSchemaApplicationService) validateMetadataCandidateWithConnectorCatalog(ctx context.Context, mutations []appschemamodel.ApplicationDefinitionMutation, connectorCatalog []connectormodel.ConnectorSchema) error {
+func (s *ApplicationSchemaApplicationService) validateMetadataCandidateWithConnectorCatalog(ctx context.Context, mutations []appschemamodel.ApplicationDefinitionMutation, connectorCatalog []appschemamodel.ConnectorSchema) error {
 	if s == nil || s.repository == nil {
 		return badRequest("backend.metadata.candidate_invalid", "diagnostic", "metadata repository is unavailable")
 	}
@@ -38,6 +40,7 @@ func (s *ApplicationSchemaApplicationService) validateMetadataCandidateWithConne
 	if err != nil {
 		return wrapMetadataError(err)
 	}
+	currentCalendars := append([]businesscalendarmodel.BusinessCalendarSchema(nil), candidate.BusinessCalendars...)
 	for _, mutation := range mutations {
 		if err := applyMetadataCandidateMutation(&candidate, mutation); err != nil {
 			return badRequest("backend.metadata.candidate_invalid", "resource_type", mutation.ResourceType, "resource_key", mutation.ResourceKey, "diagnostic", err.Error())
@@ -46,10 +49,30 @@ func (s *ApplicationSchemaApplicationService) validateMetadataCandidateWithConne
 	if err := manifestvalidation.ValidateRuntimeDefinitionGraphWithConnectorCatalog(candidate, connectorCatalog); err != nil {
 		return badRequest("backend.metadata.candidate_invalid", "diagnostic", err.Error())
 	}
+	if err := validateBusinessCalendarRevisionChanges(currentCalendars, candidate.BusinessCalendars); err != nil {
+		return badRequest("backend.metadata.candidate_invalid", "resource_type", "business_calendar", "diagnostic", err.Error())
+	}
 	for _, action := range candidate.Actions {
 		if issues := validateBusinessActionDefinitionIssuesWithObjects(action, candidate.Objects); len(issues) > 0 {
 			return badRequest("backend.metadata.candidate_invalid", "resource_type", "action", "resource_key", action.Key, "diagnostic", issues[0].ErrorCode+":"+issues[0].FieldPath)
 		}
+	}
+	return nil
+}
+
+func validateBusinessCalendarRevisionChanges(current, candidate []businesscalendarmodel.BusinessCalendarSchema) error {
+	byKey := make(map[string]businesscalendarmodel.BusinessCalendarSchema, len(current))
+	for _, value := range current {
+		value = businesscalendarpolicy.Normalize(value)
+		byKey[value.Key] = value
+	}
+	for _, value := range candidate {
+		value = businesscalendarpolicy.Normalize(value)
+		previous, found := byKey[value.Key]
+		if !found || previous.Revision != value.Revision || reflect.DeepEqual(previous, value) {
+			continue
+		}
+		return fmt.Errorf("backend.business_calendar.revision_conflict: calendar %q changed without a new revision", value.Key)
 	}
 	return nil
 }
@@ -90,12 +113,14 @@ func applyMetadataCandidateMutation(candidate *manifestmodel.ManifestSchema, mut
 		return candidateApplySlice(&candidate.Actions, resourceKey, payload, remove, func(value definitionmodel.ActionSchema) string { return value.Key })
 	case "workflow":
 		return candidateApplySlice(&candidate.Workflows, resourceKey, payload, remove, func(value definitionmodel.WorkflowSchema) string { return value.Key })
+	case "business_calendar":
+		return candidateApplySlice(&candidate.BusinessCalendars, resourceKey, payload, remove, func(value businesscalendarmodel.BusinessCalendarSchema) string { return value.Key })
 	case "automation_rule":
 		return candidateApplySlice(&candidate.AutomationRules, resourceKey, payload, remove, func(value automationmodel.AutomationRuleSchema) string { return value.Key })
 	case "dictionary":
 		return candidateApplySlice(&candidate.Dictionaries, resourceKey, payload, remove, func(value appschemamodel.DictionarySchema) string { return value.Key })
 	case "integration_event_mapping":
-		return candidateApplySlice(&candidate.Integrations.EventMappings, resourceKey, payload, remove, func(value connectormodel.IntegrationEventMappingSchema) string { return value.Key })
+		return candidateApplySlice(&candidate.Integrations.EventMappings, resourceKey, payload, remove, func(value appschemamodel.IntegrationEventMappingSchema) string { return value.Key })
 	case "skill":
 		return candidateApplySlice(&candidate.Skills, resourceKey, payload, remove, func(value agentsdk.SkillSchema) string { return value.Key })
 	case "agent":

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 func TestRecordSubjectLifecycleRequiresExplicitNonUserIdentityAndErasePolicy(t *testing.T) {
@@ -11,7 +12,7 @@ func TestRecordSubjectLifecycleRequiresExplicitNonUserIdentityAndErasePolicy(t *
 		{Key: "user", Type: "user"},
 		{Key: "customer_ref", Type: "text", Config: map[string]any{"lifecycle_subject_identity": true}},
 		{Key: "email", Type: "email", Config: map[string]any{"lifecycle_erase": "anonymize"}},
-		{Key: "attachment", Type: "text", Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete"}},
+		{Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete"}},
 	}}
 	fields := RecordSubjectIdentityFields(object)
 	if len(fields) != 2 || fields[0].Key != "user" || fields[1].Key != "customer_ref" {

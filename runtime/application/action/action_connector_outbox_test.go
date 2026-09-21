@@ -47,6 +47,12 @@ func TestBusinessActionExecutionRejectsConnectorCallsOutsidePublishedGrant(t *te
 	} else {
 		lease.Release()
 	}
+	execution.invocation.Source = actionmodel.ActionSourceScheduler
+	if lease, err := execution.AcquireSynchronousConnectorCall(writeCall); err != nil {
+		t.Fatalf("non-reclaimable Scheduler side effect error=%v", err)
+	} else {
+		lease.Release()
+	}
 	execution.invocation.PreventExecutionReclaim = false
 	if _, err := execution.AcquireSynchronousConnectorCall(writeCall); apperror.CodeOf(err) != runtimeext.ConnectorActionSideEffectOutboxErrorCode {
 		t.Fatalf("reclaimable timer side effect error=%v", err)

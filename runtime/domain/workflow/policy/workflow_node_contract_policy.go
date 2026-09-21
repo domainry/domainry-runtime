@@ -31,7 +31,7 @@ func WorkflowAssigneeResolverIsValid(resolver definitionmodel.WorkflowAssigneeRe
 	switch strings.TrimSpace(resolver.Type) {
 	case "users":
 		return workflowHasNonEmptyUniqueValue(resolver.UserIDs)
-	case "record_field":
+	case "variable_user", "record_user_field":
 		return strings.TrimSpace(resolver.Field) != ""
 	case "manager", "manager_of":
 		return strings.TrimSpace(resolver.UserField) != ""
@@ -39,6 +39,40 @@ func WorkflowAssigneeResolverIsValid(resolver definitionmodel.WorkflowAssigneeRe
 		return true
 	case "role":
 		return strings.TrimSpace(resolver.RoleKey) != ""
+	case "project":
+		return strings.TrimSpace(resolver.ResolverKey) != ""
+	case "relation_user":
+		return workflowAssigneeRelationPathValid(resolver.RelationPath)
+	case "relation_role":
+		return workflowAssigneeRelationPathValid(resolver.RelationPath) && strings.TrimSpace(resolver.RoleField) != ""
+	case "manager_chain":
+		return workflowManagerChainResolverValid(resolver)
+	default:
+		return false
+	}
+}
+
+func workflowAssigneeRelationPathValid(path []string) bool {
+	if len(path) == 0 || len(path) > 5 {
+		return false
+	}
+	for _, field := range path {
+		if strings.TrimSpace(field) == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func workflowManagerChainResolverValid(resolver definitionmodel.WorkflowAssigneeResolver) bool {
+	if resolver.MaxDepth < 1 || resolver.MaxDepth > 20 {
+		return false
+	}
+	switch strings.TrimSpace(resolver.Source) {
+	case "initiator":
+		return true
+	case "variable", "record":
+		return strings.TrimSpace(resolver.Field) != ""
 	default:
 		return false
 	}

@@ -103,7 +103,7 @@ func (e *WorkflowProcessEngine) activateRouteApprovalStep(ctx context.Context, p
 		if err := e.insertApprovalTaskWithNotification(ctx, *process, task, ""); err != nil {
 			return "", false, internalError("insert workflow route task", err)
 		}
-		e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, task.ID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": task.AssigneeUserID, "mode": step.Mode, "sequence": index + 1, "step_key": step.StepKey})
+		e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, task.ID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": task.AssigneeUserID, "assignee_role_key": task.AssigneeRoleKey, "resolver_key": task.AssigneeResolverKey, "assignee_evidence": task.AssigneeEvidence, "mode": step.Mode, "sequence": index + 1, "step_key": step.StepKey})
 	}
 	step.Status, step.NodeInstanceID, step.UpdatedAt = "active", nodeInstance.ID, now
 	activated, err := e.runtime.dependencies.Routes.UpdateRouteStepCAS(ctx, process.WorkspaceID, step, "pending")
@@ -128,9 +128,11 @@ func WorkflowRouteStepTasks(ctx context.Context, process workflowmodel.WorkflowP
 	title := valueOrDefault(strings.TrimSpace(step.Title), valueOrDefault(strings.TrimSpace(contract.Title), node.Name))
 	tasks := make([]workflowmodel.WorkflowTask, 0, len(step.AssigneeSnapshot))
 	for index, assignee := range step.AssigneeSnapshot {
+		resolverKey := "route:" + strings.TrimSpace(step.StepKey)
 		tasks = append(tasks, workflowmodel.WorkflowTask{
 			WorkspaceID: process.WorkspaceID, ID: workflowProcessID(ctx, "task"), ProcessID: process.ID, NodeInstanceID: nodeInstanceID,
 			NodeID: node.ID, Title: title, AssigneeUserID: assignee.UserID, AssigneeName: assignee.DisplayName, AssigneeRoleKey: assignee.RoleKey,
+			AssigneeResolverKey: resolverKey, AssigneeEvidence: workflowmodel.AssigneeEvidence{Matches: []workflowmodel.AssigneeEvidenceMatch{{ResolverType: "route", ResolverKey: resolverKey, ResolverIndex: index, RoleKey: assignee.RoleKey}}},
 			CandidateSource: "route", NodeDefinitionVersion: workflowpolicy.WorkflowGraphContractVersion(process.DefinitionSnapshot),
 			Sequence: index + 1, Status: "open", DueAt: workflowpolicy.WorkflowApprovalDueAt(contract, node, createdAt),
 			CreatedAt: now, UpdatedAt: now,

@@ -8,6 +8,7 @@ import (
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
 )
@@ -26,6 +27,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 	}
 	services := &runtimeAssembly{
 		schedulerDefinitions:                cloneSchedulerDefinitionMaps(manifest.SchedulerDefinitions),
+		businessCalendars:                   append([]businesscalendarmodel.BusinessCalendarSchema(nil), manifest.BusinessCalendars...),
 		productBrandName:                    deps.ProductBrandName,
 		actionRuntimeRevision:               deps.ActionRuntimeRevision,
 		actionProjectRevision:               deps.ActionProjectRevision,
@@ -51,6 +53,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		workflowRouteRepo:                   deps.WorkflowRoutes,
 		workflowNotificationCompiler:        deps.WorkflowNotificationCompiler,
 		workflowTaskNotificationCommitter:   deps.WorkflowTaskNotificationCommitter,
+		projectExtensions:                   deps.ProjectExtensions,
 		notificationIntentPublisher:         deps.NotificationIntentPublisher,
 		recordNotificationCompiler:          deps.RecordNotificationCompiler,
 		reportNotificationCompiler:          deps.ReportNotificationCompiler,
@@ -71,6 +74,7 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		openVerifiedFile:                    deps.OpenVerifiedFile,
 		issueFileDownload:                   deps.IssueFileDownload,
 		createDerivedFile:                   deps.CreateDerivedFile,
+		validateFileReferences:              deps.ValidateFileReferences,
 		workspaceAggregateCatalog:           deps.WorkspaceAggregateCatalog,
 		workspaceActiveResolver:             deps.WorkspaceActiveResolver,
 		workspaceUsageResolver:              deps.WorkspaceUsageResolver,

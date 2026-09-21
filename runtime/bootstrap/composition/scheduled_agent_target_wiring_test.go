@@ -204,7 +204,7 @@ func TestSignedSchedulerCallbackReauthorizesAndStartsAgentTask(t *testing.T) {
 	handler.RegisterRoutes(mux)
 
 	body, err := json.Marshal(map[string]any{
-		"runtime_id": "runtime-a", "execution_id": "scheduler-run-1", "idempotency_key": "plan-weekly:2026-09-14T01:00:00Z", "due_at": now,
+		"runtime_id": "runtime-a", "execution_id": "scheduler-run-1", "definition_key": "scheduled-plan:weekly", "idempotency_key": "plan-weekly:2026-09-14T01:00:00Z", "due_at": now,
 		"target": map[string]any{"type": "runtime_operation", "owner": "agent", "operation": "conversation_task_start", "payload": json.RawMessage(scheduledAgentPayload(t, owner))},
 	})
 	if err != nil {

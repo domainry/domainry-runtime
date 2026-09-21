@@ -30,7 +30,7 @@ func TestWorkflowProcessStoreDecisionFiltersAndMissingRows(t *testing.T) {
 	if err := repository.InsertNode(t.Context(), "workspace-a", node); err != nil {
 		t.Fatal(err)
 	}
-	task := workflowmodel.WorkflowTask{ID: "task-edge", ProcessID: process.ID, NodeInstanceID: node.ID, NodeID: node.NodeID, Title: "Approve", AssigneeUserID: "manager", AssigneeName: "Manager", AssigneeRoleKey: "manager", ResolverSnapshot: []definitionmodel.WorkflowAssigneeResolver{}, CandidateSource: "role", NodeDefinitionVersion: 2, Sequence: 1, Status: "open", DueAt: "2026-01-03T00:00:00Z", CreatedAt: "2026-01-02T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z"}
+	task := workflowmodel.WorkflowTask{ID: "task-edge", ProcessID: process.ID, NodeInstanceID: node.ID, NodeID: node.NodeID, Title: "Approve", AssigneeUserID: "manager", AssigneeName: "Manager", AssigneeRoleKey: "manager", AssigneeResolverKey: "role", AssigneeEvidence: workflowmodel.AssigneeEvidence{Matches: []workflowmodel.AssigneeEvidenceMatch{{ResolverType: "role", ResolverKey: "role", RoleKey: "manager"}}}, ResolverSnapshot: []definitionmodel.WorkflowAssigneeResolver{}, CandidateSource: "role", NodeDefinitionVersion: 2, Sequence: 1, Status: "open", DueAt: "2026-01-03T00:00:00Z", CreatedAt: "2026-01-02T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z"}
 	if err := repository.InsertTask(t.Context(), "workspace-a", task); err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestWorkflowProcessStoreDecisionFiltersAndMissingRows(t *testing.T) {
 	if values, err := repository.ListProcesses(t.Context(), "workspace-a", workflowmodel.WorkflowProcessFilter{ProcessID: " process-configuration ", Limit: 10}); err != nil || len(values) != 1 || values[0].ID != "process-configuration" {
 		t.Fatalf("resource process=%#v error=%v", values, err)
 	}
-	if values, err := repository.ListTasks(t.Context(), "workspace-a", " ", " ", " ", 0); err != nil || len(values) != 1 {
+	if values, err := repository.ListTasks(t.Context(), "workspace-a", " ", " ", " ", 0); err != nil || len(values) != 1 || values[0].AssigneeResolverKey != "role" || len(values[0].AssigneeEvidence.Matches) != 1 || values[0].AssigneeEvidence.Matches[0].RoleKey != "manager" {
 		t.Fatalf("tasks=%#v error=%v", values, err)
 	}
 	if values, err := repository.ListEvents(t.Context(), "workspace-a", process.ID, 1001); err != nil || len(values) != 1 {

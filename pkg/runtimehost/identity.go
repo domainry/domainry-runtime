@@ -14,9 +14,7 @@ import (
 var (
 	ErrRuntimeVersionRequired      = errors.New("runtime version is required")
 	ErrRuntimeextVersionMismatch   = errors.New("runtimeext contract version mismatch")
-	ErrRuntimeextHashMismatch      = errors.New("runtimeext contract hash mismatch")
 	ErrConnectorVersionMismatch    = errors.New("connector contract version mismatch")
-	ErrConnectorHashMismatch       = errors.New("connector contract hash mismatch")
 	ErrDomainSDKContractRequired   = errors.New("domain SDK contract identity is required")
 	ErrDomainSDKGeneratorRequired  = errors.New("domain SDK generator version is required")
 	ErrDomainSDKHashInvalid        = errors.New("domain SDK SHA-256 identity is invalid")
@@ -43,9 +41,7 @@ type DomainSDKIdentity struct {
 type BuildIdentity struct {
 	RuntimeVersion            string
 	RuntimeextContractVersion string
-	RuntimeextContractSHA256  string
 	ConnectorContractVersion  string
-	ConnectorContractSHA256   string
 	DomainSDK                 DomainSDKIdentity
 }
 
@@ -56,14 +52,8 @@ func (i BuildIdentity) Validate() error {
 	if i.RuntimeextContractVersion != runtimeext.ContractVersion {
 		return fmt.Errorf("%w: project=%q runtime=%q", ErrRuntimeextVersionMismatch, i.RuntimeextContractVersion, runtimeext.ContractVersion)
 	}
-	if i.RuntimeextContractSHA256 != runtimeext.ContractSHA256 {
-		return fmt.Errorf("%w: project=%q runtime=%q", ErrRuntimeextHashMismatch, i.RuntimeextContractSHA256, runtimeext.ContractSHA256)
-	}
 	if i.ConnectorContractVersion != connector.ContractVersion {
 		return fmt.Errorf("%w: project=%q runtime=%q", ErrConnectorVersionMismatch, i.ConnectorContractVersion, connector.ContractVersion)
-	}
-	if i.ConnectorContractSHA256 != connector.ContractSHA256 {
-		return fmt.Errorf("%w: project=%q runtime=%q", ErrConnectorHashMismatch, i.ConnectorContractSHA256, connector.ContractSHA256)
 	}
 	// The repository's generic Runtime binary has no generated project SDK.
 	// Project composition always supplies this identity and is validated below.

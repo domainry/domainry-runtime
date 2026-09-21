@@ -34,7 +34,7 @@ import (
 
 func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthoringSchemaProvider, policy recordQueryPolicy, metadata interface {
 	ValidateApplicationDefinition(context.Context, string, string, appschemamodel.ApplicationDefinitionUpsertRequest, principalmodel.Principal) (appschemamodel.ApplicationDefinitionValidationResult, error)
-}, handlers *runtimeext.BusinessHandlerRegistry, audit func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any)) *actionapplication.ActionApplicationService {
+}, handlers *runtimeext.ProjectExtensionRegistry, audit func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any)) *actionapplication.ActionApplicationService {
 	_ = metadata
 	records.ActionExecutionRuntime.ConfigureFingerprintConflictAudit(func(ctx context.Context, conflict actionruntime.ActionFingerprintConflictAudit) error {
 		idempotencyKey := ""

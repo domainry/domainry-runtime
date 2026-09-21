@@ -36,17 +36,17 @@ var BookClass runtimeext.Handler[BookClassCapabilities, BookClassInput, BookClas
 		return BookClassResult{}, nil
 	}
 
-func Extensions(handler runtimeext.BusinessHandler) runtimeext.ExtensionSet {
-	return runtimeext.ExtensionSet{BusinessHandlers: []runtimeext.BusinessHandler{handler}}
+func Extensions(handler runtimeext.BusinessHandler) runtimeext.ProjectExtensions {
+	return runtimeext.ProjectExtensions{BusinessHandlers: []runtimeext.BusinessHandler{handler}}
 }
 
-func FrozenRegistry(handler runtimeext.BusinessHandler) (*runtimeext.BusinessHandlerRegistry, error) {
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+func FrozenRegistry(handler runtimeext.BusinessHandler) (*runtimeext.ProjectExtensionRegistry, error) {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		return nil, err
 	}
 	registry.Freeze()
-	if _, found := registry.Binding(handler.Descriptor().ActionKey); !found {
+	if _, found := registry.BusinessHandlerBinding(handler.Descriptor().ActionKey); !found {
 		panic("registered Action binding is missing")
 	}
 	return registry, nil

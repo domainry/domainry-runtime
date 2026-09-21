@@ -1,6 +1,9 @@
 package composition
 
-import recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
+import (
+	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
+	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
+)
 
 func initializeWorkflowAutomationAndGovernance(s *runtimeAssembly, deps RuntimeServicesDependencies) {
 	// Workflow dependencies capture the timer port by value, so construct it
@@ -10,6 +13,9 @@ func initializeWorkflowAutomationAndGovernance(s *runtimeAssembly, deps RuntimeS
 	s.targetExecutionService = newTargetExecutionApplicationService(newScheduledWorkflowRuntimeAdapter(s), s.workerDependencies)
 	s.schedulerDefinitionSource = schedulerDefinitionSourceAdapter{definitions: s.metadataDefinitions, authored: s.schedulerDefinitions}
 	s.authoringCapabilities = newCapabilityAuthoringApplicationService(s)
+	s.authoringCapabilities.UseAssigneeResolverReferenceSource(func() []capabilitycontract.CapabilityAuthoringAssigneeResolver {
+		return capabilityAssigneeResolverReferences(s.projectExtensions)
+	})
 	s.businessReferences = assembleChangePlanReferenceApplication(s, businessReferenceRuntimeAdapter{records: s, workflows: s.workflowApplicationService}, s.businessEvidenceRepo)
 	s.applicationSchemaService = assembleApplicationSchema(s)
 	s.automationApplicationService = assembleAutomationApplication(s)

@@ -1,4 +1,4 @@
-package capabilityprovider
+package capability
 
 import (
 	"context"
@@ -15,6 +15,8 @@ import (
 	appschemavalidation "github.com/domainry/domainry-runtime/runtime/domain/appschema/validation"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
+	businesscalendarpolicy "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/policy"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestvalidation "github.com/domainry/domainry-runtime/runtime/domain/manifest/validation"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
@@ -42,9 +44,34 @@ var workflowAuthoringKeys = stringSet(
 )
 
 func validateSchemaCandidate(_ context.Context, request modulecapability.ValidationRequest) (modulecapability.ValidationResult, error) {
-	if request.Kind != "schema.object" {
+	switch request.Kind {
+	case "schema.object":
+		return validateSchemaObjectCandidate(request)
+	case "schema.business_calendar":
+		var calendar businesscalendarmodel.BusinessCalendarSchema
+		if err := modulecapability.DecodeKeyedAuthoringValue(request.Candidate, "key", &calendar); err != nil {
+			return validationDiagnostics(invalidInputDiagnostic("schema", "$.candidate.value", err)), nil
+		}
+		if err := businesscalendarpolicy.Validate(calendar); err != nil {
+			path := "$.candidate.value"
+			var validation *businesscalendarpolicy.ValidationError
+			if errors.As(err, &validation) && strings.TrimSpace(validation.Path) != "" {
+				path += "." + validation.Path
+			}
+			return validationDiagnostics(errorDiagnostic("schema", businesscalendarpolicy.ValidationCode(err), path, err, nil)), nil
+		}
+		return validationDiagnostics(), nil
+	case "schema.dictionary":
+		if err := appschemavalidation.ApplicationSchemaValidateDictionaryDefinition(request.Candidate.Key, request.Candidate.Value); err != nil {
+			return validationDiagnostics(diagnosticFromError("schema", "schema.dictionary.invalid", "$.candidate.value", err)), nil
+		}
+		return validationDiagnostics(), nil
+	default:
 		return modulecapability.ValidationResult{}, &modulecapability.Error{StatusCode: 400, Code: "module_capability.validation_scope_invalid"}
 	}
+}
+
+func validateSchemaObjectCandidate(request modulecapability.ValidationRequest) (modulecapability.ValidationResult, error) {
 	object, source, err := decodeObjectAuthoringFragment(request.Candidate)
 	if err != nil {
 		return validationDiagnostics(invalidInputDiagnostic("schema", "$.candidate.value", err)), nil

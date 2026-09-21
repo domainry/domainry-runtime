@@ -153,8 +153,8 @@ func TestRuntimeReleaseIntegrityFailureEdges(t *testing.T) {
 		t.Fatalf("empty schema=%v", err)
 	}
 
-	mutableHandlers := runtimeext.NewBusinessHandlerRegistry()
-	frozenHandlers := runtimeext.NewBusinessHandlerRegistry()
+	mutableHandlers := runtimeext.NewProjectExtensionRegistry()
+	frozenHandlers := runtimeext.NewProjectExtensionRegistry()
 	frozenHandlers.Freeze()
 	mutableConnectors := connector.NewRegistry()
 	frozenConnectors := connector.NewRegistry()
@@ -168,9 +168,9 @@ func TestRuntimeReleaseIntegrityFailureEdges(t *testing.T) {
 			t.Fatalf("mutable registry error=%v", err)
 		}
 	}
-	handlerHash, _ := deploymentmodel.RuntimeRegistrySHA256("domainry-handler-registry-v1", frozenHandlers.Descriptors())
+	extensionHash, _ := deploymentmodel.RuntimeRegistrySHA256("domainry-project-extension-registry-v1", frozenHandlers.Descriptors())
 	registryDrift := NewRuntimeReleaseIntegrity(identity, RuntimeReleaseArtifactEvidence{Verified: true}, "schema", func(context.Context) (string, error) { return "schema", nil }, frozenHandlers, frozenConnectors)
-	registryDrift.identity.HandlerRegistrySHA256 = handlerHash
+	registryDrift.identity.ProjectExtensionRegistrySHA256 = extensionHash
 	registryDrift.identity.ConnectorRegistrySHA256 = strings.Repeat("0", 64)
 	if err := registryDrift.RegistryReadiness(t.Context()); !errors.Is(err, ErrRuntimeReleaseRegistryIntegrity) {
 		t.Fatalf("connector registry drift=%v", err)

@@ -74,8 +74,14 @@ func ProtocolValueMatchesType(value any, fieldType string) bool {
 		return true
 	}
 	switch strings.TrimSpace(fieldType) {
-	case "text", "long_text", "date", "datetime", "file":
+	case "text", "long_text", "date", "datetime":
 		_, ok := value.(string)
+		return ok
+	case "file":
+		_, ok := value.(map[string]any)
+		return ok
+	case "file_list":
+		_, ok := value.([]any)
 		return ok
 	case "integer":
 		switch typed := value.(type) {

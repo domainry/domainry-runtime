@@ -9,6 +9,7 @@ import (
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
+	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	businessseed "github.com/domainry/domainry-runtime/runtime/application/seed/business"
 	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
 )
@@ -33,6 +34,10 @@ type ProjectStartupOptions struct {
 	// AnalysisTableSource is a trusted public data-owner port assembled by the
 	// project host. Runtime and Report never import the source implementation.
 	AnalysisTableSource reportmodulehost.AnalysisTableSource
+	// BlobStore and FileScanner are trusted deployment adapters, not project
+	// business extensions and not persisted authoring inputs.
+	BlobStore   runtimefile.BlobStore
+	FileScanner runtimefile.FileScanner
 }
 
 type identityBusinessSeedReferenceResolver struct {

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 type UploadFieldCatalog struct {
@@ -15,7 +16,8 @@ func NewUploadFieldCatalog(objects []definitionmodel.ObjectSchema) UploadFieldCa
 	for _, object := range objects {
 		fields := make(map[string]struct{}, len(object.Fields))
 		for _, field := range object.Fields {
-			if key := strings.TrimSpace(field.Key); key != "" {
+			kind := strings.TrimSpace(field.Type)
+			if key := strings.TrimSpace(field.Key); key != "" && (kind == recordmodel.RecordFileFieldType || kind == recordmodel.RecordFileListFieldType) {
 				fields[key] = struct{}{}
 			}
 		}

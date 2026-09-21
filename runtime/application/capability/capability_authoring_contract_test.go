@@ -31,6 +31,9 @@ func TestRuntimeAuthoringCapabilitiesAreValidAndDeterministic(t *testing.T) {
 	if first.ContractHash != RuntimeAuthoringContractHash {
 		t.Fatalf("published authoring contract hash is stale: catalog=%s published=%s", first.ContractHash, RuntimeAuthoringContractHash)
 	}
+	if !reflect.DeepEqual(first.Instance.NotificationAudienceResolverKeys, []string{"workflow_task_assignee"}) {
+		t.Fatalf("Notification audience resolver registry is not disclosed: %v", first.Instance.NotificationAudienceResolverKeys)
+	}
 }
 
 func TestRuntimeAuthoringCatalogSummaryMatchesCatalogAndIsMutationSafe(t *testing.T) {

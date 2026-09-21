@@ -57,9 +57,9 @@ func TestReportRecordsUseCurrentObjectMetadataWithoutBuildingWholeSchema(t *test
 		}
 	}
 	assertObjects("Customer", "balance")
-	services.applyManifestMetadata("template", "2", "Updated runtime", "UTC", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Updated", Fields: []definitionmodel.FieldSchema{{Key: "amount", Type: "integer"}}}}, nil, nil, nil, nil, appschemamodel.IntegrationSchema{}, nil, nil, nil, nil)
+	services.applyManifestMetadata("template", "2", "Updated runtime", "UTC", []definitionmodel.ObjectSchema{{Key: "customer", Name: "Updated", Fields: []definitionmodel.FieldSchema{{Key: "amount", Type: "integer"}}}}, nil, nil, nil, nil, nil, appschemamodel.IntegrationSchema{}, nil, nil, nil, nil)
 	assertObjects("Updated", "amount")
-	services.applyManifestMetadata("template", "3", "Updated runtime", "UTC", nil, nil, nil, nil, nil, appschemamodel.IntegrationSchema{}, nil, nil, nil, nil)
+	services.applyManifestMetadata("template", "3", "Updated runtime", "UTC", nil, nil, nil, nil, nil, nil, appschemamodel.IntegrationSchema{}, nil, nil, nil, nil)
 	objects := services.reportRecordSchemaMap()
 	if len(objects) != 0 || builds != 0 {
 		t.Fatal("report source retained a removed object", objects, builds)

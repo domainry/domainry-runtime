@@ -58,7 +58,7 @@ func TestManifestWorkflowActionPermissionAndResolverEdges(t *testing.T) {
 	state.validateWorkflowActionReference("empty-name", workflow, "registered-empty", nil)
 	state.validateWorkflowResolvers("resolver", workflow, []definitionmodel.WorkflowAssigneeResolver{
 		{Type: "role", RoleKey: "missing"},
-		{Type: "record_field", Field: "missing"},
+		{Type: "record_user_field", Field: "missing"},
 		{Type: "manager", UserField: "missing"},
 		{Type: "manager_of", UserField: "disabled"},
 	})
@@ -97,5 +97,36 @@ func TestManifestWorkflowObjectKeyAndSystemFieldEdges(t *testing.T) {
 	}
 	if state.workflowObjectHasField("missing", "id") || state.workflowObjectHasField("known", "missing") {
 		t.Fatal("unknown workflow field accepted")
+	}
+}
+
+func TestManifestWorkflowRelationResolverSchemaReferences(t *testing.T) {
+	state := newValidationState(manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{
+		{Key: "order", Fields: []definitionmodel.FieldSchema{
+			{Key: "department", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "department"}},
+			{Key: "requester", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "identity_user"}},
+			{Key: "status", Type: "text"},
+		}},
+		{Key: "department", Fields: []definitionmodel.FieldSchema{
+			{Key: "reviewer", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "identity_user"}},
+			{Key: "approval_role", Type: "text"},
+		}},
+	}}, nil)
+	workflow := definitionmodel.WorkflowSchema{TriggerContract: &definitionmodel.WorkflowTriggerContract{ObjectKey: "order"}}
+	state.validateWorkflowResolvers("valid", workflow, []definitionmodel.WorkflowAssigneeResolver{
+		{Type: "relation_user", RelationPath: []string{"department", "reviewer"}},
+		{Type: "relation_role", RelationPath: []string{"department"}, RoleField: "approval_role"},
+		{Type: "manager_chain", Source: "record", Field: "requester", MaxDepth: 2},
+	})
+	if len(state.errs) != 0 {
+		t.Fatalf("valid resolver diagnostics=%+v", state.errs)
+	}
+	state.validateWorkflowResolvers("invalid", workflow, []definitionmodel.WorkflowAssigneeResolver{
+		{Type: "relation_user", RelationPath: []string{"department", "approval_role"}},
+		{Type: "relation_role", RelationPath: []string{"department"}, RoleField: "reviewer"},
+		{Type: "manager_chain", Source: "record", Field: "status", MaxDepth: 2},
+	})
+	if len(state.errs) != 3 {
+		t.Fatalf("invalid resolver diagnostics=%+v", state.errs)
 	}
 }

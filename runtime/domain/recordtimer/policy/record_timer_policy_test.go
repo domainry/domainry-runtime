@@ -3,25 +3,35 @@ package policy
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordtimermodel "github.com/domainry/domainry-runtime/runtime/domain/recordtimer/model"
 )
 
 type recordTimerCalendarProbe struct{ called bool }
 
-func (p *recordTimerCalendarProbe) AddBusinessDuration(_ context.Context, key string, base time.Time, offset time.Duration, location *time.Location) (time.Time, error) {
-	p.called = key == "weekday" && location.String() == "Asia/Shanghai"
-	return base.Add(offset + 24*time.Hour), nil
+func (p *recordTimerCalendarProbe) Resolve(_ context.Context, key string) (businesscalendarmodel.BusinessCalendarSchema, error) {
+	p.called = key == "weekday"
+	return weekdayCalendar(), nil
 }
 
 type recordTimerErrorCalendar struct{ err error }
 
-func (c recordTimerErrorCalendar) AddBusinessDuration(context.Context, string, time.Time, time.Duration, *time.Location) (time.Time, error) {
-	return time.Time{}, c.err
+func (c recordTimerErrorCalendar) Resolve(context.Context, string) (businesscalendarmodel.BusinessCalendarSchema, error) {
+	return businesscalendarmodel.BusinessCalendarSchema{}, c.err
+}
+
+func weekdayCalendar() businesscalendarmodel.BusinessCalendarSchema {
+	week := []businesscalendarmodel.BusinessCalendarWeeklySchedule{}
+	for _, weekday := range []string{"monday", "tuesday", "wednesday", "thursday", "friday"} {
+		week = append(week, businesscalendarmodel.BusinessCalendarWeeklySchedule{Weekday: weekday, Intervals: []businesscalendarmodel.BusinessCalendarTimeInterval{{Start: "09:00", End: "18:00"}}})
+	}
+	return businesscalendarmodel.BusinessCalendarSchema{Key: "weekday", Name: "Weekday", Revision: "2026.1", Timezone: "Asia/Shanghai", WeeklyWorkingIntervals: week}
 }
 
 func TestRecordTimerSchedulePolicyOwnsDefaultsAndValidation(t *testing.T) {
@@ -42,8 +52,31 @@ func TestRecordTimerSchedulePolicyOwnsDefaultsAndValidation(t *testing.T) {
 	}
 }
 
+func TestRecordTimerScheduleRejectsInvalidOrUnboundedPayloadBeforePersistence(t *testing.T) {
+	now := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
+	valid := NormalizeSchedule(recordtimermodel.Schedule{
+		TimerKey: "timer", ObjectKey: "order", RecordID: "one", Purpose: "expiry", DueAt: now,
+		TargetType: "action", TargetKey: "expire",
+	})
+	for _, payload := range []string{"[]", "null", "{", `{"value":"` + strings.Repeat("x", MaximumPayloadJSONBytes) + `"}`} {
+		candidate := valid
+		candidate.PayloadJSON = payload
+		if err := ValidateSchedule(candidate); apperror.CodeOf(err) != "backend.record_timer.payload_invalid" {
+			t.Fatalf("payload length=%d code=%q err=%v", len(payload), apperror.CodeOf(err), err)
+		}
+	}
+	exact := valid
+	exact.PayloadJSON = `{"value":"` + strings.Repeat("x", MaximumPayloadJSONBytes-len(`{"value":""}`)) + `"}`
+	if len(exact.PayloadJSON) != MaximumPayloadJSONBytes {
+		t.Fatalf("test payload length=%d", len(exact.PayloadJSON))
+	}
+	if err := ValidateSchedule(exact); err != nil {
+		t.Fatalf("exact maximum payload rejected: %v", err)
+	}
+}
+
 func TestRecordTimerScheduleResolutionBelongsToDomainPolicy(t *testing.T) {
-	base := time.Date(2026, 7, 21, 9, 30, 0, 0, time.UTC)
+	base := time.Date(2026, 7, 24, 9, 30, 0, 0, time.UTC)
 	source := recordmodel.Record{Data: map[string]any{"starts_at": base.Format(time.RFC3339Nano)}}
 	absolute, err := ResolveSchedule(t.Context(), recordtimermodel.Schedule{ScheduleMode: "absolute", DueAt: base, Timezone: "UTC"}, source, nil)
 	if err != nil || !absolute.DueAt.Equal(base) {
@@ -55,7 +88,8 @@ func TestRecordTimerScheduleResolutionBelongsToDomainPolicy(t *testing.T) {
 	}
 	calendar := &recordTimerCalendarProbe{}
 	business, err := ResolveSchedule(t.Context(), recordtimermodel.Schedule{ScheduleMode: "business_calendar", SourceField: "starts_at", OffsetSeconds: 3600, Timezone: "Asia/Shanghai", BusinessCalendarKey: "weekday"}, source, calendar)
-	if err != nil || !calendar.called || !business.DueAt.Equal(base.Add(25*time.Hour)) {
+	wantBusiness := time.Date(2026, 7, 27, 9, 30, 0, 0, time.FixedZone("CST", 8*60*60))
+	if err != nil || !calendar.called || !business.DueAt.Equal(wantBusiness) || business.BusinessCalendarRevision != "2026.1" {
 		t.Fatalf("business schedule=%#v called=%v err=%v", business, calendar.called, err)
 	}
 	for _, request := range []recordtimermodel.Schedule{
@@ -67,38 +101,36 @@ func TestRecordTimerScheduleResolutionBelongsToDomainPolicy(t *testing.T) {
 			t.Fatalf("invalid schedule resolved: %+v", request)
 		}
 	}
-	request := recordtimermodel.Schedule{ScheduleMode: "business_calendar", DueAt: base, Timezone: "UTC", BusinessCalendarKey: "24x7", OffsetSeconds: 1}
+	request := recordtimermodel.Schedule{ScheduleMode: "business_calendar", DueAt: base, BusinessCalendarKey: "weekday", OffsetSeconds: 1}
 	if _, err := ResolveSchedule(t.Context(), request, source, recordTimerErrorCalendar{err: errors.New("calendar")}); err == nil {
 		t.Fatal("calendar error accepted")
 	}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := ResolveSchedule(cancelled, request, source, StandardBusinessCalendar{}); !errors.Is(err, context.Canceled) {
+	catalog, err := NewBusinessCalendarCatalog([]businesscalendarmodel.BusinessCalendarSchema{weekdayCalendar()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveSchedule(cancelled, request, source, catalog); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled schedule err=%v", err)
 	}
 }
 
-func TestStandardBusinessCalendarEdges(t *testing.T) {
-	calendar := StandardBusinessCalendar{}
+func TestDeclarativeBusinessCalendarCatalogEdges(t *testing.T) {
+	calendar, err := NewBusinessCalendarCatalog([]businesscalendarmodel.BusinessCalendarSchema{weekdayCalendar()})
+	if err != nil {
+		t.Fatal(err)
+	}
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := calendar.AddBusinessDuration(cancelled, "24x7", time.Now(), time.Hour, time.UTC); !errors.Is(err, context.Canceled) {
+	if _, err := calendar.Resolve(cancelled, "weekday"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled calendar err=%v", err)
 	}
-	base := time.Date(2026, 7, 24, 23, 0, 0, 0, time.UTC)
-	if got, err := calendar.AddBusinessDuration(t.Context(), "24x7", base, 30*time.Minute, time.UTC); err != nil || !got.Equal(base.Add(30*time.Minute)) {
-		t.Fatalf("24x7=%v err=%v", got, err)
-	}
-	if _, err := calendar.AddBusinessDuration(t.Context(), "unknown", base, time.Hour, time.UTC); err == nil {
+	if _, err := calendar.Resolve(t.Context(), "unknown"); err == nil {
 		t.Fatal("unknown calendar accepted")
 	}
-	forward, err := calendar.AddBusinessDuration(t.Context(), "weekday", base, 90*time.Minute, time.UTC)
-	if err != nil || forward.Weekday() != time.Monday || forward.Hour() != 0 || forward.Minute() != 30 {
-		t.Fatalf("weekday forward=%v err=%v", forward, err)
-	}
-	backward, err := calendar.AddBusinessDuration(t.Context(), "weekday", time.Date(2026, 7, 27, 1, 0, 0, 0, time.UTC), -2*time.Hour, time.UTC)
-	if err != nil || backward.Weekday() != time.Friday || backward.Hour() != 23 {
-		t.Fatalf("weekday backward=%v err=%v", backward, err)
+	if _, err := NewBusinessCalendarCatalog([]businesscalendarmodel.BusinessCalendarSchema{weekdayCalendar(), weekdayCalendar()}); err == nil {
+		t.Fatal("duplicate calendar accepted")
 	}
 }
 

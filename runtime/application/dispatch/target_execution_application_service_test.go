@@ -41,6 +41,17 @@ type notificationTargetRuntime struct {
 	calls   int
 }
 
+type businessActionTargetRuntime struct {
+	request BusinessActionTargetRequest
+	calls   int
+}
+
+func (b *businessActionTargetRuntime) ExecuteBusinessActionTarget(_ context.Context, request BusinessActionTargetRequest) (BusinessActionTargetReceipt, error) {
+	b.calls++
+	b.request = request
+	return BusinessActionTargetReceipt{ID: "action-receipt-1", Status: "succeeded"}, nil
+}
+
 func (n *notificationTargetRuntime) ExecuteNotificationTarget(_ context.Context, request NotificationTargetRequest) (NotificationTargetReceipt, error) {
 	n.calls++
 	n.request = request
@@ -114,5 +125,30 @@ func TestExecuteRoutesNotificationTargetWithoutOwningNotificationState(t *testin
 	unconfigured := NewTargetExecutionApplicationService(nil)
 	if _, err = unconfigured.Execute(t.Context(), ExecutionRequest{Target: Target{Owner: "notification"}}); apperror.CodeOf(err) != "backend.dispatch.notification_target_unavailable" {
 		t.Fatalf("missing Notification runtime err=%v", err)
+	}
+}
+
+func TestExecuteRoutesBusinessActionWithCompleteGovernedTarget(t *testing.T) {
+	service := NewTargetExecutionApplicationService(nil)
+	actions := &businessActionTargetRuntime{}
+	service.UseBusinessActionTargetRuntime(actions)
+	dueAt := time.Date(2026, time.September, 20, 2, 0, 0, 0, time.FixedZone("Asia/Shanghai", 8*60*60))
+	payload := []byte(`{"status":"expired"}`)
+	receipt, err := service.Execute(t.Context(), ExecutionRequest{
+		ExecutionID: "run-1", DefinitionKey: "expire-orders", IdempotencyKey: "expire-orders:2026-09-20T02:00:00Z", DueAt: dueAt,
+		Target: Target{Owner: "business_action", Operation: "order.expire", ObjectKey: "order", RunAsRole: "order_automation", Payload: payload},
+	})
+	if err != nil || receipt != (ExecutionReceipt{ID: "action-receipt-1", Owner: "business_action", Status: "succeeded"}) || actions.calls != 1 {
+		t.Fatalf("receipt=%+v calls=%d err=%v", receipt, actions.calls, err)
+	}
+	if actions.request.DefinitionKey != "expire-orders" || actions.request.Operation != "order.expire" || actions.request.ObjectKey != "order" || actions.request.RunAsRole != "order_automation" || !actions.request.ScheduledFor.Equal(dueAt.UTC()) || actions.request.IdempotencyKey != "expire-orders:2026-09-20T02:00:00Z" {
+		t.Fatalf("business Action request=%+v", actions.request)
+	}
+	payload[0] = 'x'
+	if string(actions.request.Payload) == string(payload) {
+		t.Fatal("Business Action target retained caller payload backing storage")
+	}
+	if _, err := NewTargetExecutionApplicationService(nil).Execute(t.Context(), ExecutionRequest{Target: Target{Owner: "business_action"}}); apperror.CodeOf(err) != "backend.dispatch.business_action_target_unavailable" {
+		t.Fatalf("missing Business Action runtime err=%v", err)
 	}
 }

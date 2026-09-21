@@ -9,10 +9,10 @@ import (
 
 // RuntimeReleaseIdentityVersion is the canonical Deployment process build/composition
 // identity compared by the shared release-cohort admission gate.
-const RuntimeReleaseIdentityVersion = "domainry-runtime-release-identity-v2"
+const RuntimeReleaseIdentityVersion = "domainry-runtime-release-identity-v3"
 
 // RuntimeReleaseIdentity binds one Runtime binary, project source/SDK,
-// Metadata Snapshot and frozen Handler/Connector registries. It is deliberately
+// Metadata Snapshot and frozen Project Extension/Connector registries. It is deliberately
 // owned below transport because deployment admission and HTTP diagnostics both
 // consume the same immutable fact set.
 type RuntimeReleaseIdentity struct {
@@ -34,7 +34,7 @@ type RuntimeReleaseIdentity struct {
 	ProjectInputSHA256              string `json:"project_input_sha256"`
 	ProjectSourceSHA256             string `json:"project_source_sha256"`
 	HandlerCatalogSHA256            string `json:"handler_catalog_sha256"`
-	HandlerRegistrySHA256           string `json:"handler_registry_sha256"`
+	ProjectExtensionRegistrySHA256  string `json:"project_extension_registry_sha256"`
 	ConnectorRegistrySHA256         string `json:"connector_registry_sha256"`
 	SigningKeyID                    string `json:"signing_key_id"`
 	SigningPublicKeySHA256          string `json:"signing_public_key_sha256"`

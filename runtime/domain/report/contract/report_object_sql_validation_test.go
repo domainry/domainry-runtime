@@ -50,3 +50,16 @@ FROM sale s LEFT JOIN payment p ON p.sale_id = s.id GROUP BY s.id`}
 		t.Fatalf("canonical=%#v plan=%#v", canonical, plan)
 	}
 }
+
+func TestRuntimeReportCompilerRejectsStructuredFieldsInsteadOfCoercingThemToText(t *testing.T) {
+	objects := map[string]definitionmodel.ObjectSchema{"item": {Key: "item", Fields: []definitionmodel.FieldSchema{
+		{Key: "tags", Type: "multi_select"}, {Key: "payload", Type: "json"},
+	}}}
+	for _, field := range []string{"tags", "payload"} {
+		_, err := CompileReportObjectSQL(reportmodel.ReportObjectSQLSchema{SQL: "SELECT i." + field + " AS value FROM item i"}, objects)
+		planErr, ok := err.(*reportmodel.ReportObjectSQLPlanError)
+		if !ok || planErr.Code != "backend.report.object_sql_field_type_unsupported" {
+			t.Fatalf("field=%s err=%#v", field, err)
+		}
+	}
+}

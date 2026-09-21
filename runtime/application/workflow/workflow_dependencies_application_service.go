@@ -9,6 +9,7 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -27,6 +28,7 @@ type WorkflowDependencies struct {
 	WaitTimers               WorkflowWaitTimerService
 	ApprovalDeadlineTimers   WorkflowApprovalDeadlineTimerService
 	Identity                 identitysdk.Projection
+	ProjectExtensions        *runtimeext.ProjectExtensionRegistry
 	Principals               identitysdk.PrincipalResolver
 	WorkloadReleases         *WorkflowWorkloadReleaseState
 	Schema                   WorkflowSchemaProvider

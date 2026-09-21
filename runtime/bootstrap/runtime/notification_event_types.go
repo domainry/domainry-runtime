@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	hostsurfacemodel "github.com/domainry/domainry-runtime/runtime/domain/hostsurface/model"
 )
 
 type NotificationLocalizationLookup func(locale, key string) (string, bool)
@@ -119,13 +120,13 @@ func workflowTaskActionEventType(key, templateKey, severity string, dueFact bool
 	}
 	return notificationmodel.NotificationEventType{
 		Key: key, Source: "workflow", Category: "approval", DefaultSeverity: severity, MandatoryInApp: true,
-		TemplateKey: templateKey, Variables: variables, AudienceResolvers: []string{"workflow_task_assignee"},
+		TemplateKey: templateKey, Variables: variables, AudienceResolvers: []string{hostsurfacemodel.NotificationAudienceResolverWorkflowTaskAssignee},
 		Actions: []notificationmodel.NotificationInboxActionDescriptor{{Key: "workflow.task.open", Kind: "route", ResourceType: "workflow_task", RouteKey: "workflow.task.detail"}},
 	}
 }
 
 func workflowTaskTerminalEventType(key, templateKey string) notificationmodel.NotificationEventType {
-	return notificationmodel.NotificationEventType{Key: key, Source: "workflow", Category: "approval", DefaultSeverity: "info", MandatoryInApp: true, TemplateKey: templateKey, Variables: workflowTaskLifecycleVariables(), AudienceResolvers: []string{"workflow_task_assignee"}}
+	return notificationmodel.NotificationEventType{Key: key, Source: "workflow", Category: "approval", DefaultSeverity: "info", MandatoryInApp: true, TemplateKey: templateKey, Variables: workflowTaskLifecycleVariables(), AudienceResolvers: []string{hostsurfacemodel.NotificationAudienceResolverWorkflowTaskAssignee}}
 }
 
 func workflowTaskLifecycleVariables() []notificationmodel.NotificationTemplateVariable {

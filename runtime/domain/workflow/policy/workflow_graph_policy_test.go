@@ -136,12 +136,12 @@ func TestWorkflowValidateGraphEdgesBranchesCyclesAndConnectivity(t *testing.T) {
 }
 
 func TestWorkflowGraphRuleHelpersCompleteMatrix(t *testing.T) {
-	for _, resolver := range []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"", " user "}}, {Type: "record_field", Field: "owner"}, {Type: "role", RoleKey: "admin"}} {
+	for _, resolver := range []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"", " user "}}, {Type: "variable_user", Field: "owner"}, {Type: "record_user_field", Field: "owner"}, {Type: "role", RoleKey: "admin"}, {Type: "project", ResolverKey: "regional"}, {Type: "relation_user", RelationPath: []string{"department", "owner"}}, {Type: "relation_role", RelationPath: []string{"department"}, RoleField: "approval_role"}, {Type: "manager_chain", Source: "initiator", MaxDepth: 2}} {
 		if !validWorkflowAssigneeResolver(resolver) {
 			t.Fatalf("valid resolver rejected: %#v", resolver)
 		}
 	}
-	for _, resolver := range []definitionmodel.WorkflowAssigneeResolver{{Type: "users"}, {Type: "record_field"}, {Type: "role"}, {Type: "unknown"}} {
+	for _, resolver := range []definitionmodel.WorkflowAssigneeResolver{{Type: "users"}, {Type: "variable_user"}, {Type: "record_user_field"}, {Type: "role"}, {Type: "project"}, {Type: "relation_user"}, {Type: "relation_role", RelationPath: []string{"department"}}, {Type: "manager_chain", Source: "initiator"}, {Type: "unknown"}} {
 		if validWorkflowAssigneeResolver(resolver) {
 			t.Fatalf("invalid resolver accepted: %#v", resolver)
 		}

@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"strings"
+	"testing"
+	"time"
+
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-	"testing"
-	"time"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
 )
 
 type uploadSubjectMemory map[string]UploadSubjectBinding
@@ -44,16 +47,19 @@ func TestUploadSubjectBindingRejectsForeignClaimsAndForgedRecordReferences(t *te
 	if err := registry.Authorize(t.Context(), "other-workspace", owner.UserID, "file-1"); err == nil {
 		t.Fatal("cross-workspace upload claim allowed")
 	}
-	records := &uploadAccessRecordStub{record: recordmodel.Record{OwnerUserID: owner.UserID, Data: map[string]any{"file_url": "/uploads/avatar.png"}}}
+	records := &uploadAccessRecordStub{record: recordmodel.Record{OwnerUserID: owner.UserID, Data: map[string]any{"file_url": map[string]any{
+		"file_id": "file-1", "filename": "avatar.png", "content_type": "image/png", "size": int64(1),
+		"content_sha256": strings.Repeat("a", 64),
+	}}}}
 	service := NewUploadAccessApplicationService(uploadAccessCatalog(), &uploadAccessAuditStub{}, records, registry)
-	if err := service.AuthorizeDownload(t.Context(), "asset", "file_url", "row-1", "avatar.png", owner); err != nil {
+	if err := service.AuthorizeDownload(t.Context(), "asset", "file_url", "row-1", "file-1", owner); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.AuthorizeDownload(t.Context(), "asset", "file_url", "", "avatar.png", owner); err == nil {
+	if err := service.AuthorizeDownload(t.Context(), "asset", "file_url", "", "file-1", owner); err == nil {
 		t.Fatal("empty record context allowed")
 	}
 	records.record.OwnerUserID = "peer"
-	if err := service.AuthorizeDownload(t.Context(), "asset", "file_url", "forged-own-row", "avatar.png", owner); err == nil {
+	if err := service.AuthorizeDownload(t.Context(), "asset", "file_url", "forged-own-row", "file-1", owner); err == nil {
 		t.Fatal("editable URL re-bound a foreign upload")
 	}
 }
@@ -62,7 +68,11 @@ func TestFileCleanClaimRequiresAuthenticatedUploaderDespiteValidScanReceipt(t *t
 	owner := uploadAccessPrincipal("asset.create")
 	store := &fileCapabilityStoreStub{evidence: map[string]lifecyclecontract.FileScanEvidence{}}
 	verifier := NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32))
-	service, err := NewFileCapabilityService(store, verifier, t.TempDir(), time.Now)
+	blobs, err := blobstore.NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewFileCapabilityService(store, verifier, blobs, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

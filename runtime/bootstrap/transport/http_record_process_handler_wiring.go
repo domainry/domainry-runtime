@@ -8,6 +8,7 @@ import (
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
+	blobstore "github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
 	dispatchpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/dispatch"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
@@ -34,15 +35,20 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 		uploadDir = "../data/uploads"
 	}
 	var artifacts lifecyclecontract.UploadArtifactStore
+	var artifactContent lifecyclecontract.ArtifactContentStore
 	var scans *uploadapplication.FileScanReceiptVerifier
 	var tickets *uploadapplication.FileDownloadTicketService
 	var uploadSubjects *uploadapplication.UploadSubjectRegistry
 	if a.dependencies.Store != nil {
 		uploadSubjects = uploadapplication.NewUploadSubjectRegistry(a.dependencies.Store)
 	}
+	if a.dependencies.BlobStore != nil {
+		artifactContent = blobstore.LifecycleContentStore{Blobs: a.dependencies.BlobStore}
+	}
 	if a.dependencies.Store != nil && a.dependencies.LifecycleBinding != nil {
 		fileStore, err := a.dependencies.LifecycleBinding.UploadArtifacts(lifecyclesdk.UploadArtifactOptions{
 			Root:              uploadDir,
+			Content:           artifactContent,
 			Fields:            lifecyclemodule.NewUploadFieldCatalog(a.dependencies.Manifest.Objects),
 			References:        recordpersistence.NewUploadArtifactReferences(a.dependencies.Store, a.dependencies.Manifest.Objects),
 			ExpiredReferences: reportpersistence.NewUploadArtifactCleaner(a.dependencies.Store, a.dependencies.Manifest.Objects),
@@ -60,8 +66,8 @@ func (a *httpServerAssembly) wireRecordAndProcessHandlers() {
 		}
 	}
 	a.handlers.Uploads = uploadhttp.NewUploadsHandler(uploadhttp.UploadsDependencies{
-		Access:    uploadapplication.NewUploadAccessApplicationService(records.Applications().Schema, records.Applications().Audit, queries, uploadSubjects),
-		UploadDir: uploadDir, Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
+		Access: uploadapplication.NewUploadAccessApplicationService(records.Applications().Schema, records.Applications().Audit, queries, uploadSubjects),
+		Blobs:  a.dependencies.BlobStore, Principal: a.callbacks.Principal, WriteJSON: a.callbacks.WriteJSON,
 		WriteError: a.callbacks.WriteError, WriteServiceError: a.callbacks.WriteServiceError,
 		Artifacts: artifacts, Scans: scans, Tickets: tickets,
 		Subjects: uploadSubjects,

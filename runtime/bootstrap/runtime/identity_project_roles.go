@@ -108,7 +108,7 @@ func runtimeRolesWithInstallationAdministrator(roles []manifestmodel.RoleSchema,
 		}
 		for _, grant := range extension.Permissions {
 			if base[grant.PermissionKey] {
-				if grant.DataScope != identitysdk.DataScopeAll {
+				if grant.DataPolicy != nil || grant.DataScope != identitysdk.DataScopeAll {
 					return nil, fmt.Errorf("platform role extension cannot change scope of %q", grant.PermissionKey)
 				}
 				continue
@@ -374,7 +374,13 @@ func runtimeRolePermissionsWithCapabilityClosure(roleKey string, source []manife
 	}
 	for _, businessGrant := range result {
 		for _, capabilityPermission := range permissionsByAction[businessGrant.PermissionKey] {
+			if businessGrant.DataPolicy != nil {
+				return nil, fmt.Errorf("Runtime Workspace role %q cannot project relational data policy from Action %q onto downstream capability %q", strings.TrimSpace(roleKey), businessGrant.PermissionKey, capabilityPermission)
+			}
 			if existing, found := byKey[capabilityPermission]; found {
+				if existing.DataPolicy != nil {
+					return nil, fmt.Errorf("Runtime Workspace role %q cannot merge relational data policy onto downstream capability %q", strings.TrimSpace(roleKey), capabilityPermission)
+				}
 				mergedScope, representable := runtimeCapabilityDataScopeJoin(existing.DataScope, businessGrant.DataScope)
 				if !representable {
 					return nil, fmt.Errorf("Runtime Workspace role %q grants Actions with incompatible data scopes for one downstream capability", strings.TrimSpace(roleKey))
@@ -513,9 +519,10 @@ func runtimeRolePermissions(source []manifestmodel.RolePermission) []identitysdk
 	seen := make(map[string]bool, len(source))
 	for _, permission := range source {
 		permission.PermissionKey = strings.TrimSpace(permission.PermissionKey)
-		if permission.PermissionKey != "" && permission.DataScope.Valid() && !seen[permission.PermissionKey] {
+		projectPermission := identitysdk.ProjectRolePermission{PermissionKey: permission.PermissionKey, DataScope: permission.DataScope, DataPolicy: permission.DataPolicy, AuditDenial: permission.AuditDenial}
+		if permission.PermissionKey != "" && projectPermission.Validate() == nil && !seen[permission.PermissionKey] {
 			seen[permission.PermissionKey] = true
-			result = append(result, identitysdk.ProjectRolePermission{PermissionKey: permission.PermissionKey, DataScope: permission.DataScope, AuditDenial: permission.AuditDenial})
+			result = append(result, projectPermission)
 		}
 	}
 	return result

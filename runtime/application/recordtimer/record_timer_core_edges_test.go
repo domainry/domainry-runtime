@@ -8,6 +8,7 @@ import (
 
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -61,6 +62,20 @@ func TestBuildAndScheduleRecordTimerEdges(t *testing.T) {
 	}
 	if built, err := service.BuildRecordTimerMutationFromSource(t.Context(), "workspace", request, recordmodel.Record{}, nil, now); err != nil || built.Record.ID == "" {
 		t.Fatalf("built=%#v err=%v", built, err)
+	}
+	calendar, err := NewRecordTimerBusinessCalendarCatalog([]businesscalendarmodel.BusinessCalendarSchema{{
+		Key: "operations", Name: "Operations", Revision: "2026.1", Timezone: "UTC",
+		WeeklyWorkingIntervals: []businesscalendarmodel.BusinessCalendarWeeklySchedule{{Weekday: "wednesday", Intervals: []businesscalendarmodel.BusinessCalendarTimeInterval{{Start: "09:00", End: "18:00"}}}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	businessRequest := request
+	businessRequest.ScheduleMode, businessRequest.BusinessCalendarKey, businessRequest.Timezone, businessRequest.OffsetSeconds = "business_calendar", "operations", "", 3600
+	businessRequest.DueAt = now
+	built, err := service.BuildRecordTimerMutationFromSource(t.Context(), "workspace", businessRequest, recordmodel.Record{}, calendar, now)
+	if err != nil || built.Record.Data["business_calendar_revision"] != "2026.1" || built.Record.Data["timezone"] != "UTC" {
+		t.Fatalf("business calendar timer=%#v err=%v", built.Record.Data, err)
 	}
 	if _, err := service.Schedule(t.Context(), "workspace", request, recordmodel.Record{}, nil, now, principalmodel.SystemScope{}); err == nil {
 		t.Fatal("schedule without system scope accepted")
@@ -213,6 +228,7 @@ func TestRecordTimerNormalizationValidationAndHelpersEdges(t *testing.T) {
 		candidate.ScheduleMode = mode
 		candidate.SourceField = "source"
 		candidate.BusinessCalendarKey = "calendar"
+		candidate.BusinessCalendarRevision = "1"
 		if mode == "invalid" {
 			if recordtimerpolicy.ValidateSchedule(candidate) == nil {
 				t.Fatal("invalid mode accepted")

@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
@@ -287,5 +288,14 @@ func TestNotificationModuleChannelsAreDerivedFromRules(t *testing.T) {
 	})
 	if len(channels) != 2 || channels[0] != "email" || channels[1] != "slack" {
 		t.Fatalf("channels=%v", channels)
+	}
+}
+
+func TestNotificationSDKCatalogRejectsUnimplementedAudienceResolverAtStartup(t *testing.T) {
+	_, err := notificationSDKCatalog("en", manifestmodel.ManifestSchema{}, []notificationmodel.NotificationEventType{{
+		Key: "project.event", AudienceResolvers: []string{"project_owner"},
+	}})
+	if err == nil || !strings.Contains(err.Error(), "project_owner") || !strings.Contains(err.Error(), "Runtime host") {
+		t.Fatalf("startup error=%v", err)
 	}
 }

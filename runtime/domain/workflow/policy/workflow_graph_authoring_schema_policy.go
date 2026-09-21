@@ -17,6 +17,7 @@ func workflowCompleteGraphAuthoringContract(capability *capabilitycontract.Capab
 		{Kind: "role_key", InputJSONPointer: "/nodes/*/contract/approval/resolvers/*/role_key", ResolverEndpoint: "/discovery/references/role_key"},
 		{Kind: "user_id", InputJSONPointer: "/nodes/*/contract/approval/resolvers/*/user_ids/*", ResolverEndpoint: "/discovery/references/user_id"},
 		{Kind: "role_key", InputJSONPointer: "/nodes/*/contract/approval/route/eligible_roles/*", ResolverEndpoint: "/discovery/references/role_key"},
+		{Kind: "business_calendar_key", InputJSONPointer: "/nodes/*/contract/timer/business_calendar_key", ResolverEndpoint: "/discovery/references/business_calendar_key"},
 	}
 	capability.Errors = append(capability.Errors,
 		capabilitycontract.CapabilityAuthoringError{Code: "backend.workflow.graph_trigger_required", FieldPath: "nodes", MessageKey: "backend.workflow.graph_trigger_required"},
@@ -136,7 +137,7 @@ func workflowGraphTimerSchema() capabilitycontract.CapabilityAuthoringSchema {
 	closed := false
 	return capabilitycontract.CapabilityAuthoringSchema{Type: "object", AdditionalProperties: &closed, Properties: map[string]capabilitycontract.CapabilityAuthoringSchema{
 		"timer_key": {Type: "string"}, "purpose": {Type: "string"}, "at": {Type: "string", Format: "date-time"}, "duration_seconds": {Type: "integer", Minimum: workflowAuthoringFloatPointer(1)},
-		"source_field": {Type: "string"}, "offset_seconds": {Type: "integer"}, "timezone": {Type: "string", Default: "UTC"}, "business_calendar_key": {Type: "string"},
+		"source_field": {Type: "string"}, "offset_seconds": {Type: "integer"}, "timezone": {Type: "string"}, "business_calendar_key": {Type: "string"},
 	}}
 }
 

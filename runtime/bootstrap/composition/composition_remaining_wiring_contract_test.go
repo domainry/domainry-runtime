@@ -18,6 +18,7 @@ import (
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
+	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	connectortest "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit/connectors"
@@ -289,6 +290,11 @@ func TestCompositionFinalBranchContracts(t *testing.T) {
 	services := NewRuntimeServices(t.Context(), RuntimeServicesConfig{})
 	_ = services.Schema()
 	_ = services.SchemaForPrincipal(t.Context(), principalmodel.Principal{})
+	providers := recordapplication.NewDataExchangeProviders(nil)
+	_ = NewRuntimeServices(t.Context(), RuntimeServicesConfig{Dependencies: RuntimeServicesDependencies{DataExchangeProviders: providers}})
+	if !providers.Frozen() {
+		t.Fatal("Runtime service composition left the Data Exchange provider registry mutable")
+	}
 
 	nonDefaultState := newRuntimeServicesState(t.Context(), manifestmodel.ManifestSchema{}, RuntimeServicesDependencies{
 		IdentityProjection: compositionIdentityProjection{},
@@ -546,10 +552,9 @@ func TestAssembledActionPipelineBindingCoversPlanFailureAndCommits(t *testing.T)
 
 func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *testing.T) {
 	const actionKey = "notification_job.notify"
-	hash := strings.Repeat("a", 64)
 	descriptor := runtimeext.HandlerDescriptor{
 		ActionKey: actionKey, InputType: "project.NotifyInput", OutputType: "project.NotifyOutput",
-		InputContractSHA256: hash, OutputContractSHA256: hash, HandlerRevision: "handler-1",
+		HandlerRevision: "handler-1",
 		ConnectorCapabilities: []runtimeext.ActionConnectorCapability{{
 			ConnectorKey: "connector", ConnectionKey: "connection", OperationKey: "notify",
 			ContractSHA256: strings.Repeat("c", 64),
@@ -560,7 +565,6 @@ func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *test
 	action := definitionmodel.ActionSchema{
 		Key: actionKey, ObjectKey: "notification_job", Kind: definitionmodel.ActionKindObjectOperation,
 		InputType: descriptor.InputType, OutputType: descriptor.OutputType,
-		InputContractSHA256: descriptor.InputContractSHA256, OutputContractSHA256: descriptor.OutputContractSHA256,
 	}
 	role := accessfixture.Bundle{
 		Key: "operator", Permissions: []string{actionKey},
@@ -569,8 +573,8 @@ func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *test
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a"}}, role)
 	newService := func(t *testing.T, repository appschemarepository.ApplicationSchemaRepository, withIntent bool) *runtimeAssembly {
 		t.Helper()
-		registry := runtimeext.NewBusinessHandlerRegistry()
-		if err := registry.Register(actionWiringBusinessHandler{descriptor: descriptor, intent: withIntent}); err != nil {
+		registry := runtimeext.NewProjectExtensionRegistry()
+		if err := registry.RegisterBusinessHandler(actionWiringBusinessHandler{descriptor: descriptor, intent: withIntent}); err != nil {
 			t.Fatal(err)
 		}
 		service := newRuntimeServicesAssembly(t.Context(), RuntimeServicesConfig{
@@ -581,7 +585,7 @@ func TestAssembledBusinessHandlerCoversRevisionAndDurableIntentFallbacks(t *test
 			},
 			Dependencies: RuntimeServicesDependencies{
 				ActionRuntimeRevision: "runtime-1", ActionProjectRevision: "project-1", ActionMetadataRevision: "metadata-fallback",
-				ApplicationSchema: repository, BusinessHandlers: registry,
+				ApplicationSchema: repository, ProjectExtensions: registry,
 				ActionExecutions: &runtimeServicesActionExecutionRepository{records: &runtimeServicesRecordActionRepository{}},
 			},
 		})

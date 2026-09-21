@@ -21,9 +21,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		Identity: runtimehost.BuildIdentity{
 			RuntimeVersion:            runtimeVersion,
 			RuntimeextContractVersion: runtimeext.ContractVersion,
-			RuntimeextContractSHA256:  runtimeext.ContractSHA256,
 			ConnectorContractVersion:  connector.ContractVersion,
-			ConnectorContractSHA256:   connector.ContractSHA256,
 		},
 	})
 }

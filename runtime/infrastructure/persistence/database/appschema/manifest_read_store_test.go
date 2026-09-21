@@ -3,6 +3,7 @@ package appschema
 import (
 	"testing"
 
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 )
@@ -16,7 +17,8 @@ func TestApplicationSchemaStoreLoadsPersistedManifest(t *testing.T) {
 	repository := NewApplicationSchemaStore(store)
 	manifest := manifestmodel.ManifestSchema{
 		TemplateID: "manifest-read", Version: "1", Name: "Manifest read", DefaultLocale: "zh-CN",
-		Objects: []definitionmodel.ObjectSchema{{Key: "account", Name: "Account", Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text", Config: map[string]any{"definition_object_key": "ignored"}}}, Validations: []definitionmodel.ValidationSchema{{Key: "account.name.required", ObjectKey: "account", Type: "required", FieldKey: "name"}}}},
+		Objects:           []definitionmodel.ObjectSchema{{Key: "account", Name: "Account", Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text", Config: map[string]any{"definition_object_key": "ignored"}}}, Validations: []definitionmodel.ValidationSchema{{Key: "account.name.required", ObjectKey: "account", Type: "required", FieldKey: "name"}}}},
+		BusinessCalendars: []businesscalendarmodel.BusinessCalendarSchema{{Key: "operations", Name: "Operations", Revision: "1", Timezone: "UTC", WeeklyWorkingIntervals: []businesscalendarmodel.BusinessCalendarWeeklySchedule{{Weekday: "monday", Intervals: []businesscalendarmodel.BusinessCalendarTimeInterval{{Start: "09:00", End: "18:00"}}}}}},
 	}
 	if err := repository.SyncManifestProjection(t.Context(), metadataTestInstallationScope(), manifest); err != nil {
 		t.Fatal(err)
@@ -25,7 +27,7 @@ func TestApplicationSchemaStoreLoadsPersistedManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.TemplateID != manifest.TemplateID || loaded.Version != "1" || len(loaded.Objects) != 1 || len(loaded.Objects[0].Fields) != 1 || len(loaded.Objects[0].Validations) != 1 || len(loaded.SchedulerDefinitions) != 0 {
+	if loaded.TemplateID != manifest.TemplateID || loaded.Version != "1" || len(loaded.Objects) != 1 || len(loaded.Objects[0].Fields) != 1 || len(loaded.Objects[0].Validations) != 1 || len(loaded.BusinessCalendars) != 1 || loaded.BusinessCalendars[0].Revision != "1" || len(loaded.SchedulerDefinitions) != 0 {
 		t.Fatalf("loaded=%+v", loaded)
 	}
 }

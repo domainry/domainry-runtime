@@ -6,7 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +26,7 @@ import (
 // validation, mutation and projection.
 type DataExchangeProviders struct {
 	mu              sync.Mutex
+	frozen          bool
 	importer        *RecordImportApplicationService
 	exporter        *RecordExportApplicationService
 	resolve         func(context.Context, string, string) principalmodel.Principal
@@ -33,6 +36,17 @@ type DataExchangeProviders struct {
 	notify          func(context.Context, notificationmodel.NotificationIntent) error
 	now             func() time.Time
 }
+
+var (
+	ErrDataExchangeProviderRegistryRequired = errors.New("Data Exchange provider registry is required")
+	ErrDataExchangeProviderRegistryFrozen   = errors.New("Data Exchange provider registry is frozen")
+	ErrDataExchangeProviderKeyInvalid       = errors.New("Data Exchange provider key is invalid")
+	ErrDataExchangeProviderRequired         = errors.New("Data Exchange provider is required")
+	ErrDataExchangeProviderDuplicate        = errors.New("Data Exchange provider is already registered")
+	ErrDataExchangeProviderKeyReserved      = errors.New("Data Exchange provider key is reserved")
+)
+
+var dataExchangeProviderKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]*$`)
 
 type recordDataExchangeImportAttempt struct {
 	attempt  int
@@ -45,13 +59,30 @@ func NewDataExchangeProviders(resolve func(context.Context, string, string) prin
 
 // RegisterImportProvider attaches an application-owned atomic or row-batch
 // provider to the shared Module/SaaS host bridge.
-func (p *DataExchangeProviders) RegisterImportProvider(key string, provider modulehost.ImportProvider) {
-	if p == nil || strings.TrimSpace(key) == "" || provider == nil {
-		return
+func (p *DataExchangeProviders) RegisterImportProvider(key string, provider modulehost.ImportProvider) error {
+	if p == nil {
+		return ErrDataExchangeProviderRegistryRequired
+	}
+	key = strings.TrimSpace(key)
+	if !dataExchangeProviderKeyPattern.MatchString(key) {
+		return fmt.Errorf("%w: %q", ErrDataExchangeProviderKeyInvalid, key)
+	}
+	if key == "records" {
+		return fmt.Errorf("%w: %s", ErrDataExchangeProviderKeyReserved, key)
+	}
+	if provider == nil {
+		return fmt.Errorf("%w: import %s", ErrDataExchangeProviderRequired, key)
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.importProviders[strings.TrimSpace(key)] = provider
+	if p.frozen {
+		return ErrDataExchangeProviderRegistryFrozen
+	}
+	if _, exists := p.importProviders[key]; exists {
+		return fmt.Errorf("%w: import %s", ErrDataExchangeProviderDuplicate, key)
+	}
+	p.importProviders[key] = provider
+	return nil
 }
 
 func (p *DataExchangeProviders) Bind(importer *RecordImportApplicationService, exporter *RecordExportApplicationService) {
@@ -74,13 +105,50 @@ func (p *DataExchangeProviders) ConfigureExportNotifications(notify func(context
 
 // RegisterExportProvider attaches an application-owned provider to the shared
 // Module/SaaS host bridge. The registry owns no job or artifact state.
-func (p *DataExchangeProviders) RegisterExportProvider(key string, provider modulehost.ExportProvider) {
-	if p == nil || strings.TrimSpace(key) == "" || provider == nil {
+func (p *DataExchangeProviders) RegisterExportProvider(key string, provider modulehost.ExportProvider) error {
+	if p == nil {
+		return ErrDataExchangeProviderRegistryRequired
+	}
+	key = strings.TrimSpace(key)
+	if !dataExchangeProviderKeyPattern.MatchString(key) {
+		return fmt.Errorf("%w: %q", ErrDataExchangeProviderKeyInvalid, key)
+	}
+	if key == "records" {
+		return fmt.Errorf("%w: %s", ErrDataExchangeProviderKeyReserved, key)
+	}
+	if provider == nil {
+		return fmt.Errorf("%w: export %s", ErrDataExchangeProviderRequired, key)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.frozen {
+		return ErrDataExchangeProviderRegistryFrozen
+	}
+	if _, exists := p.exportProviders[key]; exists {
+		return fmt.Errorf("%w: export %s", ErrDataExchangeProviderDuplicate, key)
+	}
+	p.exportProviders[key] = provider
+	return nil
+}
+
+// Freeze closes provider composition. Provider lookup remains available, but
+// no startup or request path can replace an owner implementation afterwards.
+func (p *DataExchangeProviders) Freeze() {
+	if p == nil {
 		return
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.exportProviders[strings.TrimSpace(key)] = provider
+	p.frozen = true
+}
+
+func (p *DataExchangeProviders) Frozen() bool {
+	if p == nil {
+		return false
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.frozen
 }
 
 func (p *DataExchangeProviders) ImportProvider(key string) (modulehost.ImportProvider, bool) {

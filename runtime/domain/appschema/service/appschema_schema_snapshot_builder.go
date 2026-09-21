@@ -6,6 +6,7 @@ import (
 
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -21,6 +22,7 @@ type SchemaSnapshotState struct {
 	Objects                                     []definitionmodel.ObjectSchema
 	Actions                                     []definitionmodel.ActionSchema
 	Workflows                                   []definitionmodel.WorkflowSchema
+	BusinessCalendars                           []businesscalendarmodel.BusinessCalendarSchema
 	AutomationRules                             []automationmodel.AutomationRuleSchema
 	Dictionaries                                []appschemamodel.DictionarySchema
 	Integrations                                connectormodel.IntegrationSchema
@@ -57,7 +59,8 @@ func BuildSchemaSnapshot(state SchemaSnapshotState) appschemamodel.ApplicationSc
 		TemplateID: state.TemplateID, TemplateVersion: state.TemplateVersion, Name: state.Name, TimeZone: state.TimeZone,
 		Objects: objects, Actions: actions,
 		GuardedWrites: GuardedWriteContracts(actions), Workflows: workflows, AutomationRules: automationRules,
-		Dictionaries: append([]appschemamodel.DictionarySchema(nil), state.Dictionaries...), Integrations: CloneIntegrationSchema(state.Integrations),
+		BusinessCalendars: append([]businesscalendarmodel.BusinessCalendarSchema(nil), state.BusinessCalendars...),
+		Dictionaries:      append([]appschemamodel.DictionarySchema(nil), state.Dictionaries...), Integrations: CloneIntegrationSchema(state.Integrations),
 		Reports: append([]reportmodel.ReportSchema(nil), state.Reports...),
 		Skills:  append([]agentsdk.SkillSchema(nil), state.Skills...), Agents: append([]agentsdk.AgentSchema(nil), state.Agents...),
 		AgentTasks: append([]agentsdk.AgentTaskDefinition(nil), state.AgentTasks...), AgentEntrypoints: append([]agentsdk.AgentEntrypointAssignment(nil), state.AgentEntrypoints...),

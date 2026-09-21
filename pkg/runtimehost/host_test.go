@@ -27,10 +27,12 @@ import (
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	reportmodule "github.com/domainry/domainry-report/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	blobstore "github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
@@ -209,9 +211,7 @@ func validOptions() Options {
 	return Options{Identity: BuildIdentity{
 		RuntimeVersion:            "test-version",
 		RuntimeextContractVersion: runtimeext.ContractVersion,
-		RuntimeextContractSHA256:  runtimeext.ContractSHA256,
 		ConnectorContractVersion:  connector.ContractVersion,
-		ConnectorContractSHA256:   connector.ContractSHA256,
 		DomainSDK:                 domainSDK,
 	}, IdentityFactory: identityFactoryStub{}, NotificationFactory: notificationFactoryStub{}, MonitoringFactory: monitoringFactoryStub{}, SchedulerFactory: schedulerFactoryStub{}, DataExchangeFactory: dataExchangeFactoryStub{}, AgentFactory: agentFactoryStub{}, IntegrationFactory: integrationFactoryStub{}, ReportFactory: reportmodule.NewFactory(), InitialWorkspaceCredentialDelivery: acceptingCredentialDelivery{}}
 }
@@ -292,7 +292,7 @@ func serverTestDependencies(t *testing.T, cfg config.Config, runtime runtimeProc
 			databaseConfig.DBPath = databasePath
 			return bootstrap.PrepareProjectDatabase(ctx, databaseConfig)
 		},
-		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ agentsdk.Factory, _ integrationsdk.Factory, _ reportsdk.Factory, _ *bootstrap.ProjectDatabase, _ bootstrap.ProjectStartupOptions) runtimeProcess {
+		newRuntime: func(_ context.Context, _ config.Config, handlers *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ agentsdk.Factory, _ integrationsdk.Factory, _ reportsdk.Factory, _ *bootstrap.ProjectDatabase, _ bootstrap.ProjectStartupOptions) runtimeProcess {
 			if handlers == nil || !handlers.Frozen() {
 				panic("host passed an unfrozen registry")
 			}
@@ -324,10 +324,8 @@ func TestBuildIdentityFailsClosed(t *testing.T) {
 	}
 	invalid := []BuildIdentity{
 		{},
-		{RuntimeVersion: "test", RuntimeextContractVersion: "stale", RuntimeextContractSHA256: runtimeext.ContractSHA256, ConnectorContractVersion: connector.ContractVersion, ConnectorContractSHA256: connector.ContractSHA256},
-		{RuntimeVersion: "test", RuntimeextContractVersion: runtimeext.ContractVersion, RuntimeextContractSHA256: "stale", ConnectorContractVersion: connector.ContractVersion, ConnectorContractSHA256: connector.ContractSHA256},
-		{RuntimeVersion: "test", RuntimeextContractVersion: runtimeext.ContractVersion, RuntimeextContractSHA256: runtimeext.ContractSHA256, ConnectorContractVersion: "stale", ConnectorContractSHA256: connector.ContractSHA256},
-		{RuntimeVersion: "test", RuntimeextContractVersion: runtimeext.ContractVersion, RuntimeextContractSHA256: runtimeext.ContractSHA256, ConnectorContractVersion: connector.ContractVersion, ConnectorContractSHA256: "stale"},
+		{RuntimeVersion: "test", RuntimeextContractVersion: "stale", ConnectorContractVersion: connector.ContractVersion},
+		{RuntimeVersion: "test", RuntimeextContractVersion: runtimeext.ContractVersion, ConnectorContractVersion: "stale"},
 	}
 	for _, identity := range invalid {
 		if err := identity.Validate(); err == nil {
@@ -411,8 +409,8 @@ func TestValidateDomainSDKTargetRequiresExactIdentity(t *testing.T) {
 	}
 }
 
-func TestPrepareBusinessHandlersFreezesRegistry(t *testing.T) {
-	registry, gateway, err := prepareBusinessHandlers(validOptions())
+func TestPrepareProjectExtensionsFreezesRegistry(t *testing.T) {
+	registry, gateway, err := prepareProjectExtensions(validOptions())
 	if err != nil || !registry.Frozen() || len(registry.Descriptors()) != 0 || gateway == nil {
 		t.Fatalf("registry=%#v gateway=%#v error=%v", registry, gateway, err)
 	}
@@ -425,9 +423,9 @@ func TestPrepareConnectorProvidersFreezesRegistry(t *testing.T) {
 	}
 }
 
-func TestRunWithDependenciesRejectsStaleCompositionBeforeRuntimeStartup(t *testing.T) {
+func TestRunWithDependenciesRejectsStaleCompositionVersionBeforeRuntimeStartup(t *testing.T) {
 	options := validOptions()
-	options.Identity.RuntimeextContractSHA256 = "stale"
+	options.Identity.RuntimeextContractVersion = "stale"
 	dependencies := serverRunDependencies{
 		loadConfig: func() (config.Config, config.Snapshot, error) {
 			t.Fatal("configuration must not load for stale generated composition")
@@ -435,7 +433,7 @@ func TestRunWithDependenciesRejectsStaleCompositionBeforeRuntimeStartup(t *testi
 		},
 	}
 	err := runWithDependencies(options, dependencies)
-	if !errors.Is(err, ErrRuntimeextHashMismatch) {
+	if !errors.Is(err, ErrRuntimeextVersionMismatch) {
 		t.Fatalf("error=%v", err)
 	}
 }
@@ -460,9 +458,9 @@ func TestRunWithDependenciesRejectsPackagedRuntimeWithoutValidAttestationBeforeC
 func TestRunWithDependenciesBindsAndUnbindsGeneratedConnectorGateway(t *testing.T) {
 	options := validOptions()
 	var generated ConnectorGateway
-	options.BusinessHandlers = func(gateway ConnectorGateway) (runtimeext.ExtensionSet, error) {
+	options.ProjectExtensions = func(gateway ConnectorGateway) (runtimeext.ProjectExtensions, error) {
 		generated = gateway
-		return runtimeext.ExtensionSet{}, nil
+		return runtimeext.ProjectExtensions{}, nil
 	}
 	target := &connectorBindingTarget{result: ConnectorCallResult{Payload: json.RawMessage(`{"name":"Ada"}`)}}
 	runtime := &serverRuntimeFake{gateway: target}
@@ -483,6 +481,12 @@ func TestRunWithDependenciesBindsAndUnbindsGeneratedConnectorGateway(t *testing.
 func TestRunWithDependenciesPassesProjectAnalysisSourceThroughPublicSDKPort(t *testing.T) {
 	options := validOptions()
 	source := &runtimehostAnalysisSource{}
+	blobs, err := blobstore.NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanner := uploadapplication.NewBuiltinFileScanner()
+	options.BlobStore, options.FileScanner = blobs, scanner
 	factoryRuntimeID := ""
 	options.AnalysisTableSourceFactory = func(runtimeID string) (reportmodulehost.AnalysisTableSource, error) {
 		factoryRuntimeID = runtimeID
@@ -492,8 +496,8 @@ func TestRunWithDependenciesPassesProjectAnalysisSourceThroughPublicSDKPort(t *t
 	cfg := serverTestConfig()
 	deps := serverTestDependencies(t, cfg, runtime)
 	seen := false
-	deps.newRuntime = func(_ context.Context, _ config.Config, _ *runtimeext.BusinessHandlerRegistry, _ *connector.Registry, _ runtimehttp.RuntimeReleaseIdentity, _ bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ agentsdk.Factory, _ integrationsdk.Factory, _ reportsdk.Factory, _ *bootstrap.ProjectDatabase, startup bootstrap.ProjectStartupOptions) runtimeProcess {
-		seen = startup.AnalysisTableSource == source
+	deps.newRuntime = func(_ context.Context, _ config.Config, _ *runtimeext.ProjectExtensionRegistry, _ *connector.Registry, _ runtimehttp.RuntimeReleaseIdentity, _ bootstrap.RuntimeReleaseArtifactEvidence, _ identitysdk.Binding, _ notificationsdk.Factory, _ monitoringsdk.Factory, _ schedulersdk.Factory, _ dataexchangesdk.Factory, _ agentsdk.Factory, _ integrationsdk.Factory, _ reportsdk.Factory, _ *bootstrap.ProjectDatabase, startup bootstrap.ProjectStartupOptions) runtimeProcess {
+		seen = startup.AnalysisTableSource == source && startup.BlobStore == blobs && startup.FileScanner == scanner
 		return runtime
 	}
 	if err := runWithDependencies(options, deps); err != nil {
@@ -525,7 +529,7 @@ func TestRunWithDependenciesRejectsManifestSDKTargetBeforeRuntimeCreation(t *tes
 			created := 0
 			deps := serverTestDependencies(t, serverTestConfig(), &serverRuntimeFake{})
 			deps.readFile = func(string) ([]byte, error) { return serverManifestJSON(t, test.target), nil }
-			deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, bootstrap.ProjectStartupOptions) runtimeProcess {
+			deps.newRuntime = func(context.Context, config.Config, *runtimeext.ProjectExtensionRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, bootstrap.ProjectStartupOptions) runtimeProcess {
 				created++
 				return &serverRuntimeFake{}
 			}
@@ -625,12 +629,12 @@ func TestRunWithDependenciesCoversConfigurationActivationAndServeOutcomes(t *tes
 	}
 
 	var generated ConnectorGateway
-	options.BusinessHandlers = func(gateway ConnectorGateway) (runtimeext.ExtensionSet, error) {
+	options.ProjectExtensions = func(gateway ConnectorGateway) (runtimeext.ProjectExtensions, error) {
 		generated = gateway
-		return runtimeext.ExtensionSet{}, nil
+		return runtimeext.ProjectExtensions{}, nil
 	}
 	deps = serverTestDependencies(t, cfg, &serverRuntimeFake{})
-	deps.newRuntime = func(context.Context, config.Config, *runtimeext.BusinessHandlerRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, bootstrap.ProjectStartupOptions) runtimeProcess {
+	deps.newRuntime = func(context.Context, config.Config, *runtimeext.ProjectExtensionRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, bootstrap.ProjectStartupOptions) runtimeProcess {
 		return nil
 	}
 	if err := runWithDependencies(options, deps); err == nil || !strings.Contains(err.Error(), "returned no process") {

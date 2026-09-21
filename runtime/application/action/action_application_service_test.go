@@ -35,7 +35,7 @@ func TestActionApplicationUsesCatalogAndOneInvoke(t *testing.T) {
 			return ActionExecutionResult{Object: &result}, nil
 		}},
 	)
-	registry := runtimeext.NewBusinessHandlerRegistry()
+	registry := runtimeext.NewProjectExtensionRegistry()
 	registry.Freeze()
 	actions := []definitionmodel.ActionSchema{
 		{Key: "order.approve", ObjectKey: "order", Kind: "record_update"},
@@ -79,7 +79,7 @@ func TestActionApplicationPropagatesExecutorErrors(t *testing.T) {
 	executor := NewSystemOperationExecutor(system, SystemOperationBinding{Key: "record.update", Handler: func(context.Context, actionmodel.ActionInvocation, definitionmodel.ActionSchema, map[string]any) (ActionExecutionResult, error) {
 		return ActionExecutionResult{}, failure
 	}})
-	registry := runtimeext.NewBusinessHandlerRegistry()
+	registry := runtimeext.NewProjectExtensionRegistry()
 	registry.Freeze()
 	service := NewActionApplication(ActionApplicationDependencies{Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: executor, UnitOfWork: newActionTestUnitOfWork().manager})
 	_, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, RecordID: "order-1", IdempotencyKey: "approve-1", Principal: actionTestPrincipal("order.approve")})

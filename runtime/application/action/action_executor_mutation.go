@@ -28,11 +28,11 @@ func (e *businessActionExecution) AcquireSynchronousConnectorCall(requested runt
 	switch requested.Effect {
 	case runtimeext.ConnectorEffectRead:
 	case runtimeext.ConnectorEffectReserve, runtimeext.ConnectorEffectWrite:
-		// A synchronous external effect may only run from a durable timer
+		// A synchronous external effect may only run from a durable owner
 		// invocation whose Action receipt can never be reclaimed. If the
 		// worker disappears after dispatch, later timer attempts observe the
 		// unresolved receipt instead of repeating the external call.
-		if e.invocation.Source != actionmodel.ActionSourceRecordTimer || !e.invocation.PreventExecutionReclaim {
+		if (e.invocation.Source != actionmodel.ActionSourceRecordTimer && e.invocation.Source != actionmodel.ActionSourceScheduler) || !e.invocation.PreventExecutionReclaim {
 			return nil, apperror.New(apperror.KindForbidden, runtimeext.ConnectorActionSideEffectOutboxErrorCode, nil, map[string]string{"connector": requested.ConnectorKey, "operation": requested.OperationKey})
 		}
 	default:

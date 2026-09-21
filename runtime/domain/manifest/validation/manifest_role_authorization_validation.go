@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
@@ -64,8 +65,21 @@ func (state *validationState) validateRoles() {
 				state.add(permissionPath+".permission_key", "duplicate permission %q", permission)
 			}
 			permissions[permission] = true
-			if !grant.DataScope.Valid() {
-				state.add(permissionPath+".data_scope", "must be one of all, owner, org, org_child, target_org")
+			if err := (identitysdk.ProjectRolePermission{PermissionKey: permission, DataScope: grant.DataScope, DataPolicy: grant.DataPolicy, AuditDenial: grant.AuditDenial}).Validate(); err != nil {
+				if grant.DataPolicy == nil {
+					state.add(permissionPath+".data_scope", "must be one of all, owner, org, org_child, target_org")
+				} else {
+					state.add(permissionPath, "must define exactly one valid data_scope or data_policy: %v", err)
+				}
+				continue
+			}
+			if grant.DataPolicy != nil {
+				objectKey := runtimeRolePermissionResource(permission)
+				if state.objects[objectKey].Key == "" {
+					state.add(permissionPath+".data_policy", "permission resource %q is not a Runtime object", objectKey)
+					continue
+				}
+				state.validateRoleDataPolicy(permissionPath+".data_policy", objectKey, *grant.DataPolicy, map[string]bool{objectKey: true})
 			}
 		}
 		fieldPermissions := map[string]bool{}
@@ -121,6 +135,61 @@ func (state *validationState) validateRoles() {
 		}
 	}
 	state.validateInitialWorkspaceAdministratorRole()
+}
+
+func runtimeRolePermissionResource(permissionKey string) string {
+	permissionKey = strings.TrimSpace(permissionKey)
+	separator := strings.LastIndex(permissionKey, ".")
+	if separator <= 0 || separator == len(permissionKey)-1 {
+		return ""
+	}
+	return permissionKey[:separator]
+}
+
+func (state *validationState) validateRoleDataPolicy(path, objectKey string, policy identitysdk.ProjectDataPolicy, visited map[string]bool) {
+	switch strings.ToLower(strings.TrimSpace(policy.Operator)) {
+	case identitysdk.ProjectDataPolicyAnd, identitysdk.ProjectDataPolicyOr, identitysdk.ProjectDataPolicyNot:
+		for index, child := range policy.Children {
+			state.validateRoleDataPolicy(fmt.Sprintf("%s.children[%d]", path, index), objectKey, child, visited)
+		}
+		return
+	}
+	current := objectKey
+	seen := make(map[string]bool, len(visited))
+	for key, value := range visited {
+		seen[key] = value
+	}
+	for index, segment := range policy.Path {
+		segmentPath := fmt.Sprintf("%s.path[%d]", path, index)
+		target := strings.TrimSpace(segment.TargetObjectKey)
+		if state.objects[target].Key == "" {
+			state.add(segmentPath+".target_object_key", "unknown Runtime object %q", target)
+			return
+		}
+		if seen[target] {
+			state.add(segmentPath+".target_object_key", "creates a cyclic relation path through %q", target)
+			return
+		}
+		relationOwner, relationTarget := current, target
+		if segment.Direction == identitysdk.RelationReverse {
+			relationOwner, relationTarget = target, current
+		}
+		field := state.fields[relationOwner][strings.TrimSpace(segment.RelationFieldKey)]
+		if field.Key == "" || strings.TrimSpace(field.DisabledAt) != "" || strings.TrimSpace(field.Type) != "relation" {
+			state.add(segmentPath+".relation_field_key", "must reference an enabled relation field on object %q", relationOwner)
+			return
+		}
+		if actual := runtimeRelationTargetObject(field); actual != relationTarget {
+			state.add(segmentPath+".target_object_key", "relation %s.%s targets %q, not %q", relationOwner, field.Key, actual, relationTarget)
+			return
+		}
+		seen[target] = true
+		current = target
+	}
+	fieldKey := strings.TrimSpace(policy.FieldKey)
+	if fieldKey != "id" && !runtimeRoleFieldExists(state.fields[current], fieldKey) {
+		state.add(path+".field_key", "unknown or disabled field %q on object %q", fieldKey, current)
+	}
 }
 
 func (state *validationState) validateInitialWorkspaceAdministratorRole() {

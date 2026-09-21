@@ -6,48 +6,48 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
+	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 )
 
 const builtinFileScannerProvider = "domainry-content-safety-v1"
+const blobIdentityVerifierProvider = "domainry-blob-identity-v1"
 
 type DurableFileScanStore interface {
 	lifecyclecontract.FileScanStore
 	lifecyclecontract.PendingFileScanStore
 }
 
-// FileScanProcessor consumes Lifecycle's durable pending-upload queue. The
-// built-in scanner validates the exact stored bytes, rejects executable and
-// EICAR content, and verifies the declared file format before publishing a
-// terminal result. Deployments can replace this processor with a stronger
-// scanner while keeping the same Lifecycle evidence contract.
+// FileScanProcessor consumes Lifecycle's durable pending-upload queue. It owns
+// immutable-content verification and delegates content verdicts to the
+// deployment scanner. Scanner failures remain pending for retry; missing or
+// identity-mismatched blobs become terminal failed evidence.
 type FileScanProcessor struct {
-	store      DurableFileScanStore
-	uploadRoot string
-	clock      func() time.Time
+	store   DurableFileScanStore
+	blobs   runtimefile.BlobStore
+	scanner runtimefile.FileScanner
+	clock   func() time.Time
 }
 
-func NewFileScanProcessor(store DurableFileScanStore, uploadRoot string, clock func() time.Time) (*FileScanProcessor, error) {
-	root, err := filepath.Abs(strings.TrimSpace(uploadRoot))
-	if err != nil || strings.TrimSpace(uploadRoot) == "" {
-		return nil, fmt.Errorf("file scan upload root is required")
+func NewFileScanProcessor(store DurableFileScanStore, blobs runtimefile.BlobStore, scanner runtimefile.FileScanner, clock func() time.Time) (*FileScanProcessor, error) {
+	if store == nil || blobs == nil || scanner == nil {
+		return nil, fmt.Errorf("durable file scan store, blob store and scanner are required")
 	}
-	if store == nil {
-		return nil, fmt.Errorf("durable file scan store is required")
+	if !validFileAdapterDescriptor(blobs.Descriptor()) || !validFileAdapterDescriptor(scanner.Descriptor()) {
+		return nil, fmt.Errorf("blob store and scanner descriptors are required")
 	}
 	if clock == nil {
 		clock = time.Now
 	}
-	return &FileScanProcessor{store: store, uploadRoot: root, clock: clock}, nil
+	return &FileScanProcessor{store: store, blobs: blobs, scanner: scanner, clock: clock}, nil
 }
 
 func (p *FileScanProcessor) ProcessPending(ctx context.Context, limit int) (int, error) {
@@ -64,7 +64,10 @@ func (p *FileScanProcessor) ProcessPending(ctx context.Context, limit int) (int,
 		if err := ctx.Err(); err != nil {
 			return processed, err
 		}
-		result := p.scan(candidate)
+		result, err := p.scan(ctx, candidate)
+		if err != nil {
+			return processed, err
+		}
 		if err := p.store.RecordFileScan(ctx, result); err != nil {
 			return processed, err
 		}
@@ -73,42 +76,91 @@ func (p *FileScanProcessor) ProcessPending(ctx context.Context, limit int) (int,
 	return processed, nil
 }
 
-func (p *FileScanProcessor) scan(candidate lifecyclecontract.FileScanEvidence) lifecyclecontract.FileScanEvidence {
-	status, reason := lifecyclecontract.FileScanClean, "validated"
-	path, err := p.path(candidate)
-	var content []byte
-	if err == nil {
-		content, err = os.ReadFile(path)
-	}
+func (p *FileScanProcessor) scan(ctx context.Context, candidate lifecyclecontract.FileScanEvidence) (lifecyclecontract.FileScanEvidence, error) {
+	reader, err := p.blobs.Open(ctx, candidate.WorkspaceID, candidate.Filename)
 	if err != nil {
-		status, reason = lifecyclecontract.FileScanFailed, "file_unavailable"
-	} else if !fileContentIdentityMatches(candidate, content) {
-		status, reason = lifecyclecontract.FileScanFailed, "content_identity_changed"
-	} else if unsafeUploadContent(content) {
+		candidate.Status = lifecyclecontract.FileScanFailed
+		candidate.Provider = blobIdentityVerifierProvider
+		reason := "file_unavailable"
+		if !errors.Is(err, runtimefile.ErrBlobNotFound) {
+			reason = "blob_open_failed"
+		}
+		candidate.EvidenceRef = fileScanEvidenceReference(candidate, reason, candidate.Provider)
+		candidate.ScannedAt = p.clock().UTC()
+		return candidate, nil
+	}
+	defer reader.Close()
+
+	hash := sha256.New()
+	counter := &byteCounter{}
+	content := io.TeeReader(reader, io.MultiWriter(hash, counter))
+	result, err := p.scanner.Scan(ctx, runtimefile.FileScanRequest{
+		WorkspaceID: candidate.WorkspaceID, FileID: candidate.FileID, BlobKey: candidate.Filename, Filename: candidate.Filename,
+		ContentType: candidate.ContentType, ContentSHA256: candidate.SHA256, Size: candidate.Size,
+	}, content)
+	if err != nil {
+		return lifecyclecontract.FileScanEvidence{}, err
+	}
+	if _, err := io.Copy(io.Discard, content); err != nil {
+		return lifecyclecontract.FileScanEvidence{}, err
+	}
+	actualDigest := hex.EncodeToString(hash.Sum(nil))
+	if counter.size != candidate.Size || !strings.EqualFold(actualDigest, strings.TrimSpace(candidate.SHA256)) {
+		candidate.Status = lifecyclecontract.FileScanFailed
+		candidate.Provider = blobIdentityVerifierProvider
+		candidate.EvidenceRef = fileScanEvidenceReference(candidate, "content_identity_changed", candidate.Provider)
+	} else {
+		if !validTerminalFileScanResult(result) {
+			return lifecyclecontract.FileScanEvidence{}, fmt.Errorf("file scanner returned invalid terminal evidence")
+		}
+		candidate.Status, candidate.Provider, candidate.EvidenceRef = result.Status, result.Provider, result.EvidenceRef
+	}
+	candidate.ScannedAt = p.clock().UTC()
+	return candidate, nil
+}
+
+type byteCounter struct{ size int64 }
+
+func (c *byteCounter) Write(content []byte) (int, error) {
+	c.size += int64(len(content))
+	return len(content), nil
+}
+
+func validFileAdapterDescriptor(descriptor runtimefile.AdapterDescriptor) bool {
+	return strings.TrimSpace(descriptor.Provider) != "" && strings.TrimSpace(descriptor.Revision) != ""
+}
+
+func validTerminalFileScanResult(result runtimefile.FileScanResult) bool {
+	terminal := result.Status == lifecyclecontract.FileScanClean || result.Status == lifecyclecontract.FileScanQuarantined || result.Status == lifecyclecontract.FileScanFailed
+	return terminal && strings.TrimSpace(result.Provider) != "" && strings.TrimSpace(result.EvidenceRef) != ""
+}
+
+// BuiltinFileScanner is the safe local default. It intentionally owns no
+// storage paths and can be replaced by a deployment adapter.
+type BuiltinFileScanner struct{}
+
+func NewBuiltinFileScanner() *BuiltinFileScanner { return &BuiltinFileScanner{} }
+
+func (*BuiltinFileScanner) Descriptor() runtimefile.AdapterDescriptor {
+	return runtimefile.AdapterDescriptor{Provider: builtinFileScannerProvider, Revision: "v1"}
+}
+
+func (*BuiltinFileScanner) Scan(_ context.Context, request runtimefile.FileScanRequest, reader io.Reader) (runtimefile.FileScanResult, error) {
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return runtimefile.FileScanResult{}, err
+	}
+	status, reason := lifecyclecontract.FileScanClean, "validated"
+	if unsafeUploadContent(content) {
 		status, reason = lifecyclecontract.FileScanQuarantined, "unsafe_signature"
-	} else if !uploadContentTypeMatches(candidate.ContentType, content) {
+	} else if !uploadContentTypeMatches(request.ContentType, content) {
 		status, reason = lifecyclecontract.FileScanQuarantined, "content_type_mismatch"
 	}
-	candidate.Status = status
-	candidate.Provider = builtinFileScannerProvider
-	candidate.EvidenceRef = fileScanEvidenceReference(candidate, reason)
-	candidate.ScannedAt = p.clock().UTC()
-	return candidate
-}
-
-func (p *FileScanProcessor) path(candidate lifecyclecontract.FileScanEvidence) (string, error) {
-	workspace := strings.TrimSpace(candidate.WorkspaceID)
-	filename := strings.TrimSpace(candidate.Filename)
-	if workspace == "" || filename == "" || filepath.Base(filename) != filename {
-		return "", fmt.Errorf("file scan artifact identity is invalid")
+	candidate := lifecyclecontract.FileScanEvidence{
+		WorkspaceID: request.WorkspaceID, FileID: request.FileID, Filename: request.Filename, ContentType: request.ContentType,
+		SHA256: request.ContentSHA256, Size: request.Size, Status: status,
 	}
-	digest := sha256.Sum256([]byte(workspace))
-	return filepath.Join(p.uploadRoot, "workspace-"+hex.EncodeToString(digest[:16]), filename), nil
-}
-
-func fileContentIdentityMatches(candidate lifecyclecontract.FileScanEvidence, content []byte) bool {
-	digest := sha256.Sum256(content)
-	return int64(len(content)) == candidate.Size && strings.EqualFold(hex.EncodeToString(digest[:]), strings.TrimSpace(candidate.SHA256))
+	return runtimefile.FileScanResult{Status: status, Provider: builtinFileScannerProvider, EvidenceRef: fileScanEvidenceReference(candidate, reason, builtinFileScannerProvider)}, nil
 }
 
 func unsafeUploadContent(content []byte) bool {
@@ -145,10 +197,10 @@ func uploadContentTypeMatches(contentType string, content []byte) bool {
 	}
 }
 
-func fileScanEvidenceReference(candidate lifecyclecontract.FileScanEvidence, reason string) string {
+func fileScanEvidenceReference(candidate lifecyclecontract.FileScanEvidence, reason, provider string) string {
 	hash := sha256.New()
 	_, _ = io.WriteString(hash, strings.Join([]string{
-		builtinFileScannerProvider, candidate.WorkspaceID, candidate.FileID, strings.ToLower(candidate.SHA256),
+		strings.TrimSpace(provider), candidate.WorkspaceID, candidate.FileID, strings.ToLower(candidate.SHA256),
 		fmt.Sprint(candidate.Size), strings.ToLower(candidate.ContentType), candidate.Status, strings.TrimSpace(reason),
 	}, "\x00"))
 	return strings.TrimSpace(reason) + ":sha256:" + hex.EncodeToString(hash.Sum(nil))

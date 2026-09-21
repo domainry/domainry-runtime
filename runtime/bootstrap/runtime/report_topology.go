@@ -21,12 +21,12 @@ import (
 )
 
 // NewVerifiedProjectWithTopologyFactoriesAndDatabase selects Integration topology and retains Report Module by default.
-func NewVerifiedProjectWithTopologyFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, release runtimehttp.RuntimeReleaseIdentity, evidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, store *persistence.RuntimeStore, agent ...agentsdk.Factory) *Runtime {
+func NewVerifiedProjectWithTopologyFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry, release runtimehttp.RuntimeReleaseIdentity, evidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, store *persistence.RuntimeStore, agent ...agentsdk.Factory) *Runtime {
 	return NewVerifiedProjectWithAllTopologyFactoriesAndDatabase(ctx, cfg, handlers, connectors, release, evidence, identity, notification, monitoring, scheduler, dataExchange, integration, reportmodule.NewFactory(), store, agent...)
 }
 
 // NewVerifiedProjectWithAllTopologyFactoriesAndDatabase lets the project host select Report Module or SaaS explicitly.
-func NewVerifiedProjectWithAllTopologyFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, release runtimehttp.RuntimeReleaseIdentity, evidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, report reportsdk.Factory, store *persistence.RuntimeStore, agent ...agentsdk.Factory) *Runtime {
+func NewVerifiedProjectWithAllTopologyFactoriesAndDatabase(ctx context.Context, cfg config.Config, handlers *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry, release runtimehttp.RuntimeReleaseIdentity, evidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, report reportsdk.Factory, store *persistence.RuntimeStore, agent ...agentsdk.Factory) *Runtime {
 	var agentFactory agentsdk.Factory
 	if len(agent) > 0 {
 		agentFactory = agent[0]
@@ -37,7 +37,7 @@ func NewVerifiedProjectWithAllTopologyFactoriesAndDatabase(ctx context.Context, 
 // NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions is the project
 // host entrypoint for non-serializable startup evidence such as verified
 // acceptance-fixture reference candidates.
-func NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx context.Context, cfg config.Config, handlers *runtimeext.BusinessHandlerRegistry, connectors *connector.Registry, release runtimehttp.RuntimeReleaseIdentity, evidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, report reportsdk.Factory, store *persistence.RuntimeStore, options ProjectStartupOptions, agent ...agentsdk.Factory) *Runtime {
+func NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx context.Context, cfg config.Config, handlers *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry, release runtimehttp.RuntimeReleaseIdentity, evidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, report reportsdk.Factory, store *persistence.RuntimeStore, options ProjectStartupOptions, agent ...agentsdk.Factory) *Runtime {
 	var agentFactory agentsdk.Factory
 	if len(agent) > 0 {
 		agentFactory = agent[0]

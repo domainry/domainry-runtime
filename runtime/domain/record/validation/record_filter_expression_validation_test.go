@@ -1,9 +1,12 @@
 package validation
 
 import (
+	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
@@ -50,6 +53,95 @@ func TestRecordFilterExpressionFailsClosed(t *testing.T) {
 	}
 	if _, err := RecordNormalizeSelectFields(object, []string{"missing"}); err == nil {
 		t.Fatal("unknown projection field accepted")
+	}
+}
+
+func TestRecordFileFieldsOnlySupportNullFiltersAndAreNotSearchableOrSortable(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "document", Fields: []definitionmodel.FieldSchema{
+		{Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"scan_required": false}},
+		{Key: "attachments", Type: recordmodel.RecordFileListFieldType, Config: map[string]any{"scan_required": false}},
+		{Key: "title", Type: "text"},
+	}}
+	for _, expression := range []recordmodel.RecordFilterExpression{
+		{Operator: "is_null", Field: "attachment"},
+		{Operator: "is_not_null", Field: "attachments"},
+	} {
+		if _, err := RecordNormalizeFilterExpression(object, &expression); err != nil {
+			t.Fatalf("null file filter rejected: %v", err)
+		}
+	}
+	for _, expression := range []recordmodel.RecordFilterExpression{
+		{Operator: "eq", Field: "attachment", Value: "file-1"},
+		{Operator: "in", Field: "attachments", Values: []any{"file-1"}},
+	} {
+		if _, err := RecordNormalizeFilterExpression(object, &expression); err == nil {
+			t.Fatalf("file comparison accepted: %#v", expression)
+		}
+	}
+	query := RecordNormalizeListQuery(object, recordmodel.RecordListQuery{
+		SearchFields: []string{"attachment", "title"},
+		Sort:         []recordmodel.RecordSortRule{{Field: "attachments", Direction: "asc"}, {Field: "title", Direction: "desc"}},
+	})
+	if !reflect.DeepEqual(query.SearchFields, []string{"title"}) || !reflect.DeepEqual(query.Sort, []recordmodel.RecordSortRule{{Field: "title", Direction: "desc"}, {Field: "id", Direction: "asc"}}) {
+		t.Fatalf("normalized file query=%#v", query)
+	}
+	err := RecordValidateListFilters(object, map[string]any{"attachment": "file-1"})
+	var coded *apperror.CodedError
+	if !errors.As(err, &coded) || coded.Code != "backend.validation.file_filter_unsupported" {
+		t.Fatalf("legacy file filter err=%v", err)
+	}
+}
+
+func TestStructuredFieldsPublishPortableQuerySemantics(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "item", Fields: []definitionmodel.FieldSchema{
+		{Key: "tags", Type: recordmodel.RecordMultiSelectFieldType, Validation: definitionmodel.FieldValidation{Options: []string{"a", "b", "c"}}},
+		{Key: "payload", Type: recordmodel.RecordJSONFieldType},
+		{Key: "title", Type: "text"},
+	}}
+	for _, expression := range []recordmodel.RecordFilterExpression{
+		{Operator: "eq", Field: "tags", Value: []any{"b", "a", "b"}},
+		{Operator: "ne", Field: "tags", Value: []any{"a"}},
+		{Operator: "in", Field: "tags", Values: []any{[]any{"a"}, []any{"c", "b"}}},
+		{Operator: "is_null", Field: "payload"},
+		{Operator: "is_not_null", Field: "tags"},
+	} {
+		normalized, err := RecordNormalizeFilterExpression(object, &expression)
+		if err != nil {
+			t.Fatalf("valid structured expression %#v: %v", expression, err)
+		}
+		if expression.Operator == "eq" && !reflect.DeepEqual(normalized.Value, []string{"a", "b"}) {
+			t.Fatalf("multi set=%#v", normalized.Value)
+		}
+	}
+	for _, expression := range []recordmodel.RecordFilterExpression{
+		{Operator: "gt", Field: "tags", Value: []any{"a"}},
+		{Operator: "contains", Field: "tags", Value: "a"},
+		{Operator: "eq", Field: "payload", Value: map[string]any{"a": 1}},
+		{Operator: "in", Field: "payload", Values: []any{map[string]any{"a": 1}}},
+	} {
+		if _, err := RecordNormalizeFilterExpression(object, &expression); err == nil {
+			t.Fatalf("unsupported structured expression accepted: %#v", expression)
+		}
+	}
+	query := RecordNormalizeListQuery(object, recordmodel.RecordListQuery{
+		SearchFields: []string{"tags", "payload", "title"},
+		Sort:         []recordmodel.RecordSortRule{{Field: "tags"}, {Field: "payload"}, {Field: "title"}},
+	})
+	if !reflect.DeepEqual(query.SearchFields, []string{"title"}) || !reflect.DeepEqual(query.Sort, []recordmodel.RecordSortRule{{Field: "title", Direction: "asc"}, {Field: "id", Direction: "asc"}}) {
+		t.Fatalf("structured query=%#v", query)
+	}
+	if err := RecordValidateListFilters(object, map[string]any{"tags": []any{"a"}, "tags__in": []any{[]any{"b"}}}); err != nil {
+		t.Fatalf("portable multi filters rejected: %v", err)
+	}
+	for filters, code := range map[string]string{
+		"tags__gte": "backend.validation.multi_select_filter_unsupported",
+		"payload":   "backend.validation.json_filter_unsupported",
+	} {
+		err := RecordValidateListFilters(object, map[string]any{filters: "value"})
+		var coded *apperror.CodedError
+		if !errors.As(err, &coded) || coded.Code != code {
+			t.Fatalf("filters=%s err=%v", filters, err)
+		}
 	}
 }
 

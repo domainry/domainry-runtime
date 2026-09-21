@@ -24,6 +24,8 @@ func (s *CapabilityAuthoringApplicationService) ReferenceValues(ctx context.Cont
 	switch kind {
 	case "object_key":
 		values = contract.Instance.ObjectKeys
+	case "business_calendar_key":
+		values = contract.Instance.BusinessCalendarKeys
 	case "relation_target_object_key":
 		values = append(values, contract.Instance.ObjectKeys...)
 		values = append(values, definitioncontract.IdentityUserObjectKey, definitioncontract.IdentityOrganizationUnitObjectKey)
@@ -45,6 +47,10 @@ func (s *CapabilityAuthoringApplicationService) ReferenceValues(ctx context.Cont
 		values = contract.Instance.ReportKeys
 	case "role_key":
 		values = contract.Instance.RoleKeys
+	case "assignee_resolver_key":
+		for _, resolver := range contract.Instance.AssigneeResolvers {
+			values = append(values, resolver.ResolverKey)
+		}
 	case "permission_key":
 		values = contract.Instance.PermissionKeys
 	case "user_id":
@@ -64,6 +70,8 @@ func (s *CapabilityAuthoringApplicationService) ReferenceValues(ctx context.Cont
 			return capabilitycontract.CapabilityReferenceResult{}, capabilityDiscoveryBadRequest("backend.capability.reference_scope_required", "kind", kind)
 		}
 		switch scope {
+		case "business_action":
+			values = contract.Instance.ActionKeys
 		case "workflow":
 			for _, workflowKey := range contract.Instance.WorkflowKeys {
 				if strings.HasPrefix(workflowKey, "scheduled:") {

@@ -9,6 +9,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
@@ -381,20 +382,20 @@ func TestWorkflowApprovalResolverTaskAndAggregationOutcomes(t *testing.T) {
 	engine := workflowEngineEdge(store, identity, nil)
 	process := workflowEngineProcess(nil, nil)
 	principal := workflowProcessQueryPrincipal()
-	strategies := []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"direct", "direct"}}, {Type: "manager", UserField: "employee"}, {Type: "manager_of", UserField: "employee"}, {Type: "initiator_manager"}, {Type: "record_field", Field: "record_owner"}, {Type: "role", RoleKey: "approver"}}
+	strategies := []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"direct", "direct"}}, {Type: "manager", UserField: "employee"}, {Type: "manager_of", UserField: "employee"}, {Type: "initiator_manager"}, {Type: "variable_user", Field: "record_owner"}, {Type: "role", RoleKey: "approver"}}
 	for _, strategy := range strategies {
-		users, _, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, strategy, principal)
+		users, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, strategy, principal)
 		if err != nil || len(users) == 0 {
 			t.Fatalf("strategy=%s users=%v err=%v", strategy.Type, users, err)
 		}
 	}
-	if _, _, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, definitionmodel.WorkflowAssigneeResolver{Type: "bad"}, principal); apperror.CodeOf(err) != "backend.workflow.approval_resolver_invalid" {
+	if _, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, definitionmodel.WorkflowAssigneeResolver{Type: "bad"}, principal); apperror.CodeOf(err) != "backend.workflow.approval_resolver_invalid" {
 		t.Fatalf("invalid resolver=%v", err)
 	}
-	if users, _, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, definitionmodel.WorkflowAssigneeResolver{Type: "manager_of"}, principal); err != nil || len(users) != 0 {
+	if users, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, definitionmodel.WorkflowAssigneeResolver{Type: "manager_of"}, principal); err != nil || len(users) != 0 {
 		t.Fatalf("manager_of without a user field must not fall back to initiator: users=%v err=%v", users, err)
 	}
-	if _, _, err := workflowEngineEdge(store, nil, nil).resolveApprovalAssignees(t.Context(), process, definitionmodel.WorkflowGraphNode{}, principal); apperror.CodeOf(err) != "backend.workflow.approval_identity_unavailable" {
+	if _, err := workflowEngineEdge(store, nil, nil).resolveApprovalAssignees(t.Context(), process, definitionmodel.WorkflowGraphNode{}, principal); apperror.CodeOf(err) != "backend.workflow.approval_identity_unavailable" {
 		t.Fatalf("missing identity=%v", err)
 	}
 	node := definitionmodel.WorkflowGraphNode{ID: "approval", Type: "approval", Name: "Approve", Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{Mode: "sequential", Resolvers: strategies[:1]}}}
@@ -442,13 +443,13 @@ func TestWorkflowApprovalResolverTaskAndAggregationOutcomes(t *testing.T) {
 		ResolverMode: "first_match",
 		Resolvers:    []definitionmodel.WorkflowAssigneeResolver{{Type: "role", RoleKey: "approver"}, {Type: "users", UserIDs: []string{"ignored"}}},
 	}}}
-	if users, role, err := engine.resolveApprovalAssignees(t.Context(), process, roleFirst, principal); err != nil || role != "approver" || len(users) != 1 || users[0] != "role-user" {
-		t.Fatalf("first match users=%v role=%s err=%v", users, role, err)
+	if users, err := engine.resolveApprovalAssignees(t.Context(), process, roleFirst, principal); err != nil || len(users) != 1 || users[0].UserID != "role-user" || users[0].RoleKey != "approver" {
+		t.Fatalf("first match users=%v err=%v", users, err)
 	}
 	firstEmpty := definitionmodel.WorkflowGraphNode{Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{
 		ResolverMode: "first_match", Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "users"}, {Type: "users", UserIDs: []string{"direct"}}},
 	}}}
-	if users, _, err := engine.resolveApprovalAssignees(t.Context(), process, firstEmpty, principal); err != nil || len(users) != 1 {
+	if users, err := engine.resolveApprovalAssignees(t.Context(), process, firstEmpty, principal); err != nil || len(users) != 1 {
 		t.Fatalf("first empty users=%v err=%v", users, err)
 	}
 
@@ -481,6 +482,51 @@ func TestWorkflowApprovalResolverTaskAndAggregationOutcomes(t *testing.T) {
 	}
 }
 
+func TestWorkflowResolvedAssigneesPreservePerCandidateRoleEvidenceAndDataSource(t *testing.T) {
+	identity := workflowApprovalIdentityStub{
+		roles:         []identitysdk.Role{{ID: "finance-role", Key: "finance"}, {ID: "legal-role", Key: "legal"}},
+		identityUsers: []identitysdk.User{{ID: "finance-user", Status: identitysdk.UserStatusActive}, {ID: "legal-user", Status: identitysdk.UserStatusActive}},
+		assignments: map[string][]identitysdk.UserRoleAssignment{
+			"finance-user": {{UserID: "finance-user", RoleID: "finance-role"}},
+			"legal-user":   {{UserID: "legal-user", RoleID: "legal-role"}},
+		},
+	}
+	process := workflowEngineProcess(nil, nil)
+	principal := workflowProcessQueryPrincipal()
+	engine := NewWorkflowProcessEngine(WorkflowDependencies{
+		Identity: identity,
+		RecordReader: workflowRecordReaderEdgeStub{records: map[string]recordmodel.Record{
+			"record": {ID: "record", Data: map[string]any{"record_owner": "record-user"}},
+		}},
+		ObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema {
+			return map[string]definitionmodel.ObjectSchema{"order": {Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "record_owner", Type: "user"}}}}
+		},
+	})
+	node := definitionmodel.WorkflowGraphNode{Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{ResolverMode: "union", Resolvers: []definitionmodel.WorkflowAssigneeResolver{
+		{Type: "role", RoleKey: "finance", Priority: 1},
+		{Type: "role", RoleKey: "legal", Priority: 2},
+		{Type: "users", UserIDs: []string{"finance-user"}, Priority: 3},
+	}}}}
+	resolved, err := engine.resolveApprovalAssignees(t.Context(), process, node, principal)
+	if err != nil || len(resolved) != 2 {
+		t.Fatalf("resolved=%+v err=%v", resolved, err)
+	}
+	if resolved[0].UserID != "finance-user" || resolved[0].RoleKey != "finance" || resolved[1].UserID != "legal-user" || resolved[1].RoleKey != "legal" {
+		t.Fatalf("per-candidate role binding was lost: %+v", resolved)
+	}
+	if len(resolved[0].Evidence.Matches) != 2 || resolved[0].Evidence.Matches[0].RoleKey != "finance" || resolved[0].Evidence.Matches[1].ResolverType != "users" {
+		t.Fatalf("duplicate resolver evidence was lost: %+v", resolved[0].Evidence)
+	}
+	variable, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, definitionmodel.WorkflowAssigneeResolver{Type: "variable_user", Field: "record_owner"}, principal)
+	if err != nil || len(variable) != 1 || variable[0].UserID != "owner" || variable[0].Evidence.Matches[0].VariableKey != "record_owner" {
+		t.Fatalf("variable source=%+v err=%v", variable, err)
+	}
+	record, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, definitionmodel.WorkflowAssigneeResolver{Type: "record_user_field", Field: "record_owner"}, principal)
+	if err != nil || len(record) != 1 || record[0].UserID != "record-user" || record[0].Evidence.Matches[0].RecordID != "record" {
+		t.Fatalf("record source=%+v err=%v", record, err)
+	}
+}
+
 func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.T) {
 	principal := workflowProcessQueryPrincipal()
 	process := workflowEngineProcess(nil, nil)
@@ -488,31 +534,31 @@ func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.
 	store := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}}
 	engine := workflowEngineEdge(store, baseIdentity, nil)
 	managerResolver := definitionmodel.WorkflowAssigneeResolver{Type: "manager", UserField: "employee"}
-	if users, _, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err != nil || len(users) != 0 {
+	if users, err := engine.resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err != nil || len(users) != 0 {
 		t.Fatalf("missing employee users=%v err=%v", users, err)
 	}
 	employeeLookupError := baseIdentity
 	employeeLookupError.findErr = map[string]error{"employee": errors.New("employee")}
-	if _, _, err := workflowEngineEdge(store, employeeLookupError, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err == nil {
+	if _, err := workflowEngineEdge(store, employeeLookupError, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err == nil {
 		t.Fatal("expected employee lookup error")
 	}
 	managerIdentity := baseIdentity
 	managerIdentity.users = map[string]identitysdk.User{"employee": {ID: "employee", ManagerUserID: "manager", Status: identitysdk.UserStatusActive}}
-	if users, _, err := workflowEngineEdge(store, managerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err != nil || len(users) != 0 {
+	if users, err := workflowEngineEdge(store, managerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err != nil || len(users) != 0 {
 		t.Fatalf("missing manager users=%v err=%v", users, err)
 	}
 	managerIdentity.findErr = map[string]error{"manager": errors.New("manager")}
-	if _, _, err := workflowEngineEdge(store, managerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err == nil {
+	if _, err := workflowEngineEdge(store, managerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err == nil {
 		t.Fatal("expected manager lookup error")
 	}
 	managerIdentity.findErr = nil
 	managerIdentity.users["manager"] = identitysdk.User{ID: "manager", Status: "disabled"}
-	if users, _, err := workflowEngineEdge(store, managerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err != nil || len(users) != 0 {
+	if users, err := workflowEngineEdge(store, managerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err != nil || len(users) != 0 {
 		t.Fatalf("disabled manager users=%v err=%v", users, err)
 	}
 	emptyRecord := process
 	emptyRecord.Variables = map[string]any{}
-	if users, _, err := engine.resolveApprovalAssigneeStrategy(t.Context(), emptyRecord, definitionmodel.WorkflowAssigneeResolver{Type: "record_field", Field: "owner"}, principal); err != nil || len(users) != 0 {
+	if users, err := engine.resolveApprovalAssigneeStrategy(t.Context(), emptyRecord, definitionmodel.WorkflowAssigneeResolver{Type: "variable_user", Field: "owner"}, principal); err != nil || len(users) != 0 {
 		t.Fatalf("empty record users=%v err=%v", users, err)
 	}
 	for name, identity := range map[string]workflowApprovalIdentityStub{
@@ -533,8 +579,8 @@ func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.
 	}
 	adminIdentity := workflowApprovalIdentityStub{roles: []identitysdk.Role{{ID: "admin-role", Key: "admin"}}, identityUsers: []identitysdk.User{{ID: "admin", Status: identitysdk.UserStatusActive}}, assignments: map[string][]identitysdk.UserRoleAssignment{"admin": {{RoleID: "admin-role"}}}}
 	adminNode := definitionmodel.WorkflowGraphNode{Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{EmptyAssigneePolicy: "admin"}}}
-	if users, role, err := workflowEngineEdge(store, adminIdentity, nil).resolveApprovalAssignees(t.Context(), process, adminNode, principal); err != nil || role != "admin" || len(users) != 1 {
-		t.Fatalf("admin fallback users=%v role=%s err=%v", users, role, err)
+	if users, err := workflowEngineEdge(store, adminIdentity, nil).resolveApprovalAssignees(t.Context(), process, adminNode, principal); err != nil || len(users) != 1 || users[0].RoleKey != "admin" {
+		t.Fatalf("admin fallback users=%v err=%v", users, err)
 	}
 
 	approvalNode := definitionmodel.WorkflowGraphNode{ID: "approval", Type: "approval", Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{Mode: "any"}}}

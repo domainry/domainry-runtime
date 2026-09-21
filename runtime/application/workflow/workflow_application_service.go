@@ -128,7 +128,7 @@ func newWorkflowApplicationService(dependencies WorkflowDependencies, processEng
 		schema:           dependencies.Schema,
 		schemaMap:        dependencies.ObjectMap, recordReader: dependencies.RecordReader, canAccess: dependencies.CanAccessRecord,
 		invokeAction:        dependencies.InvokeAction,
-		referenceValidator:  NewWorkflowReferenceValidator(dependencies.Schema, dependencies.ObjectMap, dependencies.Identity),
+		referenceValidator:  NewWorkflowReferenceValidator(dependencies.Schema, dependencies.ObjectMap, dependencies.Identity, dependencies.ProjectExtensions),
 		executionVisibility: NewWorkflowExecutionVisibilityApplicationService(dependencies.RecordReader, dependencies.CanAccessRecord),
 		worker:              dependencies.Worker,
 		continuationWakeups: make(chan WorkflowContinuationLocator, 256),

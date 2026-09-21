@@ -8,6 +8,7 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -64,5 +65,24 @@ func TestMetadataCandidateRejectsModuleOwnedSchedulerMutation(t *testing.T) {
 	}
 	if err := service.ValidateMetadataCandidate(t.Context(), mutations); apperror.CodeOf(err) != "backend.metadata.candidate_invalid" {
 		t.Fatalf("module-owned scheduler mutation error=%#v", err)
+	}
+}
+
+func TestMetadataCandidateRequiresNewRevisionWhenBusinessCalendarSemanticsChange(t *testing.T) {
+	calendar := businesscalendarmodel.BusinessCalendarSchema{
+		Key: "operations", Name: "Operations", Revision: "1", Timezone: "UTC",
+		WeeklyWorkingIntervals: []businesscalendarmodel.BusinessCalendarWeeklySchedule{{Weekday: "monday", Intervals: []businesscalendarmodel.BusinessCalendarTimeInterval{{Start: "09:00", End: "18:00"}}}},
+	}
+	manifest := loadMetadataCandidateFixture(t)
+	manifest.BusinessCalendars = []businesscalendarmodel.BusinessCalendarSchema{calendar}
+	service := NewApplicationSchemaApplicationService(ApplicationSchemaDependencies{Repository: metadataCandidateRepository{manifest: manifest}})
+	sameRevision := []appschemamodel.ApplicationDefinitionMutation{{Operation: "update", ResourceType: "business_calendar", ResourceKey: "operations", Request: appschemamodel.ApplicationDefinitionUpsertRequest{Payload: json.RawMessage(`{"key":"operations","name":"Operations","revision":"1","timezone":"UTC","weekly_working_intervals":[{"weekday":"monday","intervals":[{"start":"10:00","end":"18:00"}]}]}`)}}}
+	if err := service.ValidateMetadataCandidate(t.Context(), sameRevision); apperror.CodeOf(err) != "backend.metadata.candidate_invalid" {
+		t.Fatalf("same revision change error=%v", err)
+	}
+	newRevision := sameRevision
+	newRevision[0].Request.Payload = json.RawMessage(`{"key":"operations","name":"Operations","revision":"2","timezone":"UTC","weekly_working_intervals":[{"weekday":"monday","intervals":[{"start":"10:00","end":"18:00"}]}]}`)
+	if err := service.ValidateMetadataCandidate(t.Context(), newRevision); err != nil {
+		t.Fatalf("new revision change rejected: %v", err)
 	}
 }

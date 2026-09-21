@@ -49,6 +49,77 @@ func ApplicationSchemaNormalizeFieldMutation(request appschemamodel.ApplicationD
 		payload, _ := json.Marshal(field)
 		request.Payload = payload
 	}
+	fileType := strings.TrimSpace(field.Type) == recordmodel.RecordFileFieldType || strings.TrimSpace(field.Type) == recordmodel.RecordFileListFieldType
+	if !fileType {
+		for _, key := range []string{"allowed_mime_types", "max_size_bytes", "max_files", "scan_required"} {
+			if _, configured := field.Config[key]; configured {
+				return request, badRequest("backend.file.config_on_non_file", "field", field.Key, "config", key)
+			}
+		}
+	}
+	if fileType {
+		policy, err := recordmodel.RecordFileFieldPolicyFor(field)
+		if err != nil {
+			return request, badRequest(metadataFileErrorCode(err), "field", field.Key)
+		}
+		if field.Config == nil {
+			field.Config = map[string]any{}
+		}
+		field.Config["max_size_bytes"] = policy.MaxSizeBytes
+		field.Config["max_files"] = policy.MaxFiles
+		field.Config["scan_required"] = policy.ScanRequired
+		if len(policy.AllowedMIMETypes) > 0 {
+			field.Config["allowed_mime_types"] = policy.AllowedMIMETypes
+		}
+		payload, _ := json.Marshal(field)
+		request.Payload = payload
+	}
+	structuredType := recordmodel.RecordIsStructuredFieldType(field.Type)
+	if !structuredType {
+		for _, key := range []string{"max_items", "json_shape", "max_json_bytes"} {
+			if _, configured := field.Config[key]; configured {
+				return request, badRequest("backend.structured.config_on_non_structured", "field", field.Key, "config", key)
+			}
+		}
+	}
+	if structuredType {
+		policy, err := recordmodel.RecordStructuredFieldPolicyFor(field)
+		if err != nil {
+			return request, badRequest(metadataStructuredErrorCode(err), "field", field.Key)
+		}
+		if field.Config == nil {
+			field.Config = map[string]any{}
+		}
+		if field.Type == recordmodel.RecordMultiSelectFieldType {
+			field.Config["max_items"] = policy.MaxItems
+		} else {
+			field.Config["json_shape"] = policy.JSONShape
+			field.Config["max_json_bytes"] = policy.MaxJSONBytes
+		}
+		for target, value := range map[string]any{"default": field.Default, "default_value": field.DefaultValue} {
+			if value == nil {
+				continue
+			}
+			normalized, normalizeErr := recordmodel.RecordNormalizeStructuredFieldValue(field, value)
+			if normalizeErr != nil {
+				return request, badRequest(metadataStructuredErrorCode(normalizeErr), "field", field.Key, "target", target)
+			}
+			if target == "default" {
+				field.Default = normalized
+			} else {
+				field.DefaultValue = normalized
+			}
+		}
+		if field.Upgrade != nil && strings.TrimSpace(field.Upgrade.ExistingRows) == definitionmodel.FieldUpgradeBackfill && field.Upgrade.BackfillValue != nil {
+			normalized, normalizeErr := recordmodel.RecordNormalizeStructuredFieldValue(field, field.Upgrade.BackfillValue)
+			if normalizeErr != nil {
+				return request, badRequest(metadataStructuredErrorCode(normalizeErr), "field", field.Key, "target", "upgrade.backfill_value")
+			}
+			field.Upgrade.BackfillValue = normalized
+		}
+		payload, _ := json.Marshal(field)
+		request.Payload = payload
+	}
 	objectKey := strings.TrimSpace(request.ObjectKey)
 	if objectKey == "" && field.Config != nil {
 		objectKey = cleanFieldValue(field.Config["_definition_object_key"])
@@ -129,6 +200,20 @@ func metadataDecimalErrorCode(err error) string {
 		return decimalError.Code
 	}
 	return "backend.decimal.value_invalid"
+}
+
+func metadataFileErrorCode(err error) string {
+	if fileError, ok := err.(*recordmodel.RecordFileContractError); ok {
+		return fileError.Code
+	}
+	return "backend.metadata.field_definition_invalid"
+}
+
+func metadataStructuredErrorCode(err error) string {
+	if structuredError, ok := err.(*recordmodel.RecordStructuredFieldError); ok {
+		return structuredError.Code
+	}
+	return "backend.validation.structured_value"
 }
 
 func containsFieldType(allowed []string, fieldType string) bool {

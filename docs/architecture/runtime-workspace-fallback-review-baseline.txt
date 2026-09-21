@@ -25,6 +25,12 @@
 # identifier and then scopes every read through NewWorkspaceSelectBuilder on
 # that workspace. None of the four substitutes a workspace or tenant.
 # 2026-09-16 review: action and workflow receipt readers reject blank request, receipt or subject workspaces; workflow withdrawal refuses a blank workspace. These five additions fail closed and never select a fallback workspace.
+# 2026-09-21 review: BlobStore extraction removed the old file-path guards.
+# LocalStore now has five explicit workspace-identity guards in stage, commit,
+# open, delete, and test-only path resolution; all reject an empty workspace
+# and none substitutes one.
+# PublicResource lookup also rejects an ambiguous result or a row without its
+# stored workspace identity; it never supplies a fallback workspace.
 runtime/application/action/action_invocation_receipt_read.go|887c5c451c24ca0c
 runtime/application/action/action_invocation_receipt_read.go|f7281c25559cf6ce
 runtime/application/action/action_workspace_aggregate_execution.go|5bb28c1937a21188
@@ -51,9 +57,7 @@ runtime/application/seed/business/acceptance_setup.go|77da2f4766b7ea50
 runtime/application/seed/business/records.go|b2e5ab60c1900c7a
 runtime/application/seed/globalcapability/runtime.go|c9934cedd7524bf6
 runtime/application/upload/file_capability_service.go|78a91dc513a29438
-runtime/application/upload/file_capability_service.go|ad1cbf6e3847fe7b
 runtime/application/upload/file_download_ticket_service.go|e49199ea673c10e3
-runtime/application/upload/file_scan_processor.go|9146e651dde443c7
 runtime/application/upload/upload_subject_registry.go|256e805788613c3d
 runtime/application/upload/upload_subject_registry.go|ce800c2d21c30df5
 runtime/application/workflow/workflow_agent_capability_completion.go|a0f007c7d608a730
@@ -66,6 +70,11 @@ runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
 runtime/application/workspaceprovision/workspace_administration_application_service.go|0e4286d03e5f3289
 runtime/application/workspaceprovision/workspace_administration_application_service.go|6a0413e7fa385b92
 runtime/application/workspaceprovision/workspace_administration_application_service.go|b7fd3431341b3beb
+runtime/infrastructure/blobstore/local_store.go|2c55a13d781fdec0
+runtime/infrastructure/blobstore/local_store.go|9eacf70f950bff5a
+runtime/infrastructure/blobstore/local_store.go|9eacf70f950bff5a
+runtime/infrastructure/blobstore/local_store.go|9eacf70f950bff5a
+runtime/infrastructure/blobstore/local_store.go|f8a2fa401c03632f
 runtime/infrastructure/persistence/auditmodule/audit_store.go|2eb97668367dd897
 runtime/infrastructure/persistence/database/action/action_business_execution_store.go|8a6b0a15d07ee4c7
 runtime/infrastructure/persistence/database/appschema/manifest_store.go|4abfd612c230c5f8
@@ -85,6 +94,7 @@ runtime/infrastructure/persistence/database/operations/operations_store.go|aa60d
 runtime/infrastructure/persistence/database/operations/operations_store.go|aa60dbbb6d4212b5
 runtime/infrastructure/persistence/database/publicationhandoff/publication_store.go|5a36b4df9408e1f7
 runtime/infrastructure/persistence/database/publicationhandoff/publication_store.go|7b95cd2bfed73c02
+runtime/infrastructure/persistence/database/publicresource/store.go|a46919ba8e779ba1
 runtime/infrastructure/persistence/database/record/record_timer_workspace_repository.go|4b05a52a154a21d2
 runtime/infrastructure/persistence/database/report/report_export_prepare_receipt_store.go|24525ceea97305f1
 runtime/infrastructure/persistence/database/report/report_export_prepare_receipt_store.go|2b789134dff6d4dc

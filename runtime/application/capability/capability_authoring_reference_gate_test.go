@@ -90,7 +90,7 @@ func authoringHasReferencePointerSuffix(declared map[string]bool, suffix string)
 
 func authoringReferenceParameterType(value string) bool {
 	switch value {
-	case "object_key", "relation_target_object_key", "field_key", "action_key", "workflow_key", "report_key", "role_key", "permission_key", "connector_key", "connection_key", "operation_key", "user_id", "org_id", "role_id", "menu_id":
+	case "object_key", "relation_target_object_key", "field_key", "action_key", "workflow_key", "report_key", "role_key", "assignee_resolver_key", "permission_key", "connector_key", "connection_key", "operation_key", "user_id", "org_id", "role_id", "menu_id":
 		return true
 	default:
 		return false

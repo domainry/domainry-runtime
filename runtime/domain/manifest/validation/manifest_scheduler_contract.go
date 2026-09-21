@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	"github.com/domainry/domainry-scheduler-sdk/schedule"
 )
@@ -42,14 +43,70 @@ func (state *validationState) validateSchedulerOwnershipAndDefinitions() {
 			state.add(path, "violates Scheduler authoring contract: %s", code)
 			continue
 		}
+		state.validateSchedulerBusinessCalendarReference(path, definition)
 		state.validateSchedulerTargetReference(path, definition)
 	}
+}
+
+func (state *validationState) validateSchedulerBusinessCalendarReference(path string, definition map[string]any) {
+	calendarKey := manifestSchedulerString(definition, "business_calendar_key")
+	if calendarKey == "" {
+		return
+	}
+	for _, calendar := range state.manifest.BusinessCalendars {
+		if strings.TrimSpace(calendar.Key) != calendarKey {
+			continue
+		}
+		if timezone := manifestSchedulerString(definition, "timezone"); timezone != strings.TrimSpace(calendar.Timezone) {
+			state.add(path+".timezone", "backend.scheduler.business_calendar_timezone_mismatch: calendar %q uses %q", calendarKey, calendar.Timezone)
+		}
+		return
+	}
+	state.add(path+".business_calendar_key", "backend.scheduler.business_calendar_not_found: %q", calendarKey)
 }
 
 func (state *validationState) validateSchedulerTargetReference(path string, definition map[string]any) {
 	targetType := strings.ToLower(manifestSchedulerString(definition, "target_type"))
 	targetKey := manifestSchedulerString(definition, "target_key")
 	switch targetType {
+	case "business_action":
+		objectKey := manifestSchedulerString(definition, "target_object")
+		action, found := state.actions[targetKey]
+		if !found {
+			state.add(path+".target_key", "references unknown Business Action %q", targetKey)
+		} else {
+			if strings.TrimSpace(action.ObjectKey) != objectKey {
+				state.add(path+".target_object", "must match Business Action %q object %q", targetKey, action.ObjectKey)
+			}
+			if !actionpolicy.ActionIsObjectKind(action.Kind) {
+				state.add(path+".target_key", "Business Action %q must be object-scoped because Scheduler targets do not carry a record identity", targetKey)
+			}
+		}
+		roleKey := manifestSchedulerString(definition, "run_as_role")
+		var roleFound bool
+		for _, role := range state.manifest.Roles {
+			if strings.TrimSpace(role.Key) != roleKey {
+				continue
+			}
+			roleFound = true
+			if strings.TrimSpace(role.Audience) != "service" || strings.TrimSpace(role.AssignmentMode) != "system_managed" {
+				state.add(path+".run_as_role", "role %q must be a service role with system_managed assignment", roleKey)
+			}
+			permitted := false
+			for _, permission := range role.Permissions {
+				if strings.TrimSpace(permission.PermissionKey) == targetKey {
+					permitted = true
+					break
+				}
+			}
+			if !permitted {
+				state.add(path+".run_as_role", "service role %q does not grant Business Action %q", roleKey, targetKey)
+			}
+			break
+		}
+		if !roleFound {
+			state.add(path+".run_as_role", "references unknown service role %q", roleKey)
+		}
 	case "workflow":
 		workflowKey := strings.TrimPrefix(targetKey, "scheduled:")
 		if workflowKey == "*" {

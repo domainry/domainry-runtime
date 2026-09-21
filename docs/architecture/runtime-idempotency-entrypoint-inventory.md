@@ -66,7 +66,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workspaceprovision` | `POST /workspaces/{workspaceCode}/suspend` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 | `workspaceprovision` | `PUT /workspaces/{workspaceCode}/commercial-configuration` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 
-## Application mutation commands (130)
+## Application mutation commands (131)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -184,6 +184,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workflow` | `ProcessScheduledWorkflowWindowPage` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_record_execution_application_service.go` |
 | `workflow` | `ProcessWorkflowContinuation` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_application_service.go` |
 | `workflow` | `ProcessWorkflowExecutions` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/workflow/workflow_application_service.go` |
+| `workflow` | `ResolveManagedWorkloadPrincipal` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/managed_workload_principal_application_service.go` |
 | `workflow` | `ResolveOpsWorkflowProcessFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_participant_use_cases.go` |
 | `workflow` | `ResolveWorkflowExecution` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_execution_application_service.go` |
 | `workflow` | `ResolveWorkflowProcessFailure` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/workflow/workflow_process_application_service.go` |

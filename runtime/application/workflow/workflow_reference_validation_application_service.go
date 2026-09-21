@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
@@ -19,13 +20,14 @@ import (
 )
 
 type WorkflowReferenceValidator struct {
-	schema    WorkflowSchemaProvider
-	objectMap func(context.Context) map[string]definitionmodel.ObjectSchema
-	identity  identitysdk.Projection
+	schema     WorkflowSchemaProvider
+	objectMap  func(context.Context) map[string]definitionmodel.ObjectSchema
+	identity   identitysdk.Projection
+	extensions *runtimeext.ProjectExtensionRegistry
 }
 
-func NewWorkflowReferenceValidator(schema WorkflowSchemaProvider, objectMap func(context.Context) map[string]definitionmodel.ObjectSchema, identity identitysdk.Projection) *WorkflowReferenceValidator {
-	return &WorkflowReferenceValidator{schema: schema, objectMap: objectMap, identity: identity}
+func NewWorkflowReferenceValidator(schema WorkflowSchemaProvider, objectMap func(context.Context) map[string]definitionmodel.ObjectSchema, identity identitysdk.Projection, extensions *runtimeext.ProjectExtensionRegistry) *WorkflowReferenceValidator {
+	return &WorkflowReferenceValidator{schema: schema, objectMap: objectMap, identity: identity, extensions: extensions}
 }
 
 func (s *WorkflowReferenceValidator) validateWorkflowReferences(ctx context.Context, workflow definitionmodel.WorkflowSchema) []workflowmodel.WorkflowValidationIssue {

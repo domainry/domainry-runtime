@@ -11,6 +11,8 @@ import (
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
+	businesscalendarpolicy "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/policy"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 	"context"
@@ -112,6 +114,22 @@ func (s *ApplicationSchemaApplicationService) ValidateApplicationDefinitionReque
 			return nil, nil, err
 		}
 		return normalized, nil, nil
+	}
+	if resourceType == "business_calendar" {
+		normalizedPayload, err := materializeDefinitionRouteKey(req.Payload, strings.TrimSpace(resourceKey), "backend.business_calendar.key_mismatch")
+		if err != nil {
+			return nil, nil, err
+		}
+		var calendar businesscalendarmodel.BusinessCalendarSchema
+		if err := decodeClosedDefinitionPayload(normalizedPayload, &calendar); err != nil {
+			return nil, nil, badRequest("backend.business_calendar.definition_invalid")
+		}
+		calendar = businesscalendarpolicy.Normalize(calendar)
+		if err := businesscalendarpolicy.Validate(calendar); err != nil {
+			return nil, nil, badRequest(valueOrDefault(businesscalendarpolicy.ValidationCode(err), "backend.business_calendar.definition_invalid"))
+		}
+		payload, err := json.Marshal(calendar)
+		return payload, nil, err
 	}
 	if resourceType == "field" {
 		fieldKey := strings.TrimSpace(resourceKey)

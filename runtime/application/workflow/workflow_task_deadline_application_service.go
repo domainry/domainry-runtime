@@ -122,19 +122,22 @@ func (s *WorkflowApplicationService) escalateWorkflowTask(ctx context.Context, p
 	if err != nil {
 		return err
 	}
-	return s.recordWorkflowTaskDeadlineEvent(ctx, process.WorkspaceID, process.ID, node.ID, task.ID, "task_escalated", "workflow.task.escalated", actor.UserID, map[string]any{"previous_assignee_user_id": previousAssignee, "assignee_user_id": task.AssigneeUserID})
+	return s.recordWorkflowTaskDeadlineEvent(ctx, process.WorkspaceID, process.ID, node.ID, task.ID, "task_escalated", "workflow.task.escalated", actor.UserID, map[string]any{"previous_assignee_user_id": previousAssignee, "assignee_user_id": task.AssigneeUserID, "assignee_role_key": task.AssigneeRoleKey, "resolver_key": task.AssigneeResolverKey, "assignee_evidence": task.AssigneeEvidence})
 }
 
 func (s *WorkflowApplicationService) prepareWorkflowTaskEscalation(ctx context.Context, process workflowmodel.WorkflowProcessInstance, task *workflowmodel.WorkflowTask, contract definitionmodel.WorkflowApprovalNodeContract, actor principalmodel.Principal) (string, error) {
-	recipients, err := s.processEngine.ResolveRecipients(ctx, process, contract.EscalationResolvers, actor)
+	assignees, err := s.processEngine.ResolveAssignees(ctx, process, task.NodeID, contract.EscalationResolvers, actor)
 	if err != nil {
 		return "", err
 	}
-	if len(recipients) == 0 {
+	if len(assignees) == 0 {
 		return "", badRequest("backend.workflow.escalation_assignee_not_found")
 	}
 	previousAssignee := task.AssigneeUserID
-	task.AssigneeUserID = recipients[0]
+	task.AssigneeUserID = assignees[0].UserID
+	task.AssigneeRoleKey = assignees[0].RoleKey
+	task.AssigneeResolverKey = assignees[0].ResolverKey
+	task.AssigneeEvidence = assignees[0].Evidence
 	task.AssigneeName = ""
 	if s.identity != nil {
 		if user, ok, getErr := s.identity.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(task.AssigneeUserID)}); getErr == nil && ok {
@@ -146,7 +149,7 @@ func (s *WorkflowApplicationService) prepareWorkflowTaskEscalation(ctx context.C
 }
 
 func (s *WorkflowApplicationService) commitWorkflowTaskEscalation(ctx context.Context, process workflowmodel.WorkflowProcessInstance, node definitionmodel.WorkflowGraphNode, task workflowmodel.WorkflowTask, previousAssignee string, actor principalmodel.Principal) error {
-	metadata := map[string]any{"previous_assignee_user_id": previousAssignee, "assignee_user_id": task.AssigneeUserID}
+	metadata := map[string]any{"previous_assignee_user_id": previousAssignee, "assignee_user_id": task.AssigneeUserID, "assignee_role_key": task.AssigneeRoleKey, "resolver_key": task.AssigneeResolverKey, "assignee_evidence": task.AssigneeEvidence}
 	compiler, committer := s.processEngine.runtime.dependencies.CompileNotification, s.processEngine.runtime.dependencies.TaskNotificationCommit
 	if compiler == nil && committer == nil {
 		if err := s.recordWorkflowTaskDeadlineEvent(ctx, process.WorkspaceID, process.ID, node.ID, task.ID, "task_escalated", "workflow.task.escalated", actor.UserID, metadata); err != nil {

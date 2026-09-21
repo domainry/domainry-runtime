@@ -18,7 +18,10 @@ func (s *UploadAccessApplicationService) authorizeRecordDownload(ctx context.Con
 	if err != nil {
 		return s.denyDownload(ctx, objectKey, fieldKey, recordID, filename, principal, "File download record access denied", "record", apperror.KindForbidden, "backend.upload.permission_denied")
 	}
-	if !uploadFileMatchesRecord(filename, record.Data[fieldKey]) {
+	object := s.catalog.ObjectMap(ctx)[objectKey]
+	field, found := uploadField(object, fieldKey)
+	reference, matches := uploadFileMatchesRecord(filename, field, record.Data[fieldKey])
+	if !found || !matches {
 		return s.denyDownload(ctx, objectKey, fieldKey, recordID, filename, principal, "File download filename mismatch", "mismatch", apperror.KindForbidden, "backend.upload.permission_denied")
 	}
 	if s.subjects != nil {
@@ -32,7 +35,10 @@ func (s *UploadAccessApplicationService) authorizeRecordDownload(ctx context.Con
 		s.audit.AppendWithMetadata(ctx, "sensitive_file_download_denied", objectKey, recordID, principal, "Sensitive document download denied", nil, nil, map[string]any{"filename": filename, "field_key": fieldKey, "reason": "sensitive"})
 		return uploadAccessError(apperror.KindForbidden, "backend.upload.permission_denied")
 	}
-	s.audit.AppendWithMetadata(ctx, "file_downloaded", objectKey, recordID, principal, "", nil, nil, map[string]any{"filename": filename, "field_key": fieldKey})
+	s.audit.AppendWithMetadata(ctx, "file_downloaded", objectKey, recordID, principal, "", nil, nil, map[string]any{
+		"file_id": reference.FileID, "filename": reference.Filename, "content_type": reference.ContentType, "size": reference.Size,
+		"content_sha256": reference.ContentSHA256, "field_key": fieldKey,
+	})
 	return nil
 }
 

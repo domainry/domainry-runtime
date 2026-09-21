@@ -30,7 +30,11 @@ func (ApplicationSchemaStorageProfile) FieldColumnType(field definitionmodel.Fie
 	case "boolean":
 		return "BOOLEAN"
 	case "json":
+		return "JSONB"
+	case "file", "file_list":
 		return "JSON"
+	case "multi_select":
+		return "TEXT"
 	default:
 		return "TEXT"
 	}

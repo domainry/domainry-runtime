@@ -89,14 +89,14 @@ func ValidateRuntimeReleaseIdentity(identity deploymentmodel.RuntimeReleaseIdent
 		}
 	}
 	for name, value := range map[string]string{
-		"runtimeext contract": identity.RuntimeextContractSHA256,
-		"connector contract":  identity.ConnectorContractSHA256,
-		"domain SDK contract": identity.DomainSDKContractSHA256,
-		"metadata snapshot":   identity.ApplicationSchemaSnapshotSHA256,
-		"generated SDK":       identity.GeneratedSDKSHA256,
-		"handler registry":    identity.HandlerRegistrySHA256,
-		"connector registry":  identity.ConnectorRegistrySHA256,
-		"combination":         identity.CombinationSHA256,
+		"runtimeext contract":        identity.RuntimeextContractSHA256,
+		"connector contract":         identity.ConnectorContractSHA256,
+		"domain SDK contract":        identity.DomainSDKContractSHA256,
+		"metadata snapshot":          identity.ApplicationSchemaSnapshotSHA256,
+		"generated SDK":              identity.GeneratedSDKSHA256,
+		"project extension registry": identity.ProjectExtensionRegistrySHA256,
+		"connector registry":         identity.ConnectorRegistrySHA256,
+		"combination":                identity.CombinationSHA256,
 	} {
 		if !runtimeReleaseLowerSHA256(value) {
 			return fmt.Errorf("%w: %s SHA-256 is malformed", deploymentmodel.ErrRuntimeReleaseAdmission, name)
@@ -172,7 +172,7 @@ type RuntimeReleaseIntegrity struct {
 	artifact               RuntimeReleaseArtifactEvidence
 	expectedSchemaRevision string
 	schemaRevision         func(context.Context) (string, error)
-	handlers               *runtimeext.BusinessHandlerRegistry
+	extensions             *runtimeext.ProjectExtensionRegistry
 	connectors             *connector.Registry
 }
 
@@ -181,13 +181,13 @@ func NewRuntimeReleaseIntegrity(
 	artifact RuntimeReleaseArtifactEvidence,
 	expectedSchemaRevision string,
 	schemaRevision func(context.Context) (string, error),
-	handlers *runtimeext.BusinessHandlerRegistry,
+	extensions *runtimeext.ProjectExtensionRegistry,
 	connectors *connector.Registry,
 ) *RuntimeReleaseIntegrity {
 	return &RuntimeReleaseIntegrity{
 		identity: identity, artifact: artifact,
 		expectedSchemaRevision: expectedSchemaRevision, schemaRevision: schemaRevision,
-		handlers: handlers, connectors: connectors,
+		extensions: extensions, connectors: connectors,
 	}
 }
 
@@ -238,13 +238,13 @@ func (s *RuntimeReleaseIntegrity) RegistryReadiness(context.Context) error {
 	if s == nil || !s.identity.Coordinated() {
 		return nil
 	}
-	if s.handlers == nil || !s.handlers.Frozen() || s.connectors == nil || !s.connectors.Frozen() {
+	if s.extensions == nil || !s.extensions.Frozen() || s.connectors == nil || !s.connectors.Frozen() {
 		return fmt.Errorf("%w: project registries are unavailable or mutable", ErrRuntimeReleaseRegistryIntegrity)
 	}
-	handlerHash, _ := deploymentmodel.RuntimeRegistrySHA256("domainry-handler-registry-v1", s.handlers.Descriptors())
+	extensionHash, _ := deploymentmodel.RuntimeRegistrySHA256("domainry-project-extension-registry-v1", s.extensions.Descriptors())
 	connectorHash, _ := deploymentmodel.RuntimeRegistrySHA256("domainry-connector-registry-v1", s.connectors.Descriptors())
-	if handlerHash != s.identity.HandlerRegistrySHA256 || connectorHash != s.identity.ConnectorRegistrySHA256 {
-		return fmt.Errorf("%w: Handler or Connector Registry differs from release identity", ErrRuntimeReleaseRegistryIntegrity)
+	if extensionHash != s.identity.ProjectExtensionRegistrySHA256 || connectorHash != s.identity.ConnectorRegistrySHA256 {
+		return fmt.Errorf("%w: Project Extension or Connector Registry differs from release identity", ErrRuntimeReleaseRegistryIntegrity)
 	}
 	return nil
 }

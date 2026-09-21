@@ -58,6 +58,7 @@ func TestValidateManifestAcceptsRuntimeIdentityFoundationRelationTargets(t *test
 
 func TestValidateManifestRejectsAmbiguousSubjectLifecycleFieldPolicy(t *testing.T) {
 	manifest := loadFixtureManifest(t, "domain-only-minimal.json")
+	manifest.Objects[0].Fields[0].Type = "file"
 	manifest.Objects[0].Fields[0].Config = map[string]any{"lifecycle_subject_identity": "yes", "lifecycle_subject_file": true, "lifecycle_erase": "anonymize"}
 	err := ValidateManifest(manifest)
 	if err == nil || !strings.Contains(err.Error(), "lifecycle_subject_identity") || !strings.Contains(err.Error(), "file lifecycle erase") {

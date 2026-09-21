@@ -41,6 +41,12 @@ func (r ApplicationSchemaStore) UpgradePlan(ctx context.Context, scope principal
 	if err := ctx.Err(); err != nil {
 		return plan, err
 	}
+	typeChanges := map[string]bool{}
+	if previous != nil {
+		steps, changed := fieldTypeChangeUpgradeSteps(*previous, next)
+		plan.Steps = append(plan.Steps, steps...)
+		typeChanges = changed
+	}
 	for _, object := range next.Objects {
 		table := strings.TrimSpace(object.Key)
 		if table == "" {
@@ -68,6 +74,9 @@ func (r ApplicationSchemaStore) UpgradePlan(ctx context.Context, scope principal
 			return rowCount, nil
 		}
 		for _, column := range r.planObjectColumns(object, existingTypes) {
+			if typeChanges[object.Key+"\x00"+column.column] {
+				continue
+			}
 			if column.mismatch {
 				mismatch := metadataPhysicalSchemaMismatch(object.Key, column.column, column.targetType, column.currentType).(*appschemamodel.ApplicationSchemaPhysicalSchemaMismatchError)
 				plan.Steps = append(plan.Steps, appschemamodel.ApplicationSchemaUpgradeStep{
@@ -111,6 +120,50 @@ func (r ApplicationSchemaStore) UpgradePlan(ctx context.Context, scope principal
 		}
 	}
 	return plan, nil
+}
+
+func fieldTypeChangeUpgradeSteps(previous, next manifestmodel.ManifestSchema) ([]appschemamodel.ApplicationSchemaUpgradeStep, map[string]bool) {
+	previousFields := map[string]map[string]definitionmodel.FieldSchema{}
+	for _, object := range previous.Objects {
+		objectKey := strings.TrimSpace(object.Key)
+		if objectKey == "" {
+			continue
+		}
+		previousFields[objectKey] = map[string]definitionmodel.FieldSchema{}
+		for _, field := range object.Fields {
+			if key := strings.TrimSpace(field.Key); key != "" && strings.TrimSpace(field.DisabledAt) == "" {
+				previousFields[objectKey][key] = field
+			}
+		}
+	}
+	steps := []appschemamodel.ApplicationSchemaUpgradeStep{}
+	changed := map[string]bool{}
+	for _, object := range next.Objects {
+		objectKey := strings.TrimSpace(object.Key)
+		for _, field := range object.Fields {
+			fieldKey := strings.TrimSpace(field.Key)
+			previousField, exists := previousFields[objectKey][fieldKey]
+			if !exists || fieldKey == "" || strings.TrimSpace(field.DisabledAt) != "" {
+				continue
+			}
+			fromType, toType := strings.TrimSpace(previousField.Type), strings.TrimSpace(field.Type)
+			if fromType == toType {
+				continue
+			}
+			changed[objectKey+"\x00"+fieldKey] = true
+			steps = append(steps, appschemamodel.ApplicationSchemaUpgradeStep{
+				ApplicationSchemaMigrationStep: appschemamodel.ApplicationSchemaMigrationStep{
+					ObjectKey: objectKey, Table: objectKey, Operation: "change_field_type", ColumnKey: fieldKey,
+					Description: "backend.metadata.migration.fieldTypeChangeUnsupported",
+				},
+				Classification: appschemamodel.ApplicationSchemaUpgradeIncompatible,
+				Blocking:       true,
+				ErrorCode:      appschemamodel.ApplicationSchemaUpgradeFieldTypeChangeCode,
+				Params:         map[string]string{"object": objectKey, "field": fieldKey, "from_type": fromType, "to_type": toType},
+			})
+		}
+	}
+	return steps, changed
 }
 
 func compatibleUpgradeStep(step appschemamodel.ApplicationSchemaMigrationStep) appschemamodel.ApplicationSchemaUpgradeStep {

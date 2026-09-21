@@ -9,6 +9,7 @@ const (
 	ActionSourceWorkflow    ActionSource = "workflow"
 	ActionSourceAutomation  ActionSource = "automation"
 	ActionSourceRecordTimer ActionSource = "record_timer"
+	ActionSourceScheduler   ActionSource = "scheduler"
 	ActionSourceIntegration ActionSource = "integration"
 	ActionSourceAgent       ActionSource = "agent"
 	ActionSourceNested      ActionSource = "nested_action"

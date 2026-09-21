@@ -331,7 +331,7 @@ func AutomationProtocolTypesCompatible(sourceType, targetType string) bool {
 	if target == "number" && (source == "integer" || source == "decimal" || source == "currency") {
 		return true
 	}
-	textTypes := map[string]bool{"text": true, "long_text": true, "string": true, "email": true, "phone": true, "url": true, "select": true, "relation": true, "user": true, "file": true}
+	textTypes := map[string]bool{"text": true, "long_text": true, "string": true, "email": true, "phone": true, "url": true, "select": true, "relation": true, "user": true}
 	return textTypes[target] && textTypes[source]
 }
 

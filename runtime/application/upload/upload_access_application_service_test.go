@@ -48,8 +48,15 @@ func (s *uploadAccessRecordStub) GetRecord(context.Context, string, string, prin
 
 func uploadAccessCatalog() uploadAccessCatalogStub {
 	return uploadAccessCatalogStub{
-		"asset":    {Key: "asset", Fields: []definitionmodel.FieldSchema{{Key: "file_url"}}},
-		"document": {Key: "document", Fields: []definitionmodel.FieldSchema{{Key: "file_url"}, {Key: "sensitive"}}},
+		"asset":    {Key: "asset", Fields: []definitionmodel.FieldSchema{{Key: "file_url", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"scan_required": false}}, {Key: "title", Type: "text"}}},
+		"document": {Key: "document", Fields: []definitionmodel.FieldSchema{{Key: "file_url", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"scan_required": false}}, {Key: "sensitive"}}},
+	}
+}
+
+func uploadAccessFileReference(fileID, filename string) map[string]any {
+	return map[string]any{
+		"file_id": fileID, "filename": filename, "content_type": "text/plain",
+		"size": int64(4), "content_sha256": strings.Repeat("a", 64),
 	}
 }
 
@@ -116,6 +123,7 @@ func TestUploadAccessAuthorizeUpload(t *testing.T) {
 
 	assertUploadAccessError(t, service.AuthorizeUpload(t.Context(), "missing", "file_url", uploadAccessPrincipal("asset.update")), apperror.KindNotFound, "backend.object.not_found")
 	assertUploadAccessError(t, service.AuthorizeUpload(t.Context(), "asset", "missing", uploadAccessPrincipal("asset.update")), apperror.KindBadRequest, "backend.upload.field_not_defined")
+	assertUploadAccessError(t, service.AuthorizeUpload(t.Context(), "asset", "title", uploadAccessPrincipal("asset.update")), apperror.KindBadRequest, "backend.upload.field_type_invalid")
 	assertUploadAccessError(t, service.AuthorizeUpload(t.Context(), "asset", "file_url", uploadAccessPrincipal("asset.read")), apperror.KindForbidden, "backend.upload.permission_denied")
 	if audit.reason != "permission" {
 		t.Fatalf("audit reason=%q", audit.reason)
@@ -125,10 +133,27 @@ func TestUploadAccessAuthorizeUpload(t *testing.T) {
 			t.Fatalf("permissions=%v err=%v", permissions, err)
 		}
 	}
-	service.RecordUploaded(t.Context(), "asset", "file_url", "file.txt", "text/plain", 4, uploadAccessPrincipal("asset.update"))
+	service.RecordUploaded(t.Context(), "asset", "file_url", recordmodel.RecordFileReference{
+		FileID: "file-1", Filename: "file.txt", ContentType: "text/plain", Size: 4, ContentSHA256: strings.Repeat("a", 64),
+	}, uploadAccessPrincipal("asset.update"))
 	if audit.events[len(audit.events)-1] != "file_uploaded" {
 		t.Fatalf("events=%v", audit.events)
 	}
+}
+
+func TestUploadAccessEnforcesFieldMIMEAndSizePolicy(t *testing.T) {
+	catalog := uploadAccessCatalogStub{"asset": {Key: "asset", Fields: []definitionmodel.FieldSchema{{
+		Key: "file_url", Type: recordmodel.RecordFileFieldType, Config: map[string]any{
+			"allowed_mime_types": []any{"application/pdf"}, "max_size_bytes": 7, "scan_required": false,
+		},
+	}}}}
+	service := NewUploadAccessApplicationService(catalog, &uploadAccessAuditStub{}, nil)
+	principal := uploadAccessPrincipal("asset.create")
+	if err := service.ValidateUploadContent(t.Context(), "asset", "file_url", "application/pdf", 7, principal); err != nil {
+		t.Fatal(err)
+	}
+	assertUploadAccessError(t, service.ValidateUploadContent(t.Context(), "asset", "file_url", "text/plain", 7, principal), apperror.KindBadRequest, "backend.upload.mime_type_denied")
+	assertUploadAccessError(t, service.ValidateUploadContent(t.Context(), "asset", "file_url", "application/pdf", 8, principal), apperror.KindBadRequest, "backend.upload.file_too_large")
 }
 
 func TestUploadApplicationAuthorizesWorkspaceBeforePortAccess(t *testing.T) {
@@ -143,7 +168,9 @@ func TestUploadApplicationAuthorizesWorkspaceBeforePortAccess(t *testing.T) {
 	} {
 		assertUploadAccessError(t, err, apperror.KindForbidden, "backend.workspace_scope_required")
 	}
-	service.RecordUploaded(t.Context(), "asset", "file_url", "file", "text/plain", 1, missing)
+	service.RecordUploaded(t.Context(), "asset", "file_url", recordmodel.RecordFileReference{
+		FileID: "file-1", Filename: "file", ContentType: "text/plain", Size: 1, ContentSHA256: strings.Repeat("a", 64),
+	}, missing)
 	if catalog.calls != 0 || len(audit.events) != 0 {
 		t.Fatalf("ports called before workspace authorization: catalog=%d audit=%v", catalog.calls, audit.events)
 	}
@@ -178,34 +205,34 @@ func TestUploadAccessAuthorizeDownloadWithoutRecord(t *testing.T) {
 
 func TestUploadAccessAuthorizeDownloadAgainstRecord(t *testing.T) {
 	audit := &uploadAccessAuditStub{}
-	records := &uploadAccessRecordStub{record: recordmodel.Record{Data: map[string]any{"file_url": "/uploads/file.txt"}}}
+	records := &uploadAccessRecordStub{record: recordmodel.Record{Data: map[string]any{"file_url": uploadAccessFileReference("file-1", "file.txt")}}}
 	service := NewUploadAccessApplicationService(uploadAccessCatalog(), audit, records)
 	principal := uploadAccessPrincipal("asset.read", "document.read")
 
-	if err := service.AuthorizeDownload(t.Context(), "asset", "file_url", "record", "file.txt", principal); err != nil {
+	if err := service.AuthorizeDownload(t.Context(), "asset", "file_url", "record", "file-1", principal); err != nil {
 		t.Fatal(err)
 	}
 	if audit.events[len(audit.events)-1] != "file_downloaded" {
 		t.Fatalf("events=%v", audit.events)
 	}
-	records.record.Data["file_url"] = "/uploads/other.txt"
-	assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "asset", "file_url", "record", "file.txt", principal), apperror.KindForbidden, "backend.upload.permission_denied")
+	records.record.Data["file_url"] = uploadAccessFileReference("file-2", "other.txt")
+	assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "asset", "file_url", "record", "file-1", principal), apperror.KindForbidden, "backend.upload.permission_denied")
 	records.err = errors.New("database unavailable")
-	assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "asset", "file_url", "record", "file.txt", principal), apperror.KindForbidden, "backend.upload.permission_denied")
+	assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "asset", "file_url", "record", "file-1", principal), apperror.KindForbidden, "backend.upload.permission_denied")
 
 	records.err = nil
 	for _, sensitive := range []any{true, " TRUE "} {
-		records.record.Data = map[string]any{"file_url": "/uploads/document.pdf", "sensitive": sensitive}
-		assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", principal), apperror.KindForbidden, "backend.upload.permission_denied")
+		records.record.Data = map[string]any{"file_url": uploadAccessFileReference("document-file", "document.pdf"), "sensitive": sensitive}
+		assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document-file", principal), apperror.KindForbidden, "backend.upload.permission_denied")
 	}
 	workspaceAdmin := uploadAccessPrincipal("document.read", "runtime.appschema.validate_application_definition")
-	assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", workspaceAdmin), apperror.KindForbidden, "backend.upload.permission_denied")
+	assertUploadAccessError(t, service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document-file", workspaceAdmin), apperror.KindForbidden, "backend.upload.permission_denied")
 	privileged := uploadAccessPrincipal("document.read", "document.sensitive.read")
-	if err := service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", privileged); err != nil {
+	if err := service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document-file", privileged); err != nil {
 		t.Fatalf("exact sensitive permission rejected: %v", err)
 	}
 	records.record.Data["sensitive"] = false
-	if err := service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document.pdf", principal); err != nil {
+	if err := service.AuthorizeDownload(t.Context(), "document", "file_url", "record", "document-file", principal); err != nil {
 		t.Fatalf("non-sensitive document: %v", err)
 	}
 }
@@ -219,11 +246,13 @@ func TestUploadAccessPolicyHelpers(t *testing.T) {
 			t.Fatalf("recordBoolean(%v)=%v", test.value, got)
 		}
 	}
+	field := definitionmodel.FieldSchema{Key: "file_url", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"scan_required": false}}
 	for _, test := range []struct {
 		value any
 		want  bool
-	}{{"", false}, {"/uploads/a.pdf", true}, {"file:///tmp/a.pdf?x=1", false}, {"/uploads/b.pdf", false}} {
-		if got := uploadFileMatchesRecord("a.pdf", test.value); got != test.want {
+	}{{nil, false}, {uploadAccessFileReference("file-a", "a.pdf"), true}, {"/uploads/file-a", false}, {uploadAccessFileReference("file-b", "b.pdf"), false}} {
+		_, got := uploadFileMatchesRecord("file-a", field, test.value)
+		if got != test.want {
 			t.Fatalf("fileMatchesRecord(%v)=%v", test.value, got)
 		}
 	}

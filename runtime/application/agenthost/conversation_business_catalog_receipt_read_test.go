@@ -30,7 +30,7 @@ func TestSharedBusinessActionCatalogUsesCurrentReceiptScopeContractAndWholePages
 	}
 	resolver.principal = attach(resolver.principal, permissions, identity.DataScopeAll)
 	newOwner := func(defs []definitionmodel.ActionSchema) *actionapplication.ActionApplicationService {
-		handlers := runtimeext.NewBusinessHandlerRegistry()
+		handlers := runtimeext.NewProjectExtensionRegistry()
 		handlers.Freeze()
 		return actionapplication.NewActionApplication(actionapplication.ActionApplicationDependencies{Catalog: actionapplication.NewActionCatalog(defs, actionapplication.NewRuntimeSystemOperationCatalog(), handlers), Authorization: actionapplication.ActionAuthorization{ObjectForAction: func(p principalmodel.Principal, key, op string) (definitionmodel.ObjectSchema, error) {
 			if op != "read" || !p.HasExactPermission(key+".read") {

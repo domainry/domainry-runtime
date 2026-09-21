@@ -56,6 +56,35 @@ func TestRecordExportCurrencyConfigurationFailure(t *testing.T) {
 	}
 }
 
+func TestRecordExportEncodesCanonicalFileReferenceJSON(t *testing.T) {
+	field := definitionmodel.FieldSchema{Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"scan_required": false}}
+	value, err := recordExportFieldValue(accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{}), "document", field, map[string]any{
+		"file_id": "file-1", "filename": "stored.pdf", "content_type": "application/pdf", "size": 7,
+		"content_sha256": strings.Repeat("a", 64),
+	})
+	if err != nil || value != `{"content_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","content_type":"application/pdf","file_id":"file-1","filename":"stored.pdf","size":7}` {
+		t.Fatalf("file export=%q err=%v", value, err)
+	}
+	if _, err := recordExportFieldValue(accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{}), "document", field, "file-1"); apperror.CodeOf(err) != "backend.export.file_reference_invalid" {
+		t.Fatalf("invalid file export err=%v", err)
+	}
+}
+
+func TestRecordExportEncodesCanonicalStructuredValues(t *testing.T) {
+	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{})
+	multi := definitionmodel.FieldSchema{Key: "tags", Type: recordmodel.RecordMultiSelectFieldType}
+	if value, err := recordExportFieldValue(principal, "item", multi, []any{"z", "a", "z"}); err != nil || value != `["a","z"]` {
+		t.Fatalf("multi export=%q err=%v", value, err)
+	}
+	jsonField := definitionmodel.FieldSchema{Key: "payload", Type: recordmodel.RecordJSONFieldType}
+	if value, err := recordExportFieldValue(principal, "item", jsonField, map[string]any{"b": 2, "a": 1}); err != nil || value != `{"a":1,"b":2}` {
+		t.Fatalf("json export=%q err=%v", value, err)
+	}
+	if _, err := recordExportFieldValue(principal, "item", jsonField, []any{"wrong-shape"}); apperror.CodeOf(err) != "backend.export.structured_value_invalid" {
+		t.Fatalf("invalid json export err=%v", err)
+	}
+}
+
 func TestRecordExportScopedProjectedMissingAndNilFields(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{
 		{Key: "missing", Type: "text"}, {Key: "nil_value", Type: "text"},

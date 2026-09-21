@@ -2,6 +2,7 @@ package composition
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
@@ -30,14 +32,14 @@ type schedulerSDKModuleHost struct {
 	mu                sync.RWMutex
 	revision          int64
 	authored          []map[string]any
+	businessCalendars map[string]businesscalendarmodel.BusinessCalendarSchema
 	authoredSet       bool
 }
 
-func NewSchedulerSDKModuleHost(definitions SchedulerDefinitionSource, executions *dispatchapplication.TargetExecutionApplicationService, publications schedulerPublicationAcceptor, requirements []integrationsdk.ConnectionRequirement, store *persistence.RuntimeStore, workerID string, authoredDefinitions ...[]map[string]any) modulehost.ModuleHost {
-	host := &schedulerSDKModuleHost{definitionsSource: definitions, publications: publications, store: store, workerID: strings.TrimSpace(workerID)}
-	if len(authoredDefinitions) > 0 {
-		host.authoredSet = true
-		host.authored = cloneSchedulerDefinitionMaps(authoredDefinitions[0])
+func NewSchedulerSDKModuleHost(definitions SchedulerDefinitionSource, executions *dispatchapplication.TargetExecutionApplicationService, publications schedulerPublicationAcceptor, requirements []integrationsdk.ConnectionRequirement, store *persistence.RuntimeStore, workerID string, authoredDefinitions []map[string]any, businessCalendars []businesscalendarmodel.BusinessCalendarSchema) modulehost.ModuleHost {
+	host := &schedulerSDKModuleHost{definitionsSource: definitions, publications: publications, store: store, workerID: strings.TrimSpace(workerID), authoredSet: true, authored: cloneSchedulerDefinitionMaps(authoredDefinitions), businessCalendars: make(map[string]businesscalendarmodel.BusinessCalendarSchema, len(businessCalendars))}
+	for _, calendar := range businessCalendars {
+		host.businessCalendars[strings.TrimSpace(calendar.Key)] = calendar
 	}
 	host.dispatcher = NewTargetExecutionDispatcher(executions, publications, requirements)
 	return host
@@ -105,7 +107,7 @@ func (h *schedulerSDKModuleHost) Snapshot(ctx context.Context) (schedulersdk.Def
 	h.revision++
 	definitions := make([]schedulersdk.Definition, 0, len(published))
 	for _, definition := range published {
-		definitions = append(definitions, schedulerSDKDefinition(definition))
+		definitions = append(definitions, schedulerSDKDefinition(definition, h.businessCalendars))
 	}
 	return schedulersdk.DefinitionSnapshot{Revision: h.revision, Definitions: definitions}, nil
 }
@@ -126,19 +128,65 @@ func cloneSchedulerDefinitionMap(value map[string]any) map[string]any {
 	return result
 }
 
-func schedulerSDKDefinition(definition SchedulerPublishedDefinition) schedulersdk.Definition {
+func schedulerSDKDefinition(definition SchedulerPublishedDefinition, calendars map[string]businesscalendarmodel.BusinessCalendarSchema) schedulersdk.Definition {
 	data := definition.Data
 	targetType := schedulerSDKString(data, "target_type")
-	target := schedulersdk.TargetRef{Type: "runtime_operation", Owner: targetType, Operation: schedulerSDKString(data, "target_key"), Payload: json.RawMessage(schedulerSDKStringDefault(data, "payload_json", "{}"))}
+	target := schedulersdk.TargetRef{Type: "runtime_operation", Owner: targetType, Operation: schedulerSDKString(data, "target_key"), ObjectKey: schedulerSDKString(data, "target_object"), RunAsRole: schedulerSDKString(data, "run_as_role")}
+	if payload := schedulerSDKString(data, "payload_json"); payload != "" {
+		target.Payload = json.RawMessage(payload)
+	}
 	if targetType == "http" {
-		target = schedulersdk.TargetRef{Type: "http", ConnectionKey: schedulerSDKString(data, "connection_key"), Operation: schedulerSDKStringDefault(data, "operation", schedulerSDKString(data, "target_key")), DispatchMode: "runtime_callback", Payload: json.RawMessage(schedulerSDKStringDefault(data, "payload_json", "{}"))}
+		target = schedulersdk.TargetRef{Type: "http", ConnectionKey: schedulerSDKString(data, "connection_key"), Operation: schedulerSDKString(data, "target_key"), DispatchMode: "runtime_callback", Payload: json.RawMessage(schedulerSDKStringDefault(data, "payload_json", "{}"))}
 	}
 	revision := strings.TrimSpace(definition.UpdatedAt)
 	if revision == "" {
 		revision = "published"
 	}
-	initialNextRunAt, _ := time.Parse(time.RFC3339, schedulerSDKString(data, "next_run_at"))
-	return schedulersdk.Definition{Key: definition.Key, Name: schedulerSDKString(data, "name"), Status: schedulerSDKString(data, "status"), Revision: revision, InitialNextRunAt: initialNextRunAt, Schedule: schedulersdk.Schedule{Type: schedulerSDKString(data, "schedule_type"), Expression: schedulerSDKString(data, "schedule_expression"), Timezone: schedulerSDKString(data, "timezone"), IntervalSeconds: schedulerSDKInt(data["interval_seconds"]), TimeOfDay: schedulerSDKString(data, "time_of_day"), DayOfWeek: schedulerSDKString(data, "day_of_week"), DayOfMonth: schedulerSDKInt(data["day_of_month"])}, Target: target, Policy: schedulersdk.Policy{Misfire: schedulerSDKString(data, "missed_window_policy"), MaxCatchupWindows: schedulerSDKInt(data["max_catchup_windows"]), Timeout: time.Duration(schedulerSDKInt(data["timeout_seconds"])) * time.Second, MaxAttempts: schedulerSDKInt(data["max_attempts"]), RetryInitial: time.Duration(schedulerSDKInt(data["retry_delay_seconds"])) * time.Second, RetryMax: time.Duration(schedulerSDKInt(data["retry_max_delay_seconds"])) * time.Second}}
+	initialNextRunAt, _ := time.Parse(time.RFC3339Nano, schedulerSDKString(data, "next_run_at"))
+	schedule := schedulersdk.Schedule{Type: schedulerSDKString(data, "schedule_type"), Expression: schedulerSDKString(data, "schedule_expression"), Timezone: schedulerSDKString(data, "timezone"), IntervalSeconds: schedulerSDKInt(data["interval_seconds"]), TimeOfDay: schedulerSDKString(data, "time_of_day"), DayOfWeek: schedulerSDKString(data, "day_of_week"), DayOfMonth: schedulerSDKInt(data["day_of_month"])}
+	if calendarKey := schedulerSDKString(data, "business_calendar_key"); calendarKey != "" {
+		if calendar, found := calendars[calendarKey]; found {
+			schedule.BusinessCalendar = schedulerSDKBusinessCalendar(calendar)
+		}
+		schedule.NonWorkingDayPolicy = schedulerSDKStringDefault(data, "non_working_day_policy", schedulersdk.NonWorkingDaySkip)
+	}
+	if schedule.BusinessCalendar != nil {
+		payload, _ := json.Marshal(schedule.BusinessCalendar)
+		digest := sha256.Sum256(payload)
+		revision = fmt.Sprintf("%s|business_calendar:%s@%s:%x", revision, schedule.BusinessCalendar.Key, schedule.BusinessCalendar.Revision, digest[:8])
+	}
+	return schedulersdk.Definition{Key: definition.Key, Name: schedulerSDKString(data, "name"), Description: schedulerSDKString(data, "description"), I18n: schedulerSDKI18n(data), Status: schedulerSDKString(data, "status"), Revision: revision, InitialNextRunAt: initialNextRunAt, Schedule: schedule, Target: target, Policy: schedulersdk.Policy{Misfire: schedulerSDKStringDefault(data, "missed_window_policy", "skip"), MaxCatchupWindows: schedulerSDKInt(data["max_catchup_windows"]), Timeout: time.Duration(schedulerSDKIntDefault(data["timeout_seconds"], 300)) * time.Second, MaxAttempts: schedulerSDKIntDefault(data["max_attempts"], 1), RetryInitial: time.Duration(schedulerSDKIntDefault(data["retry_delay_seconds"], 30)) * time.Second, RetryMax: time.Duration(schedulerSDKIntDefault(data["retry_max_delay_seconds"], 900)) * time.Second}}
+}
+
+func schedulerSDKBusinessCalendar(value businesscalendarmodel.BusinessCalendarSchema) *schedulersdk.BusinessCalendarSnapshot {
+	result := &schedulersdk.BusinessCalendarSnapshot{Key: strings.TrimSpace(value.Key), Revision: strings.TrimSpace(value.Revision), Timezone: strings.TrimSpace(value.Timezone), Holidays: append([]string(nil), value.Holidays...)}
+	for _, weekly := range value.WeeklyWorkingIntervals {
+		item := schedulersdk.BusinessCalendarWeeklySchedule{Weekday: strings.TrimSpace(weekly.Weekday)}
+		for _, interval := range weekly.Intervals {
+			item.Intervals = append(item.Intervals, schedulersdk.BusinessCalendarTimeInterval{Start: strings.TrimSpace(interval.Start), End: strings.TrimSpace(interval.End)})
+		}
+		result.WeeklyWorkingIntervals = append(result.WeeklyWorkingIntervals, item)
+	}
+	for _, exception := range value.DateExceptions {
+		item := schedulersdk.BusinessCalendarDateException{Date: strings.TrimSpace(exception.Date)}
+		for _, interval := range exception.Intervals {
+			item.Intervals = append(item.Intervals, schedulersdk.BusinessCalendarTimeInterval{Start: strings.TrimSpace(interval.Start), End: strings.TrimSpace(interval.End)})
+		}
+		result.DateExceptions = append(result.DateExceptions, item)
+	}
+	return result
+}
+
+func schedulerSDKI18n(data map[string]any) map[string]json.RawMessage {
+	payload, err := json.Marshal(data["i18n"])
+	if err != nil {
+		return nil
+	}
+	var result map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &result); err != nil {
+		return nil
+	}
+	return result
 }
 
 // TargetExecutionDispatcher is Runtime's schedule-agnostic target router. The
@@ -164,8 +212,8 @@ func NewTargetExecutionDispatcher(executions *dispatchapplication.TargetExecutio
 
 func (d *TargetExecutionDispatcher) Dispatch(ctx context.Context, trigger schedulersdk.Trigger) (schedulersdk.DownstreamReceipt, error) {
 	receipt, err := d.Execute(ctx, dispatchapplication.ExecutionRequest{
-		ExecutionID: trigger.RunID, IdempotencyKey: trigger.IdempotencyKey, DueAt: trigger.ScheduledFor,
-		Target:    dispatchapplication.Target{Type: trigger.Target.Type, Owner: trigger.Target.Owner, Operation: trigger.Target.Operation, ConnectionKey: trigger.Target.ConnectionKey, Payload: append([]byte(nil), trigger.Target.Payload...)},
+		ExecutionID: trigger.RunID, DefinitionKey: trigger.DefinitionKey, IdempotencyKey: trigger.IdempotencyKey, DueAt: trigger.ScheduledFor,
+		Target:    dispatchapplication.Target{Type: trigger.Target.Type, Owner: trigger.Target.Owner, Operation: trigger.Target.Operation, ObjectKey: trigger.Target.ObjectKey, RunAsRole: trigger.Target.RunAsRole, ConnectionKey: trigger.Target.ConnectionKey, Payload: append([]byte(nil), trigger.Target.Payload...)},
 		Principal: targetExecutionSystemPrincipal(),
 	})
 	return schedulersdk.DownstreamReceipt{ID: receipt.ID, Owner: receipt.Owner, Status: receipt.Status}, err
@@ -241,4 +289,11 @@ func schedulerSDKInt(value any) int {
 	var out int
 	_, _ = fmt.Sscan(strings.TrimSpace(fmt.Sprint(value)), &out)
 	return out
+}
+
+func schedulerSDKIntDefault(value any, fallback int) int {
+	if strings.TrimSpace(fmt.Sprint(value)) == "" || strings.TrimSpace(fmt.Sprint(value)) == "<nil>" {
+		return fallback
+	}
+	return schedulerSDKInt(value)
 }

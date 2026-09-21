@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +49,7 @@ func TestPreparedRecordErasureRollsBackSQLAndResumesFilesFromFrozenPlan(t *testi
 	object := definitionmodel.ObjectSchema{Key: "personal_document", Fields: []definitionmodel.FieldSchema{
 		{Key: "subject", Type: "user", Config: map[string]any{"lifecycle_erase": "retain"}},
 		{Key: "email", Type: "email", Config: map[string]any{"lifecycle_erase": "anonymize"}},
-		{Key: "attachment", Type: "text", Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete"}},
+		{Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete", "scan_required": false}},
 	}}
 	objects := []definitionmodel.ObjectSchema{object}
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
@@ -62,7 +63,7 @@ func TestPreparedRecordErasureRollsBackSQLAndResumesFilesFromFrozenPlan(t *testi
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	insert := func(id, subject, file, workspace string) {
 		t.Helper()
-		if err := repository.InsertRecord(t.Context(), workspace, object, recordmodel.Record{ID: id, CreatedAt: now, UpdatedAt: now, Data: map[string]any{"subject": subject, "email": subject + "@example.test", "attachment": "/uploads/" + file}}); err != nil {
+		if err := repository.InsertRecord(t.Context(), workspace, object, recordmodel.Record{ID: id, CreatedAt: now, UpdatedAt: now, Data: map[string]any{"subject": subject, "email": subject + "@example.test", "attachment": subjectLifecycleStructuredFile(file)}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -123,7 +124,7 @@ func TestPreparedRecordErasureRollsBackSQLAndResumesFilesFromFrozenPlan(t *testi
 		t.Fatal("stale row accepted")
 	}
 	first, _, err := repository.GetRecord(t.Context(), "workspace-one", object, "one")
-	if err != nil || first.Data["email"] != "subject-one@example.test" || first.Data["attachment"] != "/uploads/private.txt" {
+	if err != nil || first.Data["email"] != "subject-one@example.test" || !reflect.DeepEqual(first.Data["attachment"], subjectLifecycleStructuredFile("private.txt")) {
 		t.Fatalf("SQL batch failed to roll back: %+v %v", first, err)
 	}
 	second.UpdatedAt = now

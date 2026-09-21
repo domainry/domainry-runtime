@@ -6,6 +6,7 @@ import (
 
 	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
+	hostsurfacemodel "github.com/domainry/domainry-runtime/runtime/domain/hostsurface/model"
 )
 
 const (
@@ -68,7 +69,7 @@ func RuntimeAuthoringCapabilities() capabilitycontract.CapabilityRuntimeAuthorin
 			authoringSchemaDomain(), authoringActionDomain(), authoringWorkflowDomain(),
 			authoringAutomationDomain(), authoringProfileBindingDomain(), authoringMaintenanceDomain(),
 		},
-		Instance: capabilitycontract.CapabilityAuthoringInstance{ObjectKeys: []string{}, FieldKeys: []capabilitycontract.CapabilityAuthoringScopedValues{}, ActionKeys: []string{}, WorkflowKeys: []string{}, ReportKeys: []string{}, RoleKeys: []string{}, PermissionKeys: []string{}, UserIDs: []string{}, OrgIDs: []string{}, RoleIDs: []string{}, MenuIDs: []string{}, ConnectorKeys: []string{}, ConnectionKeys: []string{}, ConnectorOperations: []capabilitycontract.CapabilityAuthoringConnectorBinding{}},
+		Instance: capabilitycontract.CapabilityAuthoringInstance{ObjectKeys: []string{}, BusinessCalendarKeys: []string{}, FieldKeys: []capabilitycontract.CapabilityAuthoringScopedValues{}, ActionKeys: []string{}, WorkflowKeys: []string{}, ReportKeys: []string{}, RoleKeys: []string{}, PermissionKeys: []string{}, UserIDs: []string{}, OrgIDs: []string{}, RoleIDs: []string{}, MenuIDs: []string{}, ConnectorKeys: []string{}, ConnectionKeys: []string{}, ConnectorOperations: []capabilitycontract.CapabilityAuthoringConnectorBinding{}, AssigneeResolvers: []capabilitycontract.CapabilityAuthoringAssigneeResolver{}, NotificationAudienceResolverKeys: hostsurfacemodel.NotificationAudienceResolverKeys()},
 	}
 	normalizeSourceControlledMetadataCapabilities(&contract)
 	materializeAuthoringCapabilityPermissions(&contract)

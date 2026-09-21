@@ -1,6 +1,8 @@
 package validation
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -105,6 +107,29 @@ func TestRecordImportValueDomains(t *testing.T) {
 	}
 	if got := normalizeImportValueDomainText(" A_B-C "); got != "abc" {
 		t.Fatalf("%q", got)
+	}
+}
+
+func TestRecordImportStructuredFieldsUseJSONAndValueDomains(t *testing.T) {
+	multi := definitionmodel.FieldSchema{
+		Key: "tags", Type: recordmodel.RecordMultiSelectFieldType,
+		Options: []any{map[string]any{"value": "red", "label": "Red"}, map[string]any{"value": "blue", "label": "Blue"}},
+	}
+	got, issue := RecordCoerceImportValue("item", multi, `["Blue","red","Blue"]`)
+	if issue != "" || !reflect.DeepEqual(got, []string{"blue", "red"}) {
+		t.Fatalf("multi import=%#v issue=%q", got, issue)
+	}
+	if got, issue := RecordCoerceImportValue("item", multi, `["unknown"]`); got != nil || issue != "backend.import.invalid_value_domain_option" {
+		t.Fatalf("invalid multi=%#v issue=%q", got, issue)
+	}
+	jsonField := definitionmodel.FieldSchema{Key: "payload", Type: recordmodel.RecordJSONFieldType}
+	got, issue = RecordCoerceImportValue("item", jsonField, `{"count":9007199254740993}`)
+	object, ok := got.(map[string]any)
+	if issue != "" || !ok || fmt.Sprint(object["count"]) != "9007199254740993" {
+		t.Fatalf("json import=%#v issue=%q", got, issue)
+	}
+	if got, issue := RecordCoerceImportValue("item", jsonField, `[1]`); got != nil || issue != "backend.import.invalid_json" {
+		t.Fatalf("invalid json=%#v issue=%q", got, issue)
 	}
 }
 

@@ -7,6 +7,8 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	metadataauthoring "github.com/domainry/domainry-runtime/runtime/domain/appschema/contract"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
+	businesscalendarpolicy "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/policy"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
@@ -32,6 +34,16 @@ func TestMetadataAuthoringExamplesExecuteOwnerValidators(t *testing.T) {
 				_, err = ApplicationSchemaNormalizeFieldMutation(request, objects, metadataauthoring.ApplicationSchemaAuthoringFieldTypes(), nil, 0)
 			case "schema.dictionary":
 				err = ApplicationSchemaValidateDictionaryDefinition("order_status", payload)
+			case "schema.business_calendar":
+				var calendar businesscalendarmodel.BusinessCalendarSchema
+				if decodeErr := json.Unmarshal(payload, &calendar); decodeErr != nil {
+					err = decodeErr
+				} else {
+					calendar.Key = "workday"
+					if validationErr := businesscalendarpolicy.Validate(calendar); validationErr != nil {
+						err = badRequest(businesscalendarpolicy.ValidationCode(validationErr))
+					}
+				}
 			}
 			if len(example.ExpectedErrorCodes) == 0 {
 				if err != nil {

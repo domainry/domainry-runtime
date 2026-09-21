@@ -130,7 +130,8 @@ func (e *businessActionExecution) RunBusinessJob(ctx context.Context, request ru
 		return runtimeext.BusinessJobReceipt{}, apperror.New(apperror.KindForbidden, runtimeext.FileActionGrantDeniedErrorCode, nil, nil)
 	}
 	request.JobKey, request.ObjectKey, request.RecordID, request.ActionKey = strings.TrimSpace(request.JobKey), strings.TrimSpace(request.ObjectKey), strings.TrimSpace(request.RecordID), strings.TrimSpace(request.ActionKey)
-	if request.JobKey == "" || request.ObjectKey == "" || request.RecordID == "" || request.ActionKey == "" || len(request.Payload) == 0 || !json.Valid(request.Payload) || request.MaxAttempts < 0 || request.RetryDelaySeconds < 0 || request.RetryMaxDelaySeconds < 0 {
+	payload := map[string]any{}
+	if request.JobKey == "" || request.ObjectKey == "" || request.RecordID == "" || request.ActionKey == "" || len(request.Payload) == 0 || len(request.Payload) > runtimeext.MaximumBusinessJobPayloadBytes || !json.Valid(request.Payload) || json.Unmarshal(request.Payload, &payload) != nil || payload == nil || request.MaxAttempts < 0 || request.MaxAttempts > 100 || request.RetryDelaySeconds < 0 || request.RetryMaxDelaySeconds < 0 || request.RetryMaxDelaySeconds > 86400 || request.RetryDelaySeconds > 0 && request.RetryMaxDelaySeconds > 0 && request.RetryMaxDelaySeconds < request.RetryDelaySeconds {
 		return runtimeext.BusinessJobReceipt{}, apperror.New(apperror.KindBadRequest, "backend.business_job.request_invalid", nil, nil)
 	}
 	if e.dependencies.StageBusinessJob == nil {

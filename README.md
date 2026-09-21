@@ -7,6 +7,18 @@ The Control Plane and Builder live in the sibling `domainry-plane` repository.
 This repository contains only Runtime implementation and its public host and
 business-extension APIs.
 
+Agent-facing capability questions and scenario guides are indexed by the
+source-owned [`capability/agent/index.json`](capability/agent/index.json). Each
+leaf Markdown document answers one question so consumers can load only the
+matching scenario from the locked Runtime release.
+
+The authoritative machine-readable authoring contract is generated from code
+by `capability.RuntimeAuthoringCapabilities()` and exposed by Runtime discovery;
+it is not copied into a hand-maintained JSON file. The canonical catalog is
+sorted and protected by `RuntimeAuthoringContractHash`, while tests verify that
+Runtime-owned keys referenced by the guide index still exist. The guide index
+is a scenario router, not a second authoring schema.
+
 Runtime architecture and contribution rules are defined in
 [`docs/architecture/backend-development-guide.md`](docs/architecture/backend-development-guide.md).
 The Runtime capability inventory, conventional-development cost comparison,
@@ -31,3 +43,12 @@ binds the resulting `domainry-metadata-sdk.Binding`, mounts its declared HTTP
 Adapter, and consumes only the SDK definition, localization, dictionary and
 projection ports. Metadata migrations, tables, definition reads, localization
 exports and dictionary endpoints are not implemented by Runtime.
+
+Project business code enters Runtime only through
+`runtimehost.Options.ProjectExtensions`. Business Handlers, Workspace bootstrap
+participants, and Workflow assignee resolvers publish descriptors, freeze at
+startup, and contribute to the Runtime release identity. Deployment
+infrastructure is separate: `runtimehost.Options.BlobStore` and `FileScanner`
+select storage and scanning adapters. Nil selects the local filesystem and
+built-in scanner; these adapters never receive Runtime repositories and are not
+project business extensions.

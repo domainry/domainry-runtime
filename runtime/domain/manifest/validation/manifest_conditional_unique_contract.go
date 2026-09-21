@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 func (state *validationState) validateConditionalUnique(object definitionmodel.ObjectSchema, validation definitionmodel.ValidationSchema, path string) {
@@ -26,6 +27,8 @@ func (state *validationState) validateConditionalUnique(object definitionmodel.O
 			state.add(path+".fields", "backend.definition.conditional_unique_field_duplicate: %s", fieldKey)
 		case strings.TrimSpace(field.DisabledAt) != "":
 			state.add(path+".fields", "backend.definition.conditional_unique_field_disabled: %s", fieldKey)
+		case recordmodel.RecordIsStructuredFieldType(field.Type):
+			state.add(path+".fields", "backend.definition.structured_index_unsupported: %s", fieldKey)
 		}
 		seen[fieldKey] = true
 	}
@@ -35,6 +38,8 @@ func (state *validationState) validateConditionalUnique(object definitionmodel.O
 		state.add(path+".config.condition_field", "backend.definition.conditional_unique_condition_field_required")
 	} else if strings.TrimSpace(condition.DisabledAt) != "" {
 		state.add(path+".config.condition_field", "backend.definition.conditional_unique_condition_field_disabled: %s", conditionField)
+	} else if recordmodel.RecordIsStructuredFieldType(condition.Type) {
+		state.add(path+".config.condition_field", "backend.definition.structured_index_unsupported: %s", conditionField)
 	}
 	values := conditionalUniqueStringList(validation.Config["condition_values"])
 	if len(values) == 0 {

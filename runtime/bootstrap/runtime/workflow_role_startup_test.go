@@ -9,14 +9,110 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identitymodule "github.com/domainry/domainry-identity/module"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 )
+
+type schedulerBusinessActionStartupHandler struct {
+	calls *atomic.Int32
+}
+
+func (h schedulerBusinessActionStartupHandler) Descriptor() runtimeext.HandlerDescriptor {
+	return runtimeext.HandlerDescriptor{
+		ActionKey:       "order.create_scheduled",
+		InputType:       "example.com/project/actions.CreateScheduledOrderInput",
+		OutputType:      "example.com/project/actions.CreateScheduledOrderOutput",
+		HandlerRevision: "scheduler-business-action-v1",
+	}
+}
+
+func (h schedulerBusinessActionStartupHandler) Invoke(context.Context, runtimeext.ActionExecution, json.RawMessage) (json.RawMessage, error) {
+	h.calls.Add(1)
+	return json.RawMessage(`{"status":"created"}`), nil
+}
+
+func TestRuntimeSchedulerBusinessActionUsesManagedWorkloadAndReplaysWindowOnce(t *testing.T) {
+	cfg := bootstrapTestConfig(t)
+	cfg.ManifestPath = filepath.Join(t.TempDir(), "manifest.json")
+	cfg.DefinitionUpgradeMode = "apply"
+	cfg.RuntimeVersion = "scheduler-business-action-test"
+	manifest := manifestmodel.ManifestSchema{
+		SchemaVersion: "2", TemplateID: "scheduler_business_action", Version: "1", Name: "Scheduler business Action",
+		Objects: []definitionmodel.ObjectSchema{{Key: "order", Name: "Order", Fields: []definitionmodel.FieldSchema{{Key: "name", Name: "Name", Type: "text", Required: true}}}},
+		Actions: []definitionmodel.ActionSchema{{
+			Key: "order.create_scheduled", ObjectKey: "order", Label: "Create scheduled order", Kind: definitionmodel.ActionKindObjectOperation, AuditEvent: "scheduled_order_created",
+			InputType: "example.com/project/actions.CreateScheduledOrderInput", OutputType: "example.com/project/actions.CreateScheduledOrderOutput",
+			PayloadFields: []definitionmodel.ActionPayloadField{{Key: "name", Type: "text", Required: true}},
+		}},
+		Roles: []manifestmodel.RoleSchema{{
+			Key: "order_automation", Name: "Order automation", Audience: "service", AssignmentMode: "system_managed",
+			Permissions: []manifestmodel.RolePermission{{PermissionKey: "order.create_scheduled", DataScope: identitysdk.DataScopeAll}},
+		}},
+		SchedulerDefinitions: []map[string]any{{
+			"key": "create-order", "name": "Create scheduled order", "status": "enabled",
+			"schedule_type": "interval", "interval_seconds": 60, "target_type": "business_action", "target_key": "order.create_scheduled",
+			"target_object": "order", "run_as_role": "order_automation", "payload_json": `{"name":"scheduled"}`,
+			"max_attempts": 3, "timeout_seconds": 30,
+		}},
+	}
+	raw, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg.ManifestPath, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identityPath := filepath.Join(t.TempDir(), "identity.db")
+	binding, err := identitymodule.NewFactory(identitymodule.Options{DatabaseDriver: "sqlite", DatabasePath: identityPath}).Open(t.Context(), identitysdk.ApplicationRef{WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer binding.Close(context.Background())
+	var handlerCalls atomic.Int32
+	projectExtensions := runtimeext.NewProjectExtensionRegistry()
+	if err := projectExtensions.RegisterBusinessHandler(schedulerBusinessActionStartupHandler{calls: &handlerCalls}); err != nil {
+		t.Fatal(err)
+	}
+	projectExtensions.Freeze()
+	application := NewWithProjectExtensions(t.Context(), cfg, projectExtensions, binding, runtimeTestNotificationFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
+	defer application.CloseContext(context.Background())
+
+	request := dispatchapplication.ExecutionRequest{
+		ExecutionID: "scheduler-run-1", DefinitionKey: "create-order", IdempotencyKey: "scheduler:create-order:2026-09-20T02:00:00Z",
+		Target: dispatchapplication.Target{Type: "runtime_operation", Owner: "business_action", Operation: "order.create_scheduled", ObjectKey: "order", RunAsRole: "order_automation", Payload: []byte(`{"name":"scheduled"}`)},
+	}
+	first, err := application.records.Applications().TargetExecutions.Execute(t.Context(), request)
+	if err != nil {
+		t.Fatalf("first dispatch: %v (handler calls=%d)", err, handlerCalls.Load())
+	}
+	second, err := application.records.Applications().TargetExecutions.Execute(t.Context(), request)
+	if err != nil || first.ID == "" || first != second {
+		t.Fatalf("first=%+v second=%+v err=%v", first, second, err)
+	}
+	if got := handlerCalls.Load(); got != 1 {
+		t.Fatalf("scheduled Action handler calls=%d want=1", got)
+	}
+	var subjectID, roleKey, actionKeysJSON string
+	probe, err := sql.Open("sqlite", identityPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer probe.Close()
+	if err := probe.QueryRowContext(t.Context(), `SELECT subject_id, role_key, action_keys_json FROM _identity_workflow_workload_bindings WHERE workspace_id=? AND application_key=? AND workflow_key=?`, cfg.IdentityWorkspaceID, cfg.IdentityAudience, "scheduler:create-order").Scan(&subjectID, &roleKey, &actionKeysJSON); err != nil {
+		t.Fatalf("load Scheduler workload binding: %v", err)
+	}
+	if subjectID != "workflow:scheduler:create-order" || roleKey != "order_automation" || !strings.Contains(actionKeysJSON, "order.create_scheduled") {
+		t.Fatalf("Scheduler workload subject=%q role=%q actions=%s", subjectID, roleKey, actionKeysJSON)
+	}
+}
 
 // Use the real Identity publisher and projection. Pre-populating a role stub
 // hides the upgrade where a workflow first references a new service role.

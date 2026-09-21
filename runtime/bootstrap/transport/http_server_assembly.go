@@ -21,6 +21,7 @@ import (
 
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
@@ -74,7 +75,8 @@ type HTTPServerDependencies struct {
 	BusinessEventBackplane   businesseventcontract.Backplane
 	ModuleHTTPAdapters       []modulehttp.Adapter
 	NotificationInboxActions notificationhttp.NotificationInboxActionResolver
-	BusinessHandlers         *runtimeext.BusinessHandlerRegistry
+	ProjectExtensions        *runtimeext.ProjectExtensionRegistry
+	BlobStore                runtimefile.BlobStore
 }
 
 type httpServerAssembly struct {
@@ -196,7 +198,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	assembly.bindAgentApplicationHost()
 	assembly.wireIdentityReferences(ctx)
 	assembly.wireRecordAndProcessHandlers()
-	assembly.wireMetadataAndBusinessHandlers()
+	assembly.wireMetadataAndProjectExtensions()
 	assembly.wireRuntimePublicationHandoff()
 	assembly.wireWorkspaceProvisioning(ctx)
 	assembly.wireNotificationHandlers()
@@ -242,10 +244,10 @@ func (a *httpServerAssembly) wireWorkspaceProvisioning(ctx context.Context) {
 }
 
 func (a *httpServerAssembly) workspaceBootstrapParticipant() runtimeext.WorkspaceBootstrapParticipant {
-	if a == nil || a.dependencies.BusinessHandlers == nil {
+	if a == nil || a.dependencies.ProjectExtensions == nil {
 		return nil
 	}
-	return a.dependencies.BusinessHandlers.WorkspaceBootstrapParticipant()
+	return a.dependencies.ProjectExtensions.WorkspaceBootstrapParticipant()
 }
 
 // wireRuntimePublicationHandoff exposes only the Runtime-owned publication

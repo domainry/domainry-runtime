@@ -16,7 +16,7 @@ const routeWithdrawKey = "expense_request.withdraw"
 type routeWithdrawHandler struct{ abort bool }
 
 func (*routeWithdrawHandler) Descriptor() runtimeext.HandlerDescriptor {
-	return runtimeext.HandlerDescriptor{ActionKey: routeWithdrawKey, InputType: routeTypeBase + "WithdrawInput", OutputType: routeTypeBase + "WithdrawOutput", InputContractSHA256: sourceOwnedFixtureContractHash(routeWithdrawKey + ":input"), OutputContractSHA256: sourceOwnedFixtureContractHash(routeWithdrawKey + ":output"), HandlerRevision: "withdraw-v1", ObjectCapabilities: []runtimeext.ActionObjectCapability{{ObjectKey: "expense_request", Operations: []string{"update"}}}, Workflows: []runtimeext.WorkflowGrant{{Key: routeWorkflowKey, Operations: []string{runtimeext.WorkflowWithdrawOperation}}}}
+	return runtimeext.HandlerDescriptor{ActionKey: routeWithdrawKey, InputType: routeTypeBase + "WithdrawInput", OutputType: routeTypeBase + "WithdrawOutput", HandlerRevision: "withdraw-v1", ObjectCapabilities: []runtimeext.ActionObjectCapability{{ObjectKey: "expense_request", Operations: []string{"update"}}}, Workflows: []runtimeext.WorkflowGrant{{Key: routeWorkflowKey, Operations: []string{runtimeext.WorkflowWithdrawOperation}}}}
 }
 
 func (h *routeWithdrawHandler) Invoke(ctx context.Context, execution runtimeext.ActionExecution, raw json.RawMessage) (json.RawMessage, error) {
@@ -51,7 +51,7 @@ func routeWithdrawalManifest(t *testing.T, directory string) string {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	action := map[string]any{"key": routeWithdrawKey, "object_key": "expense_request", "label": "Withdraw expense", "kind": "record_operation", "preconditions": []any{}, "audit_event": "expense_withdrawn", "input_type": routeTypeBase + "WithdrawInput", "output_type": routeTypeBase + "WithdrawOutput", "input_contract_sha256": sourceOwnedFixtureContractHash(routeWithdrawKey + ":input"), "output_contract_sha256": sourceOwnedFixtureContractHash(routeWithdrawKey + ":output"), "payload_fields": []any{map[string]any{"key": "process_id", "type": "text", "required": true}}}
+	action := map[string]any{"key": routeWithdrawKey, "object_key": "expense_request", "label": "Withdraw expense", "kind": "record_operation", "preconditions": []any{}, "audit_event": "expense_withdrawn", "input_type": routeTypeBase + "WithdrawInput", "output_type": routeTypeBase + "WithdrawOutput", "payload_fields": []any{map[string]any{"key": "process_id", "type": "text", "required": true}}}
 	manifest["actions"] = append(manifest["actions"].([]any), action)
 	object := manifest["objects"].([]any)[0].(map[string]any)
 	object["fields"] = append(object["fields"].([]any), map[string]any{"key": "withdrawal_receipt", "name": "Withdrawal receipt", "type": "text"})

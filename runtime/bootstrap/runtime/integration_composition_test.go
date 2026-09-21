@@ -27,7 +27,7 @@ func newIntegrationCompositionApp(t *testing.T, name string, extraProviders ...c
 		IdentityWorkspaceID: "workspace-primary", IdentityAudience: "domainry-runtime", NotificationWorkspaceID: "workspace-primary", NotificationApplicationKey: "domainry-runtime", AuditExportTokenKey: "test-audit-export-signing-key",
 		ManifestPath: filepath.Join("..", "..", "domain", "manifest", "testdata", "manifests", "domain-only-minimal.json"), UploadDir: filepath.Join(t.TempDir(), "uploads"),
 	}
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	providers := connector.NewRegistry()
 	if len(extraProviders) > 0 {

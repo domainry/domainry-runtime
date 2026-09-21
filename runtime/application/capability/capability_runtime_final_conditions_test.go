@@ -64,7 +64,11 @@ func TestCapabilityCatalogAndReferenceRemainingConditions(t *testing.T) {
 		t.Fatal("empty scheduler scope accepted")
 	}
 	service.schema = func(context.Context, principalmodel.Principal) capabilitycontract.CapabilityInstanceSchema {
-		return capabilitycontract.CapabilityInstanceSchema{Workflows: []definitionmodel.WorkflowSchema{{Key: "scheduled:existing"}, {Key: "plain"}}}
+		return capabilitycontract.CapabilityInstanceSchema{Actions: []definitionmodel.ActionSchema{{Key: "order.expire"}}, Workflows: []definitionmodel.WorkflowSchema{{Key: "scheduled:existing"}, {Key: "plain"}}}
+	}
+	businessActions, err := service.ReferenceValues(t.Context(), admin, "scheduler_target_key", "business_action")
+	if err != nil || len(businessActions.Values) != 1 || businessActions.Values[0] != "order.expire" {
+		t.Fatalf("business Action values=%+v err=%v", businessActions, err)
 	}
 	values, err := service.ReferenceValues(t.Context(), admin, "scheduler_target_key", "workflow")
 	if err != nil || len(values.Values) != 2 {

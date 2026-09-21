@@ -13,6 +13,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 )
 
@@ -242,7 +243,7 @@ func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object 
 			// backfill receipt, so the next start repeats the idempotent UPDATE.
 			stepKey := metadataUpgradeStepKey("backfill", object.Key, fieldKey, execution.toVersion)
 			if err := r.runReceiptedUpgradeStep(ctx, execution, object.Key, fieldKey, stepKey, func() error {
-				backfill, args, buildErr := query.NewUpdateBuilder(r.store.SQLRenderer, object.Key).Set(fieldKey, metadataDBValue(backfillValue)).Where(query.IsNull(fieldKey)).Build()
+				backfill, args, buildErr := query.NewUpdateBuilder(r.store.SQLRenderer, object.Key).Set(fieldKey, r.metadataDBFieldValue(field, backfillValue)).Where(query.IsNull(fieldKey)).Build()
 				if buildErr != nil {
 					return fmt.Errorf("build backfill for %s.%s: %w", object.Key, fieldKey, buildErr)
 				}
@@ -506,6 +507,30 @@ func metadataDBValue(value any) any {
 	}
 }
 
+func (r ApplicationSchemaStore) metadataDBFieldValue(field definitionmodel.FieldSchema, value any) any {
+	if recordmodel.RecordIsStructuredFieldType(field.Type) {
+		if encoded, err := recordmodel.RecordEncodeStructuredFieldValue(field, value); err == nil {
+			return encoded
+		}
+		return value
+	}
+	if field.Type == "currency" || field.Type == "percent" {
+		config, err := recordmodel.RecordNormalizeDecimalConfig(field.Config)
+		if err != nil {
+			return value
+		}
+		if r.store.RuntimeEngine != nil && r.store.RuntimeEngine.OrderedDecimalTextStorage() {
+			if encoded, err := recordmodel.RecordEncodeSQLiteDecimal(value, config); err == nil {
+				return encoded
+			}
+		}
+		if normalized, err := recordmodel.RecordNormalizeDecimal(value, config); err == nil {
+			return normalized
+		}
+	}
+	return metadataDBValue(value)
+}
+
 func (r ApplicationSchemaStore) tableColumns(ctx context.Context, table string) (map[string]bool, error) {
 	return r.storage.Columns(ctx, r.database(), r.store.SQLRenderer, r.store.DatabaseSchema(), table)
 }
@@ -523,7 +548,7 @@ func metadataColumnTypeMatches(current, target string) bool {
 
 func metadataRequiresExactPhysicalType(field definitionmodel.FieldSchema) bool {
 	switch strings.TrimSpace(field.Type) {
-	case "currency", "percent", "integer":
+	case "currency", "percent", "integer", "file", "file_list", "multi_select", "json":
 		return true
 	default:
 		return false

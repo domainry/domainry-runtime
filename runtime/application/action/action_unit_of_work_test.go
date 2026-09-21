@@ -251,8 +251,8 @@ func TestActionUnitOfWorkCommitsSystemAndBusinessOwnersThroughOneBoundary(t *tes
 		store := &actionUnitOfWorkStoreProbe{}
 		action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.reserve", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation})
 		handler := actionUnitOfWorkMutationHandler{descriptor: actionTestHandlerDescriptor(action.Key, []runtimeext.ActionObjectCapability{{ObjectKey: "booking", Operations: []string{"create"}}})}
-		registry := runtimeext.NewBusinessHandlerRegistry()
-		if err := registry.Register(handler); err != nil {
+		registry := runtimeext.NewProjectExtensionRegistry()
+		if err := registry.RegisterBusinessHandler(handler); err != nil {
 			t.Fatal(err)
 		}
 		registry.Freeze()
@@ -388,8 +388,8 @@ func TestActionUnitOfWorkReadinessRequiresTransactionalStore(t *testing.T) {
 func TestActionExecutionPhaseFollowsRuntimeOwnedUnitOfWork(t *testing.T) {
 	newService := func(t *testing.T, store *actionUnitOfWorkStoreProbe, handler *actionPhaseMutationHandler) *ActionApplicationService {
 		t.Helper()
-		registry := runtimeext.NewBusinessHandlerRegistry()
-		if err := registry.Register(handler); err != nil {
+		registry := runtimeext.NewProjectExtensionRegistry()
+		if err := registry.RegisterBusinessHandler(handler); err != nil {
 			t.Fatal(err)
 		}
 		registry.Freeze()
@@ -571,8 +571,8 @@ func assertActionFailureCompletion(t *testing.T, store *actionUnitOfWorkStorePro
 func TestActionUnitOfWorkOpensLazilyForGetForUpdate(t *testing.T) {
 	store := &actionUnitOfWorkStoreProbe{}
 	handler := &actionLockingReadHandler{descriptor: actionTestHandlerDescriptor("booking.lock", []runtimeext.ActionObjectCapability{{ObjectKey: "booking", Operations: []string{"get", "get_for_update"}}})}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -609,8 +609,8 @@ func TestActionUnitOfWorkOpensLazilyForGetForUpdate(t *testing.T) {
 func TestActionScopeDenialAfterLockingReadRollsBackBeforeAtomicFailureAudit(t *testing.T) {
 	store := &actionUnitOfWorkStoreProbe{}
 	handler := &actionLockingReadHandler{descriptor: actionTestHandlerDescriptor("booking.lock", []runtimeext.ActionObjectCapability{{ObjectKey: "booking", Operations: []string{"get", "get_for_update"}}})}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -847,8 +847,8 @@ func TestBusinessActionExecutionEnforcesConnectorLeaseAtEveryWriteBoundary(t *te
 func TestActionSuccessAuditAndReceiptShareTransactionWithoutBusinessMutation(t *testing.T) {
 	store := &actionUnitOfWorkStoreProbe{}
 	handler := &catalogHandler{descriptor: actionTestHandlerDescriptor("booking.preview", []runtimeext.ActionObjectCapability{{ObjectKey: "booking", Operations: []string{"get"}}})}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -901,8 +901,8 @@ func TestBookClassCommitsClassBookingAuditOutboxAndReceiptThroughOneUnitOfWork(t
 		}, connectorGrant),
 		receipt: &durableReceipt,
 	}
-	registry := runtimeext.NewBusinessHandlerRegistry()
-	if err := registry.Register(handler); err != nil {
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
 		t.Fatal(err)
 	}
 	registry.Freeze()
@@ -987,9 +987,9 @@ func TestBookClassCommitsClassBookingAuditOutboxAndReceiptThroughOneUnitOfWork(t
 	}
 }
 
-func frozenEmptyHandlerRegistry(t *testing.T) *runtimeext.BusinessHandlerRegistry {
+func frozenEmptyHandlerRegistry(t *testing.T) *runtimeext.ProjectExtensionRegistry {
 	t.Helper()
-	registry := runtimeext.NewBusinessHandlerRegistry()
+	registry := runtimeext.NewProjectExtensionRegistry()
 	registry.Freeze()
 	return registry
 }

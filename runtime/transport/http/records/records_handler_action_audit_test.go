@@ -123,7 +123,7 @@ func recordsActionService(actions []definitionmodel.ActionSchema, execute action
 		Key: "test.operation", Matches: func(definitionmodel.ActionSchema) bool { return true }, WriteOperation: "update",
 	})
 	executor := actionapplication.NewSystemOperationExecutor(system, actionapplication.SystemOperationBinding{Key: "test.operation", Handler: execute})
-	registry := runtimeext.NewBusinessHandlerRegistry()
+	registry := runtimeext.NewProjectExtensionRegistry()
 	registry.Freeze()
 	return actionapplication.NewActionApplication(actionapplication.ActionApplicationDependencies{
 		Catalog: actionapplication.NewActionCatalog(actions, system, registry), SystemOperations: executor,

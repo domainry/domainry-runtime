@@ -150,6 +150,32 @@ func TestSDKDataScopeCompilerTranslatesRelationsAndBusinessClaims(t *testing.T) 
 	}
 }
 
+func TestProjectRelationalDataPolicyCompilesThroughAccessBundleIntoRuntimeQuery(t *testing.T) {
+	booking := definitionmodel.ObjectSchema{Key: "booking", Fields: []definitionmodel.FieldSchema{{Key: "customer_id", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "customer"}}}}
+	customer := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "organization_id", Type: "text"}}}
+	policy := identitysdk.ProjectDataPolicy{
+		Operator: identitysdk.ProjectDataPolicyIn,
+		Path:     []identitysdk.ProjectDataPolicyRelationSegment{{Direction: identitysdk.RelationForward, RelationFieldKey: "customer_id", TargetObjectKey: "customer"}},
+		FieldKey: "organization_id", SubjectClaim: identitysdk.ProjectSubjectClaimOrgScopeIDs,
+	}
+	predicate, err := policy.Predicate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "manager", OrgScopeIDs: []string{"region", "store"}}}, accessfixture.Bundle{Permissions: []string{"booking.read"}})
+	principal.AccessBundle.DataPolicies = []identitysdk.DataPolicy{{
+		Key: "booking.read.relational", Resource: "booking", Action: "read", Effect: identitysdk.EffectAllow, Predicate: predicate,
+	}}
+
+	expression, compileErr, handled := RecordCompileSDKDataScopeExpression(booking, []definitionmodel.ObjectSchema{booking, customer}, principal, "read")
+	if compileErr != nil || !handled || expression == nil {
+		t.Fatalf("expression=%#v handled=%t error=%v", expression, handled, compileErr)
+	}
+	if expression.Operator != "in" || expression.FieldKey != "organization_id" || len(expression.Path) != 1 || expression.Path[0].RelationFieldKey != "customer_id" || len(expression.Values) != 2 || expression.Values[0] != "region" || expression.Values[1] != "store" {
+		t.Fatalf("Runtime query lost project relational policy semantics: %#v", expression)
+	}
+}
+
 func TestSDKDataScopeCompilerFailsClosed(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "case"}
 	if expression, err, handled := RecordCompileSDKDataScopeExpression(object, []definitionmodel.ObjectSchema{object}, principalmodel.Principal{}, "read"); err != nil || handled || expression != nil {

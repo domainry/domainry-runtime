@@ -47,7 +47,7 @@ func validRuntimeReleaseIdentity(t *testing.T, marker string) deploymentmodel.Ru
 		RuntimeextContractVersion: "runtimeext-v1", RuntimeextContractSHA256: hash("a"),
 		ConnectorContractVersion: "connector-v1", ConnectorContractSHA256: hash("b"),
 		DomainSDKContractVersion: "domain-sdk-v1", DomainSDKContractSHA256: hash("c"), DomainSDKGeneratorVersion: "generator-v1", DomainSDKBuildConstraint: "sdk-build-" + marker,
-		ApplicationSchemaSnapshotSHA256: hash(marker), GeneratedSDKSHA256: hash("d"), HandlerRegistrySHA256: hash("e"), ConnectorRegistrySHA256: hash("f"),
+		ApplicationSchemaSnapshotSHA256: hash(marker), GeneratedSDKSHA256: hash("d"), ProjectExtensionRegistrySHA256: hash("e"), ConnectorRegistrySHA256: hash("f"),
 	}
 	combination, err := RuntimeReleaseCombinationSHA256(identity)
 	if err != nil {
@@ -97,7 +97,7 @@ func TestRuntimeReleaseIdentityValidationRejectsComponentAndCombinationDrift(t *
 		t.Fatalf("component drift error=%v", err)
 	}
 	malformed := identity
-	malformed.HandlerRegistrySHA256 = "not-a-hash"
+	malformed.ProjectExtensionRegistrySHA256 = "not-a-hash"
 	if err := ValidateRuntimeReleaseIdentity(malformed); !errors.Is(err, deploymentmodel.ErrRuntimeReleaseAdmission) {
 		t.Fatalf("malformed identity error=%v", err)
 	}

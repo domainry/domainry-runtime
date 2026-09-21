@@ -63,8 +63,12 @@ func (externalDataExchangeProviderStub) BuildExportArtifact(context.Context, dat
 func TestDataExchangeProvidersRegistersExternalArtifactProvider(t *testing.T) {
 	providers := NewDataExchangeProviders(nil)
 	external := externalDataExchangeProviderStub{}
-	providers.RegisterImportProvider(" identity-portability ", external)
-	providers.RegisterExportProvider(" identity-portability ", external)
+	if err := providers.RegisterImportProvider(" identity-portability ", external); err != nil {
+		t.Fatal(err)
+	}
+	if err := providers.RegisterExportProvider(" identity-portability ", external); err != nil {
+		t.Fatal(err)
+	}
 
 	importProvider, ok := providers.ImportProvider("identity-portability")
 	if !ok || importProvider == nil {
@@ -79,6 +83,62 @@ func TestDataExchangeProvidersRegistersExternalArtifactProvider(t *testing.T) {
 	}
 	if _, ok := exportProvider.(modulehost.ExportArtifactProvider); !ok {
 		t.Fatalf("artifact export capability was erased: %T", exportProvider)
+	}
+}
+
+func TestDataExchangeProviderRegistryRejectsInvalidDuplicateReservedAndLateRegistration(t *testing.T) {
+	external := externalDataExchangeProviderStub{}
+	var missing *DataExchangeProviders
+	if err := missing.RegisterImportProvider("identity-portability", external); !errors.Is(err, ErrDataExchangeProviderRegistryRequired) {
+		t.Fatalf("nil registry error=%v", err)
+	}
+	providers := NewDataExchangeProviders(nil)
+	for _, test := range []struct {
+		name string
+		key  string
+		in   modulehost.ImportProvider
+		want error
+	}{
+		{name: "blank", key: " ", in: external, want: ErrDataExchangeProviderKeyInvalid},
+		{name: "unstable", key: "Upper Case", in: external, want: ErrDataExchangeProviderKeyInvalid},
+		{name: "reserved", key: "records", in: external, want: ErrDataExchangeProviderKeyReserved},
+		{name: "nil", key: "identity-portability", want: ErrDataExchangeProviderRequired},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := providers.RegisterImportProvider(test.key, test.in); !errors.Is(err, test.want) {
+				t.Fatalf("error=%v want=%v", err, test.want)
+			}
+		})
+	}
+	if err := providers.RegisterImportProvider("identity-portability", external); err != nil {
+		t.Fatal(err)
+	}
+	if err := providers.RegisterImportProvider("identity-portability", external); !errors.Is(err, ErrDataExchangeProviderDuplicate) {
+		t.Fatalf("duplicate import error=%v", err)
+	}
+	// Import and export are distinct owner capabilities and may intentionally
+	// share one provider identity.
+	if err := providers.RegisterExportProvider("identity-portability", external); err != nil {
+		t.Fatal(err)
+	}
+	if err := providers.RegisterExportProvider("identity-portability", external); !errors.Is(err, ErrDataExchangeProviderDuplicate) {
+		t.Fatalf("duplicate export error=%v", err)
+	}
+	providers.Freeze()
+	if !providers.Frozen() {
+		t.Fatal("provider registry did not freeze")
+	}
+	if err := providers.RegisterImportProvider("late", external); !errors.Is(err, ErrDataExchangeProviderRegistryFrozen) {
+		t.Fatalf("late import error=%v", err)
+	}
+	if err := providers.RegisterExportProvider("late", external); !errors.Is(err, ErrDataExchangeProviderRegistryFrozen) {
+		t.Fatalf("late export error=%v", err)
+	}
+	if _, ok := providers.ImportProvider("identity-portability"); !ok {
+		t.Fatal("freeze removed existing import provider")
+	}
+	if _, ok := providers.ExportProvider("identity-portability"); !ok {
+		t.Fatal("freeze removed existing export provider")
 	}
 }
 

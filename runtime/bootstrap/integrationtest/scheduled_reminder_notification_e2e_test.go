@@ -102,7 +102,7 @@ func TestScheduledReminderSignedCallbackMaterializesInboxDeliversConnectedChanne
 		RuntimeInstanceID: "g04-runtime", IdentityAudience: "domainry-runtime", IntegrationSecretKey: "g04-runtime-integration-signing-secret", WorkerPollInterval: 5 * time.Millisecond, WorkerBatchSize: 25,
 	})
 	identity := newIntegrationIdentityBinding(t, cfg)
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	probe := &g04DeliveryProbe{}
 	providers := connector.NewRegistry()
@@ -126,7 +126,7 @@ func TestScheduledReminderSignedCallbackMaterializesInboxDeliversConnectedChanne
 	}
 	idempotencyKey := "plan-g04-reminder:" + dueAt.Format(time.RFC3339Nano)
 	body, err := json.Marshal(map[string]any{
-		"runtime_id": cfg.RuntimeInstanceID, "execution_id": "scheduler-g04-run", "idempotency_key": idempotencyKey, "due_at": dueAt,
+		"runtime_id": cfg.RuntimeInstanceID, "execution_id": "scheduler-g04-run", "definition_key": "g04-reminder", "idempotency_key": idempotencyKey, "due_at": dueAt,
 		"target": map[string]any{"type": "runtime_operation", "owner": "notification", "operation": "publish_reminder", "payload": json.RawMessage(payload)},
 	})
 	if err != nil {

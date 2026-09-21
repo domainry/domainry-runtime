@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v39"
-	ContractSHA256  = "f39febca75935811416a54542efdd4a27b871d6a283536bc0de0c57c7ec866d1"
+	ContractVersion = "runtimeext-v42"
+	ContractSHA256  = "652ead900a305ee47ff49817472552ccd7cf6f9739d016f9146db63baa240a05"
 )
 
-const contractDefinitionV39 = `runtimeext-v39
+const contractDefinitionV42 = `runtimeext-v42
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 BusinessHandler.Descriptor()HandlerDescriptor
@@ -67,11 +67,16 @@ ActionWriteDuringConnectorCallErrorCode=backend.action.write_during_connector_ca
 ConnectorActionExecutionRequiredErrorCode=backend.connector.action_execution_required
 ConnectorActionGrantDeniedErrorCode=backend.connector.action_grant_denied
 ConnectorActionSideEffectOutboxErrorCode=backend.connector.action_side_effect_requires_outbox
-BusinessHandlerRegistry.Register(BusinessHandler)error
-BusinessHandlerRegistry.RegisterExtensionSet(ExtensionSet)error
-BusinessHandlerRegistry.Freeze()
-BusinessHandlerRegistry.Binding(string)(BusinessHandlerBinding,bool)
-BusinessHandlerRegistry.Descriptors()[]HandlerDescriptor
+ProjectExtensionRegistry.RegisterBusinessHandler(BusinessHandler)error
+ProjectExtensionRegistry.RegisterAssigneeResolver(AssigneeResolver)error
+ProjectExtensionRegistry.RegisterProjectExtensions(ProjectExtensions)error
+ProjectExtensionRegistry.Freeze()
+ProjectExtensionRegistry.BusinessHandlerBinding(string)(BusinessHandlerBinding,bool)
+ProjectExtensionRegistry.BusinessHandlerDescriptors()[]HandlerDescriptor
+ProjectExtensionRegistry.AssigneeResolverBinding(string)(AssigneeResolverBinding,bool)
+ProjectExtensionRegistry.AssigneeResolverDescriptors()[]AssigneeResolverDescriptor
+ProjectExtensionRegistry.Descriptors()[]ProjectExtensionDescriptor
+ProjectExtensionRegistry.WorkspaceBootstrapParticipant()WorkspaceBootstrapParticipant
 QueryOperation=get,get_for_update,list,exists,count
 RecordQueryPagination=after_id
 RecordQueryFilterContains=literal_substring|text_long_text_email_phone_url_and_record_id|string_value|preserve_spaces|escape_percent_underscore_tilde|database_collation|null_does_not_match
@@ -113,7 +118,15 @@ ExecuteWorkspaceIdentityUsageResolve(context.Context,ActionExecution,WorkspaceId
 WorkspaceIdentityUsageMaximumPageSize=100
 WorkspaceIdentityUsageProjection=canonical_code,display_name,commercial_plan,included_user_limit,max_user_limit,identity_account_counts|physical_workspace_id_withheld
 WorkspaceIdentityUsageResolve=canonical_workspace_code,expected_top_level_workspace_revision|active_workspace_locked_and_rechecked|typed_commercial_configuration|identity_account_counts|same_action_uow|physical_workspace_id_withheld
-ExtensionSet.WorkspaceBootstrapParticipant=WorkspaceBootstrapParticipant
+ProjectExtensions.BusinessHandlers=[]BusinessHandler
+ProjectExtensions.AssigneeResolvers=[]AssigneeResolver
+ProjectExtensions.WorkspaceBootstrapParticipant=WorkspaceBootstrapParticipant
+ProjectExtensionDescriptor=closed_kind_envelope|business_handler|workflow_assignee_resolver|workspace_bootstrap
+AssigneeResolver.Descriptor()AssigneeResolverDescriptor
+AssigneeResolver.Resolve(context.Context,AssigneeResolverCapabilities,AssigneeResolverContext)([]AssigneeResolverCandidate,error)
+AssigneeResolverCapabilities=GetRecord|ListRecords|FollowRelation|FindUser|UsersForRole
+AssigneeResolverReadSemantics=workspace_scoped|principal_authorized|descriptor_projected|query_and_row_bounded|context_budgeted
+AssigneeResolverResultSemantics=active_users|max_candidates|declared_candidate_roles|stable_ordered_evidence|duplicate_evidence_merge
 WorkspaceBootstrapParticipant.Descriptor()WorkspaceBootstrapDescriptor
 WorkspaceBootstrapParticipant.BuildWorkspaceBootstrap(context.Context,WorkspaceBootstrapContext,map[string]any)([]WorkspaceBootstrapRecord,error)
 WorkspaceBootstrapInputExactDecimal=canonical_decimal_string|no_binary_float|exact_range_validation
@@ -135,15 +148,16 @@ func ComputedContractSHA256() string {
 		StoreOrganizationCatalogCapability{}, StoreOrganizationCatalogRequest{}, StoreOrganizationCatalogItem{}, StoreOrganizationCatalogPage{},
 		WorkspaceIdentityUsageCapability{}, WorkspaceIdentityUsageRequest{}, WorkspaceIdentityUsageResolveRequest{}, WorkspaceIdentityAccountCounts{}, WorkspaceCommercialTerms{}, WorkspaceCommercialConfiguration{}, WorkspaceIdentityUsageItem{}, WorkspaceIdentityUsagePage{}, WorkspaceIdentityUsageResolveResult{},
 		WorkspaceBootstrapInputField{}, WorkspaceBootstrapRecordCapability{}, WorkspaceBootstrapDescriptor{}, WorkspaceBootstrapContext{}, WorkspaceBootstrapRecord{},
-		HandlerDescriptor{}, BusinessHandlerBinding{},
+		HandlerDescriptor{}, BusinessHandlerBinding{}, ProjectExtensionDescriptor{},
+		AssigneeResolverConfigField{}, AssigneeResolverRecordCapability{}, AssigneeResolverRelationCapability{}, AssigneeResolverDescriptor{}, AssigneeRecordFilter{}, AssigneeRecordListRequest{}, AssigneeRelationRequest{}, AssigneeRecord{}, AssigneeIdentityUser{}, AssigneeResolverContext{}, AssigneeEvidenceFact{}, AssigneeResolverCandidate{}, AssigneeResolverBinding{},
 		Record{}, Filter{}, Sort{}, RecordQuery{}, RecordQueryResult{},
 		Predicate{}, Arithmetic{}, RecordMutation{}, RecordMutationResult{}, ConditionalUpdateManyExactCoverage{}, ConditionalUpdateManyRequest{}, ConditionalUpdateManyResult{},
-		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ExtensionSet{},
+		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ProjectExtensions{},
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV39)
+	definition.WriteString(contractDefinitionV42)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

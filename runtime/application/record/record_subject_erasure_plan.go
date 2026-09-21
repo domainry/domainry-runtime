@@ -86,7 +86,7 @@ func (s *RecordSubjectLifecycleApplicationService) PrepareSubjectErasure(ctx con
 				if _, ok := s.files.(lifecyclecontract.SubjectFileVersionDeleter); !ok {
 					return nil, fmt.Errorf("record subject file version deletion unavailable")
 				}
-				for _, value := range recordSubjectFileValues(value) {
+				for _, value := range recordSubjectFileValues(field, value) {
 					if seenFiles[value] {
 						continue
 					}
@@ -321,6 +321,9 @@ func recordSubjectValueContainsReference(value any, reference string) bool {
 			}
 		}
 	case map[string]any:
+		if filename, ok := typed["filename"].(string); ok && "/uploads/"+strings.TrimSpace(filename) == reference {
+			return true
+		}
 		for _, item := range typed {
 			if recordSubjectValueContainsReference(item, reference) {
 				return true

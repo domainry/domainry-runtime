@@ -273,8 +273,9 @@ func scanWorkflowNode(scanner interface{ Scan(...any) error }) (workflowmodel.Wo
 }
 
 func workflowTaskValues(task workflowmodel.WorkflowTask) []any {
+	evidence, _ := json.Marshal(task.AssigneeEvidence)
 	resolver, _ := json.Marshal(task.ResolverSnapshot)
-	return []any{task.WorkspaceID, task.ID, task.ProcessID, task.NodeInstanceID, task.NodeID, task.Title, task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, string(resolver), task.CandidateSource, task.NodeDefinitionVersion, task.Sequence, task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.CreatedAt, task.UpdatedAt}
+	return []any{task.WorkspaceID, task.ID, task.ProcessID, task.NodeInstanceID, task.NodeID, task.Title, task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), string(resolver), task.CandidateSource, task.NodeDefinitionVersion, task.Sequence, task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.CreatedAt, task.UpdatedAt}
 }
 func (r WorkflowProcessStore) InsertTask(ctx context.Context, workspaceID string, task workflowmodel.WorkflowTask) error {
 	var err error
@@ -299,7 +300,7 @@ func (r WorkflowProcessStore) UpdateTask(ctx context.Context, workspaceID string
 		return err
 	}
 	values := workflowTaskValues(task)
-	return r.updateScopedRow(ctx, "_workflow_tasks", workspaceID, task.ID, []string{"assignee_user_id", "assignee_name", "assignee_role_key", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}, []any{values[6], values[7], values[8], values[13], values[14], values[15], values[16], values[17], values[18], values[20]})
+	return r.updateScopedRow(ctx, "_workflow_tasks", workspaceID, task.ID, []string{"assignee_user_id", "assignee_name", "assignee_role_key", "assignee_resolver_key", "assignee_evidence_json", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}, []any{values[6], values[7], values[8], values[9], values[10], values[15], values[16], values[17], values[18], values[19], values[20], values[22]})
 }
 
 func (r WorkflowProcessStore) UpdateTasks(ctx context.Context, workspaceID string, tasks []workflowmodel.WorkflowTask) error {
@@ -330,7 +331,7 @@ func (r WorkflowProcessStore) UpdateTasks(ctx context.Context, workspaceID strin
 	defer tx.Rollback()
 	columns := workflowTaskColumns()[1:]
 	assignments := []query.Assignment{}
-	for _, column := range []string{"assignee_user_id", "assignee_name", "assignee_role_key", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"} {
+	for _, column := range []string{"assignee_user_id", "assignee_name", "assignee_role_key", "assignee_resolver_key", "assignee_evidence_json", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"} {
 		assignments = append(assignments, query.AssignExpression(column, query.InsertedValue(column)))
 	}
 	for start := 0; start < len(order); start += 20 {

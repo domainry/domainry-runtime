@@ -15,6 +15,36 @@ import (
 var importValueDomainLookup = localization.Lookup
 
 func coerceImportValue(objectKey string, field definitionmodel.FieldSchema, value string) (any, string) {
+	if field.Type == recordmodel.RecordMultiSelectFieldType {
+		decoded, err := recordmodel.RecordDecodeStructuredFieldValue(field, value)
+		if err != nil {
+			return nil, "backend.import.invalid_multi_select"
+		}
+		values := decoded.([]string)
+		mapped := make([]string, 0, len(values))
+		for _, item := range values {
+			if option, ok := importValueDomainValue(objectKey, field, item); ok {
+				mapped = append(mapped, option)
+				continue
+			}
+			if importFieldRequiresValueDomain(field) {
+				return nil, importValueDomainIssue(field, item)
+			}
+			mapped = append(mapped, item)
+		}
+		normalized, err := recordmodel.RecordNormalizeStructuredFieldValue(field, mapped)
+		if err != nil {
+			return nil, "backend.import.invalid_multi_select"
+		}
+		return normalized, ""
+	}
+	if field.Type == recordmodel.RecordJSONFieldType {
+		normalized, err := recordmodel.RecordDecodeStructuredFieldValue(field, value)
+		if err != nil {
+			return nil, "backend.import.invalid_json"
+		}
+		return normalized, ""
+	}
 	if mapped, ok := importValueDomainValue(objectKey, field, value); ok {
 		return mapped, ""
 	}
@@ -77,7 +107,7 @@ func importValueDomainValue(objectKey string, field definitionmodel.FieldSchema,
 }
 
 func importFieldRequiresValueDomain(field definitionmodel.FieldSchema) bool {
-	return len(importValueDomainItems(field)) > 0 && (field.Type == "select" || field.Type == "status" || strings.Contains(strings.ToLower(field.Key), "status") || strings.Contains(strings.ToLower(field.Key), "stage"))
+	return len(importValueDomainItems(field)) > 0 && (field.Type == "select" || field.Type == recordmodel.RecordMultiSelectFieldType || field.Type == "status" || strings.Contains(strings.ToLower(field.Key), "status") || strings.Contains(strings.ToLower(field.Key), "stage"))
 }
 
 func importValueDomainIssue(field definitionmodel.FieldSchema, value string) string {
@@ -117,6 +147,9 @@ func RecordImportValueDomainCandidates(field definitionmodel.FieldSchema) []stri
 }
 
 func importValueDomainItems(field definitionmodel.FieldSchema) []appschemamodel.DictionaryItemSchema {
+	if items := dictionaryItemsFromAny(field.Options); len(items) > 0 {
+		return items
+	}
 	config := field.Config
 	if config == nil {
 		return nil

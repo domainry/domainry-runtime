@@ -1,6 +1,8 @@
 package contract
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"reflect"
 	"strings"
@@ -22,6 +24,51 @@ func TestRuntimeAPIContractIdentityIsStable(t *testing.T) {
 	}
 	if document.ContractHash != RuntimeAPIContractHash() {
 		t.Fatalf("published Runtime API hash=%q, generated identity=%q", document.ContractHash, RuntimeAPIContractHash())
+	}
+	var canonical map[string]any
+	if err := json.Unmarshal(RuntimeAPIContractDocument(), &canonical); err != nil {
+		t.Fatal(err)
+	}
+	delete(canonical, "contract_hash")
+	payload, err := json.Marshal(canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(payload)
+	if calculated := hex.EncodeToString(digest[:]); calculated != RuntimeAPIContractHash() {
+		t.Fatalf("published Runtime API content hash=%q want=%q", calculated, RuntimeAPIContractHash())
+	}
+}
+
+func TestRuntimeAPIContractPublishesClosedRecordFileSemantics(t *testing.T) {
+	var document struct {
+		Routes map[string]struct {
+			Path               string   `json:"path"`
+			Identity           string   `json:"identity"`
+			AuthorizationModes []string `json:"authorization_modes"`
+		} `json:"routes"`
+		Schemas map[string]struct {
+			AdditionalProperties *bool    `json:"additional_properties"`
+			Required             []string `json:"required"`
+			Optional             []string `json:"optional"`
+			Items                string   `json:"items"`
+			TargetFieldTypes     []string `json:"target_field_types"`
+			RecordReference      string   `json:"record_reference"`
+		} `json:"schemas"`
+	}
+	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
+		t.Fatal(err)
+	}
+	download := document.Routes["file_download"]
+	if download.Path != "/uploads/{fileID}" || download.Identity != "file_id" || !reflect.DeepEqual(download.AuthorizationModes, []string{"record_reference", "signed_action_ticket"}) {
+		t.Fatalf("file download contract=%+v", download)
+	}
+	reference := document.Schemas["record_file_reference"]
+	if reference.AdditionalProperties == nil || *reference.AdditionalProperties || !reflect.DeepEqual(reference.Required, []string{"file_id", "filename", "content_type", "size", "content_sha256"}) || !reflect.DeepEqual(reference.Optional, []string{"scan_receipt"}) {
+		t.Fatalf("file reference schema=%+v", reference)
+	}
+	if document.Schemas["record_file_reference_list"].Items != "record_file_reference" || !reflect.DeepEqual(document.Schemas["multipart_file_with_object_field_scope"].TargetFieldTypes, []string{"file", "file_list"}) || document.Schemas["runtime_uploaded_file"].RecordReference == "" {
+		t.Fatalf("file schema closure=%+v", document.Schemas)
 	}
 }
 

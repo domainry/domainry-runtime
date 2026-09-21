@@ -53,9 +53,10 @@ type RoleFieldRestriction struct {
 }
 
 type RolePermission struct {
-	PermissionKey string                `json:"permission_key"`
-	DataScope     identitysdk.DataScope `json:"data_scope"`
-	AuditDenial   bool                  `json:"audit_denial,omitempty"`
+	PermissionKey string                         `json:"permission_key"`
+	DataScope     identitysdk.DataScope          `json:"data_scope,omitempty"`
+	DataPolicy    *identitysdk.ProjectDataPolicy `json:"data_policy,omitempty"`
+	AuditDenial   bool                           `json:"audit_denial,omitempty"`
 }
 type RoleFieldPermission struct {
 	ObjectKey   string `json:"object_key"`

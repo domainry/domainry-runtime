@@ -115,6 +115,18 @@ func RecordNormalizeFieldValue(field definitionmodel.FieldSchema, value any) (an
 			return nil, validationError("backend.validation.datetime_format", "field", field.Key)
 		}
 		return text, nil
+	case recordmodel.RecordFileFieldType, recordmodel.RecordFileListFieldType:
+		normalized, err := recordmodel.RecordNormalizeFileFieldValue(field, value)
+		if err != nil {
+			return nil, recordFileValidationError(err, field.Key)
+		}
+		return normalized, nil
+	case recordmodel.RecordMultiSelectFieldType, recordmodel.RecordJSONFieldType:
+		normalized, err := recordmodel.RecordNormalizeStructuredFieldValue(field, value)
+		if err != nil {
+			return nil, recordStructuredValidationError(err, field.Key)
+		}
+		return normalized, nil
 	default:
 		text, ok := stringValue(value)
 		if !ok {
@@ -167,8 +179,23 @@ func validateFieldType(field definitionmodel.FieldSchema, value any) error {
 		if _, ok := value.(bool); !ok {
 			return validationError("backend.validation.boolean", "field", field.Key)
 		}
+	case recordmodel.RecordFileFieldType, recordmodel.RecordFileListFieldType:
+		if _, err := recordmodel.RecordNormalizeFileFieldValue(field, value); err != nil {
+			return recordFileValidationError(err, field.Key)
+		}
+	case recordmodel.RecordMultiSelectFieldType, recordmodel.RecordJSONFieldType:
+		if _, err := recordmodel.RecordNormalizeStructuredFieldValue(field, value); err != nil {
+			return recordStructuredValidationError(err, field.Key)
+		}
 	}
 	return nil
+}
+
+func recordFileValidationError(err error, fieldKey string) error {
+	if contract, ok := err.(*recordmodel.RecordFileContractError); ok {
+		return validationError(contract.Code, "field", fieldKey, "detail", contract.Detail)
+	}
+	return validationError("backend.validation.file_reference", "field", fieldKey)
 }
 
 func recordDecimalValidationError(err error, fieldKey string) error {
@@ -176,6 +203,13 @@ func recordDecimalValidationError(err error, fieldKey string) error {
 		return validationError(decimalError.Code, "field", fieldKey)
 	}
 	return validationError("backend.decimal.value_invalid", "field", fieldKey)
+}
+
+func recordStructuredValidationError(err error, fieldKey string) error {
+	if contract, ok := err.(*recordmodel.RecordStructuredFieldError); ok {
+		return validationError(contract.Code, "field", fieldKey, "detail", contract.Detail)
+	}
+	return validationError("backend.validation.structured_value", "field", fieldKey)
 }
 
 func validateFieldRules(field definitionmodel.FieldSchema, value any) error {
@@ -206,6 +240,20 @@ func validateFieldRules(field definitionmodel.FieldSchema, value any) error {
 			options := selectFieldOptions(field)
 			if len(options) > 0 && !containsOption(options, text) {
 				return validationError("backend.validation.invalid_option", "field", field.Key, "options", strings.Join(options, ", "))
+			}
+		}
+	}
+	if field.Type == recordmodel.RecordMultiSelectFieldType {
+		options := selectFieldOptions(field)
+		if len(options) > 0 {
+			values, ok := value.([]string)
+			if !ok {
+				return validationError("backend.validation.multi_select", "field", field.Key)
+			}
+			for _, item := range values {
+				if !containsOption(options, item) {
+					return validationError("backend.validation.invalid_option", "field", field.Key, "options", strings.Join(options, ", "))
+				}
 			}
 		}
 	}

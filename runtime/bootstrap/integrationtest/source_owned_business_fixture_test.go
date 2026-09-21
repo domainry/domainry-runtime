@@ -2,8 +2,6 @@ package integrationtest
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -171,7 +169,7 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 	}
 	identityBinding := newIntegrationIdentityBinding(t, cfg)
 	actions, _ := manifest["actions"].([]any)
-	registry := runtimeext.NewBusinessHandlerRegistry()
+	registry := runtimeext.NewProjectExtensionRegistry()
 	hasBusinessHandlers := false
 	for _, rawAction := range actions {
 		action, _ := rawAction.(map[string]any)
@@ -188,12 +186,8 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 		}
 		inputType := "example.com/domainry/integrationtest/actions." + sourceOwnedFixtureActionTypeName(actionKey) + "Input"
 		outputType := "example.com/domainry/integrationtest/actions." + sourceOwnedFixtureActionTypeName(actionKey) + "Output"
-		inputHash := sourceOwnedFixtureContractHash(actionKey + ":input")
-		outputHash := sourceOwnedFixtureContractHash(actionKey + ":output")
 		action["input_type"] = inputType
 		action["output_type"] = outputType
-		action["input_contract_sha256"] = inputHash
-		action["output_contract_sha256"] = outputHash
 		readOperations := []any{"get"}
 		objectOperations := []string{"get", "update"}
 		if actionKey == "lead.activate_due_candidates" || actionKey == "lead.create_daily_review_tasks" {
@@ -244,12 +238,11 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 		}
 		handler := sourceOwnedIntegrationFixtureHandler{descriptor: runtimeext.HandlerDescriptor{
 			ActionKey: actionKey, InputType: inputType, OutputType: outputType,
-			InputContractSHA256: inputHash, OutputContractSHA256: outputHash,
 			HandlerRevision:        "source-owned-integration-fixture-v1",
 			ObjectCapabilities:     objectCapabilities,
 			NotificationEventTypes: notificationEventTypes,
 		}}
-		if err := registry.Register(handler); err != nil {
+		if err := registry.RegisterBusinessHandler(handler); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -272,7 +265,7 @@ func newIntegrationRuntime(t *testing.T, cfg config.Config) *bootstrap.Runtime {
 	if err := os.WriteFile(cfg.ManifestPath, normalized, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return bootstrap.NewWithBusinessHandlersAndScheduler(t.Context(), cfg, registry, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory(), integrationAgentFactory())
+	return bootstrap.NewWithProjectExtensionsAndScheduler(t.Context(), cfg, registry, identityBinding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory(), integrationAgentFactory())
 }
 
 func integrationAgentFactory() *agentmodule.Factory {
@@ -327,9 +320,4 @@ func sourceOwnedFixtureActionTypeName(actionKey string) string {
 		result.WriteRune(current)
 	}
 	return result.String()
-}
-
-func sourceOwnedFixtureContractHash(value string) string {
-	sum := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(sum[:])
 }

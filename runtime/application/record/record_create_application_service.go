@@ -39,6 +39,7 @@ type RecordCreateDependencies struct {
 	CanWrite              func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool
 	CanWriteCandidate     func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) (bool, error)
 	ValidatePipeline      func(context.Context, definitionmodel.ObjectSchema, string, map[string]any, principalmodel.Principal) error
+	ValidateFiles         func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
 	ApplyPipelineDefaults func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal, bool) error
 	FindReplay            func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) (recordmodel.Record, bool, error)
 	RunBefore             func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error
@@ -262,6 +263,11 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 	}
 	if err := recordvalidation.RecordValidateData(object, data, false); err != nil {
 		return recordCreatePlannedMutation{}, recordCreateErrorFrom(apperror.KindBadRequest, err)
+	}
+	if s.dependencies.ValidateFiles != nil {
+		if err := s.dependencies.ValidateFiles(ctx, object, data, principal); err != nil {
+			return recordCreatePlannedMutation{}, err
+		}
 	}
 	if s.dependencies.ValidateRelations != nil {
 		if err := s.dependencies.ValidateRelations(ctx, object, data, principal); err != nil {

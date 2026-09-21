@@ -14,9 +14,6 @@ import (
 )
 
 func recordQueryDBValues(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, queryValue recordmodel.RecordListQuery) recordmodel.RecordListQuery {
-	if !profile.OrderedDecimalTextStorage() {
-		return queryValue
-	}
 	fields := make(map[string]definitionmodel.FieldSchema, len(object.Fields))
 	for _, field := range object.Fields {
 		fields[field.Key] = field
@@ -28,8 +25,12 @@ func recordQueryDBValues(profile persistencedriver.EngineProfile, object definit
 			fieldKey = fieldKey[:index]
 		}
 		field, ok := fields[fieldKey]
-		if !ok || field.Type != "currency" {
+		if !ok || !recordFieldQueryValueNeedsEncoding(profile, field) {
 			filters[key] = value
+			continue
+		}
+		if recordmodel.RecordIsStructuredFieldType(field.Type) && !strings.HasSuffix(key, "__in") {
+			filters[key] = dbFieldValue(profile, field, value)
 			continue
 		}
 		switch typed := value.(type) {
@@ -62,12 +63,12 @@ func RecordQueryDatabaseValues(profile persistencedriver.EngineProfile, object d
 }
 
 func recordFilterDBValues(profile persistencedriver.EngineProfile, fields map[string]definitionmodel.FieldSchema, expression recordmodel.RecordFilterExpression) recordmodel.RecordFilterExpression {
-	field, isCurrency := fields[expression.Field]
-	isCurrency = isCurrency && field.Type == "currency"
-	if isCurrency && expression.Value != nil {
+	field, needsEncoding := fields[expression.Field]
+	needsEncoding = needsEncoding && recordFieldQueryValueNeedsEncoding(profile, field)
+	if needsEncoding && expression.Value != nil {
 		expression.Value = dbFieldValue(profile, field, expression.Value)
 	}
-	if isCurrency {
+	if needsEncoding {
 		for index, value := range expression.Values {
 			expression.Values[index] = dbFieldValue(profile, field, value)
 		}
@@ -76,6 +77,10 @@ func recordFilterDBValues(profile persistencedriver.EngineProfile, fields map[st
 		expression.Children[index] = recordFilterDBValues(profile, fields, expression.Children[index])
 	}
 	return expression
+}
+
+func recordFieldQueryValueNeedsEncoding(profile persistencedriver.EngineProfile, field definitionmodel.FieldSchema) bool {
+	return recordmodel.RecordIsStructuredFieldType(field.Type) || profile.OrderedDecimalTextStorage() && (field.Type == "currency" || field.Type == "percent")
 }
 
 func recordListProjections(selectFields []string) []query.Projection {

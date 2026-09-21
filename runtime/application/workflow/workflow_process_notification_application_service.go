@@ -130,10 +130,11 @@ func (e *WorkflowProcessEngine) executeCCNode(ctx context.Context, process workf
 	if strings.TrimSpace(contract.NotificationActionKey) == "" {
 		return nil, badRequest("backend.workflow.cc_notification_action_required", "node", node.ID)
 	}
-	recipients, err := e.resolveWorkflowRecipients(ctx, process, contract.Resolvers, principal)
+	assignees, err := e.resolveWorkflowAssignees(ctx, process, node.ID, contract.Resolvers, principal)
 	if err != nil {
 		return nil, err
 	}
+	recipients := resolvedAssigneeUserIDs(assignees)
 	if len(recipients) == 0 {
 		return nil, badRequest("backend.workflow.cc_recipient_not_found", "node", node.ID)
 	}
@@ -157,21 +158,29 @@ func (e *WorkflowProcessEngine) executeCCNode(ctx context.Context, process workf
 		return nil, err
 	}
 	e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", "cc_notified", "system", node.Name, map[string]any{
-		"recipients": recipients, "action_key": contract.NotificationActionKey, "invocation_id": invocation.InvocationID,
+		"recipients": recipients, "resolved_assignees": assignees, "action_key": contract.NotificationActionKey, "invocation_id": invocation.InvocationID,
 	})
 	return map[string]any{
-		"notified": true, "recipients": recipients, "action_key": contract.NotificationActionKey, "invocation_id": invocation.InvocationID,
+		"notified": true, "recipients": recipients, "resolved_assignees": assignees, "action_key": contract.NotificationActionKey, "invocation_id": invocation.InvocationID,
 	}, nil
 }
 
-func (e *WorkflowProcessEngine) resolveWorkflowRecipients(ctx context.Context, process workflowmodel.WorkflowProcessInstance, resolvers []definitionmodel.WorkflowAssigneeResolver, principal principalmodel.Principal) ([]string, error) {
-	recipients := []string{}
-	for _, resolver := range resolvers {
-		users, _, err := e.resolveApprovalAssigneeStrategy(ctx, process, resolver, principal)
+func (e *WorkflowProcessEngine) resolveWorkflowAssignees(ctx context.Context, process workflowmodel.WorkflowProcessInstance, nodeID string, resolvers []definitionmodel.WorkflowAssigneeResolver, principal principalmodel.Principal) ([]ResolvedAssignee, error) {
+	assignees := []ResolvedAssignee{}
+	for index, resolver := range workflowpolicy.WorkflowOrderedApprovalResolvers(resolvers) {
+		resolved, err := e.resolveApprovalAssigneeStrategyAt(ctx, process, nodeID, resolver, index, principal)
 		if err != nil {
 			return nil, err
 		}
-		recipients = append(recipients, users...)
+		assignees = mergeResolvedAssignees(assignees, resolved)
 	}
-	return uniqueSortedStrings(recipients), nil
+	return assignees, nil
+}
+
+func resolvedAssigneeUserIDs(assignees []ResolvedAssignee) []string {
+	result := make([]string, 0, len(assignees))
+	for _, assignee := range assignees {
+		result = append(result, assignee.UserID)
+	}
+	return result
 }

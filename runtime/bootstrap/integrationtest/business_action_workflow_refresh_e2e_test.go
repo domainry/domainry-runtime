@@ -28,8 +28,8 @@ func TestBusinessActorRecordActionWorkflowTaskAndRefreshEndToEnd(t *testing.T) {
 	publishSchedulerDefinitionFixture(t, cfg, "scheduler_p7_business_workflow", map[string]any{
 		"key": "scheduler_p7_business_workflow", "name": "P7 Business Workflow Worker",
 		"status": "enabled", "target_type": "workflow", "target_key": "scheduled:*",
-		"schedule_expression": "daily", "timezone": "UTC", "max_attempts": 3,
-		"retry_backoff": "fixed", "retry_delay_seconds": 60, "retry_max_delay_seconds": 3600,
+		"schedule_type": "interval", "interval_seconds": 86400, "timezone": "UTC", "max_attempts": 3,
+		"retry_delay_seconds": 60, "retry_max_delay_seconds": 3600,
 		"timeout_seconds": 300, "next_run_at": "2026-01-01T00:00:00Z",
 	})
 	asUser := func(userID string) map[string]string {

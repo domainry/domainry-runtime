@@ -85,8 +85,6 @@ func routeWorkflowManifest(t *testing.T, directory string, route map[string]any)
 		"key": routeSubmitKey, "object_key": "expense_request", "label": "Submit expense", "kind": "object_operation",
 		"preconditions": []any{}, "audit_event": "expense_submitted",
 		"input_type": routeTypeBase + "SubmitInput", "output_type": routeTypeBase + "SubmitOutput",
-		"input_contract_sha256":  sourceOwnedFixtureContractHash(routeSubmitKey + ":input"),
-		"output_contract_sha256": sourceOwnedFixtureContractHash(routeSubmitKey + ":output"),
 		"payload_fields": []any{
 			map[string]any{"key": "title", "name": "Title", "type": "text", "required": true},
 			map[string]any{"key": "steps", "name": "Steps", "type": "object", "repeated": true, "max_items": 5, "fields": []any{
@@ -191,24 +189,23 @@ func newRouteWorkflowRuntime(t *testing.T, cfg config.Config, route map[string]a
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = binding.Close(context.Background()) })
-	registry := runtimeext.NewBusinessHandlerRegistry()
+	registry := runtimeext.NewProjectExtensionRegistry()
 	descriptor := runtimeext.HandlerDescriptor{
 		ActionKey: routeSubmitKey, InputType: routeTypeBase + "SubmitInput", OutputType: routeTypeBase + "SubmitOutput",
-		InputContractSHA256: sourceOwnedFixtureContractHash(routeSubmitKey + ":input"), OutputContractSHA256: sourceOwnedFixtureContractHash(routeSubmitKey + ":output"),
 		HandlerRevision:    "workflow-route-fixture-v1",
 		ObjectCapabilities: []runtimeext.ActionObjectCapability{{ObjectKey: "expense_request", Operations: []string{"create", "update"}}},
 		Workflows:          []runtimeext.WorkflowGrant{{Key: routeWorkflowKey, Operations: []string{runtimeext.WorkflowStartOperation}}},
 	}
-	if err := registry.Register(&routeSubmitHandler{descriptor: descriptor}); err != nil {
+	if err := registry.RegisterBusinessHandler(&routeSubmitHandler{descriptor: descriptor}); err != nil {
 		t.Fatal(err)
 	}
 	for _, handler := range additionalHandlers {
-		if err := registry.Register(handler); err != nil {
+		if err := registry.RegisterBusinessHandler(handler); err != nil {
 			t.Fatal(err)
 		}
 	}
 	registry.Freeze()
-	runtime := bootstrap.NewWithBusinessHandlersAndScheduler(t.Context(), cfg, registry, binding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory(), integrationAgentFactory())
+	runtime := bootstrap.NewWithProjectExtensionsAndScheduler(t.Context(), cfg, registry, binding, notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()), schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()), dataexchangefixture.NewFactory(), integrationmodule.NewFactory(), integrationAgentFactory())
 	t.Cleanup(func() { _ = runtime.CloseContext(context.Background()) })
 	return runtime
 }

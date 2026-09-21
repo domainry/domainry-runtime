@@ -58,6 +58,10 @@ func (state *validationState) validateWorkflows() {
 		for nodeIndex, node := range workflow.Graph.Nodes {
 			nodePath := fmt.Sprintf("%s.graph.nodes[%d]", path, nodeIndex)
 			switch node.Type {
+			case "timer", "wait_duration", "wait_until":
+				if node.Contract != nil && node.Contract.Timer != nil {
+					state.validateWorkflowTimerBusinessCalendar(nodePath+".contract.timer", node.Contract.Timer.BusinessCalendarKey, node.Contract.Timer.Timezone)
+				}
 			case "approval":
 				contract := manifestWorkflowApprovalNodeContract(node)
 				state.validateWorkflowResolvers(nodePath+".contract.approval.resolvers", workflow, contract.Resolvers)
@@ -126,13 +130,76 @@ func (state *validationState) validateWorkflowResolvers(path string, workflow de
 			if strings.TrimSpace(resolver.RoleKey) == "" {
 				state.add(resolverPath+".role_key", "backend.workflow.resolver_role_required")
 			}
-		case "record_field":
-			if !state.workflowTriggerObjectsHaveField(workflow, resolver.Field) {
+		case "record_user_field":
+			field, found := state.workflowTriggerObjectField(workflow, resolver.Field)
+			if !found {
 				state.add(resolverPath+".field", "backend.workflow.resolver_field_not_found: %q", resolver.Field)
+			} else if !manifestWorkflowIdentityField(field) {
+				state.add(resolverPath+".field", "backend.workflow.resolver_field_type_invalid: %q", resolver.Field)
 			}
 		case "manager", "manager_of":
-			if !state.workflowTriggerObjectsHaveField(workflow, resolver.UserField) {
+			field, found := state.workflowTriggerObjectField(workflow, resolver.UserField)
+			if !found {
 				state.add(resolverPath+".user_field", "backend.workflow.resolver_field_not_found: %q", resolver.UserField)
+			} else if !manifestWorkflowIdentityField(field) {
+				state.add(resolverPath+".user_field", "backend.workflow.resolver_field_type_invalid: %q", resolver.UserField)
+			}
+		case "relation_user":
+			state.validateWorkflowRelationResolver(resolverPath, workflow, resolver, true)
+		case "relation_role":
+			state.validateWorkflowRelationResolver(resolverPath, workflow, resolver, false)
+		case "manager_chain":
+			if strings.TrimSpace(resolver.Source) == "record" {
+				field, found := state.workflowTriggerObjectField(workflow, resolver.Field)
+				if !found {
+					state.add(resolverPath+".field", "backend.workflow.resolver_field_not_found: %q", resolver.Field)
+				} else if !manifestWorkflowIdentityField(field) {
+					state.add(resolverPath+".field", "backend.workflow.resolver_field_type_invalid: %q", resolver.Field)
+				}
+			}
+		}
+	}
+}
+
+func (state *validationState) validateWorkflowRelationResolver(path string, workflow definitionmodel.WorkflowSchema, resolver definitionmodel.WorkflowAssigneeResolver, userTerminal bool) {
+	objectKeys := manifestWorkflowTriggerObjectKeys(workflow)
+	if len(objectKeys) == 0 {
+		state.add(path+".relation_path", "backend.workflow.resolver_object_not_found")
+		return
+	}
+	for _, rootObjectKey := range objectKeys {
+		objectKey := rootObjectKey
+		for index, fieldKey := range resolver.RelationPath {
+			fieldKey = strings.TrimSpace(fieldKey)
+			field, found := state.fields[objectKey][fieldKey]
+			isLast := index == len(resolver.RelationPath)-1
+			if !found || field.DisabledAt != "" {
+				state.add(path+".relation_path", "backend.workflow.resolver_field_not_found: %s.%s", objectKey, fieldKey)
+				break
+			}
+			if userTerminal && isLast {
+				if !manifestWorkflowIdentityField(field) {
+					state.add(path+".relation_path", "backend.workflow.resolver_field_type_invalid: %s.%s", objectKey, fieldKey)
+				}
+				break
+			}
+			targetObjectKey := runtimeRelationTargetObject(field)
+			if strings.TrimSpace(field.Type) != "relation" || targetObjectKey == "" || targetObjectKey == "identity_user" || targetObjectKey == "identity_role" {
+				state.add(path+".relation_path", "backend.workflow.resolver_field_type_invalid: %s.%s", objectKey, fieldKey)
+				break
+			}
+			if state.objects[targetObjectKey].Key == "" {
+				state.add(path+".relation_path", "backend.workflow.resolver_object_not_found: %s", targetObjectKey)
+				break
+			}
+			objectKey = targetObjectKey
+			if !userTerminal && isLast {
+				roleField, roleFound := state.fields[objectKey][strings.TrimSpace(resolver.RoleField)]
+				if !roleFound || roleField.DisabledAt != "" {
+					state.add(path+".role_field", "backend.workflow.resolver_field_not_found: %s.%s", objectKey, resolver.RoleField)
+				} else if !manifestWorkflowRoleField(roleField) {
+					state.add(path+".role_field", "backend.workflow.resolver_field_type_invalid: %s.%s", objectKey, resolver.RoleField)
+				}
 			}
 		}
 	}
@@ -149,6 +216,45 @@ func (state *validationState) workflowTriggerObjectsHaveField(workflow definitio
 		}
 	}
 	return false
+}
+
+func (state *validationState) workflowTriggerObjectField(workflow definitionmodel.WorkflowSchema, fieldKey string) (definitionmodel.FieldSchema, bool) {
+	fieldKey = strings.TrimSpace(fieldKey)
+	objectKeys := manifestWorkflowTriggerObjectKeys(workflow)
+	if fieldKey == "" || len(objectKeys) == 0 {
+		return definitionmodel.FieldSchema{}, false
+	}
+	var common definitionmodel.FieldSchema
+	for _, objectKey := range objectKeys {
+		field, exists := state.fields[objectKey][fieldKey]
+		if !exists || field.DisabledAt != "" || common.Key != "" && strings.TrimSpace(common.Type) != strings.TrimSpace(field.Type) {
+			return definitionmodel.FieldSchema{}, false
+		}
+		common = field
+	}
+	return common, common.Key != ""
+}
+
+func manifestWorkflowIdentityField(field definitionmodel.FieldSchema) bool {
+	switch strings.TrimSpace(field.Type) {
+	case "user", "identity_user":
+		return true
+	case "relation":
+		return runtimeRelationTargetObject(field) == "identity_user"
+	default:
+		return false
+	}
+}
+
+func manifestWorkflowRoleField(field definitionmodel.FieldSchema) bool {
+	switch strings.TrimSpace(field.Type) {
+	case "text", "select", "multi_select", "role", "identity_role":
+		return true
+	case "relation":
+		return runtimeRelationTargetObject(field) == "identity_role"
+	default:
+		return false
+	}
 }
 
 func manifestWorkflowTriggerObjectKeys(workflow definitionmodel.WorkflowSchema) []string {

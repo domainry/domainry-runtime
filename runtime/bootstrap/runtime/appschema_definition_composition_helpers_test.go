@@ -128,7 +128,7 @@ func newMetadataCompositionAppWithManifest(t *testing.T, name string, objects []
 	if err := os.WriteFile(manifestPath, encoded, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	handlers := runtimeext.NewBusinessHandlerRegistry()
+	handlers := runtimeext.NewProjectExtensionRegistry()
 	handlers.Freeze()
 	connectors := connector.NewRegistry()
 	connectors.Freeze()

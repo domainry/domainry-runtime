@@ -107,6 +107,37 @@ func TestCreateIdempotentValidationFailureCompletesTerminalReceipt(t *testing.T)
 	}
 }
 
+func TestCreateValidatesStructuredFileReferencesBeforeCommit(t *testing.T) {
+	repository := &createRepositoryProbe{}
+	object := definitionmodel.ObjectSchema{Key: "document", Fields: []definitionmodel.FieldSchema{{
+		Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"scan_required": false},
+	}}}
+	validationFailure := errors.New("file evidence rejected")
+	validated := false
+	service := NewRecordCreateApplicationService(RecordCreateDependencies{
+		Repository: repository,
+		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
+			return object, nil
+		},
+		CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
+		ValidateFiles: func(_ context.Context, _ definitionmodel.ObjectSchema, values map[string]any, _ principalmodel.Principal) error {
+			validated = true
+			reference, ok := values["attachment"].(map[string]any)
+			if !ok || reference["size"] != int64(7) {
+				t.Fatalf("file value was not normalized before verification: %#v", values)
+			}
+			return validationFailure
+		},
+	})
+	_, err := service.Create(t.Context(), object.Key, map[string]any{"attachment": map[string]any{
+		"file_id": "file-1", "filename": "stored.pdf", "content_type": "application/pdf", "size": float64(7),
+		"content_sha256": strings.Repeat("a", 64),
+	}}, recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "uploader"}}))
+	if !errors.Is(err, validationFailure) || !validated || repository.commit.Record.ID != "" {
+		t.Fatalf("create err=%v validated=%v commit=%#v", err, validated, repository.commit)
+	}
+}
+
 func TestCreateLocalizedRecordCarriesTranslationsInCanonicalCommit(t *testing.T) {
 	repository := &createRepositoryProbe{}
 	object := definitionmodel.ObjectSchema{Key: "product", Fields: []definitionmodel.FieldSchema{{Key: "sku", Type: "text"}, {Key: "name", Type: "text", Config: map[string]any{"localized": true}}}}

@@ -15,6 +15,7 @@ import (
 	businessseedmodel "github.com/domainry/domainry-runtime/runtime/domain/businessseed/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 func TestManifestDictionaryAndStructuredOptionEdges(t *testing.T) {
@@ -135,6 +136,24 @@ func TestManifestGovernanceValidationEdges(t *testing.T) {
 	state.validateGovernance()
 	if len(state.errs) == 0 || !manifestHasReport(state, "known") || manifestHasReport(state, "missing") {
 		t.Fatalf("governance result = %#v", state.errs)
+	}
+}
+
+func TestManifestFileFieldPolicyIsClosed(t *testing.T) {
+	manifest := manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "document", Fields: []definitionmodel.FieldSchema{
+		{Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"allowed_mime_types": []any{"application/pdf"}, "max_size_bytes": 1024, "scan_required": true}},
+		{Key: "title", Type: "text", Config: map[string]any{"max_files": 2}},
+	}}}}
+	state := newValidationState(manifest, nil)
+	state.validateObjects()
+	if len(state.errs) == 0 || !strings.Contains(state.errs.Error(), "backend.file.config_on_non_file") {
+		t.Fatalf("non-file policy diagnostics=%v", state.errs)
+	}
+	manifest.Objects[0].Fields = manifest.Objects[0].Fields[:1]
+	state = newValidationState(manifest, nil)
+	state.validateObjects()
+	if len(state.errs) != 0 {
+		t.Fatalf("valid file policy diagnostics=%v", state.errs)
 	}
 }
 
@@ -421,6 +440,26 @@ func TestManifestIdentityProfileExtensionAndRemainingCoreEdges(t *testing.T) {
 	)
 	if len(restrict.Changes) == 0 || restrict.Changes[0].Kind != "restrict_identity_profile_visibility" {
 		t.Fatalf("restrict profile review = %#v", restrict.Changes)
+	}
+}
+
+func TestManifestNotificationAudienceResolversMustExistInRuntimeHost(t *testing.T) {
+	eventType := notificationmodel.NotificationEventType{
+		Key: "project.event", Source: "project", Category: "business", DefaultSeverity: "info",
+		TemplateKey: "project.event.in_app", DefaultLocale: "en", Version: 1, Status: "published",
+		Locales:           map[string]notificationmodel.NotificationInboxEventTypeContent{"en": {Title: "Title", Body: "Body"}},
+		AudienceResolvers: []string{"workflow_task_assignee"},
+	}
+	state := newValidationState(manifestmodel.ManifestSchema{NotificationEventTypes: []notificationmodel.NotificationEventType{eventType}}, nil)
+	state.validateNotificationTemplates()
+	if len(state.errs) != 0 {
+		t.Fatalf("supported resolver errors=%v", state.errs)
+	}
+	eventType.AudienceResolvers = []string{"project_owner"}
+	state = newValidationState(manifestmodel.ManifestSchema{NotificationEventTypes: []notificationmodel.NotificationEventType{eventType}}, nil)
+	state.validateNotificationTemplates()
+	if len(state.errs) == 0 || !strings.Contains(state.errs.Error(), "project_owner") || !strings.Contains(state.errs.Error(), "Runtime host") {
+		t.Fatalf("unimplemented resolver errors=%v", state.errs)
 	}
 }
 

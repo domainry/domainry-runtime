@@ -76,6 +76,7 @@ func schedulerSignature(r *http.Request) schedulergateway.Signature {
 type executionRequest struct {
 	RuntimeID      string          `json:"runtime_id"`
 	ExecutionID    string          `json:"execution_id"`
+	DefinitionKey  string          `json:"definition_key"`
 	IdempotencyKey string          `json:"idempotency_key"`
 	DueAt          time.Time       `json:"due_at,omitempty"`
 	Target         executionTarget `json:"target"`
@@ -85,6 +86,8 @@ type executionTarget struct {
 	Type          string          `json:"type"`
 	Owner         string          `json:"owner"`
 	Operation     string          `json:"operation"`
+	ObjectKey     string          `json:"object_key,omitempty"`
+	RunAsRole     string          `json:"run_as_role,omitempty"`
 	ConnectionKey string          `json:"connection_key,omitempty"`
 	Payload       json.RawMessage `json:"payload,omitempty"`
 }

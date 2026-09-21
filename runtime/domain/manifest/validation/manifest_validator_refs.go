@@ -56,6 +56,31 @@ func (state *validationState) validateObjects() {
 				state.add(fieldPath+".key", "duplicate field key %q", fieldKey)
 			}
 			fieldSeen[fieldKey] = true
+			if strings.TrimSpace(field.Type) != "" && !manifestFieldTypeAllowed(field.Type) {
+				state.add(fieldPath+".type", "unsupported field type %q", field.Type)
+			}
+			if field.Type == recordmodel.RecordFileFieldType || field.Type == recordmodel.RecordFileListFieldType {
+				if _, err := recordmodel.RecordFileFieldPolicyFor(field); err != nil {
+					state.add(fieldPath+".config", "%v", err)
+				}
+			} else {
+				for _, configKey := range []string{"allowed_mime_types", "max_size_bytes", "max_files", "scan_required"} {
+					if _, configured := field.Config[configKey]; configured {
+						state.add(fieldPath+".config."+configKey, "backend.file.config_on_non_file")
+					}
+				}
+			}
+			if recordmodel.RecordIsStructuredFieldType(field.Type) {
+				if err := recordmodel.RecordValidateStructuredFieldDefinition(field); err != nil {
+					state.add(fieldPath+".config", "%v", err)
+				}
+			} else {
+				for _, configKey := range []string{"max_items", "json_shape", "max_json_bytes"} {
+					if _, configured := field.Config[configKey]; configured {
+						state.add(fieldPath+".config."+configKey, "backend.structured.config_on_non_structured")
+					}
+				}
+			}
 			if field.Type == "relation" && strings.TrimSpace(field.Validation.Target) != "" {
 				target := strings.TrimSpace(field.Validation.Target)
 				if _, ok := state.objects[target]; !ok && !definitioncontract.IsFoundationObjectKey(target) {
@@ -84,6 +109,9 @@ func (state *validationState) validateObjects() {
 				if validationType == "composite_unique" && strings.TrimSpace(state.fields[key][fieldKey].DisabledAt) != "" {
 					state.add(validationPath+".fields", "backend.definition.composite_unique_field_disabled: %s", fieldKey)
 				}
+				if validationType == "composite_unique" && recordmodel.RecordIsStructuredFieldType(state.fields[key][fieldKey].Type) {
+					state.add(validationPath+".fields", "backend.definition.structured_index_unsupported: %s", fieldKey)
+				}
 			}
 			if validationType == "composite_unique" && len(validation.Fields) < 2 {
 				state.add(validationPath+".fields", "backend.definition.composite_unique_fields_required")
@@ -110,6 +138,16 @@ func (state *validationState) validateObjects() {
 			}
 		}
 	}
+}
+
+func manifestFieldTypeAllowed(value string) bool {
+	value = strings.TrimSpace(value)
+	for _, allowed := range appschemacontract.ApplicationSchemaAuthoringFieldTypes() {
+		if value == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 func (state *validationState) validateObjectPublicResources(path string, object definitionmodel.ObjectSchema, resourceKeys map[string]bool) {

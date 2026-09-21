@@ -210,8 +210,6 @@ type ActionSchema struct {
 	AuditEvent                string                                 `json:"audit_event"`
 	InputType                 string                                 `json:"input_type,omitempty"`
 	OutputType                string                                 `json:"output_type,omitempty"`
-	InputContractSHA256       string                                 `json:"input_contract_sha256,omitempty"`
-	OutputContractSHA256      string                                 `json:"output_contract_sha256,omitempty"`
 	PayloadFields             []ActionPayloadField                   `json:"payload_fields,omitempty"`
 	OutputFields              []ActionOutputField                    `json:"output_fields,omitempty"`
 	Defaults                  map[string]any                         `json:"defaults,omitempty"`
@@ -542,12 +540,18 @@ type WorkflowApprovalRouteContract struct {
 }
 
 type WorkflowAssigneeResolver struct {
-	Type      string   `json:"type"`
-	Priority  int      `json:"priority,omitempty"`
-	UserIDs   []string `json:"user_ids,omitempty"`
-	RoleKey   string   `json:"role_key,omitempty"`
-	Field     string   `json:"field,omitempty"`
-	UserField string   `json:"user_field,omitempty"`
+	Type         string         `json:"type"`
+	Priority     int            `json:"priority,omitempty"`
+	UserIDs      []string       `json:"user_ids,omitempty"`
+	RoleKey      string         `json:"role_key,omitempty"`
+	Field        string         `json:"field,omitempty"`
+	UserField    string         `json:"user_field,omitempty"`
+	ResolverKey  string         `json:"resolver_key,omitempty"`
+	Config       map[string]any `json:"config,omitempty"`
+	Source       string         `json:"source,omitempty"`
+	RelationPath []string       `json:"relation_path,omitempty"`
+	RoleField    string         `json:"role_field,omitempty"`
+	MaxDepth     int            `json:"max_depth,omitempty"`
 }
 
 type WorkflowBusinessActionNodeContract struct {

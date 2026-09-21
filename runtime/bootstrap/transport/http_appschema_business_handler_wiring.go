@@ -35,7 +35,7 @@ func (a *httpServerAssembly) wireOperationsApplication() {
 	a.operations = operationsService
 }
 
-func (a *httpServerAssembly) wireMetadataAndBusinessHandlers() {
+func (a *httpServerAssembly) wireMetadataAndProjectExtensions() {
 	records := a.dependencies.Records
 	operationsService := a.operations
 	operationsStore := operationspersistence.NewOperationsStore(a.dependencies.Store)

@@ -139,9 +139,9 @@ func NormalizeType(value string) ValueType {
 		return TypeUser
 	case "relation", "record_id":
 		return TypeRelation
-	case "json", "object", "array":
+	case "json", "object", "array", "file", "file_list":
 		return TypeJSON
-	case "email", "file", "long_text", "phone", "select", "string", "text", "url":
+	case "email", "long_text", "phone", "select", "string", "text", "url":
 		return TypeText
 	default:
 		return TypeUnknown

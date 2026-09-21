@@ -149,6 +149,20 @@ func dbValue(value any) any {
 }
 
 func dbFieldValue(profile persistencedriver.EngineProfile, field definitionmodel.FieldSchema, value any) any {
+	if kind := strings.TrimSpace(field.Type); kind == recordmodel.RecordFileFieldType || kind == recordmodel.RecordFileListFieldType {
+		encoded, err := recordmodel.RecordEncodeFileFieldValue(field, value)
+		if err == nil {
+			return encoded
+		}
+		return value
+	}
+	if recordmodel.RecordIsStructuredFieldType(field.Type) {
+		encoded, err := recordmodel.RecordEncodeStructuredFieldValue(field, value)
+		if err == nil {
+			return encoded
+		}
+		return value
+	}
 	if strings.TrimSpace(field.Type) != "currency" && strings.TrimSpace(field.Type) != "percent" {
 		return dbValue(value)
 	}
@@ -178,6 +192,18 @@ func normalizeDBValue(profile persistencedriver.EngineProfile, field definitionm
 		value = typed
 	}
 	switch field.Type {
+	case recordmodel.RecordFileFieldType, recordmodel.RecordFileListFieldType:
+		decoded, err := recordmodel.RecordDecodeFileFieldValue(field, value)
+		if err == nil {
+			return decoded
+		}
+		return value
+	case recordmodel.RecordMultiSelectFieldType, recordmodel.RecordJSONFieldType:
+		decoded, err := recordmodel.RecordDecodeStructuredFieldValue(field, value)
+		if err == nil {
+			return decoded
+		}
+		return value
 	case "boolean":
 		switch typed := value.(type) {
 		case bool:

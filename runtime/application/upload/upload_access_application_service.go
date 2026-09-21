@@ -15,6 +15,7 @@ import (
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 )
 
@@ -90,8 +91,15 @@ func (s *UploadAccessApplicationService) AuthorizeUpload(ctx context.Context, ob
 	if !ok {
 		return uploadAccessError(apperror.KindNotFound, "backend.object.not_found")
 	}
-	if !objectHasField(object, fieldKey) {
+	field, found := uploadField(object, fieldKey)
+	if !found {
 		return uploadAccessError(apperror.KindBadRequest, "backend.upload.field_not_defined")
+	}
+	if field.Type != recordmodel.RecordFileFieldType && field.Type != recordmodel.RecordFileListFieldType {
+		return uploadAccessError(apperror.KindBadRequest, "backend.upload.field_type_invalid")
+	}
+	if _, err := recordmodel.RecordFileFieldPolicyFor(field); err != nil {
+		return uploadAccessError(apperror.KindBadRequest, "backend.upload.field_policy_invalid")
 	}
 	if (recordpolicy.RecordAllowsObjectAction(principal, objectKey, "update") || recordpolicy.RecordAllowsObjectAction(principal, objectKey, "create")) && recordpolicy.RecordCanWriteObjectFieldKeyForPrincipal(principal, object, fieldKey) {
 		return nil
@@ -100,11 +108,41 @@ func (s *UploadAccessApplicationService) AuthorizeUpload(ctx context.Context, ob
 	return uploadAccessError(apperror.KindForbidden, "backend.upload.permission_denied")
 }
 
-func (s *UploadAccessApplicationService) RecordUploaded(ctx context.Context, objectKey, fieldKey, filename, contentType string, size int, principal principalmodel.Principal) {
+func (s *UploadAccessApplicationService) UploadPolicy(ctx context.Context, objectKey, fieldKey string, principal principalmodel.Principal) (recordmodel.RecordFileFieldPolicy, error) {
+	if err := s.AuthorizeUpload(ctx, objectKey, fieldKey, principal); err != nil {
+		return recordmodel.RecordFileFieldPolicy{}, err
+	}
+	object := s.catalog.ObjectMap(ctx)[strings.TrimSpace(objectKey)]
+	field, _ := uploadField(object, strings.TrimSpace(fieldKey))
+	policy, err := recordmodel.RecordFileFieldPolicyFor(field)
+	if err != nil {
+		return recordmodel.RecordFileFieldPolicy{}, uploadAccessError(apperror.KindBadRequest, "backend.upload.field_policy_invalid")
+	}
+	return policy, nil
+}
+
+func (s *UploadAccessApplicationService) ValidateUploadContent(ctx context.Context, objectKey, fieldKey, contentType string, size int64, principal principalmodel.Principal) error {
+	policy, err := s.UploadPolicy(ctx, objectKey, fieldKey, principal)
+	if err != nil {
+		return err
+	}
+	if size < 1 || size > policy.MaxSizeBytes {
+		return uploadAccessError(apperror.KindBadRequest, "backend.upload.file_too_large")
+	}
+	if !policy.AllowsContentType(contentType) {
+		return uploadAccessError(apperror.KindBadRequest, "backend.upload.mime_type_denied")
+	}
+	return nil
+}
+
+func (s *UploadAccessApplicationService) RecordUploaded(ctx context.Context, objectKey, fieldKey string, reference recordmodel.RecordFileReference, principal principalmodel.Principal) {
 	if uploadAuthorizePrincipal(principal) != nil {
 		return
 	}
-	s.audit.AppendWithMetadata(ctx, "file_uploaded", objectKey, "", principal, "", nil, nil, map[string]any{"field_key": fieldKey, "filename": filename, "content_type": contentType, "size": size})
+	s.audit.AppendWithMetadata(ctx, "file_uploaded", objectKey, "", principal, "", nil, nil, map[string]any{
+		"field_key": fieldKey, "file_id": reference.FileID, "filename": reference.Filename, "content_type": reference.ContentType,
+		"size": reference.Size, "content_sha256": reference.ContentSHA256,
+	})
 }
 
 func (s *UploadAccessApplicationService) AuthorizeDownload(ctx context.Context, objectKey, fieldKey, recordID, filename string, principal principalmodel.Principal) error {
@@ -119,7 +157,9 @@ func (s *UploadAccessApplicationService) AuthorizeDownload(ctx context.Context, 
 	if !ok {
 		return s.denyDownload(ctx, objectKey, fieldKey, recordID, filename, principal, "File download object missing", "object", apperror.KindNotFound, "backend.object.not_found")
 	}
-	readAllowed := objectHasField(object, fieldKey) && recordpolicy.RecordAllowsObjectAction(principal, objectKey, "read") && recordpolicy.RecordCanReadObjectFieldKeyForPrincipal(principal, object, fieldKey)
+	field, fileField := uploadField(object, fieldKey)
+	fileField = fileField && (field.Type == recordmodel.RecordFileFieldType || field.Type == recordmodel.RecordFileListFieldType)
+	readAllowed := fileField && recordpolicy.RecordAllowsObjectAction(principal, objectKey, "read") && recordpolicy.RecordCanReadObjectFieldKeyForPrincipal(principal, object, fieldKey)
 	if !readAllowed {
 		return s.denyDownload(ctx, objectKey, fieldKey, recordID, filename, principal, "File download permission denied", "permission", apperror.KindForbidden, "backend.upload.permission_denied")
 	}
@@ -135,13 +175,18 @@ func (s *UploadAccessApplicationService) RecordTicketDownload(ctx context.Contex
 	})
 }
 
-func objectHasField(object definitionmodel.ObjectSchema, fieldKey string) bool {
+func uploadField(object definitionmodel.ObjectSchema, fieldKey string) (definitionmodel.FieldSchema, bool) {
 	for _, field := range object.Fields {
 		if field.Key == fieldKey {
-			return true
+			return field, true
 		}
 	}
-	return false
+	return definitionmodel.FieldSchema{}, false
+}
+
+func objectHasField(object definitionmodel.ObjectSchema, fieldKey string) bool {
+	_, found := uploadField(object, fieldKey)
+	return found
 }
 
 func uploadAccessError(kind apperror.ErrorKind, code string) error {

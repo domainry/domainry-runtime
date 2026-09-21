@@ -18,7 +18,9 @@ import (
 	"github.com/domainry/domainry-notification-sdk/contract"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
+	hostsurfacemodel "github.com/domainry/domainry-runtime/runtime/domain/hostsurface/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	manifestvalidation "github.com/domainry/domainry-runtime/runtime/domain/manifest/validation"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
@@ -47,6 +49,9 @@ func notificationSDKCatalog(defaultLocale string, manifest manifestmodel.Manifes
 	rules, err := notificationSDKConvert[[]contract.NotificationRule](manifest.NotificationRules)
 	if err != nil {
 		return modulehost.Catalog{}, fmt.Errorf("convert Notification rules to SDK catalog: %w", err)
+	}
+	if err := manifestvalidation.ValidateNotificationAudienceResolverReferences(events, rules, hostsurfacemodel.NotificationAudienceResolverKeys()); err != nil {
+		return modulehost.Catalog{}, fmt.Errorf("validate Notification audience resolver catalog: %w", err)
 	}
 	capabilities, err := notificationSDKConvert[[]contract.NotificationTemplateCapability](modulehost.DefaultProviderCapabilities())
 	if err != nil {
@@ -136,7 +141,7 @@ func (d notificationSDKRecipientResolver) FindRecipient(ctx context.Context, wor
 type notificationSDKWorkflowAudience struct{ lookup workflowTaskLookup }
 
 func (a notificationSDKWorkflowAudience) ResolveAudience(ctx context.Context, key string, event contract.NotificationEvent) ([]string, error) {
-	if strings.TrimSpace(key) != "workflow_task_assignee" || a.lookup == nil {
+	if strings.TrimSpace(key) != hostsurfacemodel.NotificationAudienceResolverWorkflowTaskAssignee || a.lookup == nil {
 		return nil, &apperror.AppError{Kind: apperror.KindUnavailable, Code: "backend.notification.inbox_audience_resolver_unavailable"}
 	}
 	task, found, err := a.lookup(ctx, event.WorkspaceID, event.SubjectID)

@@ -20,6 +20,7 @@ func recordTimerObject() definitionmodel.ObjectSchema {
 		recordTimerField("offset_seconds", "Offset Seconds", "number", false),
 		recordTimerField("timezone", "Timezone", "text", true),
 		recordTimerField("business_calendar_key", "Business Calendar Key", "text", false),
+		recordTimerField("business_calendar_revision", "Business Calendar Revision", "text", false),
 		recordTimerSelect("target_type", "Target Type", true, "action", "workflow"),
 		recordTimerField("target_key", "Target Key", "text", true),
 		recordTimerField("payload_json", "Payload JSON", "long_text", false),

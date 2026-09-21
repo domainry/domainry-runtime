@@ -108,6 +108,11 @@ func TestEveryRuntimeRouteHasACompleteCompiledEndpointContract(t *testing.T) {
 			t.Errorf("%s has an incomplete write contract: %+v", route, contract)
 		}
 	}
+	for identity := range runtimeEndpointContracts {
+		if !routes[identity] {
+			t.Errorf("compiled endpoint contract %s has no registered Runtime route", identity)
+		}
+	}
 }
 
 func TestEveryRuntimeRouteUsesItsOwnerNamespace(t *testing.T) {

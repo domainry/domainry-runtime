@@ -73,7 +73,7 @@ func TestWorkflowProcessRuntimeAuthorizationWrappersAndFailedNode(t *testing.T) 
 	if _, err := engine.RunWithContext(t.Context(), workflowmodel.WorkflowProcessInstance{}, nil, nil, unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("run authorization=%v", err)
 	}
-	if _, err := engine.ResolveRecipients(t.Context(), workflowmodel.WorkflowProcessInstance{}, nil, unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
+	if _, err := engine.ResolveAssignees(t.Context(), workflowmodel.WorkflowProcessInstance{}, "", nil, unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("recipient authorization=%v", err)
 	}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace"}}
@@ -82,7 +82,7 @@ func TestWorkflowProcessRuntimeAuthorizationWrappersAndFailedNode(t *testing.T) 
 	if err != nil || completed.Status != "completed" {
 		t.Fatalf("completed=%+v err=%v", completed, err)
 	}
-	recipients, err := engine.ResolveRecipients(t.Context(), process, nil, principal)
+	recipients, err := engine.ResolveAssignees(t.Context(), process, "", nil, principal)
 	if err != nil || len(recipients) != 0 {
 		t.Fatalf("recipients=%v err=%v", recipients, err)
 	}

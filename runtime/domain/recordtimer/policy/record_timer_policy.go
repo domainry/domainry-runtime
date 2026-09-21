@@ -2,55 +2,79 @@ package policy
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
+	businesscalendarpolicy "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/policy"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordtimermodel "github.com/domainry/domainry-runtime/runtime/domain/recordtimer/model"
 )
 
+const MaximumPayloadJSONBytes = 64 << 10
+
 type BusinessCalendar interface {
-	AddBusinessDuration(context.Context, string, time.Time, time.Duration, *time.Location) (time.Time, error)
+	Resolve(context.Context, string) (businesscalendarmodel.BusinessCalendarSchema, error)
 }
 
-type StandardBusinessCalendar struct{}
+type BusinessCalendarCatalog struct {
+	definitions map[string]businesscalendarmodel.BusinessCalendarSchema
+}
 
-func (StandardBusinessCalendar) AddBusinessDuration(ctx context.Context, key string, base time.Time, offset time.Duration, _ *time.Location) (time.Time, error) {
+func NewBusinessCalendarCatalog(values []businesscalendarmodel.BusinessCalendarSchema) (*BusinessCalendarCatalog, error) {
+	result := &BusinessCalendarCatalog{definitions: make(map[string]businesscalendarmodel.BusinessCalendarSchema, len(values))}
+	for index, value := range values {
+		value = businesscalendarpolicy.Normalize(value)
+		if err := businesscalendarpolicy.Validate(value); err != nil {
+			return nil, fmt.Errorf("business calendar %d: %w", index, err)
+		}
+		if _, duplicate := result.definitions[value.Key]; duplicate {
+			return nil, fmt.Errorf("duplicate business calendar %q", value.Key)
+		}
+		result.definitions[value.Key] = value
+	}
+	return result, nil
+}
+
+func (c *BusinessCalendarCatalog) Resolve(ctx context.Context, key string) (businesscalendarmodel.BusinessCalendarSchema, error) {
 	if err := ctx.Err(); err != nil {
-		return time.Time{}, err
+		return businesscalendarmodel.BusinessCalendarSchema{}, err
 	}
-	switch strings.TrimSpace(key) {
-	case "24x7":
-		return base.Add(offset), nil
-	case "weekday":
-	default:
-		return time.Time{}, fmt.Errorf("unknown business calendar %q", key)
+	if c == nil {
+		return businesscalendarmodel.BusinessCalendarSchema{}, fmt.Errorf("business calendar catalog is unavailable")
 	}
-	direction := time.Duration(1)
-	if offset < 0 {
-		direction = -1
-		offset = -offset
+	value, found := c.definitions[strings.TrimSpace(key)]
+	if !found {
+		return businesscalendarmodel.BusinessCalendarSchema{}, fmt.Errorf("unknown business calendar %q", key)
 	}
-	current := base
-	for offset > 0 {
-		step := time.Hour
-		if offset < step {
-			step = offset
-		}
-		candidate := current.Add(direction * step)
-		if candidate.Weekday() != time.Saturday && candidate.Weekday() != time.Sunday {
-			offset -= step
-		}
-		current = candidate
-	}
-	return current, nil
+	return value, nil
 }
 
 func ResolveSchedule(ctx context.Context, request recordtimermodel.Schedule, source recordmodel.Record, calendar BusinessCalendar) (recordtimermodel.Schedule, error) {
 	request = NormalizeSchedule(request)
+	var calendarDefinition businesscalendarmodel.BusinessCalendarSchema
+	var err error
+	if request.ScheduleMode == "business_calendar" {
+		if calendar == nil {
+			return recordtimermodel.Schedule{}, policyError("backend.record_timer.business_calendar_required", nil)
+		}
+		calendarDefinition, err = calendar.Resolve(ctx, request.BusinessCalendarKey)
+		if err != nil {
+			return recordtimermodel.Schedule{}, policyError("backend.record_timer.business_calendar_invalid", err)
+		}
+		if request.BusinessCalendarRevision != "" && request.BusinessCalendarRevision != calendarDefinition.Revision {
+			return recordtimermodel.Schedule{}, policyError("backend.record_timer.business_calendar_revision_mismatch", nil)
+		}
+		if request.Timezone != "" && request.Timezone != calendarDefinition.Timezone {
+			return recordtimermodel.Schedule{}, policyError("backend.record_timer.business_calendar_timezone_mismatch", nil)
+		}
+		request.BusinessCalendarRevision = calendarDefinition.Revision
+		request.Timezone = calendarDefinition.Timezone
+	}
 	location, err := time.LoadLocation(request.Timezone)
 	if err != nil {
 		return recordtimermodel.Schedule{}, policyError("backend.record_timer.timezone_invalid", err)
@@ -69,10 +93,7 @@ func ResolveSchedule(ctx context.Context, request recordtimermodel.Schedule, sou
 	case "relative_field":
 		request.DueAt = base.Add(time.Duration(request.OffsetSeconds) * time.Second)
 	case "business_calendar":
-		if calendar == nil {
-			return recordtimermodel.Schedule{}, policyError("backend.record_timer.business_calendar_required", nil)
-		}
-		request.DueAt, err = calendar.AddBusinessDuration(ctx, request.BusinessCalendarKey, base.In(location), time.Duration(request.OffsetSeconds)*time.Second, location)
+		request.DueAt, err = businesscalendarpolicy.AddBusinessDuration(ctx, calendarDefinition, base.In(location), time.Duration(request.OffsetSeconds)*time.Second)
 		if err != nil {
 			return recordtimermodel.Schedule{}, policyError("backend.record_timer.business_calendar_invalid", err)
 		}
@@ -83,13 +104,13 @@ func ResolveSchedule(ctx context.Context, request recordtimermodel.Schedule, sou
 func NormalizeSchedule(request recordtimermodel.Schedule) recordtimermodel.Schedule {
 	request.TimerKey, request.ObjectKey, request.RecordID = strings.TrimSpace(request.TimerKey), strings.TrimSpace(request.ObjectKey), strings.TrimSpace(request.RecordID)
 	request.Purpose, request.ScheduleMode = strings.TrimSpace(request.Purpose), strings.TrimSpace(request.ScheduleMode)
-	request.SourceField, request.Timezone, request.BusinessCalendarKey = strings.TrimSpace(request.SourceField), strings.TrimSpace(request.Timezone), strings.TrimSpace(request.BusinessCalendarKey)
+	request.SourceField, request.Timezone, request.BusinessCalendarKey, request.BusinessCalendarRevision = strings.TrimSpace(request.SourceField), strings.TrimSpace(request.Timezone), strings.TrimSpace(request.BusinessCalendarKey), strings.TrimSpace(request.BusinessCalendarRevision)
 	request.TargetType, request.TargetKey = strings.TrimSpace(request.TargetType), strings.TrimSpace(request.TargetKey)
 	request.PayloadJSON, request.SupersedesTimerID = strings.TrimSpace(request.PayloadJSON), strings.TrimSpace(request.SupersedesTimerID)
 	if request.ScheduleMode == "" {
 		request.ScheduleMode = "absolute"
 	}
-	if request.Timezone == "" {
+	if request.Timezone == "" && request.ScheduleMode != "business_calendar" {
 		request.Timezone = "UTC"
 	}
 	if request.PayloadJSON == "" {
@@ -114,11 +135,15 @@ func ValidateSchedule(request recordtimermodel.Schedule) error {
 	if request.ScheduleMode != "absolute" && request.ScheduleMode != "relative_field" && request.ScheduleMode != "business_calendar" {
 		return policyError("backend.record_timer.schedule_mode_invalid", nil)
 	}
-	if request.ScheduleMode == "relative_field" && request.SourceField == "" || request.ScheduleMode == "business_calendar" && request.BusinessCalendarKey == "" {
+	if request.ScheduleMode == "relative_field" && request.SourceField == "" || request.ScheduleMode == "business_calendar" && (request.BusinessCalendarKey == "" || request.BusinessCalendarRevision == "") {
 		return policyError("backend.record_timer.schedule_source_required", nil)
 	}
 	if request.TargetType != "action" && request.TargetType != "workflow" {
 		return policyError("backend.record_timer.target_invalid", nil)
+	}
+	payload := map[string]any{}
+	if len(request.PayloadJSON) > MaximumPayloadJSONBytes || json.Unmarshal([]byte(request.PayloadJSON), &payload) != nil || payload == nil {
+		return policyError("backend.record_timer.payload_invalid", nil)
 	}
 	if request.MaxAttempts < 1 || request.MaxAttempts > 100 || request.RetryDelaySeconds < 1 || request.RetryMaxDelaySeconds < request.RetryDelaySeconds || request.RetryMaxDelaySeconds > 86400 {
 		return policyError("backend.record_timer.retry_policy_invalid", nil)
