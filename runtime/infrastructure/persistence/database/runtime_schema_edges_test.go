@@ -204,14 +204,14 @@ func (stub runtimeSchemaAssemblerStub) EnsureWorkflowProcessSchema(context.Conte
 func (stub runtimeSchemaAssemblerStub) EnsureRateLimitSchema(context.Context, runtimeschema.Store) error {
 	return stub.result("ratelimit")
 }
-func TestEnsureRuntimeSchemaAssemblerFailures(t *testing.T) {
+func TestEnsureRuntimeSchemaCurrentReceiptSkipsSchemaReconciliation(t *testing.T) {
 	for _, stage := range []string{"metadata", "evidence", "workflow", "ratelimit"} {
 		t.Run(stage, func(t *testing.T) {
 			state := &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(1, currentRuntimeSchemaChecksum(), false)}
 			store := runtimeSchemaStore(t, state)
 			store.schemaAssembler = runtimeSchemaAssemblerStub{fail: stage}
-			if err := store.EnsureRuntimeSchema(t.Context()); !errors.Is(err, errDatabaseSQL) {
-				t.Fatalf("error=%v", err)
+			if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+				t.Fatalf("current schema receipt unexpectedly reconciled %s: %v", stage, err)
 			}
 		})
 	}
@@ -270,18 +270,8 @@ func TestEnsureRuntimeSchemaOrchestrationFailures(t *testing.T) {
 	}
 }
 
-func TestRuntimeSchemaPendingRecordAndActionExecutionContextEdges(t *testing.T) {
-	store := runtimeSchemaStore(t, &databaseSQLState{execSteps: []databaseSQLExecStep{{err: errDatabaseSQL}}})
-	if err := store.recordRuntimeSchemaMigrationIfPending(t.Context(), false, time.Now()); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.recordRuntimeSchemaMigrationIfPending(t.Context(), true, time.Now()); !errors.Is(err, errDatabaseSQL) {
-		t.Fatalf("record error=%v", err)
-	}
-	success := runtimeSchemaStore(t, &databaseSQLState{execSteps: []databaseSQLExecStep{{rows: 1}}})
-	if err := success.recordRuntimeSchemaMigrationIfPending(t.Context(), true, time.Now()); err != nil {
-		t.Fatalf("successful record error=%v", err)
-	}
+func TestActionExecutionContextEdges(t *testing.T) {
+	store := runtimeSchemaStore(t, &databaseSQLState{})
 	if WithActionExecutionTransaction(nil, store.DB()) != nil {
 		t.Fatal("nil context changed")
 	}

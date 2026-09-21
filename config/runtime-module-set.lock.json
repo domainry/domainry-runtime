@@ -1,6 +1,6 @@
 {
   "contract_version": "domainry-runtime-module-set-v1",
-  "set_sha256": "4baffe7891b2ba5537c61bc120937f4f8de89bcb3ab1952182240f6c80c81dbc",
+  "set_sha256": "0563bb78f8c3b17877c51c5a5ca922f1ae2b86bbe08b7b88541084c6e4e202b4",
   "modules": [
     {
       "key": "agent",
@@ -38,15 +38,15 @@
       "implementation_version": "v0.2.15",
       "implementation_sum": "h1:X1X0sp3Ha3q2nBtlHAROBvIQKqtlpkN7qgBnPpjoK+o=",
       "sdk": "github.com/domainry/domainry-identity-sdk",
-      "sdk_version": "v0.1.12",
-      "sdk_sum": "h1:oUKWeAnTJ4ekXmdBr7JUcFhpZTOgY8VHhwHLpi7Uhlc=",
+      "sdk_version": "v0.1.13",
+      "sdk_sum": "h1:4HTrCi4dVtjhkSkV3wnbLevojOp34NXPEfRse1NC52I=",
       "capability_contract_sha256": "517ce88cb344eaf3824d349286f51c2e329aa028415c720f2a572793e09871c5"
     },
     {
       "key": "integration",
       "implementation": "github.com/domainry/domainry-integration",
-      "implementation_version": "v0.1.18",
-      "implementation_sum": "h1:W0UfC5fQ5/6ml5vARedT4+7feVeiLkkJsBTI8WWCYnc=",
+      "implementation_version": "v0.1.20",
+      "implementation_sum": "h1:g1YeRCT5qAMnSGLwh9eTHOBDvSJHbjxpuUvx3jWUdZg=",
       "sdk": "github.com/domainry/domainry-integration-sdk",
       "sdk_version": "v0.1.7",
       "sdk_sum": "h1:LS/ve4T+izsPuGLkqkcYiRB1MvoBNuqCeNE3BZatzdI=",

@@ -59,16 +59,23 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if pending {
-		if err := s.ValidateLegacyWorkspaceScopes(ctx); err != nil {
-			return err
-		}
-		if err := s.ensureMigrationBackupForExistingData(ctx, s.runtimeMigrationConfig()); err != nil {
-			return err
-		}
-		if err := s.startRuntimeSchemaMigration(ctx, CurrentRuntimeSchemaVersion); err != nil {
-			return err
-		}
+	// A clean receipt for the current schema version is the authority that the
+	// Runtime-owned schema was fully materialized. Re-running every table,
+	// column, and index probe on each process start turns remote-database latency
+	// into minutes of serialized startup work and bypasses the migration ledger's
+	// purpose. A new schema contract changes the version/checksum and takes the
+	// full path below.
+	if !pending {
+		return nil
+	}
+	if err := s.ValidateLegacyWorkspaceScopes(ctx); err != nil {
+		return err
+	}
+	if err := s.ensureMigrationBackupForExistingData(ctx, s.runtimeMigrationConfig()); err != nil {
+		return err
+	}
+	if err := s.startRuntimeSchemaMigration(ctx, CurrentRuntimeSchemaVersion); err != nil {
+		return err
 	}
 	if err := s.ensureManagedDatabaseCohortMarker(ctx); err != nil {
 		return err
@@ -79,10 +86,8 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := runtimeschema.EnsureWorkspaceProvisioningSchema(ctx, s); err != nil {
 		return err
 	}
-	if pending {
-		if err := s.migrateLegacyWorkspaceAuthorities(ctx); err != nil {
-			return err
-		}
+	if err := s.migrateLegacyWorkspaceAuthorities(ctx); err != nil {
+		return err
 	}
 	if err := s.EnsureApplicationSchema(ctx); err != nil {
 		return err
@@ -104,7 +109,7 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := s.EnsureRateLimitSchema(ctx); err != nil {
 		return err
 	}
-	if err := s.recordRuntimeSchemaMigrationIfPending(ctx, pending, startedAt); err != nil {
+	if err := s.recordRuntimeSchemaMigration(ctx, CurrentRuntimeSchemaVersion, time.Since(startedAt)); err != nil {
 		return err
 	}
 	if err := s.removeObsoleteMigrationLedgers(ctx); err != nil {
@@ -279,13 +284,6 @@ func (s *RuntimeStore) runtimeMigrationStore() *RuntimeStore {
 		backupChecksum:       s.backupChecksum,
 		migrationReadDir:     s.migrationReadDir,
 	}
-}
-
-func (s *RuntimeStore) recordRuntimeSchemaMigrationIfPending(ctx context.Context, pending bool, startedAt time.Time) error {
-	if !pending {
-		return nil
-	}
-	return s.recordRuntimeSchemaMigration(ctx, CurrentRuntimeSchemaVersion, time.Since(startedAt))
 }
 
 func (s *RuntimeStore) verifyRuntimeSchema(ctx context.Context) error {
