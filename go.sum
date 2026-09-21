@@ -85,8 +85,8 @@ github.com/domainry/domainry-notification-sdk v0.1.2 h1:cbtYTBochv83QNmEzbivUoVx
 github.com/domainry/domainry-notification-sdk v0.1.2/go.mod h1:o2lBKXB+3FWql3sVBltycpXmuqyKSw8JY3CBOz30vOk=
 github.com/domainry/domainry-orm v0.1.30 h1:5QOtG2qRzV1PhiioS2aKfCoEt9ab3OBucwicHAn/5HQ=
 github.com/domainry/domainry-orm v0.1.30/go.mod h1:gB/ooN737tsBYHbeHqCpngEprvdvZKp0Zygtzv+IPJY=
-github.com/domainry/domainry-report v0.1.15 h1:aaQYDu8zGtL4v4HzH6F0sU1O7Kh0NrbjJru/lIuOhvo=
-github.com/domainry/domainry-report v0.1.15/go.mod h1:EK8EC/RpIPazRy5oPuG8vDWXRKKpZCFncA/XEY7Up3M=
+github.com/domainry/domainry-report v0.1.17 h1:SDL6TwQRAgxVHbvSC4qni5yAKUJGRITYjp2LX5Lj6Hw=
+github.com/domainry/domainry-report v0.1.17/go.mod h1:EK8EC/RpIPazRy5oPuG8vDWXRKKpZCFncA/XEY7Up3M=
 github.com/domainry/domainry-report-sdk v0.1.11 h1:IWDuebRiFECUZhErey4XHhzbGe6/GXGktTdRCktoW98=
 github.com/domainry/domainry-report-sdk v0.1.11/go.mod h1:Zn9LwcykLGVzNpdJxmbmuIWNUeoKz2uVjkVupkcZ9ZE=
 github.com/domainry/domainry-scheduler v0.1.13 h1:lFpB/fonWg8fmXLZkHXztauc5n6Up1mV5hCsPascK5k=

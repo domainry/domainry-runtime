@@ -29,7 +29,7 @@ require (
 	github.com/domainry/domainry-monitoring-sdk v0.1.3
 	github.com/domainry/domainry-notification v0.1.6
 	github.com/domainry/domainry-notification-sdk v0.1.2
-	github.com/domainry/domainry-report v0.1.15
+	github.com/domainry/domainry-report v0.1.17
 	github.com/domainry/domainry-report-sdk v0.1.11
 	github.com/domainry/domainry-scheduler v0.1.13
 	github.com/domainry/domainry-scheduler-sdk v0.1.9
