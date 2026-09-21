@@ -741,8 +741,20 @@ func TestManifestValidationCatalogPropagatesCatalogFailure(t *testing.T) {
 	if _, err := replaceIntegrationConnectorValidationProjection(manifestmodel.ManifestSchema{}, nil, errors.New("catalog unavailable")); err == nil {
 		t.Fatal("catalog failure must propagate")
 	}
-	if _, err := addIntegrationOwnerValidationCatalog(t.Context(), manifestmodel.ManifestSchema{}, startupIntegrationCatalogStub{err: errors.New("catalog unavailable")}); err == nil {
+	manifest := manifestmodel.ManifestSchema{Integrations: connectormodel.IntegrationSchema{Connections: []connectormodel.ConnectionSchema{{Key: "primary", ConnectorKey: "mail"}}}}
+	if _, err := addIntegrationOwnerValidationCatalog(t.Context(), manifest, startupIntegrationCatalogStub{err: errors.New("catalog unavailable")}); err == nil {
 		t.Fatal("Integration owner catalog failure must propagate")
+	}
+}
+
+func TestManifestWithoutIntegrationReferencesSkipsOwnerCatalog(t *testing.T) {
+	manifest := manifestmodel.ManifestSchema{}
+	got, err := addIntegrationOwnerValidationCatalog(t.Context(), manifest, startupIntegrationCatalogStub{err: errors.New("catalog must not be loaded")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Integrations.Connectors) != 0 {
+		t.Fatalf("connectors=%#v", got.Integrations.Connectors)
 	}
 }
 

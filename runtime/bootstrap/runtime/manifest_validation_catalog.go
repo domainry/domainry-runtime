@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -18,6 +19,10 @@ import (
 func addIntegrationOwnerValidationCatalog(ctx context.Context, manifest manifestmodel.ManifestSchema, catalog integrationsdk.Catalog) (manifestmodel.ManifestSchema, error) {
 	if catalog == nil {
 		return manifestmodel.ManifestSchema{}, fmt.Errorf("Integration Catalog is required")
+	}
+	if !manifestNeedsIntegrationOwnerValidationCatalog(manifest) {
+		manifest.Integrations.Connectors = nil
+		return manifest, nil
 	}
 	definitions, err := catalog.ListConnectorDefinitions(ctx)
 	if err != nil {
@@ -41,6 +46,24 @@ func addIntegrationOwnerValidationCatalog(ctx context.Context, manifest manifest
 		validationCatalog = append(validationCatalog, connector)
 	}
 	return replaceIntegrationConnectorValidationProjection(manifest, validationCatalog, nil)
+}
+
+func manifestNeedsIntegrationOwnerValidationCatalog(manifest manifestmodel.ManifestSchema) bool {
+	if len(manifest.Integrations.Connectors) != 0 || len(manifest.Integrations.Connections) != 0 {
+		return true
+	}
+	for _, rule := range manifest.AutomationRules {
+		for _, instruction := range rule.Instructions {
+			if strings.TrimSpace(instruction.ConnectorKey) != "" {
+				return true
+			}
+			switch strings.TrimSpace(instruction.Type) {
+			case "integration_call", "reserve":
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func replaceIntegrationConnectorValidationProjection(manifest manifestmodel.ManifestSchema, validationCatalog []connectormodel.ConnectorSchema, catalogErr error) (manifestmodel.ManifestSchema, error) {
