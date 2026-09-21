@@ -273,6 +273,34 @@ func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx contex
 		}
 		existing[columnName] = true
 	}
+	if batchAdder, ok := r.storage.(appschemastorage.BatchColumnAdder); ok {
+		additions := []appschemastorage.ColumnDefinition{}
+		pending := map[string]bool{}
+		for _, field := range object.Fields {
+			field = metadataConstraintIndexedField(field, constraintIndexed[field.Key])
+			fieldKey := strings.TrimSpace(field.Key)
+			if fieldKey == "" || strings.TrimSpace(field.DisabledAt) != "" || existing[fieldKey] || pending[fieldKey] {
+				continue
+			}
+			additions = append(additions, appschemastorage.ColumnDefinition{Name: fieldKey, Type: r.metadataSQLTypeForField(field)})
+			pending[fieldKey] = true
+		}
+		if len(additions) > 0 {
+			if _, err := schemaDB.ExecContext(ctx, batchAdder.BatchAddColumnsSQL(r.store.SQLRenderer, object.Key, additions)); err != nil {
+				return fmt.Errorf("add object columns for %s: %w", object.Key, err)
+			}
+			for _, addition := range additions {
+				existing[addition.Name] = true
+				if existingTypes == nil {
+					existingTypes = map[string]string{}
+				}
+				existingTypes[addition.Name] = addition.Type
+				if err := r.writeUpgradeReceipt(ctx, execution, object.Key, addition.Name, metadataUpgradeStepKey(metadataColumnAddOperation, object.Key, addition.Name, execution.toVersion), metadataUpgradeReceiptCompleted, ""); err != nil {
+					return err
+				}
+			}
+		}
+	}
 	if err := ensureIndex(r.metadataFieldIndexName(object.Key, "workspace_id_id", true), true, "workspace_id", "id"); err != nil {
 		return fmt.Errorf("create workspace record identity index for %s: %w", object.Key, err)
 	}

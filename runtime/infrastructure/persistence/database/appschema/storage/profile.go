@@ -93,12 +93,23 @@ type PhysicalSchemaSnapshot struct {
 	IndexesByTable map[string]map[string]bool
 }
 
+type ColumnDefinition struct {
+	Name string
+	Type string
+}
+
 // BulkPhysicalSchemaInspector is an optional storage profile capability used
 // by upgrade planning. Profiles that implement it can avoid one metadata query
 // per table when the database is separated from Runtime by a high-latency
 // network connection.
 type BulkPhysicalSchemaInspector interface {
 	PhysicalSchema(context.Context, Queryer, query.Renderer, string, []string) (PhysicalSchemaSnapshot, error)
+}
+
+// BatchColumnAdder is an optional capability for dialects that can add
+// multiple columns with one ALTER TABLE statement.
+type BatchColumnAdder interface {
+	BatchAddColumnsSQL(query.Renderer, string, []ColumnDefinition) string
 }
 
 type Profile interface {

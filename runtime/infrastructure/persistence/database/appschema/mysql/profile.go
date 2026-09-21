@@ -112,6 +112,13 @@ func (ApplicationSchemaStorageProfile) PhysicalSchema(ctx context.Context, query
 	}
 	return snapshot, rows.Err()
 }
+func (ApplicationSchemaStorageProfile) BatchAddColumnsSQL(renderer query.Renderer, table string, columns []appschemastorage.ColumnDefinition) string {
+	definitions := make([]string, 0, len(columns))
+	for _, column := range columns {
+		definitions = append(definitions, "ADD COLUMN "+renderer.Identifier(column.Name)+" "+column.Type)
+	}
+	return "ALTER TABLE " + renderer.Table(table) + " " + strings.Join(definitions, ", ")
+}
 func (ApplicationSchemaStorageProfile) DropIndex(ctx context.Context, executor appschemastorage.Executor, renderer query.Renderer, table, index string) error {
 	_, err := executor.ExecContext(ctx, "DROP INDEX "+renderer.Identifier(index)+" ON "+renderer.Table(table))
 	return err
