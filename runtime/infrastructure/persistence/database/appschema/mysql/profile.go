@@ -52,6 +52,66 @@ func (ApplicationSchemaStorageProfile) Indexes(ctx context.Context, queryer apps
 	rows, err := queryer.QueryContext(ctx, "SELECT DISTINCT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = "+renderer.Placeholder(1), table)
 	return appschemastorage.ReadIndexes(rows, err)
 }
+
+func (ApplicationSchemaStorageProfile) PhysicalSchema(ctx context.Context, queryer appschemastorage.Queryer, renderer query.Renderer, _ string, tables []string) (appschemastorage.PhysicalSchemaSnapshot, error) {
+	snapshot := appschemastorage.PhysicalSchemaSnapshot{
+		ColumnsByTable: map[string]map[string]string{},
+		IndexesByTable: map[string]map[string]bool{},
+	}
+	if len(tables) == 0 {
+		return snapshot, nil
+	}
+	placeholders := make([]string, len(tables))
+	args := make([]any, len(tables))
+	for index, table := range tables {
+		placeholders[index] = renderer.Placeholder(index + 1)
+		args[index] = table
+		snapshot.IndexesByTable[table] = map[string]bool{}
+	}
+	tableFilter := "(" + strings.Join(placeholders, ", ") + ")"
+	rows, err := queryer.QueryContext(ctx, "SELECT table_name, column_name, data_type, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name IN "+tableFilter, args...)
+	if err != nil {
+		return snapshot, err
+	}
+	for rows.Next() {
+		var table, name, dataType string
+		var precision, scale sql.NullInt64
+		if err := rows.Scan(&table, &name, &dataType, &precision, &scale); err != nil {
+			_ = rows.Close()
+			return snapshot, err
+		}
+		if precision.Valid && scale.Valid && (strings.EqualFold(dataType, "decimal") || strings.EqualFold(dataType, "numeric")) {
+			dataType = fmt.Sprintf("%s(%d,%d)", dataType, precision.Int64, scale.Int64)
+		}
+		if snapshot.ColumnsByTable[table] == nil {
+			snapshot.ColumnsByTable[table] = map[string]string{}
+		}
+		snapshot.ColumnsByTable[table][name] = dataType
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return snapshot, err
+	}
+	if err := rows.Close(); err != nil {
+		return snapshot, err
+	}
+	rows, err = queryer.QueryContext(ctx, "SELECT DISTINCT table_name, index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name IN "+tableFilter, args...)
+	if err != nil {
+		return snapshot, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var table, name string
+		if err := rows.Scan(&table, &name); err != nil {
+			return snapshot, err
+		}
+		if snapshot.IndexesByTable[table] == nil {
+			snapshot.IndexesByTable[table] = map[string]bool{}
+		}
+		snapshot.IndexesByTable[table][name] = true
+	}
+	return snapshot, rows.Err()
+}
 func (ApplicationSchemaStorageProfile) DropIndex(ctx context.Context, executor appschemastorage.Executor, renderer query.Renderer, table, index string) error {
 	_, err := executor.ExecContext(ctx, "DROP INDEX "+renderer.Identifier(index)+" ON "+renderer.Table(table))
 	return err

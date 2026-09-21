@@ -85,6 +85,22 @@ type Executor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
+// PhysicalSchemaSnapshot contains the physical columns and indexes for a set
+// of application tables. A missing ColumnsByTable entry means the table does
+// not exist; an empty IndexesByTable entry means the table has no indexes.
+type PhysicalSchemaSnapshot struct {
+	ColumnsByTable map[string]map[string]string
+	IndexesByTable map[string]map[string]bool
+}
+
+// BulkPhysicalSchemaInspector is an optional storage profile capability used
+// by upgrade planning. Profiles that implement it can avoid one metadata query
+// per table when the database is separated from Runtime by a high-latency
+// network connection.
+type BulkPhysicalSchemaInspector interface {
+	PhysicalSchema(context.Context, Queryer, query.Renderer, string, []string) (PhysicalSchemaSnapshot, error)
+}
+
 type Profile interface {
 	IDColumnType() string
 	FieldColumnType(definitionmodel.FieldSchema, bool) string

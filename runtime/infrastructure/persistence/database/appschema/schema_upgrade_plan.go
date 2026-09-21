@@ -12,6 +12,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	appschemastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema/storage"
 )
 
 const (
@@ -47,13 +48,38 @@ func (r ApplicationSchemaStore) UpgradePlan(ctx context.Context, scope principal
 		plan.Steps = append(plan.Steps, steps...)
 		typeChanges = changed
 	}
+	var physicalSchema *appschemastorage.PhysicalSchemaSnapshot
+	if inspector, ok := r.storage.(appschemastorage.BulkPhysicalSchemaInspector); ok {
+		tables := make([]string, 0, len(next.Objects))
+		seen := map[string]bool{}
+		for _, object := range next.Objects {
+			table := strings.TrimSpace(object.Key)
+			if table != "" && !seen[table] {
+				tables = append(tables, table)
+				seen[table] = true
+			}
+		}
+		snapshot, err := inspector.PhysicalSchema(ctx, r.database(), r.store.SQLRenderer, r.store.DatabaseSchema(), tables)
+		if err != nil {
+			return plan, err
+		}
+		physicalSchema = &snapshot
+	}
 	for _, object := range next.Objects {
 		table := strings.TrimSpace(object.Key)
 		if table == "" {
 			continue
 		}
-		existingTypes, err := r.tableColumnTypes(ctx, table)
-		if err != nil {
+		var existingTypes map[string]string
+		var indexes map[string]bool
+		var err error
+		if physicalSchema != nil {
+			existingTypes = physicalSchema.ColumnsByTable[table]
+			indexes = physicalSchema.IndexesByTable[table]
+		} else {
+			existingTypes, err = r.tableColumnTypes(ctx, table)
+		}
+		if err != nil || len(existingTypes) == 0 {
 			if contextErr := ctx.Err(); contextErr != nil {
 				return plan, contextErr
 			}
@@ -104,7 +130,7 @@ func (r ApplicationSchemaStore) UpgradePlan(ctx context.Context, scope principal
 			}
 			plan.Steps = append(plan.Steps, step)
 		}
-		uniqueSteps, err := r.planUniqueIndexes(ctx, object, table, existingTypes)
+		uniqueSteps, err := r.planUniqueIndexes(ctx, object, table, existingTypes, indexes)
 		if err != nil {
 			return plan, err
 		}
@@ -173,10 +199,13 @@ func compatibleUpgradeStep(step appschemamodel.ApplicationSchemaMigrationStep) a
 // planUniqueIndexes reports unique indexes the next definition adds on columns
 // that already exist. Duplicates in the stored data would make the index
 // creation fail, so the plan probes them up front.
-func (r ApplicationSchemaStore) planUniqueIndexes(ctx context.Context, object definitionmodel.ObjectSchema, table string, existingTypes map[string]string) ([]appschemamodel.ApplicationSchemaUpgradeStep, error) {
-	indexes, err := r.tableIndexes(ctx, table)
-	if err != nil {
-		return nil, err
+func (r ApplicationSchemaStore) planUniqueIndexes(ctx context.Context, object definitionmodel.ObjectSchema, table string, existingTypes map[string]string, indexes map[string]bool) ([]appschemamodel.ApplicationSchemaUpgradeStep, error) {
+	if indexes == nil {
+		var err error
+		indexes, err = r.tableIndexes(ctx, table)
+		if err != nil {
+			return nil, err
+		}
 	}
 	steps := []appschemamodel.ApplicationSchemaUpgradeStep{}
 	probe := func(indexName string, columnKey string, fields []string) error {

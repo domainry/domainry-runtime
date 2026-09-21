@@ -2,13 +2,17 @@ package appschema
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
+	"strings"
 	"testing"
 
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	appschemamysql "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema/mysql"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
 )
 
 func upgradePlanStepsByOperation(plan appschemamodel.ApplicationSchemaUpgradePlan) map[string]appschemamodel.ApplicationSchemaUpgradeStep {
@@ -151,5 +155,46 @@ func TestUpgradePlanRequiresInstallationScopeAndHonorsContext(t *testing.T) {
 	cancel()
 	if _, err := store.UpgradePlan(ctx, metadataTestInstallationScope(), nil, manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled plan err=%v", err)
+	}
+}
+
+func TestMySQLPhysicalSchemaLoadsAllTablesInTwoQueries(t *testing.T) {
+	state := &metadataSQLState{querySteps: []metadataSQLQueryStep{
+		{
+			columns: []string{"table_name", "column_name", "data_type", "numeric_precision", "numeric_scale"},
+			rows: [][]driver.Value{
+				{"account", "id", "varchar", nil, nil},
+				{"account", "balance", "decimal", int64(19), int64(2)},
+				{"invoice", "id", "varchar", nil, nil},
+			},
+		},
+		{
+			columns: []string{"table_name", "index_name"},
+			rows:    [][]driver.Value{{"account", "PRIMARY"}, {"account", "idx_account_balance"}, {"invoice", "PRIMARY"}},
+		},
+	}}
+	db := openMetadataScriptedDB(state)
+	defer db.Close()
+	profile := appschemamysql.NewApplicationSchemaStorageProfile()
+	snapshot, err := profile.PhysicalSchema(t.Context(), db, mysql.NewEngine().SQLDialect().WithSchema(""), "", []string{"account", "invoice", "missing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.queryLog) != 2 {
+		t.Fatalf("queries=%d log=%v", len(state.queryLog), state.queryLog)
+	}
+	for _, statement := range state.queryLog {
+		if !strings.Contains(statement, "table_schema = DATABASE()") || !strings.Contains(statement, "table_name IN (?, ?, ?)") {
+			t.Fatalf("query did not batch all tables: %s", statement)
+		}
+	}
+	if got := snapshot.ColumnsByTable["account"]["balance"]; got != "decimal(19,2)" {
+		t.Fatalf("account.balance type=%q snapshot=%v", got, snapshot.ColumnsByTable)
+	}
+	if !snapshot.IndexesByTable["account"]["idx_account_balance"] || len(snapshot.IndexesByTable["missing"]) != 0 {
+		t.Fatalf("indexes=%v", snapshot.IndexesByTable)
+	}
+	if _, found := snapshot.ColumnsByTable["missing"]; found {
+		t.Fatalf("missing table was reported as existing: %v", snapshot.ColumnsByTable)
 	}
 }
