@@ -201,6 +201,18 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	}()
 	releaseLease, err = releaseCohort.Join(ctx, workerDependencies.WorkerID.String(), releaseIdentity, workerDependencies.Clock.Now())
 	mustCompleteRuntimeStartup(err)
+	bootstrapReleaseHeartbeat := startRuntimeReleaseBootstrapHeartbeat(ctx, releaseCohort.HeartbeatInterval(), releaseLease, func(heartbeatCtx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease) (deploymentmodel.RuntimeReleaseCohortLease, error) {
+		return releaseCohort.Heartbeat(heartbeatCtx, lease, workerDependencies.Clock.Now())
+	})
+	defer func() {
+		if bootstrapReleaseHeartbeat == nil {
+			return
+		}
+		latestLease, _ := bootstrapReleaseHeartbeat.Stop()
+		if latestLease.InstanceID != "" {
+			releaseLease = latestLease
+		}
+	}()
 	metadataBinding, err := metadatamodule.NewFactory().OpenModule(ctx, metadatasdk.ApplicationRef{InstallationID: valueOrDefault(seedManifest.TemplateID, "domainry-runtime")}, runtimeMetadataModuleHost{store: store})
 	mustCompleteRuntimeStartup(err)
 	mustCompleteRuntimeStartup(metadataBinding.Descriptor().Validate())
@@ -632,6 +644,10 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	})
 	records.Applications().Actions.ReplaceDefinitions(records.Schema().Actions)
 	manifest.ManifestHash = seedManifest.ManifestHash
+	if bootstrapReleaseHeartbeat != nil {
+		releaseLease, err = bootstrapReleaseHeartbeat.Stop()
+		mustCompleteRuntimeStartup(err)
+	}
 	runtime := constructRuntime(runtimeConstructionInput{
 		config:               cfg,
 		templateID:           templateID,
