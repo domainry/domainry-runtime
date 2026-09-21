@@ -9,6 +9,9 @@ import (
 )
 
 type ManifestRuntimeMetadataRepository interface {
+	// ProjectionMatches reports whether the successfully materialized Metadata
+	// projection was produced from this exact installed manifest.
+	ProjectionMatches(context.Context, principalmodel.SystemScope, manifestmodel.ManifestSchema) (bool, error)
 	SyncManifestProjection(context.Context, principalmodel.SystemScope, manifestmodel.ManifestSchema) error
 	LoadManifest(context.Context, principalmodel.SystemScope) (manifestmodel.ManifestSchema, error)
 	SyncManifest(context.Context, principalmodel.SystemScope, manifestmodel.ManifestSchema) error

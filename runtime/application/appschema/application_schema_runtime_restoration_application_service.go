@@ -54,27 +54,36 @@ func (s *ApplicationSchemaRuntimeRestorationApplicationService) Restore(ctx cont
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	previous, err := s.manifest.LoadPreviousManifest(ctx, scope)
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	plan, err := s.manifest.UpgradePlan(ctx, scope, previous, installed)
-	if err != nil {
-		return manifestmodel.ManifestSchema{}, err
-	}
-	switch mode {
-	case DefinitionUpgradeModePlan:
-		return manifestmodel.ManifestSchema{}, &DefinitionUpgradePlanRequested{Plan: plan}
-	case DefinitionUpgradeModeVerify:
-		if plan.Blocking || len(plan.PendingSteps()) > 0 {
-			return manifestmodel.ManifestSchema{}, definitionUpgradeError(DefinitionUpgradePendingCode, plan)
-		}
-	default:
-		if plan.Blocking {
-			return manifestmodel.ManifestSchema{}, definitionUpgradeError(DefinitionUpgradeBlockedCode, plan)
-		}
-		if _, err := s.manifest.ApplyUpgrade(ctx, scope, plan, installed); err != nil {
+	projectionMatches := false
+	if mode == DefinitionUpgradeModeApply {
+		projectionMatches, err = s.manifest.ProjectionMatches(ctx, scope, installed)
+		if err != nil {
 			return manifestmodel.ManifestSchema{}, err
+		}
+	}
+	if !projectionMatches {
+		previous, err := s.manifest.LoadPreviousManifest(ctx, scope)
+		if err != nil {
+			return manifestmodel.ManifestSchema{}, err
+		}
+		plan, err := s.manifest.UpgradePlan(ctx, scope, previous, installed)
+		if err != nil {
+			return manifestmodel.ManifestSchema{}, err
+		}
+		switch mode {
+		case DefinitionUpgradeModePlan:
+			return manifestmodel.ManifestSchema{}, &DefinitionUpgradePlanRequested{Plan: plan}
+		case DefinitionUpgradeModeVerify:
+			if plan.Blocking || len(plan.PendingSteps()) > 0 {
+				return manifestmodel.ManifestSchema{}, definitionUpgradeError(DefinitionUpgradePendingCode, plan)
+			}
+		default:
+			if plan.Blocking {
+				return manifestmodel.ManifestSchema{}, definitionUpgradeError(DefinitionUpgradeBlockedCode, plan)
+			}
+			if _, err := s.manifest.ApplyUpgrade(ctx, scope, plan, installed); err != nil {
+				return manifestmodel.ManifestSchema{}, err
+			}
 		}
 	}
 	if err := s.notifications.SyncPublished(ctx, scope, installed.NotificationTemplates); err != nil {
@@ -84,8 +93,10 @@ func (s *ApplicationSchemaRuntimeRestorationApplicationService) Restore(ctx cont
 	if err != nil {
 		return manifestmodel.ManifestSchema{}, err
 	}
-	if err = s.manifest.SyncManifestProjection(ctx, scope, installed); err != nil {
-		return manifestmodel.ManifestSchema{}, err
+	if !projectionMatches {
+		if err = s.manifest.SyncManifestProjection(ctx, scope, installed); err != nil {
+			return manifestmodel.ManifestSchema{}, err
+		}
 	}
 	persisted, err := s.manifest.LoadManifest(ctx, scope)
 	if err != nil {
@@ -95,8 +106,10 @@ func (s *ApplicationSchemaRuntimeRestorationApplicationService) Restore(ctx cont
 		return manifestmodel.ManifestSchema{}, err
 	}
 	restored := manifestprojection.MergeInstalledEnvelope(persisted, installed, activePublishedNotificationTemplates(records))
-	if err = s.manifest.SyncManifest(ctx, scope, restored); err != nil {
-		return manifestmodel.ManifestSchema{}, err
+	if !projectionMatches {
+		if err = s.manifest.SyncManifest(ctx, scope, restored); err != nil {
+			return manifestmodel.ManifestSchema{}, err
+		}
 	}
 	return restored, nil
 }

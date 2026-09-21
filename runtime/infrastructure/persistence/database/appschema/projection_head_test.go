@@ -32,6 +32,16 @@ func TestManifestMaterializationMaintainsOneProjectionHeadAndPurgesDeletedDefini
 	if firstSourceHash == "" || firstSchemaHash == "" || status != "materialized" {
 		t.Fatalf("first projection source=%q schema=%q status=%q", firstSourceHash, firstSchemaHash, status)
 	}
+	matches, err := repository.ProjectionMatches(t.Context(), metadataTestInstallationScope(), first)
+	if err != nil || !matches {
+		t.Fatalf("matching projection: matches=%v err=%v", matches, err)
+	}
+	changed := first
+	changed.Name = "Changed"
+	matches, err = repository.ProjectionMatches(t.Context(), metadataTestInstallationScope(), changed)
+	if err != nil || matches {
+		t.Fatalf("changed projection: matches=%v err=%v", matches, err)
+	}
 	second := first
 	second.Version = "2"
 	second.Objects = second.Objects[:1]

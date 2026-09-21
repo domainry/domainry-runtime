@@ -94,6 +94,29 @@ func TestRestoreRuntimeManifestKeepsOnlyActivePublishedTemplates(t *testing.T) {
 	}
 }
 
+func TestRestoreRuntimeManifestSkipsDefinitionWorkWhenProjectionMatches(t *testing.T) {
+	failure := errors.New("definition work must be skipped")
+	installed := manifestmodel.ManifestSchema{ManifestHash: "installed-hash", TemplateID: "office", Version: "1"}
+	metadata := runtimeMetadataRepositoryStub{
+		projectionMatches: true,
+		manifest:          installed,
+		previousErr:       failure,
+		planErr:           failure,
+		applyErr:          failure,
+		ensureErr:         failure,
+		syncErr:           failure,
+	}
+	restored, err := NewApplicationSchemaRuntimeRestorationApplicationService(runtimeNotificationRepositoryStub{}, metadata).Restore(
+		t.Context(), installed, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "test matching Runtime metadata projection"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.ManifestHash != installed.ManifestHash || restored.Version != installed.Version {
+		t.Fatalf("restored manifest = %#v", restored)
+	}
+}
+
 func TestRestoreRuntimeManifestRejectsIncompleteInstalledActionAuthorization(t *testing.T) {
 	installed := manifestmodel.ManifestSchema{
 		Actions: []definitionmodel.ActionSchema{{
@@ -130,17 +153,23 @@ func (s runtimeNotificationRepositoryStub) List(context.Context, principalmodel.
 }
 
 type runtimeMetadataRepositoryStub struct {
-	ensureErr   error
-	loadErr     error
-	syncErr     error
-	previousErr error
-	planErr     error
-	applyErr    error
-	manifest    manifestmodel.ManifestSchema
-	previous    *manifestmodel.ManifestSchema
-	plan        appschemamodel.ApplicationSchemaUpgradePlan
-	applied     *appschemamodel.ApplicationSchemaUpgradePlan
-	synced      *manifestmodel.ManifestSchema
+	projectionMatches bool
+	projectionErr     error
+	ensureErr         error
+	loadErr           error
+	syncErr           error
+	previousErr       error
+	planErr           error
+	applyErr          error
+	manifest          manifestmodel.ManifestSchema
+	previous          *manifestmodel.ManifestSchema
+	plan              appschemamodel.ApplicationSchemaUpgradePlan
+	applied           *appschemamodel.ApplicationSchemaUpgradePlan
+	synced            *manifestmodel.ManifestSchema
+}
+
+func (s runtimeMetadataRepositoryStub) ProjectionMatches(context.Context, principalmodel.SystemScope, manifestmodel.ManifestSchema) (bool, error) {
+	return s.projectionMatches, s.projectionErr
 }
 
 func (s runtimeMetadataRepositoryStub) LoadPreviousManifest(context.Context, principalmodel.SystemScope) (*manifestmodel.ManifestSchema, error) {

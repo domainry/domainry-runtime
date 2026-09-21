@@ -3,6 +3,7 @@ package appschema
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -13,6 +14,33 @@ import (
 	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
+
+// ProjectionMatches is the restart fast path. source_hash is written only by
+// SyncManifestProjection after the physical definition upgrade has completed,
+// so an exact match means the installed definition has already been applied.
+func (s ApplicationSchemaStore) ProjectionMatches(ctx context.Context, scope principalmodel.SystemScope, manifest manifestmodel.ManifestSchema) (bool, error) {
+	if err := requireMetadataInstallationScope(scope); err != nil {
+		return false, err
+	}
+	_, expectedHash, err := metadataPayload(manifest)
+	if err != nil {
+		return false, fmt.Errorf("hash installed metadata projection: %w", err)
+	}
+	statement, args, err := query.NewSelectBuilder(s.store.SQLRenderer, "_application_schema_projection").
+		Columns("source_hash", "status").Where(query.Equal("id", "current")).Build()
+	if err != nil {
+		return false, fmt.Errorf("build metadata projection match lookup: %w", err)
+	}
+	var sourceHash, status string
+	err = s.database().QueryRowContext(ctx, statement, args...).Scan(&sourceHash, &status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("load metadata projection match: %w", err)
+	}
+	return strings.TrimSpace(sourceHash) == expectedHash && strings.TrimSpace(status) == "materialized", nil
+}
 
 func (s ApplicationSchemaStore) SyncManifestProjection(ctx context.Context, scope principalmodel.SystemScope, manifest manifestmodel.ManifestSchema) error {
 	if err := requireMetadataInstallationScope(scope); err != nil {
