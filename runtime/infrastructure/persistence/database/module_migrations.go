@@ -128,12 +128,65 @@ func (s *RuntimeStore) applyOwnedMigrationsLocked(ctx context.Context, owner str
 	if err := s.ensureMigrationLedger(ctx); err != nil {
 		return fmt.Errorf("prepare module migration ledger: %w", err)
 	}
+	allApplied, err := s.ownedMigrationsApplied(ctx, owner, migrations)
+	if err != nil {
+		return err
+	}
+	if allApplied {
+		return nil
+	}
 	for _, migration := range migrations {
 		if err := s.applyOwnedMigration(ctx, owner, migration); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// ownedMigrationsApplied loads an owner's complete ledger in one round trip.
+// The normal restart path can then avoid one SELECT per source migration.
+func (s *RuntimeStore) ownedMigrationsApplied(ctx context.Context, owner string, migrations []ormmigration.Migration) (bool, error) {
+	if len(migrations) == 0 {
+		return true, nil
+	}
+	query := "SELECT " + s.identifier("path") + "," + s.identifier("checksum") + "," + s.identifier("dirty") + " FROM " + s.tableIdentifier("_schema_migrations") + " WHERE " + s.identifier("kind") + "=" + s.placeholder(1)
+	rows, err := s.schemaDatabase().QueryContext(ctx, query, "module:"+owner)
+	if err != nil {
+		return false, fmt.Errorf("inspect module migration ledger for %s: %w", owner, err)
+	}
+	defer rows.Close()
+	type ledgerEntry struct {
+		checksum string
+		dirty    bool
+	}
+	applied := map[string]ledgerEntry{}
+	for rows.Next() {
+		var path string
+		var entry ledgerEntry
+		if err := rows.Scan(&path, &entry.checksum, &entry.dirty); err != nil {
+			return false, fmt.Errorf("scan module migration ledger for %s: %w", owner, err)
+		}
+		applied[path] = entry
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("read module migration ledger for %s: %w", owner, err)
+	}
+	allApplied := true
+	for _, migration := range migrations {
+		path := moduleMigrationPath(owner, migration)
+		entry, exists := applied[path]
+		if !exists {
+			allApplied = false
+			continue
+		}
+		if entry.dirty {
+			return false, fmt.Errorf("migration.dirty: %s", path)
+		}
+		if entry.checksum != moduleMigrationChecksum(migration) {
+			return false, fmt.Errorf("migration.checksum_drift: %s", path)
+		}
+	}
+	return allApplied, nil
 }
 
 func (s *RuntimeStore) applyOwnedMigration(ctx context.Context, owner string, migration ormmigration.Migration) error {
