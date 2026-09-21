@@ -34,7 +34,7 @@ func TestDispatchCallbackReceiptSchemaRendersForSupportedDialects(t *testing.T) 
 				!strings.Contains(strings.ToLower(db.statements[0]), "primary key") {
 				t.Fatalf("ddl=%q", db.statements)
 			}
-			if len(store.indexes) != 2 || store.indexes[0] != "uniq_dispatch_callback_scope:workspace_id,runtime_id,method,path,idempotency_key" ||
+			if len(store.indexes) != 2 || store.indexes[0] != "uniq_dispatch_callback_scope:workspace_id,id,idempotency_key" ||
 				store.indexes[1] != "idx_dispatch_callback_lease:workspace_id,status,lease_expires_at" {
 				t.Fatalf("indexes=%#v", store.indexes)
 			}

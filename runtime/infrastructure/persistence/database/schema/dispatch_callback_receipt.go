@@ -16,7 +16,7 @@ func EnsureDispatchCallbackReceiptSchema(ctx context.Context, store Store) error
 	statement, arguments, err := ormschema.NewTable(store.RuntimeRenderer(), DispatchCallbackReceiptTable).
 		IfNotExists().
 		Columns(
-			ormschema.Column("id", key).NotNull(),
+			ormschema.Column("id", ormschema.TextKey(64)).NotNull(),
 			ormschema.Column("workspace_id", key).NotNull(),
 			ormschema.Column("runtime_id", key).NotNull(),
 			ormschema.Column("method", ormschema.TextKey(16)).NotNull(),
@@ -43,7 +43,11 @@ func EnsureDispatchCallbackReceiptSchema(ctx context.Context, store Store) error
 	if _, err := store.SchemaDB().ExecContext(ctx, statement, arguments...); err != nil {
 		return fmt.Errorf("create dispatch callback receipt table: %w", err)
 	}
-	if err := store.CreateIndexIfMissing(ctx, DispatchCallbackReceiptTable, "uniq_dispatch_callback_scope", true, "workspace_id", "runtime_id", "method", "path", "idempotency_key"); err != nil {
+	// CallbackReceiptStore derives id from the complete callback scope before
+	// every insert. Keep idempotency_key in an explicit unique constraint while
+	// indexing the bounded scope digest instead of the five raw scope columns;
+	// the raw form exceeds InnoDB's 3072-byte key limit under utf8mb4.
+	if err := store.CreateIndexIfMissing(ctx, DispatchCallbackReceiptTable, "uniq_dispatch_callback_scope", true, "workspace_id", "id", "idempotency_key"); err != nil {
 		return fmt.Errorf("create dispatch callback scope identity: %w", err)
 	}
 	if err := store.CreateIndexIfMissing(ctx, DispatchCallbackReceiptTable, "idx_dispatch_callback_lease", false, "workspace_id", "status", "lease_expires_at"); err != nil {
