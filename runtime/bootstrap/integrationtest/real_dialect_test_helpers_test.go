@@ -48,7 +48,7 @@ func realDialectMySQLConfig(t *testing.T, dsn, databaseName string) config.Confi
 		t.Fatalf("connect MySQL contract admin database: %v", err)
 	}
 	identifier := "`" + databaseName + "`"
-	if _, err := admin.ExecContext(t.Context(), "CREATE DATABASE "+identifier+" CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"); err != nil {
+	if _, err := admin.ExecContext(t.Context(), "CREATE DATABASE "+identifier+" CHARACTER SET utf8mb4 COLLATE utf8mb4_bin"); err != nil {
 		_ = admin.Close()
 		t.Fatalf("create isolated MySQL contract database: %v", err)
 	}

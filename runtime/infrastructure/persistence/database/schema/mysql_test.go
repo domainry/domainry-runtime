@@ -18,10 +18,11 @@ func TestMySQLTextDefaultsUseExpressions(t *testing.T) {
 		t.Fatal(err)
 	}
 	for input, want := range map[string]string{
-		"TEXT NOT NULL DEFAULT ''":   "TEXT NOT NULL DEFAULT ('')",
-		"TEXT NOT NULL DEFAULT '[]'": "TEXT NOT NULL DEFAULT ('[]')",
-		"TEXT NOT NULL DEFAULT '{}'": "TEXT NOT NULL DEFAULT ('{}')",
-		"TEXT NOT NULL":              "TEXT NOT NULL",
+		"TEXT NOT NULL DEFAULT ''":                 "TEXT NOT NULL DEFAULT ('')",
+		"TEXT NOT NULL DEFAULT '[]'":               "TEXT NOT NULL DEFAULT ('[]')",
+		"TEXT NOT NULL DEFAULT '{}'":               "TEXT NOT NULL DEFAULT ('{}')",
+		"TEXT NOT NULL DEFAULT '{\"matches\":[]}'": "TEXT NOT NULL DEFAULT ('{\"matches\":[]}')",
+		"TEXT NOT NULL":                            "TEXT NOT NULL",
 	} {
 		if got := store.RuntimeColumnDefinition(input); got != want {
 			t.Fatalf("runtimeColumnDefinition(%q) = %q, want %q", input, got, want)

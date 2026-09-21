@@ -19,9 +19,6 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 			return fmt.Errorf("create %s: %w", table, err)
 		}
 	}
-	if err := s.RuntimeProfile().NormalizeEvidenceSchema(ctx, s.SchemaDB(), s.RuntimeRenderer()); err != nil {
-		return err
-	}
 	if err := ensureWorkspaceScopedIdentities(ctx, s, workspaceIdentities); err != nil {
 		return err
 	}

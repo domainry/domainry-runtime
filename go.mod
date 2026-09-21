@@ -17,7 +17,7 @@ require (
 	github.com/domainry/domainry-foundation v0.1.1
 	github.com/domainry/domainry-identity v0.2.15
 	github.com/domainry/domainry-identity-bridge v0.1.3
-	github.com/domainry/domainry-identity-sdk v0.1.12
+	github.com/domainry/domainry-identity-sdk v0.1.13
 	github.com/domainry/domainry-integration v0.1.18
 	github.com/domainry/domainry-integration-sdk v0.1.7
 	github.com/domainry/domainry-knowledge v0.1.5

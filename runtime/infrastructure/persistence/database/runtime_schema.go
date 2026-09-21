@@ -93,6 +93,11 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := s.ensureAuditModuleSchemaLocked(ctx); err != nil {
 		return err
 	}
+	// The MySQL evidence profile normalizes cursor columns owned by the Audit
+	// module, so the source-owned Audit table must exist before normalization.
+	if err := s.RuntimeProfile().NormalizeEvidenceSchema(ctx, s.schemaDatabase(), s.RuntimeRenderer()); err != nil {
+		return err
+	}
 	if err := s.EnsureWorkflowProcessSchema(ctx); err != nil {
 		return err
 	}

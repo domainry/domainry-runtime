@@ -2,6 +2,7 @@ package schema
 
 import (
 	"context"
+	"regexp"
 	"strings"
 
 	ormdialect "github.com/domainry/domainry-orm/dialect"
@@ -10,15 +11,14 @@ import (
 
 type Profile struct{}
 
+var textDefaultLiteral = regexp.MustCompile(`TEXT NOT NULL DEFAULT ('(?:''|[^'])*')`)
+
 func NewProfile() Profile { return Profile{} }
 
 func (Profile) ManagedDatabaseMarkerEnabled() bool { return true }
 func (Profile) ColumnDefinition(definition string) string {
 	definition = strings.TrimSpace(definition)
-	definition = strings.ReplaceAll(definition, "TEXT NOT NULL DEFAULT '[]'", "TEXT NOT NULL DEFAULT ('[]')")
-	definition = strings.ReplaceAll(definition, "TEXT NOT NULL DEFAULT '{}'", "TEXT NOT NULL DEFAULT ('{}')")
-	definition = strings.ReplaceAll(definition, "TEXT NOT NULL DEFAULT ''", "TEXT NOT NULL DEFAULT ('')")
-	return definition
+	return textDefaultLiteral.ReplaceAllString(definition, "TEXT NOT NULL DEFAULT ($1)")
 }
 func (Profile) ApplicationTablesQuery(ormdialect.Renderer, string) persistencedriver.SchemaQuery {
 	return persistencedriver.SchemaQuery{Statement: "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()"}

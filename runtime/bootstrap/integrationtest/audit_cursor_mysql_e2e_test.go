@@ -33,8 +33,10 @@ func TestAuditCursorSchemaAndPaginationOnRealMySQL(t *testing.T) {
 	}
 
 	wantIndexes := map[string][]string{
-		"idx_audit_event_actor_cursor":  {"workspace_id", "actor_id", "created_at", "id"},
-		"idx_audit_event_record_cursor": {"workspace_id", "object_key", "record_id", "created_at", "id"},
+		"idx_audit_event_actor_cursor": {"workspace_id", "actor_id", "created_at", "id"},
+		// InnoDB appends the remaining primary-key column (id) to this wide
+		// secondary index, so the physical definition omits only that duplicate.
+		"idx_audit_event_record_cursor": {"workspace_id", "object_key", "record_id", "created_at"},
 	}
 	rows, err := store.DB().QueryContext(t.Context(), `SELECT INDEX_NAME, COLUMN_NAME, SEQ_IN_INDEX, SUB_PART FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '_audit_events' AND INDEX_NAME IN ('idx_audit_event_actor_cursor', 'idx_audit_event_record_cursor') ORDER BY INDEX_NAME, SEQ_IN_INDEX`)
 	if err != nil {
