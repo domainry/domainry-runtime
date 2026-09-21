@@ -136,6 +136,23 @@ func (r ApplicationSchemaStore) loadPhysicalSchemaSnapshot(ctx context.Context, 
 }
 
 func (r ApplicationSchemaStore) syncManifestForUpgrade(ctx context.Context, manifest manifestmodel.ManifestSchema, execution metadataUpgradeExecution) error {
+	hasObjects := false
+	for _, object := range manifest.Objects {
+		if strings.TrimSpace(object.Key) != "" {
+			hasObjects = true
+			break
+		}
+	}
+	if !hasObjects {
+		return nil
+	}
+	if execution.receiptStatuses == nil {
+		statuses, err := r.loadUpgradeReceiptStatuses(ctx, execution.toVersion)
+		if err != nil {
+			return err
+		}
+		execution.receiptStatuses = statuses
+	}
 	physicalSchema, err := r.loadPhysicalSchemaSnapshot(ctx, manifest.Objects)
 	if err != nil {
 		return err

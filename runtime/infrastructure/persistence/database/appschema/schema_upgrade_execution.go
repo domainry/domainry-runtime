@@ -27,9 +27,10 @@ const (
 // metadataUpgradeExecution carries the version pair and backup evidence that
 // every receipt written by one physical upgrade run refers to.
 type metadataUpgradeExecution struct {
-	fromVersion string
-	toVersion   string
-	backupID    string
+	fromVersion     string
+	toVersion       string
+	backupID        string
+	receiptStatuses map[string]string
 }
 
 func metadataUpgradeStepKey(operation, objectKey, columnKey, toVersion string) string {
@@ -132,6 +133,41 @@ func (r ApplicationSchemaStore) upgradeReceiptCompleted(ctx context.Context, ste
 	return status == metadataUpgradeReceiptCompleted, nil
 }
 
+func (r ApplicationSchemaStore) loadUpgradeReceiptStatuses(ctx context.Context, toVersion string) (map[string]string, error) {
+	builder := query.NewSelectBuilder(r.store.SQLRenderer, runtimeschema.DefinitionUpgradeReceiptsTable).Columns("step_key", "status")
+	if toVersion = strings.TrimSpace(toVersion); toVersion != "" {
+		builder = builder.Where(query.Equal("to_version", toVersion))
+	}
+	statement, args, err := builder.Build()
+	if err != nil {
+		return nil, fmt.Errorf("build upgrade receipt snapshot: %w", err)
+	}
+	rows, err := r.schemaDatabase().QueryContext(ctx, statement, args...)
+	if err != nil {
+		return nil, fmt.Errorf("load upgrade receipt snapshot: %w", err)
+	}
+	defer rows.Close()
+	statuses := map[string]string{}
+	for rows.Next() {
+		var stepKey, status string
+		if err := rows.Scan(&stepKey, &status); err != nil {
+			return nil, fmt.Errorf("scan upgrade receipt snapshot: %w", err)
+		}
+		statuses[strings.TrimSpace(stepKey)] = strings.TrimSpace(status)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate upgrade receipt snapshot: %w", err)
+	}
+	return statuses, nil
+}
+
+func (r ApplicationSchemaStore) executionUpgradeReceiptStatus(ctx context.Context, execution metadataUpgradeExecution, stepKey string) (string, error) {
+	if execution.receiptStatuses != nil {
+		return execution.receiptStatuses[stepKey], nil
+	}
+	return r.upgradeReceiptStatus(ctx, stepKey)
+}
+
 // writeUpgradeReceipt upserts the receipt for one step. A started receipt
 // left behind by a crash is overwritten by the rerun that completes the step.
 func (r ApplicationSchemaStore) writeUpgradeReceipt(ctx context.Context, execution metadataUpgradeExecution, objectKey, columnKey, stepKey, status, errorCode string) error {
@@ -140,7 +176,7 @@ func (r ApplicationSchemaStore) writeUpgradeReceipt(ctx context.Context, executi
 	if status == metadataUpgradeReceiptCompleted || status == metadataUpgradeReceiptFailed {
 		completedAt = now
 	}
-	existing, err := r.upgradeReceiptStatus(ctx, stepKey)
+	existing, err := r.executionUpgradeReceiptStatus(ctx, execution, stepKey)
 	if err != nil {
 		return err
 	}
@@ -162,14 +198,17 @@ func (r ApplicationSchemaStore) writeUpgradeReceipt(ctx context.Context, executi
 	if _, err := r.schemaDatabase().ExecContext(ctx, statement, args...); err != nil {
 		return fmt.Errorf("record upgrade receipt %s: %w", stepKey, err)
 	}
+	if execution.receiptStatuses != nil {
+		execution.receiptStatuses[stepKey] = status
+	}
 	return nil
 }
 
 // runReceiptedUpgradeStep executes one step unless a completed receipt already
 // exists, surrounding it with started/completed (or failed) receipts.
 func (r ApplicationSchemaStore) runReceiptedUpgradeStep(ctx context.Context, execution metadataUpgradeExecution, objectKey, columnKey, stepKey string, step func() error) error {
-	completed, err := r.upgradeReceiptCompleted(ctx, stepKey)
-	if err != nil || completed {
+	status, err := r.executionUpgradeReceiptStatus(ctx, execution, stepKey)
+	if err != nil || status == metadataUpgradeReceiptCompleted {
 		return err
 	}
 	if err := r.writeUpgradeReceipt(ctx, execution, objectKey, columnKey, stepKey, metadataUpgradeReceiptStarted, ""); err != nil {
