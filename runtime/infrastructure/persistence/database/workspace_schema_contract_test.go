@@ -167,6 +167,9 @@ func sqliteTableHasIndexPrefix(t *testing.T, db *sql.DB, quotedTable string, pre
 }
 
 func globallyOwnedUniqueConstraint(table, indexName string, columns []string) bool {
+	if table == "_operations" && len(columns) == 1 && columns[0] == "id" {
+		return true
+	}
 	if len(columns) != 1 || columns[0] != "token_hash" {
 		return false
 	}

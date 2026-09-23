@@ -13,7 +13,6 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -41,7 +40,7 @@ func TestAuditExportUsesRuntimeSharedArtifactMetadataAndBlobContent(t *testing.T
 	binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{Clock: auditExportClock{now: now}}).OpenModule(
 		ctx,
 		auditsdk.ApplicationRef{InstallationID: "runtime-audit-export-test"},
-		runtimeauditmodule.NewHost(store, content, content, operationspersistence.NewSharedCommandStore(store)),
+		runtimeauditmodule.NewHost(store, content, content),
 	)
 	if err != nil {
 		t.Fatal(err)

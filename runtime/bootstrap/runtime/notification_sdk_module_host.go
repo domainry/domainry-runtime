@@ -20,7 +20,6 @@ import (
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	hostsurfacemodel "github.com/domainry/domainry-runtime/runtime/domain/hostsurface/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	operationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 )
 
 type notificationSDKModuleHost struct {
@@ -117,12 +116,6 @@ func (h notificationSDKModuleHost) WorkspaceScope() modulehost.WorkspaceScope {
 }
 func (h notificationSDKModuleHost) QueueScopes() modulehost.QueueScopeIndex {
 	return notificationSDKQueueScopes{h.store}
-}
-func (h notificationSDKModuleHost) ManagedOperationStore() modulehost.ManagedOperationStore {
-	return operationpersistence.NewSharedManagedStore(h.store)
-}
-func (h notificationSDKModuleHost) OperationControlStore() modulehost.OperationControlStore {
-	return operationpersistence.NewSharedOperationControlStore(h.store)
 }
 func (h notificationSDKModuleHost) RetentionArchiveStore() modulehost.RetentionArchiveStore {
 	return h.archives

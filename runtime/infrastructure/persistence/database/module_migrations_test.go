@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	shareddefinition "github.com/domainry/domainry-foundation/definition"
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	ormmigration "github.com/domainry/domainry-orm/migration"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -52,6 +53,13 @@ func TestOwnedModuleMigrationAcceptsOneSharedKernelNamespace(t *testing.T) {
 	}
 	if err := store.ApplyOwnedMigrations(t.Context(), "shared/definitions/invalid", []modulehost.SchemaMigration{migration}); err == nil {
 		t.Fatal("nested shared migration namespace was accepted")
+	}
+	operationMigration := modulehost.SchemaMigration{Version: 1, Name: "shared_operations", Statements: []string{"CREATE TABLE shared_operation_kernel_test (id TEXT NOT NULL PRIMARY KEY)"}}
+	if err := store.ApplyOwnedMigrations(t.Context(), sharedoperation.MigrationOwner, []modulehost.SchemaMigration{operationMigration}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT kind FROM _schema_migrations WHERE path = ?", moduleMigrationPath(sharedoperation.MigrationOwner, ormmigration.Migration{Version: operationMigration.Version, Name: operationMigration.Name})).Scan(&kind); err != nil || kind != "module:"+sharedoperation.MigrationOwner {
+		t.Fatalf("Operations ledger kind=%q err=%v", kind, err)
 	}
 }
 

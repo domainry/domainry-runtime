@@ -45,7 +45,6 @@ import (
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
-	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 	workspaceprovisionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
@@ -162,7 +161,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(err)
 	mustCompleteRuntimeStartup(generateDevelopmentData(ctx, cfg, store, projectModel, startupOptions.DevelopmentData))
 	artifactContent := blobstore.LifecycleContentStore{Blobs: startupOptions.BlobStore}
-	auditBinding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: projectModel.ProjectKey}, runtimeauditmodule.NewHost(store, artifactContent, artifactContent, operationspersistence.NewSharedCommandStore(store)))
+	auditBinding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: projectModel.ProjectKey}, runtimeauditmodule.NewHost(store, artifactContent, artifactContent))
 	mustCompleteRuntimeStartup(err)
 	mustCompleteRuntimeStartup(auditBinding.Descriptor().Validate())
 	runtimeAuditRepository := runtimeauditmodule.NewAuditStore(auditBinding)

@@ -14,6 +14,7 @@ import (
 
 	auditmodulehost "github.com/domainry/domainry-audit-sdk/modulehost"
 	auditmodule "github.com/domainry/domainry-audit/module"
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	ormmigration "github.com/domainry/domainry-orm/migration"
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
@@ -21,7 +22,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "030_shared_persistence_kernel"
+const CurrentRuntimeSchemaVersion = "031_foundation_operations_kernel"
 
 type RuntimeSchemaCapabilities struct {
 	Workflow            bool
@@ -64,6 +65,13 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities RuntimeSchemaCapabilities) error {
 	s.runtimeCapabilities = capabilities
 	s.runtimeCapabilitiesSelected = true
+	if s.migrationDB != nil {
+		migrationStore := s.runtimeMigrationStore()
+		if err := migrationStore.EnsureRuntimeSchemaFor(ctx, capabilities); err != nil {
+			return err
+		}
+		return nil
+	}
 	if s.config.EffectiveDatabaseMigrationMode() == "verify" {
 		if err := s.verifyRuntimeSchemaFor(ctx, capabilities); err != nil {
 			return err
@@ -71,14 +79,12 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 		if err := s.verifyManagedDatabaseCohortMarker(ctx); err != nil {
 			return err
 		}
-		return nil
+		return s.ensureOperationsKernel(ctx)
 	}
-	if s.migrationDB != nil {
-		migrationStore := s.runtimeMigrationStore()
-		if err := migrationStore.EnsureRuntimeSchemaFor(ctx, capabilities); err != nil {
+	if s.schemaAssembler == nil {
+		if err := s.ensureOperationsKernel(ctx); err != nil {
 			return err
 		}
-		return nil
 	}
 	release, err := s.acquireMigrationLock(ctx, s.config)
 	if err != nil {
@@ -121,7 +127,7 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 	if err := s.EnsureApplicationSchemaFor(ctx, capabilities); err != nil {
 		return err
 	}
-	if err := s.EnsureEvidenceSchemaFor(ctx, capabilities); err != nil {
+	if err := s.ensureEvidenceSchemaFor(ctx, capabilities); err != nil {
 		return err
 	}
 	if err := s.ensureAuditModuleSchemaLocked(ctx); err != nil {
@@ -384,13 +390,25 @@ func (s *RuntimeStore) EnsureApplicationSchemaFor(ctx context.Context, capabilit
 }
 
 func (s *RuntimeStore) EnsureEvidenceSchema(ctx context.Context) error {
-	if s.schemaAssembler != nil {
-		return s.schemaAssembler.EnsureEvidenceSchema(ctx, s)
+	if s.schemaAssembler == nil {
+		if err := s.ensureOperationsKernel(ctx); err != nil {
+			return err
+		}
 	}
-	return runtimeschema.EnsureEvidenceSchema(ctx, s)
+	return s.ensureEvidenceSchemaFor(ctx, FullRuntimeSchemaCapabilities())
 }
 
-func (s *RuntimeStore) EnsureEvidenceSchemaFor(ctx context.Context, capabilities RuntimeSchemaCapabilities) error {
+func (s *RuntimeStore) ensureOperationsKernel(ctx context.Context) error {
+	if s == nil || s.DB() == nil {
+		return fmt.Errorf("Runtime Operations persistence host is incomplete")
+	}
+	if _, err := sharedoperation.Open(ctx, s.DB(), s.RuntimeRenderer(), s); err != nil {
+		return fmt.Errorf("open Runtime Operations persistence: %w", err)
+	}
+	return nil
+}
+
+func (s *RuntimeStore) ensureEvidenceSchemaFor(ctx context.Context, capabilities RuntimeSchemaCapabilities) error {
 	if s.schemaAssembler != nil {
 		if capabilities != FullRuntimeSchemaCapabilities() {
 			return fmt.Errorf("capability-selected Runtime schema does not support a custom schema assembler")
@@ -400,6 +418,15 @@ func (s *RuntimeStore) EnsureEvidenceSchemaFor(ctx context.Context, capabilities
 	return runtimeschema.EnsureEvidenceSchemaFor(ctx, s, runtimeschema.EvidenceSchemaCapabilities{
 		Workflow: capabilities.Workflow, Automation: capabilities.Automation, Lifecycle: capabilities.Lifecycle, ReleaseCoordination: capabilities.ReleaseCoordination,
 	})
+}
+
+func (s *RuntimeStore) EnsureEvidenceSchemaFor(ctx context.Context, capabilities RuntimeSchemaCapabilities) error {
+	if s.schemaAssembler == nil {
+		if err := s.ensureOperationsKernel(ctx); err != nil {
+			return err
+		}
+	}
+	return s.ensureEvidenceSchemaFor(ctx, capabilities)
 }
 
 func (s *RuntimeStore) EnsureWorkflowProcessSchema(ctx context.Context) error {

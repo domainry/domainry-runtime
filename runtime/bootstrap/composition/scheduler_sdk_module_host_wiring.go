@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	reportsdk "github.com/domainry/domainry-report-sdk"
@@ -17,7 +16,6 @@ import (
 	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	operationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	"github.com/domainry/domainry-scheduler-sdk/modulehost"
 )
@@ -52,9 +50,6 @@ func (h *schedulerSDKModuleHost) HTTPConnections() modulehost.HTTPConnectionProv
 func (h *schedulerSDKModuleHost) Database() modulehost.Database                      { return h.store.DB() }
 func (h *schedulerSDKModuleHost) Dialect() modulehost.Dialect                        { return h.store.SQLRenderer }
 func (h *schedulerSDKModuleHost) WorkerID() string                                   { return h.workerID }
-func (h *schedulerSDKModuleHost) OperationStore() sharedoperation.Store {
-	return operationpersistence.NewSharedCommandStore(h.store)
-}
 func (h *schedulerSDKModuleHost) Migrations() modulehost.MigrationRegistrar {
 	return schedulerSDKMigrationRegistrar{store: h.store}
 }

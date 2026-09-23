@@ -33,7 +33,7 @@ func runtimeSchemaLedgerQueries(count int64, checksum string, dirty bool) []data
 
 func TestRuntimeSchemaHelpersAndDatabaseSelection(t *testing.T) {
 	versions := SupportedRuntimeSchemaUpgradeVersions()
-	if len(versions) != 15 || versions[0] != "001_connector_runtime_lifecycle" || versions[14] != "028_subject_execution_evidence" || CurrentRuntimeSchemaVersion != "030_shared_persistence_kernel" {
+	if len(versions) != 15 || versions[0] != "001_connector_runtime_lifecycle" || versions[14] != "028_subject_execution_evidence" || CurrentRuntimeSchemaVersion != "031_foundation_operations_kernel" {
 		t.Fatalf("versions=%#v", versions)
 	}
 	for _, version := range versions {
@@ -239,6 +239,7 @@ func TestEnsureRuntimeSchemaOrchestrationFailures(t *testing.T) {
 	}
 
 	pendingFailure := runtimeSchemaStore(t, &databaseSQLState{execSteps: []databaseSQLExecStep{{err: errDatabaseSQL}}})
+	pendingFailure.schemaAssembler = runtimeSchemaAssemblerStub{}
 	if err := pendingFailure.EnsureRuntimeSchema(t.Context()); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("pending error=%v", err)
 	}
@@ -246,12 +247,14 @@ func TestEnsureRuntimeSchemaOrchestrationFailures(t *testing.T) {
 	pendingLedgerQueries := runtimeSchemaLedgerQueries(0, "", false)[:11]
 	validationQueries := append(append([]databaseSQLQueryStep{}, pendingLedgerQueries...), databaseSQLQueryStep{err: errDatabaseSQL})
 	validation := runtimeSchemaStore(t, &databaseSQLState{querySteps: validationQueries})
+	validation.schemaAssembler = runtimeSchemaAssemblerStub{}
 	if err := validation.EnsureRuntimeSchema(t.Context()); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("validation error=%v", err)
 	}
 
 	backupQueries := append(append([]databaseSQLQueryStep{}, pendingLedgerQueries...), databaseSQLQueryStep{}, databaseSQLQueryStep{err: errDatabaseSQL})
 	backup := runtimeSchemaStore(t, &databaseSQLState{querySteps: backupQueries})
+	backup.schemaAssembler = runtimeSchemaAssemblerStub{}
 	if err := backup.EnsureRuntimeSchema(t.Context()); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("backup error=%v", err)
 	}
@@ -265,6 +268,7 @@ func TestEnsureRuntimeSchemaOrchestrationFailures(t *testing.T) {
 
 	startQueries := append(append([]databaseSQLQueryStep{}, pendingLedgerQueries...), databaseSQLQueryStep{}, databaseSQLQueryStep{})
 	start := runtimeSchemaStore(t, &databaseSQLState{querySteps: startQueries, execSteps: []databaseSQLExecStep{{rows: 1}, {err: errDatabaseSQL}}})
+	start.schemaAssembler = runtimeSchemaAssemblerStub{}
 	if err := start.EnsureRuntimeSchema(t.Context()); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("start error=%v", err)
 	}

@@ -21,7 +21,6 @@ import (
 	metadatamodule "github.com/domainry/domainry-metadata/module"
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 )
 
@@ -40,7 +39,7 @@ func Open(ctx context.Context, store *database.RuntimeStore, runtimeID string) (
 		}
 	}
 	content := newMemoryArtifactContent()
-	auditBinding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: runtimeID}, runtimeauditmodule.NewHost(store, content, content, operationspersistence.NewSharedCommandStore(store)))
+	auditBinding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: runtimeID}, runtimeauditmodule.NewHost(store, content, content))
 	if err != nil {
 		return nil, fmt.Errorf("open shared Audit module for Lifecycle test: %w", err)
 	}

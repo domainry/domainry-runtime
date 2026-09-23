@@ -215,7 +215,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 	artifactContent := blobstore.LifecycleContentStore{Blobs: blobs}
 	if auditBinding == nil {
 		auditBinding, err = auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx,
-			auditsdk.ApplicationRef{InstallationID: valueOrDefault(projectModel.ProjectKey, "domainry-runtime")}, runtimeauditmodule.NewHost(store, artifactContent, artifactContent, operationspersistence.NewSharedCommandStore(store)))
+			auditsdk.ApplicationRef{InstallationID: valueOrDefault(projectModel.ProjectKey, "domainry-runtime")}, runtimeauditmodule.NewHost(store, artifactContent, artifactContent))
 		if err != nil {
 			return runtimeServiceAssembly{}, fmt.Errorf("open Audit module: %w", err)
 		}

@@ -5,21 +5,19 @@ import (
 
 	"github.com/domainry/domainry-audit-sdk/modulehost"
 	sharedartifact "github.com/domainry/domainry-foundation/artifact"
-	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	artifactpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/artifact"
 )
 
 type Host struct {
-	store      *database.RuntimeStore
-	content    sharedartifact.ContentStore
-	writer     sharedartifact.ContentWriter
-	operations sharedoperation.Store
+	store   *database.RuntimeStore
+	content sharedartifact.ContentStore
+	writer  sharedartifact.ContentWriter
 }
 
-func NewHost(store *database.RuntimeStore, content sharedartifact.ContentStore, writer sharedartifact.ContentWriter, operations sharedoperation.Store) Host {
-	return Host{store: store, content: content, writer: writer, operations: operations}
+func NewHost(store *database.RuntimeStore, content sharedartifact.ContentStore, writer sharedartifact.ContentWriter) Host {
+	return Host{store: store, content: content, writer: writer}
 }
 func (h Host) Database() modulehost.Database             { return h.store.DB() }
 func (h Host) Dialect() modulehost.Dialect               { return h.store.RuntimeRenderer() }
@@ -29,7 +27,6 @@ func (h Host) ArtifactStore() sharedartifact.ManagedStore {
 }
 func (h Host) ArtifactContentStore() sharedartifact.ContentStore   { return h.content }
 func (h Host) ArtifactContentWriter() sharedartifact.ContentWriter { return h.writer }
-func (h Host) OperationStore() sharedoperation.Store               { return h.operations }
 
 type migrationRegistrar struct{ store *database.RuntimeStore }
 
