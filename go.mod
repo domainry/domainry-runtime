@@ -20,7 +20,7 @@ require (
 	github.com/domainry/domainry-integration-sdk v0.1.9
 	github.com/domainry/domainry-lifecycle v0.1.19
 	github.com/domainry/domainry-lifecycle-sdk v0.1.16
-	github.com/domainry/domainry-metadata v0.1.13
+	github.com/domainry/domainry-metadata v0.1.14
 	github.com/domainry/domainry-metadata-sdk v0.1.5
 	github.com/domainry/domainry-monitoring-sdk v0.1.4
 	github.com/domainry/domainry-notification v0.1.10
