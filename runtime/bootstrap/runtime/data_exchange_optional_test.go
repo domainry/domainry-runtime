@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -8,6 +9,30 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
+
+type subjectLifecyclePersistenceDataExchangeBinding struct {
+	dataexchange.Binding
+	descriptor dataexchange.Descriptor
+	bindErr    error
+	bindCalls  int
+}
+
+func (b *subjectLifecyclePersistenceDataExchangeBinding) Descriptor() dataexchange.Descriptor {
+	return b.descriptor
+}
+
+func (b *subjectLifecyclePersistenceDataExchangeBinding) BindSubjectLifecyclePersistence() error {
+	b.bindCalls++
+	return b.bindErr
+}
+
+type dataExchangeBindingWithoutSubjectLifecyclePersistence struct {
+	dataexchange.Binding
+}
+
+func (dataExchangeBindingWithoutSubjectLifecyclePersistence) Descriptor() dataexchange.Descriptor {
+	return dataexchange.Descriptor{Mode: dataexchange.DeploymentModeModule}
+}
 
 func TestMissingDataExchangeFactoryLeavesCapabilityAndStorageUninstalled(t *testing.T) {
 	store, err := prepareRuntimeStore(t.Context(), config.Config{
@@ -54,5 +79,48 @@ func TestMissingDataExchangeFactoryLeavesCapabilityAndStorageUninstalled(t *test
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBindEmbeddedDataExchangeSubjectLifecyclePersistence(t *testing.T) {
+	binding := &subjectLifecyclePersistenceDataExchangeBinding{
+		descriptor: dataexchange.Descriptor{Mode: dataexchange.DeploymentModeModule},
+	}
+	if err := bindEmbeddedDataExchangeSubjectLifecyclePersistence(binding); err != nil {
+		t.Fatalf("bind embedded Data Exchange subject lifecycle persistence: %v", err)
+	}
+	if binding.bindCalls != 1 {
+		t.Fatalf("bind calls = %d, want 1", binding.bindCalls)
+	}
+}
+
+func TestBindEmbeddedDataExchangeSubjectLifecyclePersistenceSkipsSaaS(t *testing.T) {
+	binding := &subjectLifecyclePersistenceDataExchangeBinding{
+		descriptor: dataexchange.Descriptor{Mode: dataexchange.DeploymentModeSaaS},
+	}
+	if err := bindEmbeddedDataExchangeSubjectLifecyclePersistence(binding); err != nil {
+		t.Fatalf("skip SaaS Data Exchange subject lifecycle persistence: %v", err)
+	}
+	if binding.bindCalls != 0 {
+		t.Fatalf("bind calls = %d, want 0", binding.bindCalls)
+	}
+}
+
+func TestBindEmbeddedDataExchangeSubjectLifecyclePersistenceRequiresBinder(t *testing.T) {
+	err := bindEmbeddedDataExchangeSubjectLifecyclePersistence(dataExchangeBindingWithoutSubjectLifecyclePersistence{})
+	if err == nil || !strings.Contains(err.Error(), "no shared subject lifecycle persistence binder") {
+		t.Fatalf("missing binder error = %v", err)
+	}
+}
+
+func TestBindEmbeddedDataExchangeSubjectLifecyclePersistencePropagatesFailure(t *testing.T) {
+	wantErr := errors.New("shared tables unavailable")
+	binding := &subjectLifecyclePersistenceDataExchangeBinding{
+		descriptor: dataexchange.Descriptor{Mode: dataexchange.DeploymentModeModule},
+		bindErr:    wantErr,
+	}
+	err := bindEmbeddedDataExchangeSubjectLifecyclePersistence(binding)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("bind error = %v, want %v", err, wantErr)
 	}
 }

@@ -469,6 +469,10 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 				return runtimeServiceAssembly{}, fmt.Errorf("bind embedded Integration shared subject lifecycle persistence: %w", err)
 			}
 		}
+		if err := bindEmbeddedDataExchangeSubjectLifecyclePersistence(dataExchangeBinding); err != nil {
+			_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+			return runtimeServiceAssembly{}, err
+		}
 		store.BindSubjectLifecyclePersistence()
 		accountErasureBinding, ok := lifecycleBinding.(lifecyclesdk.AccountErasureBinding)
 		if !ok || !lifecycleBinding.Descriptor().Capabilities.AccountErasure || accountErasureBinding.AccountErasures() == nil {
@@ -622,6 +626,20 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 			services.Applications().RecordTimers.ConfigureWorker(recordtimerapplication.WorkerConfig{Enabled: cfg.RecordTimerEnabled, PollInterval: cfg.RecordTimerPollInterval, BatchSize: cfg.RecordTimerBatchSize, LeaseTTL: cfg.RecordTimerLeaseTTL})
 		},
 	)
+}
+
+func bindEmbeddedDataExchangeSubjectLifecyclePersistence(binding dataexchangesdk.Binding) error {
+	if binding == nil || binding.Descriptor().Mode != dataexchangesdk.DeploymentModeModule {
+		return nil
+	}
+	persistenceBinding, ok := binding.(dataexchangesdk.SubjectLifecyclePersistenceBinding)
+	if !ok {
+		return fmt.Errorf("embedded Data Exchange Binding returned no shared subject lifecycle persistence binder")
+	}
+	if err := persistenceBinding.BindSubjectLifecyclePersistence(); err != nil {
+		return fmt.Errorf("bind embedded Data Exchange shared subject lifecycle persistence: %w", err)
+	}
+	return nil
 }
 
 type agentSchemaOwner interface {
