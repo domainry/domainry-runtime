@@ -3,45 +3,106 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/domainry/domainry-orm/query"
 )
 
-// SubjectEvidenceWriteAllowed is an adapter-private final SQL predicate. It
-// protects cleaned rows and their parent processes even from cached workers.
-func (s *RuntimeStore) SubjectEvidenceWriteAllowed(workspace, table, id string) query.Predicate {
-	return query.Not(query.ExistsSubquery(query.NewWorkspaceSelectBuilder(s.SQLRenderer, "_subject_evidence_erasure_fences", workspace).
-		Columns("record_id").Where(query.And(query.Equal("kind", table), query.Equal("object_key", ""), query.Equal("record_id", id)))))
+const (
+	sharedSubjectRequestsTable          = "_subject_requests"
+	lifecycleSubjectExecutionStepsTable = "_subject_steps"
+	lifecycleSubjectOwner               = "lifecycle"
+	lifecycleEraseFenceOperation        = "erase_fence"
+	runtimeEvidenceSubjectOwner         = "runtime_evidence"
+	runtimeEvidenceErasePlanOperation   = "erase_plan"
+)
+
+func (s *RuntimeStore) subjectErasureFenceRequests(workspace, request, subject string) *query.SelectBuilder {
+	requestIDs := query.NewWorkspaceSelectBuilder(s.SQLRenderer, sharedSubjectRequestsTable, workspace).Columns("id").Where(query.And(
+		query.NotEqual("request_type", "external_erasure"),
+		query.Equal("kind", "erase"),
+		query.Equal("resolved_identity", subject),
+	))
+	predicates := []query.Predicate{
+		query.Equal("owner", lifecycleSubjectOwner),
+		query.Equal("operation", lifecycleEraseFenceOperation),
+		query.InSubquery("request_id", requestIDs),
+	}
+	if strings.TrimSpace(request) != "" {
+		predicates = append(predicates, query.Equal("request_id", request))
+	}
+	return query.NewWorkspaceSelectBuilder(s.SQLRenderer, lifecycleSubjectExecutionStepsTable, workspace).
+		Columns("request_id").Where(query.And(predicates...))
 }
 
-func (s *RuntimeStore) SubjectEvidenceRowWriteAllowed(workspace, table string) query.Predicate {
-	return query.Not(query.ExistsSubquery(query.NewWorkspaceSelectBuilder(s.SQLRenderer, "_subject_evidence_erasure_fences", workspace).
-		Columns("record_id").Where(query.And(query.Equal("kind", table), query.Equal("object_key", ""),
-		query.EqualExpressions(query.TableColumn("_subject_evidence_erasure_fences", "record_id"), query.TableColumn(table, "id"))))))
+func (s *RuntimeStore) SubjectErasureFenceExists(workspace, subject string) query.Predicate {
+	return query.ExistsSubquery(s.subjectErasureFenceRequests(workspace, "", subject))
+}
+
+func (s *RuntimeStore) SubjectErasureFenceMatches(workspace, request, subject string) query.Predicate {
+	return query.ExistsSubquery(s.subjectErasureFenceRequests(workspace, request, subject))
+}
+
+type subjectPlanRowReference struct {
+	Table string `json:"table"`
+	ID    string `json:"id"`
+}
+
+type subjectPlanRecordReference struct {
+	ObjectKey string `json:"object_key"`
+	RecordID  string `json:"record_id"`
+}
+
+// SubjectEvidenceWriteAllowed protects one Runtime evidence row by consulting
+// the Runtime owner's plan persisted in Lifecycle's shared execution-step
+// journal. Runtime does not own another fence table.
+func (s *RuntimeStore) SubjectEvidenceWriteAllowed(workspace, table, id string) query.Predicate {
+	if !s.SubjectLifecyclePersistenceBound() || strings.TrimSpace(id) == "" {
+		return query.AlwaysTrue()
+	}
+	return query.Not(s.subjectPlanContains(workspace, subjectPlanRowReference{Table: table, ID: id}))
 }
 
 func (s *RuntimeStore) SubjectResourceWriteAllowed(workspace, object, id string) query.Predicate {
-	return query.Not(query.ExistsSubquery(query.NewWorkspaceSelectBuilder(s.SQLRenderer, "_subject_evidence_erasure_fences", workspace).
-		Columns("record_id").Where(query.And(query.Equal("kind", "record"), query.Equal("object_key", object), query.Equal("record_id", id)))))
+	workspace, object, id = strings.TrimSpace(workspace), strings.TrimSpace(object), strings.TrimSpace(id)
+	if !s.SubjectLifecyclePersistenceBound() || strings.TrimSpace(object) == "" || strings.TrimSpace(id) == "" {
+		return query.AlwaysTrue()
+	}
+	return query.Not(s.subjectPlanContains(workspace, subjectPlanRecordReference{ObjectKey: object, RecordID: id}))
 }
 
 func (s *RuntimeStore) SubjectActorWriteAllowed(workspace, actor string) query.Predicate {
-	if actor == "" {
+	workspace, actor = strings.TrimSpace(workspace), strings.TrimSpace(actor)
+	if !s.SubjectLifecyclePersistenceBound() || strings.TrimSpace(actor) == "" {
 		return query.AlwaysTrue()
 	}
-	return query.Not(query.ExistsSubquery(query.NewWorkspaceSelectBuilder(s.SQLRenderer, "_subject_evidence_erasure_fences", workspace).
-		Columns("record_id").Where(query.And(query.Equal("kind", "subject"), query.Equal("object_key", ""), query.Equal("record_id", actor)))))
+	return query.Not(s.SubjectErasureFenceExists(workspace, actor))
+}
+
+func (s *RuntimeStore) SubjectRecordWriteAllowed(workspace, object, recordID, actor string) query.Predicate {
+	if !s.SubjectLifecyclePersistenceBound() {
+		return query.AlwaysTrue()
+	}
+	return query.And(s.SubjectResourceWriteAllowed(workspace, object, recordID), s.SubjectActorWriteAllowed(workspace, actor))
 }
 
 // SubjectEvidenceInsertBuilder checks immutable ownership in the INSERT itself.
 // ORM workspace INSERT does not support a SELECT source, so this adapter owns
 // the workspace column explicitly. An aggregate seed returns exactly one row
-// even when no fences exist, across SQLite, PostgreSQL and MySQL.
+// even when no Lifecycle steps exist, across SQLite, PostgreSQL and MySQL.
 func (s *RuntimeStore) SubjectEvidenceInsertBuilder(workspace, table string, columns []string, values []any, extra ...query.Predicate) (*query.InsertBuilder, error) {
 	if strings.TrimSpace(workspace) == "" {
 		return nil, fmt.Errorf("subject evidence workspace required")
+	}
+	for _, column := range columns {
+		if strings.EqualFold(column, "workspace_id") {
+			return nil, fmt.Errorf("subject evidence insert owns workspace_id")
+		}
+	}
+	if !s.SubjectLifecyclePersistenceBound() {
+		return query.NewWorkspaceInsertBuilder(s.SQLRenderer, table, workspace).Columns(columns...).Values(values...), nil
 	}
 	predicate, err := s.subjectEvidenceWritePredicate(workspace, table, columns, values)
 	if err != nil {
@@ -50,35 +111,24 @@ func (s *RuntimeStore) SubjectEvidenceInsertBuilder(workspace, table string, col
 	if predicate == nil {
 		predicate = query.AlwaysTrue()
 	}
-	for _, column := range columns {
-		if strings.EqualFold(column, "workspace_id") {
-			return nil, fmt.Errorf("subject evidence insert owns workspace_id")
-		}
-	}
 	projections := []query.Projection{query.Project(query.Value(workspace))}
 	for _, value := range values {
 		projections = append(projections, query.Project(query.Value(value)))
 	}
-	seed := query.NewSelectBuilder(s.SQLRenderer, "_subject_evidence_erasure_fences").Projections(query.ProjectAs(query.CountAll(), "fence_count")).Where(query.AlwaysFalse())
-	source := query.NewSelectFromSubquery(s.SQLRenderer, seed, "subject_insert_seed").Projections(projections...).Where(query.And(append([]query.Predicate{predicate}, extra...)...))
-	return query.NewInsertBuilder(s.SQLRenderer, table).Columns(append([]string{"workspace_id"}, columns...)...).FromSelect(source), nil
-}
-
-// The correlation keeps a set mutation in one UPDATE and applies the fence to
-// every selected record, including records not represented by a synthetic ID.
-func (s *RuntimeStore) SubjectRecordWriteAllowed(workspace, object, actor string) query.Predicate {
-	where := []query.Predicate{query.And(query.Equal("kind", "record"), query.Equal("object_key", object),
-		query.EqualExpressions(query.QualifiedColumn("_subject_evidence_erasure_fences", "record_id"), query.QualifiedColumn(object, "id")))}
-	if actor != "" {
-		where = append(where, query.And(query.Equal("kind", "subject"), query.Equal("object_key", ""), query.Equal("record_id", actor)))
-	}
-	return query.Not(query.ExistsSubquery(query.NewWorkspaceSelectBuilder(s.SQLRenderer, "_subject_evidence_erasure_fences", workspace).
-		Columns("record_id").Where(query.Or(where...))))
+	seed := query.NewWorkspaceSelectBuilder(s.SQLRenderer, lifecycleSubjectExecutionStepsTable, workspace).
+		Projections(query.ProjectAs(query.CountAll(), "step_count")).Where(query.AlwaysFalse())
+	source := query.NewSelectFromSubquery(s.SQLRenderer, seed, "subject_insert_seed").
+		Projections(projections...).Where(query.And(append([]query.Predicate{predicate}, extra...)...))
+	return query.NewInsertBuilder(s.SQLRenderer, table).
+		Columns(append([]string{"workspace_id"}, columns...)...).FromSelect(source), nil
 }
 
 func (s *RuntimeStore) GuardSubjectEvidenceWrite(ctx context.Context, executor interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }, workspace, table string, columns []string, values []any) error {
+	if !s.SubjectLifecyclePersistenceBound() {
+		return nil
+	}
 	predicate, err := s.subjectEvidenceWritePredicate(workspace, table, columns, values)
 	if err != nil {
 		return err
@@ -86,7 +136,34 @@ func (s *RuntimeStore) GuardSubjectEvidenceWrite(ctx context.Context, executor i
 	if predicate == nil {
 		return nil
 	}
-	statement, args, err := query.NewWorkspaceSelectBuilder(s.SQLRenderer, "_subject_evidence_erasure_fences", workspace).Columns("record_id").Where(query.Not(predicate)).Limit(1).Build()
+	return s.guardSubjectWriteAllowed(ctx, executor, workspace, predicate)
+}
+
+// GuardSubjectRecordsWrite blocks a set mutation before its UPDATE executes.
+// The caller must run this guard and the mutation in the same serializable
+// transaction so a concurrently prepared erasure cannot slip between them.
+func (s *RuntimeStore) GuardSubjectRecordsWrite(ctx context.Context, executor interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, workspace, object string, recordIDs []string, actor string) error {
+	if !s.SubjectLifecyclePersistenceBound() {
+		return nil
+	}
+	allowed := []query.Predicate{s.SubjectActorWriteAllowed(workspace, actor)}
+	for _, id := range recordIDs {
+		if id = strings.TrimSpace(id); id != "" {
+			allowed = append(allowed, s.SubjectResourceWriteAllowed(workspace, object, id))
+		}
+	}
+	return s.guardSubjectWriteAllowed(ctx, executor, workspace, query.And(allowed...))
+}
+
+func (s *RuntimeStore) guardSubjectWriteAllowed(ctx context.Context, executor interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, workspace string, allowed query.Predicate) error {
+	seed := query.NewWorkspaceSelectBuilder(s.SQLRenderer, lifecycleSubjectExecutionStepsTable, workspace).
+		Projections(query.ProjectAs(query.CountAll(), "step_count")).Where(query.AlwaysFalse())
+	statement, args, err := query.NewSelectFromSubquery(s.SQLRenderer, seed, "subject_write_guard").
+		Columns("step_count").Where(query.Not(allowed)).Limit(1).Build()
 	if err != nil {
 		return err
 	}
@@ -102,6 +179,9 @@ func (s *RuntimeStore) GuardSubjectEvidenceWrite(ctx context.Context, executor i
 }
 
 func (s *RuntimeStore) subjectEvidenceWritePredicate(workspace, table string, columns []string, values []any) (query.Predicate, error) {
+	if !s.SubjectLifecyclePersistenceBound() {
+		return nil, nil
+	}
 	if len(columns) != len(values) {
 		return nil, fmt.Errorf("subject evidence write shape invalid")
 	}
@@ -111,27 +191,51 @@ func (s *RuntimeStore) subjectEvidenceWritePredicate(workspace, table string, co
 			data[column] = strings.TrimSpace(fmt.Sprint(values[i]))
 		}
 	}
-	where := []query.Predicate{}
-	add := func(kind, object, id string) {
-		if id != "" {
-			where = append(where, query.And(query.Equal("kind", kind), query.Equal("object_key", object), query.Equal("record_id", id)))
+	blocked := []query.Predicate{}
+	addRow := func(rowTable, id string) {
+		if strings.TrimSpace(rowTable) != "" && strings.TrimSpace(id) != "" {
+			blocked = append(blocked, s.subjectPlanContains(workspace, subjectPlanRowReference{Table: rowTable, ID: id}))
 		}
 	}
-	add(table, "", data["id"])
-	add("_workflow_process_instances", "", data["process_id"])
-	for _, parent := range []string{"_action_executions", "_workflow_executions", "_record_mutation_executions"} {
-		add(parent, "", data["request_ref"])
+	addRecord := func(object, id string) {
+		if strings.TrimSpace(object) != "" && strings.TrimSpace(id) != "" {
+			blocked = append(blocked, s.subjectPlanContains(workspace, subjectPlanRecordReference{ObjectKey: object, RecordID: id}))
+		}
+	}
+	addActor := func(actor string) {
+		if strings.TrimSpace(actor) != "" {
+			blocked = append(blocked, s.SubjectErasureFenceExists(workspace, actor))
+		}
+	}
+
+	addRow(table, data["id"])
+	addRow("_workflow_process_instances", data["process_id"])
+	for _, parent := range []string{"_workflow_executions", "_operations"} {
+		addRow(parent, data["request_ref"])
+	}
+	if table == "_operations" && (data["owner"] == "record" || data["owner"] == "action") {
+		addRecord(data["resource_type"], data["resource_id"])
 	}
 	if data["record_id"] == "" {
 		data["record_id"] = data["target_id"]
 	}
-	add("record", data["object_key"], data["record_id"])
+	addRecord(data["object_key"], data["record_id"])
 	for _, column := range []string{"actor_id", "initiator_id", "created_by", "create_by", "update_by", "owner_user_id", "user_id", "assignee_user_id", "completed_by", "configured_by", "requested_by", "requester_user_id", "revoked_by"} {
-		add("subject", "", data[column])
+		addActor(data[column])
 	}
-	if len(where) == 0 {
+	if len(blocked) == 0 {
 		return nil, nil
 	}
-	return query.Not(query.ExistsSubquery(query.NewWorkspaceSelectBuilder(s.SQLRenderer, "_subject_evidence_erasure_fences", workspace).
-		Columns("record_id").Where(query.Or(where...)))), nil
+	return query.Not(query.Or(blocked...)), nil
+}
+
+func (s *RuntimeStore) subjectPlanContains(workspace string, reference any) query.Predicate {
+	raw, _ := json.Marshal(reference)
+	escaped := strings.NewReplacer("~", "~~", "%", "~%", "_", "~_").Replace(string(raw))
+	return query.ExistsSubquery(query.NewWorkspaceSelectBuilder(s.SQLRenderer, lifecycleSubjectExecutionStepsTable, workspace).
+		Columns("request_id").Where(query.And(
+		query.Equal("owner", runtimeEvidenceSubjectOwner),
+		query.Equal("operation", runtimeEvidenceErasePlanOperation),
+		query.LikeEscaped("payload_json", "%"+escaped+"%"),
+	)))
 }

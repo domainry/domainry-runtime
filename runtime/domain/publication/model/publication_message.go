@@ -6,6 +6,7 @@ package publicationmodel
 type Message struct {
 	ID                 string         `json:"id"`
 	WorkspaceID        string         `json:"workspace_id,omitempty"`
+	OperationID        string         `json:"operation_id,omitempty"`
 	ConnectorKey       string         `json:"connector_key"`
 	ConnectionKey      string         `json:"connection_key,omitempty"`
 	Operation          string         `json:"operation"`

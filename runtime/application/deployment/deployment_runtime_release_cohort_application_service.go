@@ -77,26 +77,20 @@ func ValidateRuntimeReleaseIdentity(identity deploymentmodel.RuntimeReleaseIdent
 		return fmt.Errorf("%w: release build mode=%q", deploymentmodel.ErrRuntimeReleaseAdmission, identity.BuildMode)
 	}
 	for name, value := range map[string]string{
-		"runtime version":              identity.RuntimeVersion,
-		"runtimeext contract version":  identity.RuntimeextContractVersion,
-		"connector contract version":   identity.ConnectorContractVersion,
-		"domain SDK contract version":  identity.DomainSDKContractVersion,
-		"domain SDK generator version": identity.DomainSDKGeneratorVersion,
-		"domain SDK build constraint":  identity.DomainSDKBuildConstraint,
+		"runtime version":             identity.RuntimeVersion,
+		"runtimeext contract version": identity.RuntimeextContractVersion,
+		"connector contract version":  identity.ConnectorContractVersion,
 	} {
 		if strings.TrimSpace(value) == "" || strings.TrimSpace(value) != value {
 			return fmt.Errorf("%w: %s is malformed", deploymentmodel.ErrRuntimeReleaseAdmission, name)
 		}
 	}
 	for name, value := range map[string]string{
-		"runtimeext contract":        identity.RuntimeextContractSHA256,
-		"connector contract":         identity.ConnectorContractSHA256,
-		"domain SDK contract":        identity.DomainSDKContractSHA256,
-		"metadata snapshot":          identity.ApplicationSchemaSnapshotSHA256,
-		"generated SDK":              identity.GeneratedSDKSHA256,
-		"project extension registry": identity.ProjectExtensionRegistrySHA256,
-		"connector registry":         identity.ConnectorRegistrySHA256,
-		"combination":                identity.CombinationSHA256,
+		"runtimeext contract":         identity.RuntimeextContractSHA256,
+		"connector contract":          identity.ConnectorContractSHA256,
+		"project definition registry": identity.ProjectDefinitionRegistrySHA256,
+		"connector registry":          identity.ConnectorRegistrySHA256,
+		"combination":                 identity.CombinationSHA256,
 	} {
 		if !runtimeReleaseLowerSHA256(value) {
 			return fmt.Errorf("%w: %s SHA-256 is malformed", deploymentmodel.ErrRuntimeReleaseAdmission, name)
@@ -243,7 +237,7 @@ func (s *RuntimeReleaseIntegrity) RegistryReadiness(context.Context) error {
 	}
 	extensionHash, _ := deploymentmodel.RuntimeRegistrySHA256("domainry-project-extension-registry-v1", s.extensions.Descriptors())
 	connectorHash, _ := deploymentmodel.RuntimeRegistrySHA256("domainry-connector-registry-v1", s.connectors.Descriptors())
-	if extensionHash != s.identity.ProjectExtensionRegistrySHA256 || connectorHash != s.identity.ConnectorRegistrySHA256 {
+	if extensionHash != s.identity.ProjectDefinitionRegistrySHA256 || connectorHash != s.identity.ConnectorRegistrySHA256 {
 		return fmt.Errorf("%w: Project Extension or Connector Registry differs from release identity", ErrRuntimeReleaseRegistryIntegrity)
 	}
 	return nil

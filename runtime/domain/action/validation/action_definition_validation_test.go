@@ -17,7 +17,7 @@ func TestActionDefinitionValidationOwnsMetadataContract(t *testing.T) {
 		}
 	}
 	for _, issue := range issues {
-		if issue.MessageKey == "" || issue.CapabilityKey != "action.definition" || issue.ContractVersion == "" {
+		if issue.MessageKey == "" || issue.ErrorCode == "" || issue.FieldPath == "" {
 			t.Fatalf("issue=%#v", issue)
 		}
 	}

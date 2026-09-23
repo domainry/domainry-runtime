@@ -7,7 +7,7 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/invocation"
+	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/invocation/contract"
 
 	"context"
 	"strings"

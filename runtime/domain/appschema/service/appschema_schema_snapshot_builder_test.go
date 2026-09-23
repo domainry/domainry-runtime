@@ -8,7 +8,7 @@ import (
 
 func TestBuildSchemaSnapshotCanonicalizesOwnerProjection(t *testing.T) {
 	snapshot := BuildSchemaSnapshot(SchemaSnapshotState{
-		TemplateID: "template", TemplateVersion: "1",
+		ProjectKey: "template", SchemaVersion: "1",
 		Objects: []definitionmodel.ObjectSchema{{Key: "z"}, {Key: "a"}},
 		Actions: []definitionmodel.ActionSchema{{Key: "z.run", ObjectKey: "z"}, {Key: "a.run", ObjectKey: "a"}},
 	})

@@ -257,7 +257,7 @@ func automationNotificationEvent(id, sourceID string) notificationmodel.Notifica
 func assertAutomationNotificationCounts(t *testing.T, store *database.RuntimeStore, executionID string, wantExecutions, wantEvents int) {
 	t.Helper()
 	var executions, events int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("_automation_rule_executions")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1)+" AND "+store.Identifier("id")+" = "+store.Placeholder(2), "workspace-a", executionID).Scan(&executions); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("_automation_runs")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1)+" AND "+store.Identifier("run_kind")+" = "+store.Placeholder(2)+" AND "+store.Identifier("id")+" = "+store.Placeholder(3), "workspace-a", "rule", executionID).Scan(&executions); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("_notification_events")).Scan(&events); err != nil {

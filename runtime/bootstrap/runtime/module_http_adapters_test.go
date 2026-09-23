@@ -11,6 +11,7 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
+	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
@@ -112,6 +113,20 @@ func TestRuntimeCollectsModuleOwnedHTTPAdapters(t *testing.T) {
 	adapters[0] = nil
 	if runtime.ModuleHTTPAdapters()[0] == nil {
 		t.Fatal("caller mutated Runtime module Adapter inventory")
+	}
+}
+
+func TestRuntimePublicResourceAdapterOmitsFileRouteWhenUploadsAreUnselected(t *testing.T) {
+	runtime := &Runtime{schemaCapabilitiesSelected: true, schemaCapabilities: persistence.RuntimeSchemaCapabilities{}}
+	adapter := runtimePublicResourceHTTPAdapter{runtime: runtime}
+	if routes := adapter.Routes(); len(routes) != 1 || routes[0].Action.Key != "runtime.public_resources.read" {
+		t.Fatalf("minimal public-resource routes=%#v", routes)
+	}
+
+	response := httptest.NewRecorder()
+	adapter.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/public-resources/catalog/access/files/manual", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("unselected public-resource file route status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

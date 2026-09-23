@@ -45,14 +45,6 @@ func TestAssembleRuntimeHTTPServerMinimalGraphWiresRoutesAndFallbackDependencies
 	}
 
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
-	request.Header.Set("X-User-ID", "admin")
-	request.Header.Set("X-Role", "admin")
-	server.Routes().ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		t.Fatalf("openapi status=%d body=%s", response.Code, response.Body.String())
-	}
-	response = httptest.NewRecorder()
 	server.Routes().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/live", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("liveness status=%d body=%s", response.Code, response.Body.String())
@@ -63,7 +55,7 @@ func TestAssembleRuntimeHTTPServerMinimalGraphWiresRoutesAndFallbackDependencies
 		t.Fatalf("readiness identity status=%d body=%s", response.Code, response.Body.String())
 	}
 	response = httptest.NewRecorder()
-	request = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	request.Header.Set("X-User-ID", "operator")
 	request.Header.Set("X-Role", "operator")
 	server.Routes().ServeHTTP(response, request)
@@ -100,25 +92,9 @@ func TestListenerRouteGroupsRegisterOnlyTheirCompiledEndpointInventory(t *testin
 	}
 
 	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/live", nil, http.StatusOK)
-	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/openapi.json", nil, http.StatusOK)
-	publicOpenAPI := httptest.NewRecorder()
-	server.RoutesForListenerGroup(runtimehttp.ListenerRouteGroupPublic).ServeHTTP(
-		publicOpenAPI,
-		httptest.NewRequest(http.MethodGet, "/openapi.json", nil),
-	)
-	if body := publicOpenAPI.Body.String(); !strings.Contains(body, `"/records/{objectKey}"`) ||
-		!strings.Contains(body, `"/automation/rules"`) ||
-		strings.Contains(body, `"/identity/`) ||
-		strings.Contains(body, `"/auth/`) ||
-		strings.Contains(body, `"/operations"`) {
-		t.Fatalf("public OpenAPI leaked or omitted Surface paths: %s", body)
-	}
 	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/metrics", nil, http.StatusNotFound)
 	assertStatus(runtimehttp.ListenerRouteGroupManagement, http.MethodGet, "/metrics", nil, http.StatusUnauthorized)
 	assertStatus(runtimehttp.ListenerRouteGroupOps, http.MethodGet, "/identity/users", nil, http.StatusNotFound)
-	assertStatus(runtimehttp.ListenerRouteGroupManagement, http.MethodGet, "/openapi.json", map[string]string{
-		"X-User-ID": "admin", "X-Role": "admin",
-	}, http.StatusOK)
 	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/live", map[string]string{
 		"Origin": "https://admin.example.com",
 	}, http.StatusForbidden)

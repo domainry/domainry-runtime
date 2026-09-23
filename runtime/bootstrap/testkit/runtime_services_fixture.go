@@ -2,14 +2,17 @@ package testkit
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"strings"
 
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	reportsdk "github.com/domainry/domainry-report-sdk"
-	globalcapabilityseed "github.com/domainry/domainry-runtime/runtime/application/seed/globalcapability"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 	auditpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
 	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
@@ -35,19 +38,26 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *comp
 	if err := principalmodel.ConfigureInstallationWorkspaceID(installationWorkspaceID); err != nil {
 		panic("configure Runtime testkit installation workspace: " + err.Error())
 	}
-	manifest := manifestmodel.ManifestSchema{
-		TemplateID: config.TemplateID, Version: config.TemplateVersion, Name: config.Name,
-		Objects: config.Objects, Actions: config.Actions, Workflows: config.Workflows,
-		AutomationRules: config.AutomationRules, Dictionaries: config.Dictionaries, Integrations: config.Integrations,
-		Reports: config.Reports, Skills: config.Skills, Agents: config.Agents,
-		IdentityProfileExtensions: config.IdentityProfileExtensions,
+	modelHash := sha256.Sum256(mustJSON(config.Objects))
+	model := projectmodel.RuntimeModel{
+		SchemaVersion: "1", ProjectKey: config.ProjectKey, ProjectName: config.Name,
+		TimeZone: "UTC", ContentHash: hex.EncodeToString(modelHash[:]),
+		Objects: config.Objects, IdentityProfiles: config.IdentityProfileExtensions,
 	}
-	manifest = globalcapabilityseed.WithGeneratedSchema(manifest)
-	if config.Store != nil && config.ApplicationSchemaRepository == nil {
+	definitions := runtimeext.ProjectDefinitions{
+		Workflows: config.Workflows, AutomationRules: config.AutomationRules,
+		AgentSkills: config.Skills, Agents: config.Agents,
+	}
+	for _, report := range config.Reports {
+		definitions.Reports = append(definitions.Reports, runtimeext.ReportDefinition{Report: report})
+	}
+	if config.Store != nil {
 		metadatamodulefixture.EnsureBinding(ctx, config.Store)
-		if len(manifest.Objects) > 0 {
+	}
+	if config.Store != nil && config.ApplicationSchemaRepository == nil {
+		if len(model.Objects) > 0 {
 			repository := appschemapersistence.NewApplicationSchemaStore(config.Store)
-			if err := repository.SyncManifestProjection(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "prepare Runtime testkit metadata projection"), manifest); err != nil {
+			if err := repository.InitializeProjectModel(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "prepare Runtime testkit project model"), model); err != nil {
 				panic("sync Runtime testkit metadata projection: " + err.Error())
 			}
 		}
@@ -70,19 +80,16 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *comp
 	if config.WorkflowDefinitions != nil {
 		dependencies.WorkflowDefinitions = config.WorkflowDefinitions
 	}
-	if config.BusinessEvidence != nil {
-		dependencies.BusinessEvidence = config.BusinessEvidence
-	}
 	dependencies.WorkflowDecisions = config.WorkflowDecisions
 	dependencies.IdentityProjection = config.IdentityProjection
 	dependencies.IdentityPrincipals = config.IdentityPrincipals
 	dependencies.DataExchange = config.DataExchange
 	services := composition.NewRuntimeServices(ctx, composition.RuntimeServicesConfig{
-		Manifest:     manifest,
-		Dependencies: dependencies,
+		ProjectModel: model, ProjectDefinitions: definitions,
+		Actions: config.Actions, Integrations: config.Integrations, Dependencies: dependencies,
 	})
 	if reportBinding != nil {
-		if err := reportmodulehost.SynchronizeDefinitions(ctx, reportBinding, manifest); err != nil {
+		if err := reportmodulehost.SynchronizeDefinitions(ctx, reportBinding, model.ProjectKey, model.ContentHash, definitions.Reports); err != nil {
 			panic("synchronize Report test definitions: " + err.Error())
 		}
 		binder, ok := reportBinding.(reportsdk.ApplicationHostBinder)
@@ -97,6 +104,14 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *comp
 		}
 	}
 	return services
+}
+
+func mustJSON(value any) []byte {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return payload
 }
 
 func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesConfig) (composition.RuntimeServicesDependencies, reportsdk.Binding) {
@@ -125,7 +140,6 @@ func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesC
 		ApplicationSchema:                   appschemapersistence.NewApplicationSchemaStore(config.Store),
 		AutomationWorker:                    automationpersistence.NewAutomationWorkerStore(config.Store),
 		AutomationExecutions:                automationpersistence.NewAutomationExecutionStore(config.Store),
-		BusinessEvidence:                    nil,
 		ActionExecutions:                    actionpersistence.NewActionBusinessExecutionStore(config.Store),
 		ActionAssurance:                     actionpersistence.NewActionAssuranceStore(config.Store),
 		RuntimeStatus:                       deploymentpersistence.NewRuntimeStatusStore(config.Store),

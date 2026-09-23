@@ -189,7 +189,7 @@ func validateWorkspaceBootstrapInputField(field WorkspaceBootstrapInputField) er
 }
 
 // NormalizeWorkspaceBootstrapInputValue applies the same controlled type and
-// constraint contract used by descriptor validation and OpenAPI projection.
+// constraint contract used by descriptor validation and Runtime execution.
 func NormalizeWorkspaceBootstrapInputValue(field WorkspaceBootstrapInputField, value any) (any, error) {
 	invalid := func() (any, error) { return nil, fmt.Errorf("Workspace bootstrap input %q is invalid", field.Key) }
 	switch field.Type {

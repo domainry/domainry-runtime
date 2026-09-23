@@ -7,11 +7,15 @@ import (
 	"strings"
 	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
+	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/datamigration"
 )
@@ -253,7 +257,8 @@ func (e DatabaseRetirementSQLExecutor) ExecuteDatabaseRetirement(ctx context.Con
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	if err := operationspolicy.OperationsValidateDatabaseDropEvidence(retirement.Evidence, now().UTC()); err != nil {
+	completedAt := now().UTC()
+	if err := operationspolicy.OperationsValidateDatabaseDropEvidence(retirement.Evidence, completedAt); err != nil {
 		return result, err
 	}
 	if plan.RetirementID != retirement.ID || plan.Object != retirement.Object {
@@ -292,10 +297,43 @@ func (e DatabaseRetirementSQLExecutor) ExecuteDatabaseRetirement(ctx context.Con
 			return result, err
 		}
 	}
+	if err = appendDatabaseRetirementCompletionAudit(ctx, e.store, tx, retirement, plan, result, completedAt); err != nil {
+		return result, err
+	}
 	if err = tx.Commit(); err != nil {
 		return result, err
 	}
 	return result, nil
+}
+
+func appendDatabaseRetirementCompletionAudit(ctx context.Context, store *database.RuntimeStore, tx *sql.Tx, retirement operationsmodel.DatabaseRetirement, plan operationsmodel.DatabaseDropPlan, result operationscontract.DatabaseRetirementExecutionResult, completedAt time.Time) error {
+	if store == nil || tx == nil {
+		return fmt.Errorf("database retirement audit transaction unavailable")
+	}
+	workspaceID := strings.TrimSpace(principalmodel.InstallationWorkspaceID)
+	if workspaceID == "" {
+		workspaceID = "runtime-installation"
+	}
+	event := auditmodel.AuditEvent{
+		ID: result.AuditEventID, WorkspaceID: workspaceID,
+		OperationID: requestcontext.OwnerExecutionID(ctx), OwnerRunID: retirement.ID,
+		Family: auditmodel.EventFamilyRuntimeOperations,
+		Event:  "database_retirement_completed", ObjectKey: "database_object", RecordID: retirement.ID,
+		ActorID: strings.TrimSpace(retirement.Evidence.Owner), RoleKey: "operations",
+		Summary: "Database object retirement completed",
+		Before:  map[string]any{"state": retirement.State, "object": retirement.Object},
+		After:   map[string]any{"state": operationsmodel.DatabaseRetirementDropped, "executed_statements": result.ExecutedStatements},
+		Metadata: map[string]any{
+			"approval_id": retirement.Evidence.ApprovalID, "backup_id": retirement.Evidence.BackupID,
+			"backup_checksum": retirement.Evidence.BackupChecksum, "change_plan_id": retirement.Evidence.ChangePlanID,
+			"disposition": retirement.Evidence.Disposition, "rollback": plan.Rollback,
+		},
+		CreatedAt: completedAt.Format(time.RFC3339Nano),
+	}
+	if err := auditmoduleimpl.AppendPreparedWithin(ctx, store.RuntimeRenderer(), runtimeauditmodule.NewTransaction(tx), event); err != nil {
+		return fmt.Errorf("append database retirement completion audit: %w", err)
+	}
+	return nil
 }
 
 func applyRetirementLockTimeout(ctx context.Context, tx *sql.Tx, engine datamigration.Engine, timeout time.Duration) error {

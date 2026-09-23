@@ -154,7 +154,7 @@ func (*uploadArtifactStoreStub) ReconcileUploadArtifacts(context.Context, lifecy
 
 func uploadTestHandler(t *testing.T, principal principalmodel.Principal) *UploadsHandler {
 	t.Helper()
-	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "uploads", TemplateVersion: "1", Objects: uploadTestObjects()})
+	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{ProjectKey: "uploads", SchemaVersion: "1", Objects: uploadTestObjects()})
 	return NewUploadsHandler(UploadsDependencies{
 		Access: uploadapplication.NewUploadAccessApplicationService(records.Applications().Schema, records.Applications().Audit, uploadTestRecordQuery{}), Subjects: uploadapplication.NewUploadSubjectRegistry(uploadSubjectTestMemory{}), Scans: uploadapplication.NewFileScanReceiptVerifier(&uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{"workspace-a\x00asset.txt": {FileID: "asset.txt", WorkspaceID: "workspace-a", Filename: "asset.txt", ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean}, "workspace-a\x00file.txt": {FileID: "file.txt", WorkspaceID: "workspace-a", Filename: "file.txt", ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean}}}, bytes.Repeat([]byte("k"), 32)), Blobs: newUploadBlobStoreStub(), Principal: func(*http.Request) principalmodel.Principal { return principal },
 		WriteJSON: func(w http.ResponseWriter, status int, value any) {
@@ -590,7 +590,7 @@ func TestUploadStorageIsIsolatedByWorkspace(t *testing.T) {
 func TestUploadHelpersAndRoutes(t *testing.T) {
 	handler := uploadTestHandler(t, principalmodel.Principal{})
 	handler.UseAccess(nil)
-	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "uploads", TemplateVersion: "1"})
+	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{ProjectKey: "uploads", SchemaVersion: "1"})
 	handler.UseAccess(uploadapplication.NewUploadAccessApplicationService(records.Applications().Schema, records.Applications().Audit, nil))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -609,7 +609,7 @@ func (handoffReviewCatalog) ObjectMap(context.Context) map[string]definitionmode
 
 type handoffReviewAudit struct{}
 
-func (handoffReviewAudit) AppendWithMetadata(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) {
+func (handoffReviewAudit) AppendWithMetadata(context.Context, string, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) {
 }
 
 type handoffReviewRecord struct{}

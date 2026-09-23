@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -22,7 +23,9 @@ func assembleAutomationApplication(records *runtimeAssembly) *automationapplicat
 		DeliveryRepository:    records.publicationRepository,
 		IntegrationManagement: records.integrationOwnerManagement,
 		IntegrationOperations: records.integrationOwnerOperations,
-		Audit:                 records.auditApplicationService.AppendWithMetadata,
+		Audit: func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, before, after, metadata map[string]any) {
+			records.auditApplicationService.AppendWithMetadata(ctx, auditmodel.EventFamilyBusinessEntity, event, objectKey, recordID, principal, summary, before, after, metadata)
+		},
 		Principal: func(ctx context.Context, userID, roleKey, fallbackRoleKey string) principalmodel.Principal {
 			if roleKey == "" {
 				roleKey = fallbackRoleKey

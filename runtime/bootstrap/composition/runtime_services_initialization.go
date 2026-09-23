@@ -4,30 +4,32 @@ import (
 	"context"
 
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	recordruntime "github.com/domainry/domainry-runtime/runtime/domain/record/runtime"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 // newRuntimeServicesState allocates state before ordered service initialization.
-func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.ManifestSchema, deps RuntimeServicesDependencies) *runtimeAssembly {
+func newRuntimeServicesState(ctx context.Context, definitions runtimeext.ProjectDefinitions, integrations appschemamodel.IntegrationSchema, deps RuntimeServicesDependencies) *runtimeAssembly {
 	dataExchangeProviders := deps.DataExchangeProviders
 	if dataExchangeProviders == nil && deps.DataExchange != nil {
 		dataExchangeProviders = recordapplication.NewDataExchangeProviders(nil)
 	}
 	identityProjection := deps.IdentityProjection
-	connectorRegistry := newRuntimeConnectorCatalog(manifest.Integrations)
+	connectorRegistry := newRuntimeConnectorCatalog(integrations)
 	auditApplicationService := deps.AuditApplication
 	if auditApplicationService == nil {
 		auditApplicationService = auditapplication.NewAuditApplicationService(deps.Audit)
 	}
 	services := &runtimeAssembly{
-		schedulerDefinitions:                cloneSchedulerDefinitionMaps(manifest.SchedulerDefinitions),
-		businessCalendars:                   append([]businesscalendarmodel.BusinessCalendarSchema(nil), manifest.BusinessCalendars...),
+		schedulerDefinitions:                append([]schedulersdk.Definition(nil), definitions.Schedules...),
+		businessCalendars:                   append([]businesscalendarmodel.BusinessCalendarSchema(nil), definitions.BusinessCalendars...),
 		productBrandName:                    deps.ProductBrandName,
 		actionRuntimeRevision:               deps.ActionRuntimeRevision,
 		actionProjectRevision:               deps.ActionProjectRevision,
@@ -66,7 +68,6 @@ func newRuntimeServicesState(ctx context.Context, manifest manifestmodel.Manifes
 		metadataLocalization:                deps.MetadataLocalization,
 		automationWorkerRepo:                deps.AutomationWorker,
 		automationExecutionRepo:             deps.AutomationExecutions,
-		businessEvidenceRepo:                deps.BusinessEvidence,
 		runtimeStatusRepo:                   deps.RuntimeStatus,
 		actionAssuranceStore:                deps.ActionAssurance,
 		connectorRegistry:                   connectorRegistry,

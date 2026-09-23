@@ -10,23 +10,12 @@ func EnsureWorkflowProcessSchema(ctx context.Context, s Store) error {
 	tables := map[string][]string{
 		"_workflow_process_instances": {
 			"workspace_id " + text + " NOT NULL", "id " + text + " NOT NULL", "workflow_key " + text + " NOT NULL", "workflow_name TEXT NOT NULL",
+			"operation_id " + text + " NOT NULL DEFAULT ''",
 			"workflow_definition_version_id " + text + " NOT NULL DEFAULT ''",
 			"definition_version INTEGER NOT NULL", "definition_hash " + text + " NOT NULL", "definition_json TEXT NOT NULL",
 			"object_key " + text, "record_id " + text, "initiator_id " + text + " NOT NULL", "initiator_role_key " + text,
 			"status " + text + " NOT NULL", "current_node_ids_json TEXT NOT NULL", "variables_json TEXT NOT NULL",
 			"result_json TEXT NOT NULL", "error_code " + text, "created_at " + text + " NOT NULL", "updated_at " + text + " NOT NULL", "completed_at " + text,
-		},
-		"_workflow_definitions": {
-			"id " + text + " PRIMARY KEY", "workflow_key " + text + " NOT NULL", "name TEXT NOT NULL", "owner_user_id " + text,
-			"enabled INTEGER NOT NULL", "current_draft_version_id " + text, "current_published_version_id " + text,
-			"created_at " + text + " NOT NULL", "updated_at " + text + " NOT NULL",
-		},
-		"_workflow_definition_versions": {
-			"id " + text + " PRIMARY KEY", "definition_id " + text + " NOT NULL", "version_no INTEGER NOT NULL",
-			"status " + text + " NOT NULL", "revision INTEGER NOT NULL", "content_hash " + text, "workflow_json TEXT NOT NULL",
-			"validation_report_json TEXT NOT NULL", "publish_note TEXT", "created_by " + text + " NOT NULL", "published_by " + text,
-			"publish_idempotency_key " + text, "created_at " + text + " NOT NULL", "updated_at " + text + " NOT NULL",
-			"published_at " + text, "archived_at " + text,
 		},
 		"_workflow_node_instances": {
 			"workspace_id " + text + " NOT NULL", "id " + text + " NOT NULL", "process_id " + text + " NOT NULL", "node_id " + text + " NOT NULL",
@@ -73,11 +62,8 @@ func EnsureWorkflowProcessSchema(ctx context.Context, s Store) error {
 		{name: "uniq_workflow_task_workspace_id", table: "_workflow_tasks", columns: []string{"workspace_id", "id"}, unique: true},
 		{name: "uniq_workflow_event_workspace_id", table: "_workflow_process_events", columns: []string{"workspace_id", "id"}, unique: true},
 		{name: "idx_workflow_process_business_record", table: "_workflow_process_instances", columns: []string{"workspace_id", "object_key", "record_id", "created_at"}},
-		{name: "idx_workflow_definition_key", table: "_workflow_definitions", columns: []string{"workflow_key"}, unique: true},
-		{name: "idx_workflow_version_number", table: "_workflow_definition_versions", columns: []string{"definition_id", "version_no"}, unique: true},
-		{name: "idx_workflow_version_status", table: "_workflow_definition_versions", columns: []string{"definition_id", "status", "updated_at"}},
-		{name: "idx_workflow_publish_idempotency", table: "_workflow_definition_versions", columns: []string{"definition_id", "publish_idempotency_key"}, unique: true},
 		{name: "idx_workflow_process_status", table: "_workflow_process_instances", columns: []string{"workspace_id", "status", "updated_at"}},
+		{name: "idx_workflow_process_operation", table: "_workflow_process_instances", columns: []string{"workspace_id", "operation_id"}},
 		{name: "idx_workflow_node_process", table: "_workflow_node_instances", columns: []string{"workspace_id", "process_id", "node_id", "iteration"}, unique: true},
 		{name: "idx_workflow_task_assignee", table: "_workflow_tasks", columns: []string{"workspace_id", "assignee_user_id", "status", "created_at"}},
 		{name: "idx_workflow_task_assignee_process", table: "_workflow_tasks", columns: []string{"workspace_id", "assignee_user_id", "process_id"}},

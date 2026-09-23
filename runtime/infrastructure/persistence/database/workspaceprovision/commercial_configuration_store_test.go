@@ -14,15 +14,13 @@ import (
 
 func TestCommercialConfigurationStoreResolvesOneWorkspaceCompanyAuthority(t *testing.T) {
 	tests := []struct {
-		name       string
-		companyIDs []string
-		want       string
-		wantError  string
+		name      string
+		companyID string
+		want      string
+		wantError string
 	}{
-		{name: "one receipt", companyIDs: []string{"company-a"}, want: "company-a"},
-		{name: "missing receipt", wantError: "missing or ambiguous"},
-		{name: "ambiguous companies", companyIDs: []string{"company-a", "company-b"}, wantError: "missing or ambiguous"},
-		{name: "equal replay receipts", companyIDs: []string{"company-a", "company-a"}, want: "company-a"},
+		{name: "workspace authority", companyID: "company-a", want: "company-a"},
+		{name: "missing authority", wantError: "missing or ambiguous"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -35,15 +33,15 @@ func TestCommercialConfigurationStoreResolvesOneWorkspaceCompanyAuthority(t *tes
 				t.Fatal(err)
 			}
 			now := time.Now().UTC().Format(time.RFC3339Nano)
-			insertTestBuilder(t, store, query.NewInsertBuilder(store.RuntimeRenderer(), "_workspace_commercial_configuration").Columns(
-				"workspace_id", "plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit", "included_store_limit", "max_stores", "contract_date", "billing_day",
-				"billing_contact_name", "billing_contact_phone", "billing_contact_email", "billing_contact_address", "billing_contact_notes", "revision", "created_at", "updated_at",
-			).Values("workspace-a", "standard", 1, 10, 0, 100, 1, 2, "2026-09-06", 1, "", "", "", "", "", 1, now, now))
-			for index, companyID := range test.companyIDs {
-				insertTestBuilder(t, store, query.NewInsertBuilder(store.RuntimeRenderer(), workspaceProvisioningReceiptTable).Columns(
-					"request_id", "request_fingerprint", "workspace_id", "canonical_code", "admin_login_id", "must_change_password", "receipt_status", "company_id", "created_at",
-				).Values("request-"+string(rune('a'+index)), "fingerprint", "workspace-a", "primary", "owner@example.test", true, "committed", companyID, now))
+			var companyID any
+			if test.companyID != "" {
+				companyID = test.companyID
 			}
+			insertTestBuilder(t, store, query.NewInsertBuilder(store.RuntimeRenderer(), "_workspaces").Columns(
+				"id", "canonical_code", "name", "status", "company_organization_id",
+				"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit", "included_store_limit", "max_stores", "contract_date", "billing_day",
+				"billing_contact_name", "billing_contact_phone", "billing_contact_email", "billing_contact_address", "billing_contact_notes", "commercial_revision", "revision", "created_at", "updated_at",
+			).Values("workspace-a", "primary", "Primary", "active", companyID, "standard", 1, 10, 0, 100, 1, 2, "2026-09-06", 1, "", "", "", "", "", 1, 1, now, now))
 			tx, err := store.DB().BeginTx(t.Context(), nil)
 			if err != nil {
 				t.Fatal(err)

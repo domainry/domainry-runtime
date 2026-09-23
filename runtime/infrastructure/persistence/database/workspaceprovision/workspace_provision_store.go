@@ -17,7 +17,7 @@ import (
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	workspaceprovisionmodel "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/model"
@@ -26,12 +26,18 @@ import (
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 )
 
-const workspaceProvisioningReceiptTable = "_workspace_provisioning_receipts_v3"
+const (
+	workspaceProvisioningReceiptTable = "_operations"
+	workspaceProvisioningPurpose      = "workspace_provisioning"
+	workspaceProvisioningOwner        = "workspace"
+	workspaceProvisioningKind         = "workspace.provisioning"
+	workspaceProvisioningAction       = "runtime.workspace.provision"
+)
 
 type WorkspaceProvisionStore struct {
 	runtime     *database.RuntimeStore
 	bootstrap   identitysdk.WorkspaceIdentityBootstrap
-	manifest    manifestmodel.ManifestSchema
+	model       projectmodel.RuntimeModel
 	rolePolicy  WorkspaceBootstrapRolePolicyEvidence
 	participant runtimeext.WorkspaceBootstrapParticipant
 	failures    FailureInjector
@@ -43,11 +49,10 @@ type WorkspaceProvisionStore struct {
 // canonicalization function.
 type WorkspaceBootstrapRolePolicyEvidence struct {
 	RoleCatalogSHA256                    string
-	NavigationCatalogSHA256              string
 	InitialWorkspaceAdministratorRoleKey string
 }
 
-func NewWorkspaceBootstrapRolePolicyEvidence(catalog identitysdk.ProjectRoleCatalog, navigation ...identitysdk.ProjectNavigationCatalog) (WorkspaceBootstrapRolePolicyEvidence, error) {
+func NewWorkspaceBootstrapRolePolicyEvidence(catalog identitysdk.ProjectRoleCatalog) (WorkspaceBootstrapRolePolicyEvidence, error) {
 	digest, err := identitysdk.WorkspaceBootstrapProjectRoleCatalogSHA256(catalog)
 	if err != nil {
 		return WorkspaceBootstrapRolePolicyEvidence{}, err
@@ -56,45 +61,37 @@ func NewWorkspaceBootstrapRolePolicyEvidence(catalog identitysdk.ProjectRoleCata
 	if administratorRoleKey == "" {
 		return WorkspaceBootstrapRolePolicyEvidence{}, fmt.Errorf("Workspace bootstrap initial administrator role is required")
 	}
-	navigationCatalog := identitysdk.ProjectNavigationCatalog{ContractVersion: identitysdk.ProjectNavigationContractVersion, Menus: []identitysdk.ProjectMenuDefinition{}}
-	if len(navigation) > 0 {
-		navigationCatalog = navigation[0]
-	}
-	navigationDigest, err := identitysdk.ProjectNavigationCatalogSHA256(navigationCatalog)
-	if err != nil {
-		return WorkspaceBootstrapRolePolicyEvidence{}, err
-	}
 	return WorkspaceBootstrapRolePolicyEvidence{
-		RoleCatalogSHA256: digest, NavigationCatalogSHA256: navigationDigest,
+		RoleCatalogSHA256:                    digest,
 		InitialWorkspaceAdministratorRoleKey: administratorRoleKey,
 	}, nil
 }
 
 // NewWorkspaceProvisionStore accepts an ordinary initialized Binding, but the
 // provisioning path requires its single current bootstrap capability.
-func NewWorkspaceProvisionStore(store *database.RuntimeStore, binding identitysdk.Binding, manifest manifestmodel.ManifestSchema, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
+func NewWorkspaceProvisionStore(store *database.RuntimeStore, binding identitysdk.Binding, model projectmodel.RuntimeModel, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
 	bootstrap, _ := binding.(identitysdk.WorkspaceIdentityBootstrap)
-	return &WorkspaceProvisionStore{runtime: store, bootstrap: bootstrap, manifest: manifest, rolePolicy: firstWorkspaceBootstrapRolePolicy(rolePolicy)}
+	return &WorkspaceProvisionStore{runtime: store, bootstrap: bootstrap, model: model, rolePolicy: firstWorkspaceBootstrapRolePolicy(rolePolicy)}
 }
 
-func NewWorkspaceProvisionStoreWithParticipant(store *database.RuntimeStore, binding identitysdk.Binding, manifest manifestmodel.ManifestSchema, participant runtimeext.WorkspaceBootstrapParticipant, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
-	result := NewWorkspaceProvisionStore(store, binding, manifest, rolePolicy...)
+func NewWorkspaceProvisionStoreWithParticipant(store *database.RuntimeStore, binding identitysdk.Binding, model projectmodel.RuntimeModel, participant runtimeext.WorkspaceBootstrapParticipant, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
+	result := NewWorkspaceProvisionStore(store, binding, model, rolePolicy...)
 	result.participant = participant
 	return result
 }
 
-func NewWorkspaceInitializationStore(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, manifest manifestmodel.ManifestSchema, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
-	return &WorkspaceProvisionStore{runtime: store, bootstrap: binding, manifest: manifest, rolePolicy: firstWorkspaceBootstrapRolePolicy(rolePolicy)}
+func NewWorkspaceInitializationStore(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, model projectmodel.RuntimeModel, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
+	return &WorkspaceProvisionStore{runtime: store, bootstrap: binding, model: model, rolePolicy: firstWorkspaceBootstrapRolePolicy(rolePolicy)}
 }
 
-func NewWorkspaceInitializationStoreWithParticipant(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, manifest manifestmodel.ManifestSchema, participant runtimeext.WorkspaceBootstrapParticipant, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
-	result := NewWorkspaceInitializationStore(store, binding, manifest, rolePolicy...)
+func NewWorkspaceInitializationStoreWithParticipant(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, model projectmodel.RuntimeModel, participant runtimeext.WorkspaceBootstrapParticipant, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
+	result := NewWorkspaceInitializationStore(store, binding, model, rolePolicy...)
 	result.participant = participant
 	return result
 }
 
-func NewWorkspaceProvisionStoreWithFailureInjector(store *database.RuntimeStore, binding identitysdk.Binding, manifest manifestmodel.ManifestSchema, participant runtimeext.WorkspaceBootstrapParticipant, failures FailureInjector, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
-	result := NewWorkspaceProvisionStoreWithParticipant(store, binding, manifest, participant, rolePolicy...)
+func NewWorkspaceProvisionStoreWithFailureInjector(store *database.RuntimeStore, binding identitysdk.Binding, model projectmodel.RuntimeModel, participant runtimeext.WorkspaceBootstrapParticipant, failures FailureInjector, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
+	result := NewWorkspaceProvisionStoreWithParticipant(store, binding, model, participant, rolePolicy...)
 	result.failures = failures
 	return result
 }
@@ -213,6 +210,10 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	if err = store.insertRuntimeWorkspace(ctx, tx, request, result, installationIdentity); err != nil {
 		return store.afterFailedInsert(ctx, request, fingerprint, err)
 	}
+	initialAdminPassword, err := randomInitialAdministratorPassword()
+	if err != nil {
+		return workspaceprovisionmodel.Result{}, err
+	}
 
 	identityReceipt, err = store.bootstrap.BootstrapWorkspaceIdentity(ctx, identitysdk.WorkspaceIdentityBootstrapRequest{
 		ContractVersion: identitysdk.WorkspaceIdentityBootstrapContractVersion,
@@ -221,7 +222,10 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 		CompanyID: result.CompanyID, CompanyCode: request.WorkspaceCode + "-company", CompanyName: request.WorkspaceName,
 		FirstStoreID: result.FirstStoreID, FirstStoreCode: request.FirstStoreCode, FirstStoreName: request.FirstStoreName,
 		InitialAdminUserID: result.InitialAdminUserID, InitialAdminLoginID: request.AdminLoginID, InitialAdminName: request.AdminName,
-		InitialAdminPassword: store.manifest.InitialWorkspaceAdministratorPassword,
+		// Runtime generates a one-time secret for Identity's closed bootstrap
+		// transaction. It is never authored in model.json or retained in project
+		// metadata; only the post-commit credential claim can disclose it.
+		InitialAdminPassword: initialAdminPassword,
 	}, identitysdk.EmbeddedTransaction{Executor: tx, WorkspaceProvisionFailures: store.identityFailureInjector()})
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, err
@@ -270,9 +274,6 @@ func validateIdentityReceipt(result workspaceprovisionmodel.Result, invocationID
 	if rolePolicy.RoleCatalogSHA256 == "" || receipt.RoleCatalogSHA256 != rolePolicy.RoleCatalogSHA256 {
 		return fmt.Errorf("Identity workspace bootstrap returned a role catalog digest that does not match the catalog sent by Runtime")
 	}
-	if rolePolicy.NavigationCatalogSHA256 == "" || receipt.NavigationCatalogSHA256 != rolePolicy.NavigationCatalogSHA256 {
-		return fmt.Errorf("Identity workspace bootstrap returned a navigation catalog digest that does not match the template sent by Runtime")
-	}
 	if rolePolicy.InitialWorkspaceAdministratorRoleKey == "" || receipt.InitialWorkspaceAdministratorRoleKey != rolePolicy.InitialWorkspaceAdministratorRoleKey {
 		return fmt.Errorf("Identity workspace bootstrap returned an initial administrator role that does not match the catalog sent by Runtime")
 	}
@@ -317,8 +318,8 @@ func (store *WorkspaceProvisionStore) insertApplicationBootstrap(ctx context.Con
 	for _, capability := range descriptor.Records {
 		capabilities[strings.TrimSpace(capability.Key)] = capability
 	}
-	objects := make(map[string]definitionmodel.ObjectSchema, len(store.manifest.Objects))
-	for _, object := range store.manifest.Objects {
+	objects := make(map[string]definitionmodel.ObjectSchema, len(store.model.Objects))
+	for _, object := range store.model.Objects {
 		objects[strings.TrimSpace(object.Key)] = object
 	}
 	if len(records) != len(capabilities) {
@@ -364,7 +365,7 @@ func (store *WorkspaceProvisionStore) insertApplicationBootstrap(ctx context.Con
 			}
 			rawData[key] = record.Data[key]
 		}
-		// Object defaults are manifest-owned static facts, not Handler-selected
+		// Object defaults are model-owned static facts, not Handler-selected
 		// fields. Apply them inside the provisioning transaction before the same
 		// normalization and validation used for ordinary record creation.
 		recordpolicy.RecordApplyFieldDefaults(object, rawData)
@@ -440,13 +441,24 @@ func stableApplicationBootstrapRecordID(workspaceID, capabilityKey, objectKey st
 
 func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, installationIdentity string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	configuration := request.CommercialConfiguration
 	var initialIdentity any
 	if installationIdentity != "" {
 		initialIdentity = installationIdentity
 	}
 	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspaces").
-		Columns("id", "canonical_code", "name", "status", "initial_installation_identity", "revision", "created_at", "updated_at").
-		Values(result.WorkspaceID, result.CanonicalCode, request.WorkspaceName, "active", initialIdentity, 1, now, now)); err != nil {
+		Columns(
+			"id", "canonical_code", "name", "status", "initial_installation_identity", "company_organization_id",
+			"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit",
+			"included_store_limit", "max_stores", "contract_date", "billing_day", "billing_contact_name", "billing_contact_phone",
+			"billing_contact_email", "billing_contact_address", "billing_contact_notes", "commercial_revision", "revision", "created_at", "updated_at",
+		).
+		Values(
+			result.WorkspaceID, result.CanonicalCode, request.WorkspaceName, "active", initialIdentity, result.CompanyID,
+			configuration.Plan, configuration.IncludedUserLimit, configuration.MaxUserLimit, configuration.IncludedCustomerLimit, configuration.MaxCustomerLimit,
+			configuration.IncludedStoreLimit, configuration.MaxStores, configuration.ContractDate, configuration.BillingDay, configuration.BillingContactName, configuration.BillingContactPhone,
+			configuration.BillingContactEmail, configuration.BillingContactAddress, configuration.BillingContactNotes, 1, 1, now, now,
+		)); err != nil {
 		return err
 	}
 	return store.inject(FailureAfterWorkspace)
@@ -454,28 +466,23 @@ func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context
 
 func (store *WorkspaceProvisionStore) insertConfigurationAndReceipt(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, identityReceipt identitysdk.WorkspaceIdentityBootstrapReceipt, fingerprint string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	configuration := request.CommercialConfiguration
-	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspace_commercial_configuration").Columns(
-		"workspace_id", "plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit",
-		"included_store_limit", "max_stores", "contract_date", "billing_day", "billing_contact_name", "billing_contact_phone",
-		"billing_contact_email", "billing_contact_address", "billing_contact_notes", "revision", "created_at", "updated_at",
-	).Values(
-		result.WorkspaceID, configuration.Plan, configuration.IncludedUserLimit, configuration.MaxUserLimit,
-		configuration.IncludedCustomerLimit, configuration.MaxCustomerLimit, configuration.IncludedStoreLimit, configuration.MaxStores,
-		configuration.ContractDate, configuration.BillingDay, configuration.BillingContactName, configuration.BillingContactPhone,
-		configuration.BillingContactEmail, configuration.BillingContactAddress, configuration.BillingContactNotes, 1, now, now,
-	)); err != nil {
-		return err
-	}
 	if err := store.inject(FailureAfterWorkspaceConfiguration); err != nil {
 		return err
 	}
+	resultJSON, metadataJSON, relatedIDsJSON, evidenceJSON, err := workspaceProvisioningOperationJSON(result, identityReceipt)
+	if err != nil {
+		return err
+	}
+	operationID := workspaceProvisioningOperationID(request.RequestID)
 	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), workspaceProvisioningReceiptTable).Columns(
-		"request_id", "request_fingerprint", "workspace_id", "canonical_code", "admin_login_id", "must_change_password",
-		"receipt_status", "identity_receipt_id", "identity_contract_version", "identity_contract_hash", "company_id", "first_store_id", "initial_admin_user_id", "created_at",
+		"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id",
+		"idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json",
+		"error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at",
+		"fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at",
 	).Values(
-		request.RequestID, fingerprint, result.WorkspaceID, result.CanonicalCode, result.AdminLoginID, result.MustChangePassword,
-		"committed", identityReceipt.ReceiptID, identityReceipt.ContractVersion, identityReceipt.ContractHash, result.CompanyID, result.FirstStoreID, result.InitialAdminUserID, now,
+		operationID, "", workspaceProvisioningPurpose, workspaceProvisioningOwner, workspaceProvisioningKind, workspaceProvisioningAction, "", "workspace", result.WorkspaceID,
+		request.RequestID, fingerprint, result.InitialAdminUserID, request.WorkspaceName, result.CanonicalCode, "succeeded", "/operations/"+operationID, resultJSON, metadataJSON,
+		"", "", "", relatedIDsJSON, identityReceipt.ReceiptID, evidenceJSON, "", "", 0, "", now, now, now, now,
 	)); err != nil {
 		return err
 	}
@@ -493,32 +500,77 @@ func insert(ctx context.Context, tx *sql.Tx, builder *query.InsertBuilder) error
 
 func (store *WorkspaceProvisionStore) receipt(ctx context.Context, requestID, fingerprint string) (workspaceprovisionmodel.Result, bool, error) {
 	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), workspaceProvisioningReceiptTable).Columns(
-		"request_fingerprint", "receipt_status", "workspace_id", "canonical_code", "admin_login_id", "must_change_password", "company_id", "first_store_id", "initial_admin_user_id",
-	).Where(query.Equal("request_id", requestID)).Build()
+		"request_fingerprint", "result_json",
+	).Where(query.And(
+		query.Equal("system_purpose", workspaceProvisioningPurpose),
+		query.Equal("owner", workspaceProvisioningOwner),
+		query.Equal("kind", workspaceProvisioningKind),
+		query.Equal("idempotency_key", strings.TrimSpace(requestID)),
+	)).Build()
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, false, err
 	}
-	var stored, status string
-	var companyID, firstStoreID, adminUserID sql.NullString
+	var stored, resultJSON string
 	var result workspaceprovisionmodel.Result
-	err = store.runtime.DB().QueryRowContext(ctx, statement, arguments...).Scan(
-		&stored, &status, &result.WorkspaceID, &result.CanonicalCode, &result.AdminLoginID, &result.MustChangePassword,
-		&companyID, &firstStoreID, &adminUserID,
-	)
+	err = store.runtime.DB().QueryRowContext(ctx, statement, arguments...).Scan(&stored, &resultJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return workspaceprovisionmodel.Result{}, false, nil
 	}
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, false, err
 	}
-	if status != "committed" {
-		return workspaceprovisionmodel.Result{}, true, workspaceprovisionmodel.ErrLegacyAdjudicationRequired
-	}
 	if stored != fingerprint {
 		return workspaceprovisionmodel.Result{}, true, workspaceprovisionmodel.ErrIdempotencyConflict
 	}
-	result.CompanyID, result.FirstStoreID, result.InitialAdminUserID = companyID.String, firstStoreID.String, adminUserID.String
+	var storedResult workspaceProvisioningOperationResult
+	if err := json.Unmarshal([]byte(resultJSON), &storedResult); err != nil {
+		return workspaceprovisionmodel.Result{}, true, workspaceprovisionmodel.ErrIdentityUnavailable
+	}
+	result = workspaceprovisionmodel.Result{
+		WorkspaceID: storedResult.WorkspaceID, CompanyID: storedResult.CompanyID, FirstStoreID: storedResult.FirstStoreID,
+		InitialAdminUserID: storedResult.InitialAdminUserID, CanonicalCode: storedResult.CanonicalCode,
+		AdminLoginID: storedResult.AdminLoginID, MustChangePassword: storedResult.MustChangePassword,
+	}
 	return result, true, nil
+}
+
+func workspaceProvisioningOperationID(requestID string) string {
+	digest := sha256.Sum256([]byte("domainry-runtime/workspace-provisioning-operation/v1\x00" + strings.TrimSpace(requestID)))
+	return "workspace_provision_" + hex.EncodeToString(digest[:16])
+}
+
+type workspaceProvisioningOperationResult struct {
+	WorkspaceID        string `json:"workspace_id"`
+	CompanyID          string `json:"company_id"`
+	FirstStoreID       string `json:"first_store_id"`
+	InitialAdminUserID string `json:"initial_admin_user_id"`
+	CanonicalCode      string `json:"canonical_code"`
+	AdminLoginID       string `json:"admin_login_id"`
+	MustChangePassword bool   `json:"must_change_password"`
+}
+
+func workspaceProvisioningOperationJSON(result workspaceprovisionmodel.Result, receipt identitysdk.WorkspaceIdentityBootstrapReceipt) (string, string, string, string, error) {
+	resultValue := workspaceProvisioningOperationResult{
+		WorkspaceID: result.WorkspaceID, CompanyID: result.CompanyID, FirstStoreID: result.FirstStoreID,
+		InitialAdminUserID: result.InitialAdminUserID, CanonicalCode: result.CanonicalCode,
+		AdminLoginID: result.AdminLoginID, MustChangePassword: result.MustChangePassword,
+	}
+	metadataValue := struct {
+		IdentityReceiptID       string `json:"identity_receipt_id"`
+		IdentityContractVersion string `json:"identity_contract_version"`
+		IdentityContractHash    string `json:"identity_contract_hash"`
+	}{receipt.ReceiptID, receipt.ContractVersion, receipt.ContractHash}
+	resultJSON, err := json.Marshal(resultValue)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	metadataJSON, err := json.Marshal(metadataValue)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	relatedIDs, _ := json.Marshal([]string{result.WorkspaceID, result.CompanyID, result.FirstStoreID, result.InitialAdminUserID})
+	evidence, _ := json.Marshal([]string{receipt.ReceiptID})
+	return string(resultJSON), string(metadataJSON), string(relatedIDs), string(evidence), nil
 }
 
 func (store *WorkspaceProvisionStore) afterFailedInsert(ctx context.Context, request workspaceprovisionmodel.Request, fingerprint string, insertErr error) (workspaceprovisionmodel.Result, error) {
@@ -572,4 +624,12 @@ func randomID(prefix string) (string, error) {
 		return "", fmt.Errorf("generate workspace provisioning identity: %w", err)
 	}
 	return prefix + "_" + hex.EncodeToString(buffer), nil
+}
+
+func randomInitialAdministratorPassword() (string, error) {
+	random := make([]byte, 18)
+	if _, err := rand.Read(random); err != nil {
+		return "", fmt.Errorf("generate initial administrator credential: %w", err)
+	}
+	return "Aa1!" + hex.EncodeToString(random), nil
 }

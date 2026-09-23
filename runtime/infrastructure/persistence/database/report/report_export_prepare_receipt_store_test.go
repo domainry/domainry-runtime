@@ -74,6 +74,14 @@ func TestReportExportPrepareReceiptReplayConflictIsolationAndRestart(t *testing.
 	if err != nil || claim.Decision != idempotency.DecisionAcquired {
 		t.Fatalf("initial claim=%+v err=%v", claim, err)
 	}
+	var sharedRows int
+	if err := runtimeStore.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE owner = 'report' AND kind = 'report.export.prepare'`).Scan(&sharedRows); err != nil || sharedRows != 1 {
+		t.Fatalf("shared report operation rows=%d err=%v", sharedRows, err)
+	}
+	var legacyTables int
+	if err := runtimeStore.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_report_export_prepare_receipts'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
+		t.Fatalf("legacy report receipt tables=%d err=%v", legacyTables, err)
+	}
 	payload := `{"workspace_id":"workspace-a","requester_user_id":"requester-a","report_key":"revenue","object_key":"customer","audit_id":"audit-a","prepare_receipt_id":"` + claim.Receipt.ID + `"}`
 	receipt, err := receipts.SaveReportExportPreparePayload(t.Context(), reportmodel.ReportExportPreparePayload{
 		WorkspaceID: "workspace-a", ReceiptID: claim.Receipt.ID, PayloadJSON: payload, BusinessJobKey: "business-a",

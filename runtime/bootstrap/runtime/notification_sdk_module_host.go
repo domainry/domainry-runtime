@@ -15,13 +15,13 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	"github.com/domainry/domainry-notification-sdk/contract"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	hostsurfacemodel "github.com/domainry/domainry-runtime/runtime/domain/hostsurface/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	manifestvalidation "github.com/domainry/domainry-runtime/runtime/domain/manifest/validation"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	operationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 )
 
 type notificationSDKModuleHost struct {
@@ -35,10 +35,11 @@ type notificationSDKModuleHost struct {
 	delivery   modulehost.DeliveryGateway
 	metrics    modulehost.DeliveryMetrics
 	validator  modulehost.ProviderTemplateValidator
+	archives   modulehost.RetentionArchiveStore
 }
 
-func notificationSDKCatalog(defaultLocale string, manifest manifestmodel.ManifestSchema, eventTypes []notificationmodel.NotificationEventType) (modulehost.Catalog, error) {
-	templates, err := notificationSDKConvert[[]contract.NotificationTemplate](manifest.NotificationTemplates)
+func notificationSDKCatalog(defaultLocale string, projectTemplates []notificationmodel.NotificationTemplate, eventTypes []notificationmodel.NotificationEventType, projectRules []notificationmodel.NotificationRule) (modulehost.Catalog, error) {
+	templates, err := notificationSDKConvert[[]contract.NotificationTemplate](projectTemplates)
 	if err != nil {
 		return modulehost.Catalog{}, fmt.Errorf("convert Notification templates to SDK catalog: %w", err)
 	}
@@ -46,11 +47,11 @@ func notificationSDKCatalog(defaultLocale string, manifest manifestmodel.Manifes
 	if err != nil {
 		return modulehost.Catalog{}, fmt.Errorf("convert Notification event types to SDK catalog: %w", err)
 	}
-	rules, err := notificationSDKConvert[[]contract.NotificationRule](manifest.NotificationRules)
+	rules, err := notificationSDKConvert[[]contract.NotificationRule](projectRules)
 	if err != nil {
 		return modulehost.Catalog{}, fmt.Errorf("convert Notification rules to SDK catalog: %w", err)
 	}
-	if err := manifestvalidation.ValidateNotificationAudienceResolverReferences(events, rules, hostsurfacemodel.NotificationAudienceResolverKeys()); err != nil {
+	if err := validateNotificationAudienceResolverReferences(events, rules, hostsurfacemodel.NotificationAudienceResolverKeys()); err != nil {
 		return modulehost.Catalog{}, fmt.Errorf("validate Notification audience resolver catalog: %w", err)
 	}
 	capabilities, err := notificationSDKConvert[[]contract.NotificationTemplateCapability](modulehost.DefaultProviderCapabilities())
@@ -59,9 +60,52 @@ func notificationSDKCatalog(defaultLocale string, manifest manifestmodel.Manifes
 	}
 	return modulehost.Catalog{
 		DefaultLocale:    defaultLocale,
-		ExternalChannels: notificationModuleChannels(manifest.NotificationRules), Templates: templates,
+		ExternalChannels: notificationModuleChannels(projectRules), Templates: templates,
 		TemplateCapabilities: capabilities, EventTypes: events, Rules: rules,
 	}, nil
+}
+
+// validateNotificationAudienceResolverReferences is a host-composition check,
+// not Notification domain behavior. It proves every catalog reference has a
+// Runtime-mounted resolver before the owner module is started.
+func validateNotificationAudienceResolverReferences(eventTypes []contract.NotificationEventType, rules []contract.NotificationRule, resolverKeys []string) error {
+	supported := make(map[string]bool, len(resolverKeys))
+	for index, raw := range resolverKeys {
+		key := strings.TrimSpace(raw)
+		if key == "" || supported[key] {
+			return fmt.Errorf("notification audience resolver inventory contains blank or duplicate key at index %d", index)
+		}
+		supported[key] = true
+	}
+	for eventIndex, eventType := range eventTypes {
+		if err := validateNotificationAudienceResolverList(eventType.AudienceResolvers, supported); err != nil {
+			return fmt.Errorf("notification_event_types[%d].audience_resolvers: %w", eventIndex, err)
+		}
+	}
+	for ruleIndex, rule := range rules {
+		if err := validateNotificationAudienceResolverList(rule.AudienceResolvers, supported); err != nil {
+			return fmt.Errorf("notification_rules[%d].audience_resolvers: %w", ruleIndex, err)
+		}
+	}
+	return nil
+}
+
+func validateNotificationAudienceResolverList(values []string, supported map[string]bool) error {
+	seen := make(map[string]bool, len(values))
+	for index, raw := range values {
+		key := strings.TrimSpace(raw)
+		if key == "" {
+			return fmt.Errorf("resolver at index %d is blank", index)
+		}
+		if seen[key] {
+			return fmt.Errorf("resolver %q is duplicated", key)
+		}
+		if !supported[key] {
+			return fmt.Errorf("resolver %q is not implemented by the Runtime host", key)
+		}
+		seen[key] = true
+	}
+	return nil
 }
 
 func (h notificationSDKModuleHost) Database() modulehost.Database             { return h.store.DB() }
@@ -74,6 +118,21 @@ func (h notificationSDKModuleHost) WorkspaceScope() modulehost.WorkspaceScope {
 }
 func (h notificationSDKModuleHost) QueueScopes() modulehost.QueueScopeIndex {
 	return notificationSDKQueueScopes{h.store}
+}
+func (h notificationSDKModuleHost) DefinitionStore() metadatasdk.DefinitionStore {
+	if h.store == nil || h.store.Metadata() == nil {
+		return nil
+	}
+	return h.store.Metadata().DefinitionStore()
+}
+func (h notificationSDKModuleHost) ManagedOperationStore() modulehost.ManagedOperationStore {
+	return operationpersistence.NewSharedManagedStore(h.store)
+}
+func (h notificationSDKModuleHost) OperationControlStore() modulehost.OperationControlStore {
+	return operationpersistence.NewSharedOperationControlStore(h.store)
+}
+func (h notificationSDKModuleHost) RetentionArchiveStore() modulehost.RetentionArchiveStore {
+	return h.archives
 }
 func (h notificationSDKModuleHost) Identity() identitysdk.Binding { return h.identity }
 func (h notificationSDKModuleHost) Clock() modulehost.Clock       { return h.clock }

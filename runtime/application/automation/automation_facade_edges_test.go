@@ -126,9 +126,6 @@ func TestAutomationFacadeConstructorQueriesAndValidationDelegation(t *testing.T)
 	if err := service.ValidateIntegrationOutput(automationmodel.AutomationInstructionSchema{Config: map[string]any{"connector_key": "missing"}}, nil); err == nil {
 		t.Fatal("missing connector output accepted")
 	}
-	if result, err := service.ValidateAutomationRule(t.Context(), automationmodel.AutomationRuleSchema{Key: "valid"}, principal); err != nil || !result.Valid {
-		t.Fatalf("validation=%#v err=%v", result, err)
-	}
 }
 
 func TestAutomationFacadeBeforeOutboxSimulationAndWorkflowProjection(t *testing.T) {
@@ -160,8 +157,7 @@ func TestAutomationFacadeBeforeOutboxSimulationAndWorkflowProjection(t *testing.
 		t.Fatalf("outbox=%#v", messages)
 	}
 
-	requestRule := beforeRule
-	result, err := service.SimulateAutomationRule(t.Context(), "", automationcontract.AutomationSimulationRequest{Rule: &requestRule, Input: map[string]any{"name": "A"}}, principal)
+	result, err := service.SimulateAutomationRule(t.Context(), "before", automationcontract.AutomationSimulationRequest{Input: map[string]any{"name": "A"}}, principal)
 	if err != nil || result.TestedNodeID != "save" || !result.NodePassed {
 		t.Fatalf("simulation=%#v err=%v", result, err)
 	}
@@ -383,8 +379,7 @@ func TestAutomationFacadeExecutesPureBeforeConditionAndDerivationWithoutIO(t *te
 	if err != nil || len(traces) != 1 || traces[0].Status != "succeeded" || len(traces[0].InstructionTraces) != 1 || len(audits) != 0 {
 		t.Fatalf("traces=%#v audits=%v err=%v", traces, audits, err)
 	}
-	simulation, err := service.SimulateAutomationRule(t.Context(), "", automationcontract.AutomationSimulationRequest{
-		Rule:  &rule,
+	simulation, err := service.SimulateAutomationRule(t.Context(), "normalize", automationcontract.AutomationSimulationRequest{
 		Input: map[string]any{"active": true},
 	}, principal)
 	if err != nil || !simulation.WouldSave || simulation.Status != "succeeded" || simulation.Candidate["normalized"] != true {

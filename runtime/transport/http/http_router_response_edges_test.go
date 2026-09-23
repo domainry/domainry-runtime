@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"encoding/json"
-	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -167,45 +166,7 @@ func TestWriteServiceErrorKindAndResponseParameterMatrix(t *testing.T) {
 	}
 }
 
-func TestRuntimeAuthoringServiceErrorSemanticsMatrix(t *testing.T) {
-	if got := runtimeAuthoringSemantics(http.StatusConflict, "backend.change_plan.concurrent_write"); got.Class != "conflict" || got.Retryable {
-		t.Fatalf("conflict semantics=%#v", got)
-	}
-	if got := runtimeAuthoringSemantics(http.StatusTooManyRequests, "backend.rate_limited"); got.Class != "transient" || !got.Retryable {
-		t.Fatalf("rate-limit semantics=%#v", got)
-	}
-	tests := []struct {
-		name      string
-		kind      apperror.ErrorKind
-		code      string
-		status    int
-		class     string
-		action    string
-		retryable bool
-	}{
-		{name: "protocol", kind: apperror.KindBadRequest, code: "backend.idempotency.key_required", status: http.StatusBadRequest, class: "protocol", action: "correct_request_protocol"},
-		{name: "repairable", kind: apperror.KindBadRequest, code: "backend.metadata.field_type_invalid", status: http.StatusUnprocessableEntity, class: "repairable", action: "repair_capability_payload", retryable: true},
-		{name: "drift", kind: apperror.KindConflict, code: "backend.authoring.resource_hash_conflict", status: http.StatusConflict, class: "drift", action: "refresh_contract_and_snapshot", retryable: true},
-		{name: "dependency", kind: apperror.KindUnavailable, code: "backend.integration.provider_unavailable", status: http.StatusFailedDependency, class: "dependency", action: "resolve_runtime_dependency"},
-		{name: "permission", kind: apperror.KindForbidden, code: "auth.permission_denied", status: http.StatusForbidden, class: "permission", action: "resolve_authorization"},
-		{name: "platform unavailable", kind: apperror.KindUnavailable, code: "backend.authoring.success_projection_unavailable", status: http.StatusServiceUnavailable, class: "transient", action: "retry_with_backoff", retryable: true},
-		{name: "internal", kind: apperror.KindInternal, code: "backend.authoring.store_failed", status: http.StatusInternalServerError, class: "transient", action: "retry_with_backoff", retryable: true},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			response := httptest.NewRecorder()
-			request := httptest.NewRequest(http.MethodPut, "/metadata/definitions/object/order", nil)
-			request = request.WithContext(operationscontract.WithBuilderTaskID(request.Context(), "task-1"))
-			writeServiceError(response, request, apperror.New(test.kind, test.code, nil, nil))
-			body := map[string]any{}
-			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || response.Code != test.status || body["error_class"] != test.class || body["repair_action"] != test.action || body["retryable"] != test.retryable {
-				t.Fatalf("status=%d body=%#v err=%v", response.Code, body, err)
-			}
-		})
-	}
-}
-
-func TestBuilderPrincipalShortcutRejectsEveryExplicitCredentialHeader(t *testing.T) {
+func TestPrincipalContextRejectsEveryExplicitCredentialHeader(t *testing.T) {
 	router := &HTTPRouter{}
 	for _, header := range []struct{ key, value string }{
 		{"Authorization", "Bearer token"},
@@ -214,7 +175,6 @@ func TestBuilderPrincipalShortcutRejectsEveryExplicitCredentialHeader(t *testing
 		{"X-User-Role", "viewer"},
 	} {
 		request := requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/", nil), principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "context-user"}})
-		request = request.WithContext(operationscontract.WithBuilderTaskID(request.Context(), "task"))
 		request.Header.Set(header.key, header.value)
 		if principal := router.principalFromRequest(request); principal.UserID != "context-user" {
 			t.Fatalf("header %s principal=%#v", header.key, principal)

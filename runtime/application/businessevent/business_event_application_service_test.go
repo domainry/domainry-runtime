@@ -1,11 +1,15 @@
 package businessevent
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
+	businesseventcontract "github.com/domainry/domainry-runtime/runtime/domain/businessevent/contract"
+	businesseventmodel "github.com/domainry/domainry-runtime/runtime/domain/businessevent/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	businesseventmemory "github.com/domainry/domainry-runtime/runtime/infrastructure/broadcast/memory"
 )
@@ -33,8 +37,24 @@ func TestBusinessEventServiceEnforcesIdentityWorkspaceCapacityAndCleanup(t *test
 	}
 	second.Close()
 	stats := service.Snapshot(t.Context())
-	if stats.ActiveConnections != 0 || stats.OpenedTotal != 2 || stats.RejectedTotal != 1 {
+	if stats.ActiveConnections != 0 || stats.OpenedTotal != 2 || stats.ClosedTotal != 2 || stats.RejectedTotal != 1 {
 		t.Fatalf("unexpected stats: %+v", stats)
+	}
+}
+
+func TestBusinessEventServiceCountsBackplaneFailuresWithoutAuditEvidence(t *testing.T) {
+	backplaneErr := errors.New("backplane unavailable")
+	service := NewBusinessEventApplicationService(failingBusinessEventBackplane{err: backplaneErr}, Limits{})
+	if _, err := service.Publish(t.Context(), "workspace-a", "customer", "mutation"); apperror.CodeOf(err) != "backend.event_stream.unavailable" {
+		t.Fatalf("publish error=%v", err)
+	}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a"}}
+	if _, err := service.Open(t.Context(), principal, ""); apperror.CodeOf(err) != "backend.event_stream.unavailable" {
+		t.Fatalf("open error=%v", err)
+	}
+	stats := service.Snapshot(t.Context())
+	if stats.ActiveConnections != 0 || stats.OpenedTotal != 0 || stats.ClosedTotal != 0 || stats.OpenFailedTotal != 1 || stats.PublishedTotal != 0 || stats.PublishFailedTotal != 1 {
+		t.Fatalf("unexpected failure stats: %+v", stats)
 	}
 }
 
@@ -73,4 +93,18 @@ func TestInjectedBackplaneBroadcastsAcrossServiceInstances(t *testing.T) {
 	case <-t.Context().Done():
 		t.Fatal("cross-instance event was not delivered")
 	}
+}
+
+type failingBusinessEventBackplane struct{ err error }
+
+func (f failingBusinessEventBackplane) Mode(context.Context) string {
+	return businesseventcontract.BackplaneModeShared
+}
+
+func (f failingBusinessEventBackplane) Publish(context.Context, businesseventmodel.BusinessEvent) (businesseventmodel.BusinessEvent, error) {
+	return businesseventmodel.BusinessEvent{}, f.err
+}
+
+func (f failingBusinessEventBackplane) Open(context.Context, string, string) (businesseventcontract.Subscription, error) {
+	return businesseventcontract.Subscription{}, f.err
 }

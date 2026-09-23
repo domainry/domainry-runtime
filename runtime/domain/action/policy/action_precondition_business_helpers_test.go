@@ -100,16 +100,15 @@ func TestActionScalarHelpers(t *testing.T) {
 
 func TestActionOwnerFieldResolution(t *testing.T) {
 	identityObject := definitionmodel.ObjectSchema{
-		UX:     map[string]any{"kind": "identity_profile_extension", "config": map[string]any{"identity_relation_field": "profile"}},
-		Fields: []definitionmodel.FieldSchema{{Key: "profile", Type: "relation"}},
+		Fields: []definitionmodel.FieldSchema{{Key: "profile", Type: "relation", Config: map[string]any{"object_key": "identity_user"}}},
 	}
 	if got := actionOwnerFieldKey(identityObject); got != "profile" {
 		t.Fatalf("identity owner=%q", got)
 	}
 	for name, object := range map[string]definitionmodel.ObjectSchema{
-		"invalid config":       {UX: map[string]any{"kind": "identity_profile_extension", "config": "invalid"}},
-		"missing key":          {UX: map[string]any{"kind": "identity_profile_extension", "config": map[string]any{"identity_relation_field": "profile"}}, Fields: []definitionmodel.FieldSchema{{Key: "other", Type: "relation"}}},
-		"wrong relation type":  {UX: map[string]any{"kind": "identity_profile_extension", "config": map[string]any{"identity_relation_field": "profile"}}, Fields: []definitionmodel.FieldSchema{{Key: "profile", Type: "text"}}},
+		"invalid config":       {Fields: []definitionmodel.FieldSchema{{Key: "profile", Type: "relation", Config: map[string]any{"object_key": true}}}},
+		"missing key":          {Fields: []definitionmodel.FieldSchema{{Key: "other", Type: "relation", Config: map[string]any{"object_key": "other"}}}},
+		"wrong relation type":  {Fields: []definitionmodel.FieldSchema{{Key: "profile", Type: "text", Config: map[string]any{"object_key": "identity_user"}}}},
 		"wrong preferred type": {Fields: []definitionmodel.FieldSchema{{Key: "assignee", Type: "text"}}},
 		"no user field":        {Fields: []definitionmodel.FieldSchema{{Key: "description", Type: "text"}}},
 	} {

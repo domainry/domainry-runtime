@@ -11,7 +11,6 @@ import (
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
-	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -22,8 +21,8 @@ import (
 // focused owner stores before entering the production composition root.
 type RuntimeServicesConfig struct {
 	InstallationWorkspaceID     string
-	TemplateID                  string
-	TemplateVersion             string
+	ProjectKey                  string
+	SchemaVersion               string
 	Name                        string
 	Objects                     []definitionmodel.ObjectSchema
 	Actions                     []definitionmodel.ActionSchema
@@ -37,7 +36,6 @@ type RuntimeServicesConfig struct {
 	IdentityProfileExtensions   []profilebindingmodel.Binding
 	Store                       *database.RuntimeStore
 	ApplicationSchemaRepository appschemarepository.ApplicationSchemaRepository
-	BusinessEvidence            changeplanrepository.ChangePlanEvidenceRepository
 	WorkflowWorker              workflowcontract.WorkflowWorkerStore
 	WorkflowProcesses           workflowcontract.WorkflowProcessStore
 	WorkflowDefinitions         workflowcontract.WorkflowDefinitionStore

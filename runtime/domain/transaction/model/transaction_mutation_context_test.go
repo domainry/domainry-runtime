@@ -56,7 +56,7 @@ func TestMutationContextValidatesSourceIdentityAndRequiredSnapshotCoordinates(t 
 			}
 		})
 	}
-	for _, source := range []MutationSource{MutationSourceHTTP, MutationSourceImport, MutationSourceScheduler, MutationSourceIntegration, MutationSourceInternal} {
+	for _, source := range []MutationSource{MutationSourceHTTP, MutationSourceProjectHTTP, MutationSourceImport, MutationSourceScheduler, MutationSourceIntegration, MutationSourceInternal} {
 		input := base
 		input.Source = source
 		if _, err := NewMutationContext(input); err != nil {
@@ -73,9 +73,6 @@ func TestMutationContextWildcardEffectAuthority(t *testing.T) {
 }
 
 func TestTransactionModelRemainingValueAndCloneEdges(t *testing.T) {
-	if BoundaryIntentTransitionAllowed("", BoundaryIntentExecuting) || BoundaryIntentTransitionAllowed(BoundaryIntentPending, BoundaryIntentSucceeded) || !BoundaryIntentTransitionAllowed(BoundaryIntentPending, BoundaryIntentExecuting) {
-		t.Fatal("boundary intent transition policy mismatch")
-	}
 	optimistic := RecordMutationCommit{ExpectedUpdatedAt: "legacy", Optimistic: OptimisticPrecondition{ExpectedUpdatedAt: "canonical"}}
 	if optimistic.OptimisticUpdatedAt() != "canonical" || (RecordMutationCommit{ExpectedUpdatedAt: "legacy"}).OptimisticUpdatedAt() != "legacy" {
 		t.Fatal("optimistic timestamp fallback mismatch")

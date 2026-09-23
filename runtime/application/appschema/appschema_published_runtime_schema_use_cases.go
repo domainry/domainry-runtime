@@ -13,8 +13,8 @@ import (
 const ActionOpsMetadataDiagnostics = "runtime.appschema.ops_metadata_diagnostics"
 
 type PublishedRuntimeSchemaDTO struct {
-	TemplateID      string                                                 `json:"template_id"`
-	TemplateVersion string                                                 `json:"template_version"`
+	ProjectKey      string                                                 `json:"project_key"`
+	SchemaVersion   string                                                 `json:"schema_version"`
 	Name            string                                                 `json:"name,omitempty"`
 	TimeZone        string                                                 `json:"time_zone"`
 	SchemaHash      string                                                 `json:"schema_hash"`
@@ -30,7 +30,7 @@ type OpsMetadataDiagnosticsDTO struct {
 	RepositoryRevision string `json:"repository_revision"`
 	SchemaHash         string `json:"schema_hash"`
 	SnapshotVersion    string `json:"snapshot_version"`
-	TemplateVersion    string `json:"template_version"`
+	SchemaVersion      string `json:"schema_version"`
 	ObjectCount        int    `json:"object_count"`
 	ActionCount        int    `json:"action_count"`
 	WorkflowCount      int    `json:"workflow_count"`
@@ -45,10 +45,9 @@ func (s *ApplicationSchemaQueryApplicationService) PublishedRuntimeSchema(ctx co
 	objects := append([]definitionmodel.ObjectSchema(nil), snapshot.Objects...)
 	for index := range objects {
 		objects[index].Config = sanitizePublishedMap(objects[index].Config)
-		objects[index].UX = sanitizePublishedMap(objects[index].UX)
 	}
 	return PublishedRuntimeSchemaDTO{
-		TemplateID: snapshot.TemplateID, TemplateVersion: snapshot.TemplateVersion, Name: snapshot.Name, TimeZone: snapshot.TimeZone,
+		ProjectKey: snapshot.ProjectKey, SchemaVersion: snapshot.SchemaVersion, Name: snapshot.Name, TimeZone: snapshot.TimeZone,
 		SchemaHash: snapshot.SchemaHash, SnapshotVersion: snapshot.SnapshotVersion,
 		Objects: objects, Actions: append([]definitionmodel.ActionSchema(nil), snapshot.Actions...),
 		GuardedWrites: append([]appschemamodel.ApplicationSchemaGuardedWriteContract(nil), snapshot.GuardedWrites...),
@@ -74,7 +73,7 @@ func (s *ApplicationSchemaApplicationService) OpsMetadataDiagnostics(ctx context
 	snapshot := s.runtime.Schema()
 	return OpsMetadataDiagnosticsDTO{
 		RepositoryRevision: revision, SchemaHash: snapshot.SchemaHash, SnapshotVersion: snapshot.SnapshotVersion,
-		TemplateVersion: snapshot.TemplateVersion, ObjectCount: len(snapshot.Objects), ActionCount: len(snapshot.Actions),
+		SchemaVersion: snapshot.SchemaVersion, ObjectCount: len(snapshot.Objects), ActionCount: len(snapshot.Actions),
 		WorkflowCount: len(snapshot.Workflows), Compatible: strings.TrimSpace(revision) != "" && strings.TrimSpace(snapshot.SchemaHash) != "",
 	}, nil
 }

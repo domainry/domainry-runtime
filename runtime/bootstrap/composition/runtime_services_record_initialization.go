@@ -42,6 +42,9 @@ func initializeRecordApplications(s *runtimeAssembly) {
 	})
 	s.auditApplicationService.SetEventProjector(auditRecordAccess.ProjectAuditEvents)
 	s.recordMutations = recordruntime.NewRecordMutationApplicationService(s.recordApplicationService)
+	if s.reportObjectSQL == nil && s.reportSnapshotSources == nil && s.reportExportPrepareReceipts == nil {
+		return
+	}
 	reportRecords := reportadapter.NewReportRecordAdapter(s.recordApplicationService, s.recordRepo, s.reportRecordSchemaMap)
 	businessPrincipals := principalapplication.NewBusinessPrincipalApplicationService(principalapplication.BusinessPrincipalDependencies{
 		Records: s.recordRepo,

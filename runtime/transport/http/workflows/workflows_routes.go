@@ -22,7 +22,4 @@ func (h *WorkflowsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /workflow/recovery/processes/{processID}", h.getOpsWorkflowProcess)
 	mux.HandleFunc("POST /workflow/recovery/processes/{processID}/retry", h.retryOpsWorkflowProcess)
 	mux.HandleFunc("POST /workflow/recovery/processes/{processID}/resolve", h.resolveOpsWorkflowProcess)
-	mux.HandleFunc("POST /workflow/authoring-fragments/{capabilityKey}/validate", h.validateAuthoringFragment)
-	mux.HandleFunc("POST /workflow/definitions/{workflowKey}/validate", h.validateWorkflowDefinition)
-	mux.HandleFunc("POST /workflow/definitions/{workflowKey}/simulate", h.simulateWorkflow)
 }

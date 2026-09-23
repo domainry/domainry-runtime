@@ -147,14 +147,7 @@ func recordReferenceDefaultDisplayFields(object definitionmodel.ObjectSchema) []
 	if definitioncontract.IsFoundationObjectKey(object.Key) {
 		return []string{"name"}
 	}
-	configured := ""
-	if display, ok := object.UX["display"].(map[string]any); ok {
-		configured = strings.TrimSpace(fmt.Sprint(display["title_field"]))
-	}
-	if configured == "" || configured == "<nil>" {
-		configured = strings.TrimSpace(fmt.Sprint(object.Config["title_field"]))
-	}
-	ordered := append([]string{configured}, "name", "title", "subject", "number", "code", "display_name", "short_name")
+	ordered := []string{"name", "title", "subject", "number", "code", "display_name", "short_name"}
 	if fields := recordReferenceExistingDisplayFields(object, ordered); len(fields) > 0 {
 		return fields[:1]
 	}

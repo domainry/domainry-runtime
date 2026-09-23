@@ -108,10 +108,6 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 	if strings.TrimSpace(descriptor.ActionKey) != strings.TrimSpace(action.Key) {
 		return ActionExecutionResult{}, apperror.New(apperror.KindInternal, "backend.action.handler_contract_mismatch", nil, map[string]string{"action": action.Key})
 	}
-	rawInput, err := json.Marshal(businessHandlerInput(action, payload))
-	if err != nil {
-		return ActionExecutionResult{}, apperror.New(apperror.KindBadRequest, "backend.action.payload_invalid", err, nil)
-	}
 	if governed.unitOfWork == nil {
 		return ActionExecutionResult{}, apperror.New(apperror.KindInternal, "backend.action.execution_phase_required", nil, map[string]string{"action": action.Key})
 	}
@@ -148,7 +144,7 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 	if err := session.initializeTargetOrganization(ctx); err != nil {
 		return ActionExecutionResult{}, err
 	}
-	rawOutput, err := binding.Handler.Invoke(ctx, session, rawInput)
+	rawOutput, err := invokeBusinessHandler(ctx, binding.Handler, session, governed.nativeInput, action, payload)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return ActionExecutionResult{}, err
@@ -198,6 +194,29 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 		CreatedRecords: session.created, UpdatedRecords: session.updated, DeletedRecords: session.deleted, RestoredRecords: session.restored,
 	}
 	return ActionExecutionResult{Object: &result, Commits: commits, PostCommit: session.postCommit}, nil
+}
+
+func invokeBusinessHandler(
+	ctx context.Context,
+	handler runtimeext.BusinessHandler,
+	execution runtimeext.ActionExecution,
+	nativeInput any,
+	action definitionmodel.ActionSchema,
+	payload map[string]any,
+) (json.RawMessage, error) {
+	if nativeInput != nil {
+		if native, ok := handler.(runtimeext.NativeBusinessHandler); ok {
+			output, accepted, err := native.InvokeNative(ctx, execution, nativeInput)
+			if accepted || err != nil {
+				return output, err
+			}
+		}
+	}
+	rawInput, err := json.Marshal(businessHandlerInput(action, payload))
+	if err != nil {
+		return nil, apperror.New(apperror.KindBadRequest, "backend.action.payload_invalid", err, nil)
+	}
+	return handler.Invoke(ctx, execution, rawInput)
 }
 
 type businessActionExecution struct {

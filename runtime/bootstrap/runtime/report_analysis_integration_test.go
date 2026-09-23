@@ -43,6 +43,7 @@ func TestReportAnalysisRealOwnerFullSQLiteAggregationAndCurrentPermissions(t *te
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	bindReportTestMetadata(t, store)
 	columns := []ormschema.ColumnDefinition{}
 	for _, key := range []string{"workspace_id", "id", "created_at", "updated_at", "owner_user_id", "department", "amount", "occurred_at"} {
 		columns = append(columns, ormschema.Column(key, ormschema.Text()))

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -16,10 +17,14 @@ import (
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 )
 
-const reportExportPrepareReceiptLeaseTTL = 5 * time.Minute
+const (
+	reportExportPrepareReceiptLeaseTTL = 5 * time.Minute
+	reportExportPrepareTable           = "_operations"
+	reportExportPrepareOwner           = "report"
+	reportExportPrepareKind            = "report.export.prepare"
+)
 
 type ReportExportPrepareReceiptStore struct {
 	store *database.RuntimeStore
@@ -70,12 +75,12 @@ func (s *ReportExportPrepareReceiptStore) tryBeginReportExportPrepareOnce(ctx co
 	receipt.FencingToken = 1
 	receipt.CreatedAt, receipt.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	columns, values := reportExportPrepareReceiptColumns(), reportExportPrepareReceiptValues(receipt)
-	if err := s.store.GuardSubjectEvidenceWrite(ctx, s.store.DB(), receipt.WorkspaceID, runtimeschema.ReportExportPrepareReceiptTable, columns, values); err != nil {
+	if err := s.store.GuardSubjectEvidenceWrite(ctx, s.store.DB(), receipt.WorkspaceID, reportExportPrepareTable, columns, values); err != nil {
 		return reportmodel.ReportExportPrepareClaimResult{}, err
 	}
-	statement, arguments, buildErr := query.NewWorkspaceInsertBuilder(s.store.SQLRenderer, runtimeschema.ReportExportPrepareReceiptTable, receipt.WorkspaceID).
-		Columns(append(columns[:2], columns[3:]...)...).
-		Values(append(values[:2], values[3:]...)...).
+	statement, arguments, buildErr := query.NewWorkspaceInsertBuilder(s.store.SQLRenderer, reportExportPrepareTable, receipt.WorkspaceID).
+		Columns(append(columns[:1], columns[2:]...)...).
+		Values(append(values[:1], values[2:]...)...).
 		Build()
 	if buildErr != nil {
 		return reportmodel.ReportExportPrepareClaimResult{}, fmt.Errorf("build report export prepare receipt insert: %w", buildErr)
@@ -122,13 +127,14 @@ func (s *ReportExportPrepareReceiptStore) tryBeginReportExportPrepareOnce(ctx co
 
 func (s *ReportExportPrepareReceiptStore) adoptReportExportPrepareOrphan(ctx context.Context, requested, current reportmodel.ReportExportPrepareReceipt, now time.Time, leaseTTL time.Duration) (reportmodel.ReportExportPrepareReceipt, bool, error) {
 	nowValue, leaseExpiresAt := now.Format(time.RFC3339Nano), now.Add(leaseTTL).Format(time.RFC3339Nano)
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, runtimeschema.ReportExportPrepareReceiptTable, requested.WorkspaceID).
+	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, reportExportPrepareTable, requested.WorkspaceID).
 		Set("id", requested.ID).
-		Set("requester_user_id", requested.RequesterUserID).
-		Set("idempotency_key", requested.CallerKey).
+		Set("requested_by", requested.RequesterUserID).
+		Set("metadata_json", reportExportPrepareMetadataJSON(requested)).
 		Set("request_fingerprint", requested.RequestFingerprint).
 		Set("status", string(idempotency.StatusProcessing)).
-		Set("terminal_error_code", "").
+		Set("error_code", "").
+		Set("failure_class", "").
 		Set("lease_owner", requested.LeaseOwner).
 		Set("lease_expires_at", leaseExpiresAt).
 		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).
@@ -136,14 +142,10 @@ func (s *ReportExportPrepareReceiptStore) adoptReportExportPrepareOrphan(ctx con
 		Set("expires_at", "").
 		Where(query.And(
 			query.Equal("id", current.ID),
-			query.Equal("operation_id", requested.OperationID),
+			reportExportPrepareOperationPredicate(requested),
 			query.Equal("status", string(idempotency.StatusProcessing)),
 			query.LessThanOrEqual("lease_expires_at", nowValue),
-			query.Equal("payload_json", ""),
-			query.Equal("business_job_key", ""),
-			query.Equal("job_id", ""),
-			query.Equal("completion_artifact_id", ""),
-			query.Equal("completion_fingerprint", ""),
+			query.Equal("result_json", reportExportPrepareResultJSON(current)),
 		)).Build()
 	if err != nil {
 		return reportmodel.ReportExportPrepareReceipt{}, false, fmt.Errorf("build report export prepare orphan adoption: %w", err)
@@ -168,18 +170,19 @@ func (s *ReportExportPrepareReceiptStore) adoptReportExportPrepareOrphan(ctx con
 
 func (s *ReportExportPrepareReceiptStore) reclaimReportExportPrepare(ctx context.Context, requested reportmodel.ReportExportPrepareReceipt, now time.Time, leaseTTL time.Duration) (reportmodel.ReportExportPrepareClaimResult, error) {
 	updatedAt, leaseExpiresAt := now.Format(time.RFC3339Nano), now.Add(leaseTTL).Format(time.RFC3339Nano)
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, runtimeschema.ReportExportPrepareReceiptTable, requested.WorkspaceID).
+	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, reportExportPrepareTable, requested.WorkspaceID).
 		Set("status", string(idempotency.StatusProcessing)).
-		Set("terminal_error_code", "").
+		Set("error_code", "").
+		Set("failure_class", "").
 		Set("lease_owner", requested.LeaseOwner).
 		Set("lease_expires_at", leaseExpiresAt).
 		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).
 		Set("updated_at", updatedAt).
 		Set("expires_at", "").
 		Where(query.And(
-			query.Equal("operation_id", requested.OperationID),
-			query.Equal("requester_user_id", requested.RequesterUserID),
-			query.Equal("idempotency_key", requested.CallerKey),
+			reportExportPrepareOperationPredicate(requested),
+			query.Equal("requested_by", requested.RequesterUserID),
+			query.Equal("metadata_json", reportExportPrepareMetadataJSON(requested)),
 			query.Equal("request_fingerprint", requested.RequestFingerprint),
 			query.Or(
 				query.Equal("status", string(idempotency.StatusFailedRetryable)),
@@ -219,17 +222,25 @@ func (s *ReportExportPrepareReceiptStore) SaveReportExportPreparePayload(ctx con
 	if workspaceID == "" || receiptID == "" || payloadJSON == "" || businessJobKey == "" || strings.TrimSpace(value.LeaseOwner) == "" || value.FencingToken < 1 {
 		return reportmodel.ReportExportPrepareReceipt{}, fmt.Errorf("report export prepare payload binding is incomplete")
 	}
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, runtimeschema.ReportExportPrepareReceiptTable, workspaceID).
-		Set("payload_json", payloadJSON).
-		Set("business_job_key", businessJobKey).
-		Set("updated_at", now.Format(time.RFC3339Nano)).
+	current, found, err := s.findReportExportPrepareByID(ctx, workspaceID, receiptID)
+	if err != nil {
+		return reportmodel.ReportExportPrepareReceipt{}, err
+	}
+	if !found || current.Status != string(idempotency.StatusProcessing) || current.LeaseOwner != strings.TrimSpace(value.LeaseOwner) || current.FencingToken != value.FencingToken || current.PayloadJSON != "" || current.JobID != "" {
+		return reportmodel.ReportExportPrepareReceipt{}, reportExportPrepareLeaseLost(ctx, workspaceID, receiptID, s.store)
+	}
+	next := current
+	next.PayloadJSON, next.BusinessJobKey = payloadJSON, businessJobKey
+	next.UpdatedAt = now.Format(time.RFC3339Nano)
+	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, reportExportPrepareTable, workspaceID).
+		Set("result_json", reportExportPrepareResultJSON(next)).
+		Set("related_ids_json", reportExportPrepareRelatedIDsJSON(next)).
+		Set("updated_at", next.UpdatedAt).
 		Where(query.And(
-			query.Equal("id", receiptID),
-			query.Equal("status", string(idempotency.StatusProcessing)),
-			query.Equal("lease_owner", strings.TrimSpace(value.LeaseOwner)),
-			query.Equal("fencing_token", value.FencingToken),
-			query.Equal("payload_json", ""),
-			query.Equal("job_id", ""),
+			reportExportPrepareFencePredicate(receiptID, value.LeaseOwner, value.FencingToken),
+			query.Equal("result_json", reportExportPrepareResultJSON(current)),
+			s.store.SubjectEvidenceWriteAllowed(workspaceID, reportExportPrepareTable, receiptID),
+			s.store.SubjectActorWriteAllowed(workspaceID, current.RequesterUserID),
 		)).Build()
 	if err != nil {
 		return reportmodel.ReportExportPrepareReceipt{}, fmt.Errorf("build report export prepare payload binding: %w", err)
@@ -253,19 +264,35 @@ func (s *ReportExportPrepareReceiptStore) CompleteReportExportPrepare(ctx contex
 	if workspaceID == "" || receiptID == "" || jobID == "" || strings.TrimSpace(value.LeaseOwner) == "" || value.FencingToken < 1 {
 		return fmt.Errorf("report export prepare completion is incomplete")
 	}
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, runtimeschema.ReportExportPrepareReceiptTable, workspaceID).
-		Set("status", string(idempotency.StatusSucceeded)).
-		Set("job_id", jobID).
-		Set("expires_at", value.ExpiresAt.UTC().Format(time.RFC3339Nano)).
-		Set("updated_at", now.Format(time.RFC3339Nano)).
+	current, found, err := s.findReportExportPrepareByID(ctx, workspaceID, receiptID)
+	if err != nil {
+		return err
+	}
+	if found && current.Status == string(idempotency.StatusSucceeded) && current.JobID == jobID {
+		return nil
+	}
+	if !found || current.Status != string(idempotency.StatusProcessing) || current.LeaseOwner != strings.TrimSpace(value.LeaseOwner) || current.FencingToken != value.FencingToken || current.PayloadJSON == "" || current.BusinessJobKey == "" || current.JobID != "" {
+		return reportExportPrepareLeaseLost(ctx, workspaceID, receiptID, s.store)
+	}
+	next := current
+	next.Status, next.JobID = string(idempotency.StatusSucceeded), jobID
+	next.LeaseOwner, next.LeaseExpiresAt = "", ""
+	next.ExpiresAt = value.ExpiresAt.UTC().Format(time.RFC3339Nano)
+	next.UpdatedAt = now.Format(time.RFC3339Nano)
+	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, reportExportPrepareTable, workspaceID).
+		Set("status", next.Status).
+		Set("result_json", reportExportPrepareResultJSON(next)).
+		Set("related_ids_json", reportExportPrepareRelatedIDsJSON(next)).
+		Set("lease_owner", "").
+		Set("lease_expires_at", "").
+		Set("expires_at", next.ExpiresAt).
+		Set("finished_at", next.UpdatedAt).
+		Set("updated_at", next.UpdatedAt).
 		Where(query.And(
-			query.Equal("id", receiptID),
-			query.Equal("status", string(idempotency.StatusProcessing)),
-			query.Equal("lease_owner", strings.TrimSpace(value.LeaseOwner)),
-			query.Equal("fencing_token", value.FencingToken),
-			query.NotEqual("payload_json", ""),
-			query.NotEqual("business_job_key", ""),
-			query.Equal("job_id", ""),
+			reportExportPrepareFencePredicate(receiptID, value.LeaseOwner, value.FencingToken),
+			query.Equal("result_json", reportExportPrepareResultJSON(current)),
+			s.store.SubjectEvidenceWriteAllowed(workspaceID, reportExportPrepareTable, receiptID),
+			s.store.SubjectActorWriteAllowed(workspaceID, current.RequesterUserID),
 		)).Build()
 	if err != nil {
 		return fmt.Errorf("build report export prepare completion: %w", err)
@@ -281,7 +308,7 @@ func (s *ReportExportPrepareReceiptStore) CompleteReportExportPrepare(ctx contex
 	if rows == 1 {
 		return nil
 	}
-	current, found, err := s.findReportExportPrepareByID(ctx, workspaceID, receiptID)
+	current, found, err = s.findReportExportPrepareByID(ctx, workspaceID, receiptID)
 	if err != nil {
 		return err
 	}
@@ -305,14 +332,18 @@ func (s *ReportExportPrepareReceiptStore) ReleaseReportExportPrepare(ctx context
 	if workspaceID == "" || receiptID == "" || leaseOwner == "" || value.FencingToken < 1 {
 		return fmt.Errorf("report export prepare release binding is incomplete")
 	}
-	condition := query.And(
-		query.Equal("id", receiptID),
-		query.Equal("status", string(idempotency.StatusProcessing)),
-		query.Equal("lease_owner", leaseOwner),
-		query.Equal("fencing_token", value.FencingToken),
-	)
-	statement, arguments, err := query.NewWorkspaceDeleteBuilder(s.store.SQLRenderer, runtimeschema.ReportExportPrepareReceiptTable, workspaceID).
-		Where(query.And(condition, query.Equal("payload_json", ""), query.Equal("business_job_key", ""), query.Equal("job_id", ""))).Build()
+	current, found, err := s.findReportExportPrepareByID(ctx, workspaceID, receiptID)
+	if err != nil {
+		return err
+	}
+	if !found || current.Status != string(idempotency.StatusProcessing) || current.LeaseOwner != leaseOwner || current.FencingToken != value.FencingToken || current.PayloadJSON != "" || current.BusinessJobKey != "" || current.JobID != "" {
+		return reportExportPrepareLeaseLost(ctx, workspaceID, receiptID, s.store)
+	}
+	statement, arguments, err := query.NewWorkspaceDeleteBuilder(s.store.SQLRenderer, reportExportPrepareTable, workspaceID).
+		Where(query.And(
+			reportExportPrepareFencePredicate(receiptID, leaseOwner, value.FencingToken),
+			query.Equal("result_json", reportExportPrepareResultJSON(current)),
+		)).Build()
 	if err != nil {
 		return fmt.Errorf("build report export prepare release: %w", err)
 	}
@@ -326,19 +357,16 @@ func (s *ReportExportPrepareReceiptStore) finishReportExportPrepareFailure(ctx c
 	if workspaceID == "" || receiptID == "" || leaseOwner == "" || value.FencingToken < 1 || value.ExpiresAt.IsZero() || (status == idempotency.StatusFailedTerminal && errorCode == "") {
 		return fmt.Errorf("report export prepare failure binding is incomplete")
 	}
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, runtimeschema.ReportExportPrepareReceiptTable, workspaceID).
+	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, reportExportPrepareTable, workspaceID).
 		Set("status", string(status)).
-		Set("terminal_error_code", errorCode).
+		Set("error_code", errorCode).
+		Set("failure_class", reportExportPrepareFailureClass(status)).
 		Set("lease_owner", "").
 		Set("lease_expires_at", "").
 		Set("updated_at", now.Format(time.RFC3339Nano)).
+		Set("finished_at", now.Format(time.RFC3339Nano)).
 		Set("expires_at", value.ExpiresAt.UTC().Format(time.RFC3339Nano)).
-		Where(query.And(
-			query.Equal("id", receiptID),
-			query.Equal("status", string(idempotency.StatusProcessing)),
-			query.Equal("lease_owner", leaseOwner),
-			query.Equal("fencing_token", value.FencingToken),
-		)).Build()
+		Where(reportExportPrepareFencePredicate(receiptID, leaseOwner, value.FencingToken)).Build()
 	if err != nil {
 		return fmt.Errorf("build report export prepare failure transition: %w", err)
 	}
@@ -351,68 +379,68 @@ func (s *ReportExportPrepareReceiptStore) BindReportExportCompletion(ctx context
 	if workspaceID == "" || receiptID == "" || strings.TrimSpace(binding.JobID) == "" || strings.TrimSpace(binding.ArtifactID) == "" || payloadJSON == "" || strings.TrimSpace(binding.CompletionFingerprint) == "" {
 		return reportmodel.ReportExportCompletionBindingResult{}, fmt.Errorf("report export completion binding is incomplete")
 	}
-	current, found, err := s.findReportExportPrepareByID(ctx, workspaceID, receiptID)
-	if err != nil {
-		return reportmodel.ReportExportCompletionBindingResult{}, err
-	}
-	if !found || !reportExportCompletionOwnsReceipt(current, binding, payloadJSON) {
-		return reportmodel.ReportExportCompletionBindingResult{Decision: reportmodel.ReportExportCompletionConflict, Receipt: current}, nil
-	}
-	if current.CompletionFingerprint != "" || current.CompletionArtifactID != "" {
-		decision := reportmodel.ReportExportCompletionConflict
-		if current.CompletionFingerprint == strings.TrimSpace(binding.CompletionFingerprint) && current.CompletionArtifactID == strings.TrimSpace(binding.ArtifactID) {
-			decision = reportmodel.ReportExportCompletionReplay
+	for attempt := 0; attempt < 3; attempt++ {
+		current, found, err := s.findReportExportPrepareByID(ctx, workspaceID, receiptID)
+		if err != nil {
+			return reportmodel.ReportExportCompletionBindingResult{}, err
 		}
-		return reportmodel.ReportExportCompletionBindingResult{Decision: decision, Receipt: current}, nil
+		if !found || !reportExportCompletionOwnsReceipt(current, binding, payloadJSON) {
+			return reportmodel.ReportExportCompletionBindingResult{Decision: reportmodel.ReportExportCompletionConflict, Receipt: current}, nil
+		}
+		if current.CompletionFingerprint != "" || current.CompletionArtifactID != "" {
+			decision := reportmodel.ReportExportCompletionConflict
+			if current.CompletionFingerprint == strings.TrimSpace(binding.CompletionFingerprint) && current.CompletionArtifactID == strings.TrimSpace(binding.ArtifactID) {
+				decision = reportmodel.ReportExportCompletionReplay
+			}
+			return reportmodel.ReportExportCompletionBindingResult{Decision: decision, Receipt: current}, nil
+		}
+		next := current
+		next.Status = string(idempotency.StatusSucceeded)
+		next.JobID = strings.TrimSpace(binding.JobID)
+		next.CompletionArtifactID = strings.TrimSpace(binding.ArtifactID)
+		next.CompletionFingerprint = strings.TrimSpace(binding.CompletionFingerprint)
+		next.LeaseOwner, next.LeaseExpiresAt = "", ""
+		next.ExpiresAt = binding.ExpiresAt.UTC().Format(time.RFC3339Nano)
+		next.UpdatedAt = normalizedReportExportPrepareTime(binding.Now).Format(time.RFC3339Nano)
+		statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, reportExportPrepareTable, workspaceID).
+			Set("status", next.Status).
+			Set("result_json", reportExportPrepareResultJSON(next)).
+			Set("related_ids_json", reportExportPrepareRelatedIDsJSON(next)).
+			Set("lease_owner", "").
+			Set("lease_expires_at", "").
+			Set("expires_at", next.ExpiresAt).
+			Set("finished_at", next.UpdatedAt).
+			Set("updated_at", next.UpdatedAt).
+			Where(query.And(
+				query.Equal("id", receiptID),
+				query.Equal("owner", reportExportPrepareOwner),
+				query.Equal("kind", reportExportPrepareKind),
+				query.Equal("status", current.Status),
+				query.Equal("result_json", reportExportPrepareResultJSON(current)),
+				s.store.SubjectEvidenceWriteAllowed(workspaceID, reportExportPrepareTable, receiptID),
+				s.store.SubjectActorWriteAllowed(workspaceID, current.RequesterUserID),
+			)).Build()
+		if err != nil {
+			return reportmodel.ReportExportCompletionBindingResult{}, fmt.Errorf("build report export completion binding: %w", err)
+		}
+		result, err := s.store.DB().ExecContext(ctx, statement, arguments...)
+		if err != nil {
+			return reportmodel.ReportExportCompletionBindingResult{}, err
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return reportmodel.ReportExportCompletionBindingResult{}, err
+		}
+		if rows == 1 {
+			return reportmodel.ReportExportCompletionBindingResult{Decision: reportmodel.ReportExportCompletionBound, Receipt: next}, nil
+		}
 	}
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, runtimeschema.ReportExportPrepareReceiptTable, workspaceID).
-		Set("status", string(idempotency.StatusSucceeded)).
-		Set("job_id", strings.TrimSpace(binding.JobID)).
-		Set("completion_artifact_id", strings.TrimSpace(binding.ArtifactID)).
-		Set("completion_fingerprint", strings.TrimSpace(binding.CompletionFingerprint)).
-		Set("expires_at", binding.ExpiresAt.UTC().Format(time.RFC3339Nano)).
-		Set("updated_at", normalizedReportExportPrepareTime(binding.Now).Format(time.RFC3339Nano)).
-		Where(query.And(
-			query.Equal("id", receiptID),
-			query.Equal("payload_json", payloadJSON),
-			query.NotEqual("business_job_key", ""),
-			query.Or(
-				query.And(query.Equal("status", string(idempotency.StatusSucceeded)), query.Equal("job_id", strings.TrimSpace(binding.JobID))),
-				query.And(query.Or(query.Equal("status", string(idempotency.StatusProcessing)), query.Equal("status", string(idempotency.StatusFailedRetryable))), query.Equal("job_id", "")),
-			),
-			query.Equal("completion_artifact_id", ""),
-			query.Equal("completion_fingerprint", ""),
-		)).Build()
-	if err != nil {
-		return reportmodel.ReportExportCompletionBindingResult{}, fmt.Errorf("build report export completion binding: %w", err)
-	}
-	result, err := s.store.DB().ExecContext(ctx, statement, arguments...)
-	if err != nil {
-		return reportmodel.ReportExportCompletionBindingResult{}, err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return reportmodel.ReportExportCompletionBindingResult{}, err
-	}
-	current, found, err = s.findReportExportPrepareByID(ctx, workspaceID, receiptID)
-	if err != nil {
-		return reportmodel.ReportExportCompletionBindingResult{}, err
-	}
-	if !found || !reportExportCompletionOwnsReceipt(current, binding, payloadJSON) {
-		return reportmodel.ReportExportCompletionBindingResult{Decision: reportmodel.ReportExportCompletionConflict, Receipt: current}, nil
-	}
-	if current.CompletionFingerprint != strings.TrimSpace(binding.CompletionFingerprint) || current.CompletionArtifactID != strings.TrimSpace(binding.ArtifactID) {
-		return reportmodel.ReportExportCompletionBindingResult{Decision: reportmodel.ReportExportCompletionConflict, Receipt: current}, nil
-	}
-	decision := reportmodel.ReportExportCompletionReplay
-	if rows == 1 {
-		decision = reportmodel.ReportExportCompletionBound
-	}
-	return reportmodel.ReportExportCompletionBindingResult{Decision: decision, Receipt: current}, nil
+	current, _, err := s.findReportExportPrepareByID(ctx, workspaceID, receiptID)
+	return reportmodel.ReportExportCompletionBindingResult{Decision: reportmodel.ReportExportCompletionConflict, Receipt: current}, err
 }
 
 func (s *ReportExportPrepareReceiptStore) findReportExportPrepareByOperation(ctx context.Context, workspaceID, operationID string) (reportmodel.ReportExportPrepareReceipt, bool, error) {
-	return s.findReportExportPrepare(ctx, workspaceID, query.Equal("operation_id", strings.TrimSpace(operationID)))
+	return s.findReportExportPrepare(ctx, workspaceID, query.Equal("idempotency_key", strings.TrimSpace(operationID)))
 }
 
 func (s *ReportExportPrepareReceiptStore) findReportExportPrepareByID(ctx context.Context, workspaceID, receiptID string) (reportmodel.ReportExportPrepareReceipt, bool, error) {
@@ -420,13 +448,16 @@ func (s *ReportExportPrepareReceiptStore) findReportExportPrepareByID(ctx contex
 }
 
 func (s *ReportExportPrepareReceiptStore) findReportExportPrepare(ctx context.Context, workspaceID string, predicate query.Predicate) (reportmodel.ReportExportPrepareReceipt, bool, error) {
-	statement, arguments, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, runtimeschema.ReportExportPrepareReceiptTable, strings.TrimSpace(workspaceID)).
-		Columns(reportExportPrepareReceiptColumns()...).Where(predicate).Limit(1).Build()
+	statement, arguments, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, reportExportPrepareTable, strings.TrimSpace(workspaceID)).
+		Columns(reportExportPrepareReceiptColumns()...).Where(query.And(
+		query.Equal("owner", reportExportPrepareOwner),
+		query.Equal("kind", reportExportPrepareKind),
+		predicate,
+	)).Limit(1).Build()
 	if err != nil {
 		return reportmodel.ReportExportPrepareReceipt{}, false, fmt.Errorf("build report export prepare receipt lookup: %w", err)
 	}
-	var value reportmodel.ReportExportPrepareReceipt
-	err = s.store.DB().QueryRowContext(ctx, statement, arguments...).Scan(reportExportPrepareReceiptScanTargets(&value)...)
+	value, err := scanReportExportPrepareReceipt(s.store.DB().QueryRowContext(ctx, statement, arguments...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return reportmodel.ReportExportPrepareReceipt{}, false, nil
 	}
@@ -492,6 +523,42 @@ func sameReportExportPrepareOperation(left, right reportmodel.ReportExportPrepar
 	return left.OperationID == right.OperationID && left.WorkspaceID == right.WorkspaceID && left.UseCase == right.UseCase && left.ReportKey == right.ReportKey && left.ObjectKey == right.ObjectKey && left.AuditID == right.AuditID && left.RetryOfJobID == right.RetryOfJobID
 }
 
+func reportExportPrepareOperationPredicate(value reportmodel.ReportExportPrepareReceipt) query.Predicate {
+	return query.And(
+		query.Equal("owner", reportExportPrepareOwner),
+		query.Equal("kind", reportExportPrepareKind),
+		query.Equal("action_key", value.UseCase),
+		query.Equal("resource_type", "report"),
+		query.Equal("resource_id", value.ReportKey),
+		query.Equal("idempotency_key", value.OperationID),
+		query.Equal("reason", value.ObjectKey),
+		query.Equal("reference", value.AuditID),
+	)
+}
+
+func reportExportPrepareFencePredicate(receiptID, leaseOwner string, fencingToken int64) query.Predicate {
+	return query.And(
+		query.Equal("id", strings.TrimSpace(receiptID)),
+		query.Equal("owner", reportExportPrepareOwner),
+		query.Equal("kind", reportExportPrepareKind),
+		query.Equal("status", string(idempotency.StatusProcessing)),
+		query.Equal("lease_owner", strings.TrimSpace(leaseOwner)),
+		query.Equal("fencing_token", fencingToken),
+	)
+}
+
+func reportExportPrepareFailureClass(status idempotency.Status) string {
+	if status == idempotency.StatusFailedRetryable {
+		return "retryable"
+	}
+	return "terminal"
+}
+
+func reportExportPrepareLeaseLost(ctx context.Context, workspaceID, receiptID string, store *database.RuntimeStore) error {
+	store.ObserveIdempotency(ctx, strings.TrimSpace(workspaceID), reportmodel.ReportExportPrepareUseCase, idempotency.OutcomeLeaseLost)
+	return mutation.MutationConflict("report_export_prepare_receipt", strings.TrimSpace(receiptID), mutation.MutationConflictLeaseLost, nil)
+}
+
 func reportExportCompletionOwnsReceipt(receipt reportmodel.ReportExportPrepareReceipt, binding reportmodel.ReportExportCompletionBinding, payloadJSON string) bool {
 	statusCanComplete := (receipt.Status == string(idempotency.StatusSucceeded) && receipt.JobID == strings.TrimSpace(binding.JobID)) ||
 		((receipt.Status == string(idempotency.StatusProcessing) || receipt.Status == string(idempotency.StatusFailedRetryable)) && receipt.JobID == "")
@@ -531,21 +598,97 @@ func expectOneReportExportPrepareMutation(ctx context.Context, store *database.R
 }
 
 func reportExportPrepareReceiptColumns() []string {
-	return []string{
-		"id", "operation_id", "workspace_id", "requester_user_id", "use_case", "report_key", "object_key", "audit_id", "idempotency_key", "request_fingerprint", "status", "payload_json", "business_job_key", "job_id", "completion_artifact_id", "completion_fingerprint", "terminal_error_code", "lease_owner", "lease_expires_at", "fencing_token", "created_at", "updated_at", "expires_at", "retry_of_job_id",
-	}
+	return []string{"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
 }
 
 func reportExportPrepareReceiptValues(value reportmodel.ReportExportPrepareReceipt) []any {
-	return []any{
-		value.ID, value.OperationID, value.WorkspaceID, value.RequesterUserID, value.UseCase, value.ReportKey, value.ObjectKey, value.AuditID, value.CallerKey, value.RequestFingerprint, value.Status, value.PayloadJSON, value.BusinessJobKey, value.JobID, value.CompletionArtifactID, value.CompletionFingerprint, value.TerminalErrorCode, value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.CreatedAt, value.UpdatedAt, value.ExpiresAt, value.RetryOfJobID,
+	resultJSON := reportExportPrepareResultJSON(value)
+	metadataJSON := reportExportPrepareMetadataJSON(value)
+	relatedIDs, _ := json.Marshal(reportExportPrepareRelatedIDs(value))
+	evidence, _ := json.Marshal([]string{value.AuditID})
+	failureClass := ""
+	if value.Status == string(idempotency.StatusFailedRetryable) {
+		failureClass = "retryable"
+	} else if value.Status == string(idempotency.StatusFailedTerminal) {
+		failureClass = "terminal"
 	}
+	return []any{value.ID, value.WorkspaceID, "", reportExportPrepareOwner, reportExportPrepareKind, value.UseCase, "", "report", value.ReportKey, value.OperationID, value.RequestFingerprint, value.RequesterUserID, value.ObjectKey, value.AuditID, value.Status, "/operations/" + value.ID, resultJSON, metadataJSON, value.TerminalErrorCode, failureClass, "", string(relatedIDs), value.OperationID, string(evidence), value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.ExpiresAt, value.CreatedAt, value.CreatedAt, "", value.UpdatedAt}
 }
 
-func reportExportPrepareReceiptScanTargets(value *reportmodel.ReportExportPrepareReceipt) []any {
-	return []any{
-		&value.ID, &value.OperationID, &value.WorkspaceID, &value.RequesterUserID, &value.UseCase, &value.ReportKey, &value.ObjectKey, &value.AuditID, &value.CallerKey, &value.RequestFingerprint, &value.Status, &value.PayloadJSON, &value.BusinessJobKey, &value.JobID, &value.CompletionArtifactID, &value.CompletionFingerprint, &value.TerminalErrorCode, &value.LeaseOwner, &value.LeaseExpiresAt, &value.FencingToken, &value.CreatedAt, &value.UpdatedAt, &value.ExpiresAt, &value.RetryOfJobID,
+type reportExportPrepareMetadata struct {
+	CallerKey    string `json:"caller_key"`
+	RetryOfJobID string `json:"retry_of_job_id,omitempty"`
+}
+
+type reportExportPrepareResult struct {
+	PayloadJSON           string `json:"payload_json,omitempty"`
+	BusinessJobKey        string `json:"business_job_key,omitempty"`
+	JobID                 string `json:"job_id,omitempty"`
+	CompletionArtifactID  string `json:"completion_artifact_id,omitempty"`
+	CompletionFingerprint string `json:"completion_fingerprint,omitempty"`
+}
+
+func reportExportPrepareMetadataJSON(value reportmodel.ReportExportPrepareReceipt) string {
+	encoded, _ := json.Marshal(reportExportPrepareMetadata{CallerKey: value.CallerKey, RetryOfJobID: value.RetryOfJobID})
+	return string(encoded)
+}
+
+func reportExportPrepareResultJSON(value reportmodel.ReportExportPrepareReceipt) string {
+	encoded, _ := json.Marshal(reportExportPrepareResult{
+		PayloadJSON: value.PayloadJSON, BusinessJobKey: value.BusinessJobKey, JobID: value.JobID,
+		CompletionArtifactID: value.CompletionArtifactID, CompletionFingerprint: value.CompletionFingerprint,
+	})
+	return string(encoded)
+}
+
+func reportExportPrepareRelatedIDs(value reportmodel.ReportExportPrepareReceipt) []string {
+	result := []string{}
+	for _, id := range []string{value.JobID, value.CompletionArtifactID, value.RetryOfJobID} {
+		if strings.TrimSpace(id) != "" {
+			result = append(result, id)
+		}
 	}
+	return result
+}
+
+func reportExportPrepareRelatedIDsJSON(value reportmodel.ReportExportPrepareReceipt) string {
+	encoded, _ := json.Marshal(reportExportPrepareRelatedIDs(value))
+	return string(encoded)
+}
+
+type reportExportPrepareScanner interface{ Scan(...any) error }
+
+func scanReportExportPrepareReceipt(scanner reportExportPrepareScanner) (reportmodel.ReportExportPrepareReceipt, error) {
+	var value reportmodel.ReportExportPrepareReceipt
+	var systemPurpose, owner, kind, parentID, resourceType, statusURL string
+	var resultJSON, metadataJSON, failureClass, nextAction, relatedIDs, correlation, evidence string
+	var startedAt, finishedAt string
+	err := scanner.Scan(
+		&value.ID, &value.WorkspaceID, &systemPurpose, &owner, &kind, &value.UseCase, &parentID,
+		&resourceType, &value.ReportKey, &value.OperationID, &value.RequestFingerprint,
+		&value.RequesterUserID, &value.ObjectKey, &value.AuditID, &value.Status, &statusURL,
+		&resultJSON, &metadataJSON, &value.TerminalErrorCode, &failureClass, &nextAction,
+		&relatedIDs, &correlation, &evidence, &value.LeaseOwner, &value.LeaseExpiresAt,
+		&value.FencingToken, &value.ExpiresAt, &value.CreatedAt, &startedAt, &finishedAt, &value.UpdatedAt,
+	)
+	if err != nil {
+		return value, err
+	}
+	if systemPurpose != "" || owner != reportExportPrepareOwner || kind != reportExportPrepareKind || resourceType != "report" || correlation != value.OperationID {
+		return value, fmt.Errorf("report export prepare operation identity is invalid")
+	}
+	var metadata reportExportPrepareMetadata
+	if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
+		return value, fmt.Errorf("decode report export prepare operation metadata: %w", err)
+	}
+	var result reportExportPrepareResult
+	if err := json.Unmarshal([]byte(resultJSON), &result); err != nil {
+		return value, fmt.Errorf("decode report export prepare operation result: %w", err)
+	}
+	value.CallerKey, value.RetryOfJobID = metadata.CallerKey, metadata.RetryOfJobID
+	value.PayloadJSON, value.BusinessJobKey, value.JobID = result.PayloadJSON, result.BusinessJobKey, result.JobID
+	value.CompletionArtifactID, value.CompletionFingerprint = result.CompletionArtifactID, result.CompletionFingerprint
+	return value, nil
 }
 
 func reportExportPrepareClaimBackoff(ctx context.Context, attempt int) error {

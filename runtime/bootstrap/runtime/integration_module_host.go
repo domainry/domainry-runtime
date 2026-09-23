@@ -13,22 +13,34 @@ import (
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	integrationmodulehost "github.com/domainry/domainry-integration-sdk/modulehost"
 	integrationsaashost "github.com/domainry/domainry-integration-sdk/saashost"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
 type openedRuntimeIntegration struct {
-	Binding      integrationsdk.Binding
-	Delivery     integrationsdk.Delivery
-	Catalog      integrationsdk.Catalog
-	Requirements integrationsdk.Requirements
-	Management   integrationsdk.Management
-	Operations   integrationsdk.Operations
-	Workers      integrationsdk.LocalWorkers
-	Subjects     integrationsdk.SubjectLifecycle
+	Binding            integrationsdk.Binding
+	Delivery           integrationsdk.Delivery
+	Catalog            integrationsdk.Catalog
+	Requirements       integrationsdk.Requirements
+	Management         integrationsdk.Management
+	Operations         integrationsdk.Operations
+	Workers            integrationsdk.LocalWorkers
+	Subjects           integrationsdk.SubjectLifecycle
+	SubjectPersistence integrationsdk.SubjectLifecyclePersistenceBinding
+}
+
+func integrationDeploymentMode(binding integrationsdk.Binding) integrationsdk.DeploymentMode {
+	if binding == nil {
+		return ""
+	}
+	return binding.Descriptor().Mode
 }
 
 func openRuntimeIntegration(ctx context.Context, application integrationsdk.ApplicationRef, factory integrationsdk.Factory, host runtimeIntegrationModuleHost) (openedRuntimeIntegration, error) {
+	if factory == nil {
+		return openedRuntimeIntegration{}, nil
+	}
 	binding, err := openIntegrationBinding(ctx, application, factory, host)
 	if err != nil {
 		return openedRuntimeIntegration{}, err
@@ -63,6 +75,11 @@ func openRuntimeIntegration(ctx context.Context, application integrationsdk.Appl
 		result.Subjects = port.SubjectLifecycle()
 	}
 	if binding.Descriptor().Mode == integrationsdk.DeploymentModeModule {
+		persistence, ok := binding.(integrationsdk.SubjectLifecyclePersistenceBinding)
+		if !ok {
+			return openedRuntimeIntegration{}, fmt.Errorf("Integration Module Binding returned no shared subject lifecycle persistence binder")
+		}
+		result.SubjectPersistence = persistence
 		workers, ok := binding.(integrationsdk.LocalWorkerBinding)
 		if !ok {
 			return openedRuntimeIntegration{}, fmt.Errorf("Integration Module Binding returned no local worker boundary")
@@ -119,6 +136,12 @@ func (h runtimeIntegrationModuleHost) SecretCipher() integrationmodulehost.Secre
 	return h
 }
 func (h runtimeIntegrationModuleHost) RuntimeTriggers() integrationsdk.TriggerSink { return h.triggers }
+func (h runtimeIntegrationModuleHost) DefinitionStore() metadatasdk.DefinitionStore {
+	if h.store == nil || h.store.Metadata() == nil {
+		return nil
+	}
+	return h.store.Metadata().DefinitionStore()
+}
 func (h runtimeIntegrationModuleHost) EncryptSecretMaterial(ctx context.Context, workspaceID, secretKey, plaintext string) (string, error) {
 	return (secrets.Cipher{Keys: h.store.SecretKeyProvider(), Purpose: "integration-secret"}).Encrypt(ctx, workspaceID, secretKey, []byte(plaintext))
 }

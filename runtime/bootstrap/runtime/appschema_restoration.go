@@ -7,48 +7,19 @@ import (
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
-	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
-	manifestrepository "github.com/domainry/domainry-runtime/runtime/domain/manifest/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	appschemapersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema"
 )
 
-type restoredRuntimeMetadata struct {
-	manifest      manifestmodel.ManifestSchema
-	metadataStore appschemapersistence.ApplicationSchemaStore
-}
-
-// DefinitionUpgradePlanRequested is the plan-mode outcome of metadata
-// restoration: the process prints the plan and exits without serving.
-type DefinitionUpgradePlanRequested = appschemaapplication.DefinitionUpgradePlanRequested
-
-func restoreRuntimeMetadata(ctx context.Context, store *persistence.RuntimeStore, seedManifest manifestmodel.ManifestSchema, definitionUpgradeMode string) (restoredRuntimeMetadata, error) {
+func initializeRuntimeProjectModel(ctx context.Context, store *persistence.RuntimeStore, model projectmodel.RuntimeModel) (appschemapersistence.ApplicationSchemaStore, error) {
 	metadataStore := appschemapersistence.NewApplicationSchemaStore(store)
-	manifest, err := restoreRuntimeManifest(ctx, &installedNotificationTemplateCatalog{}, metadataStore, seedManifest, definitionUpgradeMode)
-	if err != nil {
-		return restoredRuntimeMetadata{}, err
+	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "initialize project model")
+	if err := metadataStore.InitializeProjectModel(ctx, scope, model); err != nil {
+		return appschemapersistence.ApplicationSchemaStore{}, err
 	}
-	return restoredRuntimeMetadata{manifest: manifest, metadataStore: metadataStore}, nil
-}
-
-type installedNotificationTemplateCatalog struct {
-	values []notificationmodel.NotificationTemplate
-}
-
-func (c *installedNotificationTemplateCatalog) SyncPublished(_ context.Context, _ principalmodel.SystemScope, values []notificationmodel.NotificationTemplate) error {
-	c.values = append([]notificationmodel.NotificationTemplate(nil), values...)
-	return nil
-}
-
-func (c *installedNotificationTemplateCatalog) List(context.Context, principalmodel.SystemScope) ([]notificationmodel.NotificationTemplateRecord, error) {
-	result := make([]notificationmodel.NotificationTemplateRecord, len(c.values))
-	for index := range c.values {
-		value := c.values[index]
-		result[index] = notificationmodel.NotificationTemplateRecord{Key: value.Key, Published: &value, PublishedVersion: value.Version, Status: value.Status}
-	}
-	return result, nil
+	return metadataStore, nil
 }
 
 type sdkNotificationTemplateCatalog struct {
@@ -75,9 +46,4 @@ func (c sdkNotificationTemplateCatalog) List(ctx context.Context, _ principalmod
 		return nil, err
 	}
 	return notificationSDKConvert[[]notificationmodel.NotificationTemplateRecord](values)
-}
-
-func restoreRuntimeManifest(ctx context.Context, notifications appschemaapplication.InstalledNotificationTemplateCatalog, metadata manifestrepository.ManifestRuntimeMetadataRepository, seedManifest manifestmodel.ManifestSchema, definitionUpgradeMode string) (manifestmodel.ManifestSchema, error) {
-	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "restore Runtime metadata")
-	return appschemaapplication.NewApplicationSchemaRuntimeRestorationApplicationService(notifications, metadata).WithDefinitionUpgradeMode(definitionUpgradeMode).Restore(ctx, seedManifest, scope)
 }

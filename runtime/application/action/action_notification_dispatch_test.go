@@ -30,8 +30,8 @@ func testNotificationIntent() runtimeext.NotificationIntent {
 func TestBusinessActionStagesGrantedNotificationAtomicallyWithAudit(t *testing.T) {
 	compiled := 0
 	execution := &businessActionExecution{
-		unitOfWork: newActionTestUnitOfWork(), identity: runtimeext.ExecutionIdentity{ExecutionID: "execution-1"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
-		principal: runtimeext.Principal{UserID: "user-1", RoleKey: "operator"}, invocation: actionTestInvocation(), notificationGrants: []string{"business_task.assigned"},
+		unitOfWork: newActionTestUnitOfWork(), identity: runtimeext.ExecutionIdentity{ExecutionID: "execution-1", ReceiptID: "operation-1"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
+		principal: runtimeext.Principal{UserID: "user-1", RoleKey: "operator", CausationID: "cause-1"}, invocation: actionTestInvocation(), notificationGrants: []string{"business_task.assigned"},
 		dependencies: BusinessHandlerExecutionDependencies{CompileNotification: func(_ context.Context, eventID string, intent runtimeext.NotificationIntent, principal principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
 			compiled++
 			if eventID == "" || principal.WorkspaceID != "workspace-a" || intent.Variables[0].Value() != "PT COMEX order" {
@@ -53,7 +53,7 @@ func TestBusinessActionStagesGrantedNotificationAtomicallyWithAudit(t *testing.T
 	if event.WorkspaceID != "workspace-a" || event.SourceEventID != "s10:order-42:v7:assigned:user-2" || event.SubjectVersion != "order-version-7" || event.DedupeKey == "" {
 		t.Fatalf("event=%+v", event)
 	}
-	if commits[0].Audits[0].Event != runtimeext.NotificationDispatchOperationKey || commits[0].Audits[0].Metadata["recipient_count"] != 1 {
+	if commits[0].Audits[0].Event != runtimeext.NotificationDispatchOperationKey || commits[0].Audits[0].Metadata["recipient_count"] != 1 || commits[0].Audits[0].OperationID != "operation-1" || commits[0].Audits[0].CausationID != "cause-1" {
 		t.Fatalf("audit=%+v", commits[0].Audits[0])
 	}
 }

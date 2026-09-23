@@ -8,12 +8,20 @@ import (
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	actionbusiness "github.com/domainry/domainry-runtime/runtime/domain/action/service"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 )
+
+// CanonicalSchemaProvider exposes the immutable project schema to internal
+// composition. Authorization filters are applied only at the consuming
+// application boundary.
+type CanonicalSchemaProvider interface {
+	Schema() appschemamodel.ApplicationSchemaSnapshot
+}
 
 func newRecordValidationService(schema CanonicalSchemaProvider, repository recordrepository.RecordRepository, access pipelineRecordAccess, identity identitysdk.Projection) *recordservice.RecordValidationDomainService {
 	object := func(_ context.Context, key string) (definitionmodel.ObjectSchema, bool) {

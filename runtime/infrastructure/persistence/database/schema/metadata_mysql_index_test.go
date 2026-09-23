@@ -22,8 +22,8 @@ func TestApplicationSchemaDoesNotEmitNotificationOwnedDDL(t *testing.T) {
 		if strings.Contains(query, "notification_") {
 			t.Fatalf("Runtime metadata schema emitted Notification-owned DDL: %s", query)
 		}
-		if strings.Contains(query, "_application_schema_projection") && strings.Contains(query, `"name" TEXT NOT NULL DEFAULT '',`) {
-			t.Fatalf("MySQL application projection emitted an unsupported TEXT default: %s", query)
+		if strings.Contains(query, "_project_model_state") && strings.Contains(query, `"name" TEXT NOT NULL DEFAULT '',`) {
+			t.Fatalf("MySQL project model state emitted an unsupported TEXT default: %s", query)
 		}
 	}
 }

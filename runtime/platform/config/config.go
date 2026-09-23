@@ -93,7 +93,6 @@ type Config struct {
 	DatabaseDSN                             string
 	DatabaseMigrationDSN                    string
 	DatabaseMigrationMode                   string
-	DefinitionUpgradeMode                   string
 	DatabaseMinSchemaVersion                string
 	DatabaseMaxSchemaVersion                string
 	DatabaseConnectionMode                  string
@@ -110,7 +109,6 @@ type Config struct {
 	DatabaseLockTimeout                     time.Duration
 	DatabaseSSLRootCert                     string
 	DBPath                                  string
-	ManifestPath                            string
 	MigrationDir                            string
 	MigrationSQL                            string
 	MigrationBackupDir                      string
@@ -119,8 +117,6 @@ type Config struct {
 	MigrationRestoreDrillSuccessAt          string
 	MigrationOperator                       string
 	MigrationInstanceID                     string
-	SkipManifestValidation                  bool
-	BusinessSeedSyncDisabled                bool
 	// WorkspaceProvisionFailurePoint is a process-start acceptance control.
 	// Project, file, and remote configuration sources cannot set it.
 	WorkspaceProvisionFailurePoint              string
@@ -144,36 +140,33 @@ type Config struct {
 	InstallationAdministratorLoginID          string
 	InstallationAdministratorName             string
 	InstallationAdministratorCredentialFile   string
-	// AllowEmptyAuthoringManifest is set only by the trusted configuring
-	// Provision lifecycle. It is not loaded from environment configuration.
-	AllowEmptyAuthoringManifest    bool
-	UploadDir                      string
-	CORSAllowedOrigins             []string
-	HTTPPublicOrigins              []string
-	HTTPManagementOrigins          []string
-	HTTPOpsOrigins                 []string
-	RuntimeAllowDevIdentityHeaders bool
-	AuditExportTokenKey            string
-	IdentityRedirectURLs           []string
-	IdentityWorkspaceID            string
-	IdentityAudience               string
-	NotificationWorkspaceID        string
-	NotificationApplicationKey     string
-	IntegrationSecretKey           string
-	IntegrationActiveKeyID         string
-	IntegrationDecryptOnlyKeys     map[string]string
-	WorkerPollInterval             time.Duration
-	WorkerBatchSize                int
-	WorkerLeaseTTL                 time.Duration
-	SchedulerEnabled               bool
-	SchedulerPollInterval          time.Duration
-	SchedulerBatchSize             int
-	SchedulerLeaseTTL              time.Duration
-	SchedulerMaxCatchupWindows     int
-	RecordTimerEnabled             bool
-	RecordTimerPollInterval        time.Duration
-	RecordTimerBatchSize           int
-	RecordTimerLeaseTTL            time.Duration
+	UploadDir                                 string
+	CORSAllowedOrigins                        []string
+	HTTPPublicOrigins                         []string
+	HTTPManagementOrigins                     []string
+	HTTPOpsOrigins                            []string
+	RuntimeAllowDevIdentityHeaders            bool
+	AuditExportTokenKey                       string
+	IdentityRedirectURLs                      []string
+	IdentityWorkspaceID                       string
+	IdentityAudience                          string
+	NotificationWorkspaceID                   string
+	NotificationApplicationKey                string
+	IntegrationSecretKey                      string
+	IntegrationActiveKeyID                    string
+	IntegrationDecryptOnlyKeys                map[string]string
+	WorkerPollInterval                        time.Duration
+	WorkerBatchSize                           int
+	WorkerLeaseTTL                            time.Duration
+	SchedulerEnabled                          bool
+	SchedulerPollInterval                     time.Duration
+	SchedulerBatchSize                        int
+	SchedulerLeaseTTL                         time.Duration
+	SchedulerMaxCatchupWindows                int
+	RecordTimerEnabled                        bool
+	RecordTimerPollInterval                   time.Duration
+	RecordTimerBatchSize                      int
+	RecordTimerLeaseTTL                       time.Duration
 }
 
 func FromEnv() Config {
@@ -265,7 +258,6 @@ func FromEnv() Config {
 		DatabaseDSN:                                 env("DATABASE_DSN", ""),
 		DatabaseMigrationDSN:                        strings.TrimSpace(os.Getenv("DATABASE_MIGRATION_DSN")),
 		DatabaseMigrationMode:                       databaseMigrationModeEnv(environment),
-		DefinitionUpgradeMode:                       definitionUpgradeModeEnv(environment),
 		DatabaseMinSchemaVersion:                    strings.TrimSpace(os.Getenv("DATABASE_MIN_SCHEMA_VERSION")),
 		DatabaseMaxSchemaVersion:                    strings.TrimSpace(os.Getenv("DATABASE_MAX_SCHEMA_VERSION")),
 		DatabaseConnectionMode:                      strings.TrimSpace(os.Getenv("DATABASE_CONNECTION_MODE")),
@@ -282,7 +274,6 @@ func FromEnv() Config {
 		DatabaseLockTimeout:                         durationEnv("DATABASE_LOCK_TIMEOUT", 5*time.Second),
 		DatabaseSSLRootCert:                         strings.TrimSpace(os.Getenv("DATABASE_SSL_ROOT_CERT")),
 		DBPath:                                      env("APP_DB_PATH", "../data/runtime.db"),
-		ManifestPath:                                env("TEMPLATE_MANIFEST", "../domainry.template.json"),
 		MigrationDir:                                env("MIGRATION_DIR", "../migrations"),
 		MigrationSQL:                                strings.TrimSpace(os.Getenv("MIGRATION_SQL")),
 		MigrationBackupDir:                          env("MIGRATION_BACKUP_DIR", "../data/migration-backups"),
@@ -291,8 +282,6 @@ func FromEnv() Config {
 		MigrationRestoreDrillSuccessAt:              strings.TrimSpace(os.Getenv("MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT")),
 		MigrationOperator:                           env("MIGRATION_OPERATOR", "runtime"),
 		MigrationInstanceID:                         strings.TrimSpace(os.Getenv("MIGRATION_INSTANCE_ID")),
-		SkipManifestValidation:                      boolEnv("SKIP_MANIFEST_VALIDATION", false),
-		BusinessSeedSyncDisabled:                    !boolEnv("BUSINESS_SEED_SYNC_ENABLED", true),
 		WorkspaceProvisionFailurePoint:              strings.TrimSpace(os.Getenv("WORKSPACE_PROVISION_FAILURE_POINT")),
 		RuntimeWorkspaceProvisionClientID:           strings.TrimSpace(os.Getenv("RUNTIME_WORKSPACE_PROVISION_CLIENT_ID")),
 		RuntimeWorkspaceProvisionSigningSecret:      os.Getenv("RUNTIME_WORKSPACE_PROVISION_SIGNING_SECRET"),
@@ -376,41 +365,6 @@ func databaseMigrationModeEnv(environment string) string {
 	default:
 		return "apply"
 	}
-}
-
-// DefinitionUpgradePlanModeRequested reports whether this process was started
-// in definition-upgrade plan mode, before any configuration is loaded. Plan
-// mode turns stdout into a data channel, so the caller must know it early
-// enough to keep diagnostics off stdout.
-func DefinitionUpgradePlanModeRequested() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("DEFINITION_UPGRADE_MODE")), "plan")
-}
-
-// DEFINITION_UPGRADE_MODE selects how Runtime treats the physical definition
-// upgrade computed at startup from the previously projected manifest to the
-// installed one: apply executes compatible steps with backup and receipts,
-// verify refuses to start while any non-retained step is pending, and plan
-// prints the plan as JSON and exits without starting HTTP. It defaults to
-// apply, to verify in production, and follows DATABASE_MIGRATION_MODE=verify
-// when unset so a verify-only deployment never mutates business tables.
-func definitionUpgradeModeEnv(environment string) string {
-	if value := strings.ToLower(strings.TrimSpace(os.Getenv("DEFINITION_UPGRADE_MODE"))); value != "" {
-		return value
-	}
-	if databaseMigrationModeEnv(environment) == "verify" {
-		return "verify"
-	}
-	return "apply"
-}
-
-func (c Config) EffectiveDefinitionUpgradeMode() string {
-	if value := strings.ToLower(strings.TrimSpace(c.DefinitionUpgradeMode)); value != "" {
-		return value
-	}
-	if c.EffectiveDatabaseMigrationMode() == "verify" {
-		return "verify"
-	}
-	return "apply"
 }
 
 func (c Config) EffectiveDatabaseMigrationMode() string {

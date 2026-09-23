@@ -126,7 +126,9 @@ func (e *businessActionExecution) canonicalCommits() ([]transactionmodel.RecordM
 		for index, event := range e.notifications {
 			commits[len(commits)-1].Audits = append(commits[len(commits)-1].Audits, auditmodel.AuditEvent{
 				ID: fmt.Sprintf("notification_audit:%s:%d", e.identity.ExecutionID, index), WorkspaceID: e.workspace.ID,
-				Event: runtimeext.NotificationDispatchOperationKey, ObjectKey: event.SubjectType, RecordID: event.SubjectID,
+				OperationID: strings.TrimSpace(e.identity.ReceiptID), CausationID: strings.TrimSpace(e.principal.CausationID),
+				Family: auditmodel.EventFamilyRuntimeNotification,
+				Event:  runtimeext.NotificationDispatchOperationKey, ObjectKey: event.SubjectType, RecordID: event.SubjectID,
 				ActorID: e.principal.UserID, RoleKey: e.principal.RoleKey, Summary: "Staged governed in-app notification",
 				Metadata: map[string]any{"event_type": event.EventType, "source_event_id": event.SourceEventID, "subject_version": event.SubjectVersion, "recipient_count": len(event.RecipientUserIDs)}, CreatedAt: event.OccurredAt,
 			})

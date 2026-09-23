@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	apperror "github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -23,7 +24,6 @@ import (
 	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
-	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -32,17 +32,14 @@ import (
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
-func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthoringSchemaProvider, policy recordQueryPolicy, metadata interface {
-	ValidateApplicationDefinition(context.Context, string, string, appschemamodel.ApplicationDefinitionUpsertRequest, principalmodel.Principal) (appschemamodel.ApplicationDefinitionValidationResult, error)
-}, handlers *runtimeext.ProjectExtensionRegistry, audit func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any)) *actionapplication.ActionApplicationService {
-	_ = metadata
+func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolicy, handlers *runtimeext.ProjectExtensionRegistry, audit func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any)) *actionapplication.ActionApplicationService {
 	records.ActionExecutionRuntime.ConfigureFingerprintConflictAudit(func(ctx context.Context, conflict actionruntime.ActionFingerprintConflictAudit) error {
 		idempotencyKey := ""
 		if conflict.RequestID != "" {
 			idempotencyKey = "action_idempotency_conflict:" + conflict.RequestID
 		}
 		return records.auditApplicationService.AppendAudit(ctx, auditapplication.AuditAppendRequest{
-			IdempotencyKey: idempotencyKey, Event: "action_idempotency_conflict", ObjectKey: conflict.ObjectKey, RecordID: conflict.RecordID,
+			IdempotencyKey: idempotencyKey, Family: auditmodel.EventFamilyBusinessAction, Event: "action_idempotency_conflict", ObjectKey: conflict.ObjectKey, RecordID: conflict.RecordID,
 			Principal: conflict.Principal, Summary: "Action idempotency fingerprint conflict",
 			Metadata: map[string]any{
 				"action_key": conflict.ActionKey, "request_fingerprint_sha256": conflict.RequestFingerprintSHA256,
@@ -161,7 +158,7 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 			WorkspaceAggregateRepository: records.workspaceAggregateRepository,
 			AuditWorkspaceAggregate: func(ctx context.Context, value actionapplication.WorkspaceAggregateAudit) error {
 				return records.auditApplicationService.AppendAudit(ctx, auditapplication.AuditAppendRequest{
-					Event: "action_cross_workspace_aggregate", ObjectKey: value.ObjectKey, Principal: value.Principal, Summary: "Executed controlled cross-Workspace aggregate",
+					Family: auditmodel.EventFamilyBusinessAction, Event: "action_cross_workspace_aggregate", ObjectKey: value.ObjectKey, Principal: value.Principal, Summary: "Executed controlled cross-Workspace aggregate",
 					Metadata: map[string]any{
 						"action_key": value.ActionKey, "capability_key": value.CapabilityKey, "outcome": value.Outcome, "error_code": value.ErrorCode,
 						"scope_sha256": value.ScopeSHA256, "workspace_count": value.WorkspaceCount, "source_row_count": value.SourceRowCount, "result_row_count": value.ResultRowCount,
@@ -170,7 +167,7 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 			},
 			AuditWorkspaceIdentityUsage: func(ctx context.Context, value actionapplication.WorkspaceIdentityUsageAudit) error {
 				return records.auditApplicationService.AppendAudit(ctx, auditapplication.AuditAppendRequest{
-					Event: "action_workspace_identity_usage", Principal: value.Principal, Summary: "Read controlled Workspace identity usage aggregates",
+					Family: auditmodel.EventFamilyBusinessAction, Event: "action_workspace_identity_usage", Principal: value.Principal, Summary: "Read controlled Workspace identity usage aggregates",
 					Metadata: map[string]any{
 						"action_key": value.ActionKey, "outcome": value.Outcome, "error_code": value.ErrorCode,
 						"scope_sha256": value.ScopeSHA256, "workspace_count": value.WorkspaceCount,
@@ -320,7 +317,6 @@ func assembleActionApplication(records *runtimeAssembly, schema CapabilityAuthor
 		},
 	})
 	_ = policy
-	_ = schema
 	return service
 }
 

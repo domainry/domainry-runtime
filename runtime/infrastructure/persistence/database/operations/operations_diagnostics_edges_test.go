@@ -152,7 +152,7 @@ func TestOperationsLeaseSnapshotAndCountEdges(t *testing.T) {
 		t.Fatal("lease query failure swallowed")
 	}
 	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{{columns: []string{"live", "expired"}, rows: [][]driver.Value{{int64(2), int64(3)}}}}})
-	if live, expired, err := store.operationsLeaseCounts(t.Context(), "leases", "", now); err != nil || live != 2 || expired != 3 {
+	if live, expired, err := store.operationsLeaseCounts(t.Context(), "leases", "", "", "", now); err != nil || live != 2 || expired != 3 {
 		t.Fatalf("live=%d expired=%d err=%v", live, expired, err)
 	}
 	expiredOnly := leaseCountSteps(len(operationsLeaseSpecs), 0, 0)

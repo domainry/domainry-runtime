@@ -16,7 +16,6 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
-	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 
 	"sort"
@@ -127,19 +126,8 @@ func (s *AutomationManagementApplicationService) ExecutionHistory(ctx context.Co
 	return automationprojection.AutomationExecutionHistory{Items: items, Count: len(items), Metrics: automationprojection.BuildAutomationExecutionMetrics(items, invocations, outbox)}, nil
 }
 
-func (s *AutomationManagementApplicationService) ValidateRule(ctx context.Context, rule automationmodel.AutomationRuleSchema, principal principalmodel.Principal) (automationvalidation.AutomationValidationResult, error) {
-	if err := automationAuthorizeEndpoint(principal, "POST /automation/validate"); err != nil {
-		return automationvalidation.AutomationValidationResult{}, err
-	}
-	return automationvalidation.AutomationValidateRuleForAuthoring(ctx, rule, s.dependencies.ValidateDefinition)
-}
-
 func (s *AutomationManagementApplicationService) SimulateRule(ctx context.Context, rule automationmodel.AutomationRuleSchema, request automationcontract.AutomationSimulationRequest, principal principalmodel.Principal) (automationprojection.AutomationSimulationResult, error) {
-	endpoint := "POST /automation/rules/{ruleKey}/simulate"
-	if request.Rule != nil {
-		endpoint = "POST /automation/simulate"
-	}
-	if err := automationAuthorizeEndpoint(principal, endpoint); err != nil {
+	if err := automationAuthorizeEndpoint(principal, "POST /automation/rules/{ruleKey}/simulate"); err != nil {
 		return automationprojection.AutomationSimulationResult{}, err
 	}
 	if err := s.dependencies.ValidateDefinition(ctx, rule); err != nil {

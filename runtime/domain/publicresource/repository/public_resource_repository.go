@@ -8,7 +8,7 @@ import (
 )
 
 // Repository performs only the exact cross-workspace capability-key lookup
-// declared by a manifest public resource. It is intentionally not a generic
+// declared by a code-owned public resource. It is intentionally not a generic
 // anonymous Record repository.
 type Repository interface {
 	Find(context.Context, definitionmodel.ObjectSchema, definitionmodel.ObjectPublicResource, string) (publicresourcemodel.Projection, bool, error)

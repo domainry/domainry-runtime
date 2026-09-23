@@ -3,14 +3,79 @@ package publicationhandoff
 import (
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/domainry/domainry-foundation/mutation"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
+
+func TestPublicationOutboxFreshSchemaRetainsHandoffContract(t *testing.T) {
+	runtimeStore, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "handoff-schema.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtimeStore.Close()
+	if err := runtimeStore.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := runtimeStore.DB().QueryContext(t.Context(), `PRAGMA table_info('_publication_outbox')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	columns := map[string]bool{}
+	for rows.Next() {
+		var sequence, notNull, primaryKey int
+		var name, dataType string
+		var defaultValue any
+		if err := rows.Scan(&sequence, &name, &dataType, &notNull, &defaultValue, &primaryKey); err != nil {
+			t.Fatal(err)
+		}
+		columns[name] = true
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{
+		"publication_type", "workspace_id", "connector_key", "connection_key", "operation",
+		"payload_json", "request_ref", "dedup_key", "request_fingerprint", "status",
+		"attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token",
+	} {
+		if !columns[required] {
+			t.Errorf("publication handoff column %q is missing", required)
+		}
+	}
+	assertPublicationIndexColumns(t, runtimeStore, "uniq_runtime_publication_dedup", []string{"workspace_id", "publication_type", "connector_key", "connection_key", "operation", "dedup_key"})
+	assertPublicationIndexColumns(t, runtimeStore, "idx_runtime_publication_due", []string{"publication_type", "status", "next_attempt_at", "lease_expires_at", "created_at"})
+}
+
+func assertPublicationIndexColumns(t *testing.T, runtimeStore *database.RuntimeStore, index string, want []string) {
+	t.Helper()
+	rows, err := runtimeStore.DB().QueryContext(t.Context(), `PRAGMA index_info(`+runtimeStore.Identifier(index)+`)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var sequence, columnSequence int
+		var column string
+		if err := rows.Scan(&sequence, &columnSequence, &column); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, column)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("publication index %s columns=%v want=%v", index, got, want)
+	}
+}
 
 func TestStoreReadsOnlyIntegrationConnectorPublications(t *testing.T) {
 	runtimeStore, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "handoff.db")})
@@ -83,6 +148,9 @@ func TestStoreOwnsIdempotentPublicationMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := NewPublicationStore(runtimeStore)
+	if _, err := store.InsertOutbox(t.Context(), "workspace-a", publicationmodel.Message{WorkspaceID: "workspace-a", ConnectorKey: "crm", Operation: "upsert"}); err == nil {
+		t.Fatal("publication without stable deduplication identity accepted")
+	}
 	message := publicationmodel.Message{WorkspaceID: "workspace-a", ConnectorKey: "crm", ConnectionKey: "primary", Operation: "upsert", RequestRef: "record:1", DedupKey: "record:1", Payload: map[string]any{"id": "1"}}
 	first, err := store.InsertOutbox(t.Context(), message.WorkspaceID, message)
 	if err != nil {
@@ -96,12 +164,14 @@ func TestStoreOwnsIdempotentPublicationMutation(t *testing.T) {
 	if _, err := store.InsertOutbox(t.Context(), message.WorkspaceID, message); !mutation.IsMutationConflict(err, mutation.MutationConflictIdempotency) {
 		t.Fatalf("fingerprint conflict=%v", err)
 	}
-	updated, err := store.UpdateOutboxStatus(t.Context(), message.WorkspaceID, first.ID, "accepted", "invocation-1", "")
-	if err != nil || updated.Status != "accepted" || updated.ResponseRef != "invocation-1" {
+	statusContext := requestcontext.WithOwnerExecutionID(t.Context(), "operation-status")
+	updated, err := store.UpdateOutboxStatus(statusContext, message.WorkspaceID, first.ID, "accepted", "invocation-1", "")
+	if err != nil || updated.OperationID != "operation-status" || updated.Status != "accepted" || updated.ResponseRef != "invocation-1" {
 		t.Fatalf("updated=%#v err=%v", updated, err)
 	}
-	retried, err := store.ScheduleOutboxRetry(t.Context(), message.WorkspaceID, first.ID, 1, "retry")
-	if err != nil || retried.Status != "queued" || retried.AttemptCount != 1 || retried.NextAttemptAt == "" {
+	retryContext := requestcontext.WithOwnerExecutionID(t.Context(), "operation-retry")
+	retried, err := store.ScheduleOutboxRetry(retryContext, message.WorkspaceID, first.ID, 1, "retry")
+	if err != nil || retried.OperationID != "operation-retry" || retried.Status != "queued" || retried.AttemptCount != 1 || retried.NextAttemptAt == "" {
 		t.Fatalf("retried=%#v err=%v", retried, err)
 	}
 }

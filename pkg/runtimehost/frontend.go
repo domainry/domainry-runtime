@@ -88,18 +88,15 @@ func loadProjectFrontendAssets(executablePath, expectedSHA256 string, readFile f
 	return &projectFrontendAssets{files: files}, nil
 }
 
-func (a *projectFrontendAssets) wrap(next http.Handler) http.Handler {
+func (a *projectFrontendAssets) wrap(next http.Handler, hasProjectHTTP bool) http.Handler {
 	if a == nil {
 		return next
 	}
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path == "/api" || strings.HasPrefix(request.URL.Path, "/api/") {
+		if backendPath, normalize := runtimeOwnedFrontendAPIPath(request.URL.Path, hasProjectHTTP); normalize {
 			cloned := request.Clone(request.Context())
-			cloned.URL.Path = strings.TrimPrefix(request.URL.Path, "/api")
-			if cloned.URL.Path == "" {
-				cloned.URL.Path = "/"
-			}
-			next.ServeHTTP(writer, cloned)
+			cloned.URL.Path = backendPath
+			next.ServeHTTP(newNormalizedAPIResponseWriter(writer, request.URL.Path, backendPath), cloned)
 			return
 		}
 		if request.Method != http.MethodGet && request.Method != http.MethodHead {
@@ -117,6 +114,94 @@ func (a *projectFrontendAssets) wrap(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(writer, request)
 	})
+}
+
+type normalizedAPIResponseWriter struct {
+	http.ResponseWriter
+	wroteHeader bool
+}
+
+func newNormalizedAPIResponseWriter(writer http.ResponseWriter, browserPath, backendPath string) http.ResponseWriter {
+	if !strings.HasPrefix(browserPath, "/api/auth/") || !strings.HasPrefix(backendPath, "/auth/") {
+		return writer
+	}
+	return &normalizedAPIResponseWriter{ResponseWriter: writer}
+}
+
+func (writer *normalizedAPIResponseWriter) WriteHeader(status int) {
+	if !writer.wroteHeader {
+		writer.rewriteCookiePaths()
+		writer.wroteHeader = true
+	}
+	writer.ResponseWriter.WriteHeader(status)
+}
+
+func (writer *normalizedAPIResponseWriter) Write(content []byte) (int, error) {
+	if !writer.wroteHeader {
+		writer.rewriteCookiePaths()
+		writer.wroteHeader = true
+	}
+	return writer.ResponseWriter.Write(content)
+}
+
+func (writer *normalizedAPIResponseWriter) Unwrap() http.ResponseWriter { return writer.ResponseWriter }
+
+func (writer *normalizedAPIResponseWriter) rewriteCookiePaths() {
+	values := writer.Header().Values("Set-Cookie")
+	if len(values) == 0 {
+		return
+	}
+	writer.Header().Del("Set-Cookie")
+	for _, value := range values {
+		attributes := strings.Split(value, ";")
+		for index, attribute := range attributes {
+			if strings.TrimSpace(attribute) == "Path=/auth" {
+				attributes[index] = strings.Repeat(" ", len(attribute)-len(strings.TrimLeft(attribute, " "))) + "Path=/api/auth"
+			}
+		}
+		writer.Header().Add("Set-Cookie", strings.Join(attributes, ";"))
+	}
+}
+
+// runtimeOwnedFrontendAPIPath keeps one browser-facing /api surface without
+// stealing ProjectHTTP's source-owned /api namespace. Runtime and embedded
+// owner modules publish canonical root paths; only those stable owner prefixes
+// are normalized. Every other /api path remains unchanged for ProjectHTTP.
+func runtimeOwnedFrontendAPIPath(path string, hasProjectHTTP bool) (string, bool) {
+	if path == "/api" {
+		return "/", true
+	}
+	if !strings.HasPrefix(path, "/api/") {
+		return "", false
+	}
+	backendPath := strings.TrimPrefix(path, "/api")
+	for _, prefix := range []string{
+		"/agent",
+		"/auth",
+		"/data-exchange",
+		"/discovery",
+		"/identity",
+		"/integration",
+		"/lifecycle",
+		"/metadata",
+		"/monitoring",
+		"/notification",
+		"/operations",
+		"/organization",
+		"/records",
+		"/report",
+		"/scheduler",
+		"/uploads",
+		"/workflow",
+	} {
+		if hasProjectHTTP && prefix == "/records" {
+			continue
+		}
+		if backendPath == prefix || strings.HasPrefix(backendPath, prefix+"/") {
+			return backendPath, true
+		}
+	}
+	return "", false
 }
 
 func acceptsHTML(accept string) bool {

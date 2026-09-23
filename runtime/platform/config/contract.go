@@ -70,9 +70,6 @@ func Definitions() []Definition {
 		name := configEnvName(field.Name)
 		secret := strings.Contains(name, "SECRET") || strings.Contains(name, "PASSWORD") || strings.Contains(name, "TOKEN") || strings.Contains(name, "DSN") || strings.Contains(name, "API_KEY") || strings.Contains(name, "ACCESS_TOKEN") || field.Name == "IntegrationDecryptOnlyKeys" || field.Name == "TelemetryHeaders" || field.Name == "RateLimitRedisURL" || field.Name == "PrincipalCacheRedisURL"
 		defaultValue := valueOfDefaults.Field(i).Interface()
-		if field.Name == "BusinessSeedSyncDisabled" {
-			defaultValue = !defaultValue.(bool)
-		}
 		if secret {
 			defaultValue = "[REDACTED]"
 		}
@@ -393,8 +390,8 @@ func (c Config) Validate() error {
 	if c.DatabaseConnMaxLifetime <= 0 || c.DatabaseConnMaxIdleTime <= 0 || c.DatabaseConnectTimeout <= 0 || c.DatabaseStatementTimeout <= 0 || c.DatabaseLockTimeout <= 0 {
 		return fmt.Errorf("database timeouts must be positive")
 	}
-	if strings.TrimSpace(c.ManifestPath) == "" || strings.TrimSpace(c.MigrationDir) == "" || strings.TrimSpace(c.UploadDir) == "" {
-		return fmt.Errorf("manifest, migration, and upload paths are required")
+	if strings.TrimSpace(c.MigrationDir) == "" || strings.TrimSpace(c.UploadDir) == "" {
+		return fmt.Errorf("migration and upload paths are required")
 	}
 	return nil
 }
@@ -408,9 +405,6 @@ func setConfigField(cfg *Config, definition Definition, raw string) error {
 		value, err := strconv.ParseBool(strings.TrimSpace(raw))
 		if err != nil {
 			return err
-		}
-		if definition.Field == "BusinessSeedSyncDisabled" {
-			value = !value
 		}
 		field.SetBool(value)
 	case TypeInt:
@@ -442,7 +436,7 @@ func setConfigField(cfg *Config, definition Definition, raw string) error {
 }
 
 func configEnvName(field string) string {
-	overrides := map[string]string{"RuntimeVersion": "DOMAINRY_RUNTIME_VERSION", "Environment": "APP_ENV", "AppLocale": "APP_LOCALE", "DatabaseDSN": "DATABASE_DSN", "DBPath": "APP_DB_PATH", "ManifestPath": "TEMPLATE_MANIFEST", "MigrationSQL": "MIGRATION_SQL", "MigrationRestoreDrillSuccessAt": "MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT", "SkipManifestValidation": "SKIP_MANIFEST_VALIDATION", "BusinessSeedSyncDisabled": "BUSINESS_SEED_SYNC_ENABLED", "Port": "PORT"}
+	overrides := map[string]string{"RuntimeVersion": "DOMAINRY_RUNTIME_VERSION", "Environment": "APP_ENV", "AppLocale": "APP_LOCALE", "DatabaseDSN": "DATABASE_DSN", "DBPath": "APP_DB_PATH", "MigrationSQL": "MIGRATION_SQL", "MigrationRestoreDrillSuccessAt": "MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT", "Port": "PORT"}
 	if value := overrides[field]; value != "" {
 		return value
 	}

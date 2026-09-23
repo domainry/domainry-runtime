@@ -30,7 +30,7 @@ func TestWorkflowValidationLocatesNodeAndEdgeFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	issue := findWorkflowValidationIssue(report.Issues, "backend.workflow.approval_resolver_invalid")
-	if issue == nil || issue.NodeID != "approve" || issue.FieldPath != "graph.nodes[approve].contract.approval.resolvers" || issue.CapabilityKey != "workflow.assignee_resolver" || issue.ContractVersion == "" {
+	if issue == nil || issue.NodeID != "approve" || issue.FieldPath != "graph.nodes[approve].contract.approval.resolvers" {
 		t.Fatalf("resolver issue lacks machine location: %#v", report.Issues)
 	}
 	edgeWorkflow := resolverWorkflow

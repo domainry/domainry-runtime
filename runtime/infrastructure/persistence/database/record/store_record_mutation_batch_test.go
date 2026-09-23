@@ -90,7 +90,7 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 }
 
 func dialectAudit(driver, suffix string) *auditmodel.AuditEvent {
-	return &auditmodel.AuditEvent{ID: fmt.Sprintf("audit_%s_%s", driver, suffix), Event: "record_updated", ObjectKey: "dialect_record", RecordID: suffix, CreatedAt: "v2"}
+	return &auditmodel.AuditEvent{ID: fmt.Sprintf("audit_%s_%s", driver, suffix), Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", ObjectKey: "dialect_record", RecordID: suffix, CreatedAt: "v2"}
 }
 
 func dialectWorkflowIntent(driver, suffix string) workflowmodel.WorkflowExecution {

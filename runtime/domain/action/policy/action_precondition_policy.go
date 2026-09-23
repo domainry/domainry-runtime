@@ -279,14 +279,9 @@ func actionDateOnly(value any) (time.Time, bool) {
 }
 
 func actionOwnerFieldKey(object definitionmodel.ObjectSchema) string {
-	if strings.TrimSpace(fmt.Sprint(object.UX["kind"])) == "identity_profile_extension" {
-		if config, ok := object.UX["config"].(map[string]any); ok {
-			key := strings.TrimSpace(fmt.Sprint(config["identity_relation_field"]))
-			for _, field := range object.Fields {
-				if field.Key == key && field.Type == "relation" {
-					return key
-				}
-			}
+	for _, field := range object.Fields {
+		if field.Type == "relation" && strings.TrimSpace(fmt.Sprint(field.Config["object_key"])) == "identity_user" {
+			return field.Key
 		}
 	}
 	for _, preferred := range []string{"owner", "assignee", "requester", "created_by", "createdBy"} {

@@ -51,7 +51,7 @@ func RecordIsStructuredFieldType(value string) bool {
 }
 
 // RecordStructuredFieldPolicyFor validates definition-level constraints shared
-// by authoring, manifest bootstrap and the record value pipeline. Structured
+// by project-model bootstrap and the record value pipeline. Structured
 // values deliberately have no portable scalar index or uniqueness semantics.
 func RecordStructuredFieldPolicyFor(field definitionmodel.FieldSchema) (RecordStructuredFieldPolicy, error) {
 	kind := strings.TrimSpace(field.Type)

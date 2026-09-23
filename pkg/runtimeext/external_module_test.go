@@ -55,7 +55,7 @@ func FrozenRegistry(handler runtimeext.BusinessHandler) (*runtimeext.ProjectExte
 	if err := os.WriteFile(filepath.Join(externalRoot, "project.go"), source, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("go", "test", "./...")
+	command := exec.Command("go", "test", "-mod=mod", "./...")
 	command.Dir = externalRoot
 	command.Env = append(os.Environ(), "GOWORK=off")
 	if output, err := command.CombinedOutput(); err != nil {

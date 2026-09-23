@@ -8,15 +8,18 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v42"
-	ContractSHA256  = "652ead900a305ee47ff49817472552ccd7cf6f9739d016f9146db63baa240a05"
+	ContractVersion = "runtimeext-v47"
+	ContractSHA256  = "b0c653a7a56cfd878b77064e544ac3dcce6f2f1ed252006aedafd648e39ae134"
 )
 
-const contractDefinitionV42 = `runtimeext-v42
+const contractDefinitionV47 = `runtimeext-v47
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
+CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
+NewTypedBusinessHandler(HandlerDescriptor,CapabilityFactory,Handler)(BusinessHandler,error)
 BusinessHandler.Descriptor()HandlerDescriptor
 BusinessHandler.Invoke(context.Context,ActionExecution,json.RawMessage)(json.RawMessage,error)
+NativeBusinessHandler.InvokeNative(context.Context,ActionExecution,any)(json.RawMessage,bool,error)
 ActionExecution.Identity()ExecutionIdentity
 ActionExecution.Principal()Principal
 ActionExecution.Workspace()Workspace
@@ -54,7 +57,7 @@ WorkflowWithdrawalExecution.StageWorkflowWithdrawal(context.Context,WorkflowWith
 StageWorkflowWithdrawal(context.Context,ActionExecution,WorkflowWithdrawal)(WorkflowWithdrawalReceipt,error)
 WorkflowWithdrawalSemantics=exact_descriptor_withdraw_grant|exact_workspace_workflow_object_record_and_initiator|waiting_decision_boundary|process_revision_compare_and_swap|cancel_all_active_children|same_action_uow|business_receipt_and_occupancy_release_by_handler|rollback_together|action_execution_replay
 WorkflowGrantDeniedErrorCode=backend.action.workflow_grant_denied
-WorkflowStartSemantics=manifest_workflow_with_instance_approval_route|descriptor_workflow_start_grant|synchronous_route_validation|same_action_uow|starting_process_and_route_steps_and_intent|activation_by_committed_intent
+WorkflowStartSemantics=registered_workflow_with_instance_approval_route|descriptor_workflow_start_grant|synchronous_route_validation|same_action_uow|starting_process_and_route_steps_and_intent|activation_by_committed_intent
 StageNotification(context.Context,ActionExecution,NotificationIntent)(NotificationReceipt,error)
 StageNotificationBatch(context.Context,ActionExecution,[]NotificationIntent)([]NotificationReceipt,error)
 NotificationDispatchOperationKey=notification.intent.dispatch
@@ -96,7 +99,7 @@ ResolveOrganizationUnit(context.Context,ActionExecution,OrganizationUnitResolveR
 OrganizationUnitDeliveryOperation=create,resolve
 OrganizationUnitDeliveryNodeType=region,department,team,warehouse|company_and_store_forbidden
 OrganizationUnitDeliveryParentSource=workspace_company,target_organization
-OrganizationUnitDeliveryAuthority=published_manifest_and_handler_descriptor_exact_match|runtime_workspace_and_bearer|runtime_parent_resolution|same_action_uow|opaque_result|no_workspace_bearer_parent_or_owner_input
+OrganizationUnitDeliveryAuthority=project_model_and_handler_descriptor_exact_match|runtime_workspace_and_bearer|runtime_parent_resolution|same_action_uow|opaque_result|no_workspace_bearer_parent_or_owner_input
 DeliverIdentity(context.Context,ActionExecution,IdentityHandlerDeliveryRequest)(IdentityHandlerDeliveryResult,error)
 StageAccountErasure(context.Context,ActionExecution,AccountErasureStageRequest)(AccountErasureReceipt,error)
 GetAccountErasure(context.Context,ActionExecution,AccountErasureGetRequest)(AccountErasureReceipt,error)
@@ -121,6 +124,10 @@ WorkspaceIdentityUsageResolve=canonical_workspace_code,expected_top_level_worksp
 ProjectExtensions.BusinessHandlers=[]BusinessHandler
 ProjectExtensions.AssigneeResolvers=[]AssigneeResolver
 ProjectExtensions.WorkspaceBootstrapParticipant=WorkspaceBootstrapParticipant
+ProjectExtensions.Definitions=ProjectDefinitions
+ProjectDefinitions=code_owned_behavior_only|reports|public_resources|workflows|business_calendars|schedules|automation|notification|integration_mappings|agents
+ProjectDefinitionRegistry=stable_key|typed_descriptor|computed_sha256|freeze|duplicate_rejection|detached_snapshot
+ReportDefinition=ReportSchema|OperationStateExamples|SensitiveFieldPolicies|ExportControls|single_immutable_report_definition|object_sql_owned_in_go
 ProjectExtensionDescriptor=closed_kind_envelope|business_handler|workflow_assignee_resolver|workspace_bootstrap
 AssigneeResolver.Descriptor()AssigneeResolverDescriptor
 AssigneeResolver.Resolve(context.Context,AssigneeResolverCapabilities,AssigneeResolverContext)([]AssigneeResolverCandidate,error)
@@ -131,7 +138,7 @@ WorkspaceBootstrapParticipant.Descriptor()WorkspaceBootstrapDescriptor
 WorkspaceBootstrapParticipant.BuildWorkspaceBootstrap(context.Context,WorkspaceBootstrapContext,map[string]any)([]WorkspaceBootstrapRecord,error)
 WorkspaceBootstrapInputExactDecimal=canonical_decimal_string|no_binary_float|exact_range_validation
 WorkspaceBootstrapRuntimeOwnedFields=workspace_id,id,owner_org_id,created_at,updated_at
-RuntimeWorkspaceRoleCatalog=manifest_defined_roles|bootstrap=provision_to_workspaces_and_audience_any,user,business_profile_and_assignment_manual,request_only|complete_publication=all_manifest_roles|initial_workspace_administrator_role=explicit_provisioned_audience_any,user_assignment_manual_without_required_binding
+RuntimeWorkspaceRoleCatalog=project_model_defined_roles|bootstrap=provision_to_workspaces_and_audience_any,user,business_profile_and_assignment_manual,request_only|complete_publication=all_project_model_roles|initial_workspace_administrator_role=explicit_provisioned_audience_any,user_assignment_manual_without_required_binding
 WorkspaceProvisioningVocabulary=workspace_name,workspace_code
 AcceptanceFixtureContract=runtime-acceptance-fixture-v2|workspace_code
 `
@@ -152,12 +159,12 @@ func ComputedContractSHA256() string {
 		AssigneeResolverConfigField{}, AssigneeResolverRecordCapability{}, AssigneeResolverRelationCapability{}, AssigneeResolverDescriptor{}, AssigneeRecordFilter{}, AssigneeRecordListRequest{}, AssigneeRelationRequest{}, AssigneeRecord{}, AssigneeIdentityUser{}, AssigneeResolverContext{}, AssigneeEvidenceFact{}, AssigneeResolverCandidate{}, AssigneeResolverBinding{},
 		Record{}, Filter{}, Sort{}, RecordQuery{}, RecordQueryResult{},
 		Predicate{}, Arithmetic{}, RecordMutation{}, RecordMutationResult{}, ConditionalUpdateManyExactCoverage{}, ConditionalUpdateManyRequest{}, ConditionalUpdateManyResult{},
-		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ProjectExtensions{},
+		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ProjectExtensions{}, ProjectDefinitions{}, ReportDefinition{}, PublicResourceDefinition{}, ProjectDefinitionIdentity{},
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV42)
+	definition.WriteString(contractDefinitionV47)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

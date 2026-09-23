@@ -21,6 +21,7 @@ import (
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
+	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
@@ -29,8 +30,8 @@ import (
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
@@ -42,49 +43,52 @@ import (
 
 // Runtime owns the process-level composition and lifecycle.
 type Runtime struct {
-	cfg                  config.Config
-	templateID           string
-	store                *persistence.RuntimeStore
-	borrowedStore        bool
-	records              *composition.RuntimeServices
-	authorizationActions func() *actioncontract.Registry
-	moduleBindings       runtimeModuleBindingInventory
-	identityBinding      identitysdk.Binding
-	identityProjection   identitysdk.Projection
-	identityPrincipals   identitysdk.PrincipalResolver
-	principalCache       identityprincipal.Cache
-	integrationMode      integrationsdk.DeploymentMode
-	integrationBinding   integrationsdk.Binding
-	integrationWorkers   integrationsdk.LocalWorkers
-	dataExchangeBinding  dataexchangesdk.Binding
-	lifecycleBinding     lifecyclesdk.Binding
-	fileScanProcessor    *uploadapplication.FileScanProcessor
-	blobStore            runtimefile.BlobStore
-	publicResources      *publicresourceapplication.Service
-	manifest             manifestmodel.ManifestSchema
-	workspaceRolePolicy  workspaceprovision.WorkspaceBootstrapRolePolicyEvidence
-	recordRepo           recordrepository.RecordRepository
-	rateLimiter          ratelimit.Limiter
-	notificationHTTP     *notificationfacade.NotificationApplicationService
-	notificationBinding  notificationsdk.Binding
-	monitoringBinding    monitoringsdk.Binding
-	schedulerBinding     schedulersdk.Binding
-	agentBinding         agentsdk.Binding
-	auditBinding         auditsdk.Binding
-	metadataBinding      metadatasdk.Binding
-	reportBinding        reportsdk.Binding
-	notificationWorkers  notificationsdk.LocalWorkers
-	notificationRelay    *notificationpublication.Relay
-	worker               workerplatform.Dependencies
-	api                  *runtimehttp.HTTPRouter
-	projectExtensions    *runtimeext.ProjectExtensionRegistry
-	connectorProviders   *connector.Registry
-	releaseIdentity      runtimehttp.RuntimeReleaseIdentity
-	releaseCohort        *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
-	releaseLease         deploymentmodel.RuntimeReleaseCohortLease
-	releaseAdmission     *deploymentapplication.RuntimeReleaseAdmission
-	releaseIntegrity     *deploymentapplication.RuntimeReleaseIntegrity
-	releaseMu            sync.Mutex
+	cfg                        config.Config
+	templateID                 string
+	store                      *persistence.RuntimeStore
+	borrowedStore              bool
+	records                    *composition.RuntimeServices
+	authorizationActions       func() *actioncontract.Registry
+	moduleBindings             runtimeModuleBindingInventory
+	identityBinding            identitysdk.Binding
+	identityProjection         identitysdk.Projection
+	identityPrincipals         identitysdk.PrincipalResolver
+	principalCache             identityprincipal.Cache
+	integrationMode            integrationsdk.DeploymentMode
+	integrationBinding         integrationsdk.Binding
+	integrationWorkers         integrationsdk.LocalWorkers
+	dataExchangeBinding        dataexchangesdk.Binding
+	lifecycleBinding           lifecyclesdk.Binding
+	fileScanProcessor          *uploadapplication.FileScanProcessor
+	blobStore                  runtimefile.BlobStore
+	publicResources            *publicresourceapplication.Service
+	projectModel               projectmodel.RuntimeModel
+	schemaCapabilities         persistence.RuntimeSchemaCapabilities
+	schemaCapabilitiesSelected bool
+	workspaceRolePolicy        workspaceprovision.WorkspaceBootstrapRolePolicyEvidence
+	recordRepo                 recordrepository.RecordRepository
+	rateLimiter                ratelimit.Limiter
+	notificationHTTP           *notificationfacade.NotificationApplicationService
+	notificationBinding        notificationsdk.Binding
+	monitoringBinding          monitoringsdk.Binding
+	schedulerBinding           schedulersdk.Binding
+	agentBinding               agentsdk.Binding
+	auditBinding               auditsdk.Binding
+	metadataBinding            metadatasdk.Binding
+	reportBinding              reportsdk.Binding
+	notificationWorkers        notificationsdk.LocalWorkers
+	notificationRelay          *notificationpublication.Relay
+	worker                     workerplatform.Dependencies
+	api                        *runtimehttp.HTTPRouter
+	projectExtensions          *runtimeext.ProjectExtensionRegistry
+	projectHTTP                runtimeengine.HTTPFactory
+	connectorProviders         *connector.Registry
+	releaseIdentity            runtimehttp.RuntimeReleaseIdentity
+	releaseCohort              *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
+	releaseLease               deploymentmodel.RuntimeReleaseCohortLease
+	releaseAdmission           *deploymentapplication.RuntimeReleaseAdmission
+	releaseIntegrity           *deploymentapplication.RuntimeReleaseIntegrity
+	releaseMu                  sync.Mutex
 
 	workersMu                     sync.Mutex
 	workerCancels                 []context.CancelFunc

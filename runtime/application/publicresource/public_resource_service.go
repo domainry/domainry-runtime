@@ -14,7 +14,6 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	publicresourcemodel "github.com/domainry/domainry-runtime/runtime/domain/publicresource/model"
 	publicresourcerepository "github.com/domainry/domainry-runtime/runtime/domain/publicresource/repository"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
@@ -43,12 +42,12 @@ type resourceDefinition struct {
 	resource definitionmodel.ObjectPublicResource
 }
 
-func NewService(manifest manifestmodel.ManifestSchema, repository publicresourcerepository.Repository, records recordrepository.RecordRepository, files *uploadapplication.FileCapabilityService, scans *uploadapplication.FileScanReceiptVerifier) *Service {
+func NewService(objects []definitionmodel.ObjectSchema, repository publicresourcerepository.Repository, records recordrepository.RecordRepository, files *uploadapplication.FileCapabilityService, scans *uploadapplication.FileScanReceiptVerifier) *Service {
 	service := &Service{
 		repository: repository, records: records, files: files, scans: scans,
 		objects: map[string]definitionmodel.ObjectSchema{}, resources: map[string]resourceDefinition{},
 	}
-	for _, object := range manifest.Objects {
+	for _, object := range objects {
 		objectKey := strings.TrimSpace(object.Key)
 		if objectKey == "" {
 			continue

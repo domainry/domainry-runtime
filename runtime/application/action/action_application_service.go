@@ -8,6 +8,7 @@ import (
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	"github.com/domainry/domainry-foundation/telemetry"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
@@ -81,6 +82,7 @@ type governedActionExecution struct {
 	invocation  actionmodel.ActionInvocation
 	entry       ActionCatalogEntry
 	payload     map[string]any
+	nativeInput any
 	executionID string
 	unitOfWork  *actionUnitOfWork
 }
@@ -226,6 +228,11 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 	if err != nil {
 		return s.failPreClaim(ctx, action, invocation, err)
 	}
+	nativeInput := projectNativeInputFromContext(ctx, invocation.ActionKey)
+	ctx = withoutProjectNativeInput(ctx)
+	if nativeInput != nil && !nativeBusinessHandlerInputSafe(invocation.Input, businessHandlerInput(action, payload)) {
+		nativeInput = nil
+	}
 	invocation.Input = payload
 	if assured, err := actionValidateInvocationAssurance(ctx, s.dependencies.Assurance.Validate, invocation); err != nil {
 		return s.failPreClaim(ctx, action, invocation, err)
@@ -246,8 +253,9 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 	if replay {
 		return cached, nil
 	}
+	auditContext := requestcontext.WithOwnerExecutionID(ctx, unitOfWork.executionID())
 	executed, err := s.execute(ctx, governedActionExecution{
-		invocation: invocation, entry: entry, payload: payload, executionID: unitOfWork.executionID(), unitOfWork: unitOfWork,
+		invocation: invocation, entry: entry, payload: payload, nativeInput: nativeInput, executionID: unitOfWork.executionID(), unitOfWork: unitOfWork,
 	})
 	if err != nil {
 		unitOfWork.rollBack(ctx)
@@ -256,7 +264,7 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 			unitOfWork,
 			result,
 			err,
-			s.dependencies.Audit.BuildFailure(ctx, action, invocation, result, err),
+			s.dependencies.Audit.BuildFailure(auditContext, action, invocation, result, err),
 		)
 	}
 	executed.Commits, err = enforceActionOptimisticConcurrency(action, invocation, executed.Commits)
@@ -267,7 +275,7 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 			unitOfWork,
 			result,
 			err,
-			s.dependencies.Audit.BuildFailure(ctx, action, invocation, result, err),
+			s.dependencies.Audit.BuildFailure(auditContext, action, invocation, result, err),
 		)
 	}
 	executed, err = s.projectExecutionResult(ctx, action, invocation.Principal, executed)
@@ -296,7 +304,7 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 		unitOfWork.rollBack(ctx)
 		return s.failOwnedInvocation(context.WithoutCancel(ctx), unitOfWork, result, apperror.New(apperror.KindInternal, actionmodel.AcceptanceFailureInjectedCode, nil, map[string]string{"action": action.Key, "point": actionmodel.AcceptanceFailureBeforeCommit}), nil)
 	}
-	auditEvent := s.dependencies.Audit.BuildSuccess(ctx, action, invocation, result)
+	auditEvent := s.dependencies.Audit.BuildSuccess(auditContext, action, invocation, result)
 	err = unitOfWork.commit(ctx, receiptResult, executed.Commits, []auditmodel.AuditEvent{auditEvent})
 	if err != nil {
 		return s.failOwnedInvocation(context.WithoutCancel(ctx), unitOfWork, result, err, nil)
@@ -322,7 +330,7 @@ func (s *ActionApplicationService) failPreClaim(ctx context.Context, action defi
 		idempotencyKey = event + ":" + requestID
 	}
 	if err := s.dependencies.Audit.AppendAttempt(ctx, auditapplication.AuditAppendRequest{
-		IdempotencyKey: idempotencyKey, Event: event, ObjectKey: action.ObjectKey, RecordID: invocation.RecordID,
+		IdempotencyKey: idempotencyKey, Family: auditmodel.EventFamilyBusinessAction, Event: event, ObjectKey: action.ObjectKey, RecordID: invocation.RecordID,
 		Principal: invocation.Principal, Summary: "Action invocation rejected before execution",
 		Metadata: map[string]any{
 			"action_key": action.Key, "owner_source": invocation.Source, "result": result, "reason": code, "error_code": code,

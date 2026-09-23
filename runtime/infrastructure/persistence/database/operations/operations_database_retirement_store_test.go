@@ -29,6 +29,14 @@ func TestDatabaseRetirementStorePersistsTransitionsAndAccessObservations(t *test
 	if err != nil || !created {
 		t.Fatalf("register retirement: created=%v err=%v", created, err)
 	}
+	var operationRows int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE id = ? AND system_purpose = ? AND owner = ? AND kind = ?`, retirement.ID, databaseRetirementSystemPurpose, databaseRetirementOwner, databaseRetirementKind).Scan(&operationRows); err != nil || operationRows != 1 {
+		t.Fatalf("shared operation rows=%d err=%v", operationRows, err)
+	}
+	var legacyTables int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_operation_database_retirements'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
+		t.Fatalf("dedicated database retirement table remains=%d err=%v", legacyTables, err)
+	}
 	if err := repository.RecordDatabaseRetirementAccess(t.Context(), retirement.ID, "read", "runtime", now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}

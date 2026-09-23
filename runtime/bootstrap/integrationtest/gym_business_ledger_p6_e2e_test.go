@@ -71,7 +71,7 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 		SourceObjects: []string{object.Key},
 		ResultSchema:  []reportmodel.ReportResultColumnSchema{{Key: "bucket", Type: "text", Kind: "dimension"}, {Key: "direction", Type: "text", Kind: "dimension"}, {Key: "entries", Type: "integer", Kind: "measure"}, {Key: "amount", Type: "currency", Kind: "measure", Precision: 19, Scale: 2}},
 	}}
-	services := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{TemplateID: "gym-ledger-report-p7", TemplateVersion: "1", Name: "Gym Ledger Report P7", Objects: []definitionmodel.ObjectSchema{object}, Reports: []reportmodel.ReportSchema{report}, Integrations: connectormodel.IntegrationSchema{}, Store: store})
+	services := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{ProjectKey: "gym-ledger-report-p7", SchemaVersion: "1", Name: "Gym Ledger Report P7", Objects: []definitionmodel.ObjectSchema{object}, Reports: []reportmodel.ReportSchema{report}, Integrations: connectormodel.IntegrationSchema{}, Store: store})
 	summary, err := integrationReportSummary(t.Context(), services, report.Key, "realtime", accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "finance", WorkspaceID: "workspace-primary"}}, role))
 	if err != nil {
 		t.Fatal(err)

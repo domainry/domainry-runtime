@@ -34,10 +34,29 @@ func fixture(t *testing.T) (*database.RuntimeStore, *Handler, context.Context) {
 	if err = store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	for _, statement := range []string{
+		`CREATE TABLE _subject_requests (id TEXT NOT NULL, workspace_id TEXT NOT NULL, request_type TEXT NOT NULL, kind TEXT NOT NULL, resolved_identity TEXT NOT NULL, PRIMARY KEY(workspace_id,id))`,
+		`CREATE TABLE _subject_steps (workspace_id TEXT NOT NULL, request_id TEXT NOT NULL, owner TEXT NOT NULL, operation TEXT NOT NULL, payload_json TEXT NOT NULL, completed_at TEXT NOT NULL, PRIMARY KEY(workspace_id,request_id,owner,operation))`,
+	} {
+		if _, err = store.DB().ExecContext(t.Context(), statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	store.BindSubjectLifecyclePersistence()
 	h := New(store, func(context.Context, string, string) ([]recordmodel.SubjectRecordReference, error) {
 		return []recordmodel.SubjectRecordReference{{ObjectKey: "member_profile", RecordID: "profile-alice"}}, nil
 	})
 	return store, h, requestcontext.WithWorkspaceID(t.Context(), "workspace-a")
+}
+
+func beginSubjectErasure(t *testing.T, store *database.RuntimeStore, request, subject string) {
+	t.Helper()
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_requests(id,workspace_id,request_type,kind,resolved_identity) VALUES(?,'workspace-a','subject_request','erase',?)`, request, subject); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_steps(workspace_id,request_id,owner,operation,payload_json,completed_at) VALUES('workspace-a',?,'lifecycle','erase_fence','{}',?)`, request, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestUploadSubjectRegistryIsImmutableScopedAndErasedWithWriteFence(t *testing.T) {
@@ -69,6 +88,7 @@ func TestUploadSubjectRegistryIsImmutableScopedAndErasedWithWriteFence(t *testin
 	if err != nil || len(refs) != 1 || refs[0].Reference != "/uploads/private.png" {
 		t.Fatalf("inventory: %+v %v", refs, err)
 	}
+	beginSubjectErasure(t, store, "erase-upload", "alice")
 	plan, err := h.PrepareSubjectErasure(ctx, "erase-upload", "workspace-a", "alice")
 	if err != nil {
 		t.Fatal(err)
@@ -186,8 +206,13 @@ func TestRuntimeEvidenceErasureUsesDurableScopeAndRollsBackBeforeRetry(t *testin
 				override["publication_type"] = "integration.connector"
 				override["status"] = "queued"
 			}
-			if s.table == "_upload_subject_bindings" {
-				override["filename"] = private
+			if s.table == "_artifact_bindings" {
+				override["artifact_id"] = item.prefix + "-artifact"
+				override["owner"] = "uploads"
+				override["kind"] = "subject"
+				override["resource_type"] = "identity_user"
+				override["resource_id"] = item.subject
+				override["field_key"] = "file_url"
 			}
 			seed(t, store, s.table, id, item.workspace, override)
 			ref := rowReference{Table: s.table, ID: id}
@@ -199,14 +224,15 @@ func TestRuntimeEvidenceErasureUsesDurableScopeAndRollsBackBeforeRetry(t *testin
 		}
 	}
 	// A manager's response for the subject's business record is still a copy.
-	seed(t, store, "_action_executions", "manager-response", "workspace-a", map[string]any{"actor_id": "manager", "object_key": "member_profile", "record_id": "profile-alice", "status": "completed", "result_json": `{"email":"a@private.example.test"}`})
-	alice = append(alice, rowReference{Table: "_action_executions", ID: "manager-response"})
+	seed(t, store, "_operations", "manager-response", "workspace-a", map[string]any{"owner": "action", "kind": "action.execution", "requested_by": "manager", "resource_type": "member_profile", "resource_id": "profile-alice", "status": "completed", "result_json": `{"email":"a@private.example.test"}`})
+	alice = append(alice, rowReference{Table: "_operations", ID: "manager-response"})
 	seed(t, store, "_publication_outbox", "manager-publication", "workspace-a", map[string]any{"created_by": "manager", "event_id": "source-event-alice", "status": "queued", "publication_type": "integration.connector", "payload_json": `{"email":"a@private.example.test"}`})
 	alice = append(alice, rowReference{Table: "_publication_outbox", ID: "manager-publication"})
 	export, err := h.ExportSubjectForRequest(ctx, "export", "workspace-a", "alice")
 	if err != nil || !bytes.Contains(export, []byte("a@private.example.test")) {
 		t.Fatalf("actual export did not include private copies: err=%v", err)
 	}
+	beginSubjectErasure(t, store, "erase-alice", "alice")
 	p, err := h.PrepareSubjectErasure(ctx, "erase-alice", "workspace-a", "alice")
 	if err != nil {
 		t.Fatal(err)
@@ -288,12 +314,13 @@ func TestRuntimeEvidenceBusyAndEmptyParentsDoNotErasePeerWorkflows(t *testing.T)
 	store, h, ctx := fixture(t)
 	seed(t, store, "_workflow_executions", "peer-unbound", "workspace-a", map[string]any{"actor_id": "bob", "status": "pending", "process_id": "", "payload_json": `{"email":"bob@private.test"}`})
 	seed(t, store, "_publication_outbox", "busy", "workspace-a", map[string]any{"created_by": "alice", "status": "sending", "publication_type": "integration.connector", "payload_json": `{"email":"alice@private.test"}`})
+	beginSubjectErasure(t, store, "busy-erase", "alice")
 	if _, err := h.PrepareSubjectErasure(ctx, "busy-erase", "workspace-a", "alice"); err == nil {
 		t.Fatal("allowed erasure during external delivery")
 	}
-	var fences int
-	if err := store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM _subject_evidence_erasure_fences`).Scan(&fences); err != nil || fences != 0 {
-		t.Fatalf("busy preparation left fences: %d %v", fences, err)
+	var steps int
+	if err := store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM _subject_steps WHERE request_id='busy-erase' AND owner='runtime_evidence'`).Scan(&steps); err != nil || steps != 0 {
+		t.Fatalf("busy preparation left owner steps: %d %v", steps, err)
 	}
 	if _, err := store.DB().ExecContext(ctx, `UPDATE _publication_outbox SET status='queued' WHERE id='busy'`); err != nil {
 		t.Fatal(err)
@@ -332,6 +359,7 @@ func TestRuntimeEvidenceIncludesTypedNotificationIntentAndRejectsNewPublication(
 			t.Fatal(err)
 		}
 	}
+	beginSubjectErasure(t, store, "notify-erase", "alice")
 	p, err := h.PrepareSubjectErasure(ctx, "notify-erase", "workspace-a", "alice")
 	if err != nil {
 		t.Fatal(err)

@@ -19,12 +19,14 @@ type AutomationExecutionStore struct {
 	db    *sql.DB
 }
 
+const (
+	automationRunsTable       = "_automation_runs"
+	automationRuleRunKind     = "rule"
+	automationInstructionKind = "instruction"
+)
+
 func NewAutomationExecutionStore(store *database.RuntimeStore) AutomationExecutionStore {
 	return AutomationExecutionStore{store: store, db: store.DB()}
-}
-
-func automationExecutionColumnsSQL(store *database.RuntimeStore) string {
-	return stringsJoinIdentifiers(store, "id", "workspace_id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at")
 }
 
 func scanAutomationRuleExecution(scanner interface{ Scan(...any) error }) (automationmodel.AutomationRuleExecution, error) {
@@ -67,9 +69,9 @@ func (r AutomationExecutionStore) InsertExecution(ctx context.Context, workspace
 	if err != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("encode automation execution trace: %w", err)
 	}
-	columns := []string{"id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at"}
-	values := []any{value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), value.CreatedAt, value.UpdatedAt}
-	builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, "_automation_rule_executions", columns, values)
+	columns := []string{"id", "run_kind", "idempotency_key", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at"}
+	values := []any{value.ID, automationRuleRunKind, value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), value.CreatedAt, value.UpdatedAt}
+	builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, automationRunsTable, columns, values)
 	if buildErr != nil {
 		return automationmodel.AutomationRuleExecution{}, buildErr
 	}
@@ -98,54 +100,6 @@ func (r AutomationExecutionStore) executor(ctx context.Context) automationExecut
 		return tx
 	}
 	return r.db
-}
-
-func (r AutomationExecutionStore) InsertExecutionSeed(ctx context.Context, workspaceID string, value automationmodel.AutomationRuleExecution) (automationmodel.AutomationRuleExecution, error) {
-	workspaceID, err := automationExecutionWorkspaceID(workspaceID, value.WorkspaceID)
-	if err != nil {
-		return automationmodel.AutomationRuleExecution{}, err
-	}
-	value.WorkspaceID = workspaceID
-	if strings.TrimSpace(value.ID) == "" {
-		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("automation execution seed id is required")
-	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	if strings.TrimSpace(value.CreatedAt) == "" {
-		value.CreatedAt = now
-	}
-	if strings.TrimSpace(value.UpdatedAt) == "" {
-		value.UpdatedAt = value.CreatedAt
-	}
-	candidateJSON, err := json.Marshal(nonNilMap(value.Candidate))
-	if err != nil {
-		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("encode automation execution seed candidate: %w", err)
-	}
-	traceJSON, err := json.Marshal(nonNilMap(value.Trace))
-	if err != nil {
-		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("encode automation execution seed trace: %w", err)
-	}
-	columns := []string{"id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at"}
-	values := []any{value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), value.CreatedAt, value.UpdatedAt}
-	builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, "_automation_rule_executions", columns, values)
-	if buildErr != nil {
-		return automationmodel.AutomationRuleExecution{}, buildErr
-	}
-	statement, args, buildErr := builder.OnConflictDoNothing("workspace_id", "id").Build()
-	if buildErr != nil {
-		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("build automation execution seed insert: %w", buildErr)
-	}
-	result, err := r.db.ExecContext(ctx, statement, args...)
-	if err != nil {
-		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("insert automation execution seed: %w", err)
-	}
-	if affected, err := result.RowsAffected(); err != nil {
-		return automationmodel.AutomationRuleExecution{}, err
-	} else if affected == 0 {
-		if err := r.store.GuardSubjectEvidenceWrite(ctx, r.db, workspaceID, "_automation_rule_executions", columns, values); err != nil {
-			return automationmodel.AutomationRuleExecution{}, err
-		}
-	}
-	return value, nil
 }
 
 func (r AutomationExecutionStore) ListExecutions(ctx context.Context, workspaceID string, filter automationmodel.AutomationExecutionFilter) ([]automationmodel.AutomationRuleExecution, error) {
@@ -177,7 +131,8 @@ func (r AutomationExecutionStore) ListExecutions(ctx context.Context, workspaceI
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_automation_rule_executions", workspaceID).
+	predicates = append(predicates, query.Equal("run_kind", automationRuleRunKind))
+	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, automationRunsTable, workspaceID).
 		Columns("id", "workspace_id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at").
 		OrderBy(query.Descending("created_at")).Limit(limit)
 	if len(predicates) > 0 {

@@ -5,7 +5,9 @@ package operationsmodel
 type OperationsReceiptFilter struct {
 	Status       OperationsStatus       `json:"status,omitempty"`
 	FailureClass OperationsFailureClass `json:"failure_class,omitempty"`
+	Owner        string                 `json:"owner,omitempty"`
 	Kind         string                 `json:"kind,omitempty"`
+	ParentID     string                 `json:"parent_operation_id,omitempty"`
 	ResourceType string                 `json:"resource_type,omitempty"`
 	ResourceID   string                 `json:"resource_id,omitempty"`
 	RequestedBy  string                 `json:"requested_by,omitempty"`

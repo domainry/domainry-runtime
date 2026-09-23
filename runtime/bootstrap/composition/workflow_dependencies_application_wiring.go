@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	apperror "github.com/domainry/domainry-foundation/apperror"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
@@ -120,8 +121,12 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 			})
 			return workflowActionInvocationResult(result), err
 		},
-		Audit:         records.auditApplicationService.Append,
-		AuditMetadata: records.auditApplicationService.AppendWithMetadata,
-		Worker:        records.workerDependencies,
+		Audit: func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, before, after map[string]any) {
+			records.auditApplicationService.Append(ctx, auditmodel.EventFamilyRuntimeWorkflow, event, objectKey, recordID, principal, summary, before, after)
+		},
+		AuditMetadata: func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, before, after, metadata map[string]any) {
+			records.auditApplicationService.AppendWithMetadata(ctx, auditmodel.EventFamilyRuntimeWorkflow, event, objectKey, recordID, principal, summary, before, after, metadata)
+		},
+		Worker: records.workerDependencies,
 	}
 }

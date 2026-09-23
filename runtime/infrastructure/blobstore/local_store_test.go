@@ -54,6 +54,31 @@ func TestLocalStoreStageCommitOpenStatDelete(t *testing.T) {
 	}
 }
 
+func TestLifecycleContentStoreWritesImmutableArchiveContentIdempotently(t *testing.T) {
+	store, err := NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := LifecycleContentStore{Blobs: store}
+	first, err := content.PutImmutable(t.Context(), "workspace-a", "archive-1", []byte(`{"id":"record-1"}`))
+	if err != nil || first.Reference == "" || first.Size == 0 {
+		t.Fatalf("first=%+v err=%v", first, err)
+	}
+	replayed, err := content.PutImmutable(t.Context(), "workspace-a", "archive-1", []byte(`{"id":"record-1"}`))
+	if err != nil || replayed != first {
+		t.Fatalf("replayed=%+v first=%+v err=%v", replayed, first, err)
+	}
+	reader, err := content.Open(t.Context(), "workspace-a", first.Reference)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, readErr := io.ReadAll(reader)
+	_ = reader.Close()
+	if readErr != nil || string(raw) != `{"id":"record-1"}` {
+		t.Fatalf("content=%s err=%v", raw, readErr)
+	}
+}
+
 func TestLocalStoreRejectsOversizeAndIdentityConflictWithoutOverwrite(t *testing.T) {
 	store, err := NewLocalStore(t.TempDir())
 	if err != nil {

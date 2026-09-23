@@ -63,7 +63,7 @@ func recordTimerDeadLetterItem(record recordmodel.Record) operationsapplication.
 		Owner: "record_timer", ID: record.ID, ResourceType: "record_timer", Status: strings.TrimSpace(valueString(data, "status")),
 		FailureCode: valueString(data, "last_error"), BusinessKey: strings.Trim(strings.Join([]string{valueString(data, "object_key"), valueString(data, "record_id"), valueString(data, "purpose")}, ":"), ":"),
 		EvidenceRef: "record_timer_event:" + record.ID, AllowedActions: []string{"resolve", "retry", "ack"},
-		Details: map[string]any{"target_type": valueString(data, "target_type"), "target_key": valueString(data, "target_key"), "attempt": data["attempt"], "max_attempts": data["max_attempts"], "fencing_token": data["fencing_token"]}, UpdatedAt: record.UpdatedAt,
+		Details: map[string]any{"operation_id": valueString(data, "operation_id"), "target_type": valueString(data, "target_type"), "target_key": valueString(data, "target_key"), "attempt": data["attempt"], "max_attempts": data["max_attempts"], "fencing_token": data["fencing_token"]}, UpdatedAt: record.UpdatedAt,
 	}
 }
 
@@ -111,7 +111,7 @@ func publicationHandoffDeadLetterItem(message publicationmodel.Message) operatio
 	if businessKey == "" {
 		businessKey = message.DedupKey
 	}
-	return operationsapplication.OperationsDeadLetterItem{Owner: "runtime_publication_outbox", ID: message.ID, ResourceType: "runtime_publication_outbox", Status: message.Status, FailureCode: message.Error, CorrelationID: message.EventID, BusinessKey: businessKey, EvidenceRef: valueOr(message.ResponseRef, "publication_handoff:"+message.ID), AllowedActions: []string{"resolve", "retry", "ack"}, Details: map[string]any{"connector_key": message.ConnectorKey, "operation": message.Operation, "attempt_count": message.AttemptCount}, UpdatedAt: message.UpdatedAt}
+	return operationsapplication.OperationsDeadLetterItem{Owner: "runtime_publication_outbox", ID: message.ID, ResourceType: "runtime_publication_outbox", Status: message.Status, FailureCode: message.Error, CorrelationID: message.EventID, BusinessKey: businessKey, EvidenceRef: valueOr(message.ResponseRef, "publication_handoff:"+message.ID), AllowedActions: []string{"resolve", "retry", "ack"}, Details: map[string]any{"operation_id": message.OperationID, "connector_key": message.ConnectorKey, "operation": message.Operation, "attempt_count": message.AttemptCount}, UpdatedAt: message.UpdatedAt}
 }
 
 type workflowDeadLetterOwner struct {
@@ -129,7 +129,7 @@ func (o workflowDeadLetterOwner) Inspect(ctx context.Context, id string, princip
 	if err != nil {
 		return operationsapplication.OperationsDeadLetterItem{}, err
 	}
-	return operationsapplication.OperationsDeadLetterItem{Owner: "workflow_execution", ID: execution.ID, ResourceType: "workflow_execution", Status: execution.Status, FailureCode: execution.LastError, CorrelationID: execution.ProcessID, BusinessKey: strings.Trim(strings.Join([]string{execution.ObjectKey, execution.RecordID}, ":"), ":"), EvidenceRef: "workflow_execution:" + execution.ID, AllowedActions: []string{"resolve", "retry", "ack"}, Details: map[string]any{"workflow_key": execution.WorkflowKey, "attempt": execution.Attempt, "max_attempts": execution.MaxAttempts}, UpdatedAt: execution.UpdatedAt}, nil
+	return operationsapplication.OperationsDeadLetterItem{Owner: "workflow_execution", ID: execution.ID, ResourceType: "workflow_execution", Status: execution.Status, FailureCode: execution.LastError, CorrelationID: execution.ProcessID, BusinessKey: strings.Trim(strings.Join([]string{execution.ObjectKey, execution.RecordID}, ":"), ":"), EvidenceRef: "workflow_execution:" + execution.ID, AllowedActions: []string{"resolve", "retry", "ack"}, Details: map[string]any{"operation_id": execution.OperationID, "workflow_key": execution.WorkflowKey, "attempt": execution.Attempt, "max_attempts": execution.MaxAttempts}, UpdatedAt: execution.UpdatedAt}, nil
 }
 func (o workflowDeadLetterOwner) Act(ctx context.Context, id, action, reason, key string, principal principalmodel.Principal) (operationsapplication.OperationsDeadLetterItem, error) {
 	switch action {

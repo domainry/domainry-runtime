@@ -41,6 +41,7 @@ func StartWorkers(ctx context.Context, runtime *Runtime) {
 	runtime.startDataExchangeWorker(ctx)
 	runtime.startFileScanWorker(ctx)
 	runtime.startIdempotencyCleanupWorker(ctx)
+	runtime.startArtifactCleanupWorker(ctx)
 	runtime.startLifecycleCleanupWorker(ctx)
 	runtime.startAccountErasureWorker(ctx)
 	if runtime.api != nil {
@@ -85,22 +86,11 @@ func (a *Runtime) startRecordTimerWorker(ctx context.Context) {
 }
 
 func (a *Runtime) startSchedulerWorker(ctx context.Context) {
-	if a == nil {
+	if a == nil || a.schedulerBinding == nil {
 		return
 	}
-	if a.schedulerBinding != nil {
-		a.startControlledWorker(ctx, "scheduler", func(workerCtx context.Context) <-chan struct{} {
-			return a.schedulerBinding.Start(workerCtx, schedulersdk.WorkerConfig{Enabled: a.cfg.SchedulerEnabled, PollInterval: a.cfg.SchedulerPollInterval, BatchSize: a.cfg.SchedulerBatchSize, LeaseTTL: a.cfg.SchedulerLeaseTTL})
-		})
-		return
-	}
-	// Runtime construction tests and internal embedders may not have a binding,
-	// but the lifecycle registry still owns a deterministic Scheduler slot. The
-	// closed worker deliberately performs no legacy Runtime scheduling.
-	a.startControlledWorker(ctx, "scheduler", func(context.Context) <-chan struct{} {
-		done := make(chan struct{})
-		close(done)
-		return done
+	a.startControlledWorker(ctx, "scheduler", func(workerCtx context.Context) <-chan struct{} {
+		return a.schedulerBinding.Start(workerCtx, schedulersdk.WorkerConfig{Enabled: a.cfg.SchedulerEnabled, PollInterval: a.cfg.SchedulerPollInterval, BatchSize: a.cfg.SchedulerBatchSize, LeaseTTL: a.cfg.SchedulerLeaseTTL})
 	})
 }
 
@@ -148,7 +138,7 @@ func (a *Runtime) beginWorkerStartup() bool {
 }
 
 func (a *Runtime) startDataExchangeWorker(ctx context.Context) {
-	if a == nil || a.records == nil || a.records.Applications().Records == nil {
+	if a == nil || a.dataExchangeBinding == nil || a.records == nil || a.records.Applications().Records == nil {
 		return
 	}
 	a.startControlledWorker(ctx, "data_exchange", func(workerCtx context.Context) <-chan struct{} {
@@ -174,7 +164,7 @@ func (a *Runtime) startIdempotencyCleanupWorker(ctx context.Context) {
 }
 
 func (a *Runtime) StartWorkflowWorker(ctx context.Context) {
-	if a == nil || a.records == nil || runtimeWorkerApplications(a.records).Workflows == nil {
+	if a == nil || !a.schemaCapabilities.Workflow || a.records == nil || runtimeWorkerApplications(a.records).Workflows == nil {
 		return
 	}
 	a.startControlledWorker(ctx, "workflow", func(workerCtx context.Context) <-chan struct{} {
@@ -226,6 +216,9 @@ func (a *Runtime) StartIntegrationEventWorker(ctx context.Context) {
 }
 
 func (a *Runtime) StartPublicationHandoffWorker(ctx context.Context) {
+	if a == nil || a.integrationBinding == nil || a.records == nil || a.records.Applications().PublicationHandoff == nil {
+		return
+	}
 	a.startControlledWorker(ctx, "runtime_publication_outbox", func(workerCtx context.Context) <-chan struct{} {
 		return a.records.Applications().PublicationHandoff.StartWorker(workerCtx, time.Second, 25)
 	})
@@ -379,13 +372,6 @@ func runLoggedRuntimeWorkerTickWork(ctx context.Context, control *workerplatform
 		}
 	})
 	return worked
-}
-
-func (a *Runtime) startMetadataSnapshotWatcher(ctx context.Context) {
-	a.startControlledWorker(ctx, "metadata_snapshot", func(workerCtx context.Context) <-chan struct{} {
-		scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "watch Runtime metadata snapshot revision")
-		return a.records.Applications().ApplicationSchema.StartSnapshotWatcher(workerCtx, 5*time.Second, scope)
-	})
 }
 
 func (a *Runtime) startRuntimeReleaseHeartbeat(parent context.Context) {

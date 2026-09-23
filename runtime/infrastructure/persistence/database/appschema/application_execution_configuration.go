@@ -16,8 +16,8 @@ func (r ApplicationSchemaStore) ExecutionConfiguration(ctx context.Context, scop
 	if err := requireMetadataInstallationScope(scope); err != nil {
 		return appschemamodel.ApplicationExecutionConfiguration{}, err
 	}
-	statement, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_application_schema_projection").
-		Columns("source_hash", "schema_hash", "time_zone").Where(query.Equal("id", "current")).Build()
+	statement, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_project_model_state").
+		Columns("model_hash", "catalog_hash", "time_zone").Where(query.Equal("id", "current")).Build()
 	if err != nil {
 		return appschemamodel.ApplicationExecutionConfiguration{}, err
 	}
@@ -25,15 +25,15 @@ func (r ApplicationSchemaStore) ExecutionConfiguration(ctx context.Context, scop
 	if transaction := database.ActionExecutionTransaction(ctx); transaction != nil {
 		executor = transaction
 	}
-	var sourceHash, schemaHash, zone string
-	if err := executor.QueryRowContext(ctx, statement, args...).Scan(&sourceHash, &schemaHash, &zone); err != nil {
+	var modelHash, catalogHash, zone string
+	if err := executor.QueryRowContext(ctx, statement, args...).Scan(&modelHash, &catalogHash, &zone); err != nil {
 		return appschemamodel.ApplicationExecutionConfiguration{}, fmt.Errorf("load Action application configuration: %w", err)
 	}
-	if strings.TrimSpace(schemaHash) == "" {
+	if strings.TrimSpace(catalogHash) == "" {
 		return appschemamodel.ApplicationExecutionConfiguration{}, fmt.Errorf("Action application schema revision is missing")
 	}
 	if err := runtimeext.ValidateApplicationTimeZone(zone); err != nil {
 		return appschemamodel.ApplicationExecutionConfiguration{}, err
 	}
-	return appschemamodel.ApplicationExecutionConfiguration{SchemaRevision: strings.TrimSpace(sourceHash) + ":" + strings.TrimSpace(schemaHash), TimeZone: zone}, nil
+	return appschemamodel.ApplicationExecutionConfiguration{SchemaRevision: strings.TrimSpace(modelHash) + ":" + strings.TrimSpace(catalogHash), TimeZone: zone}, nil
 }

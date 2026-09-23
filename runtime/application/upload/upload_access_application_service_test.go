@@ -32,7 +32,7 @@ type uploadAccessAuditStub struct {
 	reason string
 }
 
-func (s *uploadAccessAuditStub) AppendWithMetadata(_ context.Context, event, _, _ string, _ principalmodel.Principal, _ string, _, _, metadata map[string]any) {
+func (s *uploadAccessAuditStub) AppendWithMetadata(_ context.Context, _, event, _, _ string, _ principalmodel.Principal, _ string, _, _, metadata map[string]any) {
 	s.events = append(s.events, event)
 	s.reason, _ = metadata["reason"].(string)
 }

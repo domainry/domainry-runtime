@@ -27,7 +27,7 @@ func (s *WorkflowApplicationService) failedWorkflowProcessExecution(
 	now := time.Now().UTC()
 	execution := workflowmodel.WorkflowExecution{
 		WorkspaceID: process.WorkspaceID,
-		ID:          process.ID, WorkflowKey: workflow.Key, Name: workflow.Name, Trigger: trigger,
+		ID:          process.ID, OperationID: process.OperationID, WorkflowKey: workflow.Key, Name: workflow.Name, Trigger: trigger,
 		Status: "running", ActionType: "workflow_graph", Action: workflowpolicy.WorkflowCloneMap(workflow.Action), Payload: workflowpolicy.WorkflowCloneMap(payload),
 		Result:    map[string]any{"process_id": process.ID, "definition_hash": process.DefinitionHash},
 		ProcessID: process.ID, ObjectKey: process.ObjectKey, RecordID: process.RecordID,
@@ -57,6 +57,9 @@ func (s *WorkflowApplicationService) syncWorkflowExecutionWithProcess(ctx contex
 		return err
 	}
 	execution.ProcessID = process.ID
+	if process.OperationID != "" {
+		execution.OperationID = process.OperationID
+	}
 	execution.Status = process.Status
 	execution.UpdatedAt = process.UpdatedAt
 	execution.Result = workflowpolicy.WorkflowCloneMap(execution.Result)

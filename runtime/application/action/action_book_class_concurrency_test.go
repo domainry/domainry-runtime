@@ -230,7 +230,8 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 					Format(time.RFC3339Nano)
 				audit := auditmodel.AuditEvent{
 					ID: "class-audit-" + principal.UserID, WorkspaceID: principal.WorkspaceID,
-					Event: "record_updated", ObjectKey: groupClass.Key, RecordID: recordID,
+					Family: auditmodel.EventFamilyBusinessRecord,
+					Event:  "record_updated", ObjectKey: groupClass.Key, RecordID: recordID,
 					ActorID: principal.UserID, CreatedAt: stamp,
 				}
 				plan, err := newPlan(principal, "update", groupClass, record, input.Predicates, audit)
@@ -245,7 +246,8 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 				}
 				audit := auditmodel.AuditEvent{
 					ID: "booking-audit-" + principal.UserID, WorkspaceID: principal.WorkspaceID,
-					Event: "record_created", ObjectKey: classBooking.Key, RecordID: record.ID,
+					Family: auditmodel.EventFamilyBusinessRecord,
+					Event:  "record_created", ObjectKey: classBooking.Key, RecordID: record.ID,
 					ActorID: principal.UserID, CreatedAt: stamp,
 				}
 				plan, err := newPlan(principal, "create", classBooking, record, nil, audit)
@@ -263,7 +265,8 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 		Audit: ActionAudit{BuildSuccess: func(_ context.Context, _ definitionmodel.ActionSchema, _ actionmodel.ActionInvocation, result actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
 			return auditmodel.AuditEvent{
 				ID: "action-audit-" + result.InvocationID, WorkspaceID: "workspace-a",
-				Event: "gym.class_booked", ObjectKey: groupClass.Key, ActorID: result.InvocationID, CreatedAt: stamp,
+				Family: auditmodel.EventFamilyBusinessEntity,
+				Event:  "gym.class_booked", ObjectKey: groupClass.Key, ActorID: result.InvocationID, CreatedAt: stamp,
 			}
 		}},
 	})
@@ -370,7 +373,8 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 			SUM(CASE WHEN status = ? THEN 1 ELSE 0 END),
 			SUM(CASE WHEN status = ? THEN 1 ELSE 0 END),
 			SUM(CASE WHEN status = ? THEN 1 ELSE 0 END)
-		FROM _action_executions`,
+		FROM _operations
+		WHERE owner = 'action'`,
 		string(idempotency.StatusSucceeded),
 		string(idempotency.StatusFailedTerminal),
 		string(idempotency.StatusProcessing),
@@ -412,9 +416,9 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 	var failureStatus, failureCode string
 	var failureResponseStatus int
 	if err := store.DB().QueryRow(
-		`SELECT status, error_code, response_status
-		FROM _action_executions
-		WHERE idempotency_key = ?`,
+		`SELECT status, error_code, CAST(json_extract(metadata_json, '$.response_status') AS INTEGER)
+		FROM _operations
+		WHERE owner = 'action' AND reference = ?`,
 		terminalFailure.key,
 	).Scan(&failureStatus, &failureCode, &failureResponseStatus); err != nil {
 		t.Fatal(err)
@@ -430,11 +434,14 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 		"concurrent_class_booking": 30,
 		"_publication_outbox":      30,
 		"_audit_events":            160,
-		"_action_executions":       100,
 	} {
 		var count int
 		if err := store.DB().QueryRow("SELECT COUNT(*) FROM " + store.Identifier(table)).Scan(&count); err != nil || count != want {
 			t.Fatalf("after replay table=%s count=%d want=%d err=%v", table, count, want, err)
 		}
+	}
+	var actionReceiptCount int
+	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM _operations WHERE owner = 'action'`).Scan(&actionReceiptCount); err != nil || actionReceiptCount != 100 {
+		t.Fatalf("after replay action receipt count=%d want=100 err=%v", actionReceiptCount, err)
 	}
 }

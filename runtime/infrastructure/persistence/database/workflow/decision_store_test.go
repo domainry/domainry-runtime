@@ -14,6 +14,7 @@ import (
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	agentsdkfixture "github.com/domainry/domainry-runtime/testsupport/agentsdkfixture"
+	metadatamodulefixture "github.com/domainry/domainry-runtime/testsupport/metadatamodulefixture"
 
 	"path/filepath"
 	"testing"
@@ -159,6 +160,7 @@ func openStoreForGeneratedListTest(t *testing.T) *database.RuntimeStore {
 	if err != nil {
 		t.Fatal(err)
 	}
+	metadatamodulefixture.EnsureBinding(t.Context(), store)
 	binding, err := agentsdkfixture.Open(t.Context(), store, "workflow-decision-store-test")
 	if err != nil {
 		_ = store.Close()

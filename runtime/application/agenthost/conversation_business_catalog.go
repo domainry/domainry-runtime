@@ -9,7 +9,7 @@ import (
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/invocation"
+	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/invocation/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"

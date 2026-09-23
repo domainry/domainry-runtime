@@ -76,19 +76,6 @@ func (h *AutomationHandler) getAutomationRule(w http.ResponseWriter, r *http.Req
 	h.writeJSON(w, http.StatusOK, rule)
 }
 
-func (h *AutomationHandler) validateAutomationRule(w http.ResponseWriter, r *http.Request) {
-	var rule automationmodel.AutomationRuleSchema
-	if !h.decodeJSON(w, r, &rule) {
-		return
-	}
-	result, err := h.commands.ValidateAutomationRule(r.Context(), rule, h.principal(r))
-	if err != nil {
-		h.writeServiceError(w, r, err)
-		return
-	}
-	h.writeJSON(w, http.StatusOK, result)
-}
-
 func (h *AutomationHandler) simulateAutomationRule(w http.ResponseWriter, r *http.Request) {
 	var req automationcontract.AutomationSimulationRequest
 	if !h.decodeJSON(w, r, &req) {

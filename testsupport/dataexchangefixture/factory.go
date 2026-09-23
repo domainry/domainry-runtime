@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
-	"github.com/domainry/domainry-foundation/modulecapability"
 )
 
 // Factory supplies the SDK boundary required by Runtime composition tests.
@@ -19,7 +18,7 @@ func (Factory) Open(context.Context, dataexchange.ApplicationRef) (dataexchange.
 	return Binding{}, nil
 }
 
-type Binding struct{ modulecapability.Binding }
+type Binding struct{}
 
 func (Binding) Descriptor() dataexchange.Descriptor {
 	return dataexchange.Descriptor{

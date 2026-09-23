@@ -9,6 +9,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -168,8 +169,9 @@ func TestRetryOpsWorkflowProcessSuccessProjection(t *testing.T) {
 	}
 	worker := &workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}
 	operator := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace"}}
-	projected, err := workflowProcessMutationService(store, worker, nil).RetryOpsWorkflowProcessWithKey(t.Context(), "process", "retry-key", operator)
-	if err != nil || projected.ID != "process" || projected.Status != "completed" || projected.RetryCount != 1 {
+	operationContext := requestcontext.WithOwnerExecutionID(t.Context(), "operation-process-retry")
+	projected, err := workflowProcessMutationService(store, worker, nil).RetryOpsWorkflowProcessWithKey(operationContext, "process", "retry-key", operator)
+	if err != nil || projected.ID != "process" || projected.OperationID != "operation-process-retry" || projected.Status != "completed" || projected.RetryCount != 1 {
 		t.Fatalf("projected=%+v err=%v", projected, err)
 	}
 }
@@ -277,8 +279,9 @@ func TestOpsWorkflowMutationWrappersPropagateAuthorizedServiceFailures(t *testin
 		&workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}},
 		&workflowStateDecisionEdgeStub{},
 	)
-	resolved, err := service.ResolveOpsWorkflowProcessFailure(t.Context(), "process", "resolved by operator", operator)
-	if err != nil || resolved.ID != "process" || resolved.Status != "resolved" {
+	operationContext := requestcontext.WithOwnerExecutionID(t.Context(), "operation-process-resolve")
+	resolved, err := service.ResolveOpsWorkflowProcessFailure(operationContext, "process", "resolved by operator", operator)
+	if err != nil || resolved.ID != "process" || resolved.OperationID != "operation-process-resolve" || resolved.Status != "resolved" {
 		t.Fatalf("resolved=%+v err=%v", resolved, err)
 	}
 }

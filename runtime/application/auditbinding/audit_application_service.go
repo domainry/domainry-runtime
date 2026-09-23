@@ -2,6 +2,7 @@ package auditbinding
 
 import (
 	"context"
+	"strings"
 
 	auditapplication "github.com/domainry/domainry-audit-sdk/application"
 	auditcontract "github.com/domainry/domainry-audit-sdk/contract"
@@ -36,7 +37,7 @@ func runtimePolicy() auditapplication.Policy[principalmodel.Principal, principal
 			} else if !principal.Known || principal.SystemScope.Valid() {
 				kind = "system"
 			}
-			return auditcontract.Actor{WorkspaceID: principal.WorkspaceID, SubjectID: principal.UserID, RoleKey: principal.RoleKey, Kind: kind, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, AuthorizationRevision: principal.EffectiveAuthorizationRevision()}
+			return auditcontract.Actor{WorkspaceID: principal.WorkspaceID, SubjectID: principal.UserID, RoleKey: principal.RoleKey, Kind: kind, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, CausationID: principal.CausationID, AuthorizationRevision: principal.EffectiveAuthorizationRevision()}
 		},
 		WorkspaceID: func(principal principalmodel.Principal) string { return principal.WorkspaceID },
 		ValidateCommand: func(principal principalmodel.Principal) error {
@@ -59,7 +60,11 @@ func runtimePolicy() auditapplication.Policy[principalmodel.Principal, principal
 }
 
 func AuditBuildEvent(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, before, after, metadata map[string]any) auditcontract.AuditEvent {
-	return auditapplication.NewService[principalmodel.Principal, principalmodel.SystemScope](nil, runtimePolicy()).NewAuditEvent(ctx, AuditAppendRequest{Event: event, ObjectKey: objectKey, RecordID: recordID, Principal: principal, Summary: summary, Before: before, After: after, Metadata: workloadAuditMetadata(principal, metadata)})
+	family := auditcontract.EventFamilyBusinessAction
+	if strings.HasPrefix(strings.TrimSpace(event), "record_") {
+		family = auditcontract.EventFamilyBusinessRecord
+	}
+	return auditapplication.NewService[principalmodel.Principal, principalmodel.SystemScope](nil, runtimePolicy()).NewAuditEvent(ctx, AuditAppendRequest{Family: family, Event: event, ObjectKey: objectKey, RecordID: recordID, Principal: principal, Summary: summary, Before: before, After: after, Metadata: workloadAuditMetadata(principal, metadata)})
 }
 
 func workloadAuditMetadata(principal principalmodel.Principal, metadata map[string]any) map[string]any {

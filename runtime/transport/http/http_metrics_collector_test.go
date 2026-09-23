@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	businesseventapplication "github.com/domainry/domainry-runtime/runtime/application/businessevent"
 )
 
 func TestMemoryHTTPMetricsCollectorIsConcurrentAndBoundsSeries(t *testing.T) {
@@ -51,10 +53,12 @@ func TestMemoryHTTPMetricsCollectorIsConcurrentAndBoundsSeries(t *testing.T) {
 }
 
 func TestMetricsEndpointAppendsTechnicalMetricsAndOpenMetricsEOF(t *testing.T) {
-	router := &HTTPRouter{httpMetrics: NewMemoryHTTPMetricsCollector(8), technicalMetrics: func(context.Context) string { return "# TYPE runtime_probe gauge\nruntime_probe 1\n" }}
+	events := businesseventapplication.NewBusinessEventApplicationService(nil, businesseventapplication.Limits{})
+	_, _ = events.Publish(t.Context(), "workspace-a", "customer", "mutation")
+	router := &HTTPRouter{httpMetrics: NewMemoryHTTPMetricsCollector(8), technicalMetrics: func(context.Context) string { return "# TYPE runtime_probe gauge\nruntime_probe 1\n" }, businessEvents: events}
 	response := httptest.NewRecorder()
 	router.metrics(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "runtime_probe 1") || !strings.HasSuffix(response.Body.String(), "# EOF\n") {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "runtime_probe 1") || !strings.Contains(response.Body.String(), "domainry_runtime_business_events_publish_failed_total 1") || !strings.HasSuffix(response.Body.String(), "# EOF\n") {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }

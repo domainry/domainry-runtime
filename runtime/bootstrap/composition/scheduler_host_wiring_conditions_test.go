@@ -20,7 +20,7 @@ func (s schedulerMetadataDefinitions) List(context.Context, metadatasdk.Definiti
 	return s.values, s.err
 }
 
-func (s schedulerMetadataDefinitions) Get(_ context.Context, _, key string) (metadatasdk.Definition, bool, error) {
+func (s schedulerMetadataDefinitions) Get(_ context.Context, _, _, key string) (metadatasdk.Definition, bool, error) {
 	if s.err != nil {
 		return metadatasdk.Definition{}, false, s.err
 	}
@@ -32,7 +32,7 @@ func (s schedulerMetadataDefinitions) Get(_ context.Context, _, key string) (met
 	return metadatasdk.Definition{}, false, nil
 }
 
-func (s schedulerMetadataDefinitions) Snapshot(context.Context) (metadatasdk.DefinitionSnapshot, error) {
+func (s schedulerMetadataDefinitions) Snapshot(context.Context, metadatasdk.DefinitionQuery) (metadatasdk.DefinitionSnapshot, error) {
 	return metadatasdk.DefinitionSnapshot{Definitions: s.values}, s.err
 }
 

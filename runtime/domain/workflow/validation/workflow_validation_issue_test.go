@@ -11,15 +11,15 @@ import (
 func TestWorkflowValidationIssueMappings(t *testing.T) {
 	appErr := &apperror.AppError{Kind: apperror.KindBadRequest, Code: "owner", Params: map[string]string{"node": " node-1 ", "edge": " edge-1 ", "extra": "x"}}
 	issue := WorkflowValidationIssueFromError(appErr, "backend.workflow.edge_invalid", "diag")
-	if issue.NodeID != "node-1" || issue.EdgeID != "edge-1" || issue.FieldPath != "graph.edges[edge-1]" || issue.CapabilityKey != "workflow.graph_edge" || issue.Diagnostic != "diag" {
+	if issue.NodeID != "node-1" || issue.EdgeID != "edge-1" || issue.FieldPath != "graph.edges[edge-1]" || issue.Diagnostic != "diag" {
 		t.Fatalf("%#v", issue)
 	}
 	issue = WorkflowValidationIssueFromError(errors.New("plain"), "backend.workflow.trigger_invalid", "plain")
-	if issue.FieldPath != "trigger_contract" || issue.Params != nil || issue.CapabilityKey != "workflow.trigger_contract" {
+	if issue.FieldPath != "trigger_contract" || issue.Params != nil {
 		t.Fatalf("%#v", issue)
 	}
 	ref := WorkflowReferenceValidationIssue("backend.workflow.action_key_missing", "node", "action.create")
-	if ref.FieldPath != "graph.nodes[node].contract.action.action_key" || ref.Params["reference"] != "action.create" || ref.CapabilityKey != "workflow.node.action" {
+	if ref.FieldPath != "graph.nodes[node].contract.action.action_key" || ref.Params["reference"] != "action.create" {
 		t.Fatalf("%#v", ref)
 	}
 }
@@ -44,17 +44,7 @@ func TestWorkflowValidationFieldPathMatrix(t *testing.T) {
 	}
 }
 
-func TestWorkflowCapabilityMatrixAndConditionContract(t *testing.T) {
-	for code, want := range map[string]string{
-		"resolver_invalid": "workflow.assignee_resolver", "assignee_invalid": "workflow.assignee_resolver",
-		"approval_invalid": "workflow.node.approval", "condition_invalid": "workflow.condition_contract",
-		"action_invalid": "workflow.node.action", "edge_invalid": "workflow.graph_edge", "branch_invalid": "workflow.graph_edge",
-		"trigger_invalid": "workflow.trigger_contract", "other": "workflow.graph_v2",
-	} {
-		if got := workflowValidationCapabilityKey(code); got != want {
-			t.Fatalf("%s => %s", code, got)
-		}
-	}
+func TestWorkflowConditionContract(t *testing.T) {
 	if !WorkflowConditionContractIsValid(definitionmodel.WorkflowConditionContract{Type: "always"}) {
 		t.Fatal("always condition")
 	}

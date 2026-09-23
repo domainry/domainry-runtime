@@ -23,6 +23,14 @@ func TestCallbackReceiptStoreReplaysConflictsAndFencesCompletion(t *testing.T) {
 	if err != nil || first.Decision != idempotency.DecisionAcquired || first.Receipt.FencingToken != 1 {
 		t.Fatalf("first=%#v err=%v", first, err)
 	}
+	var sharedRows int
+	if err := repository.store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE owner = 'dispatch' AND kind = 'dispatch.callback'`).Scan(&sharedRows); err != nil || sharedRows != 1 {
+		t.Fatalf("shared operation rows=%d err=%v", sharedRows, err)
+	}
+	var legacyTables int
+	if err := repository.store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_dispatch_callback_receipts'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
+		t.Fatalf("legacy callback receipt tables=%d err=%v", legacyTables, err)
+	}
 	active, err := repository.TryBeginCallback(t.Context(), request)
 	if err != nil || active.Decision != idempotency.DecisionInProgress {
 		t.Fatalf("active=%#v err=%v", active, err)

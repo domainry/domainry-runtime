@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	pathpkg "path"
@@ -18,10 +19,16 @@ import (
 	dispatchmodel "github.com/domainry/domainry-runtime/runtime/domain/dispatch/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 )
 
 var _ dispatchcontract.CallbackReceiptStore = (*CallbackReceiptStore)(nil)
+
+const (
+	dispatchCallbackTable     = "_operations"
+	dispatchCallbackOwner     = "dispatch"
+	dispatchCallbackKind      = "dispatch.callback"
+	dispatchCallbackActionKey = "runtime.dispatch.callback"
+)
 
 type CallbackReceiptStore struct {
 	store *database.RuntimeStore
@@ -58,7 +65,7 @@ func (s *CallbackReceiptStore) tryBeginCallbackOnce(ctx context.Context, request
 	receipt.FencingToken = 1
 	receipt.CreatedAt, receipt.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	columns, values := callbackReceiptColumns(), callbackReceiptValues(receipt)
-	statement, arguments, buildErr := query.NewWorkspaceInsertBuilder(s.store.SQLRenderer, runtimeschema.DispatchCallbackReceiptTable, receipt.WorkspaceID).
+	statement, arguments, buildErr := query.NewWorkspaceInsertBuilder(s.store.SQLRenderer, dispatchCallbackTable, receipt.WorkspaceID).
 		Columns(append(columns[:1], columns[2:]...)...).
 		Values(append(values[:1], values[2:]...)...).
 		Build()
@@ -89,11 +96,11 @@ func (s *CallbackReceiptStore) tryBeginCallbackOnce(ctx context.Context, request
 
 func (s *CallbackReceiptStore) reclaimCallback(ctx context.Context, requested dispatchmodel.CallbackReceipt, now time.Time, leaseTTL time.Duration) (dispatchmodel.CallbackClaimResult, error) {
 	updatedAt, leaseExpiresAt := now.Format(time.RFC3339Nano), now.Add(leaseTTL).Format(time.RFC3339Nano)
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, runtimeschema.DispatchCallbackReceiptTable, requested.WorkspaceID).
+	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, dispatchCallbackTable, requested.WorkspaceID).
 		Set("status", string(idempotency.StatusProcessing)).
-		Set("downstream_id", "").
-		Set("downstream_owner", "").
-		Set("downstream_status", "").
+		Set("result_json", "{}").
+		Set("error_code", "").
+		Set("failure_class", "").
 		Set("lease_owner", requested.LeaseOwner).
 		Set("lease_expires_at", leaseExpiresAt).
 		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).
@@ -145,7 +152,7 @@ func (s *CallbackReceiptStore) HeartbeatCallback(ctx context.Context, heartbeat 
 		return false, fmt.Errorf("dispatch callback heartbeat lease TTL is required")
 	}
 	nowText := now.Format(time.RFC3339Nano)
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, runtimeschema.DispatchCallbackReceiptTable, strings.TrimSpace(heartbeat.WorkspaceID)).
+	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, dispatchCallbackTable, strings.TrimSpace(heartbeat.WorkspaceID)).
 		Set("lease_expires_at", now.Add(heartbeat.LeaseTTL).Format(time.RFC3339Nano)).
 		Set("updated_at", nowText).
 		Where(query.And(
@@ -171,11 +178,13 @@ func (s *CallbackReceiptStore) CompleteCallback(ctx context.Context, completion 
 		return fmt.Errorf("dispatch callback receipt store is unavailable")
 	}
 	now := normalizedCallbackTime(completion.Now)
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, runtimeschema.DispatchCallbackReceiptTable, strings.TrimSpace(completion.WorkspaceID)).
+	resultJSON, err := json.Marshal(callbackOperationResult{DownstreamID: strings.TrimSpace(completion.DownstreamID), DownstreamOwner: strings.TrimSpace(completion.DownstreamOwner), DownstreamStatus: strings.TrimSpace(completion.DownstreamStatus)})
+	if err != nil {
+		return fmt.Errorf("encode dispatch callback completion: %w", err)
+	}
+	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, dispatchCallbackTable, strings.TrimSpace(completion.WorkspaceID)).
 		Set("status", string(idempotency.StatusSucceeded)).
-		Set("downstream_id", strings.TrimSpace(completion.DownstreamID)).
-		Set("downstream_owner", strings.TrimSpace(completion.DownstreamOwner)).
-		Set("downstream_status", strings.TrimSpace(completion.DownstreamStatus)).
+		Set("result_json", string(resultJSON)).
 		Set("lease_owner", "").
 		Set("lease_expires_at", "").
 		Set("updated_at", now.Format(time.RFC3339Nano)).
@@ -192,8 +201,10 @@ func (s *CallbackReceiptStore) FailCallbackRetryable(ctx context.Context, failur
 		return fmt.Errorf("dispatch callback receipt store is unavailable")
 	}
 	now := normalizedCallbackTime(failure.Now)
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, runtimeschema.DispatchCallbackReceiptTable, strings.TrimSpace(failure.WorkspaceID)).
+	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, dispatchCallbackTable, strings.TrimSpace(failure.WorkspaceID)).
 		Set("status", string(idempotency.StatusFailedRetryable)).
+		Set("error_code", "dispatch.callback_retryable").
+		Set("failure_class", "retryable").
 		Set("lease_owner", "").
 		Set("lease_expires_at", "").
 		Set("updated_at", now.Format(time.RFC3339Nano)).
@@ -222,7 +233,7 @@ func (s *CallbackReceiptStore) requireFencedWrite(ctx context.Context, workspace
 }
 
 func (s *CallbackReceiptStore) findCallbackByScope(ctx context.Context, scope dispatchmodel.CallbackReceipt) (dispatchmodel.CallbackReceipt, bool, error) {
-	statement, arguments, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, runtimeschema.DispatchCallbackReceiptTable, strings.TrimSpace(scope.WorkspaceID)).
+	statement, arguments, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, dispatchCallbackTable, strings.TrimSpace(scope.WorkspaceID)).
 		Columns(callbackReceiptColumns()...).
 		Where(callbackScopePredicate(scope)).
 		Limit(1).
@@ -230,8 +241,7 @@ func (s *CallbackReceiptStore) findCallbackByScope(ctx context.Context, scope di
 	if err != nil {
 		return dispatchmodel.CallbackReceipt{}, false, fmt.Errorf("build dispatch callback receipt lookup: %w", err)
 	}
-	var receipt dispatchmodel.CallbackReceipt
-	err = s.store.DB().QueryRowContext(ctx, statement, arguments...).Scan(callbackReceiptScanTargets(&receipt)...)
+	receipt, err := scanCallbackReceipt(s.store.DB().QueryRowContext(ctx, statement, arguments...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return dispatchmodel.CallbackReceipt{}, false, nil
 	}
@@ -270,12 +280,7 @@ func normalizeCallbackClaim(request dispatchmodel.CallbackClaimRequest) (dispatc
 }
 
 func callbackScopePredicate(receipt dispatchmodel.CallbackReceipt) query.Predicate {
-	return query.And(
-		query.Equal("runtime_id", receipt.RuntimeID),
-		query.Equal("method", receipt.Method),
-		query.Equal("path", receipt.Path),
-		query.Equal("idempotency_key", receipt.IdempotencyKey),
-	)
+	return query.And(query.Equal("id", callbackReceiptID(receipt)), query.Equal("owner", dispatchCallbackOwner), query.Equal("kind", dispatchCallbackKind))
 }
 
 func callbackFencePredicate(receiptID, leaseOwner string, fencingToken int64) query.Predicate {
@@ -298,15 +303,55 @@ func callbackReceiptID(receipt dispatchmodel.CallbackReceipt) string {
 }
 
 func callbackReceiptColumns() []string {
-	return []string{"id", "workspace_id", "runtime_id", "method", "path", "idempotency_key", "request_fingerprint", "status", "execution_id", "downstream_id", "downstream_owner", "downstream_status", "lease_owner", "lease_expires_at", "fencing_token", "created_at", "updated_at", "expires_at"}
+	return []string{"id", "workspace_id", "owner", "kind", "action_key", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "updated_at"}
 }
 
 func callbackReceiptValues(receipt dispatchmodel.CallbackReceipt) []any {
-	return []any{receipt.ID, receipt.WorkspaceID, receipt.RuntimeID, receipt.Method, receipt.Path, receipt.IdempotencyKey, receipt.BodySHA256, receipt.Status, receipt.ExecutionID, receipt.DownstreamID, receipt.DownstreamOwner, receipt.DownstreamStatus, receipt.LeaseOwner, receipt.LeaseExpiresAt, receipt.FencingToken, receipt.CreatedAt, receipt.UpdatedAt, receipt.ExpiresAt}
+	metadata, _ := json.Marshal(callbackOperationMetadata{RuntimeID: receipt.RuntimeID, Method: receipt.Method, Path: receipt.Path, IdempotencyKey: receipt.IdempotencyKey, ExecutionID: receipt.ExecutionID})
+	result, _ := json.Marshal(callbackOperationResult{DownstreamID: receipt.DownstreamID, DownstreamOwner: receipt.DownstreamOwner, DownstreamStatus: receipt.DownstreamStatus})
+	return []any{receipt.ID, receipt.WorkspaceID, dispatchCallbackOwner, dispatchCallbackKind, dispatchCallbackActionKey, "dispatch_callback", receipt.ExecutionID, receipt.ID, receipt.BodySHA256, receipt.RuntimeID, receipt.Method, receipt.Path, receipt.Status, "/operations/" + receipt.ID, string(result), string(metadata), "", "", "", "[]", receipt.ExecutionID, "[]", receipt.LeaseOwner, receipt.LeaseExpiresAt, receipt.FencingToken, receipt.ExpiresAt, receipt.CreatedAt, receipt.UpdatedAt}
 }
 
-func callbackReceiptScanTargets(receipt *dispatchmodel.CallbackReceipt) []any {
-	return []any{&receipt.ID, &receipt.WorkspaceID, &receipt.RuntimeID, &receipt.Method, &receipt.Path, &receipt.IdempotencyKey, &receipt.BodySHA256, &receipt.Status, &receipt.ExecutionID, &receipt.DownstreamID, &receipt.DownstreamOwner, &receipt.DownstreamStatus, &receipt.LeaseOwner, &receipt.LeaseExpiresAt, &receipt.FencingToken, &receipt.CreatedAt, &receipt.UpdatedAt, &receipt.ExpiresAt}
+type callbackOperationMetadata struct {
+	RuntimeID      string `json:"runtime_id"`
+	Method         string `json:"method"`
+	Path           string `json:"path"`
+	IdempotencyKey string `json:"idempotency_key"`
+	ExecutionID    string `json:"execution_id"`
+}
+
+type callbackOperationResult struct {
+	DownstreamID     string `json:"downstream_id,omitempty"`
+	DownstreamOwner  string `json:"downstream_owner,omitempty"`
+	DownstreamStatus string `json:"downstream_status,omitempty"`
+}
+
+type callbackScanner interface{ Scan(...any) error }
+
+func scanCallbackReceipt(row callbackScanner) (dispatchmodel.CallbackReceipt, error) {
+	var receipt dispatchmodel.CallbackReceipt
+	var owner, kind, actionKey, resourceType, resourceID, operationKey, requestedBy, reason, reference, statusURL string
+	var resultJSON, metadataJSON, errorCode, failureClass, nextAction, relatedIDs, correlation, evidence string
+	if err := row.Scan(&receipt.ID, &receipt.WorkspaceID, &owner, &kind, &actionKey, &resourceType, &resourceID, &operationKey, &receipt.BodySHA256, &requestedBy, &reason, &reference, &receipt.Status, &statusURL, &resultJSON, &metadataJSON, &errorCode, &failureClass, &nextAction, &relatedIDs, &correlation, &evidence, &receipt.LeaseOwner, &receipt.LeaseExpiresAt, &receipt.FencingToken, &receipt.ExpiresAt, &receipt.CreatedAt, &receipt.UpdatedAt); err != nil {
+		return receipt, err
+	}
+	if owner != dispatchCallbackOwner || kind != dispatchCallbackKind || actionKey != dispatchCallbackActionKey || resourceType != "dispatch_callback" || operationKey != receipt.ID {
+		return receipt, fmt.Errorf("dispatch callback operation identity is invalid")
+	}
+	var metadata callbackOperationMetadata
+	if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
+		return receipt, fmt.Errorf("decode dispatch callback metadata: %w", err)
+	}
+	var result callbackOperationResult
+	if err := json.Unmarshal([]byte(resultJSON), &result); err != nil {
+		return receipt, fmt.Errorf("decode dispatch callback result: %w", err)
+	}
+	receipt.RuntimeID, receipt.Method, receipt.Path, receipt.IdempotencyKey, receipt.ExecutionID = metadata.RuntimeID, metadata.Method, metadata.Path, metadata.IdempotencyKey, metadata.ExecutionID
+	receipt.DownstreamID, receipt.DownstreamOwner, receipt.DownstreamStatus = result.DownstreamID, result.DownstreamOwner, result.DownstreamStatus
+	if receipt.RuntimeID != requestedBy || receipt.Method != reason || receipt.Path != reference || receipt.ExecutionID != resourceID || receipt.ExecutionID != correlation {
+		return receipt, fmt.Errorf("dispatch callback operation metadata is inconsistent")
+	}
+	return receipt, nil
 }
 
 func normalizedCallbackTime(value time.Time) time.Time {

@@ -11,7 +11,7 @@ import (
 
 func operationsReceiptFixture(now time.Time) operationsmodel.OperationsReceipt {
 	return operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{
-		ID: "operation", Kind: "retention.cleanup", ActionKey: "runtime.operations.run_lifecycle_cleanup_job",
+		ID: "operation", Owner: "lifecycle", Kind: "retention.cleanup", ActionKey: "runtime.operations.run_lifecycle_cleanup_job",
 		Scope:          operationsmodel.OperationsScope{WorkspaceID: "workspace", ResourceType: "retention_policy", ResourceID: "policy"},
 		IdempotencyKey: "key", RequestFingerprint: "fingerprint", RequestedBy: "operator", Reason: "reason",
 		Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now,
@@ -19,13 +19,13 @@ func operationsReceiptFixture(now time.Time) operationsmodel.OperationsReceipt {
 }
 
 func operationsReceiptRow(receipt operationsmodel.OperationsReceipt, startedAt, finishedAt string) []driver.Value {
-	resultJSON, relatedJSON, evidenceJSON := operationsReceiptJSON(receipt)
-	command := receipt.Command
-	return []driver.Value{command.ID, command.Scope.WorkspaceID, command.Scope.SystemPurpose, command.Kind, command.ActionKey,
-		command.Scope.ResourceType, command.Scope.ResourceID, command.IdempotencyKey, command.RequestFingerprint, command.RequestedBy,
-		command.Reason, command.Reference, string(command.Status), receipt.StatusURL, resultJSON, receipt.ErrorCode,
-		string(receipt.FailureClass), receipt.NextAction, relatedJSON, receipt.Correlation, evidenceJSON,
-		command.CreatedAt.Format(time.RFC3339Nano), startedAt, finishedAt, command.UpdatedAt.Format(time.RFC3339Nano)}
+	values := operationsReceiptValues(receipt)
+	values[29], values[30] = startedAt, finishedAt
+	result := make([]driver.Value, len(values))
+	for index := range values {
+		result[index] = values[index]
+	}
+	return result
 }
 
 func TestOperationsStoreSQLFailureStagesAndScopeEdges(t *testing.T) {
@@ -185,12 +185,13 @@ func TestOperationsUpdateAndReceiptScanEdges(t *testing.T) {
 		index int
 		value driver.Value
 	}{
-		{name: "related", index: 18, value: "{"},
-		{name: "evidence", index: 20, value: "{"},
-		{name: "created", index: 21, value: "invalid"},
-		{name: "updated", index: 24, value: "invalid"},
-		{name: "started", index: 22, value: "invalid"},
-		{name: "finished", index: 23, value: "invalid"},
+		{name: "metadata", index: 17, value: "{"},
+		{name: "related", index: 21, value: "{"},
+		{name: "evidence", index: 23, value: "{"},
+		{name: "created", index: 28, value: "invalid"},
+		{name: "updated", index: 31, value: "invalid"},
+		{name: "started", index: 29, value: "invalid"},
+		{name: "finished", index: 30, value: "invalid"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			row := append([]driver.Value(nil), base...)

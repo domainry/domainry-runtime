@@ -31,6 +31,11 @@
 # and none substitutes one.
 # PublicResource lookup also rejects an ambiguous result or a row without its
 # stored workspace identity; it never supplies a fallback workspace.
+# 2026-09-22 review: the development-data generator now rejects an empty
+# workspace before calling its application persistence port. It never selects
+# or substitutes a fallback workspace.
+# 2026-09-22 review: the retired worker-queue-scope backfill and its workspace
+# fallback candidate were removed with the shared worker-scope implementation.
 runtime/application/action/action_invocation_receipt_read.go|887c5c451c24ca0c
 runtime/application/action/action_invocation_receipt_read.go|f7281c25559cf6ce
 runtime/application/action/action_workspace_aggregate_execution.go|5bb28c1937a21188
@@ -45,6 +50,7 @@ runtime/application/agenthost/agent_task_dispatch_application_service.go|a1aa32c
 runtime/application/agenthost/conversation_business_host.go|4c46628760bfbeb3
 runtime/application/agenthost/conversation_business_host.go|e3dcace4ac8cd670
 runtime/application/agenthost/conversation_business_write_receipt_read.go|97ea556eec451090
+runtime/application/devdata/generator.go|b2e5ab60c1900c7a
 runtime/application/notificationfacade/module_transactions.go|a53412ab9d129a2d
 runtime/application/publicationhandoff/publication_handoff_application_service.go|3a264f3250c4d24e
 runtime/application/publicationhandoff/publication_handoff_application_service.go|b2e5ab60c1900c7a
@@ -53,9 +59,6 @@ runtime/application/record/record_subject_erasure_plan.go|db4061e02aef0d91
 runtime/application/record/record_subject_lifecycle_application_service.go|9bc2b99f1b0726ee
 runtime/application/report/export/application/report_export_retry.go|6159e1133620af2d
 runtime/application/report/export/application/report_export_retry.go|86b97b1de7234ba2
-runtime/application/seed/business/acceptance_setup.go|77da2f4766b7ea50
-runtime/application/seed/business/records.go|b2e5ab60c1900c7a
-runtime/application/seed/globalcapability/runtime.go|c9934cedd7524bf6
 runtime/application/upload/file_capability_service.go|78a91dc513a29438
 runtime/application/upload/file_download_ticket_service.go|e49199ea673c10e3
 runtime/application/upload/upload_subject_registry.go|256e805788613c3d
@@ -77,7 +80,6 @@ runtime/infrastructure/blobstore/local_store.go|9eacf70f950bff5a
 runtime/infrastructure/blobstore/local_store.go|f8a2fa401c03632f
 runtime/infrastructure/persistence/auditmodule/audit_store.go|2eb97668367dd897
 runtime/infrastructure/persistence/database/action/action_business_execution_store.go|8a6b0a15d07ee4c7
-runtime/infrastructure/persistence/database/appschema/manifest_store.go|4abfd612c230c5f8
 runtime/infrastructure/persistence/database/automation/sql_values.go|e3a854a480b5fcda
 runtime/infrastructure/persistence/database/datamigration/copy.go|50c2e571441e2111
 runtime/infrastructure/persistence/database/datamigration/verify.go|d6e7f1f7aec0d805
@@ -104,7 +106,6 @@ runtime/infrastructure/persistence/database/report/report_export_prepare_receipt
 runtime/infrastructure/persistence/database/report/report_export_prepare_receipt_store.go|4d6a2a9b24627125
 runtime/infrastructure/persistence/database/report/report_export_prepare_receipt_store.go|fd8d30675ba2e2a7
 runtime/infrastructure/persistence/database/runtime_store.go|25946a0c038e554c
-runtime/infrastructure/persistence/database/schema/evidence_tables.go|fd24a33727e24390
 runtime/infrastructure/persistence/database/schema/idempotency_receipt_migration.go|e8c3ac38d432ce4d
 runtime/infrastructure/persistence/database/subject_write_fence.go|3933b62c3fd70ac8
 runtime/infrastructure/persistence/database/transaction/boundary_intent_store.go|b2e5ab60c1900c7a

@@ -11,6 +11,7 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -77,12 +78,16 @@ func (p *breakGlassRepositoryProbe) RevokeOperationsBreakGlass(_ context.Context
 var errBreakGlassProbe = errors.New("break glass probe failed")
 
 type breakGlassAlertProbe struct {
-	events []string
-	fail   bool
+	events       []string
+	operationIDs []string
+	grants       []operationsmodel.OperationsBreakGlassGrant
+	fail         bool
 }
 
-func (p *breakGlassAlertProbe) BreakGlassAlert(_ context.Context, event string, _ operationsmodel.OperationsBreakGlassGrant, _ principalmodel.Principal) error {
+func (p *breakGlassAlertProbe) BreakGlassAlert(ctx context.Context, event string, grant operationsmodel.OperationsBreakGlassGrant, _ principalmodel.Principal) error {
 	p.events = append(p.events, event)
+	p.operationIDs = append(p.operationIDs, requestcontext.OwnerExecutionID(ctx))
+	p.grants = append(p.grants, grant)
 	if p.fail {
 		return apperror.New(apperror.KindInternal, "alert.failed", nil, nil)
 	}
@@ -104,18 +109,27 @@ func TestOperationsBreakGlassIsTimeLimitedDualApprovedAuditedAndRevisionFenced(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !enabled.Grant.Active(now) || enabled.Grant.ExpiresAt.Sub(now) != 15*time.Minute || len(alerts.events) != 1 || enabled.Receipt.Correlation != "INC-42" || len(enabled.Receipt.Evidence) != 2 {
+	if !enabled.Grant.Active(now) || enabled.Grant.ExpiresAt.Sub(now) != 15*time.Minute || len(alerts.events) != 1 || alerts.operationIDs[0] == "" || enabled.Grant.AuditEventID != alerts.grants[0].AuditEventID || enabled.Receipt.Correlation != "INC-42" || len(enabled.Receipt.Evidence) != 2 {
 		t.Fatalf("enabled=%#v alerts=%#v", enabled, alerts.events)
 	}
 	replay, err := service.EnableBreakGlass(t.Context(), command, "enable-key", principal)
 	if err != nil || replay.Grant.ID != enabled.Grant.ID || len(alerts.events) != 1 {
 		t.Fatalf("replay=%#v alerts=%#v err=%v", replay, alerts.events, err)
 	}
+	current := repository.grants[enabled.Grant.ID]
+	current.State = operationsmodel.OperationsBreakGlassRevoked
+	repository.grants[enabled.Grant.ID] = current
+	replay, err = service.EnableBreakGlass(t.Context(), command, "enable-key", principal)
+	if err != nil || replay.Grant.State != operationsmodel.OperationsBreakGlassRevoked || len(alerts.events) != 1 {
+		t.Fatalf("current replay=%#v alerts=%#v err=%v", replay, alerts.events, err)
+	}
+	current.State = operationsmodel.OperationsBreakGlassActive
+	repository.grants[enabled.Grant.ID] = current
 	if _, err := service.DisableBreakGlass(t.Context(), enabled.Grant.ID, OperationsBreakGlassDisableCommand{ExpectedRevision: 2, Reason: "wrong revision", IncidentRef: "INC-42"}, "disable-bad", principal); apperror.CodeOf(err) != "backend.operations.break_glass_revision_conflict" {
 		t.Fatalf("revision err=%v", err)
 	}
 	disabled, err := service.DisableBreakGlass(t.Context(), enabled.Grant.ID, OperationsBreakGlassDisableCommand{ExpectedRevision: 1, Reason: "incident ended", IncidentRef: "INC-42"}, "disable-key", principal)
-	if err != nil || disabled.Grant.State != operationsmodel.OperationsBreakGlassRevoked || len(alerts.events) != 2 {
+	if err != nil || disabled.Grant.State != operationsmodel.OperationsBreakGlassRevoked || len(alerts.events) != 2 || alerts.operationIDs[1] == "" || disabled.Grant.AuditEventID == enabled.Grant.AuditEventID || disabled.Grant.AuditEventID != alerts.grants[1].AuditEventID {
 		t.Fatalf("disabled=%#v alerts=%#v err=%v", disabled, alerts.events, err)
 	}
 }

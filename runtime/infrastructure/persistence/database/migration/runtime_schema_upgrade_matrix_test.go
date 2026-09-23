@@ -45,28 +45,10 @@ func TestEverySupportedRuntimeSchemaVersionUpgradesToCurrent(t *testing.T) {
 			if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 				t.Fatalf("repeat upgrade %s: %v", version, err)
 			}
-			if version == "023_dispatch_callback_receipts" {
-				var zone, name string
-				if err := store.DB().QueryRowContext(t.Context(), `SELECT time_zone, name FROM _application_schema_projection WHERE id = 'current'`).Scan(&zone, &name); err != nil || zone != "UTC" || name != "Legacy application" {
-					t.Fatalf("application header upgrade zone=%q name=%q err=%v", zone, name, err)
-				}
-			}
-			if version == "024_application_time_zone" {
-				var receipts int
-				if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _application_schema_upgrade_receipts`).Scan(&receipts); err != nil || receipts != 0 {
-					t.Fatalf("definition upgrade receipts table after upgrade count=%d err=%v", receipts, err)
-				}
-			}
 			if version == "025_definition_upgrade_receipts" {
 				var steps int
 				if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _workflow_route_steps`).Scan(&steps); err != nil || steps != 0 {
 					t.Fatalf("workflow route step table after upgrade count=%d err=%v", steps, err)
-				}
-			}
-			if version == "026_workflow_route_steps" {
-				var lineage, payload, fingerprint, job string
-				if err := store.DB().QueryRowContext(t.Context(), `SELECT retry_of_job_id, payload_json, request_fingerprint, job_id FROM _report_export_prepare_receipts WHERE id = 'receipt-026'`).Scan(&lineage, &payload, &fingerprint, &job); err != nil || lineage != "" || payload != `{"historical":"payload"}` || fingerprint != "frozen-fingerprint" || job != "failed-job-026" {
-					t.Fatalf("historical receipt changed on retry migration: lineage=%q payload=%q fingerprint=%q job=%q err=%v", lineage, payload, fingerprint, job, err)
 				}
 			}
 			var currentRows, dirty int

@@ -70,7 +70,7 @@ func recordTimerRuntimeObjectByKey(t *testing.T, objects []definitionmodel.Objec
 func newRecordTimerRuntimeTestService(t *testing.T, store *persistence.RuntimeStore, objects []definitionmodel.ObjectSchema) *RuntimeServices {
 	t.Helper()
 	return runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{
-		TemplateID: "record-timer-runtime-test", TemplateVersion: "1", Name: "Record Timer Runtime Test",
+		ProjectKey: "record-timer-runtime-test", SchemaVersion: "1", Name: "Record Timer Runtime Test",
 		Objects: objects, Integrations: connectormodel.IntegrationSchema{}, Store: store,
 	})
 }

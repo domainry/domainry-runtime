@@ -17,16 +17,16 @@ var workspaceSQLTablePattern = regexp.MustCompile(`TableIdentifier\("([^"]+)"\)`
 
 var reviewedWorkspaceSQLTables = map[string]bool{
 	"_audit_events": true, "_workflow_executions": true,
-	"_automation_instruction_executions": true, "_automation_rule_executions": true, "_action_executions": true,
-	"_audit_export_artifacts": true, "_record_localized_values": true,
+	"_automation_runs":                    true,
+	"_record_localized_values":            true,
 	"_publication_outbox":                 true,
 	"_notification_delivery_reservations": true,
-	"_lifecycle_archive_entries":          true, "_lifecycle_audit_evidence": true, "_lifecycle_cleanup_jobs": true,
-	"_lifecycle_deletion_registry": true, "_lifecycle_external_erasure_requests": true, "_lifecycle_legal_holds": true,
-	"_lifecycle_policy_versions": true, "_lifecycle_subject_requests": true, "_lifecycle_file_artifacts": true,
-	"_notification_recipient_preferences": true, "_record_mutation_executions": true,
-	"_transaction_boundary_intents": true, "_workflow_execution_receipts": true, "_workflow_node_instances": true,
-	"_workflow_process_events": true, "_workflow_process_instances": true, "_workflow_tasks": true,
+	"_lifecycle_cleanup_jobs":             true,
+	"_lifecycle_legal_holds":              true,
+	"_subject_requests":         true,
+	"_notification_recipient_preferences": true,
+	"_workflow_node_instances":            true,
+	"_workflow_process_events":            true, "_workflow_process_instances": true, "_workflow_tasks": true,
 }
 
 // TestWorkspaceSQLReviewBaseline blocks every new literal SQL statement that

@@ -43,10 +43,10 @@ func TestActionDefinitionValidationIdentityKindAndIssueEdges(t *testing.T) {
 		t.Fatal("unknown kind accepted")
 	}
 	issue := actionDefinitionValidationIssue("backend.action.definition_invalid", "", nil)
-	if issue.CapabilityKey != "action.definition" {
+	if issue.ErrorCode != "backend.action.definition_invalid" || issue.MessageKey != issue.ErrorCode {
 		t.Fatalf("fallback issue = %#v", issue)
 	}
-	if issue := actionDefinitionValidationIssue("backend.action.unknown", "field", nil); issue.CapabilityKey != "action.definition" {
+	if issue := actionDefinitionValidationIssue("backend.action.unknown", "field", nil); issue.ErrorCode != "backend.action.unknown" || issue.FieldPath != "field" {
 		t.Fatalf("unknown action issue = %#v", issue)
 	}
 }

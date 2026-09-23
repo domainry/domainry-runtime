@@ -21,4 +21,4 @@ Runtime bootstrap 固定构造 `domainry-metadata/module.Factory`。Module 借�
 
 - `runtimehost.Options` 尚无 Metadata Factory，当前不能宣称支持 SaaS 切换。
 - 多实例 snapshot revision/invalidation 必须通过共享数据库集成测试后才可发布。
-- Runtime 的 `_application_schema_projection` 是已安装应用结构的物化状态，不是 Metadata Module 的第二份可写真相；后续清退仍须同步 state、workspace scope、retirement 与 idempotency inventory。
+- Runtime 的 `_project_model_state` 是已安装 model.json 的单行当前状态，不是 Metadata Module 的第二份可写真相；定义内容仍以 Metadata Module 的 projection 为准。

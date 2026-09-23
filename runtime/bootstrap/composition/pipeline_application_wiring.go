@@ -3,6 +3,7 @@ package composition
 import (
 	"context"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -50,9 +51,11 @@ func newPipelineTransitionApplicationService(records *runtimeAssembly) *pipeline
 		},
 		CanAccess:         records.RecordQueryPolicyDomainService.CanAccessRecord,
 		CheckPrecondition: records.ActionPreconditionApplicationService.Check,
-		Audit:             records.auditApplicationService.AppendWithMetadata,
-		PlanUpdate:        records.recordApplicationService.PlanUpdateMutation,
-		PlanCreate:        records.recordApplicationService.PlanCreateMutation,
+		Audit: func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, before, after, metadata map[string]any) {
+			records.auditApplicationService.AppendWithMetadata(ctx, auditmodel.EventFamilyBusinessEntity, event, objectKey, recordID, principal, summary, before, after, metadata)
+		},
+		PlanUpdate: records.recordApplicationService.PlanUpdateMutation,
+		PlanCreate: records.recordApplicationService.PlanCreateMutation,
 		CommitPlans: func(ctx context.Context, plans []transactionmodel.MutationPlan) error {
 			return records.mutationKernel.CommitBatch(ctx, plans, nil)
 		},

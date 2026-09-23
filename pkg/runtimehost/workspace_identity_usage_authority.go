@@ -217,11 +217,9 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) catalogRevision(ctx con
 	statement, arguments, err := query.NewSelectBuilder(authority.runtime.RuntimeRenderer(), "_workspaces").Alias("workspace").
 		Projections(
 			query.Project(query.QualifiedColumn("workspace", "id")), query.Project(query.QualifiedColumn("workspace", "revision")),
-			query.Project(query.QualifiedColumn("commercial", "revision")),
+			query.Project(query.QualifiedColumn("workspace", "commercial_revision")),
 		).
-		Join(query.InnerJoin("_workspace_commercial_configuration", "commercial", query.EqualExpressions(
-			query.QualifiedColumn("commercial", "workspace_id"), query.QualifiedColumn("workspace", "id"),
-		))).Where(query.EqualExpressions(query.QualifiedColumn("workspace", "status"), query.Value("active"))).OrderBy(query.AscendingExpression(query.QualifiedColumn("workspace", "id"))).Build()
+		Where(query.EqualExpressions(query.QualifiedColumn("workspace", "status"), query.Value("active"))).OrderBy(query.AscendingExpression(query.QualifiedColumn("workspace", "id"))).Build()
 	if err != nil {
 		return "", workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_catalog_unavailable", err)
 	}
@@ -250,7 +248,7 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) appendAuthorizationAudi
 	auditCtx, cancel := context.WithTimeout(context.Background(), workspaceIdentityUsageAuditTimeout)
 	defer cancel()
 	event, err := auditcontract.BuildEvent(auditcontract.AppendRequest{
-		Event: "identity.workspace_identity_usage.authorize", ObjectKey: "identity.workspace_identity_usage", RecordID: "installation",
+		Family: auditcontract.EventFamilyIdentityGovernance, Event: "identity.workspace_identity_usage.authorize", ObjectKey: "identity.workspace_identity_usage", RecordID: "installation",
 		Actor: auditcontract.Actor{
 			WorkspaceID: strings.TrimSpace(installation.WorkspaceID), SubjectID: strings.TrimSpace(principal.UserID), RoleKey: strings.TrimSpace(principal.RoleKey),
 			Kind: "user", AuthorizationRevision: strings.TrimSpace(principal.AuthorizationRevision),

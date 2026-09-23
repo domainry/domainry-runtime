@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"github.com/domainry/domainry-foundation/requestcontext"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
 	"context"
@@ -54,6 +55,7 @@ func (e *WorkflowProcessEngine) Start(ctx context.Context, workflow definitionmo
 	process := workflowmodel.WorkflowProcessInstance{
 		WorkspaceID:         principal.WorkspaceID,
 		ID:                  workflowProcessID(ctx, "process"),
+		OperationID:         requestcontext.OwnerExecutionID(ctx),
 		WorkflowKey:         workflow.Key,
 		WorkflowName:        workflow.Name,
 		DefinitionVersionID: workflow.DefinitionVersionID,

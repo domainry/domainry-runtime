@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/domainry/domainry-foundation/requestcontext"
 	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -315,6 +317,7 @@ func (s *WorkflowApplicationService) workflowRouteStartProcess(ctx context.Conte
 	}
 	return workflowmodel.WorkflowProcessInstance{
 		WorkspaceID: principal.WorkspaceID, ID: workflowRouteStartProcessID(ctx, request),
+		OperationID: requestcontext.OwnerExecutionID(ctx),
 		WorkflowKey: workflow.Key, WorkflowName: workflow.Name,
 		DefinitionVersionID: workflow.DefinitionVersionID, DefinitionVersion: workflowpolicy.WorkflowPublishedVersion(workflow),
 		DefinitionHash: workflowpolicy.WorkflowDefinitionHash(workflow), DefinitionSnapshot: workflow,
@@ -339,7 +342,8 @@ func workflowRouteStartIntent(workflow definitionmodel.WorkflowSchema, process w
 	payload["process_id"] = process.ID
 	return workflowmodel.WorkflowExecution{
 		WorkspaceID: process.WorkspaceID, ID: "intent_" + process.ID, WorkflowKey: workflow.Key, Name: workflow.Name,
-		Trigger: WorkflowRouteStartTrigger, Status: "pending", ActionType: "workflow_graph",
+		OperationID: process.OperationID,
+		Trigger:     WorkflowRouteStartTrigger, Status: "pending", ActionType: "workflow_graph",
 		Action: workflowpolicy.WorkflowCloneMap(workflow.Action), Payload: payload,
 		Result:    map[string]any{"transactional_intent": true, "route_start": true, "resume_process_id": process.ID},
 		ProcessID: process.ID, ObjectKey: process.ObjectKey, RecordID: process.RecordID, ActorID: principal.UserID,

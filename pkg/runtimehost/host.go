@@ -28,27 +28,20 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/codingruntime"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
+	projectvalidation "github.com/domainry/domainry-runtime/runtime/domain/project/validation"
+	recordtimerprojection "github.com/domainry/domainry-runtime/runtime/domain/recordtimer/projection"
 	principalcache "github.com/domainry/domainry-runtime/runtime/infrastructure/principalcache"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
-	"github.com/domainry/domainry-runtime/runtime/transport/provision"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	"go.uber.org/zap"
 )
 
-// Run validates generated project composition, freezes its Handler registry
+// Run validates project-owned composition, freezes its Handler registry
 // and owns the complete Runtime process lifecycle until shutdown.
 func Run(options Options) error {
-	// DEFINITION_UPGRADE_MODE=plan makes stdout a data channel: the plan is the
-	// only document written there (command.go). The shared logger writes to
-	// os.Stdout, so it is pointed at stderr for the lifetime of a plan run
-	// before it is initialized. The plan itself is unaffected: cmd/server took
-	// the original stdout file before Run was called.
-	if config.DefinitionUpgradePlanModeRequested() {
-		os.Stdout = os.Stderr
-	}
 	logger, err := logging.Initialize("domainry-domain-runtime")
 	if err != nil {
 		wrapped := fmt.Errorf("initialize logger: %w", err)
@@ -57,11 +50,6 @@ func Run(options Options) error {
 	}
 	defer func() { _ = logger.Sync() }()
 	if err := runWithDependencies(options, defaultServerRunDependencies()); err != nil {
-		var planRequested *bootstrap.DefinitionUpgradePlanRequested
-		if errors.As(err, &planRequested) {
-			logger.Info("domain Runtime evaluated the definition upgrade plan without starting", zap.String("from_version", planRequested.Plan.FromVersion), zap.String("to_version", planRequested.Plan.ToVersion), zap.Bool("blocking", planRequested.Plan.Blocking))
-			return err
-		}
 		logger.Error("domain Runtime stopped", logging.StableErrorFields(err)...)
 		return err
 	}
@@ -113,7 +101,7 @@ type serverRunDependencies struct {
 	executable           func() (string, error)
 	stat                 func(string) (os.FileInfo, error)
 	readFile             func(string) ([]byte, error)
-	prepareDatabase      func(context.Context, config.Config) (*bootstrap.ProjectDatabase, error)
+	prepareDatabase      func(context.Context, config.Config, bootstrap.RuntimeSchemaCapabilities) (*bootstrap.ProjectDatabase, error)
 	newRuntime           func(context.Context, config.Config, *runtimeext.ProjectExtensionRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, bootstrap.ProjectStartupOptions) runtimeProcess
 	listenAndServe       func(*http.Server) error
 	shutdown             func(context.Context, *http.Server) error
@@ -142,7 +130,7 @@ type runtimeActivator struct {
 	handler          *bootstrap.EntrypointMux
 	handlers         map[runtimehttp.ListenerRouteGroup]*bootstrap.EntrypointMux
 	connectorGateway *bindableConnectorGateway
-	start            func(manifestmodel.ManifestSchema) (runtimeProcess, error)
+	start            func() (runtimeProcess, error)
 	close            func(runtimeProcess) error
 	mu               sync.Mutex
 	runtime          runtimeProcess
@@ -160,7 +148,7 @@ func (a *runtimeActivator) entrypointHandlers() map[runtimehttp.ListenerRouteGro
 	return nil
 }
 
-func (a *runtimeActivator) Activate(manifest manifestmodel.ManifestSchema) (err error) {
+func (a *runtimeActivator) Activate() (err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.runtime != nil {
@@ -171,13 +159,13 @@ func (a *runtimeActivator) Activate(manifest manifestmodel.ManifestSchema) (err 
 			// Bootstrap reports startup failures by panicking with the error;
 			// wrapping keeps typed outcomes such as the plan-mode sentinel visible.
 			if recoveredErr, ok := recovered.(error); ok {
-				err = fmt.Errorf("Runtime bootstrap failed after manifest Provision: %w", recoveredErr)
+				err = fmt.Errorf("Runtime bootstrap failed during project activation: %w", recoveredErr)
 				return
 			}
-			err = fmt.Errorf("Runtime bootstrap failed after manifest Provision: %v", recovered)
+			err = fmt.Errorf("Runtime bootstrap failed during project activation: %v", recovered)
 		}
 	}()
-	runtime, startErr := a.start(manifest)
+	runtime, startErr := a.start()
 	if startErr != nil {
 		return startErr
 	}
@@ -203,24 +191,6 @@ func (a *runtimeActivator) Close() {
 	if a.runtime != nil {
 		_ = a.closeRuntime(a.runtime)
 	}
-}
-
-func (a *runtimeActivator) Abandon() error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.connectorGateway != nil {
-		a.connectorGateway.unbind()
-	}
-	if a.runtime != nil {
-		if err := a.closeRuntime(a.runtime); err != nil {
-			return err
-		}
-		a.runtime = nil
-	}
-	for _, handler := range a.entrypointHandlers() {
-		handler.SetProvisioning()
-	}
-	return nil
 }
 
 type runtimeHTTPListener struct {
@@ -306,34 +276,12 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	}
 	artifactEvidence := bootstrap.RuntimeReleaseArtifactEvidence{Verified: true}
 	executablePath := ""
-	frontendBundleSHA256 := ""
-	if releaseIdentity.BuildMode != "packaged" && dependencies.executable != nil {
-		// Development builds do not have a signed Runtime attestation, but they
-		// may still ship the project-owned frontend beside the executable. The
-		// frontend loader intentionally accepts an empty expected digest for this
-		// case; keep packaged builds on the strict attestation path below.
+	if dependencies.executable != nil {
 		if resolvedExecutablePath, executableErr := dependencies.executable(); executableErr == nil {
 			executablePath = resolvedExecutablePath
 		}
 	}
-	if releaseIdentity.BuildMode == "packaged" {
-		if dependencies.executable == nil {
-			evidenceErr := fmt.Errorf("%w: executable path provider is unavailable", ErrRuntimeArtifactAttestation)
-			artifactEvidence.BuildError, artifactEvidence.SignatureError = evidenceErr, evidenceErr
-		} else if resolvedExecutablePath, executableErr := dependencies.executable(); executableErr != nil {
-			evidenceErr := fmt.Errorf("%w: resolve executable path: %v", ErrRuntimeArtifactAttestation, executableErr)
-			artifactEvidence.BuildError, artifactEvidence.SignatureError = evidenceErr, evidenceErr
-		} else {
-			executablePath = resolvedExecutablePath
-			evidence := verifyRuntimeArtifact(executablePath, releaseIdentity, dependencies.readFile)
-			artifactEvidence.BuildError, artifactEvidence.SignatureError = evidence.BuildError, evidence.SignatureError
-			frontendBundleSHA256 = evidence.FrontendBundleSHA256
-		}
-		if artifactEvidence.BuildError != nil || artifactEvidence.SignatureError != nil {
-			return fmt.Errorf("verify packaged Runtime artifact: %w", errors.Join(artifactEvidence.BuildError, artifactEvidence.SignatureError))
-		}
-	}
-	frontendAssets, err := loadProjectFrontendAssets(executablePath, frontendBundleSHA256, dependencies.readFile)
+	frontendAssets, err := loadProjectFrontendAssets(executablePath, "", dependencies.readFile)
 	if err != nil {
 		return fmt.Errorf("load packaged project frontend: %w", err)
 	}
@@ -358,43 +306,46 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	if err != nil {
 		return fmt.Errorf("load Runtime configuration: %w", err)
 	}
-	projectNavigation, err := loadProjectNavigationCatalog(options.ProjectNavigationFile, dependencies.readFile)
-	if err != nil {
-		return err
+	modelFile := strings.TrimSpace(options.ModelFile)
+	if modelFile == "" {
+		return fmt.Errorf("load project model: ModelFile is required")
 	}
+	rawModel, err := dependencies.readFile(modelFile)
+	if err != nil {
+		return fmt.Errorf("read project model %s: %w", modelFile, err)
+	}
+	projectModel, err := projectmodel.Decode(rawModel)
+	if err != nil {
+		return fmt.Errorf("decode project model %s: %w", modelFile, err)
+	}
+	if err := projectvalidation.ValidateComposition(projectModel, projectExtensions, nil); err != nil {
+		return fmt.Errorf("validate project model and code definitions: %w", err)
+	}
+	runtimeModel, err := projectmodel.Compile(projectModel)
+	if err != nil {
+		return fmt.Errorf("compile project storage and authorization model: %w", err)
+	}
+	if err := attachPublicResources(&runtimeModel, projectExtensions.ProjectDefinitions().PublicResources); err != nil {
+		return fmt.Errorf("attach code-owned public resources: %w", err)
+	}
+	// Runtime-owned record timer storage is code-owned infrastructure. It is
+	// always materialized with the project model, but never authored in
+	// model.json and never participates in the project content hash.
+	runtimeModel.Objects = append(runtimeModel.Objects, recordtimerprojection.RecordTimerSystemObjects()...)
+	runtimeSchemaCapabilities := bootstrap.ProjectSchemaCapabilities(runtimeModel, projectExtensions)
+	runtimeSchemaCapabilities.ReleaseCoordination = cfg.RuntimeReplicaCount > 1
 	cfg.RuntimeVersion = options.Identity.RuntimeVersion
 	identityFactory := options.IdentityFactory
 	if identityFactory == nil {
 		return fmt.Errorf("configure Identity factory: generated project composition did not supply an SDK Factory")
 	}
 	notificationFactory := options.NotificationFactory
-	if notificationFactory == nil {
-		return fmt.Errorf("configure Notification factory: generated project composition did not supply an SDK Factory")
-	}
 	monitoringFactory := options.MonitoringFactory
-	if monitoringFactory == nil {
-		return fmt.Errorf("configure Monitoring factory: generated project composition did not supply an SDK Factory")
-	}
 	schedulerFactory := options.SchedulerFactory
-	if schedulerFactory == nil {
-		return fmt.Errorf("configure Scheduler factory: generated project composition did not supply an SDK Factory")
-	}
 	dataExchangeFactory := options.DataExchangeFactory
-	if dataExchangeFactory == nil {
-		return fmt.Errorf("configure Data Exchange factory: generated project composition did not supply an SDK Factory")
-	}
 	agentFactory := options.AgentFactory
-	if agentFactory == nil {
-		return fmt.Errorf("configure Agent factory: generated project composition did not supply an SDK Factory")
-	}
 	integrationFactory := options.IntegrationFactory
-	if integrationFactory == nil {
-		return fmt.Errorf("configure Integration factory: generated project composition did not supply an SDK Factory")
-	}
 	reportFactory := options.ReportFactory
-	if reportFactory == nil {
-		return fmt.Errorf("configure Report factory: generated project composition did not supply an SDK Factory")
-	}
 	for _, entry := range configSnapshot.StartupReport() {
 		zap.L().Info("Runtime configuration", zap.String("name", entry.Name), zap.String("source", entry.Source), zap.String("version", entry.Version), zap.Bool("redacted", entry.Redacted))
 	}
@@ -440,7 +391,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	}()
 	projectDatabaseConfig := cfg
 	projectDatabaseConfig.DatabaseMigrationDSN = ""
-	projectDatabase, err := dependencies.prepareDatabase(context.WithoutCancel(lifecycleCtx), projectDatabaseConfig)
+	projectDatabase, err := dependencies.prepareDatabase(context.WithoutCancel(lifecycleCtx), projectDatabaseConfig, runtimeSchemaCapabilities)
 	if err != nil {
 		return fmt.Errorf("prepare project database: %w", err)
 	}
@@ -453,9 +404,6 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	}), options.InitialWorkspaceCredentialDelivery, options.InstallationAdministratorCredentialDelivery)
 	if err != nil {
 		return err
-	}
-	if err := workspaceManager.SetProjectNavigationCatalog(projectNavigation); err != nil {
-		return fmt.Errorf("configure project navigation template: %w", err)
 	}
 	defer func() {
 		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(lifecycleCtx), cfg.HTTPShutdownTimeout)
@@ -485,16 +433,6 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			return fmt.Errorf("mount initialized Identity HTTP adapters: %w", err)
 		}
 	}
-	lifecycleState, lifecycleFound, lifecycleErr := provision.ReadLifecycle(cfg.ManifestPath)
-	if lifecycleErr != nil {
-		return fmt.Errorf("load Runtime lifecycle: %w", lifecycleErr)
-	}
-	if lifecycleFound && (lifecycleState.Status == provision.LifecycleStatusConfiguring || lifecycleState.Status == provision.LifecycleStatusValidating || lifecycleState.Status == provision.LifecycleStatusVerifying) {
-		cfg.AllowEmptyAuthoringManifest = true
-		for _, handler := range handlers {
-			handler.SetConfiguring(lifecycleState.BuilderTaskID)
-		}
-	}
 	closeRuntime := func(runtime runtimeProcess) error {
 		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(lifecycleCtx), cfg.HTTPShutdownTimeout)
 		defer cancel()
@@ -503,16 +441,9 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	activator := &runtimeActivator{
 		handlers: handlers, connectorGateway: connectorGateway,
 		close: closeRuntime,
-		start: func(manifest manifestmodel.ManifestSchema) (runtimeProcess, error) {
-			if err := validateDomainSDKTarget(options.Identity.DomainSDK, manifest.GeneratedDomainSDK); err != nil {
+		start: func() (runtimeProcess, error) {
+			if err := workspaceManager.Activate(context.WithoutCancel(lifecycleCtx), runtimeModel, projectExtensions.WorkspaceBootstrapParticipant(), projectExtensions.BusinessHandlerDescriptors()...); err != nil {
 				return nil, err
-			}
-			if err := workspaceManager.Activate(context.WithoutCancel(lifecycleCtx), manifest, projectExtensions.WorkspaceBootstrapParticipant(), projectExtensions.BusinessHandlerDescriptors()...); err != nil {
-				return nil, err
-			}
-			businessSeedReferences, err := workspaceManager.BusinessSeedReferenceCandidates()
-			if err != nil {
-				return nil, fmt.Errorf("prepare Runtime baseline reference candidates: %w", err)
 			}
 			identityBinding := workspaceManager.Binding()
 			if identityBinding == nil {
@@ -528,9 +459,6 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 				}
 			}
 			runtimeConfig := workspaceManager.Config()
-			if manifest.SourceBlueprintID == provision.DirectAuthoringSourceID && len(manifest.Objects) == 0 {
-				runtimeConfig.AllowEmptyAuthoringManifest = true
-			}
 			var analysisTableSource reportmodulehost.AnalysisTableSource
 			if options.AnalysisTableSourceFactory != nil {
 				analysisTableSource, err = options.AnalysisTableSourceFactory(runtimeConfig.RuntimeInstanceID)
@@ -553,14 +481,22 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 					return nil, fmt.Errorf("prepare Agent coding Runtime: %w", err)
 				}
 			}
+			developmentData := bootstrap.DevelopmentDataOptions{}
+			if options.DevelopmentData != nil {
+				developmentData = bootstrap.DevelopmentDataOptions{
+					Enabled: true, Seed: options.DevelopmentData.Seed,
+					RecordsPerObject: options.DevelopmentData.RecordsPerObject,
+				}
+			}
 			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, projectExtensions, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, notificationFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, agentFactory, integrationFactory, reportFactory, projectDatabase, bootstrap.ProjectStartupOptions{
-				ConversationCodeRuntime:         codeRuntime,
-				ConversationCodingRuntime:       codingRuntime,
-				BusinessSeedReferenceCandidates: businessSeedReferences,
-				ProjectNavigationCatalog:        projectNavigation,
-				AnalysisTableSource:             analysisTableSource,
-				BlobStore:                       options.BlobStore,
-				FileScanner:                     options.FileScanner,
+				ConversationCodeRuntime:   codeRuntime,
+				ConversationCodingRuntime: codingRuntime,
+				DevelopmentData:           developmentData,
+				ProjectModel:              runtimeModel,
+				AnalysisTableSource:       analysisTableSource,
+				BlobStore:                 options.BlobStore,
+				FileScanner:               options.FileScanner,
+				ProjectHTTP:               options.ProjectHTTP,
 			})
 			if runtime == nil {
 				return nil, errors.New("Runtime bootstrap returned no process")
@@ -589,39 +525,12 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			}
 			bound = true
 			runtime.StartWorkers(lifecycleCtx)
-			businessProfileProjection.Publish(manifest.Objects, manifest.IdentityProfileExtensions)
+			businessProfileProjection.Publish(runtimeModel.Objects, runtimeModel.IdentityProfiles)
 			started = true
 			return runtime, nil
 		},
 	}
-	provisionServer := provision.NewServerWithConfiguringLifecycle(cfg.ManifestPath, cfg.RuntimeVersion, provision.ContractIdentity{
-		ServiceKind: runtimehttp.BusinessRuntimeServiceKind, APIContractVersion: runtimehttp.BusinessRuntimeAPIContractVersion, APIContractHash: runtimehttp.BusinessRuntimeAPIContractHash(),
-	}, activator.Activate, func(state provision.LifecycleState) {
-		for _, handler := range handlers {
-			handler.SetConfiguring(state.BuilderTaskID)
-		}
-	}).UseProductBrand(cfg.EffectiveProductBrandName()).UseAbandonRuntime(activator.Abandon)
-	provisionRoutes := provisionServer.Routes()
-	for group, handler := range handlers {
-		if group == runtimehttp.ListenerRouteGroupPublic || group == runtimehttp.ListenerRouteGroupAll {
-			handler.SetProvision(provisionRoutes)
-		}
-	}
-	if _, err := dependencies.stat(cfg.ManifestPath); err == nil {
-		rawManifest, readErr := dependencies.readFile(cfg.ManifestPath)
-		if readErr != nil {
-			return fmt.Errorf("read Runtime manifest: %w", readErr)
-		}
-		manifest, decodeErr := manifestmodel.DecodeManifest(rawManifest)
-		if decodeErr != nil {
-			return fmt.Errorf("decode Runtime manifest: %w", decodeErr)
-		}
-		if err := activator.Activate(manifest); err != nil {
-			return err
-		}
-	} else if os.IsNotExist(err) {
-		zap.L().Info("starting domain Runtime in unauthenticated Provision mode", zap.String("manifest_path", cfg.ManifestPath))
-	} else {
+	if err := activator.Activate(); err != nil {
 		return err
 	}
 	defer activator.Close()
@@ -630,7 +539,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	for _, listener := range listenerDefinitions {
 		listenerHandler := http.Handler(identityRouters[listener.group])
 		if listener.group == runtimehttp.ListenerRouteGroupPublic || listener.group == runtimehttp.ListenerRouteGroupAll {
-			listenerHandler = frontendAssets.wrap(listenerHandler)
+			listenerHandler = frontendAssets.wrap(listenerHandler, options.ProjectHTTP != nil)
 		}
 		endpointCount := runtimehttp.ListenerRouteGroupEndpointCount(listener.group)
 		zap.L().Info("starting domain Runtime listener",
@@ -673,35 +582,4 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 		}
 		return nil
 	}
-}
-
-func validateDomainSDKTarget(compiled DomainSDKIdentity, target *manifestmodel.GeneratedDomainSDKIdentity) error {
-	if compiled.isZero() {
-		if target == nil {
-			return nil
-		}
-		return ErrDomainSDKContractRequired
-	}
-	if target == nil {
-		return ErrDomainSDKTargetRequired
-	}
-	fields := []struct {
-		name     string
-		compiled string
-		target   string
-	}{
-		{"contract_version", compiled.ContractVersion, target.ContractVersion},
-		{"contract_sha256", compiled.ContractSHA256, target.ContractSHA256},
-		{"generator_version", compiled.GeneratorVersion, target.GeneratorVersion},
-		{"metadata_snapshot_sha256", compiled.ApplicationSchemaSnapshotSHA256, target.ApplicationSchemaSnapshotSHA256},
-		{"runtimeext_contract_sha256", compiled.RuntimeextContractSHA256, target.RuntimeextContractSHA256},
-		{"build_constraint", compiled.BuildConstraint, target.BuildConstraint},
-		{"artifact_sha256", compiled.ArtifactSHA256, target.ArtifactSHA256},
-	}
-	for _, field := range fields {
-		if field.compiled != field.target {
-			return fmt.Errorf("%w: field=%s compiled=%q target=%q", ErrDomainSDKTargetMismatch, field.name, field.compiled, field.target)
-		}
-	}
-	return nil
 }

@@ -16,6 +16,7 @@ import (
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
+	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
@@ -24,7 +25,7 @@ import (
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
@@ -53,7 +54,8 @@ type runtimeConstructionInput struct {
 	fileScanProcessor    *uploadapplication.FileScanProcessor
 	blobStore            runtimefile.BlobStore
 	publicResources      *publicresourceapplication.Service
-	manifest             manifestmodel.ManifestSchema
+	projectModel         projectmodel.RuntimeModel
+	schemaCapabilities   persistence.RuntimeSchemaCapabilities
 	workspaceRolePolicy  workspaceprovision.WorkspaceBootstrapRolePolicyEvidence
 	recordRepository     recordrepository.RecordRepository
 	rateLimiter          ratelimit.Limiter
@@ -69,6 +71,7 @@ type runtimeConstructionInput struct {
 	notificationRelay    *notificationpublication.Relay
 	worker               workerplatform.Dependencies
 	projectExtensions    *runtimeext.ProjectExtensionRegistry
+	projectHTTP          runtimeengine.HTTPFactory
 	connectorProviders   *connector.Registry
 	releaseIdentity      runtimehttp.RuntimeReleaseIdentity
 	releaseCohort        *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
@@ -79,45 +82,48 @@ type runtimeConstructionInput struct {
 
 func constructRuntime(input runtimeConstructionInput) *Runtime {
 	return &Runtime{
-		cfg:                  input.config,
-		templateID:           input.templateID,
-		store:                input.store,
-		records:              input.applicationServices,
-		authorizationActions: input.authorizationActions,
-		moduleBindings:       input.moduleBindings.clone(),
-		identityBinding:      input.identityBinding,
-		identityProjection:   input.identityProjection,
-		identityPrincipals:   input.identityPrincipals,
-		principalCache:       input.principalCache,
-		integrationMode:      input.integrationMode,
-		integrationBinding:   input.integrationBinding,
-		integrationWorkers:   input.integrationWorkers,
-		dataExchangeBinding:  input.dataExchangeBinding,
-		lifecycleBinding:     input.lifecycleBinding,
-		fileScanProcessor:    input.fileScanProcessor,
-		blobStore:            input.blobStore,
-		publicResources:      input.publicResources,
-		manifest:             input.manifest,
-		workspaceRolePolicy:  input.workspaceRolePolicy,
-		recordRepo:           input.recordRepository,
-		rateLimiter:          input.rateLimiter,
-		notificationHTTP:     input.notificationHTTP,
-		notificationBinding:  input.notificationBinding,
-		monitoringBinding:    input.monitoringBinding,
-		schedulerBinding:     input.schedulerBinding,
-		agentBinding:         input.agentBinding,
-		auditBinding:         input.auditBinding,
-		metadataBinding:      input.metadataBinding,
-		reportBinding:        input.reportBinding,
-		notificationWorkers:  input.notificationWorkers,
-		notificationRelay:    input.notificationRelay,
-		worker:               workerplatform.NormalizeDependencies(input.worker),
-		projectExtensions:    input.projectExtensions,
-		connectorProviders:   input.connectorProviders,
-		releaseIdentity:      input.releaseIdentity,
-		releaseCohort:        input.releaseCohort,
-		releaseLease:         input.releaseLease,
-		releaseAdmission:     input.releaseAdmission,
-		releaseIntegrity:     input.releaseIntegrity,
+		cfg:                        input.config,
+		templateID:                 input.templateID,
+		store:                      input.store,
+		records:                    input.applicationServices,
+		authorizationActions:       input.authorizationActions,
+		moduleBindings:             input.moduleBindings.clone(),
+		identityBinding:            input.identityBinding,
+		identityProjection:         input.identityProjection,
+		identityPrincipals:         input.identityPrincipals,
+		principalCache:             input.principalCache,
+		integrationMode:            input.integrationMode,
+		integrationBinding:         input.integrationBinding,
+		integrationWorkers:         input.integrationWorkers,
+		dataExchangeBinding:        input.dataExchangeBinding,
+		lifecycleBinding:           input.lifecycleBinding,
+		fileScanProcessor:          input.fileScanProcessor,
+		blobStore:                  input.blobStore,
+		publicResources:            input.publicResources,
+		projectModel:               input.projectModel,
+		schemaCapabilities:         input.schemaCapabilities,
+		schemaCapabilitiesSelected: true,
+		workspaceRolePolicy:        input.workspaceRolePolicy,
+		recordRepo:                 input.recordRepository,
+		rateLimiter:                input.rateLimiter,
+		notificationHTTP:           input.notificationHTTP,
+		notificationBinding:        input.notificationBinding,
+		monitoringBinding:          input.monitoringBinding,
+		schedulerBinding:           input.schedulerBinding,
+		agentBinding:               input.agentBinding,
+		auditBinding:               input.auditBinding,
+		metadataBinding:            input.metadataBinding,
+		reportBinding:              input.reportBinding,
+		notificationWorkers:        input.notificationWorkers,
+		notificationRelay:          input.notificationRelay,
+		worker:                     workerplatform.NormalizeDependencies(input.worker),
+		projectExtensions:          input.projectExtensions,
+		projectHTTP:                input.projectHTTP,
+		connectorProviders:         input.connectorProviders,
+		releaseIdentity:            input.releaseIdentity,
+		releaseCohort:              input.releaseCohort,
+		releaseLease:               input.releaseLease,
+		releaseAdmission:           input.releaseAdmission,
+		releaseIntegrity:           input.releaseIntegrity,
 	}
 }

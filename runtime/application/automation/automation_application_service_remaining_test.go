@@ -19,52 +19,6 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
-func TestAutomationAuthoringFragmentRejectsUnknownPrincipal(t *testing.T) {
-	service := NewAutomationApplicationService(AutomationApplicationDependencies{})
-	if _, err := service.ValidateAutomationAuthoringFragment(
-		t.Context(),
-		"automation.instruction.emit_event",
-		map[string]any{},
-		principalmodel.Principal{},
-	); apperror.CodeOf(err) != "backend.workspace_scope_required" {
-		t.Fatalf("unknown principal error=%v", err)
-	}
-
-	readOnly := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true,
-		WorkspaceID: "workspace-1"},
-	}, accessfixture.Bundle{Permissions: []string{"runtime.automation.list_automation_rules"}},
-	)
-	if _, err := service.ValidateAutomationAuthoringFragment(
-		t.Context(), "automation.trigger", map[string]any{}, readOnly,
-	); apperror.CodeOf(err) != "auth.permission_denied" {
-		t.Fatalf("read-only principal error=%v", err)
-	}
-
-	manager := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true,
-		WorkspaceID: "workspace-1"},
-	}, accessfixture.Bundle{Permissions: []string{"runtime.automation.validate_automation_authoring_fragment"}},
-	)
-	if result, err := service.ValidateAutomationAuthoringFragment(
-		t.Context(),
-		"automation.trigger",
-		map[string]any{"phase": "after", "operation": "update"},
-		manager,
-	); err != nil || !result.Valid {
-		t.Fatalf("valid fragment result=%+v err=%v", result, err)
-	}
-	if result, err := service.ValidateAutomationAuthoringFragment(
-		t.Context(), "automation.instruction.emit_event", map[string]any{"key": "emit", "config": map[string]any{"event_type": "order.changed"}}, manager,
-	); err != nil || !result.Valid || result.Fragment["type"] != "emit_event" {
-		t.Fatalf("instruction type was not derived from capability route: result=%+v err=%v", result, err)
-	}
-	if result, err := service.ValidateAutomationAuthoringFragment(
-		t.Context(), "automation.unknown", map[string]any{}, manager,
-	); err != nil || result.Valid || len(result.Errors) != 1 {
-		t.Fatalf("invalid fragment result=%+v err=%v", result, err)
-	}
-
-}
-
 func TestAutomationRunBeforePersistsExecutionAndAfterRuleStoresResult(t *testing.T) {
 	beforeRule := automationmodel.AutomationRuleSchema{
 		Key: "before", ObjectKey: "order", Enabled: true,

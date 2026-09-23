@@ -76,7 +76,7 @@ func (s OperationsStore) RegisterOperationsCommand(ctx context.Context, receipt 
 	if workspaceID, err := principalmodel.NewWorkspaceID(receipt.Command.Scope.WorkspaceID); err == nil {
 		insertColumns := append(append([]string{}, columns[:1]...), columns[2:]...)
 		insertValues := append(append([]any{}, values[:1]...), values[2:]...)
-		builder, buildErr := s.store.SubjectEvidenceInsertBuilder(workspaceID.String(), "_operation_requests", insertColumns, insertValues)
+		builder, buildErr := s.store.SubjectEvidenceInsertBuilder(workspaceID.String(), "_operations", insertColumns, insertValues)
 		if buildErr != nil {
 			return operationsmodel.OperationsReceipt{}, "", buildErr
 		}
@@ -85,7 +85,7 @@ func (s OperationsStore) RegisterOperationsCommand(ctx context.Context, receipt 
 			return operationsmodel.OperationsReceipt{}, "", err
 		}
 	} else {
-		queryValue, args, err = query.NewInsertBuilder(s.store.SQLRenderer, "_operation_requests").Columns(columns...).Values(values...).Build()
+		queryValue, args, err = query.NewInsertBuilder(s.store.SQLRenderer, "_operations").Columns(columns...).Values(values...).Build()
 		if err != nil {
 			return operationsmodel.OperationsReceipt{}, "", err
 		}
@@ -183,7 +183,9 @@ func (s OperationsStore) SearchOperationsReceipts(ctx context.Context, scope ope
 	}
 	addExact("status", string(filter.Status), filter.Status != "")
 	addExact("failure_class", string(filter.FailureClass), filter.FailureClass != "")
+	addExact("owner", filter.Owner, filter.Owner != "")
 	addExact("kind", filter.Kind, filter.Kind != "")
+	addExact("parent_id", filter.ParentID, filter.ParentID != "")
 	addExact("resource_type", filter.ResourceType, filter.ResourceType != "")
 	addExact("resource_id", filter.ResourceID, filter.ResourceID != "")
 	addExact("requested_by", filter.RequestedBy, filter.RequestedBy != "")
@@ -195,7 +197,7 @@ func (s OperationsStore) SearchOperationsReceipts(ctx context.Context, scope ope
 		predicate = combineOperationsPredicate(predicate, query.LessThanOrEqual("created_at", filter.CreatedTo))
 	}
 	if filter.Search != "" {
-		searchColumns := []string{"id", "kind", "resource_type", "resource_id", "requested_by", "reason", "correlation", "error_code", "next_action"}
+		searchColumns := []string{"id", "owner", "kind", "parent_id", "resource_type", "resource_id", "requested_by", "reason", "correlation", "error_code", "next_action"}
 		terms := make([]query.Predicate, 0, len(searchColumns))
 		for _, column := range searchColumns {
 			terms = append(terms, query.LikeValue(query.Lower(query.Column(column)), "%"+strings.ToLower(filter.Search)+"%"))
@@ -268,7 +270,7 @@ func (s OperationsStore) SearchOperationsReceipts(ctx context.Context, scope ope
 }
 
 func (s OperationsStore) UpdateOperationsReceipt(ctx context.Context, receipt operationsmodel.OperationsReceipt, expected operationsmodel.OperationsStatus) (bool, error) {
-	resultJSON, relatedJSON, evidenceJSON := operationsReceiptJSON(receipt)
+	resultJSON, metadataJSON, relatedJSON, evidenceJSON := operationsReceiptJSON(receipt)
 	startedAt, finishedAt := "", ""
 	if receipt.Command.StartedAt != nil {
 		startedAt = receipt.Command.StartedAt.UTC().Format(time.RFC3339Nano)
@@ -281,13 +283,13 @@ func (s OperationsStore) UpdateOperationsReceipt(ctx context.Context, receipt op
 		return false, scopeErr
 	}
 	predicate := combineOperationsPredicate(scopePredicate, query.And(query.Equal("id", receipt.Command.ID), query.Equal("status", string(expected))))
-	builder := query.NewUpdateBuilder(s.store.SQLRenderer, "_operation_requests")
+	builder := query.NewUpdateBuilder(s.store.SQLRenderer, "_operations")
 	if workspaceID != "" {
-		builder = query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_operation_requests", workspaceID)
-		predicate = combineOperationsPredicate(predicate, s.store.SubjectEvidenceWriteAllowed(workspaceID, "_operation_requests", receipt.Command.ID))
+		builder = query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_operations", workspaceID)
+		predicate = combineOperationsPredicate(predicate, s.store.SubjectEvidenceWriteAllowed(workspaceID, "_operations", receipt.Command.ID))
 		predicate = combineOperationsPredicate(predicate, s.store.SubjectActorWriteAllowed(workspaceID, receipt.Command.RequestedBy))
 	}
-	queryValue, args, buildErr := builder.Set("status", string(receipt.Command.Status)).Set("started_at", startedAt).Set("finished_at", finishedAt).Set("updated_at", receipt.Command.UpdatedAt.UTC().Format(time.RFC3339Nano)).Set("result_json", resultJSON).Set("error_code", strings.TrimSpace(receipt.ErrorCode)).Set("failure_class", string(receipt.FailureClass)).Set("next_action", strings.TrimSpace(receipt.NextAction)).Set("related_ids_json", relatedJSON).Set("correlation", strings.TrimSpace(receipt.Correlation)).Set("evidence_json", evidenceJSON).Where(predicate).Build()
+	queryValue, args, buildErr := builder.Set("status", string(receipt.Command.Status)).Set("started_at", startedAt).Set("finished_at", finishedAt).Set("updated_at", receipt.Command.UpdatedAt.UTC().Format(time.RFC3339Nano)).Set("result_json", resultJSON).Set("metadata_json", metadataJSON).Set("error_code", strings.TrimSpace(receipt.ErrorCode)).Set("failure_class", string(receipt.FailureClass)).Set("next_action", strings.TrimSpace(receipt.NextAction)).Set("related_ids_json", relatedJSON).Set("correlation", strings.TrimSpace(receipt.Correlation)).Set("evidence_json", evidenceJSON).Set("lease_owner", strings.TrimSpace(receipt.LeaseOwner)).Set("lease_expires_at", strings.TrimSpace(receipt.LeaseExpires)).Set("fencing_token", receipt.FencingToken).Set("expires_at", strings.TrimSpace(receipt.ExpiresAt)).Where(predicate).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}
@@ -351,9 +353,9 @@ func (s OperationsStore) scopePredicate(scope operationsmodel.OperationsScope, p
 
 func operationsSelectBuilder(store *database.RuntimeStore, workspaceID string) *query.SelectBuilder {
 	if workspaceID != "" {
-		return query.NewWorkspaceSelectBuilder(store.SQLRenderer, "_operation_requests", workspaceID)
+		return query.NewWorkspaceSelectBuilder(store.SQLRenderer, "_operations", workspaceID)
 	}
-	return query.NewSelectBuilder(store.SQLRenderer, "_operation_requests")
+	return query.NewSelectBuilder(store.SQLRenderer, "_operations")
 }
 
 func combineOperationsPredicate(left, right query.Predicate) query.Predicate {
@@ -367,7 +369,7 @@ func combineOperationsPredicate(left, right query.Predicate) query.Predicate {
 }
 
 func operationsReceiptColumns() []string {
-	return []string{"id", "workspace_id", "system_purpose", "kind", "action_key", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "created_at", "started_at", "finished_at", "updated_at"}
+	return []string{"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
 }
 
 func operationsQuotedColumns(store *database.RuntimeStore, columns []string) string {
@@ -379,33 +381,41 @@ func operationsQuotedColumns(store *database.RuntimeStore, columns []string) str
 }
 
 func operationsReceiptValues(receipt operationsmodel.OperationsReceipt) []any {
-	resultJSON, relatedJSON, evidenceJSON := operationsReceiptJSON(receipt)
+	resultJSON, metadataJSON, relatedJSON, evidenceJSON := operationsReceiptJSON(receipt)
 	command := receipt.Command
-	return []any{command.ID, command.Scope.WorkspaceID, command.Scope.SystemPurpose, command.Kind, command.ActionKey, command.Scope.ResourceType, command.Scope.ResourceID, command.IdempotencyKey, command.RequestFingerprint, command.RequestedBy, command.Reason, command.Reference, string(command.Status), receipt.StatusURL, resultJSON, receipt.ErrorCode, string(receipt.FailureClass), receipt.NextAction, relatedJSON, receipt.Correlation, evidenceJSON, command.CreatedAt.UTC().Format(time.RFC3339Nano), "", "", command.UpdatedAt.UTC().Format(time.RFC3339Nano)}
+	return []any{command.ID, command.Scope.WorkspaceID, command.Scope.SystemPurpose, command.Owner, command.Kind, command.ActionKey, command.ParentID, command.Scope.ResourceType, command.Scope.ResourceID, command.IdempotencyKey, command.RequestFingerprint, command.RequestedBy, command.Reason, command.Reference, string(command.Status), receipt.StatusURL, resultJSON, metadataJSON, receipt.ErrorCode, string(receipt.FailureClass), receipt.NextAction, relatedJSON, receipt.Correlation, evidenceJSON, receipt.LeaseOwner, receipt.LeaseExpires, receipt.FencingToken, receipt.ExpiresAt, command.CreatedAt.UTC().Format(time.RFC3339Nano), "", "", command.UpdatedAt.UTC().Format(time.RFC3339Nano)}
 }
 
-func operationsReceiptJSON(receipt operationsmodel.OperationsReceipt) (string, string, string) {
+func operationsReceiptJSON(receipt operationsmodel.OperationsReceipt) (string, string, string, string) {
 	resultJSON := string(receipt.Result)
 	if resultJSON == "" {
 		resultJSON = "{}"
 	}
+	metadataJSON := string(receipt.Metadata)
+	if metadataJSON == "" {
+		metadataJSON = "{}"
+	}
 	related, _ := json.Marshal(receipt.RelatedIDs)
 	evidence, _ := json.Marshal(receipt.Evidence)
-	return resultJSON, string(related), string(evidence)
+	return resultJSON, metadataJSON, string(related), string(evidence)
 }
 
 type operationsScanner interface{ Scan(...any) error }
 
 func operationsScanReceipt(scanner operationsScanner) (operationsmodel.OperationsReceipt, error) {
 	var receipt operationsmodel.OperationsReceipt
-	var status, failureClass, resultJSON, relatedJSON, evidenceJSON, createdAt, startedAt, finishedAt, updatedAt string
+	var status, failureClass, resultJSON, metadataJSON, relatedJSON, evidenceJSON, createdAt, startedAt, finishedAt, updatedAt string
 	command := &receipt.Command
-	err := scanner.Scan(&command.ID, &command.Scope.WorkspaceID, &command.Scope.SystemPurpose, &command.Kind, &command.ActionKey, &command.Scope.ResourceType, &command.Scope.ResourceID, &command.IdempotencyKey, &command.RequestFingerprint, &command.RequestedBy, &command.Reason, &command.Reference, &status, &receipt.StatusURL, &resultJSON, &receipt.ErrorCode, &failureClass, &receipt.NextAction, &relatedJSON, &receipt.Correlation, &evidenceJSON, &createdAt, &startedAt, &finishedAt, &updatedAt)
+	err := scanner.Scan(&command.ID, &command.Scope.WorkspaceID, &command.Scope.SystemPurpose, &command.Owner, &command.Kind, &command.ActionKey, &command.ParentID, &command.Scope.ResourceType, &command.Scope.ResourceID, &command.IdempotencyKey, &command.RequestFingerprint, &command.RequestedBy, &command.Reason, &command.Reference, &status, &receipt.StatusURL, &resultJSON, &metadataJSON, &receipt.ErrorCode, &failureClass, &receipt.NextAction, &relatedJSON, &receipt.Correlation, &evidenceJSON, &receipt.LeaseOwner, &receipt.LeaseExpires, &receipt.FencingToken, &receipt.ExpiresAt, &createdAt, &startedAt, &finishedAt, &updatedAt)
 	if err != nil {
 		return receipt, err
 	}
 	command.Status, receipt.FailureClass = operationsmodel.OperationsStatus(status), operationsmodel.OperationsFailureClass(failureClass)
 	receipt.Result = json.RawMessage(resultJSON)
+	receipt.Metadata = json.RawMessage(metadataJSON)
+	if !json.Valid(receipt.Metadata) {
+		return receipt, fmt.Errorf("operations receipt metadata is invalid")
+	}
 	if err := json.Unmarshal([]byte(relatedJSON), &receipt.RelatedIDs); err != nil {
 		return receipt, err
 	}

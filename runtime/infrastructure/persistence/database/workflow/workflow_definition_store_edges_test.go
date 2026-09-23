@@ -51,7 +51,7 @@ func TestWorkflowDefinitionMissingRowsCorruptScansAndWriteFailures(t *testing.T)
 		t.Fatal("duplicate version inserted")
 	}
 
-	if _, err := store.DB().ExecContext(t.Context(), `UPDATE _workflow_definitions SET enabled = 'invalid' WHERE id = ?`, definition.ID); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `UPDATE _definitions SET payload_json = 'not-json' WHERE owner = 'workflow' AND kind = 'workflow' AND definition_key = ?`, definition.Key); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := repository.GetDefinitionByKey(t.Context(), definition.Key); err == nil {
@@ -60,7 +60,7 @@ func TestWorkflowDefinitionMissingRowsCorruptScansAndWriteFailures(t *testing.T)
 	if _, err := repository.ListDefinitions(t.Context()); err == nil {
 		t.Fatal("corrupt definition listed")
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `UPDATE _workflow_definition_versions SET version_no = 'invalid' WHERE id = ?`, draft.ID); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `UPDATE _definitions SET payload_json = 'not-json' WHERE owner = 'workflow' AND kind = 'workflow' AND definition_key = ?`, workflowVersionResourceKey(draft.ID)); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := repository.GetVersion(t.Context(), draft.ID); err == nil {
@@ -125,21 +125,36 @@ func TestWorkflowDefinitionDraftAndPublishSecondWriteFailuresRollback(t *testing
 	})
 	t.Run("delete draft identity update", func(t *testing.T) {
 		store, repository, definition, draft := workflowDefinitionEdgeFixture(t)
-		if _, err := store.DB().ExecContext(t.Context(), `DROP TABLE _workflow_definitions`); err != nil {
+		if _, err := store.DB().ExecContext(t.Context(), `CREATE TRIGGER fail_workflow_version_disable BEFORE UPDATE ON _definitions WHEN OLD.owner = 'workflow' AND OLD.kind = 'workflow' AND OLD.definition_key = 'version:version-edge' BEGIN SELECT RAISE(ABORT, 'forced version update failure'); END`); err != nil {
 			t.Fatal(err)
 		}
 		if deleted, err := repository.DeleteDraft(t.Context(), definition.ID, draft.ID); err == nil || deleted {
 			t.Fatalf("deleted=%v error=%v", deleted, err)
 		}
+		storedDefinition, found, err := repository.GetDefinitionByKey(t.Context(), definition.Key)
+		if err != nil || !found || storedDefinition.CurrentDraftVersionID != draft.ID {
+			t.Fatalf("definition rollback=%#v found=%v error=%v", storedDefinition, found, err)
+		}
+		if _, found, err := repository.GetVersion(t.Context(), draft.ID); err != nil || !found {
+			t.Fatalf("version rollback found=%v error=%v", found, err)
+		}
 	})
 	t.Run("publish identity update", func(t *testing.T) {
 		store, repository, definition, draft := workflowDefinitionEdgeFixture(t)
 		draft.ContentHash, draft.PublishedBy, draft.PublishedAt = "hash", "admin", "v2"
-		if _, err := store.DB().ExecContext(t.Context(), `DROP TABLE _workflow_definitions`); err != nil {
+		if _, err := store.DB().ExecContext(t.Context(), `CREATE TRIGGER fail_workflow_definition_update BEFORE UPDATE ON _definitions WHEN OLD.owner = 'workflow' AND OLD.kind = 'workflow' AND OLD.definition_key = 'edge' BEGIN SELECT RAISE(ABORT, 'forced definition update failure'); END`); err != nil {
 			t.Fatal(err)
 		}
 		if published, err := repository.PublishDraft(t.Context(), definition, draft, "publish"); err == nil || published {
 			t.Fatalf("published=%v error=%v", published, err)
+		}
+		storedVersion, found, err := repository.GetVersion(t.Context(), draft.ID)
+		if err != nil || !found || storedVersion.Status != workflowmodel.WorkflowVersionDraft {
+			t.Fatalf("version rollback=%#v found=%v error=%v", storedVersion, found, err)
+		}
+		storedDefinition, found, err := repository.GetDefinitionByKey(t.Context(), definition.Key)
+		if err != nil || !found || storedDefinition.CurrentDraftVersionID != draft.ID || storedDefinition.CurrentPublishedVersionID != "" {
+			t.Fatalf("definition rollback=%#v found=%v error=%v", storedDefinition, found, err)
 		}
 	})
 	t.Run("stale publish", func(t *testing.T) {

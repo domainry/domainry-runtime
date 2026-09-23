@@ -119,7 +119,7 @@ func actionBelongsToObject(definition actioncontract.ActionDefinition, objectKey
 func (s *HTTPRouter) withActionAuthorization(routes *http.ServeMux, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		policy := routePolicyFor(routes, r)
-		if r.Method == http.MethodOptions || policy.fallback {
+		if r.Method == http.MethodOptions || policy.fallback || (s.projectHTTP != nil && strings.HasPrefix(policy.path, "/api/")) {
 			next.ServeHTTP(w, r)
 			return
 		}

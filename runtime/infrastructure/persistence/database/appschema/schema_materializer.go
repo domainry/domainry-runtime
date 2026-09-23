@@ -11,108 +11,11 @@ import (
 
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	appschemastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema/storage"
 )
-
-// metadataColumnPlan is the shared column inspection used by MigrationPlan
-// and UpgradePlan: it compares one declared field against the physical
-// column types of an existing table.
-type metadataColumnPlan struct {
-	field       definitionmodel.FieldSchema
-	column      string
-	operation   string
-	currentType string
-	targetType  string
-	mismatch    bool
-}
-
-const (
-	metadataColumnAddOperation          = "add_column"
-	metadataColumnExactDecimalOperation = "alter_column_exact_decimal"
-)
-
-func (r ApplicationSchemaStore) planObjectColumns(object definitionmodel.ObjectSchema, existingTypes map[string]string) []metadataColumnPlan {
-	plans := []metadataColumnPlan{}
-	for _, field := range object.Fields {
-		column := strings.TrimSpace(field.Key)
-		if column == "" || strings.TrimSpace(field.DisabledAt) != "" {
-			continue
-		}
-		targetType := r.metadataSQLTypeForField(field)
-		currentType, exists := existingTypes[column]
-		if !exists {
-			plans = append(plans, metadataColumnPlan{field: field, column: column, operation: metadataColumnAddOperation, targetType: targetType})
-			continue
-		}
-		if !metadataRequiresExactPhysicalType(field) || metadataColumnTypeMatches(currentType, targetType) {
-			continue
-		}
-		if r.storage.ExactDecimalUpgradeAllowed(currentType, field) {
-			plans = append(plans, metadataColumnPlan{field: field, column: column, operation: metadataColumnExactDecimalOperation, currentType: currentType, targetType: targetType})
-			continue
-		}
-		plans = append(plans, metadataColumnPlan{field: field, column: column, currentType: currentType, targetType: targetType, mismatch: true})
-	}
-	return plans
-}
-
-func (plan metadataColumnPlan) migrationStep(object definitionmodel.ObjectSchema, table string) appschemamodel.ApplicationSchemaMigrationStep {
-	switch plan.operation {
-	case metadataColumnExactDecimalOperation:
-		return appschemamodel.ApplicationSchemaMigrationStep{ObjectKey: object.Key, Table: table, Operation: metadataColumnExactDecimalOperation, ColumnKey: plan.column, ColumnType: plan.targetType, Reversible: false, Description: "backend.metadata.migration.exactDecimal"}
-	default:
-		return appschemamodel.ApplicationSchemaMigrationStep{ObjectKey: object.Key, Table: table, Operation: metadataColumnAddOperation, ColumnKey: plan.column, ColumnType: plan.targetType, Description: "backend.metadata.migration.addColumn"}
-	}
-}
-
-func metadataCreateTableStep(object definitionmodel.ObjectSchema, table string) appschemamodel.ApplicationSchemaMigrationStep {
-	return appschemamodel.ApplicationSchemaMigrationStep{ObjectKey: object.Key, Table: table, Operation: "create_table", Description: "backend.metadata.migration.createTable"}
-}
-
-func (r ApplicationSchemaStore) MigrationPlan(ctx context.Context, scope principalmodel.SystemScope, manifest manifestmodel.ManifestSchema) ([]appschemamodel.ApplicationSchemaMigrationStep, error) {
-	if err := requireMetadataInstallationScope(scope); err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	steps := []appschemamodel.ApplicationSchemaMigrationStep{}
-	for _, object := range manifest.Objects {
-		table := strings.TrimSpace(object.Key)
-		if table == "" {
-			continue
-		}
-		existingTypes, err := r.tableColumnTypes(ctx, table)
-		if err != nil {
-			if contextErr := ctx.Err(); contextErr != nil {
-				return nil, contextErr
-			}
-			steps = append(steps, metadataCreateTableStep(object, table))
-			continue
-		}
-		for _, plan := range r.planObjectColumns(object, existingTypes) {
-			if plan.mismatch {
-				return nil, metadataPhysicalSchemaMismatch(object.Key, plan.column, plan.targetType, plan.currentType)
-			}
-			steps = append(steps, plan.migrationStep(object, table))
-		}
-	}
-	return steps, nil
-}
-
-// SyncManifest materializes the manifest's objects. Receipts are keyed by the
-// manifest version; callers that know the previous version and backup use
-// ApplyUpgrade instead.
-func (r ApplicationSchemaStore) SyncManifest(ctx context.Context, scope principalmodel.SystemScope, manifest manifestmodel.ManifestSchema) error {
-	if err := requireMetadataInstallationScope(scope); err != nil {
-		return err
-	}
-	return r.syncManifestForUpgrade(ctx, manifest, metadataUpgradeExecution{toVersion: strings.TrimSpace(manifest.Version)})
-}
 
 func (r ApplicationSchemaStore) loadPhysicalSchemaSnapshot(ctx context.Context, objects []definitionmodel.ObjectSchema) (*appschemastorage.PhysicalSchemaSnapshot, error) {
 	inspector, ok := r.storage.(appschemastorage.BulkPhysicalSchemaInspector)
@@ -135,55 +38,11 @@ func (r ApplicationSchemaStore) loadPhysicalSchemaSnapshot(ctx context.Context, 
 	return &snapshot, nil
 }
 
-func (r ApplicationSchemaStore) syncManifestForUpgrade(ctx context.Context, manifest manifestmodel.ManifestSchema, execution metadataUpgradeExecution) error {
-	hasObjects := false
-	for _, object := range manifest.Objects {
-		if strings.TrimSpace(object.Key) != "" {
-			hasObjects = true
-			break
-		}
-	}
-	if !hasObjects {
-		return nil
-	}
-	if execution.receiptStatuses == nil {
-		statuses, err := r.loadUpgradeReceiptStatuses(ctx, execution.toVersion)
-		if err != nil {
-			return err
-		}
-		execution.receiptStatuses = statuses
-	}
-	physicalSchema, err := r.loadPhysicalSchemaSnapshot(ctx, manifest.Objects)
-	if err != nil {
-		return err
-	}
-	if err := r.migrateExactDecimalStorage(ctx, manifest, physicalSchema); err != nil {
-		return err
-	}
-	for _, object := range manifest.Objects {
-		if strings.TrimSpace(object.Key) == "" {
-			continue
-		}
-		var existingTypes map[string]string
-		var indexes map[string]bool
-		if physicalSchema != nil {
-			existingTypes = physicalSchema.ColumnsByTable[strings.TrimSpace(object.Key)]
-			if len(existingTypes) > 0 {
-				indexes = physicalSchema.IndexesByTable[strings.TrimSpace(object.Key)]
-			}
-		}
-		if err := r.ensureObjectStorageWithPhysicalSchema(ctx, object, execution, existingTypes, indexes); err != nil {
-			return err
-		}
-	}
-	return nil
+func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object definitionmodel.ObjectSchema) error {
+	return r.ensureObjectStorageWithPhysicalSchema(ctx, object, nil, nil)
 }
 
-func (r ApplicationSchemaStore) ensureObjectStorage(ctx context.Context, object definitionmodel.ObjectSchema, execution metadataUpgradeExecution) error {
-	return r.ensureObjectStorageWithPhysicalSchema(ctx, object, execution, nil, nil)
-}
-
-func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx context.Context, object definitionmodel.ObjectSchema, execution metadataUpgradeExecution, existingTypes map[string]string, indexes map[string]bool) error {
+func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx context.Context, object definitionmodel.ObjectSchema, existingTypes map[string]string, indexes map[string]bool) error {
 	schemaDB := r.schemaDatabase()
 	constraintIndexed := metadataConstraintIndexedFields(object)
 	// Core identity/time columns may be declared by metadata so callers can
@@ -295,9 +154,6 @@ func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx contex
 					existingTypes = map[string]string{}
 				}
 				existingTypes[addition.Name] = addition.Type
-				if err := r.writeUpgradeReceipt(ctx, execution, object.Key, addition.Name, metadataUpgradeStepKey(metadataColumnAddOperation, object.Key, addition.Name, execution.toVersion), metadataUpgradeReceiptCompleted, ""); err != nil {
-					return err
-				}
 			}
 		}
 	}
@@ -342,26 +198,14 @@ func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx contex
 				return fmt.Errorf("add column %s.%s: %w", object.Key, fieldKey, err)
 			}
 			existing[fieldKey] = true
-			if err := r.writeUpgradeReceipt(ctx, execution, object.Key, fieldKey, metadataUpgradeStepKey(metadataColumnAddOperation, object.Key, fieldKey, execution.toVersion), metadataUpgradeReceiptCompleted, ""); err != nil {
-				return err
-			}
 		}
 		if backfillValue := field.FieldBackfillValue(); backfillValue != nil {
-			// The backfill is receipt-driven rather than tied to the ADD COLUMN
-			// above: a crash between the two statements leaves no completed
-			// backfill receipt, so the next start repeats the idempotent UPDATE.
-			stepKey := metadataUpgradeStepKey("backfill", object.Key, fieldKey, execution.toVersion)
-			if err := r.runReceiptedUpgradeStep(ctx, execution, object.Key, fieldKey, stepKey, func() error {
-				backfill, args, buildErr := query.NewUpdateBuilder(r.store.SQLRenderer, object.Key).Set(fieldKey, r.metadataDBFieldValue(field, backfillValue)).Where(query.IsNull(fieldKey)).Build()
-				if buildErr != nil {
-					return fmt.Errorf("build backfill for %s.%s: %w", object.Key, fieldKey, buildErr)
-				}
-				if _, err := schemaDB.ExecContext(ctx, backfill, args...); err != nil {
-					return fmt.Errorf("backfill column %s.%s: %w", object.Key, fieldKey, err)
-				}
-				return nil
-			}); err != nil {
-				return err
+			backfill, args, buildErr := query.NewUpdateBuilder(r.store.SQLRenderer, object.Key).Set(fieldKey, r.metadataDBFieldValue(field, backfillValue)).Where(query.IsNull(fieldKey)).Build()
+			if buildErr != nil {
+				return fmt.Errorf("build default for %s.%s: %w", object.Key, fieldKey, buildErr)
+			}
+			if _, err := schemaDB.ExecContext(ctx, backfill, args...); err != nil {
+				return fmt.Errorf("initialize default for %s.%s: %w", object.Key, fieldKey, err)
 			}
 		}
 		indexName := r.metadataFieldIndexName(object.Key, fieldKey, false)

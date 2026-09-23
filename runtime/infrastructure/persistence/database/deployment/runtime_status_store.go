@@ -48,12 +48,17 @@ func (r RuntimeStatusStore) idempotencyOperationalStatus(ctx context.Context, wo
 	}
 	nowText := now.UTC().Format(time.RFC3339Nano)
 	for _, spec := range idempotencyReceiptTables {
+		if !r.store.RuntimeSchemaCapabilities().IncludesTable(spec.table) {
+			continue
+		}
 		builder := query.NewSelectBuilder(r.store.SQLRenderer, spec.table).
 			Projections(query.Project(query.Column("status")), query.Project(query.CountAll())).
 			GroupBy(query.Column("status"))
+		predicate := idempotencyReceiptOwnerPredicate(spec)
 		if workspaceID != "" {
-			builder.Where(query.Equal("workspace_id", workspaceID))
+			predicate = query.And(predicate, query.Equal("workspace_id", workspaceID))
 		}
+		builder.Where(predicate)
 		queryValue, args, buildErr := builder.Build()
 		if buildErr != nil {
 			return status, fmt.Errorf("build %s idempotency backlog summary: %w", spec.owner, buildErr)
@@ -78,7 +83,7 @@ func (r RuntimeStatusStore) idempotencyOperationalStatus(ctx context.Context, wo
 		}
 		_ = rows.Close()
 
-		expiredPredicate := query.And(query.Equal("status", string(idempotency.StatusProcessing)), query.NotEqual("lease_expires_at", ""), query.LessThanOrEqual("lease_expires_at", nowText))
+		expiredPredicate := query.And(idempotencyReceiptOwnerPredicate(spec), query.Equal("status", string(idempotency.StatusProcessing)), query.NotEqual("lease_expires_at", ""), query.LessThanOrEqual("lease_expires_at", nowText))
 		if workspaceID != "" {
 			expiredPredicate = query.And(expiredPredicate, query.Equal("workspace_id", workspaceID))
 		}
@@ -112,7 +117,7 @@ func (r RuntimeStatusStore) idempotencyOperationalStatus(ctx context.Context, wo
 	status.LeaseLost = metricTotal(idempotency.OutcomeLeaseLost)
 	status.DuplicateSideEffects = metricTotal(idempotency.OutcomeDuplicateSideEffect)
 
-	cleanupQuery, cleanupArgs, buildErr := query.NewSelectBuilder(r.store.SQLRenderer, "_idempotency_cleanup_leases").Columns("lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error").Where(query.Equal("id", idempotencyCleanupLeaseID)).Build()
+	cleanupQuery, cleanupArgs, buildErr := query.NewSelectBuilder(r.store.SQLRenderer, "_worker_scopes").Columns("lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "checkpoint", "last_error").Where(cleanupScopePredicate()).Build()
 	if buildErr != nil {
 		return status, fmt.Errorf("build idempotency cleanup status: %w", buildErr)
 	}
@@ -139,15 +144,15 @@ func (r RuntimeStatusStore) idempotencyOperationalStatus(ctx context.Context, wo
 }
 
 type idempotencyReceiptTable struct {
-	owner, table, scopeColumn, targetColumn string
+	owner, table, scopeColumn, targetColumn, keyColumn, rowOwner string
 }
 
 var idempotencyReceiptTables = []idempotencyReceiptTable{
-	{owner: "dispatch", table: "_dispatch_callback_receipts", scopeColumn: "runtime_id", targetColumn: "path"},
-	{owner: "record", table: "_record_mutation_executions", scopeColumn: "operation"},
-	{owner: "action", table: "_action_executions", targetColumn: "record_id"},
-	{owner: "workflow", table: "_workflow_execution_receipts"},
-	{owner: "report", table: "_report_export_prepare_receipts", scopeColumn: "use_case", targetColumn: "audit_id"},
+	{owner: "dispatch", table: "_operations", scopeColumn: "kind", targetColumn: "resource_id", rowOwner: "dispatch"},
+	{owner: "record", table: "_operations", scopeColumn: "action_key", targetColumn: "resource_id", keyColumn: "reference", rowOwner: "record"},
+	{owner: "action", table: "_operations", scopeColumn: "action_key", targetColumn: "resource_id", keyColumn: "reference", rowOwner: "action"},
+	{owner: "workflow", table: "_operations", scopeColumn: "action_key", targetColumn: "resource_id", keyColumn: "reference", rowOwner: "workflow"},
+	{owner: "report", table: "_operations", scopeColumn: "action_key", targetColumn: "reference", rowOwner: "report"},
 }
 
 func (r RuntimeStatusStore) ListIdempotencyReceipts(ctx context.Context, workspaceID, status string, limit int) ([]idempotency.ReceiptSummary, error) {
@@ -158,6 +163,9 @@ func (r RuntimeStatusStore) ListIdempotencyReceipts(ctx context.Context, workspa
 	workspaceID, status = workspace.String(), strings.TrimSpace(status)
 	values := []idempotency.ReceiptSummary{}
 	for _, spec := range idempotencyReceiptTables {
+		if !r.store.RuntimeSchemaCapabilities().IncludesTable(spec.table) {
+			continue
+		}
 		scopeExpression := query.Value("")
 		if spec.scopeColumn != "" {
 			scopeExpression = query.Column(spec.scopeColumn)
@@ -166,11 +174,17 @@ func (r RuntimeStatusStore) ListIdempotencyReceipts(ctx context.Context, workspa
 		if spec.targetColumn != "" {
 			targetExpression = query.Column(spec.targetColumn)
 		}
-		builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, spec.table, workspaceID).
-			Projections(query.Project(query.Column("id")), query.Project(query.Column("workspace_id")), query.Project(scopeExpression), query.Project(targetExpression), query.Project(query.Column("idempotency_key")), query.Project(query.Column("request_fingerprint")), query.Project(query.Column("status")), query.Project(query.Column("fencing_token")), query.Project(query.Column("updated_at")), query.Project(query.Column("expires_at")))
-		if status != "" {
-			builder.Where(query.Equal("status", status))
+		keyColumn := spec.keyColumn
+		if keyColumn == "" {
+			keyColumn = "idempotency_key"
 		}
+		builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, spec.table, workspaceID).
+			Projections(query.Project(query.Column("id")), query.Project(query.Column("workspace_id")), query.Project(scopeExpression), query.Project(targetExpression), query.Project(query.Column(keyColumn)), query.Project(query.Column("request_fingerprint")), query.Project(query.Column("status")), query.Project(query.Column("fencing_token")), query.Project(query.Column("updated_at")), query.Project(query.Column("expires_at")))
+		predicate := idempotencyReceiptOwnerPredicate(spec)
+		if status != "" {
+			predicate = query.And(predicate, query.Equal("status", status))
+		}
+		builder.Where(predicate)
 		queryValue, args, buildErr := builder.OrderBy(query.Descending("updated_at"), query.Descending("id")).Limit(limit).Build()
 		if buildErr != nil {
 			return nil, fmt.Errorf("build %s idempotency receipt list: %w", spec.owner, buildErr)
@@ -239,17 +253,17 @@ func (r RuntimeStatusStore) transitionIdempotencyReceipt(ctx context.Context, wo
 	if err != nil {
 		return false, err
 	}
-	var table string
+	var selected idempotencyReceiptTable
 	for _, spec := range idempotencyReceiptTables {
 		if spec.owner == strings.TrimSpace(owner) {
-			table = spec.table
+			selected = spec
 			break
 		}
 	}
-	if table == "" || strings.TrimSpace(id) == "" {
+	if selected.table == "" || !r.store.RuntimeSchemaCapabilities().IncludesTable(selected.table) || strings.TrimSpace(id) == "" {
 		return false, nil
 	}
-	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, table, workspace.String()).Set("status", toStatus).Set("lease_owner", "").Set("lease_expires_at", "").SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", time.Now().UTC().Format(time.RFC3339Nano)).Where(query.And(query.Equal("id", strings.TrimSpace(id)), query.Equal("status", fromStatus))).Build()
+	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, selected.table, workspace.String()).Set("status", toStatus).Set("lease_owner", "").Set("lease_expires_at", "").SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", time.Now().UTC().Format(time.RFC3339Nano)).Where(query.And(idempotencyReceiptOwnerPredicate(selected), query.Equal("id", strings.TrimSpace(id)), query.Equal("status", fromStatus))).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}
@@ -259,6 +273,13 @@ func (r RuntimeStatusStore) transitionIdempotencyReceipt(ctx context.Context, wo
 	}
 	changed, err := result.RowsAffected()
 	return changed == 1, err
+}
+
+func idempotencyReceiptOwnerPredicate(spec idempotencyReceiptTable) query.Predicate {
+	if spec.rowOwner == "" {
+		return query.AlwaysTrue()
+	}
+	return query.Equal("owner", spec.rowOwner)
 }
 
 func (r RuntimeStatusStore) Ping(ctx context.Context) error {

@@ -55,7 +55,6 @@ func TestReportModuleOwnsProductHTTPAndApplicationBoundary(t *testing.T) {
 		}
 	}
 	for _, relative := range []string{
-		"transport/http/openapi",
 		"domain/endpoint/model",
 		"domain/capability/contract/capability_runtime_api_contract.go",
 	} {

@@ -41,33 +41,8 @@ func (schemaHelperStore) RuntimeRenderer() ormdialect.Renderer {
 }
 
 func TestSchemaHelperValueShapes(t *testing.T) {
-	for _, test := range []struct {
-		input any
-		want  string
-	}{
-		{input: nil, want: ""},
-		{input: []byte("x"), want: "x"},
-		{input: "value", want: "value"},
-		{input: 42, want: "42"},
-	} {
-		if got := idempotencyMigrationString(test.input); got != test.want {
-			t.Fatalf("migration string(%#v)=%q want %q", test.input, got, test.want)
-		}
-	}
-	if !idempotencyMigrationStringsEqual(nil, nil) || !idempotencyMigrationStringsEqual([]string{"a", "b"}, []string{"a", "b"}) {
-		t.Fatal("equal migration strings rejected")
-	}
-	if idempotencyMigrationStringsEqual([]string{"a"}, []string{"a", "b"}) || idempotencyMigrationStringsEqual([]string{"a"}, []string{"b"}) {
-		t.Fatal("different migration strings accepted")
-	}
-	if !idempotencyMigrationContains([]string{"a", "b"}, "b") || idempotencyMigrationContains([]string{"a"}, "b") {
-		t.Fatal("migration contains mismatch")
-	}
 	if got := quotedColumnDefinitions(schemaHelperStore{}, []string{"id", "name TEXT NOT NULL"}); got != `"id", "name" normalized:TEXT NOT NULL` {
 		t.Fatalf("quoted definitions=%q", got)
-	}
-	if err := prepareIdempotencyReceiptMigrations(t.Context(), schemaHelperStore{}); err != nil {
-		t.Fatalf("empty migration specs=%v", err)
 	}
 }
 

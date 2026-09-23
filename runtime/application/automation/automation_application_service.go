@@ -36,7 +36,6 @@ import (
 	apperror "github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	automationbusiness "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
-	automationvalidation "github.com/domainry/domainry-runtime/runtime/domain/automation/validation"
 	capability "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 )
 
@@ -273,41 +272,13 @@ func (s *AutomationApplicationService) AutomationRule(ctx context.Context, ruleK
 	return s.management.Rule(ctx, ruleKey, principal)
 }
 
-func (s *AutomationApplicationService) ValidateAutomationRule(ctx context.Context, rule automationmodel.AutomationRuleSchema, principal principalmodel.Principal) (automationvalidation.AutomationValidationResult, error) {
-	return s.management.ValidateRule(ctx, rule, principal)
-}
-
-// ValidateAutomationAuthoringFragment validates one Automation leaf payload
-// without creating or persisting a complete rule.
-func (s *AutomationApplicationService) ValidateAutomationAuthoringFragment(_ context.Context, capabilityKey string, fragment map[string]any, principal principalmodel.Principal) (automationvalidation.AutomationFragmentValidationResult, error) {
-	if err := automationAuthorizeEndpoint(principal, "POST /automation/fragments/{capabilityKey}/validate"); err != nil {
-		return automationvalidation.AutomationFragmentValidationResult{}, err
-	}
-	capabilityKey = strings.TrimSpace(capabilityKey)
-	fragment = automationvalidation.AutomationAuthoringFragmentWithDefaults(capabilityKey, fragment)
-	result := automationvalidation.AutomationFragmentValidationResult{Valid: true, CapabilityKey: capabilityKey, Fragment: fragment}
-	if err := automationvalidation.AutomationValidateAuthoringFragment(capabilityKey, fragment); err != nil {
-		issue := automationvalidation.AutomationValidationIssueFromError(automationmodel.AutomationRuleSchema{}, err)
-		issue.CapabilityKey = capabilityKey
-		result.Valid = false
-		result.Errors = []automationvalidation.AutomationValidationIssue{issue}
-	}
-	return result, nil
-}
-
 func (s *AutomationApplicationService) SimulateAutomationRule(ctx context.Context, ruleKey string, request automationcontract.AutomationSimulationRequest, principal principalmodel.Principal) (automationprojection.AutomationSimulationResult, error) {
-	rule := automationmodel.AutomationRuleSchema{}
-	if request.Rule != nil {
-		rule = *request.Rule
-	} else {
-		if err := automationAuthorizeEndpoint(principal, "POST /automation/rules/{ruleKey}/simulate"); err != nil {
-			return automationprojection.AutomationSimulationResult{}, err
-		}
-		var found bool
-		rule, found = s.rules.Get(strings.TrimSpace(ruleKey))
-		if !found {
-			return automationprojection.AutomationSimulationResult{}, managementError(apperror.KindNotFound, "backend.automation.not_found", nil)
-		}
+	if err := automationAuthorizeEndpoint(principal, "POST /automation/rules/{ruleKey}/simulate"); err != nil {
+		return automationprojection.AutomationSimulationResult{}, err
+	}
+	rule, found := s.rules.Get(strings.TrimSpace(ruleKey))
+	if !found {
+		return automationprojection.AutomationSimulationResult{}, managementError(apperror.KindNotFound, "backend.automation.not_found", nil)
 	}
 	return s.management.SimulateRule(ctx, rule, request, principal)
 }

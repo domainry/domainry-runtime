@@ -407,7 +407,7 @@ func (h runtimeAgentAuditHost) AppendAgentAudit(ctx context.Context, request age
 		return apperror.New(apperror.KindUnavailable, "agent.audit.unavailable", nil, nil)
 	}
 	return h.audit.AppendAudit(ctx, auditapplication.AuditAppendRequest{
-		Event: request.Event, ObjectKey: request.ObjectKey, RecordID: request.RecordID,
+		Family: auditmodel.EventFamilyRuntimeAgent, Event: request.Event, ObjectKey: request.ObjectKey, RecordID: request.RecordID,
 		Principal: runtimeAgentPrincipal(request.Principal), Summary: request.Summary,
 		Before: request.Before, After: request.After, Metadata: request.Metadata,
 	})

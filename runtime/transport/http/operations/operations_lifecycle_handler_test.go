@@ -23,11 +23,18 @@ type cleanupGovernanceStub struct {
 	jobID       string
 	batchSize   int
 	principal   lifecycleaccess.Principal
+	inspections int
 }
 
 func (s *cleanupGovernanceStub) ProcessCleanupJob(_ context.Context, workspaceID, jobID, _ string, _ time.Duration, batchSize int, _ time.Time, principal lifecycleaccess.Principal) (lifecyclemodel.CleanupJob, error) {
 	s.workspaceID, s.jobID, s.batchSize, s.principal = workspaceID, jobID, batchSize, principal
 	return lifecyclemodel.CleanupJob{ID: jobID, WorkspaceID: workspaceID, RequestedBy: principal.UserID, Status: lifecyclemodel.CleanupStatusSucceeded}, nil
+}
+
+func (s *cleanupGovernanceStub) InspectCleanupJob(_ context.Context, workspaceID, jobID string, principal lifecycleaccess.Principal) (lifecyclemodel.CleanupJob, error) {
+	s.inspections++
+	s.workspaceID, s.jobID, s.principal = workspaceID, jobID, principal
+	return lifecyclemodel.CleanupJob{ID: jobID, WorkspaceID: workspaceID, Status: lifecyclemodel.CleanupStatusSucceeded}, nil
 }
 
 type cleanupOperationRunnerStub struct {
@@ -81,6 +88,12 @@ func TestRuntimeLifecycleHTTPKeepsOnlyDurableCleanupRunOrchestration(t *testing.
 	}
 	if operations.request.Key != "cleanup-1" || operations.request.Reason != "verified retention cleanup" || response.Header().Get("Operation-ID") != "operation-1" {
 		t.Fatalf("operation request=%#v headers=%v", operations.request, response.Header())
+	}
+	if operations.request.ReplayReadiness == nil {
+		t.Fatal("cleanup operation omitted replay readiness check")
+	}
+	if err := operations.request.ReplayReadiness(t.Context(), nil); err != nil || governance.inspections != 1 || governance.jobID != "job-1" {
+		t.Fatalf("replay readiness inspections=%d job=%q err=%v", governance.inspections, governance.jobID, err)
 	}
 
 	migrated := httptest.NewRecorder()

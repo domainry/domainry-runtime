@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/domainry/domainry-foundation/idempotency"
@@ -25,35 +26,52 @@ import (
 
 type RuntimeStore struct {
 	*base.SQLDatabase
-	db                   *sql.DB
-	migrationDB          *sql.DB
-	migrationConn        *sql.Conn
-	engine               databaseEngine
-	config               config.Config
-	databaseSchema       string
-	postgresProfile      *postgres.ConnectionProfile
-	postgresCapabilities postgres.Capabilities
-	migratorCapabilities postgres.Capabilities
-	expectedMigrations   []string
-	expectedChecksums    map[string]string
-	secretMaterialKey    [32]byte
-	secretKeyProvider    secrets.KeyProvider
-	migrationBackupReady bool
-	migrationCompatible  bool
-	migrationBackupID    string
-	idempotencyMetrics   *idempotency.MemoryMetricsCollector
-	sqlMetrics           *telemetry.SQLMetrics
-	operationalMetrics   *RuntimeOperationalMetrics
-	workerScopeCursor    *runtimeWorkerScopeCursor
-	workerWakeupsMu      sync.Mutex
-	workerWakeups        *workerplatform.WakeupBroker
-	notificationMu       sync.RWMutex
-	notificationTx       modulehost.TransactionalPublisher
-	notificationSaaS     *NotificationSaaSPublicationScope
-	schemaAssembler      runtimeSchemaAssembler
-	backupChecksum       func(string) (string, error)
-	migrationReadDir     func(string) ([]os.DirEntry, error)
-	metadataBinding      metadatasdk.Binding
+	db                          *sql.DB
+	migrationDB                 *sql.DB
+	migrationConn               *sql.Conn
+	engine                      databaseEngine
+	config                      config.Config
+	databaseSchema              string
+	postgresProfile             *postgres.ConnectionProfile
+	postgresCapabilities        postgres.Capabilities
+	migratorCapabilities        postgres.Capabilities
+	expectedMigrations          []string
+	expectedChecksums           map[string]string
+	secretMaterialKey           [32]byte
+	secretKeyProvider           secrets.KeyProvider
+	migrationBackupReady        bool
+	migrationCompatible         bool
+	migrationBackupID           string
+	idempotencyMetrics          *idempotency.MemoryMetricsCollector
+	sqlMetrics                  *telemetry.SQLMetrics
+	operationalMetrics          *RuntimeOperationalMetrics
+	workerScopeCursor           *runtimeWorkerScopeCursor
+	workerWakeupsMu             sync.Mutex
+	workerWakeups               *workerplatform.WakeupBroker
+	notificationMu              sync.RWMutex
+	notificationTx              modulehost.TransactionalPublisher
+	notificationSaaS            *NotificationSaaSPublicationScope
+	schemaAssembler             runtimeSchemaAssembler
+	backupChecksum              func(string) (string, error)
+	migrationReadDir            func(string) ([]os.DirEntry, error)
+	metadataBinding             metadatasdk.Binding
+	runtimeCapabilities         RuntimeSchemaCapabilities
+	runtimeCapabilitiesSelected bool
+	subjectLifecycleBound       atomic.Bool
+}
+
+// BindSubjectLifecyclePersistence enables the write fences backed by the
+// Lifecycle module's subject-erasure tables. Runtime schema setup intentionally
+// does not create those source-owned tables, so the fences become active only
+// after the Lifecycle Binding has installed and bound its persistence.
+func (s *RuntimeStore) BindSubjectLifecyclePersistence() {
+	if s != nil {
+		s.subjectLifecycleBound.Store(true)
+	}
+}
+
+func (s *RuntimeStore) SubjectLifecyclePersistenceBound() bool {
+	return s != nil && s.subjectLifecycleBound.Load()
 }
 
 func (s *RuntimeStore) BindMetadata(binding metadatasdk.Binding) error {
@@ -164,6 +182,9 @@ func (s *RuntimeStore) RegisterWorkerQueueScope(ctx context.Context, executor Wo
 	if queueKind == "" {
 		return fmt.Errorf("worker queue kind and workspace are required")
 	}
+	if _, registered := WorkerScopeRegistrationFor(queueKind); !registered {
+		return fmt.Errorf("worker scope owner %q is not registered", queueKind)
+	}
 	if len(workspaceID) == 0 {
 		return fmt.Errorf("worker queue kind and workspace are required")
 	}
@@ -172,20 +193,39 @@ func (s *RuntimeStore) RegisterWorkerQueueScope(ctx context.Context, executor Wo
 	}
 	digest := sha256.Sum256([]byte(queueKind + "\x00" + workspaceID))
 	id := "worker_scope:" + hex.EncodeToString(digest[:12])
-	insert := query.NewInsertBuilder(s.SQLRenderer, "_worker_queue_scopes").
-		Columns("id", "queue_kind", "scope_key", "updated_at").Values(id, queueKind, workspaceID, updatedAt)
-	insert, err := s.Engine.ApplyUpsert(insert, []string{"id"},
-		query.AssignExpression("updated_at", query.InsertedValue("updated_at")),
-	)
+	update, updateArgs, err := query.NewUpdateBuilder(s.SQLRenderer, "_worker_scopes").
+		Set("updated_at", updatedAt).
+		Where(query.And(query.Equal("owner", queueKind), query.Equal("scope_key", workspaceID))).
+		Build()
 	if err != nil {
-		return fmt.Errorf("build worker queue scope upsert: %w", err)
+		return fmt.Errorf("build worker queue scope refresh: %w", err)
 	}
-	statement, args, err := insert.Build()
+	updated, err := executor.ExecContext(ctx, update, updateArgs...)
 	if err != nil {
-		return fmt.Errorf("build worker queue scope upsert: %w", err)
+		return fmt.Errorf("refresh worker queue scope: %w", err)
 	}
-	_, err = executor.ExecContext(ctx, statement, args...)
-	return err
+	if affected, rowsErr := updated.RowsAffected(); rowsErr != nil {
+		return rowsErr
+	} else if affected > 0 {
+		return nil
+	}
+	insert, insertArgs, err := query.NewInsertBuilder(s.SQLRenderer, "_worker_scopes").
+		Columns("id", "owner", "scope_key", "updated_at").
+		Values(id, queueKind, workspaceID, updatedAt).
+		Build()
+	if err != nil {
+		return fmt.Errorf("build worker queue scope registration: %w", err)
+	}
+	if _, err := executor.ExecContext(ctx, insert, insertArgs...); err != nil {
+		retried, retryErr := executor.ExecContext(ctx, update, updateArgs...)
+		if retryErr == nil {
+			if affected, rowsErr := retried.RowsAffected(); rowsErr == nil && affected > 0 {
+				return nil
+			}
+		}
+		return fmt.Errorf("register worker queue scope: %w", err)
+	}
+	return nil
 }
 
 func (s *RuntimeStore) WorkerQueueScopePage(ctx context.Context, queryer WorkerScopeQueryer, queueKind string, limit int) ([]string, error) {
@@ -195,6 +235,9 @@ func (s *RuntimeStore) WorkerQueueScopePage(ctx context.Context, queryer WorkerS
 	queueKind = strings.TrimSpace(queueKind)
 	if queueKind == "" {
 		return nil, fmt.Errorf("worker queue kind is required")
+	}
+	if _, registered := WorkerScopeRegistrationFor(queueKind); !registered {
+		return nil, fmt.Errorf("worker scope owner %q is not registered", queueKind)
 	}
 	if limit <= 0 {
 		limit = 32
@@ -220,9 +263,9 @@ func (s *RuntimeStore) WorkerQueueScopePage(ctx context.Context, queryer WorkerS
 	cursor.mu.Lock()
 	defer cursor.mu.Unlock()
 	after := cursor.after
-	selectBuilder := query.NewSelectBuilder(s.SQLRenderer, "_worker_queue_scopes").
+	selectBuilder := query.NewSelectBuilder(s.SQLRenderer, "_worker_scopes").
 		Columns("scope_key").
-		Where(query.And(query.Equal("queue_kind", queueKind), query.GreaterThan("scope_key", after))).
+		Where(query.And(query.Equal("owner", queueKind), query.GreaterThan("scope_key", after))).
 		OrderBy(query.Ascending("scope_key")).Limit(limit + 1)
 	statement, args, err := selectBuilder.Build()
 	if err != nil {

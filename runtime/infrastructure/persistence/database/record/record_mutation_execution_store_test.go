@@ -61,7 +61,7 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 	record := recordmodel.Record{ID: "record-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"name": "Acme"}}
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create", Object: object, Record: record,
-		Audit:              &auditmodel.AuditEvent{ID: "create-audit-1", Event: "record_created", ObjectKey: object.Key, RecordID: record.ID, CreatedAt: now.Format(time.RFC3339Nano)},
+		Audit:              &auditmodel.AuditEvent{ID: "create-audit-1", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_created", ObjectKey: object.Key, RecordID: record.ID, CreatedAt: now.Format(time.RFC3339Nano)},
 		Outbox:             []publicationmodel.Message{{ID: "create-outbox-1", WorkspaceID: "workspace-a", ConnectorKey: "webhook", Operation: "record.created", DedupKey: "record-1-created"}},
 		WorkflowIntents:    []workflowmodel.WorkflowExecution{{ID: "create-workflow-1", WorkflowKey: "customer-created", Trigger: "record_created", Status: "pending", ObjectKey: object.Key, RecordID: record.ID, ActorID: "admin", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 		NotificationEvents: []notificationmodel.NotificationEvent{{ID: "create-notification-1", WorkspaceID: "workspace-a", Source: "record", SourceEventID: "record-1-created", EventType: "record.created", Category: "business", Severity: "info", RecipientUserIDs: []string{"admin"}, ActionState: "none", OccurredAt: now.Format(time.RFC3339Nano), Snapshot: notificationmodel.NotificationInboxSnapshot{Title: "Record created", Body: "The record was created."}, Status: "queued", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
@@ -73,11 +73,15 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 	if found, ok, err := repository.FindRecordMutationExecution(t.Context(), request.Execution); err != nil || !ok || found.ID != claim.Execution.ID {
 		t.Fatalf("find execution=%#v ok=%v err=%v", found, ok, err)
 	}
-	for table, id := range map[string]string{"_audit_events": "create-audit-1", "_publication_outbox": "create-outbox-1", "_workflow_executions": "create-workflow-1", "_notification_events": "create-notification-1", "_record_mutation_executions": claim.Execution.ID} {
+	for table, id := range map[string]string{"_audit_events": "create-audit-1", "_publication_outbox": "create-outbox-1", "_workflow_executions": "create-workflow-1", "_notification_events": "create-notification-1", "_operations": claim.Execution.ID} {
 		var count int
 		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier("id")+" = ?", id).Scan(&count); err != nil || count != 1 {
 			t.Fatalf("atomic fact %s/%s count=%d err=%v", table, id, count, err)
 		}
+	}
+	var legacyTables int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_record_mutation_executions'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
+		t.Fatalf("legacy record mutation table count=%d err=%v", legacyTables, err)
 	}
 	replay, err := repository.TryBeginRecordMutation(t.Context(), request)
 	if err != nil || replay.Decision != idempotency.DecisionReplay || replay.Execution.Result.ID != record.ID {
@@ -211,7 +215,7 @@ func TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit(t
 				Operation: "update", Object: object,
 				Record:            recordmodel.Record{ID: initial.ID, CreatedAt: initial.CreatedAt, UpdatedAt: "version-" + identity, Data: map[string]any{"name": identity}},
 				ExpectedUpdatedAt: initial.UpdatedAt,
-				Audit:             &auditmodel.AuditEvent{ID: "update-audit-" + identity, Event: "record_updated", ObjectKey: object.Key, RecordID: initial.ID, CreatedAt: "2026-07-19T00:00:00Z"},
+				Audit:             &auditmodel.AuditEvent{ID: "update-audit-" + identity, Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", ObjectKey: object.Key, RecordID: initial.ID, CreatedAt: "2026-07-19T00:00:00Z"},
 				Outbox:            []publicationmodel.Message{{ID: "update-outbox-" + identity, WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Operation: "concurrent.record.updated", DedupKey: identity}},
 				WorkflowIntents:   []workflowmodel.WorkflowExecution{{ID: "update-workflow-" + identity, WorkflowKey: "concurrent-record-updated", Trigger: "record_updated", Status: "pending", ObjectKey: object.Key, RecordID: initial.ID, CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z"}},
 			}

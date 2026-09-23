@@ -6,6 +6,15 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	notificationcontract "github.com/domainry/domainry-notification-sdk/contract"
+	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 var (
@@ -18,14 +27,61 @@ const (
 	ProjectExtensionKindBusinessHandler    = "business_handler"
 	ProjectExtensionKindAssigneeResolver   = "workflow_assignee_resolver"
 	ProjectExtensionKindWorkspaceBootstrap = "workspace_bootstrap"
+	ProjectExtensionKindProjectDefinition  = "project_definition"
 )
 
-// ProjectExtensions is the complete generated project composition input.
+// ProjectExtensions is the complete project-owned composition input.
 // Runtime validates and freezes every extension before accepting traffic.
 type ProjectExtensions struct {
 	BusinessHandlers              []BusinessHandler
 	AssigneeResolvers             []AssigneeResolver
 	WorkspaceBootstrapParticipant WorkspaceBootstrapParticipant
+	Definitions                   ProjectDefinitions
+}
+
+// ProjectDefinitions is the sole code-owned source for executable product
+// behavior. None of these definitions are accepted from model.json.
+type ProjectDefinitions struct {
+	Reports                []ReportDefinition
+	PublicResources        []PublicResourceDefinition
+	Workflows              []definitionmodel.WorkflowSchema
+	BusinessCalendars      []businesscalendarmodel.BusinessCalendarSchema
+	Schedules              []schedulersdk.Definition
+	AutomationRules        []automationmodel.AutomationRuleSchema
+	NotificationTemplates  []notificationcontract.NotificationTemplate
+	NotificationEventTypes []notificationcontract.NotificationEventType
+	NotificationRules      []notificationcontract.NotificationRule
+	IntegrationMappings    []integrationsdk.EventMappingRequirement
+	AgentSkills            []agentsdk.SkillSchema
+	Agents                 []agentsdk.AgentSchema
+	AgentTasks             []agentsdk.AgentTaskDefinition
+	AgentEntrypoints       []agentsdk.AgentEntrypointAssignment
+	AgentServicePrincipals []agentsdk.AgentServicePrincipalBinding
+}
+
+// PublicResourceDefinition binds one anonymous, revocable projection to its
+// storage object. The behavior is code-owned; model.json remains limited to
+// storage shape and authorization.
+type PublicResourceDefinition struct {
+	ObjectKey string                               `json:"object_key"`
+	Resource  definitionmodel.ObjectPublicResource `json:"resource"`
+}
+
+// ReportDefinition is the code-owned, immutable definition for one Report.
+// Runtime owns this registration shape and translates it to the Report SDK at
+// the module boundary so external projects do not need an unreleased Report SDK
+// merely to compile runtimeext.
+type ReportDefinition struct {
+	Report                 reportmodel.ReportSchema
+	OperationStateExamples []reportmodel.ReportOperationStateExampleSchema
+	SensitiveFieldPolicies []reportmodel.ReportSensitiveFieldPolicySchema
+	ExportControls         []reportmodel.ReportExportControlSchema
+}
+
+type ProjectDefinitionIdentity struct {
+	Kind   string
+	Key    string
+	SHA256 string
 }
 
 // ProjectExtensionDescriptor is the canonical release-identity envelope for
@@ -37,6 +93,7 @@ type ProjectExtensionDescriptor struct {
 	BusinessHandler    *HandlerDescriptor
 	AssigneeResolver   *AssigneeResolverDescriptor
 	WorkspaceBootstrap *WorkspaceBootstrapDescriptor
+	ProjectDefinition  *ProjectDefinitionIdentity
 }
 
 // BusinessHandlerBinding is the immutable registration-time association
@@ -55,10 +112,11 @@ type ProjectExtensionRegistry struct {
 	assigneeResolverBindings     map[string]AssigneeResolverBinding
 	workspaceBootstrap           WorkspaceBootstrapParticipant
 	workspaceBootstrapDescriptor *WorkspaceBootstrapDescriptor
+	definitions                  frozenProjectDefinitions
 }
 
 func NewProjectExtensionRegistry() *ProjectExtensionRegistry {
-	return &ProjectExtensionRegistry{businessHandlerBindings: map[string]BusinessHandlerBinding{}, assigneeResolverBindings: map[string]AssigneeResolverBinding{}}
+	return &ProjectExtensionRegistry{businessHandlerBindings: map[string]BusinessHandlerBinding{}, assigneeResolverBindings: map[string]AssigneeResolverBinding{}, definitions: newFrozenProjectDefinitions()}
 }
 
 func (r *ProjectExtensionRegistry) RegisterBusinessHandler(handler BusinessHandler) error {
@@ -90,6 +148,10 @@ func (r *ProjectExtensionRegistry) RegisterAssigneeResolver(resolver AssigneeRes
 }
 
 func (r *ProjectExtensionRegistry) RegisterProjectExtensions(set ProjectExtensions) error {
+	definitions, err := validateProjectDefinitions(set.Definitions)
+	if err != nil {
+		return err
+	}
 	var workspaceBootstrapDescriptor *WorkspaceBootstrapDescriptor
 	if set.WorkspaceBootstrapParticipant != nil {
 		descriptor := normalizeWorkspaceBootstrapDescriptor(set.WorkspaceBootstrapParticipant.Descriptor())
@@ -148,6 +210,9 @@ func (r *ProjectExtensionRegistry) RegisterProjectExtensions(set ProjectExtensio
 	if set.WorkspaceBootstrapParticipant != nil && r.workspaceBootstrap != nil {
 		return ErrWorkspaceBootstrapParticipantDuplicate
 	}
+	if err := r.definitions.rejectDuplicates(definitions); err != nil {
+		return err
+	}
 	if r.businessHandlerBindings == nil {
 		r.businessHandlerBindings = map[string]BusinessHandlerBinding{}
 	}
@@ -174,6 +239,7 @@ func (r *ProjectExtensionRegistry) RegisterProjectExtensions(set ProjectExtensio
 		r.workspaceBootstrap = set.WorkspaceBootstrapParticipant
 		r.workspaceBootstrapDescriptor = workspaceBootstrapDescriptor
 	}
+	r.definitions.merge(definitions)
 	return nil
 }
 
@@ -243,7 +309,7 @@ func (r *ProjectExtensionRegistry) Descriptors() []ProjectExtensionDescriptor {
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	result := make([]ProjectExtensionDescriptor, 0, len(r.businessHandlerBindings)+len(r.assigneeResolverBindings)+1)
+	result := make([]ProjectExtensionDescriptor, 0, len(r.businessHandlerBindings)+len(r.assigneeResolverBindings)+len(r.definitions.identities)+1)
 	for _, binding := range r.businessHandlerBindings {
 		descriptor := cloneHandlerDescriptor(binding.Descriptor)
 		result = append(result, ProjectExtensionDescriptor{
@@ -261,6 +327,10 @@ func (r *ProjectExtensionRegistry) Descriptors() []ProjectExtensionDescriptor {
 		result = append(result, ProjectExtensionDescriptor{
 			Kind: ProjectExtensionKindWorkspaceBootstrap, Key: descriptor.Key, WorkspaceBootstrap: &descriptor,
 		})
+	}
+	for _, identity := range r.definitions.identityList() {
+		current := identity
+		result = append(result, ProjectExtensionDescriptor{Kind: ProjectExtensionKindProjectDefinition, Key: identity.Kind + ":" + identity.Key, ProjectDefinition: &current})
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Kind+"\x00"+result[i].Key < result[j].Kind+"\x00"+result[j].Key
@@ -408,8 +478,14 @@ func cloneWorkspaceBootstrapDescriptor(descriptor WorkspaceBootstrapDescriptor) 
 func normalizeHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor {
 	result := cloneHandlerDescriptor(descriptor)
 	result.ActionKey = strings.TrimSpace(result.ActionKey)
+	result.ObjectKey = strings.TrimSpace(result.ObjectKey)
+	result.Label = strings.TrimSpace(result.Label)
+	result.Kind = strings.TrimSpace(result.Kind)
+	result.RiskLevel = strings.TrimSpace(result.RiskLevel)
+	result.AuditEvent = strings.TrimSpace(result.AuditEvent)
 	result.InputType = strings.TrimSpace(result.InputType)
 	result.OutputType = strings.TrimSpace(result.OutputType)
+	result.ConcurrencyField = strings.TrimSpace(result.ConcurrencyField)
 	result.HandlerRevision = strings.TrimSpace(result.HandlerRevision)
 	for index := range result.ObjectCapabilities {
 		capability := &result.ObjectCapabilities[index]
@@ -544,6 +620,14 @@ func normalizeHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor 
 
 func cloneHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor {
 	result := descriptor
+	result.Preconditions = append([]string(nil), descriptor.Preconditions...)
+	result.PayloadFields = cloneDefinition(descriptor.PayloadFields)
+	result.OutputFields = cloneDefinition(descriptor.OutputFields)
+	result.Defaults = cloneDefinition(descriptor.Defaults)
+	if descriptor.AssurancePolicy != nil {
+		policy := cloneDefinition(*descriptor.AssurancePolicy)
+		result.AssurancePolicy = &policy
+	}
 	result.ObjectCapabilities = make([]ActionObjectCapability, len(descriptor.ObjectCapabilities))
 	for index, capability := range descriptor.ObjectCapabilities {
 		result.ObjectCapabilities[index] = ActionObjectCapability{ObjectKey: capability.ObjectKey, Operations: append([]string(nil), capability.Operations...)}

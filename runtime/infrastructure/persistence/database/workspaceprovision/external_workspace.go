@@ -10,7 +10,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 	workspaceprovisionmodel "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -60,7 +60,7 @@ func InitializeExternalInstallation(ctx context.Context, store *database.Runtime
 // CreateExternalWorkspace is the Runtime-owned part of a source module's
 // transaction. Workspace ownership, identity projections and application roles
 // are committed by that module in the same transaction.
-func CreateExternalWorkspace(ctx context.Context, store *database.RuntimeStore, request identitysdk.ExternalWorkspaceCreate, transaction identitysdk.EmbeddedTransaction, manifest manifestmodel.ManifestSchema, participant runtimeext.WorkspaceBootstrapParticipant) error {
+func CreateExternalWorkspace(ctx context.Context, store *database.RuntimeStore, request identitysdk.ExternalWorkspaceCreate, transaction identitysdk.EmbeddedTransaction, model projectmodel.RuntimeModel, participant runtimeext.WorkspaceBootstrapParticipant) error {
 	tx, ok := transaction.Executor.(*sql.Tx)
 	if !ok || tx == nil || strings.TrimSpace(request.WorkspaceID) == "" || strings.EqualFold(request.WorkspaceID, "default") || strings.TrimSpace(request.UserID) == "" || strings.TrimSpace(request.Name) == "" {
 		return fmt.Errorf("external Workspace requires a transaction and verified identity")
@@ -72,12 +72,12 @@ func CreateExternalWorkspace(ctx context.Context, store *database.RuntimeStore, 
 
 // InitializeExternalWorkspaceApplication runs once per application assignment,
 // including when the owner already has a personal Workspace from another app.
-func InitializeExternalWorkspaceApplication(ctx context.Context, store *database.RuntimeStore, request identitysdk.ExternalWorkspaceCreate, transaction identitysdk.EmbeddedTransaction, manifest manifestmodel.ManifestSchema, participant runtimeext.WorkspaceBootstrapParticipant) error {
+func InitializeExternalWorkspaceApplication(ctx context.Context, store *database.RuntimeStore, request identitysdk.ExternalWorkspaceCreate, transaction identitysdk.EmbeddedTransaction, model projectmodel.RuntimeModel, participant runtimeext.WorkspaceBootstrapParticipant) error {
 	tx, ok := transaction.Executor.(*sql.Tx)
 	if !ok || tx == nil || strings.TrimSpace(request.WorkspaceID) == "" || strings.TrimSpace(request.UserID) == "" {
 		return fmt.Errorf("external application bootstrap requires transaction and owner")
 	}
-	provision := &WorkspaceProvisionStore{runtime: store, manifest: manifest, participant: participant}
+	provision := &WorkspaceProvisionStore{runtime: store, model: model, participant: participant}
 	if err := provision.validateApplicationBootstrapRequest(request.ApplicationBootstrap); err != nil {
 		return err
 	}

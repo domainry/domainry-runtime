@@ -5,17 +5,11 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (56)
+## HTTP mutation routes (47)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
-| `appschema` | `POST /application-schema/definitions/{resourceType}/{resourceKey}/validate` | `not_applicable` | none | `runtime/transport/http/appschema/appschema_routes.go` |
-| `automation` | `POST /automation/fragments/{capabilityKey}/validate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
 | `automation` | `POST /automation/rules/{ruleKey}/simulate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
-| `automation` | `POST /automation/simulate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
-| `automation` | `POST /automation/validate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
-| `businesssystem` | `POST /authoring/validate` | `not_applicable` | none | `runtime/transport/http/businesssystem/businesssystem_routes.go` |
-| `businesssystem` | `POST /authoring/verify-delivery` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/businesssystem/businesssystem_routes.go` |
 | `dispatch` | `POST /dispatch/executions` | `system_key_required` | upstream operation and resolved target identity | `runtime/transport/http/dispatch/dispatch_routes.go` |
 | `lifecycle` | `POST /operations/lifecycle/cleanup/jobs/{jobID}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
 | `operations` | `POST /operations/break-glass-grants` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
@@ -47,10 +41,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `records` | `POST /records/{objectKey}/items/{recordID}/profile/deactivate` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `records` | `POST /records/{objectKey}/items/{recordID}/profile/reactivate` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/records/records_routes.go` |
 | `uploads` | `POST /uploads` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/uploads/uploads_routes.go` |
-| `workflows` | `POST /workflow/authoring-fragments/{capabilityKey}/validate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
 | `workflows` | `POST /workflow/definitions/{workflowKey}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /workflow/definitions/{workflowKey}/simulate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
-| `workflows` | `POST /workflow/definitions/{workflowKey}/validate` | `not_applicable` | none | `runtime/transport/http/workflows/workflows_routes.go` |
 | `workflows` | `POST /workflow/processes/{processID}/retry` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
 | `workflows` | `POST /workflow/processes/{processID}/withdraw` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
 | `workflows` | `POST /workflow/recovery/executions/process` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workflows/workflows_routes.go` |
@@ -66,7 +57,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workspaceprovision` | `POST /workspaces/{workspaceCode}/suspend` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 | `workspaceprovision` | `PUT /workspaces/{workspaceCode}/commercial-configuration` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 
-## Application mutation commands (131)
+## Application mutation commands (128)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -76,7 +67,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `agenthost` | `ResolveExecutionIdentity` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agenthost/agent_authorization_application_service.go` |
 | `agenthost` | `ResolveGlobalContext` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/agenthost/agent_authorization_application_service.go` |
 | `appschema` | `PublishedRuntimeSchema` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/appschema/appschema_published_runtime_schema_use_cases.go` |
-| `appschema` | `Restore` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/appschema/application_schema_runtime_restoration_application_service.go` |
 | `automation` | `Execute` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_instruction_dispatch_application_service.go` |
 | `automation` | `Execute` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_instruction_execution_application_service.go` |
 | `automation` | `Execute` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_rule_application_service.go` |
@@ -85,7 +75,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `automation` | `Run` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_before_application_service.go` |
 | `automation` | `RunBefore` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_application_service.go` |
 | `businessevent` | `Publish` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/businessevent/business_event_application_service.go` |
-| `businesssystem` | `RuntimeStateSnapshot` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/businesssystem/business_system_runtime_projection.go` |
 | `deployment` | `ProcessIdempotencyCleanup` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/deployment/deployment_runtime_status_application_service.go` |
 | `deployment` | `ResetIdempotencyReceipt` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/deployment/deployment_runtime_status_application_service.go` |
 | `deployment` | `RetryIdempotencyReceipt` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/deployment/deployment_runtime_status_application_service.go` |
@@ -112,7 +101,6 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `operations` | `DisableBreakGlass` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/operations/operations_break_glass_application_service.go` |
 | `operations` | `EnableBreakGlass` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/operations/operations_break_glass_application_service.go` |
 | `operations` | `Execute` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/operations/database_retirement_application_service.go` |
-| `operations` | `ExecuteDirectAuthoringUpsert` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/operations/operations_owner_execution_application_service.go` |
 | `operations` | `ExecuteOwnerOperation` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/operations/operations_owner_execution_application_service.go` |
 | `operations` | `ForceRelease` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/operations/operations_lease_application_service.go` |
 | `operations` | `ResetLegacyReceipt` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/operations/operations_application_service.go` |

@@ -55,6 +55,10 @@ func TestBusinessActionExecutionStoreAtomicClaimReplayConflictAndFencing(t *test
 	if err != nil || first.Decision != idempotency.DecisionAcquired || first.Execution.FencingToken != 1 {
 		t.Fatalf("first claim=%#v err=%v", first, err)
 	}
+	var legacyTables int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_action_executions'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
+		t.Fatalf("legacy action execution table count=%d err=%v", legacyTables, err)
+	}
 	second, err := repository.TryBeginExecution(t.Context(), request)
 	if err != nil || second.Decision != idempotency.DecisionInProgress {
 		t.Fatalf("second claim=%#v err=%v", second, err)
@@ -250,7 +254,7 @@ func TestBusinessActionExecutionStoreCommitsFactsAndReceiptInOneTransaction(t *t
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create", Object: object,
 		Record:          recordmodel.Record{ID: "record-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "created"}},
-		Audit:           &auditmodel.AuditEvent{ID: "audit-1", Event: "record_created", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", RoleKey: "admin", Summary: "created", CreatedAt: now.Format(time.RFC3339Nano)},
+		Audit:           &auditmodel.AuditEvent{ID: "audit-1", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", RoleKey: "admin", Summary: "created", CreatedAt: now.Format(time.RFC3339Nano)},
 		Outbox:          []publicationmodel.Message{{ID: "durable_intent:execution-1:0", WorkspaceID: "workspace-a", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", RequestRef: "atomic-commit", DedupKey: "atomic-commit", RequestFingerprint: strings.Repeat("a", 64), Payload: map[string]any{"record_id": "record-1"}}},
 		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "workflow-1", WorkflowKey: "on_create", Trigger: "record_created:action_atomic_record", Status: "pending", ActionType: "record", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", IdempotencyKey: "atomic-commit", MaxAttempts: 3, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
@@ -258,7 +262,7 @@ func TestBusinessActionExecutionStoreCommitsFactsAndReceiptInOneTransaction(t *t
 		Execution:   claim.Execution,
 		ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{"record_id": "record-1"}, ResponseStatus: 200,
-		AuditEvents: []auditmodel.AuditEvent{{ID: "action-audit-1", Event: "business_action_executed", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", Summary: "action completed", CreatedAt: now.Format(time.RFC3339Nano)}},
+		AuditEvents: []auditmodel.AuditEvent{{ID: "action-audit-1", Family: auditmodel.EventFamilyBusinessEntity, Event: "business_action_executed", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", Summary: "action completed", CreatedAt: now.Format(time.RFC3339Nano)}},
 		ExpiresAt:   now.Add(24 * time.Hour), Now: now,
 	})
 	if err != nil || completed.Status != string(idempotency.StatusSucceeded) {
@@ -363,7 +367,7 @@ func TestBookClassPersistsClassBookingAuditsOutboxAndReceiptInOneTransaction(t *
 				Field: "remaining_capacity", Operator: "gte", Value: int64(1), ErrorCode: "gym.class_capacity_full",
 			}},
 			Audit: &auditmodel.AuditEvent{
-				ID: classAuditID, WorkspaceID: "workspace-a", Event: "record_updated",
+				ID: classAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_updated",
 				ObjectKey: groupClass.Key, RecordID: "class-1", ActorID: "member-1", CreatedAt: stamp,
 			},
 		},
@@ -374,7 +378,7 @@ func TestBookClassPersistsClassBookingAuditsOutboxAndReceiptInOneTransaction(t *
 				Data: map[string]any{"class_id": "class-1", "member_id": "member-1", "status": "booked"},
 			},
 			Audit: &auditmodel.AuditEvent{
-				ID: bookingAuditID, WorkspaceID: "workspace-a", Event: "record_created",
+				ID: bookingAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created",
 				ObjectKey: classBooking.Key, RecordID: "booking-1", ActorID: "member-1", CreatedAt: stamp,
 			},
 			Outbox: []publicationmodel.Message{{
@@ -395,7 +399,7 @@ func TestBookClassPersistsClassBookingAuditsOutboxAndReceiptInOneTransaction(t *
 		LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{"booking_id": "booking-1", "status": "booked"}, ResponseStatus: 200,
 		AuditEvents: []auditmodel.AuditEvent{{
-			ID: actionAuditID, WorkspaceID: "workspace-a", Event: "gym.class_booked",
+			ID: actionAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "gym.class_booked",
 			ObjectKey: groupClass.Key, ActorID: "member-1", CreatedAt: stamp,
 		}},
 		ExpiresAt: now.Add(24 * time.Hour), Now: now.Add(time.Second),
@@ -561,7 +565,7 @@ func TestBusinessActionExecutionStoreCommitsFailureReceiptAndDenialAuditAtomical
 		t.Fatal(err)
 	}
 	audit := auditmodel.AuditEvent{
-		ID: "scope-denial-audit", WorkspaceID: "workspace-a", Event: "data_scope_access_denied",
+		ID: "scope-denial-audit", WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "data_scope_access_denied",
 		ObjectKey: "booking", RecordID: "booking-south", ActorID: "operator-a", RoleKey: "operator",
 		Summary: "Data scope access denied", CreatedAt: now.Format(time.RFC3339Nano),
 	}
@@ -649,7 +653,7 @@ func TestBusinessActionConditionalMutationCommitsPredicateFactsAndReceiptInOneUo
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "update", Object: object, Record: recordmodel.Record{ID: "class-1", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"reserved": 20.0, "status": "open"}},
 		Predicates:      []transactionmodel.MutationPredicate{{Field: "reserved", Operator: "lt", Value: 20.0, ErrorCode: "capacity_full"}, {Field: "status", Operator: "eq", Value: "open", ErrorCode: "capacity_closed"}},
-		Audit:           &auditmodel.AuditEvent{ID: "capacity-audit-success", Event: "capacity_reserved", ObjectKey: object.Key, RecordID: "class-1", CreatedAt: now.Format(time.RFC3339Nano)},
+		Audit:           &auditmodel.AuditEvent{ID: "capacity-audit-success", Family: auditmodel.EventFamilyBusinessEntity, Event: "capacity_reserved", ObjectKey: object.Key, RecordID: "class-1", CreatedAt: now.Format(time.RFC3339Nano)},
 		Outbox:          []publicationmodel.Message{{ID: "capacity-outbox-success", WorkspaceID: "workspace-a", ConnectorKey: "test", Operation: "notify", DedupKey: "reserve-20", Payload: map[string]any{"record_id": "class-1"}}},
 		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "capacity-workflow-success", WorkflowKey: "capacity_reserved", Trigger: "record_updated:action_capacity", Status: "pending", ActionType: "workflow_graph", ObjectKey: object.Key, RecordID: "class-1", MaxAttempts: 3, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
@@ -706,21 +710,21 @@ func TestBusinessActionExecutionStoreRollsBackAuditIntentOutboxAndReceiptOnCompl
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TRIGGER fail_action_receipt_completion BEFORE UPDATE OF status ON _action_executions WHEN NEW.status = 'succeeded' BEGIN SELECT RAISE(ABORT, 'injected action receipt completion failure'); END`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TRIGGER fail_action_receipt_completion BEFORE UPDATE OF status ON _operations WHEN NEW.owner = 'action' AND NEW.status = 'succeeded' BEGIN SELECT RAISE(ABORT, 'injected action receipt completion failure'); END`); err != nil {
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "action_completion_rollback", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create", Object: object,
 		Record:          recordmodel.Record{ID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "created"}},
-		Audit:           &auditmodel.AuditEvent{ID: "audit-rollback", Event: "record_created", ObjectKey: object.Key, RecordID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano)},
+		Audit:           &auditmodel.AuditEvent{ID: "audit-rollback", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created", ObjectKey: object.Key, RecordID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano)},
 		Outbox:          []publicationmodel.Message{{ID: "outbox-rollback", WorkspaceID: "workspace-a", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", RequestRef: "completion-rollback", DedupKey: "completion-rollback", RequestFingerprint: "fingerprint", Payload: map[string]any{"record_id": "record-rollback"}}},
 		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "workflow-rollback", WorkflowKey: "on_create", Trigger: "record_created:action_completion_rollback", Status: "pending", ActionType: "record", ObjectKey: object.Key, RecordID: "record-rollback", IdempotencyKey: "completion-rollback", MaxAttempts: 3, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
 	if _, err := commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{
 		Execution:   claim.Execution,
 		ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: map[string]any{"record_id": "record-rollback"}, ResponseStatus: 200,
-		AuditEvents: []auditmodel.AuditEvent{{ID: "action-audit-rollback", Event: "business_action_executed", ObjectKey: object.Key, RecordID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano)}},
+		AuditEvents: []auditmodel.AuditEvent{{ID: "action-audit-rollback", Family: auditmodel.EventFamilyBusinessEntity, Event: "business_action_executed", ObjectKey: object.Key, RecordID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano)}},
 		ExpiresAt:   now.Add(time.Hour), Now: now,
 	}); err == nil {
 		t.Fatal("expected injected receipt completion failure")
@@ -756,7 +760,7 @@ func TestBusinessActionExecutionStoreRollsBackMutationAndDurableIntentWhenAction
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicateAudit := auditmodel.AuditEvent{ID: "action-audit-duplicate", WorkspaceID: "workspace-a", Event: "existing_event", CreatedAt: now.Format(time.RFC3339Nano)}
+	duplicateAudit := auditmodel.AuditEvent{ID: "action-audit-duplicate", WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "existing_event", CreatedAt: now.Format(time.RFC3339Nano)}
 	if err := auditpersistence.NewAuditStoreFromRuntimeStore(t.Context(), store).InsertAuditEvent(t.Context(), "workspace-a", duplicateAudit); err != nil {
 		t.Fatal(err)
 	}
@@ -764,13 +768,13 @@ func TestBusinessActionExecutionStoreRollsBackMutationAndDurableIntentWhenAction
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create", Object: object,
 		Record: recordmodel.Record{ID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "created"}},
-		Audit:  &auditmodel.AuditEvent{ID: "mutation-audit-rollback", Event: "record_created", ObjectKey: object.Key, RecordID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano)},
+		Audit:  &auditmodel.AuditEvent{ID: "mutation-audit-rollback", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created", ObjectKey: object.Key, RecordID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano)},
 		Outbox: []publicationmodel.Message{{ID: "durable-intent-rollback", WorkspaceID: "workspace-a", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", RequestRef: "audit-rollback", DedupKey: "audit-rollback", RequestFingerprint: "fingerprint", Payload: map[string]any{"record_id": "record-audit-rollback"}}},
 	}
 	if _, err := commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{
 		Execution: claim.Execution, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{"record_id": "record-audit-rollback"}, ResponseStatus: 200,
-		AuditEvents: []auditmodel.AuditEvent{{ID: duplicateAudit.ID, WorkspaceID: "workspace-a", Event: "business_action_executed", ObjectKey: object.Key, RecordID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano)}},
+		AuditEvents: []auditmodel.AuditEvent{{ID: duplicateAudit.ID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "business_action_executed", ObjectKey: object.Key, RecordID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano)}},
 		ExpiresAt:   now.Add(time.Hour), Now: now,
 	}); err == nil {
 		t.Fatal("expected duplicate Action audit to fail the transaction")

@@ -125,7 +125,7 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 				Field: "remaining_capacity", Operator: "gte", Value: int64(1), ErrorCode: "gym.class_capacity_full",
 			}},
 			Audit: &auditmodel.AuditEvent{
-				ID: classAuditID, WorkspaceID: "workspace-a", Event: "record_updated",
+				ID: classAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_updated",
 				ObjectKey: groupClass.Key, RecordID: "class-1", ActorID: "member-1", CreatedAt: stamp,
 			},
 		},
@@ -136,7 +136,7 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 				Data: map[string]any{"class_id": "class-1", "member_id": "member-1", "status": "booked"},
 			},
 			Audit: &auditmodel.AuditEvent{
-				ID: bookingAuditID, WorkspaceID: "workspace-a", Event: "record_created",
+				ID: bookingAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created",
 				ObjectKey: classBooking.Key, RecordID: "booking-1", ActorID: "member-1", CreatedAt: stamp,
 			},
 			Outbox: []publicationmodel.Message{{
@@ -153,7 +153,7 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 		LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{"booking_id": "booking-1", "status": "booked"}, ResponseStatus: 200,
 		AuditEvents: []auditmodel.AuditEvent{{
-			ID: actionAuditID, WorkspaceID: "workspace-a", Event: "gym.class_booked",
+			ID: actionAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "gym.class_booked",
 			ObjectKey: groupClass.Key, ActorID: "member-1", CreatedAt: stamp,
 		}},
 		ExpiresAt: now.Add(24 * time.Hour), Now: now.Add(time.Second),
@@ -216,8 +216,8 @@ func bookClassFailureTriggerSQL(stage, groupClass, classBooking, classAuditID, b
 	case "action_audit":
 		return bookClassIDFailureTrigger("p8_fail_action_audit", "_audit_events", actionAuditID)
 	case "receipt":
-		return `CREATE TRIGGER p8_fail_receipt BEFORE UPDATE OF status ON _action_executions
-			WHEN NEW.status = 'succeeded'
+		return `CREATE TRIGGER p8_fail_receipt BEFORE UPDATE OF status ON _operations
+			WHEN NEW.owner = 'action' AND NEW.status = 'succeeded'
 			BEGIN SELECT RAISE(ABORT, 'injected receipt failure'); END`
 	default:
 		panic("unsupported book class failure stage: " + stage)

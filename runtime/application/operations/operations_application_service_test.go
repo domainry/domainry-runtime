@@ -31,7 +31,7 @@ func (p *operationsRepositoryProbe) RegisterOperationsCommand(_ context.Context,
 	if p.registerErr != nil {
 		return operationsmodel.OperationsReceipt{}, "", p.registerErr
 	}
-	key := receipt.Command.Scope.WorkspaceID + ":" + receipt.Command.Scope.SystemPurpose + ":" + receipt.Command.Kind + ":" + receipt.Command.IdempotencyKey
+	key := receipt.Command.Scope.WorkspaceID + ":" + receipt.Command.Scope.SystemPurpose + ":" + receipt.Command.Owner + ":" + receipt.Command.Kind + ":" + receipt.Command.IdempotencyKey
 	if existing, found := p.receipts[key]; found {
 		return existing, operationspolicy.OperationsClassifySubmission(&existing, receipt.Command), nil
 	}
@@ -95,7 +95,7 @@ func TestOperationsSubmitPersistsReplayableWorkspaceReceipt(t *testing.T) {
 	request := OperationsSubmitRequest{Kind: "retention.cleanup", ResourceType: "retention_policy", Reason: "release cleanup", Payload: map[string]any{"mode": "preview"}}
 
 	first, decision, err := service.Submit(t.Context(), request, "backup-1", principal)
-	if err != nil || decision != operationsmodel.OperationsSubmissionAccepted || first.Command.ID != "operation_fixed" || first.StatusURL != "/operations/operation_fixed" {
+	if err != nil || decision != operationsmodel.OperationsSubmissionAccepted || first.Command.ID != "operation_fixed" || first.Command.Owner != "lifecycle" || first.StatusURL != "/operations/operation_fixed" {
 		t.Fatalf("first=%#v decision=%s err=%v", first, decision, err)
 	}
 	replayed, decision, err := service.Submit(t.Context(), request, "backup-1", principal)

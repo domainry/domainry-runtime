@@ -10,6 +10,7 @@ func RecordTimerSystemObjects() []definitionmodel.ObjectSchema {
 func recordTimerObject() definitionmodel.ObjectSchema {
 	object := recordTimerSystemObject("record_timer", "Record Timer", "Durable record-scoped action and workflow timers.", []definitionmodel.FieldSchema{
 		recordTimerField("timer_key", "Timer Key", "text", true),
+		recordTimerField("operation_id", "Operation ID", "text", false),
 		recordTimerField("object_key", "Object Key", "text", true),
 		recordTimerField("record_id", "Record ID", "text", true),
 		recordTimerField("purpose", "Purpose", "text", true),
@@ -49,7 +50,7 @@ func recordTimerObject() definitionmodel.ObjectSchema {
 			if object.Fields[index].Key == "object_key" || object.Fields[index].Key == "record_id" {
 				object.Fields[index].Config["indexed"] = true
 			}
-		case "status", "due_at", "priority", "sequence":
+		case "operation_id", "status", "due_at", "priority", "sequence":
 			object.Fields[index].Config["indexed"] = true
 		}
 	}
@@ -80,7 +81,7 @@ func recordTimerEventObject() definitionmodel.ObjectSchema {
 }
 
 func recordTimerSystemObject(key, name, description string, fields []definitionmodel.FieldSchema) definitionmodel.ObjectSchema {
-	return definitionmodel.ObjectSchema{Key: key, Name: name, Description: description, Fields: fields, UX: map[string]any{}, Config: map[string]any{"runtime_owned": true, "system_kind": "record_timer", "record_timer_runtime": true}}
+	return definitionmodel.ObjectSchema{Key: key, Name: name, Description: description, Fields: fields, Config: map[string]any{"runtime_owned": true, "system_kind": "record_timer", "record_timer_runtime": true}}
 }
 
 func recordTimerField(key, name, fieldType string, required bool) definitionmodel.FieldSchema {

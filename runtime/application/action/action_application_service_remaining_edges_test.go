@@ -246,6 +246,10 @@ func TestActionFailureAuditFallbacksAndPermissionCombinations(t *testing.T) {
 	if events := buildActionFailureAudits(t.Context(), action, invocation, result, notFound); len(events) != 1 || events[0].Event != "action_execution_failed" {
 		t.Fatalf("terminal failure audit=%+v", events)
 	}
+	transient := apperror.New(apperror.KindUnavailable, "backend.action.owner_unavailable", nil, nil)
+	if events := buildActionFailureAudits(t.Context(), action, invocation, result, transient); len(events) != 0 {
+		t.Fatalf("retryable attempt leaked into Audit: %+v", events)
+	}
 
 	invocation.Principal = accessfixture.WithMutation(invocation.Principal, func(role *accessfixture.Bundle) {
 		role.DataPolicies = append(role.DataPolicies, accessfixture.DataPolicyFixture{

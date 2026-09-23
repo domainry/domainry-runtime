@@ -49,7 +49,7 @@ func TestActionApplicationUsesCatalogAndOneInvoke(t *testing.T) {
 		}},
 		Audit: ActionAudit{BuildSuccess: func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
 			called["audit"] = true
-			return auditmodel.AuditEvent{ID: "action-audit", Event: "action.executed", WorkspaceID: "workspace-a", CreatedAt: "2026-07-22T00:00:00Z"}
+			return auditmodel.AuditEvent{ID: "action-audit", Event: "action.executed", Family: auditmodel.EventFamilyBusinessEntity, WorkspaceID: "workspace-a", CreatedAt: "2026-07-22T00:00:00Z"}
 		}},
 	})
 	principal := actionTestPrincipal("order.approve", "order.create")

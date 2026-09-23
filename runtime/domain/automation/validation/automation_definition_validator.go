@@ -4,8 +4,8 @@ import (
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
-	bindingcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/binding"
-	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/invocation"
+	bindingcontract "github.com/domainry/domainry-runtime/runtime/domain/invocation/binding"
+	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/invocation/contract"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 
 	"context"

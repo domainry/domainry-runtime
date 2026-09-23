@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
@@ -64,10 +65,24 @@ func (h *WorkflowsHandler) executeOwnerOperation(r *http.Request, kind, resource
 		value, err := execute(r.Context())
 		return operationsapplication.OperationsOwnerExecutionResult{Value: value}, err
 	}
+	principal := h.principal(r)
+	replayReadiness := func(ctx context.Context, _ any) error {
+		switch resourceType {
+		case "workflow_execution":
+			_, err := h.executions.InspectWorkflowExecution(ctx, resourceID, principal)
+			return err
+		case "workflow_process":
+			_, err := h.processes.OpsWorkflowProcess(ctx, resourceID, principal)
+			return err
+		default:
+			return apperror.New(apperror.KindInternal, "backend.operations.replay_readiness_unavailable", nil, nil)
+		}
+	}
 	return h.operations.ExecuteOwnerOperation(r.Context(), operationsapplication.OperationsOwnerExecutionRequest{
 		Kind: kind, ResourceType: resourceType, ResourceID: resourceID, Payload: payload,
 		Key: strings.TrimSpace(r.Header.Get("Idempotency-Key")), Reason: operationshttp.OwnerOperationReason(r, "operator requested "+kind), Reference: strings.TrimSpace(r.Header.Get("X-Operation-Reference")),
-	}, h.principal(r), execute)
+		ReplayReadiness: replayReadiness,
+	}, principal, execute)
 }
 
 func (h *WorkflowsHandler) simulateWorkflow(w http.ResponseWriter, r *http.Request) {

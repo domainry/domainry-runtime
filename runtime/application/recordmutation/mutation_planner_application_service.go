@@ -125,7 +125,7 @@ func (s *MutationPlannerApplicationService) planCanonical(ctx context.Context, p
 	if !found || invocation.Source == "" {
 		invocation.Source = transactionmodel.MutationSourceHTTP
 	}
-	if transactionmodel.MutationObjectWritePolicy(commit.Object) == transactionmodel.ObjectWritePolicyActionOnly && invocation.Source != transactionmodel.MutationSourceAction && invocation.Source != transactionmodel.MutationSourceInternal {
+	if transactionmodel.MutationObjectWritePolicy(commit.Object) == transactionmodel.ObjectWritePolicyActionOnly && invocation.Source != transactionmodel.MutationSourceProjectHTTP && invocation.Source != transactionmodel.MutationSourceAction && invocation.Source != transactionmodel.MutationSourceInternal {
 		return transactionmodel.MutationPlan{}, &MutationPlannerError{Code: "backend.mutation.action_required", Field: commit.Object.Key}
 	}
 	if err := recordpolicy.RecordValidateLifecycleMutation(commit.Object, commit.Operation, before); err != nil {

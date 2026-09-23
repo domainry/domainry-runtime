@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	bindingcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/binding"
+	bindingcontract "github.com/domainry/domainry-runtime/runtime/domain/invocation/binding"
 )
 
 type IntegrationEventContractIssue struct {

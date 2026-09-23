@@ -8,12 +8,10 @@ import (
 	"time"
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
-	"github.com/domainry/domainry-foundation/modulecapability"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 )
 
 type recordDataExchangeBindingProbe struct {
-	modulecapability.Binding
 	mu              sync.Mutex
 	jobs            map[string]dataexchange.Job
 	artifact        dataexchange.Artifact

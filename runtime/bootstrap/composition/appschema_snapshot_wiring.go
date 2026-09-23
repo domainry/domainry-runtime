@@ -106,7 +106,7 @@ func recordSchemaSnapshot(s *runtimeAssembly) appschemamodel.ApplicationSchemaSn
 		automationRules = append(automationRules, rule)
 	}
 	return appschemaservice.BuildSchemaSnapshot(appschemaservice.SchemaSnapshotState{
-		TemplateID: s.templateID, TemplateVersion: s.templateVersion, Name: s.name, TimeZone: s.timeZone,
+		ProjectKey: s.templateID, SchemaVersion: s.templateVersion, Name: s.name, TimeZone: s.timeZone,
 		Objects: objects, Actions: actions, Workflows: workflows, AutomationRules: automationRules,
 		BusinessCalendars: s.businessCalendars,
 		Dictionaries:      s.dictionaries, Integrations: s.integrations, Reports: s.reports,

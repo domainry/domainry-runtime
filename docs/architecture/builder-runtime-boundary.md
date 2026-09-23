@@ -20,7 +20,7 @@ Runtime provides a bounded three-step projection contract. Builder/CLI model-fac
 
 1. Module summary and `RuntimeModelAPIContractIndex` disclose only selection keys and routing facts. They must be the default model context.
 2. The caller requests one exact capability category or a selected set through `RuntimeModelAPIContractProjection`. Runtime authoring source projections contain only lifecycle, dependency, input schema and reference-binding facts needed to author candidate source values.
-3. Full OpenAPI operations, HTTP paths and methods, headers, status codes, idempotency mechanics, SSE cursors, background-job state and artifact download routes remain exact machine/client contracts. They are not model context.
+3. Typed Go operations, HTTP paths and methods, headers, status codes, idempotency mechanics, SSE cursors, background-job state and artifact download routes remain exact executable contracts. Generated static Markdown makes the relevant surface directly readable by models and people without introducing a JSON API-description authority.
 
 Runtime-owned automatic delivery policy stays below the model boundary. For example, a model selects `record_export` and sees a `file` result; Runtime chooses inline or background production from the effective export scope. Browser notification, progress, SSE resumption and the eventual artifact download are client/platform behavior and must not become separate model-authored branches.
 

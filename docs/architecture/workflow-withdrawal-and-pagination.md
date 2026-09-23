@@ -26,7 +26,7 @@ When more authorized rows exist, the response includes `next_cursor`. Pass it as
 
 The keyset position follows the existing `created_at DESC, id DESC` order, including equal timestamps. Cursors bind the workspace, user, role, authorization revision, list surface and normalized filters. Every page runs live authorization again; cursors carry no authority. They preserve traversal position rather than freezing mutable Workflow status. New rows above the first page do not shift later pages; changed filters or authorization require a fresh traversal.
 
-The source OpenAPI describes both wire shapes. `RuntimeAdminClient.listWorkflowProcessesPage` exposes the participant page request and response while retaining existing array calls.
+The Workflow owner SDK and generated static API reference describe both wire shapes. `RuntimeAdminClient.listWorkflowProcessesPage` exposes the participant page request and response while retaining existing array calls.
 
 ## Verification
 

@@ -3,6 +3,7 @@ package auditbinding
 import (
 	"testing"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -15,9 +16,14 @@ func TestAuditBuildEventPreservesWorkflowWorkloadLineage(t *testing.T) {
 			ReleaseID: "release-2", ReleaseDigest: "digest-2", TaskID: "task-2", SourceEventID: "event-2", InitiatorSubjectID: "member-2",
 		},
 	}, "request-2")
-	event := AuditBuildEvent(t.Context(), "action.customer_sync", "customer", "customer-2", principal, "Synced customer", nil, nil, map[string]any{"status": "succeeded"})
+	principal.CausationID = "cause-2"
+	ctx := requestcontext.WithOwnerExecutionID(t.Context(), "operation-2")
+	event := AuditBuildEvent(ctx, "action.customer_sync", "customer", "customer-2", principal, "Synced customer", nil, nil, map[string]any{"action_key": "customer.sync", "status": "succeeded"})
 	if event.ActorID != "workflow:customer_sync" || event.RecordID != "customer-2" {
 		t.Fatalf("audit event identity = %+v", event)
+	}
+	if event.OperationID != "operation-2" || event.CausationID != "cause-2" {
+		t.Fatalf("audit correlation identity = %+v", event)
 	}
 	for key, want := range map[string]any{
 		"actor_kind":   "workload",

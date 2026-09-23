@@ -35,7 +35,6 @@ func runtimeProjectProfileExtensions(source []profilebindingmodel.Binding) []ide
 			proofs = append(proofs, identitysdk.ProjectProfileClaimProof{Type: proof.Type, FieldKey: proof.FieldKey})
 		}
 		result = append(result, identitysdk.ProjectProfileExtension{
-			ContractVersion: extension.ContractVersion, MinReaderVersion: extension.MinReaderVersion,
 			ObjectKey: extension.ObjectKey, IdentityRelationField: extension.IdentityRelationField, Cardinality: extension.Cardinality,
 			BusinessIdentity: identitysdk.ProjectBusinessIdentityBinding{
 				Key: extension.BusinessIdentity.Key, StatusField: extension.BusinessIdentity.StatusField,
@@ -46,33 +45,8 @@ func runtimeProjectProfileExtensions(source []profilebindingmodel.Binding) []ide
 				AllowUnbound: extension.BindingLifecycle.AllowUnbound, InvitationChannels: append([]string(nil), extension.BindingLifecycle.InvitationChannels...),
 				ClaimProofs: proofs, RebindRequiresApproval: extension.BindingLifecycle.RebindRequiresApproval, RebindRevokesSessions: extension.BindingLifecycle.RebindRevokesSessions,
 			},
-			SummaryFields: append([]string(nil), extension.SummaryFields...), ProfileTabs: append([]string(nil), extension.ProfileTabs...),
-			ProfileTabLabels: cloneRuntimeStringMap(extension.ProfileTabLabels), ProfileTabFields: cloneRuntimeStringSliceMap(extension.ProfileTabFields),
-			ProfileTabRelatedObjects: cloneRuntimeStringSliceMap(extension.ProfileTabRelatedObjects), ProfileTabComponents: cloneRuntimeStringSliceMap(extension.ProfileTabComponents),
-			DefaultVisibility: extension.DefaultVisibility, RequiredPermissions: append([]string(nil), extension.RequiredPermissions...), StandaloneWorkspace: extension.StandaloneWorkspace,
+			DefaultVisibility: extension.DefaultVisibility, RequiredPermissions: append([]string(nil), extension.RequiredPermissions...),
 		})
-	}
-	return result
-}
-
-func cloneRuntimeStringMap(source map[string]string) map[string]string {
-	if source == nil {
-		return nil
-	}
-	result := make(map[string]string, len(source))
-	for key, value := range source {
-		result[key] = value
-	}
-	return result
-}
-
-func cloneRuntimeStringSliceMap(source map[string][]string) map[string][]string {
-	if source == nil {
-		return nil
-	}
-	result := make(map[string][]string, len(source))
-	for key, value := range source {
-		result[key] = append([]string(nil), value...)
 	}
 	return result
 }

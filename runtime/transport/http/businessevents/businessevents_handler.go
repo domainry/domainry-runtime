@@ -1,7 +1,6 @@
 package businessevents
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -60,19 +59,19 @@ func (h *BusinessEventsHandler) stream(w http.ResponseWriter, r *http.Request) {
 	}
 	filter, err := parseFilter(r)
 	if err != nil {
-		h.auditEvent(r, principal, "business_event_stream_rejected", "Business event stream rejected", map[string]any{"reason": "filter_invalid"})
 		h.writeServiceError(w, r, err)
 		return
 	}
 	lastEventID := strings.TrimSpace(r.Header.Get("Last-Event-ID"))
 	if len(lastEventID) > 256 || strings.ContainsAny(lastEventID, "\r\n") {
-		h.auditEvent(r, principal, "business_event_stream_rejected", "Business event stream rejected", map[string]any{"reason": "last_event_id_invalid"})
 		h.writeServiceError(w, r, apperror.New(apperror.KindBadRequest, "backend.event_stream.filter_invalid", nil, nil))
 		return
 	}
 	subscription, err := h.service.Open(r.Context(), principal, lastEventID)
 	if err != nil {
-		h.auditEvent(r, principal, "business_event_stream_rejected", "Business event stream rejected", map[string]any{"reason": apperror.CodeOf(err)})
+		if code := apperror.CodeOf(err); code == "backend.event_stream.identity_required" || code == "backend.event_stream.workspace_required" {
+			h.auditEvent(r, principal, "business_event_stream_rejected", "Business event stream rejected", map[string]any{"reason": code})
+		}
 		h.writeServiceError(w, r, err)
 		return
 	}
@@ -105,16 +104,6 @@ func (h *BusinessEventsHandler) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.auditEvent(r, principal, "business_event_stream_connected", "Business event stream connected", map[string]any{
-		"object_filter_count": len(filter.ObjectKeys), "event_type_filter_count": len(filter.EventTypes),
-		"last_event_id_present": lastEventID != "", "backplane_mode": h.service.BackplaneMode(r.Context()),
-	})
-	disconnectReason := "client_closed"
-	defer func() {
-		auditRequest := r.WithContext(context.WithoutCancel(r.Context()))
-		h.auditEvent(auditRequest, principal, "business_event_stream_disconnected", "Business event stream disconnected", map[string]any{"reason": disconnectReason})
-	}()
-
 	heartbeat := time.NewTimer(h.heartbeat)
 	defer heartbeat.Stop()
 	for {
@@ -123,28 +112,23 @@ func (h *BusinessEventsHandler) stream(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-heartbeat.C:
 			if _, err := fmt.Fprintf(w, ": heartbeat %d\n\n", time.Now().UTC().Unix()); err != nil {
-				disconnectReason = "write_failed"
 				return
 			}
 			if err := controller.Flush(); err != nil {
-				disconnectReason = "flush_failed"
 				return
 			}
 			heartbeat.Reset(h.heartbeat)
 		case event, ok := <-subscription.Events:
 			if !ok {
-				disconnectReason = "slow_consumer_or_backplane_closed"
 				return
 			}
 			if !filter.Matches(event) {
 				continue
 			}
 			if err := writeEvent(w, event); err != nil {
-				disconnectReason = "write_failed"
 				return
 			}
 			if err := controller.Flush(); err != nil {
-				disconnectReason = "flush_failed"
 				return
 			}
 		}

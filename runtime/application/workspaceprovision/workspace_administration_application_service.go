@@ -122,7 +122,7 @@ func authorizeWorkspaceAdministration(principal principalmodel.Principal, action
 func workspaceAdministrationActor(principal principalmodel.Principal) workspaceprovisionmodel.AdministrationActor {
 	return workspaceprovisionmodel.AdministrationActor{
 		WorkspaceID: principal.WorkspaceID, UserID: principal.UserID, RoleKey: principal.RoleKey,
-		RequestID: principal.RequestID, AuthorizationRevision: principal.AuthorizationRevision,
+		RequestID: principal.RequestID, CausationID: principal.CausationID, AuthorizationRevision: principal.AuthorizationRevision,
 	}
 }
 

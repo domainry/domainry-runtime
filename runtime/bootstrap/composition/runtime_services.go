@@ -30,11 +30,10 @@ import (
 	appschemarepository "github.com/domainry/domainry-runtime/runtime/domain/appschema/repository"
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
-	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 	recordcontract "github.com/domainry/domainry-runtime/runtime/domain/record/contract"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
@@ -136,7 +135,6 @@ type RuntimeServicesDependencies struct {
 	MetadataLocalization                metadatasdk.Localization
 	AutomationWorker                    automationcontract.AutomationWorkerStore
 	AutomationExecutions                automationrepository.AutomationExecutionRepository
-	BusinessEvidence                    changeplanrepository.ChangePlanEvidenceRepository
 	ActionExecutions                    actioncontract.ActionExecutionStore
 	ActionAssurance                     actioncontract.ActionAssuranceStore
 	IdentityPrincipals                  identitysdk.PrincipalResolver
@@ -168,12 +166,14 @@ type RuntimeServicesDependencies struct {
 	Worker                              workerplatform.Dependencies
 }
 
-// RuntimeServicesConfig keeps the mutable Runtime schema and its concrete
-// infrastructure dependencies visible as two independently reviewable inputs.
-// The Manifest value is copied into Runtime-owned indexes during construction.
+// RuntimeServicesConfig keeps storage/security facts separate from executable
+// code definitions. Neither input is a serialized all-product manifest.
 type RuntimeServicesConfig struct {
-	Manifest     manifestmodel.ManifestSchema
-	Dependencies RuntimeServicesDependencies
+	ProjectModel       projectmodel.RuntimeModel
+	ProjectDefinitions runtimeext.ProjectDefinitions
+	Actions            []definitionmodel.ActionSchema
+	Integrations       appschemamodel.IntegrationSchema
+	Dependencies       RuntimeServicesDependencies
 }
 
 func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *RuntimeServices {
@@ -236,19 +236,18 @@ func newRuntimeServicesAssembly(ctx context.Context, config RuntimeServicesConfi
 	if ctx == nil {
 		panic("composition.NewRuntimeServices requires a non-nil construction context")
 	}
-	manifest, deps := config.Manifest, config.Dependencies
-	services := newRuntimeServicesState(ctx, manifest, deps)
+	model, definitions, deps := config.ProjectModel, config.ProjectDefinitions, config.Dependencies
+	services := newRuntimeServicesState(ctx, definitions, config.Integrations, deps)
 	queryPolicy := initializeSchemaAndRecordFoundation(services, deps)
 	initializeWorkflowAutomationAndGovernance(services, deps)
 	initializeRecordApplications(services)
 	if services.dataExchangeProviders != nil {
 		services.dataExchangeProviders.Freeze()
 	}
-	services.applyManifestMetadata(manifest.TemplateID, manifest.Version, manifest.Name, manifest.EffectiveTimeZone(), manifest.Objects, manifest.Actions, manifest.Workflows, manifest.BusinessCalendars, manifest.AutomationRules, manifest.Dictionaries, manifest.Integrations, manifest.Reports, manifest.Skills, manifest.Agents, manifest.IdentityProfileExtensions)
-	services.applyManifestAgentMetadata(manifest.AgentTasks, manifest.AgentEntrypoints, manifest.AgentServicePrincipals)
+	services.applyProjectMetadata(model, config.Actions, definitions, config.Integrations)
 	services.targetExecutionService.UseAgentTargetRuntime(scheduledAgentTargetRuntimeAdapter{runtime: services, principals: services.identityPrincipals, tasks: services.agentScheduledTasks})
 	services.targetExecutionService.UseNotificationTargetRuntime(scheduledNotificationTargetRuntimeAdapter{runtime: services, principals: services.identityPrincipals, publish: services.notificationEventPublisher})
-	initializeIntegrationAndBusinessSystem(ctx, services, manifest, deps, queryPolicy)
+	initializeActionsAndPublication(ctx, services, deps, queryPolicy)
 	// The Scheduler adapter captures the Action Application by interface value,
 	// so bind it only after Action composition has completed.
 	services.targetExecutionService.UseBusinessActionTargetRuntime(newSchedulerBusinessActionRuntime(services))

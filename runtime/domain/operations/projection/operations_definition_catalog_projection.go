@@ -1,8 +1,16 @@
 package projection
 
 import (
+	"time"
+
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
+)
+
+const (
+	operationsTechnicalRetentionPolicy = "operations.technical_receipt.v1"
+	operationsLegalRetentionPolicy     = "operations.receipt.v1"
+	operationsDaySeconds               = int64((24 * time.Hour) / time.Second)
 )
 
 var operationsDefinitionCatalog = []operationsmodel.OperationsDefinition{
@@ -27,13 +35,13 @@ var operationsDefinitionCatalog = []operationsmodel.OperationsDefinition{
 	operationsSystemDefinition("runtime.instance.drain", "operations", "runtime_instance", true, operationscontract.ActionDrainRuntimeInstance, "instance identity and drain timeout are present"),
 	operationsSystemDefinition("runtime.instance.undrain", "operations", "runtime_instance", false, operationscontract.ActionUndrainRuntimeInstance, "instance is healthy, dependencies are ready and operator explicitly confirms admission"),
 	operationsSystemDefinition("worker.lease.force_release", "operations", "worker_lease", false, operationscontract.ActionForceReleaseLease, "lease is expired or independently verified stuck and fencing remains active"),
-	operationsDefinition("dead_letter.inspect", "operations", "dead_letter", false, operationscontract.ActionInspectDeadLetter, "owner and dead-letter identity are present"),
+	operationsTechnicalDefinition("dead_letter.inspect", "operations", "dead_letter", false, operationscontract.ActionInspectDeadLetter, "owner and dead-letter identity are present"),
 	operationsDefinition("dead_letter.resolve", "operations", "dead_letter", false, operationscontract.ActionResolveDeadLetter, "owner accepts the explicit resolution transition"),
 	operationsDefinition("dead_letter.retry", "operations", "dead_letter", false, operationscontract.ActionRetryDeadLetter, "owner reauthorizes replay and current dependency readiness passes"),
 	operationsDefinition("dead_letter.ack", "operations", "dead_letter", false, operationscontract.ActionAcknowledgeDeadLetter, "owner permits acknowledgement and evidence note is present"),
-	operationsDefinition("bulk_operation.dry_run", "operations", "bulk_operation", true, operationscontract.ActionDryRunBulkDeadLetters, "filter and bounded item limit are valid"),
+	operationsTechnicalDefinition("bulk_operation.dry_run", "operations", "bulk_operation", true, operationscontract.ActionDryRunBulkDeadLetters, "filter and bounded item limit are valid"),
 	operationsDefinition("bulk_operation.apply", "operations", "bulk_operation", true, operationscontract.ActionApplyBulkDeadLetters, "matching dry-run receipt, confirmation, and bounded item limit are present"),
-	operationsSystemDefinition("diagnostics.snapshot", "operations", "runtime", false, operationscontract.ActionCaptureDiagnostics, "requested sections and bounded cost limits are valid"),
+	operationsSystemTechnicalDefinition("diagnostics.snapshot", "operations", "runtime", false, operationscontract.ActionCaptureDiagnostics, "requested sections and bounded cost limits are valid"),
 	operationsSystemDefinition("break_glass.enable", "operations", "runtime", false, operationscontract.ActionEnableBreakGlass, "incident reference, expiry, approver, alert target, and strong audit are present"),
 	operationsSystemDefinition("break_glass.disable", "operations", "runtime", false, operationscontract.ActionDisableBreakGlass, "active grant exists and revocation evidence is recorded"),
 }
@@ -45,11 +53,34 @@ func operationsDefinition(kind, owner, resourceType string, longRunning bool, ac
 		AuditEvent: kind + ".requested", ReceiptType: "operations.receipt.v1",
 		FailureSemantics: []operationsmodel.OperationsFailureClass{operationsmodel.OperationsFailureRetryable, operationsmodel.OperationsFailureTerminal, operationsmodel.OperationsFailureManualIntervention},
 		LongRunning:      longRunning,
+		Retention: operationsmodel.OperationsRetentionPolicy{
+			PolicyKey: operationsLegalRetentionPolicy, Class: operationsmodel.OperationsRetentionLegalAudit,
+			SucceededRetentionSeconds: 365 * operationsDaySeconds,
+			FailedRetentionSeconds:    7 * 365 * operationsDaySeconds,
+			MinimumRetentionSeconds:   90 * operationsDaySeconds,
+		},
 	}
+}
+
+func operationsTechnicalDefinition(kind, owner, resourceType string, longRunning bool, actionKey, precondition string) operationsmodel.OperationsDefinition {
+	definition := operationsDefinition(kind, owner, resourceType, longRunning, actionKey, precondition)
+	definition.Retention = operationsmodel.OperationsRetentionPolicy{
+		PolicyKey: operationsTechnicalRetentionPolicy, Class: operationsmodel.OperationsRetentionTechnical,
+		SucceededRetentionSeconds: 30 * operationsDaySeconds,
+		FailedRetentionSeconds:    30 * operationsDaySeconds,
+		MinimumRetentionSeconds:   7 * operationsDaySeconds,
+	}
+	return definition
 }
 
 func operationsSystemDefinition(kind, owner, resourceType string, longRunning bool, actionKey, precondition string) operationsmodel.OperationsDefinition {
 	definition := operationsDefinition(kind, owner, resourceType, longRunning, actionKey, precondition)
+	definition.ExecutionScope = operationsmodel.OperationsExecutionSystem
+	return definition
+}
+
+func operationsSystemTechnicalDefinition(kind, owner, resourceType string, longRunning bool, actionKey, precondition string) operationsmodel.OperationsDefinition {
+	definition := operationsTechnicalDefinition(kind, owner, resourceType, longRunning, actionKey, precondition)
 	definition.ExecutionScope = operationsmodel.OperationsExecutionSystem
 	return definition
 }

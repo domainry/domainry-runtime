@@ -27,6 +27,37 @@ type governedHandlerProbe struct {
 	allowEmpty bool
 }
 
+type governedNativeInput struct {
+	Amount float64 `json:"amount"`
+}
+
+type governedNativeHandlerProbe struct {
+	descriptor    runtimeext.HandlerDescriptor
+	events        *[]string
+	rawInvoked    int
+	nativeInvoked int
+}
+
+func (h *governedNativeHandlerProbe) Descriptor() runtimeext.HandlerDescriptor { return h.descriptor }
+
+func (h *governedNativeHandlerProbe) Invoke(context.Context, runtimeext.ActionExecution, json.RawMessage) (json.RawMessage, error) {
+	h.rawInvoked++
+	return json.RawMessage(`{"accepted":true}`), nil
+}
+
+func (h *governedNativeHandlerProbe) InvokeNative(_ context.Context, _ runtimeext.ActionExecution, input any) (json.RawMessage, bool, error) {
+	typed, ok := input.(governedNativeInput)
+	if !ok {
+		return nil, false, nil
+	}
+	h.nativeInvoked++
+	*h.events = append(*h.events, "handler")
+	if typed.Amount != 12.5 {
+		return nil, true, errors.New("native handler received the wrong input")
+	}
+	return json.RawMessage(`{"accepted":true}`), true, nil
+}
+
 func (h *governedHandlerProbe) Descriptor() runtimeext.HandlerDescriptor { return h.descriptor }
 
 func (h *governedHandlerProbe) Invoke(_ context.Context, execution runtimeext.ActionExecution, input json.RawMessage) (json.RawMessage, error) {
@@ -64,6 +95,28 @@ func TestBusinessHandlerReceivesOnlyPublishedInputFields(t *testing.T) {
 	}
 	if string(handler.input) != `{"amount":12.5}` {
 		t.Fatalf("handler input=%s", handler.input)
+	}
+}
+
+func TestBusinessHandlerReceivesEquivalentInProcessInputWithoutMapDecode(t *testing.T) {
+	events := []string{}
+	handler := &governedNativeHandlerProbe{
+		events: &events,
+		descriptor: actionTestHandlerDescriptor(
+			"booking.reserve",
+			[]runtimeext.ActionObjectCapability{{ObjectKey: "booking", Operations: []string{"update"}}},
+		),
+	}
+	store := &governedExecutionStoreProbe{events: &events}
+	service := newGovernedHandlerApplication(t, handler, ActionAuthorization{}, ActionAssurance{}, store)
+	invocation := governedHandlerInvocation(map[string]any{"amount": 12.5})
+
+	ctx := WithProjectNativeInput(t.Context(), "booking.reserve", governedNativeInput{Amount: 12.5})
+	if _, err := service.Invoke(ctx, actionmodel.ActionSourceHTTP, invocation); err != nil {
+		t.Fatal(err)
+	}
+	if handler.nativeInvoked != 1 || handler.rawInvoked != 0 {
+		t.Fatalf("native calls=%d raw calls=%d", handler.nativeInvoked, handler.rawInvoked)
 	}
 }
 

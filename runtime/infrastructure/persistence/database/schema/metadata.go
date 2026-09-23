@@ -6,54 +6,22 @@ import (
 )
 
 func EnsureApplicationSchema(ctx context.Context, s Store) error {
-	if err := EnsureSubjectErasureSchema(ctx, s); err != nil {
-		return err
-	}
-	documentText := "TEXT"
-	if s.Driver() == "mysql" {
-		// Change Plans and canonical resource definitions are complete system
-		// documents, not short labels. MySQL TEXT is capped at 64 KiB while
-		// SQLite/PostgreSQL TEXT is effectively unbounded for this use case.
-		documentText = "LONGTEXT"
-	}
-	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("_application_schema_projection")+" ("+
+	return EnsureApplicationSchemaFor(ctx, s, true)
+}
+
+func EnsureApplicationSchemaFor(ctx context.Context, s Store, _ bool) error {
+	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("_project_model_state")+" ("+
 		s.Identifier("id")+" "+s.ApplicationSchemaIDColumnType()+" PRIMARY KEY, "+
-		s.Identifier("contract_version")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
-		s.Identifier("source_hash")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
-		s.Identifier("schema_hash")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
-		s.Identifier("artifact_version")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
-		s.Identifier("materializer_version")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
-		s.Identifier("status")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
-		s.Identifier("template_id")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
+		s.Identifier("schema_version")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
+		s.Identifier("model_hash")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
+		s.Identifier("catalog_hash")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
+		s.Identifier("project_key")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
 		s.Identifier("default_locale")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
+		s.Identifier("time_zone")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT 'UTC', "+
 		s.Identifier("name")+" "+s.RuntimeColumnDefinition("TEXT NOT NULL DEFAULT ''")+", "+
-		s.Identifier("materialized_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '')"); err != nil {
-		return fmt.Errorf("create application schema projection: %w", err)
-	}
-	if err := EnsureApplicationTimeZoneSchema(ctx, s); err != nil {
-		return err
-	}
-	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("_application_schema_seed_checkpoints")+" ("+
-		s.Identifier("key")+" "+s.ApplicationSchemaIDColumnType()+" PRIMARY KEY, "+
-		s.Identifier("value")+" "+documentText+" NOT NULL, "+
-		s.Identifier("updated_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL)"); err != nil {
-		return fmt.Errorf("create application schema seed checkpoints: %w", err)
-	}
-	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("_application_schema_exact_decimal_migration_receipts")+" ("+
-		s.Identifier("id")+" "+s.ApplicationSchemaIDColumnType()+" PRIMARY KEY, "+
-		s.Identifier("contract_version")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
-		s.Identifier("object_key")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
-		s.Identifier("column_keys")+" "+documentText+" NOT NULL, "+
-		s.Identifier("from_types")+" "+documentText+" NOT NULL, "+
-		s.Identifier("to_types")+" "+documentText+" NOT NULL, "+
-		s.Identifier("row_count")+" BIGINT NOT NULL, "+
-		s.Identifier("before_hash")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
-		s.Identifier("after_hash")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
-		s.Identifier("applied_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL)"); err != nil {
-		return fmt.Errorf("create _application_schema_exact_decimal_migration_receipts: %w", err)
-	}
-	if err := EnsureDefinitionUpgradeReceiptsSchema(ctx, s); err != nil {
-		return err
+		s.Identifier("initialized_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '', "+
+		s.Identifier("catalog_updated_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL DEFAULT '')"); err != nil {
+		return fmt.Errorf("create project model state: %w", err)
 	}
 	if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier("_record_localized_values")+" ("+
 		s.Identifier("workspace_id")+" "+s.LocalizedTextKeyColumnType()+" NOT NULL, "+

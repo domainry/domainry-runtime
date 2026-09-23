@@ -2,7 +2,9 @@ package operations
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -15,13 +17,36 @@ import (
 
 var _ operationsrepository.DatabaseRetirementRepository = OperationsStore{}
 
+const (
+	databaseRetirementSystemPurpose = "database_retirement"
+	databaseRetirementOwner         = "operations"
+	databaseRetirementKind          = "database_retirement"
+)
+
 func (s OperationsStore) RegisterDatabaseRetirement(ctx context.Context, retirement operationsmodel.DatabaseRetirement) (bool, error) {
 	payload, _ := json.Marshal(retirement)
-	observation := retirement.Evidence.Observation
-	queryValue, args, buildErr := query.NewInsertBuilder(s.store.SQLRenderer, "_operation_database_retirements").Columns("id", "engine", "database_name", "schema_name", "object_kind", "object_name", "parent_name", "owner", "state", "blocked_reason", "read_count", "write_count", "last_read_at", "last_write_at", "source_counts_json", "retirement_json", "updated_at").Values(
-		retirement.ID, retirement.Object.Engine, retirement.Object.Database, retirement.Object.Schema, retirement.Object.Kind, retirement.Object.Name, retirement.Object.ParentName,
-		retirement.Evidence.Owner, string(retirement.State), retirement.BlockedReason, observation.ReadCount, observation.WriteCount, retirementTime(observation.LastReadAt), retirementTime(observation.LastWriteAt), retirementSources(observation.SourceCounts), string(payload), retirement.UpdatedAt.UTC().Format(time.RFC3339Nano),
-	).Build()
+	metadata, _ := json.Marshal(retirement.Object)
+	identity := databaseRetirementIdentity(retirement.Object)
+	evidence := []string{}
+	if strings.TrimSpace(retirement.Evidence.AuditEventID) != "" {
+		evidence = append(evidence, strings.TrimSpace(retirement.Evidence.AuditEventID))
+	}
+	receipt := operationsmodel.OperationsReceipt{
+		Command: operationsmodel.OperationsCommand{
+			ID: retirement.ID, Owner: databaseRetirementOwner, Kind: databaseRetirementKind,
+			ActionKey:      "runtime.operations.database_retirement",
+			Scope:          operationsmodel.OperationsScope{SystemPurpose: databaseRetirementSystemPurpose, ResourceType: "database_object", ResourceID: retirement.ID},
+			IdempotencyKey: identity, RequestFingerprint: identity, RequestedBy: retirement.Evidence.Owner,
+			Reason: retirement.BlockedReason, Status: operationsmodel.OperationsStatus(retirement.State), CreatedAt: retirement.UpdatedAt, UpdatedAt: retirement.UpdatedAt,
+		},
+		StatusURL: "/api/operations/database-retirements/" + retirement.ID,
+		Result:    payload, Metadata: metadata, Evidence: evidence,
+	}
+	if retirement.State == operationsmodel.DatabaseRetirementBlocked {
+		receipt.ErrorCode = "runtime.database_retirement_blocked"
+		receipt.FailureClass = operationsmodel.OperationsFailureManualIntervention
+	}
+	queryValue, args, buildErr := query.NewInsertBuilder(s.store.SQLRenderer, "_operations").Columns(operationsReceiptColumns()...).Values(operationsReceiptValues(receipt)...).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}
@@ -34,7 +59,7 @@ func (s OperationsStore) RegisterDatabaseRetirement(ctx context.Context, retirem
 }
 
 func (s OperationsStore) GetDatabaseRetirement(ctx context.Context, id string) (operationsmodel.DatabaseRetirement, bool, error) {
-	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, "_operation_database_retirements").Columns("retirement_json").Where(query.Equal("id", strings.TrimSpace(id))).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, "_operations").Columns("result_json").Where(databaseRetirementPredicate(query.Equal("id", strings.TrimSpace(id)))).Build()
 	if buildErr != nil {
 		return operationsmodel.DatabaseRetirement{}, false, buildErr
 	}
@@ -56,9 +81,9 @@ func (s OperationsStore) ListDatabaseRetirements(ctx context.Context, state oper
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	builder := query.NewSelectBuilder(s.store.SQLRenderer, "_operation_database_retirements").Columns("retirement_json")
+	builder := query.NewSelectBuilder(s.store.SQLRenderer, "_operations").Columns("result_json").Where(databaseRetirementPredicate())
 	if state != "" {
-		builder.Where(query.Equal("state", string(state)))
+		builder.Where(databaseRetirementPredicate(query.Equal("status", string(state))))
 	}
 	queryValue, args, buildErr := builder.OrderBy(query.Descending("updated_at"), query.Descending("id")).Limit(limit).Build()
 	if buildErr != nil {
@@ -86,8 +111,22 @@ func (s OperationsStore) ListDatabaseRetirements(ctx context.Context, state oper
 
 func (s OperationsStore) TransitionDatabaseRetirement(ctx context.Context, retirement operationsmodel.DatabaseRetirement, expected operationsmodel.DatabaseRetirementState) (bool, error) {
 	payload, _ := json.Marshal(retirement)
-	observation := retirement.Evidence.Observation
-	queryValue, args, buildErr := query.NewUpdateBuilder(s.store.SQLRenderer, "_operation_database_retirements").Set("state", string(retirement.State)).Set("blocked_reason", retirement.BlockedReason).Set("read_count", observation.ReadCount).Set("write_count", observation.WriteCount).Set("last_read_at", retirementTime(observation.LastReadAt)).Set("last_write_at", retirementTime(observation.LastWriteAt)).Set("source_counts_json", retirementSources(observation.SourceCounts)).Set("retirement_json", string(payload)).Set("updated_at", retirement.UpdatedAt.UTC().Format(time.RFC3339Nano)).Where(query.And(query.Equal("id", retirement.ID), query.Equal("state", string(expected)))).Build()
+	evidence, _ := json.Marshal(databaseRetirementEvidenceReferences(retirement))
+	builder := query.NewUpdateBuilder(s.store.SQLRenderer, "_operations").
+		Set("status", string(retirement.State)).
+		Set("reason", retirement.BlockedReason).
+		Set("result_json", string(payload)).
+		Set("evidence_json", string(evidence)).
+		Set("updated_at", retirement.UpdatedAt.UTC().Format(time.RFC3339Nano)).
+		Set("error_code", "").
+		Set("failure_class", "")
+	if retirement.State == operationsmodel.DatabaseRetirementBlocked {
+		builder.Set("error_code", "runtime.database_retirement_blocked").Set("failure_class", string(operationsmodel.OperationsFailureManualIntervention))
+	}
+	if retirement.State == operationsmodel.DatabaseRetirementDropped || retirement.State == operationsmodel.DatabaseRetirementCodeRemoved {
+		builder.Set("finished_at", retirement.UpdatedAt.UTC().Format(time.RFC3339Nano))
+	}
+	queryValue, args, buildErr := builder.Where(databaseRetirementPredicate(query.Equal("id", retirement.ID), query.Equal("status", string(expected)))).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}
@@ -113,7 +152,7 @@ func (s OperationsStore) RecordDatabaseRetirementAccess(ctx context.Context, id,
 	}
 	defer func() { _ = tx.Rollback() }()
 	var payload string
-	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, "_operation_database_retirements").Columns("retirement_json").Where(query.Equal("id", strings.TrimSpace(id))).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, "_operations").Columns("result_json").Where(databaseRetirementPredicate(query.Equal("id", strings.TrimSpace(id)))).Build()
 	if buildErr != nil {
 		return buildErr
 	}
@@ -139,7 +178,7 @@ func (s OperationsStore) RecordDatabaseRetirementAccess(ctx context.Context, id,
 	}
 	retirement.UpdatedAt = accessedAt
 	updatedPayload, _ := json.Marshal(retirement)
-	update, updateArgs, buildErr := query.NewUpdateBuilder(s.store.SQLRenderer, "_operation_database_retirements").Set("read_count", observation.ReadCount).Set("write_count", observation.WriteCount).Set("last_read_at", retirementTime(observation.LastReadAt)).Set("last_write_at", retirementTime(observation.LastWriteAt)).Set("source_counts_json", retirementSources(observation.SourceCounts)).Set("retirement_json", string(updatedPayload)).Set("updated_at", accessedAt.Format(time.RFC3339Nano)).Where(query.Equal("id", retirement.ID)).Build()
+	update, updateArgs, buildErr := query.NewUpdateBuilder(s.store.SQLRenderer, "_operations").Set("result_json", string(updatedPayload)).Set("updated_at", accessedAt.Format(time.RFC3339Nano)).Where(databaseRetirementPredicate(query.Equal("id", retirement.ID))).Build()
 	if buildErr != nil {
 		return buildErr
 	}
@@ -149,21 +188,6 @@ func (s OperationsStore) RecordDatabaseRetirementAccess(ctx context.Context, id,
 	return tx.Commit()
 }
 
-func retirementTime(value *time.Time) string {
-	if value == nil {
-		return ""
-	}
-	return value.UTC().Format(time.RFC3339Nano)
-}
-
-func retirementSources(values map[string]uint64) string {
-	if values == nil {
-		return "{}"
-	}
-	raw, _ := json.Marshal(values)
-	return string(raw)
-}
-
 func databaseRetirementAccessSourceAllowed(source string) bool {
 	switch source {
 	case "runtime", "http", "worker", "migration", "report", "query_builder", "connector", "external":
@@ -171,4 +195,27 @@ func databaseRetirementAccessSourceAllowed(source string) bool {
 	default:
 		return false
 	}
+}
+
+func databaseRetirementPredicate(extra ...query.Predicate) query.Predicate {
+	predicates := []query.Predicate{
+		query.Equal("workspace_id", ""),
+		query.Equal("system_purpose", databaseRetirementSystemPurpose),
+		query.Equal("owner", databaseRetirementOwner),
+		query.Equal("kind", databaseRetirementKind),
+	}
+	return query.And(append(predicates, extra...)...)
+}
+
+func databaseRetirementIdentity(object operationsmodel.DatabaseObjectIdentity) string {
+	payload, _ := json.Marshal(object)
+	digest := sha256.Sum256(payload)
+	return hex.EncodeToString(digest[:])
+}
+
+func databaseRetirementEvidenceReferences(retirement operationsmodel.DatabaseRetirement) []string {
+	if strings.TrimSpace(retirement.Evidence.AuditEventID) == "" {
+		return []string{}
+	}
+	return []string{strings.TrimSpace(retirement.Evidence.AuditEventID)}
 }

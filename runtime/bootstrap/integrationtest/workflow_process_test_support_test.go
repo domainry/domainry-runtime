@@ -16,7 +16,7 @@ import (
 func newWorkflowProcessTestService(t *testing.T, store *persistence.RuntimeStore, workflow definitionmodel.WorkflowSchema, identityProjection identitysdk.Projection) *RuntimeServices {
 	t.Helper()
 	return runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{
-		TemplateID: "workflow-process-test", TemplateVersion: "1", Name: "Workflow Process Test",
+		ProjectKey: "workflow-process-test", SchemaVersion: "1", Name: "Workflow Process Test",
 		Objects: recordtimerprojection.RecordTimerSystemObjects(), Workflows: []definitionmodel.WorkflowSchema{workflow},
 		Integrations: connectormodel.IntegrationSchema{}, Store: store, IdentityProjection: identityProjection,
 		WorkflowProcesses: workflowpersistence.NewWorkflowProcessStore(store),

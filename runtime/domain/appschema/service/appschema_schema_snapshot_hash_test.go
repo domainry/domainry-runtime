@@ -12,7 +12,7 @@ import (
 
 func TestSchemaSnapshotHashCoversAllManifestDomains(t *testing.T) {
 	newSnapshot := func(dictionaries []appschemamodel.DictionarySchema, reports []reportmodel.ReportSchema) appschemamodel.ApplicationSchemaSnapshot {
-		snapshot := appschemamodel.ApplicationSchemaSnapshot{TemplateID: "template", TemplateVersion: "1", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Dictionaries: dictionaries, Reports: reports}
+		snapshot := appschemamodel.ApplicationSchemaSnapshot{ProjectKey: "template", SchemaVersion: "1", Objects: []definitionmodel.ObjectSchema{{Key: "customer"}}, Dictionaries: dictionaries, Reports: reports}
 		snapshot.SchemaHash = SchemaSnapshotHash(snapshot)
 		snapshot.SnapshotVersion = snapshot.SchemaHash
 		return snapshot

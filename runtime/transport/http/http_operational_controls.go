@@ -60,16 +60,16 @@ func (s *HTTPRouter) readinessSnapshot(ctx context.Context) healthplatform.Snaps
 			return errors.New("startup incomplete")
 		}},
 		{Name: "database", Criticality: healthplatform.Critical, Timeout: s.healthCheckTimeout, Run: func(ctx context.Context) error {
-			if s.runtimeStatus == nil {
+			if s.runtimeReadiness == nil {
 				return errors.New("runtime status unavailable")
 			}
-			return s.runtimeStatus.StorageReadiness(ctx)
+			return s.runtimeReadiness.StorageReadiness(ctx)
 		}},
 		{Name: "migration", Criticality: healthplatform.Critical, Timeout: s.healthCheckTimeout, Run: func(ctx context.Context) error {
-			if s.runtimeStatus == nil {
+			if s.runtimeReadiness == nil {
 				return errors.New("runtime status unavailable")
 			}
-			return s.runtimeStatus.MigrationReadiness(ctx)
+			return s.runtimeReadiness.MigrationReadiness(ctx)
 		}},
 		{Name: "drain", Criticality: healthplatform.Critical, Timeout: s.healthCheckTimeout, Run: func(context.Context) error {
 			workerDraining := s.workerControl != nil && s.workerControl.Snapshot().State == workerplatform.ShutdownDraining

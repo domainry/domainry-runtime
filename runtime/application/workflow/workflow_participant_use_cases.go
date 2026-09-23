@@ -87,6 +87,7 @@ type ParticipantWorkflowProcessDetailDTO struct {
 
 type OpsWorkflowExecutionDTO struct {
 	ID             string `json:"id"`
+	OperationID    string `json:"operation_id,omitempty"`
 	WorkflowKey    string `json:"workflow_key"`
 	Status         string `json:"status"`
 	ProcessID      string `json:"process_id,omitempty"`
@@ -104,6 +105,7 @@ type OpsWorkflowExecutionDTO struct {
 
 type OpsWorkflowProcessDTO struct {
 	ID                  string   `json:"id"`
+	OperationID         string   `json:"operation_id,omitempty"`
 	WorkflowKey         string   `json:"workflow_key"`
 	DefinitionVersionID string   `json:"workflow_definition_version_id,omitempty"`
 	DefinitionVersion   int      `json:"definition_version"`
@@ -227,7 +229,7 @@ func ProjectParticipantWorkflowProcessDetail(detail WorkflowProcessDetail) Parti
 
 func ProjectOpsWorkflowExecution(execution workflowmodel.WorkflowExecution) OpsWorkflowExecutionDTO {
 	return OpsWorkflowExecutionDTO{
-		ID: execution.ID, WorkflowKey: execution.WorkflowKey, Status: execution.Status,
+		ID: execution.ID, OperationID: execution.OperationID, WorkflowKey: execution.WorkflowKey, Status: execution.Status,
 		ProcessID: execution.ProcessID, NodeID: execution.NodeID, Attempt: execution.Attempt,
 		MaxAttempts: execution.MaxAttempts, NextRunAt: execution.NextRunAt, LastError: execution.LastError,
 		LeaseOwner: execution.LeaseOwner, LeaseExpiresAt: execution.LeaseExpiresAt,
@@ -241,7 +243,7 @@ func ProjectOpsWorkflowProcess(process workflowmodel.WorkflowProcessInstance) Op
 		retryCount = workflowpolicy.WorkflowRetryCount(process.Result["retry_count"])
 	}
 	return OpsWorkflowProcessDTO{
-		ID: process.ID, WorkflowKey: process.WorkflowKey,
+		ID: process.ID, OperationID: process.OperationID, WorkflowKey: process.WorkflowKey,
 		DefinitionVersionID: process.DefinitionVersionID, DefinitionVersion: process.DefinitionVersion,
 		DefinitionHash: process.DefinitionHash, Status: process.Status, CurrentNodeIDs: process.CurrentNodeIDs,
 		FailedNodeNames: process.FailedNodeNames, ErrorCode: process.ErrorCode,

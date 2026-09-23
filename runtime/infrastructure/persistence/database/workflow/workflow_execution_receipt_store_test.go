@@ -28,6 +28,10 @@ func TestWorkflowExecutionReceiptStoreIsAtomicReplayableAndFenced(t *testing.T) 
 	if err != nil || first.Decision != idempotency.DecisionAcquired || first.Receipt.FencingToken != 1 {
 		t.Fatalf("first=%#v err=%v", first, err)
 	}
+	var legacyTables int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_workflow_execution_receipts'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
+		t.Fatalf("legacy workflow receipt table count=%d err=%v", legacyTables, err)
+	}
 	second, err := repository.TryBeginExecution(t.Context(), request)
 	if err != nil || second.Decision != idempotency.DecisionInProgress {
 		t.Fatalf("second=%#v err=%v", second, err)

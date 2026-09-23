@@ -14,16 +14,17 @@ import (
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	operationsprojection "github.com/domainry/domainry-runtime/runtime/domain/operations/projection"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
+	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
 // reconcileRuntimeIdentityAuthorization registers the Runtime application and
 // submits one complete PermissionDefinition snapshot per canonical Action
 // owner. Object fields, references and facts stay in Runtime metadata and are
 // intentionally absent from the Identity contract.
-func reconcileRuntimeIdentityAuthorization(ctx context.Context, binding identitysdk.Binding, snapshot appschemamodel.ApplicationSchemaSnapshot, moduleActions []actioncontract.ActionDefinition, previousRegistry *actioncontract.Registry, roles []manifestmodel.RoleSchema, workspaceID, applicationKey string, redirectURLs []string) (*actioncontract.Registry, error) {
-	registry, err := runtimeAuthorizationActionRegistry(snapshot, applicationKey, moduleActions)
+func reconcileRuntimeIdentityAuthorization(ctx context.Context, binding identitysdk.Binding, snapshot appschemamodel.ApplicationSchemaSnapshot, moduleActions []actioncontract.ActionDefinition, previousRegistry *actioncontract.Registry, roles []projectmodel.Role, workspaceID, applicationKey string, redirectURLs []string, selected ...persistence.RuntimeSchemaCapabilities) (*actioncontract.Registry, error) {
+	registry, err := runtimeAuthorizationActionRegistry(snapshot, applicationKey, moduleActions, selected...)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +52,7 @@ func reconcileRuntimeIdentityAuthorization(ctx context.Context, binding identity
 // embedded modules and HTTP endpoint adapters are all present, so the Runtime
 // can reject orphan grants without asking the Blueprint model to duplicate a
 // Permission resource catalog it cannot know completely.
-func validateRuntimeAuthorizationReferences(snapshot appschemamodel.ApplicationSchemaSnapshot, roles []manifestmodel.RoleSchema, registry *actioncontract.Registry) error {
+func validateRuntimeAuthorizationReferences(snapshot appschemamodel.ApplicationSchemaSnapshot, roles []projectmodel.Role, registry *actioncontract.Registry) error {
 	known := map[string]bool{}
 	if registry != nil {
 		for _, permission := range registry.PermissionDefinitions() {
@@ -262,22 +263,31 @@ func (snapshot *runtimeAuthorizationRegistrySnapshot) QueryPermissionUsages(ctx 
 
 var _ actioncontract.PermissionUsageProvider = (*runtimeAuthorizationRegistrySnapshot)(nil)
 
-func runtimeAuthorizationActionRegistry(snapshot appschemamodel.ApplicationSchemaSnapshot, applicationKey string, moduleActions []actioncontract.ActionDefinition) (*actioncontract.Registry, error) {
+func runtimeAuthorizationActionRegistry(snapshot appschemamodel.ApplicationSchemaSnapshot, applicationKey string, moduleActions []actioncontract.ActionDefinition, selected ...persistence.RuntimeSchemaCapabilities) (*actioncontract.Registry, error) {
+	capabilities := selectedRuntimeSchemaCapabilities(selected)
+	endpointContracts := runtimeEndpointContractsForCapabilities(capabilities)
 	operationsActions, err := operationsprojection.OperationsAuthorizationActions()
 	if err != nil {
 		return nil, err
 	}
-	contributed := make([]actioncontract.ActionDefinition, 0, len(moduleActions)+len(runtimeModuleInventoryActions(applicationKey))+len(operationsActions))
+	contributed := make([]actioncontract.ActionDefinition, 0, len(moduleActions)+len(runtimeModuleInventoryActions(applicationKey, capabilities))+len(operationsActions))
 	for index := range moduleActions {
+		if !runtimeActionSelected(moduleActions[index].Key, capabilities) {
+			continue
+		}
 		contributed = append(contributed, actioncontract.CloneDefinition(moduleActions[index]))
 	}
-	contributed = append(contributed, runtimeModuleInventoryActions(applicationKey)...)
-	contributed = append(contributed, operationsActions...)
-	knownActionKeys := make(map[string]bool, len(contributed)+len(endpointmodel.EndpointContracts))
+	contributed = append(contributed, runtimeModuleInventoryActions(applicationKey, capabilities)...)
+	for index := range operationsActions {
+		if runtimeActionSelected(operationsActions[index].Key, capabilities) {
+			contributed = append(contributed, operationsActions[index])
+		}
+	}
+	knownActionKeys := make(map[string]bool, len(contributed)+len(endpointContracts))
 	for _, action := range contributed {
 		knownActionKeys[action.Key] = true
 	}
-	for _, endpoint := range endpointmodel.EndpointContracts {
+	for _, endpoint := range endpointContracts {
 		knownActionKeys[endpoint.ActionKey] = true
 	}
 	nonHTTPBindings := operationsprojection.OperationsAuthorizationBindings()
@@ -287,7 +297,48 @@ func runtimeAuthorizationActionRegistry(snapshot appschemamodel.ApplicationSchem
 		}
 	}
 	return actionservice.BuildAuthorizationRegistry(actionservice.AuthorizationRegistryInput{
-		Snapshot: snapshot, ApplicationKey: applicationKey, ContributedActions: contributed, EndpointContracts: endpointmodel.EndpointContracts,
+		Snapshot: snapshot, ApplicationKey: applicationKey, ContributedActions: contributed, EndpointContracts: endpointContracts,
 		NonHTTPBindings: nonHTTPBindings,
 	})
+}
+
+func runtimeEndpointContractsForCapabilities(capabilities persistence.RuntimeSchemaCapabilities) map[string]endpointmodel.RuntimeEndpointContractV1 {
+	contracts := make(map[string]endpointmodel.RuntimeEndpointContractV1, len(endpointmodel.EndpointContracts))
+	for identity, contract := range endpointmodel.EndpointContracts {
+		if !runtimeActionSelected(contract.ActionKey, capabilities) {
+			continue
+		}
+		switch strings.TrimSpace(contract.SourceOwner) {
+		case "workflows":
+			if !capabilities.Workflow {
+				continue
+			}
+		case "automation":
+			if !capabilities.Automation {
+				continue
+			}
+		case "uploads":
+			if !capabilities.Uploads {
+				continue
+			}
+		}
+		contracts[identity] = contract
+	}
+	return contracts
+}
+
+func runtimeActionSelected(actionKey string, capabilities persistence.RuntimeSchemaCapabilities) bool {
+	actionKey = strings.TrimSpace(actionKey)
+	switch {
+	case strings.HasPrefix(actionKey, "runtime.workflows."):
+		return capabilities.Workflow
+	case strings.HasPrefix(actionKey, "runtime.automation."):
+		return capabilities.Automation
+	case strings.HasPrefix(actionKey, "runtime.uploads."), actionKey == "runtime.public_resources.files.read":
+		return capabilities.Uploads
+	case strings.HasPrefix(actionKey, "lifecycle."), actionKey == "runtime.operations.run_lifecycle_cleanup_job":
+		return capabilities.Lifecycle
+	default:
+		return true
+	}
 }

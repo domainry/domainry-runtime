@@ -60,7 +60,6 @@ func referenceOptionObjects() map[string]definitionmodel.ObjectSchema {
 		},
 		"customer": {
 			Key: "customer",
-			UX:  map[string]any{"display": map[string]any{"title_field": "name"}},
 			Fields: []definitionmodel.FieldSchema{
 				{Key: "name", Type: "text"},
 				{Key: "code", Type: "text"},
@@ -138,7 +137,6 @@ func TestReferenceOptionsRejectsInvalidSourceFieldAndTarget(t *testing.T) {
 func TestReferenceOptionsCanSearchByTechnicalIDWhenItIsTheDisplayFallback(t *testing.T) {
 	objects := referenceOptionObjects()
 	target := objects["customer"]
-	target.UX = nil
 	target.Fields = nil
 	objects["customer"] = target
 	repository := &referenceOptionRepository{}

@@ -301,6 +301,12 @@ func (s *WorkflowApplicationService) synchronizeWorkflowWorkloadBindings(ctx con
 	return nil
 }
 
+// SynchronizeManagedWorkloadBindings publishes non-Workflow workload
+// identities without requiring Workflow definition storage.
+func (s *WorkflowApplicationService) SynchronizeManagedWorkloadBindings(ctx context.Context) error {
+	return s.synchronizeWorkflowWorkloadBindings(ctx, map[string]definitionmodel.WorkflowSchema{})
+}
+
 // ManagedWorkloadBinding declares a non-human Runtime execution identity that
 // shares Identity's atomic workload release with Workflow bindings. Keys must
 // be owner-qualified (for example, scheduler:daily-settlement).

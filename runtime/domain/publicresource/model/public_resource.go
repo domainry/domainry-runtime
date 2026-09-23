@@ -11,7 +11,7 @@ type Projection struct {
 }
 
 // Resource is the anonymous JSON response contract. Data contains only the
-// manifest allowlist and Files maps declared file fields to public paths.
+// project-model allowlist and Files maps declared file fields to public paths.
 type Resource struct {
 	ResourceKey string            `json:"resource_key"`
 	Data        map[string]any    `json:"data"`
@@ -19,7 +19,7 @@ type Resource struct {
 }
 
 // File is a verified public file response. Content remains private to Runtime
-// until every manifest, record, revocation and scan check succeeds.
+// until every model, record, revocation and scan check succeeds.
 type File struct {
 	Filename    string
 	ContentType string

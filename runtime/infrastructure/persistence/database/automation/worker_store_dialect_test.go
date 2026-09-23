@@ -35,7 +35,7 @@ func TestAutomationInstructionLeaseContractAcrossDialects(t *testing.T) {
 				t.Fatal(err)
 			}
 			workspace := "automation-dialect-" + test.name + "-" + time.Now().UTC().Format("20060102150405.000000000")
-			defer store.DB().ExecContext(t.Context(), "DELETE FROM "+store.Identifier("_automation_instruction_executions")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1), workspace)
+			defer store.DB().ExecContext(t.Context(), "DELETE FROM "+store.Identifier(automationRunsTable)+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1), workspace)
 			assertAutomationLeaseRestartAndReclaim(t, store, workspace)
 		})
 	}

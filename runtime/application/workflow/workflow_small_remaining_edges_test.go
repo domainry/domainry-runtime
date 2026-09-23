@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -25,30 +24,6 @@ func (p workflowWaitTimerServiceProbe) ScheduleWorkflowWaitTimer(context.Context
 func TestNormalizeWorkflowProcessStatusesSkipsBlankAndDuplicates(t *testing.T) {
 	if got := normalizeWorkflowProcessStatuses([]string{" open, ,closed ", "open", "closed,pending"}); !reflect.DeepEqual(got, []string{"open", "closed", "pending"}) {
 		t.Fatalf("statuses=%v", got)
-	}
-}
-
-func TestValidateWorkflowAuthoringFragmentBoundaries(t *testing.T) {
-	service := NewWorkflowApplicationService(WorkflowDependencies{WorkflowRegistry: &workflowRegistryStub{items: map[string]definitionmodel.WorkflowSchema{}}})
-	if _, err := service.ValidateAuthoringFragment(t.Context(), "workflow.trigger_contract", map[string]any{"type": "manual"}, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
-		t.Fatalf("authorization err=%v", err)
-	}
-	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}}
-	if report, err := service.ValidateAuthoringFragment(t.Context(), "workflow.unknown", map[string]any{}, principal); err != nil || report.Valid || len(report.Issues) != 1 {
-		t.Fatalf("invalid report=%+v err=%v", report, err)
-	}
-	if report, err := service.ValidateAuthoringFragment(t.Context(), "workflow.trigger_contract", map[string]any{"type": "manual"}, principal); err != nil || !report.Valid || report.CapabilityKey != "workflow.trigger_contract" || report.Fragment["type"] != "manual" {
-		t.Fatalf("valid report=%+v err=%v", report, err)
-	}
-	graph := map[string]any{
-		"nodes": []any{map[string]any{"id": "trigger", "type": "trigger"}, map[string]any{"id": "complete", "type": "action", "contract": map[string]any{"action": map[string]any{"action_key": "order.complete"}}}},
-		"edges": []any{map[string]any{"id": "start", "source": "trigger", "target": "complete"}},
-	}
-	if report, err := service.ValidateAuthoringFragment(t.Context(), "workflow.graph_v2", graph, principal); err != nil || !report.Valid || report.Fragment["version"] != 2 {
-		t.Fatalf("graph defaults were not returned canonically: report=%+v err=%v", report, err)
-	}
-	if report, err := service.ValidateAuthoringFragment(t.Context(), "workflow.trigger_contract", map[string]any{"type": "manual", "unknown": true}, principal); err != nil || report.Valid || len(report.Issues) != 1 || report.Fragment != nil {
-		t.Fatalf("unknown fragment field was not rejected: report=%+v err=%v", report, err)
 	}
 }
 

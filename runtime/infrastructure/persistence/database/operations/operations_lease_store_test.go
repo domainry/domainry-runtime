@@ -20,11 +20,12 @@ func TestOperationsLeaseSnapshotReportsOnlyTargetInstance(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
-	insert := store.InsertStatement("_idempotency_cleanup_leases", []string{"id", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error", "updated_at"})
+	insert := store.InsertStatement("_worker_scopes", []string{"id", "owner", "scope_key", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "checkpoint", "last_error", "updated_at"})
 	for _, row := range [][]any{
-		{"live", "instance-a", now.Add(time.Minute).Format(time.RFC3339Nano), 1, "", "", 0, "", now.Format(time.RFC3339Nano)},
-		{"expired", "instance-a:cleanup", now.Add(-time.Minute).Format(time.RFC3339Nano), 2, "", "", 0, "", now.Format(time.RFC3339Nano)},
-		{"other", "instance-b", now.Add(time.Minute).Format(time.RFC3339Nano), 1, "", "", 0, "", now.Format(time.RFC3339Nano)},
+		{"live", "idempotency_cleanup", "live", "instance-a", now.Add(time.Minute).Format(time.RFC3339Nano), 1, "", "", 0, "", now.Format(time.RFC3339Nano)},
+		{"expired", "idempotency_cleanup", "expired", "instance-a:cleanup", now.Add(-time.Minute).Format(time.RFC3339Nano), 2, "", "", 0, "", now.Format(time.RFC3339Nano)},
+		{"other", "idempotency_cleanup", "other", "instance-b", now.Add(time.Minute).Format(time.RFC3339Nano), 1, "", "", 0, "", now.Format(time.RFC3339Nano)},
+		{"notification", "notification_inbox", "workspace-a", "instance-a", now.Add(time.Minute).Format(time.RFC3339Nano), 1, "", "", 0, "", now.Format(time.RFC3339Nano)},
 	} {
 		if _, err := store.DB().ExecContext(t.Context(), insert, row...); err != nil {
 			t.Fatal(err)
@@ -49,7 +50,7 @@ func TestOperationsLeaseSnapshotReportsOnlyTargetInstance(t *testing.T) {
 	if err != nil || !changed || released.Eligibility != "verified_stuck" || released.NextFencingToken != 2 {
 		t.Fatalf("stuck release=%#v changed=%v err=%v", released, changed, err)
 	}
-	result, err := store.DB().ExecContext(t.Context(), "UPDATE _idempotency_cleanup_leases SET last_error = 'stale' WHERE id = ? AND lease_owner = ? AND fencing_token = ?", "live", "instance-a", 1)
+	result, err := store.DB().ExecContext(t.Context(), "UPDATE _worker_scopes SET last_error = 'stale' WHERE id = ? AND lease_owner = ? AND fencing_token = ?", "live", "instance-a", 1)
 	if err != nil {
 		t.Fatal(err)
 	}

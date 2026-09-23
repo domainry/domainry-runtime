@@ -60,9 +60,7 @@ func (s *HTTPRouter) withBusinessEventPublication(next http.Handler) http.Handle
 		if !ok || strings.TrimSpace(principal.WorkspaceID) == "" {
 			return
 		}
-		if _, err := s.PublishBusinessEvent(context.WithoutCancel(r.Context()), principal.WorkspaceID, businessEventObjectKey(r), "mutation"); err != nil {
-			s.appendSecurityAuditForPrincipal(r, principal, "business_event_publish_failed", "Business refresh event publication failed", map[string]any{"error_code": "backend.event_stream.unavailable"})
-		}
+		_, _ = s.PublishBusinessEvent(context.WithoutCancel(r.Context()), principal.WorkspaceID, businessEventObjectKey(r), "mutation")
 	})
 }
 

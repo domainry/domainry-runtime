@@ -56,6 +56,7 @@ type AdministrationActor struct {
 	UserID                string `json:"-"`
 	RoleKey               string `json:"-"`
 	RequestID             string `json:"-"`
+	CausationID           string `json:"-"`
 	AuthorizationRevision string `json:"-"`
 }
 

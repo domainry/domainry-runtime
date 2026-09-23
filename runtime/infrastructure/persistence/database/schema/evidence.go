@@ -2,25 +2,27 @@ package schema
 
 import "context"
 
+type EvidenceSchemaCapabilities struct {
+	Workflow            bool
+	Automation          bool
+	Lifecycle           bool
+	ReleaseCoordination bool
+}
+
+func FullEvidenceSchemaCapabilities() EvidenceSchemaCapabilities {
+	return EvidenceSchemaCapabilities{Workflow: true, Automation: true, Lifecycle: true, ReleaseCoordination: true}
+}
+
 func EnsureEvidenceSchema(ctx context.Context, s Store) error {
-	if err := EnsureUploadSubjectSchema(ctx, s); err != nil {
-		return err
-	}
-	if err := EnsureSubjectErasureSchema(ctx, s); err != nil {
-		return err
-	}
-	if err := EnsureDispatchCallbackReceiptSchema(ctx, s); err != nil {
-		return err
-	}
-	if err := EnsureReportExportPrepareReceiptSchema(ctx, s); err != nil {
-		return err
-	}
+	return EnsureEvidenceSchemaFor(ctx, s, FullEvidenceSchemaCapabilities())
+}
+
+func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities EvidenceSchemaCapabilities) error {
 	text := s.ApplicationSchemaIDColumnType()
 	indexText := s.RuntimeProfile().TextKeyColumnType(191)
 	timestampText := s.RuntimeProfile().TextKeyColumnType(40)
 	types := s.RuntimeProfile().EvidenceSchemaTypes(text)
 	idempotencyScopeText := types.IdempotencyScope
-	retirementEngineText, retirementNamespaceText, retirementKindText, retirementObjectText := types.RetirementEngine, types.RetirementNamespace, types.RetirementKind, types.RetirementObject
 	tables := map[string][]string{
 		"_release_cohorts": {
 			"cohort_key " + text + " PRIMARY KEY",
@@ -41,6 +43,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 		"_workflow_executions": {
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"id " + text + " NOT NULL",
+			"operation_id " + text + " NOT NULL DEFAULT ''",
 			"workflow_key " + text + " NOT NULL",
 			"name TEXT NOT NULL",
 			"trigger " + text + " NOT NULL",
@@ -67,42 +70,6 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"created_at " + text + " NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
-		"_workflow_execution_receipts": {
-			"id " + text + " PRIMARY KEY",
-			"workspace_id " + idempotencyScopeText + " NOT NULL",
-			"workflow_key " + idempotencyScopeText + " NOT NULL",
-			"idempotency_key " + idempotencyScopeText + " NOT NULL",
-			"request_fingerprint " + text + " NOT NULL",
-			"status " + indexText + " NOT NULL",
-			"execution_id " + text + " NOT NULL DEFAULT ''",
-			"lease_owner " + text + " NOT NULL",
-			"lease_expires_at " + timestampText + " NOT NULL",
-			"fencing_token BIGINT NOT NULL DEFAULT 1",
-			"created_at " + text + " NOT NULL",
-			"updated_at " + text + " NOT NULL",
-			"expires_at " + text + " NOT NULL DEFAULT ''",
-		},
-		"_action_executions": {
-			"id " + text + " PRIMARY KEY",
-			"workspace_id " + idempotencyScopeText + " NOT NULL",
-			"object_key " + idempotencyScopeText + " NOT NULL",
-			"record_id " + idempotencyScopeText,
-			"action_key " + idempotencyScopeText + " NOT NULL",
-			"idempotency_key " + idempotencyScopeText + " NOT NULL",
-			"request_fingerprint " + text + " NOT NULL DEFAULT ''",
-			"status " + indexText + " NOT NULL",
-			"result_json TEXT NOT NULL",
-			"lease_owner " + text + " NOT NULL DEFAULT ''",
-			"lease_expires_at " + timestampText + " NOT NULL DEFAULT ''",
-			"fencing_token BIGINT NOT NULL DEFAULT 0",
-			"response_status INTEGER NOT NULL DEFAULT 0",
-			"error_code " + text + " NOT NULL DEFAULT ''",
-			"expires_at " + text + " NOT NULL DEFAULT ''",
-			"actor_id " + text,
-			"role_key " + text,
-			"created_at " + text + " NOT NULL",
-			"updated_at " + text + " NOT NULL",
-		},
 		"_action_assurance_grants": {
 			"id " + text + " PRIMARY KEY",
 			"token_hash " + text + " NOT NULL",
@@ -119,49 +86,29 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"expires_at " + timestampText + " NOT NULL",
 			"consumed_at " + timestampText + " NOT NULL DEFAULT ''",
 		},
-		"_record_mutation_executions": {
+		"_worker_scopes": {
 			"id " + text + " PRIMARY KEY",
-			"workspace_id " + idempotencyScopeText + " NOT NULL",
-			"operation " + idempotencyScopeText + " NOT NULL",
-			"object_key " + idempotencyScopeText + " NOT NULL",
-			"target_id " + idempotencyScopeText + " NOT NULL DEFAULT ''",
-			"idempotency_key " + idempotencyScopeText + " NOT NULL",
-			"request_fingerprint " + text + " NOT NULL",
-			"status " + indexText + " NOT NULL",
-			"result_json TEXT NOT NULL",
-			"lease_owner " + text + " NOT NULL",
-			"lease_expires_at " + timestampText + " NOT NULL",
-			"fencing_token BIGINT NOT NULL DEFAULT 1",
-			"response_status INTEGER NOT NULL DEFAULT 0",
-			"error_code " + text + " NOT NULL DEFAULT ''",
-			"expires_at " + text + " NOT NULL DEFAULT ''",
-			"actor_id " + text + " NOT NULL DEFAULT ''",
-			"created_at " + text + " NOT NULL",
-			"updated_at " + text + " NOT NULL",
-		},
-		"_worker_queue_scopes": {
-			"id " + text + " PRIMARY KEY",
-			"queue_kind " + idempotencyScopeText + " NOT NULL",
+			"owner " + idempotencyScopeText + " NOT NULL",
 			"scope_key " + idempotencyScopeText + " NOT NULL",
-			"updated_at " + text + " NOT NULL",
-		},
-		"_idempotency_cleanup_leases": {
-			"id " + text + " PRIMARY KEY",
+			"cursor " + text + " NOT NULL DEFAULT ''",
+			"checkpoint BIGINT NOT NULL DEFAULT 0",
+			"capacity BIGINT NOT NULL DEFAULT 0",
 			"lease_owner " + text + " NOT NULL DEFAULT ''",
 			"lease_expires_at " + text + " NOT NULL DEFAULT ''",
 			"fencing_token BIGINT NOT NULL DEFAULT 0",
 			"last_started_at " + text + " NOT NULL DEFAULT ''",
 			"last_completed_at " + text + " NOT NULL DEFAULT ''",
-			"last_deleted INTEGER NOT NULL DEFAULT 0",
 			"last_error TEXT NOT NULL DEFAULT ''",
 			"updated_at " + text + " NOT NULL DEFAULT ''",
 		},
-		"_operation_requests": {
+		"_operations": {
 			"id " + text + " PRIMARY KEY",
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"system_purpose " + idempotencyScopeText + " NOT NULL DEFAULT ''",
+			"owner " + idempotencyScopeText + " NOT NULL",
 			"kind " + idempotencyScopeText + " NOT NULL",
 			"action_key " + text + " NOT NULL",
+			"parent_id " + text + " NOT NULL DEFAULT ''",
 			"resource_type " + text + " NOT NULL",
 			"resource_id " + text + " NOT NULL DEFAULT ''",
 			"idempotency_key " + idempotencyScopeText + " NOT NULL",
@@ -172,16 +119,55 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"status " + indexText + " NOT NULL",
 			"status_url TEXT NOT NULL",
 			"result_json TEXT NOT NULL",
+			"metadata_json TEXT NOT NULL",
 			"error_code " + text + " NOT NULL DEFAULT ''",
 			"failure_class " + text + " NOT NULL DEFAULT ''",
 			"next_action TEXT NOT NULL DEFAULT ''",
 			"related_ids_json TEXT NOT NULL",
 			"correlation " + text + " NOT NULL DEFAULT ''",
 			"evidence_json TEXT NOT NULL",
+			"lease_owner " + text + " NOT NULL DEFAULT ''",
+			"lease_expires_at " + timestampText + " NOT NULL DEFAULT ''",
+			"fencing_token BIGINT NOT NULL DEFAULT 0",
+			"expires_at " + timestampText + " NOT NULL DEFAULT ''",
 			"created_at " + timestampText + " NOT NULL",
 			"started_at " + text + " NOT NULL DEFAULT ''",
 			"finished_at " + text + " NOT NULL DEFAULT ''",
 			"updated_at " + text + " NOT NULL",
+		},
+		"_artifacts": {
+			"workspace_id " + idempotencyScopeText + " NOT NULL",
+			"id " + text + " PRIMARY KEY",
+			"owner " + idempotencyScopeText + " NOT NULL",
+			"kind " + idempotencyScopeText + " NOT NULL",
+			"idempotency_key " + idempotencyScopeText + " NOT NULL",
+			"created_by " + text + " NOT NULL",
+			"owner_org_id " + text + " NOT NULL DEFAULT ''",
+			"filename TEXT NOT NULL",
+			"media_type " + text + " NOT NULL",
+			"content_sha256 " + text + " NOT NULL",
+			"size_bytes BIGINT NOT NULL",
+			"storage_reference TEXT NOT NULL",
+			"status " + indexText + " NOT NULL",
+			"expires_at " + timestampText + " NOT NULL DEFAULT ''",
+			"scan_status " + indexText + " NOT NULL",
+			"download_token_sha256 " + text + " NOT NULL DEFAULT ''",
+			"authorization_scope_sha256 " + text + " NOT NULL DEFAULT ''",
+			"metadata_json TEXT NOT NULL",
+			"created_at " + timestampText + " NOT NULL",
+			"updated_at " + timestampText + " NOT NULL",
+		},
+		"_artifact_bindings": {
+			"workspace_id " + idempotencyScopeText + " NOT NULL",
+			"id " + text + " PRIMARY KEY",
+			"artifact_id " + text + " NOT NULL",
+			"owner " + idempotencyScopeText + " NOT NULL",
+			"kind " + idempotencyScopeText + " NOT NULL",
+			"resource_type " + idempotencyScopeText + " NOT NULL",
+			"resource_id " + text + " NOT NULL",
+			"field_key " + text + " NOT NULL DEFAULT ''",
+			"metadata_json TEXT NOT NULL",
+			"created_at " + timestampText + " NOT NULL",
 		},
 		"_operation_controls": {
 			"system_purpose " + idempotencyScopeText + " NOT NULL",
@@ -212,88 +198,40 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"revoked_by " + text + " NOT NULL DEFAULT ''",
 			"revocation_note TEXT NOT NULL DEFAULT ''",
 		},
-		"_operation_database_retirements": {
-			"id " + text + " PRIMARY KEY",
-			"engine " + retirementEngineText + " NOT NULL",
-			"database_name " + retirementNamespaceText + " NOT NULL",
-			"schema_name " + retirementNamespaceText + " NOT NULL DEFAULT ''",
-			"object_kind " + retirementKindText + " NOT NULL",
-			"object_name " + retirementObjectText + " NOT NULL",
-			"parent_name " + retirementObjectText + " NOT NULL DEFAULT ''",
-			"owner " + text + " NOT NULL",
-			"state " + indexText + " NOT NULL",
-			"blocked_reason TEXT NOT NULL DEFAULT ''",
-			"read_count BIGINT NOT NULL DEFAULT 0",
-			"write_count BIGINT NOT NULL DEFAULT 0",
-			"last_read_at " + text + " NOT NULL DEFAULT ''",
-			"last_write_at " + text + " NOT NULL DEFAULT ''",
-			"source_counts_json TEXT NOT NULL DEFAULT '{}'",
-			"retirement_json TEXT NOT NULL",
-			"updated_at " + timestampText + " NOT NULL",
-		},
-		"_automation_rule_executions": {
+		"_automation_runs": {
 			"id " + text + " PRIMARY KEY",
 			"workspace_id " + indexText + " NOT NULL",
+			"run_kind " + indexText + " NOT NULL",
+			"idempotency_key " + indexText + " NOT NULL",
 			"rule_key " + indexText + " NOT NULL",
 			"object_key " + indexText + " NOT NULL",
-			"record_id " + indexText,
-			"phase " + text + " NOT NULL",
+			"record_id " + indexText + " NOT NULL DEFAULT ''",
+			"record_version " + text + " NOT NULL DEFAULT ''",
+			"phase " + text + " NOT NULL DEFAULT ''",
 			"operation " + text + " NOT NULL",
+			"instruction_key " + text + " NOT NULL DEFAULT ''",
 			"status " + indexText + " NOT NULL",
-			"actor_id " + text,
-			"role_key " + text,
-			"request_id " + text,
-			"correlation_id " + text,
-			"event_id " + text,
+			"actor_id " + text + " NOT NULL DEFAULT ''",
+			"role_key " + text + " NOT NULL DEFAULT ''",
+			"request_id " + text + " NOT NULL DEFAULT ''",
+			"correlation_id " + text + " NOT NULL DEFAULT ''",
+			"event_id " + text + " NOT NULL DEFAULT ''",
 			"duration_ms INTEGER NOT NULL DEFAULT 0",
-			"error_code " + text,
-			"candidate_json TEXT NOT NULL",
-			"trace_json TEXT NOT NULL",
-			"created_at " + timestampText + " NOT NULL",
-			"updated_at " + text + " NOT NULL",
-		},
-		"_automation_instruction_executions": {
-			"id " + text + " PRIMARY KEY",
-			"workspace_id " + indexText + " NOT NULL",
-			"idempotency_key " + indexText + " NOT NULL",
-			"rule_key " + text + " NOT NULL",
-			"object_key " + text + " NOT NULL",
-			"record_id " + text + " NOT NULL",
-			"record_version " + text + " NOT NULL",
-			"operation " + text + " NOT NULL",
-			"instruction_key " + text + " NOT NULL",
-			"status " + indexText + " NOT NULL",
-			"result_json TEXT NOT NULL",
-			"error_code " + text,
-			"lease_owner " + text + " NOT NULL DEFAULT ''",
-			"lease_expires_at " + timestampText,
-			"fencing_token BIGINT NOT NULL DEFAULT 1",
-			"created_at " + text + " NOT NULL",
-			"updated_at " + text + " NOT NULL",
-		},
-		"_transaction_boundary_intents": {
-			"id " + text + " PRIMARY KEY",
-			"workspace_id " + idempotencyScopeText + " NOT NULL",
-			"owner " + idempotencyScopeText + " NOT NULL",
-			"operation " + idempotencyScopeText + " NOT NULL",
-			"resource_id " + text + " NOT NULL",
-			"idempotency_key " + idempotencyScopeText + " NOT NULL",
-			"status " + indexText + " NOT NULL",
-			"payload_json TEXT NOT NULL",
-			"compensation_payload_json TEXT NOT NULL",
-			"attempt_count INTEGER NOT NULL DEFAULT 0",
-			"next_attempt_at " + timestampText + " NOT NULL DEFAULT ''",
+			"error_code " + text + " NOT NULL DEFAULT ''",
+			"candidate_json TEXT NOT NULL DEFAULT '{}'",
+			"trace_json TEXT NOT NULL DEFAULT '{}'",
+			"result_json TEXT NOT NULL DEFAULT '{}'",
 			"lease_owner " + text + " NOT NULL DEFAULT ''",
 			"lease_expires_at " + timestampText + " NOT NULL DEFAULT ''",
-			"fencing_token BIGINT NOT NULL DEFAULT 0",
-			"last_error TEXT NOT NULL DEFAULT ''",
-			"created_at " + text + " NOT NULL",
+			"fencing_token BIGINT NOT NULL DEFAULT 1",
+			"created_at " + timestampText + " NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
 		"_publication_outbox": {
 			"id " + text + " PRIMARY KEY",
 			"publication_type " + idempotencyScopeText + " NOT NULL DEFAULT 'integration.connector'",
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
+			"operation_id " + text + " NOT NULL DEFAULT ''",
 			"application_key " + idempotencyScopeText + " NOT NULL DEFAULT ''",
 			"source_event_id " + idempotencyScopeText + " NOT NULL DEFAULT ''",
 			"event_type " + text + " NOT NULL DEFAULT ''",
@@ -323,6 +261,16 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 			"created_at " + timestampText + " NOT NULL",
 			"updated_at " + text + " NOT NULL",
 		},
+	}
+	if !capabilities.Workflow {
+		delete(tables, "_workflow_executions")
+	}
+	if !capabilities.Automation {
+		delete(tables, "_automation_runs")
+	}
+	if !capabilities.ReleaseCoordination {
+		delete(tables, "_release_cohorts")
+		delete(tables, "_release_instances")
 	}
 	return ensureEvidenceTables(ctx, s, tables, text)
 }

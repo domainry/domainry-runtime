@@ -32,7 +32,7 @@ func ActionValidatePayloadFieldStructure(action definitionmodel.ActionSchema, ob
 	walker := &actionPayloadStructureWalker{
 		objects:      actionObjectFields(objects),
 		objectsKnown: objects != nil,
-		allowedTypes: actionDefinitionStringSet(appschemacontract.ApplicationSchemaAuthoringFieldTypes()),
+		allowedTypes: actionDefinitionStringSet(appschemacontract.ApplicationSchemaFieldTypes()),
 	}
 	walker.walk(action.PayloadFields, "payload_fields", 1)
 	if walker.leaves > definitionmodel.ActionPayloadMaxLeafFields {

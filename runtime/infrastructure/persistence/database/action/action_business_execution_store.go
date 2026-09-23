@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -22,6 +21,12 @@ import (
 	"github.com/domainry/domainry-foundation/mutation"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
+)
+
+const (
+	actionExecutionOperationTable = "_operations"
+	actionExecutionOwner          = "action"
+	actionExecutionKind           = "action.execution"
 )
 
 type ActionBusinessExecutionStore struct {
@@ -77,18 +82,24 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 	value.CreatedAt, value.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	columns := actionExecutionColumns()
 	values := actionExecutionValues(value, "{}")
-	if value.ActorID != "" {
-		if err := r.store.GuardSubjectEvidenceWrite(ctx, r.db, value.WorkspaceID, "_action_executions", []string{"actor_id"}, []any{value.ActorID}); err != nil {
-			return actionmodel.ActionExecutionClaimResult{}, err
-		}
-	}
-	columns, values = slices.Delete(columns, 1, 2), slices.Delete(values, 1, 2)
-	insertQuery, insertArgs, buildErr := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_action_executions", value.WorkspaceID).Columns(columns...).Values(values...).Build()
+	insertColumns, insertValues := append(columns[:1], columns[2:]...), append(values[:1], values[2:]...)
+	insertBuilder, buildErr := r.store.SubjectEvidenceInsertBuilder(value.WorkspaceID, actionExecutionOperationTable, insertColumns, insertValues)
 	if buildErr != nil {
 		return actionmodel.ActionExecutionClaimResult{}, fmt.Errorf("build business action execution insert: %w", buildErr)
 	}
-	_, insertErr := r.db.ExecContext(ctx, insertQuery, insertArgs...)
+	insertQuery, insertArgs, buildErr := insertBuilder.Build()
+	if buildErr != nil {
+		return actionmodel.ActionExecutionClaimResult{}, fmt.Errorf("build business action execution insert: %w", buildErr)
+	}
+	inserted, insertErr := r.db.ExecContext(ctx, insertQuery, insertArgs...)
 	if insertErr == nil {
+		rows, rowsErr := inserted.RowsAffected()
+		if rowsErr != nil {
+			return actionmodel.ActionExecutionClaimResult{}, rowsErr
+		}
+		if rows != 1 {
+			return actionmodel.ActionExecutionClaimResult{}, fmt.Errorf("runtime.subject_erased")
+		}
 		r.store.ObserveIdempotency(ctx, value.WorkspaceID, "action.execute", idempotency.OutcomeAcquired)
 		return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionAcquired, Execution: value}, nil
 	}
@@ -107,13 +118,15 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 		r.store.ObserveIdempotency(ctx, value.WorkspaceID, "action.execute", idempotency.OutcomeForDecision(decision, false))
 		return actionmodel.ActionExecutionClaimResult{Decision: decision, Execution: current}, nil
 	}
-	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_action_executions", value.WorkspaceID).
+	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, actionExecutionOperationTable, value.WorkspaceID).
 		Set("status", string(idempotency.StatusProcessing)).Set("lease_owner", value.LeaseOwner).
 		Set("lease_expires_at", value.LeaseExpiresAt).
 		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).
+		Set("result_json", "{}").Set("metadata_json", actionExecutionMetadataJSON(0, value.RoleKey)).
+		Set("error_code", "").Set("failure_class", "").Set("finished_at", "").Set("expires_at", "").
 		Set("updated_at", value.UpdatedAt).
 		Where(query.And(
-			query.Equal("id", value.ID), query.Equal("request_fingerprint", value.RequestFingerprint),
+			actionExecutionOperationPredicate(value.ID), query.Equal("request_fingerprint", value.RequestFingerprint),
 			query.Or(
 				query.And(query.Equal("status", string(idempotency.StatusProcessing)), query.LessThanOrEqual("lease_expires_at", now.Format(time.RFC3339Nano))),
 				query.Equal("status", string(idempotency.StatusFailedRetryable)),
@@ -316,10 +329,12 @@ func (t *actionExecutionTransaction) commitSQL(ctx context.Context) error {
 }
 
 func (r ActionBusinessExecutionStore) findExecutionByScope(ctx context.Context, workspaceID, objectKey, recordID, actionKey, idempotencyKey string) (actionmodel.ActionBusinessExecution, bool, error) {
-	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_action_executions", workspaceID).Columns(actionExecutionColumns()...).Where(query.And(
-		query.Equal("object_key", objectKey), query.Equal("record_id", recordID),
-		query.Equal("action_key", actionKey), query.Equal("idempotency_key", idempotencyKey),
-	)).Limit(1).Build()
+	id := businessActionExecutionID(workspaceID, objectKey, recordID, actionKey, idempotencyKey)
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, actionExecutionOperationTable, workspaceID).
+		Columns(actionExecutionColumns()...).
+		Where(actionExecutionOperationPredicate(id)).
+		Limit(1).
+		Build()
 	if err != nil {
 		return actionmodel.ActionBusinessExecution{}, false, err
 	}
@@ -331,7 +346,11 @@ func (r ActionBusinessExecutionStore) findExecutionByScope(ctx context.Context, 
 }
 
 func (r ActionBusinessExecutionStore) findExecutionByID(ctx context.Context, executionID string) (actionmodel.ActionBusinessExecution, error) {
-	queryValue, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_action_executions").Columns(actionExecutionColumns()...).Where(query.Equal("id", executionID)).Limit(1).Build()
+	queryValue, args, err := query.NewSelectBuilder(r.store.SQLRenderer, actionExecutionOperationTable).
+		Columns(actionExecutionColumns()...).
+		Where(actionExecutionOperationPredicate(executionID)).
+		Limit(1).
+		Build()
 	if err != nil {
 		return actionmodel.ActionBusinessExecution{}, err
 	}
@@ -339,28 +358,50 @@ func (r ActionBusinessExecutionStore) findExecutionByID(ctx context.Context, exe
 }
 
 func actionExecutionLeaseUpdate(store *database.RuntimeStore, executionID, leaseOwner string, fencingToken int64) *query.UpdateBuilder {
-	return query.NewUpdateBuilder(store.SQLRenderer, "_action_executions").Where(query.And(
-		query.Equal("id", executionID), query.Equal("lease_owner", strings.TrimSpace(leaseOwner)),
+	return query.NewUpdateBuilder(store.SQLRenderer, actionExecutionOperationTable).Where(query.And(
+		actionExecutionOperationPredicate(executionID), query.Equal("lease_owner", strings.TrimSpace(leaseOwner)),
 		query.Equal("fencing_token", fencingToken), query.Equal("status", string(idempotency.StatusProcessing)),
 	))
 }
 
 func actionExecutionCompletionUpdate(store *database.RuntimeStore, completion actionmodel.ActionExecutionCompletion, status idempotency.Status, resultJSON string, now time.Time) (string, []any, error) {
-	return query.NewWorkspaceUpdateBuilder(store.SQLRenderer, "_action_executions", completion.Execution.WorkspaceID).Where(query.And(
-		query.Equal("id", completion.ExecutionID), query.Equal("lease_owner", strings.TrimSpace(completion.LeaseOwner)),
+	failureClass := ""
+	if status == idempotency.StatusFailedRetryable {
+		failureClass = "retryable"
+	} else if status == idempotency.StatusFailedTerminal {
+		failureClass = "terminal"
+	}
+	return query.NewWorkspaceUpdateBuilder(store.SQLRenderer, actionExecutionOperationTable, completion.Execution.WorkspaceID).Where(query.And(
+		actionExecutionOperationPredicate(completion.ExecutionID), query.Equal("lease_owner", strings.TrimSpace(completion.LeaseOwner)),
 		query.Equal("fencing_token", completion.FencingToken), query.Equal("status", string(idempotency.StatusProcessing)),
 	)).
-		Set("status", string(status)).Set("result_json", resultJSON).Set("response_status", completion.ResponseStatus).
-		Set("error_code", strings.TrimSpace(completion.ErrorCode)).Set("expires_at", completion.ExpiresAt.UTC().Format(time.RFC3339Nano)).
-		Set("updated_at", now.Format(time.RFC3339Nano)).Build()
+		Set("status", string(status)).Set("result_json", resultJSON).Set("metadata_json", actionExecutionMetadataJSON(completion.ResponseStatus, completion.Execution.RoleKey)).
+		Set("error_code", strings.TrimSpace(completion.ErrorCode)).Set("failure_class", failureClass).Set("expires_at", completion.ExpiresAt.UTC().Format(time.RFC3339Nano)).
+		Set("finished_at", now.Format(time.RFC3339Nano)).Set("updated_at", now.Format(time.RFC3339Nano)).Build()
 }
 
 func actionExecutionColumns() []string {
-	return []string{"id", "workspace_id", "object_key", "record_id", "action_key", "idempotency_key", "request_fingerprint", "status", "result_json", "lease_owner", "lease_expires_at", "fencing_token", "response_status", "error_code", "expires_at", "actor_id", "role_key", "created_at", "updated_at"}
+	return []string{"id", "workspace_id", "owner", "kind", "action_key", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
 }
 
 func actionExecutionValues(value actionmodel.ActionBusinessExecution, resultJSON string) []any {
-	return []any{value.ID, value.WorkspaceID, value.ObjectKey, value.RecordID, value.ActionKey, value.IdempotencyKey, value.RequestFingerprint, value.Status, resultJSON, value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.ResponseStatus, value.ErrorCode, value.ExpiresAt, value.ActorID, value.RoleKey, value.CreatedAt, value.UpdatedAt}
+	failureClass := ""
+	if value.Status == string(idempotency.StatusFailedRetryable) {
+		failureClass = "retryable"
+	} else if value.Status == string(idempotency.StatusFailedTerminal) {
+		failureClass = "terminal"
+	}
+	return []any{value.ID, value.WorkspaceID, actionExecutionOwner, actionExecutionKind, value.ActionKey, value.ObjectKey, value.RecordID, value.ID, value.RequestFingerprint, value.ActorID, "", value.IdempotencyKey, value.Status, "/operations/" + value.ID, resultJSON, actionExecutionMetadataJSON(value.ResponseStatus, value.RoleKey), value.ErrorCode, failureClass, "", "[]", value.ID, "[]", value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.ExpiresAt, value.CreatedAt, value.CreatedAt, "", value.UpdatedAt}
+}
+
+type actionExecutionOperationMetadata struct {
+	ResponseStatus int    `json:"response_status"`
+	RoleKey        string `json:"role_key,omitempty"`
+}
+
+func actionExecutionMetadataJSON(responseStatus int, roleKey string) string {
+	encoded, _ := json.Marshal(actionExecutionOperationMetadata{ResponseStatus: responseStatus, RoleKey: strings.TrimSpace(roleKey)})
+	return string(encoded)
 }
 
 func actionExecutionLease(value actionmodel.ActionBusinessExecution) idempotency.Lease {
@@ -389,13 +430,29 @@ type rowScanner interface{ Scan(...any) error }
 
 func actionScanBusinessActionExecution(row rowScanner) (actionmodel.ActionBusinessExecution, error) {
 	var execution actionmodel.ActionBusinessExecution
-	var resultJSON string
-	if err := row.Scan(&execution.ID, &execution.WorkspaceID, &execution.ObjectKey, &execution.RecordID, &execution.ActionKey, &execution.IdempotencyKey, &execution.RequestFingerprint, &execution.Status, &resultJSON, &execution.LeaseOwner, &execution.LeaseExpiresAt, &execution.FencingToken, &execution.ResponseStatus, &execution.ErrorCode, &execution.ExpiresAt, &execution.ActorID, &execution.RoleKey, &execution.CreatedAt, &execution.UpdatedAt); err != nil {
+	var owner, kind, operationKey, reason, statusURL, resultJSON, metadataJSON, failureClass, nextAction, relatedIDs, correlation, evidence, startedAt, finishedAt string
+	if err := row.Scan(&execution.ID, &execution.WorkspaceID, &owner, &kind, &execution.ActionKey, &execution.ObjectKey, &execution.RecordID, &operationKey, &execution.RequestFingerprint, &execution.ActorID, &reason, &execution.IdempotencyKey, &execution.Status, &statusURL, &resultJSON, &metadataJSON, &execution.ErrorCode, &failureClass, &nextAction, &relatedIDs, &correlation, &evidence, &execution.LeaseOwner, &execution.LeaseExpiresAt, &execution.FencingToken, &execution.ExpiresAt, &execution.CreatedAt, &startedAt, &finishedAt, &execution.UpdatedAt); err != nil {
 		return actionmodel.ActionBusinessExecution{}, err
 	}
+	if owner != actionExecutionOwner || kind != actionExecutionKind || operationKey != execution.ID || correlation != execution.ID {
+		return actionmodel.ActionBusinessExecution{}, fmt.Errorf("action execution operation identity is invalid")
+	}
+	var metadata actionExecutionOperationMetadata
+	if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
+		return actionmodel.ActionBusinessExecution{}, fmt.Errorf("decode action execution metadata: %w", err)
+	}
+	execution.ResponseStatus, execution.RoleKey = metadata.ResponseStatus, metadata.RoleKey
 	_ = json.Unmarshal([]byte(resultJSON), &execution.Result)
 	execution.Result = nonNilMap(execution.Result)
 	return execution, nil
+}
+
+func actionExecutionOperationPredicate(executionID string) query.Predicate {
+	return query.And(
+		query.Equal("id", strings.TrimSpace(executionID)),
+		query.Equal("owner", actionExecutionOwner),
+		query.Equal("kind", actionExecutionKind),
+	)
 }
 
 func businessActionExecutionID(workspaceID, objectKey, recordID, actionKey, idempotencyKey string) string {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -68,6 +69,9 @@ func (s *RecordTimerApplicationService) transitionRecordTimerFailure(ctx context
 	}
 	now := s.worker.Clock.Now().UTC()
 	record = cloneRecordTimer(record)
+	if operationID := requestcontext.OwnerExecutionID(ctx); operationID != "" {
+		record.Data["operation_id"] = operationID
+	}
 	record.Data["status"] = status
 	record.Data["lease_owner"], record.Data["lease_expires_at"] = "", ""
 	record.Data["last_error"], record.Data["failed_at"] = "", ""

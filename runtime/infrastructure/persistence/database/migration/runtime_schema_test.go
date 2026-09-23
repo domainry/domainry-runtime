@@ -96,11 +96,13 @@ func TestRuntimeSchemaDoesNotCreateMetadataOwnedTables(t *testing.T) {
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	var metadataVersionTableCount int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_metadata_definition_versions'`).Scan(&metadataVersionTableCount); err != nil {
-		t.Fatal(err)
-	}
-	if metadataVersionTableCount != 0 {
-		t.Fatalf("Runtime schema created Metadata-owned definition version table: count=%d", metadataVersionTableCount)
+	for _, table := range []string{"_definitions", "_definition_versions", "_metadata_definitions", "_metadata_definition_versions"} {
+		var count int
+		if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Fatalf("Runtime schema created Definition store table %s: count=%d", table, count)
+		}
 	}
 }

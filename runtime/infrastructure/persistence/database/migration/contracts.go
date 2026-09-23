@@ -228,13 +228,9 @@ type ReconciliationAction struct {
 
 func RestoreReconciliationPlan() []ReconciliationAction {
 	return []ReconciliationAction{
-		{Table: "_automation_instruction_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
-		{Table: "_dispatch_callback_receipts", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
-		{Table: "_workflow_execution_receipts", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
-		{Table: "_action_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
-		{Table: "_record_mutation_executions", Action: "release_expired_processing_lease", Guard: "lease_expires_at <= restored_at"},
+		{Table: "_automation_runs", Action: "release_expired_processing_lease", Guard: "run_kind = 'instruction' AND lease_expires_at <= restored_at"},
+		{Table: "_operations", Action: "release_expired_processing_lease", Guard: "owner IN ('action', 'dispatch', 'record', 'workflow') AND lease_expires_at <= restored_at"},
 		{Table: "_publication_outbox", Action: "requeue_expired_delivery", Guard: "lease_expires_at <= restored_at AND terminal_at IS NULL"},
-		{Table: "_transaction_boundary_intents", Action: "requeue_expired_intent", Guard: "lease_expires_at <= restored_at"},
 	}
 }
 

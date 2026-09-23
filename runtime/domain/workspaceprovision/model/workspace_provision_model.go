@@ -10,7 +10,6 @@ var (
 	ErrIdentityUnavailable        = errors.New("embedded Identity workspace bootstrap is unavailable")
 	ErrInitializationRequired     = errors.New("initial Workspace must be initialized before workspace provisioning")
 	ErrAlreadyInitialized         = errors.New("initial Workspace is already initialized")
-	ErrLegacyAdjudicationRequired = errors.New("retired workspace provisioning receipt requires Identity graph adjudication")
 	// ErrAcceptanceFailure is intentionally stable and contains no generated
 	// Workspace, credential, organization, or application-record identity.
 	ErrAcceptanceFailure = errors.New("workspace provisioning acceptance failure")

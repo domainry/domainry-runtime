@@ -80,7 +80,7 @@ func TestTransactionalSideEffectsRequireStableIdentity(t *testing.T) {
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _publication_outbox WHERE id = ?`, wantID).Scan(&stored); err != nil || stored != 1 {
 		t.Fatalf("deterministic outbox id=%q stored=%d err=%v", wantID, stored, err)
 	}
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _worker_queue_scopes WHERE queue_kind = ? AND scope_key = ?`, "runtime_publication_outbox", message.WorkspaceID).Scan(&stored); err != nil || stored != 1 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _worker_scopes WHERE owner = ? AND scope_key = ?`, "runtime_publication_outbox", message.WorkspaceID).Scan(&stored); err != nil || stored != 1 {
 		t.Fatalf("transactional outbox workspace recovery scope stored=%d err=%v", stored, err)
 	}
 	select {

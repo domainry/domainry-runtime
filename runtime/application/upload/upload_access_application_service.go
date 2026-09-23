@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -104,7 +105,7 @@ func (s *UploadAccessApplicationService) AuthorizeUpload(ctx context.Context, ob
 	if (recordpolicy.RecordAllowsObjectAction(principal, objectKey, "update") || recordpolicy.RecordAllowsObjectAction(principal, objectKey, "create")) && recordpolicy.RecordCanWriteObjectFieldKeyForPrincipal(principal, object, fieldKey) {
 		return nil
 	}
-	s.audit.AppendWithMetadata(ctx, "file_upload_denied", objectKey, "", principal, "File upload permission denied", nil, nil, map[string]any{"field_key": fieldKey, "reason": "permission"})
+	s.audit.AppendWithMetadata(ctx, auditmodel.EventFamilyRuntimeUpload, "file_upload_denied", objectKey, "", principal, "File upload permission denied", nil, nil, map[string]any{"field_key": fieldKey, "reason": "permission"})
 	return uploadAccessError(apperror.KindForbidden, "backend.upload.permission_denied")
 }
 
@@ -139,7 +140,7 @@ func (s *UploadAccessApplicationService) RecordUploaded(ctx context.Context, obj
 	if uploadAuthorizePrincipal(principal) != nil {
 		return
 	}
-	s.audit.AppendWithMetadata(ctx, "file_uploaded", objectKey, "", principal, "", nil, nil, map[string]any{
+	s.audit.AppendWithMetadata(ctx, auditmodel.EventFamilyRuntimeUpload, "file_uploaded", objectKey, "", principal, "", nil, nil, map[string]any{
 		"field_key": fieldKey, "file_id": reference.FileID, "filename": reference.Filename, "content_type": reference.ContentType,
 		"size": reference.Size, "content_sha256": reference.ContentSHA256,
 	})
@@ -170,7 +171,7 @@ func (s *UploadAccessApplicationService) RecordTicketDownload(ctx context.Contex
 	if uploadAuthorizePrincipal(principal) != nil {
 		return
 	}
-	s.audit.AppendWithMetadata(ctx, "file_downloaded", strings.TrimSpace(objectKey), strings.TrimSpace(recordID), principal, "", nil, nil, map[string]any{
+	s.audit.AppendWithMetadata(ctx, auditmodel.EventFamilyRuntimeUpload, "file_downloaded", strings.TrimSpace(objectKey), strings.TrimSpace(recordID), principal, "", nil, nil, map[string]any{
 		"file_id": strings.TrimSpace(fileID), "field_key": strings.TrimSpace(fieldKey), "authorization": "action_download_ticket",
 	})
 }

@@ -9,15 +9,15 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	application "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 	model "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/model"
 	signature "github.com/domainry/domainry-scheduler-sdk/dispatchgateway"
 )
 
 func TestSignedProvisionReusesAtomicStoreReceiptsAndRollback(t *testing.T) {
 	store, probe := newWorkspaceProvisionTestStore(t)
-	initial := NewWorkspaceInitializationStore(store, probe, manifestmodel.ManifestSchema{}, probe.rolePolicy)
+	initial := NewWorkspaceInitializationStore(store, probe, projectmodel.RuntimeModel{}, probe.rolePolicy)
 	if _, err := initial.Initialize(t.Context(), validWorkspaceRequest("bootstrap")); err != nil {
 		t.Fatal(err)
 	}
@@ -63,6 +63,5 @@ func TestSignedProvisionReusesAtomicStoreReceiptsAndRollback(t *testing.T) {
 		t.Fatalf("rollback=%v", err)
 	}
 	assertRowCount(t, store, "_workspaces", 2)
-	assertRowCount(t, store, "_workspace_commercial_configuration", 2)
 	assertRowCount(t, store, workspaceProvisioningReceiptTable, 2)
 }

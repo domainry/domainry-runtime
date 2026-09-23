@@ -7,7 +7,7 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
 
-func TestWorkflowQuorumValidationAndAuthoring(t *testing.T) {
+func TestWorkflowQuorumValidation(t *testing.T) {
 	for _, test := range []struct {
 		name, mode string
 		count      int
@@ -22,23 +22,16 @@ func TestWorkflowQuorumValidationAndAuthoring(t *testing.T) {
 		{"threshold on sequential", "sequential", 2, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			fragment := map[string]any{"mode": test.mode, "required_approvals": test.count, "resolvers": []any{map[string]any{"type": "role", "role_key": "approver"}}}
-			err := WorkflowValidateAuthoringFragment("workflow.node.approval", fragment)
+			approval := definitionmodel.WorkflowApprovalNodeContract{Mode: test.mode, RequiredApprovals: test.count, Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "role", RoleKey: "approver"}}}
+			graph := &definitionmodel.WorkflowGraphSchema{Version: 2,
+				Nodes: []definitionmodel.WorkflowGraphNode{{ID: "trigger", Type: "trigger"}, {ID: "approval", Type: "approval", Contract: &definitionmodel.WorkflowNodeContract{Approval: &approval}}, {ID: "approved", Type: "action", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "order.approve"}}}, {ID: "rejected", Type: "action", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "order.reject"}}}},
+				Edges: []definitionmodel.WorkflowGraphEdge{{ID: "start", Source: "trigger", Target: "approval"}, {ID: "approved", Source: "approval", Target: "approved", Branch: "approved"}, {ID: "rejected", Source: "approval", Target: "rejected", Branch: "rejected"}},
+			}
+			err := WorkflowValidateGraph(graph)
 			if (err == nil) != test.valid {
 				t.Fatalf("validation=%v want valid=%v", err, test.valid)
 			}
 		})
-	}
-	for _, capability := range WorkflowAuthoringDomain().Capabilities {
-		if capability.Key != "workflow.node.approval" {
-			continue
-		}
-		if capability.InputSchema.Properties["required_approvals"].Minimum == nil || capability.InputSchema.Then == nil || capability.InputSchema.Then.Required[0] != "required_approvals" {
-			t.Fatalf("quorum authoring schema=%+v", capability.InputSchema)
-		}
-	}
-	if schema := workflowGraphApprovalSchema(); schema.Then == nil || schema.Then.Required[0] != "required_approvals" {
-		t.Fatalf("graph quorum schema=%+v", schema)
 	}
 }
 

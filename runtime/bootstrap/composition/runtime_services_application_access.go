@@ -11,9 +11,6 @@ import (
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
-	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
-	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
-	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	deployment "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
@@ -36,23 +33,20 @@ func (s *RuntimeServices) IntegrationOwnerOperations() integrationsdk.Operations
 }
 
 type RuntimeApplications struct {
-	AgentAuthorization    *agentapplication.AgentAuthorizationApplicationService
-	AgentTaskDispatch     *agentapplication.AgentTaskDispatchApplicationService
-	Records               *recordapplication.RecordApplicationService
-	Workflows             *workflowapplication.WorkflowApplicationService
-	ApplicationSchema     *appschemaapplication.ApplicationSchemaApplicationService
-	Automations           *automationapplication.AutomationApplicationService
-	Audit                 *auditapplication.AuditApplicationService
-	Actions               *actionapplication.ActionApplicationService
-	RuntimeStatus         *deployment.DeploymentRuntimeStatusApplicationService
-	BusinessSystem        *businesssystemapplication.BusinessSystemApplicationService
-	PublicationHandoff    *publicationhandoff.PublicationHandoffApplicationService
-	Schema                *appschemaapplication.ApplicationSchemaQueryApplicationService
-	AuthoringCapabilities *capabilityapplication.CapabilityAuthoringApplicationService
-	BusinessReferences    *changeplanapplication.ChangePlanReferenceApplicationService
-	Reports               reportsdk.ApplicationBinding
-	TargetExecutions      *dispatchapplication.TargetExecutionApplicationService
-	RecordTimers          *recordtimerapplication.RecordTimerApplicationService
+	AgentAuthorization *agentapplication.AgentAuthorizationApplicationService
+	AgentTaskDispatch  *agentapplication.AgentTaskDispatchApplicationService
+	Records            *recordapplication.RecordApplicationService
+	Workflows          *workflowapplication.WorkflowApplicationService
+	ApplicationSchema  *appschemaapplication.ApplicationSchemaApplicationService
+	Automations        *automationapplication.AutomationApplicationService
+	Audit              *auditapplication.AuditApplicationService
+	Actions            *actionapplication.ActionApplicationService
+	RuntimeStatus      *deployment.DeploymentRuntimeStatusApplicationService
+	PublicationHandoff *publicationhandoff.PublicationHandoffApplicationService
+	Schema             *appschemaapplication.ApplicationSchemaQueryApplicationService
+	Reports            reportsdk.ApplicationBinding
+	TargetExecutions   *dispatchapplication.TargetExecutionApplicationService
+	RecordTimers       *recordtimerapplication.RecordTimerApplicationService
 }
 
 // Applications exposes the assembled application services through one typed
@@ -71,23 +65,20 @@ func (s *runtimeAssembly) Applications() RuntimeApplications {
 		recordTimers = recordtimerapplication.NewRecordTimerApplicationService(nil, nil, nil)
 	}
 	return RuntimeApplications{
-		AgentAuthorization:    s.agentAuthorizationService,
-		AgentTaskDispatch:     s.agentTaskDispatchService,
-		Records:               s.recordApplicationService,
-		Workflows:             s.workflowApplicationService,
-		ApplicationSchema:     s.applicationSchemaService,
-		Automations:           s.automationApplicationService,
-		Audit:                 s.auditApplicationService,
-		Actions:               s.actionService,
-		RuntimeStatus:         s.runtimeStatusService,
-		BusinessSystem:        s.businessSystemService,
-		PublicationHandoff:    s.publicationHandoffService,
-		Schema:                s.schemaService,
-		AuthoringCapabilities: s.authoringCapabilities,
-		BusinessReferences:    s.businessReferences,
-		Reports:               s.reportApplication,
-		TargetExecutions:      targetExecutions,
-		RecordTimers:          recordTimers,
+		AgentAuthorization: s.agentAuthorizationService,
+		AgentTaskDispatch:  s.agentTaskDispatchService,
+		Records:            s.recordApplicationService,
+		Workflows:          s.workflowApplicationService,
+		ApplicationSchema:  s.applicationSchemaService,
+		Automations:        s.automationApplicationService,
+		Audit:              s.auditApplicationService,
+		Actions:            s.actionService,
+		RuntimeStatus:      s.runtimeStatusService,
+		PublicationHandoff: s.publicationHandoffService,
+		Schema:             s.schemaService,
+		Reports:            s.reportApplication,
+		TargetExecutions:   targetExecutions,
+		RecordTimers:       recordTimers,
 	}
 }
 

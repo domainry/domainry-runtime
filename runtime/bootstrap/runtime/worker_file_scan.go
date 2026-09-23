@@ -8,7 +8,7 @@ import (
 )
 
 func (a *Runtime) startFileScanWorker(ctx context.Context) {
-	if a == nil || a.fileScanProcessor == nil {
+	if a == nil || !a.schemaCapabilities.Uploads || a.fileScanProcessor == nil {
 		return
 	}
 	a.startTrackedWorker(ctx, func(workerCtx context.Context) <-chan struct{} {

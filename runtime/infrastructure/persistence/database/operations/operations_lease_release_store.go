@@ -17,19 +17,20 @@ type operationsLeaseReleaseSpec struct {
 	idColumn        string
 	workspaceColumn string
 	publicationType string
+	scopeColumn     string
+	scopeValue      string
 }
 
 var operationsLeaseReleaseSpecs = map[string]operationsLeaseReleaseSpec{
-	"dispatch_callback":          {table: "_dispatch_callback_receipts", idColumn: "id", workspaceColumn: "workspace_id"},
-	"workflow":                   {table: "_workflow_execution_receipts", idColumn: "id", workspaceColumn: "workspace_id"},
+	"dispatch_callback":          {table: "_operations", idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "dispatch"},
+	"workflow":                   {table: "_operations", idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "workflow"},
 	"workflow_execution":         {table: "_workflow_executions", idColumn: "id", workspaceColumn: "workspace_id"},
 	"workflow_deadline":          {table: "_workflow_tasks", idColumn: "id", workspaceColumn: "workspace_id"},
-	"business_action":            {table: "_action_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"record_mutation":            {table: "_record_mutation_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"idempotency_cleanup":        {table: "_idempotency_cleanup_leases", idColumn: "id"},
-	"automation":                 {table: "_automation_instruction_executions", idColumn: "id", workspaceColumn: "workspace_id"},
+	"business_action":            {table: "_operations", idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "action"},
+	"record_mutation":            {table: "_operations", idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "record"},
+	"idempotency_cleanup":        {table: "_worker_scopes", idColumn: "id", scopeColumn: "owner", scopeValue: "idempotency_cleanup"},
+	"automation":                 {table: "_automation_runs", idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "run_kind", scopeValue: "instruction"},
 	"runtime_publication_outbox": {table: "_publication_outbox", idColumn: "id", workspaceColumn: "workspace_id", publicationType: "integration.connector"},
-	"transaction_boundary":       {table: "_transaction_boundary_intents", idColumn: "id", workspaceColumn: "workspace_id"},
 }
 
 func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, request operationsmodel.OperationsLeaseReleaseRequest) (operationsmodel.OperationsLeaseReleaseResult, bool, error) {
@@ -39,6 +40,9 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 	spec, found := operationsLeaseReleaseSpecs[strings.TrimSpace(request.Owner)]
 	if !found {
 		return operationsmodel.OperationsLeaseReleaseResult{}, false, fmt.Errorf("backend.operations.lease_owner_not_registered")
+	}
+	if !s.store.RuntimeSchemaCapabilities().IncludesTable(spec.table) {
+		return operationsmodel.OperationsLeaseReleaseResult{}, false, fmt.Errorf("backend.operations.lease_owner_not_selected")
 	}
 	if spec.workspaceColumn != "" && strings.TrimSpace(request.WorkspaceID) == "" {
 		return operationsmodel.OperationsLeaseReleaseResult{}, false, fmt.Errorf("backend.workspace_scope_required")
@@ -104,6 +108,9 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 
 func operationsLeaseReleasePredicate(spec operationsLeaseReleaseSpec, request operationsmodel.OperationsLeaseReleaseRequest) query.Predicate {
 	predicate := query.Predicate(query.Equal(spec.idColumn, request.ResourceID))
+	if spec.scopeColumn != "" {
+		predicate = query.And(query.Equal(spec.scopeColumn, spec.scopeValue), predicate)
+	}
 	if spec.publicationType != "" {
 		predicate = query.And(query.Equal("publication_type", spec.publicationType), predicate)
 	}

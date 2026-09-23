@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	"github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -22,13 +23,13 @@ func (r ApplicationSchemaStore) refreshCatalogHashWithExecutorAt(ctx context.Con
 	if err != nil {
 		return err
 	}
-	snapshot, err := definitions.Snapshot(ctx)
+	snapshot, err := definitions.Snapshot(ctx, metadatasdk.DefinitionQuery{CrossOwner: true})
 	if err != nil {
 		return fmt.Errorf("load Metadata definition snapshot: %w", err)
 	}
 	hash := sha256.New()
 	hash.Write([]byte("metadata:"))
-	statement, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_application_schema_projection").
+	statement, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_project_model_state").
 		Columns("time_zone").Where(query.Equal("id", "current")).Build()
 	if err != nil {
 		return err
@@ -39,14 +40,14 @@ func (r ApplicationSchemaStore) refreshCatalogHashWithExecutorAt(ctx context.Con
 	}
 	hash.Write([]byte("time_zone:" + zone + "|"))
 	for _, definition := range snapshot.Definitions {
-		hash.Write([]byte(definition.ResourceType + ":" + definition.ResourceKey + ":" + definition.SchemaHash + "|"))
+		hash.Write([]byte(definition.Owner + ":" + definition.ResourceType + ":" + definition.ResourceKey + ":" + definition.SchemaHash + "|"))
 	}
 	value := hex.EncodeToString(hash.Sum(nil))
-	insert := query.NewInsertBuilder(r.store.SQLRenderer, "_application_schema_projection").
-		Columns("id", "schema_hash", "materialized_at").Values("current", value, now)
+	insert := query.NewInsertBuilder(r.store.SQLRenderer, "_project_model_state").
+		Columns("id", "catalog_hash", "catalog_updated_at").Values("current", value, now)
 	insert, err = r.store.Engine.ApplyUpsert(insert, []string{"id"},
-		query.AssignExpression("schema_hash", query.InsertedValue("schema_hash")),
-		query.AssignExpression("materialized_at", query.InsertedValue("materialized_at")),
+		query.AssignExpression("catalog_hash", query.InsertedValue("catalog_hash")),
+		query.AssignExpression("catalog_updated_at", query.InsertedValue("catalog_updated_at")),
 	)
 	if err != nil {
 		return err

@@ -19,23 +19,29 @@ type Limits struct {
 }
 
 type Stats struct {
-	ActiveConnections int
-	OpenedTotal       uint64
-	RejectedTotal     uint64
-	PublishedTotal    uint64
-	BackplaneMode     string
+	ActiveConnections  int
+	OpenedTotal        uint64
+	ClosedTotal        uint64
+	RejectedTotal      uint64
+	OpenFailedTotal    uint64
+	PublishedTotal     uint64
+	PublishFailedTotal uint64
+	BackplaneMode      string
 }
 
 type BusinessEventApplicationService struct {
-	backplane businesseventcontract.Backplane
-	limits    Limits
-	mu        sync.Mutex
-	global    int
-	workspace map[string]int
-	principal map[string]int
-	opened    uint64
-	rejected  uint64
-	published uint64
+	backplane     businesseventcontract.Backplane
+	limits        Limits
+	mu            sync.Mutex
+	global        int
+	workspace     map[string]int
+	principal     map[string]int
+	opened        uint64
+	closed        uint64
+	rejected      uint64
+	openFailed    uint64
+	published     uint64
+	publishFailed uint64
 }
 
 func NewBusinessEventApplicationService(backplane businesseventcontract.Backplane, limits Limits) *BusinessEventApplicationService {
@@ -57,6 +63,9 @@ func (s *BusinessEventApplicationService) Publish(ctx context.Context, workspace
 		return businesseventmodel.BusinessEvent{}, apperror.New(apperror.KindForbidden, "backend.event_stream.workspace_required", nil, nil)
 	}
 	if s == nil || s.backplane == nil {
+		if s != nil {
+			s.recordPublishFailure()
+		}
 		return businesseventmodel.BusinessEvent{}, apperror.New(apperror.KindUnavailable, "backend.event_stream.unavailable", nil, nil)
 	}
 	event, err := s.backplane.Publish(ctx, businesseventmodel.BusinessEvent{
@@ -64,6 +73,7 @@ func (s *BusinessEventApplicationService) Publish(ctx context.Context, workspace
 		ObjectKey: strings.TrimSpace(objectKey), Reason: strings.TrimSpace(reason), OccurredAt: time.Now().UTC(),
 	})
 	if err != nil {
+		s.recordPublishFailure()
 		return businesseventmodel.BusinessEvent{}, apperror.New(apperror.KindUnavailable, "backend.event_stream.unavailable", err, nil)
 	}
 	s.mu.Lock()
@@ -74,6 +84,9 @@ func (s *BusinessEventApplicationService) Publish(ctx context.Context, workspace
 
 func (s *BusinessEventApplicationService) Open(ctx context.Context, principal principalmodel.Principal, lastEventID string) (businesseventcontract.Subscription, error) {
 	if s == nil || s.backplane == nil {
+		if s != nil {
+			s.recordOpenFailure()
+		}
 		return businesseventcontract.Subscription{}, apperror.New(apperror.KindUnavailable, "backend.event_stream.unavailable", nil, nil)
 	}
 	workspaceScopeID := strings.TrimSpace(principal.WorkspaceID)
@@ -90,9 +103,11 @@ func (s *BusinessEventApplicationService) Open(ctx context.Context, principal pr
 	}
 	subscription, err := s.backplane.Open(ctx, workspaceScopeID, strings.TrimSpace(lastEventID))
 	if err != nil {
-		s.release(workspaceScopeID, principalKey)
+		s.release(workspaceScopeID, principalKey, false)
+		s.recordOpenFailure()
 		return businesseventcontract.Subscription{}, apperror.New(apperror.KindUnavailable, "backend.event_stream.unavailable", err, nil)
 	}
+	s.recordOpened()
 	closeBackplane := subscription.Close
 	var once sync.Once
 	subscription.Close = func() {
@@ -100,7 +115,7 @@ func (s *BusinessEventApplicationService) Open(ctx context.Context, principal pr
 			if closeBackplane != nil {
 				closeBackplane()
 			}
-			s.release(workspaceScopeID, principalKey)
+			s.release(workspaceScopeID, principalKey, true)
 		})
 	}
 	return subscription, nil
@@ -120,7 +135,16 @@ func (s *BusinessEventApplicationService) Snapshot(ctx context.Context) Stats {
 	mode := s.BackplaneMode(ctx)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return Stats{ActiveConnections: s.global, OpenedTotal: s.opened, RejectedTotal: s.rejected, PublishedTotal: s.published, BackplaneMode: mode}
+	return Stats{
+		ActiveConnections:  s.global,
+		OpenedTotal:        s.opened,
+		ClosedTotal:        s.closed,
+		RejectedTotal:      s.rejected,
+		OpenFailedTotal:    s.openFailed,
+		PublishedTotal:     s.published,
+		PublishFailedTotal: s.publishFailed,
+		BackplaneMode:      mode,
+	}
 }
 
 func (s *BusinessEventApplicationService) acquire(workspaceID, principalKey string) bool {
@@ -133,15 +157,17 @@ func (s *BusinessEventApplicationService) acquire(workspaceID, principalKey stri
 	s.global++
 	s.workspace[workspaceID]++
 	s.principal[principalKey]++
-	s.opened++
 	return true
 }
 
-func (s *BusinessEventApplicationService) release(workspaceID, principalKey string) {
+func (s *BusinessEventApplicationService) release(workspaceID, principalKey string, countClosed bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.global > 0 {
 		s.global--
+		if countClosed {
+			s.closed++
+		}
 	}
 	if s.workspace[workspaceID] <= 1 {
 		delete(s.workspace, workspaceID)
@@ -153,4 +179,22 @@ func (s *BusinessEventApplicationService) release(workspaceID, principalKey stri
 	} else {
 		s.principal[principalKey]--
 	}
+}
+
+func (s *BusinessEventApplicationService) recordOpened() {
+	s.mu.Lock()
+	s.opened++
+	s.mu.Unlock()
+}
+
+func (s *BusinessEventApplicationService) recordOpenFailure() {
+	s.mu.Lock()
+	s.openFailed++
+	s.mu.Unlock()
+}
+
+func (s *BusinessEventApplicationService) recordPublishFailure() {
+	s.mu.Lock()
+	s.publishFailed++
+	s.mu.Unlock()
 }

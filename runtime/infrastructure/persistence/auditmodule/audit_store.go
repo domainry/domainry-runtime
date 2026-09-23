@@ -28,7 +28,7 @@ func NewAuditStore(binding auditsdk.Binding) *AuditStore { return &AuditStore{bi
 // NewAuditStoreFromRuntimeStore opens the source-owned module against a caller-
 // supplied construction context for tests and narrow host integrations.
 func NewAuditStoreFromRuntimeStore(ctx context.Context, store *persistence.RuntimeStore) *AuditStore {
-	binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: "domainry-runtime"}, NewHost(store))
+	binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: "domainry-runtime"}, NewHost(store, nil, nil, nil))
 	if err != nil {
 		panic(err)
 	}

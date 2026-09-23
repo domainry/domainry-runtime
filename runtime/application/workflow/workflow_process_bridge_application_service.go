@@ -109,7 +109,7 @@ func (s *WorkflowApplicationService) executeWorkflowGraphProcessWithIdempotencyK
 	}
 	execution := workflowmodel.WorkflowExecution{
 		WorkspaceID: principal.WorkspaceID,
-		ID:          process.ID, WorkflowKey: workflow.Key, Name: workflow.Name, Trigger: trigger,
+		ID:          process.ID, OperationID: process.OperationID, WorkflowKey: workflow.Key, Name: workflow.Name, Trigger: trigger,
 		Status: process.Status, ActionType: "workflow_graph", Action: workflowpolicy.WorkflowCloneMap(workflow.Action), Payload: workflowpolicy.WorkflowCloneMap(payload),
 		Result: map[string]any{"process_id": process.ID, "current_node_ids": process.CurrentNodeIDs, "definition_hash": process.DefinitionHash}, ProcessID: process.ID,
 		ObjectKey: process.ObjectKey, RecordID: process.RecordID, ActorID: principal.UserID, RunAs: workflowpolicy.WorkflowRunAs(workflow),

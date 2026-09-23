@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
@@ -56,7 +57,7 @@ func (h *RecordsHandler) auditActionAssurance(request *http.Request, event, acti
 		metadata = map[string]any{}
 	}
 	metadata["action_key"] = strings.TrimSpace(actionKey)
-	h.audit.AppendWithMetadata(request.Context(), event, strings.TrimSpace(objectKey), strings.TrimSpace(recordID), h.principal(request), summary, nil, nil, metadata)
+	h.audit.AppendWithMetadata(request.Context(), auditmodel.EventFamilyBusinessAction, event, strings.TrimSpace(objectKey), strings.TrimSpace(recordID), h.principal(request), summary, nil, nil, metadata)
 }
 
 func actionAssuranceBearerToken(request *http.Request) string {

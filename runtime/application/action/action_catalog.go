@@ -49,12 +49,12 @@ const (
 
 func NewRuntimeSystemOperationCatalog(extensions ...SystemOperationDescriptor) *SystemOperationCatalog {
 	standard := []SystemOperationDescriptor{
-		{Key: SystemOperationCreate, Kind: definitionmodel.ActionKindObjectCreate, WriteOperation: "create"},
-		{Key: SystemOperationUpdate, Kind: definitionmodel.ActionKindRecordUpdate, WriteOperation: "update"},
-		{Key: SystemOperationDelete, Kind: definitionmodel.ActionKindRecordDelete, WriteOperation: "delete"},
-		{Key: SystemOperationRestore, Kind: definitionmodel.ActionKindRecordRestore, WriteOperation: "restore"},
-		{Key: SystemOperationTransition, Kind: definitionmodel.ActionKindTransitionState, WriteOperation: "update"},
-		{Key: SystemOperationConditionalUpdate, Kind: definitionmodel.ActionKindConditionalUpdate, WriteOperation: "conditional_update"},
+		{Key: SystemOperationCreate, Kind: definitionmodel.ActionKindObjectCreate, WriteOperation: runtimeext.ObjectCapabilityCreate},
+		{Key: SystemOperationUpdate, Kind: definitionmodel.ActionKindRecordUpdate, WriteOperation: runtimeext.ObjectCapabilityUpdate},
+		{Key: SystemOperationDelete, Kind: definitionmodel.ActionKindRecordDelete, WriteOperation: runtimeext.ObjectCapabilityDelete},
+		{Key: SystemOperationRestore, Kind: definitionmodel.ActionKindRecordRestore, WriteOperation: runtimeext.ObjectCapabilityRestore},
+		{Key: SystemOperationTransition, Kind: definitionmodel.ActionKindTransitionState, WriteOperation: runtimeext.ObjectCapabilityUpdate},
+		{Key: SystemOperationConditionalUpdate, Kind: definitionmodel.ActionKindConditionalUpdate, WriteOperation: runtimeext.ObjectCapabilityConditionalUpdate},
 	}
 	return NewSystemOperationCatalog(append(append([]SystemOperationDescriptor(nil), extensions...), standard...)...)
 }
@@ -265,7 +265,7 @@ func validateStoreOrganizationSnapshotOutput(action definitionmodel.ActionSchema
 	listGrants := map[string]bool{}
 	for _, capability := range descriptor.ObjectCapabilities {
 		for _, operation := range capability.Operations {
-			if strings.TrimSpace(operation) == "list" {
+			if strings.TrimSpace(operation) == runtimeext.ObjectCapabilityList {
 				listGrants[strings.TrimSpace(capability.ObjectKey)] = true
 			}
 		}
@@ -293,7 +293,9 @@ func validateStoreOrganizationSnapshotOutput(action definitionmodel.ActionSchema
 		for _, capability := range descriptor.ObjectCapabilities {
 			for _, operation := range capability.Operations {
 				switch strings.TrimSpace(operation) {
-				case "create", "update", "conditional_update", "conditional_update_many", "delete", "restore":
+				case runtimeext.ObjectCapabilityCreate, runtimeext.ObjectCapabilityUpdate,
+					runtimeext.ObjectCapabilityConditionalUpdate, runtimeext.ObjectCapabilityConditionalUpdateMany,
+					runtimeext.ObjectCapabilityDelete, runtimeext.ObjectCapabilityRestore:
 					return fmt.Errorf("published action %s store Organization snapshot output must not grant record writes", action.Key)
 				}
 			}

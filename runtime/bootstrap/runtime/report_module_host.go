@@ -4,11 +4,12 @@ import (
 	"context"
 	"time"
 
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	runtimereportmodulehost "github.com/domainry/domainry-runtime/runtime/modulehost/report"
 )
@@ -25,6 +26,12 @@ func (h runtimeReportModuleHost) DatabaseFor(ctx context.Context) reportmoduleho
 func (h runtimeReportModuleHost) Dialect() reportmodulehost.Dialect { return h.store.SQLRenderer }
 func (h runtimeReportModuleHost) Migrations() reportmodulehost.MigrationRegistrar {
 	return runtimeReportMigrationRegistrar{store: h.store}
+}
+func (h runtimeReportModuleHost) DefinitionStore() metadatasdk.DefinitionStore {
+	if h.store == nil || h.store.Metadata() == nil {
+		return nil
+	}
+	return h.store.Metadata().DefinitionStore()
 }
 
 type runtimeReportApplicationHost struct {
@@ -74,8 +81,8 @@ func (r runtimeReportMigrationRegistrar) ApplyOwnedMigrations(ctx context.Contex
 	return r.store.ApplyOwnedMigrations(ctx, owner, values)
 }
 
-// SynchronizeReportDefinitions projects Runtime manifest definitions into the
-// Report-owned repository before the Report application host is bound.
-func SynchronizeReportDefinitions(ctx context.Context, binding reportsdk.Binding, manifest manifestmodel.ManifestSchema) error {
-	return runtimereportmodulehost.SynchronizeDefinitions(ctx, binding, manifest)
+// SynchronizeReportDefinitions sends code-owned definitions to Report before
+// the Report application host is bound.
+func SynchronizeReportDefinitions(ctx context.Context, binding reportsdk.Binding, sourceID, revision string, definitions []runtimeext.ReportDefinition) error {
+	return runtimereportmodulehost.SynchronizeDefinitions(ctx, binding, sourceID, revision, definitions)
 }

@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	healthplatform "github.com/domainry/domainry-foundation/health"
-	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -44,16 +43,12 @@ func (s *HTTPRouter) registerProbeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /startup", s.startup)
 }
 
-func (s *HTTPRouter) manifestProvisionEntrypointRequired(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusServiceUnavailable, map[string]any{"code": "runtime_provision_entrypoint_required", "message": "manifest Provision routes are installed by the canonical runtime/cmd/server entrypoint"})
-}
-
 func (s *HTTPRouter) registerFallbackRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/{path...}", s.notFound)
 }
 
 func (s *HTTPRouter) notFound(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusNotFound, map[string]any{"code": "route_not_found", "message": "unknown domain Runtime route", "path": r.URL.Path, "service_kind": s.serviceKind, "openapi_url": "/openapi.json", "guidance": "Use the unprefixed routes documented by /openapi.json; /api/v1 is not supported."})
+	writeJSON(w, http.StatusNotFound, map[string]any{"code": "route_not_found", "message": "unknown domain Runtime route", "path": r.URL.Path, "service_kind": s.serviceKind, "guidance": "Use the published client route without an /api/v1 prefix; /api/v1 is not supported."})
 }
 
 func (s *HTTPRouter) apiInfo(w http.ResponseWriter, r *http.Request) {
@@ -70,18 +65,16 @@ func (s *HTTPRouter) health(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusForbidden, "auth.permission_denied")
 		return
 	}
-	if s.runtimeStatus == nil {
+	if s.runtimeHealth == nil {
 		writeError(w, r, http.StatusServiceUnavailable, "monitoring.health_unavailable")
 		return
 	}
-	payload := s.runtimeStatus.Health(r.Context())
-	authoring := capabilityapplication.RuntimeAuthoringCapabilities()
+	payload := s.runtimeHealth.Health(r.Context())
 	payload["service_kind"], payload["runtime_version"] = s.serviceKind, s.runtimeVersion
 	payload["api_contract_version"], payload["api_contract_hash"] = s.apiContractVersion, s.apiContractHash
 	readiness := s.readinessSnapshot(r.Context())
 	payload["ready"], payload["readiness"] = readiness.Status == "ok", readiness
-	payload["template_id"], payload["manifest_hash"] = s.manifestTemplateID, s.manifestHash
-	payload["authoring_contract_version"], payload["authoring_contract_hash"] = authoring.ContractVersion, authoring.ContractHash
+	payload["project_key"], payload["project_model_hash"] = s.projectKey, s.projectModelHash
 	payload["readiness_report_version"], payload["release_identity"] = "runtime.readiness.v1", s.releaseIdentity
 	payload["runtime_catalog_urls"] = []string{"/automation/execution-catalog", "/integration/catalog", "/operations/catalog"}
 	payload["api"], payload["capacity"] = s.httpMetricsSummary(), s.capacityController.Snapshot()
@@ -102,11 +95,11 @@ func (s *HTTPRouter) ready(w http.ResponseWriter, r *http.Request) {
 
 func (s *HTTPRouter) startup(w http.ResponseWriter, r *http.Request) {
 	checks := []healthplatform.Check{
-		{Name: "schema_manifest_seed", Criticality: healthplatform.Critical, Timeout: s.healthCheckTimeout, Run: func(context.Context) error {
-			if s.manifestTemplateID != "" || len(s.manifest.Objects) > 0 {
+		{Name: "project_model", Criticality: healthplatform.Critical, Timeout: s.healthCheckTimeout, Run: func(context.Context) error {
+			if s.projectKey != "" && s.projectModelHash != "" {
 				return nil
 			}
-			return errors.New("manifest unavailable")
+			return errors.New("project model unavailable")
 		}},
 		{Name: "workers", Criticality: healthplatform.Critical, Timeout: s.healthCheckTimeout, Run: func(context.Context) error {
 			if s.healthRegistry.StartupComplete() {
@@ -158,7 +151,7 @@ func (s *HTTPRouter) metrics(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.businessEvents != nil {
 		snapshot := s.businessEvents.Snapshot(r.Context())
-		_, _ = fmt.Fprintf(w, "# HELP domainry_runtime_business_event_stream_connections Active business SSE connections.\n# TYPE domainry_runtime_business_event_stream_connections gauge\ndomainry_runtime_business_event_stream_connections %d\n# HELP domainry_runtime_business_event_stream_opened_total Business SSE connections opened.\n# TYPE domainry_runtime_business_event_stream_opened_total counter\ndomainry_runtime_business_event_stream_opened_total %d\n# HELP domainry_runtime_business_event_stream_rejected_total Business SSE connections rejected.\n# TYPE domainry_runtime_business_event_stream_rejected_total counter\ndomainry_runtime_business_event_stream_rejected_total %d\n# HELP domainry_runtime_business_events_published_total Business refresh events published.\n# TYPE domainry_runtime_business_events_published_total counter\ndomainry_runtime_business_events_published_total %d\n", snapshot.ActiveConnections, snapshot.OpenedTotal, snapshot.RejectedTotal, snapshot.PublishedTotal)
+		_, _ = fmt.Fprintf(w, "# HELP domainry_runtime_business_event_stream_connections Active business SSE connections.\n# TYPE domainry_runtime_business_event_stream_connections gauge\ndomainry_runtime_business_event_stream_connections %d\n# HELP domainry_runtime_business_event_stream_opened_total Business SSE connections opened.\n# TYPE domainry_runtime_business_event_stream_opened_total counter\ndomainry_runtime_business_event_stream_opened_total %d\n# HELP domainry_runtime_business_event_stream_closed_total Business SSE connections closed.\n# TYPE domainry_runtime_business_event_stream_closed_total counter\ndomainry_runtime_business_event_stream_closed_total %d\n# HELP domainry_runtime_business_event_stream_rejected_total Business SSE connections rejected by capacity limits.\n# TYPE domainry_runtime_business_event_stream_rejected_total counter\ndomainry_runtime_business_event_stream_rejected_total %d\n# HELP domainry_runtime_business_event_stream_open_failed_total Business SSE connections that failed to open in the backplane.\n# TYPE domainry_runtime_business_event_stream_open_failed_total counter\ndomainry_runtime_business_event_stream_open_failed_total %d\n# HELP domainry_runtime_business_events_published_total Business refresh events published.\n# TYPE domainry_runtime_business_events_published_total counter\ndomainry_runtime_business_events_published_total %d\n# HELP domainry_runtime_business_events_publish_failed_total Business refresh events that failed to publish.\n# TYPE domainry_runtime_business_events_publish_failed_total counter\ndomainry_runtime_business_events_publish_failed_total %d\n", snapshot.ActiveConnections, snapshot.OpenedTotal, snapshot.ClosedTotal, snapshot.RejectedTotal, snapshot.OpenFailedTotal, snapshot.PublishedTotal, snapshot.PublishFailedTotal)
 	}
 	_, _ = w.Write([]byte("# EOF\n"))
 }

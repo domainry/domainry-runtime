@@ -1,8 +1,6 @@
 package http
 
-import appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-
-// These tests guard composition and route/OpenAPI drift across HTTP owner packages.
+// These tests guard composition and route/compiled-contract drift across HTTP owner packages.
 
 import (
 	"go/ast"
@@ -15,8 +13,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	runtimeopenapi "github.com/domainry/domainry-runtime/runtime/transport/http/openapi"
 )
 
 func TestFallbackRouteCanReturnJSONBeforeAuthentication(t *testing.T) {
@@ -59,32 +55,6 @@ func TestRoutePolicyUsesRegisteredPatternInsteadOfUserPathSegments(t *testing.T)
 	(&HTTPRouter{}).withAuth(mux, mux).ServeHTTP(response, unknownRequest)
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("unknown route was intercepted by authentication: status=%d", response.Code)
-	}
-}
-
-func TestEveryRuntimeRouteIsDocumentedByAggregatedOpenAPI(t *testing.T) {
-	routes := declaredRuntimeRoutes(t)
-	spec := runtimeopenapi.Build(appschemamodel.ApplicationSchemaSnapshot{})
-	paths, ok := spec["paths"].(map[string]any)
-	if !ok {
-		t.Fatal("OpenAPI paths missing")
-	}
-
-	missingFromSpec := []string{}
-	for contract := range routes {
-		method, path, _ := strings.Cut(contract, " ")
-		if reason := runtimeRouteOpenAPIExclusion(method, path); reason != "" {
-			continue
-		}
-		pathSpec, exists := paths[path].(map[string]any)
-		if !exists || pathSpec[strings.ToLower(method)] == nil {
-			missingFromSpec = append(missingFromSpec, contract)
-		}
-	}
-
-	sort.Strings(missingFromSpec)
-	if len(missingFromSpec) > 0 {
-		t.Fatalf("Runtime routes missing from aggregated OpenAPI: %v", missingFromSpec)
 	}
 }
 
@@ -136,7 +106,7 @@ func TestEveryRuntimeRouteUsesItsOwnerNamespace(t *testing.T) {
 		"workspaceprovision": "/workspaces",
 	}
 	for identity, contract := range runtimeEndpointContracts {
-		if contract.SourceOwner == "root" || contract.SourceOwner == "openapi" {
+		if contract.SourceOwner == "root" {
 			continue
 		}
 		root, found := namespaces[contract.SourceOwner]
@@ -153,29 +123,22 @@ func TestEveryRuntimeRouteUsesItsOwnerNamespace(t *testing.T) {
 
 func TestLegacyFrontendSurfaceRoutesAreNotPublished(t *testing.T) {
 	routes := declaredRuntimeRoutes(t)
-	spec := runtimeopenapi.Build(appschemamodel.ApplicationSchemaSnapshot{})
-	paths := spec["paths"].(map[string]any)
 	for _, identity := range []string{
 		"GET /business/surface-context",
 		"GET /portal/surface-context",
 		"POST /surfaces/{surfaceKey}/context",
 	} {
-		method, path, _ := strings.Cut(identity, " ")
 		if _, exists := routes[identity]; exists {
 			t.Errorf("legacy frontend Surface route is still registered: %s", identity)
 		}
 		if _, exists := runtimeEndpointContracts[identity]; exists {
 			t.Errorf("legacy frontend Surface route still has an endpoint contract: %s", identity)
 		}
-		if item, exists := paths[path].(map[string]any); exists && item[strings.ToLower(method)] != nil {
-			t.Errorf("legacy frontend Surface route is still published by OpenAPI: %s", identity)
-		}
 	}
 }
 
 func TestRuntimeRoutesDoNotReintroduceTransportContainerSegments(t *testing.T) {
 	routes := declaredRuntimeRoutes(t)
-	paths := runtimeopenapi.Build(appschemamodel.ApplicationSchemaSnapshot{})["paths"].(map[string]any)
 	forbidden := []string{
 		"/runtime/",
 		"/records/objects/",
@@ -203,9 +166,6 @@ func TestRuntimeRoutesDoNotReintroduceTransportContainerSegments(t *testing.T) {
 	for identity := range runtimeEndpointContracts {
 		assertCanonical("endpoint contract", identity)
 	}
-	for path := range paths {
-		assertCanonical("OpenAPI path", path)
-	}
 }
 
 func TestRuntimeDoesNotPublishIntegrationOwnerWebhookRoute(t *testing.T) {
@@ -221,18 +181,6 @@ func TestRuntimeDoesNotPublishIntegrationOwnerWebhookRoute(t *testing.T) {
 		t.Fatalf("Runtime published Integration-owner webhook routes=%v", webhookRoutes)
 	}
 
-	spec := runtimeopenapi.Build(appschemamodel.ApplicationSchemaSnapshot{})
-	paths := spec["paths"].(map[string]any)
-	webhookPaths := make([]string, 0)
-	for path := range paths {
-		if strings.Contains(strings.ToLower(path), "webhook") && !strings.Contains(path, "/webhook-subscriptions") {
-			webhookPaths = append(webhookPaths, path)
-		}
-	}
-	sort.Strings(webhookPaths)
-	if len(webhookPaths) != 0 {
-		t.Fatalf("Runtime OpenAPI published Integration-owner webhook paths=%v", webhookPaths)
-	}
 }
 
 func TestRoutesOnlyComposesDomainRegistrarsAndGlobalMiddleware(t *testing.T) {
@@ -242,10 +190,9 @@ func TestRoutesOnlyComposesDomainRegistrarsAndGlobalMiddleware(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := map[string]bool{
-		"discoveryHTTP": false, "openAPIHTTP": false,
-		"applicationSchemaHTTP": false,
-		"businessSystemHTTP":    false,
-		"businessReferenceHTTP": false, "lifecycleHTTP": false,
+		"discoveryHTTP":          false,
+		"applicationSchemaHTTP":  false,
+		"lifecycleHTTP":          false,
 		"workspaceProvisionHTTP": false,
 		"uploadHTTP":             false, "recordHTTP": false, "workflowHTTP": false,
 		"automationHTTP": false, "dispatchHTTP": false,
@@ -304,15 +251,12 @@ func declaredRuntimeRoutes(t *testing.T) map[string]bool {
 	files = append(files, filepath.Join(filepath.Dir(current), "records", "records_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "uploads", "uploads_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "discovery", "discovery_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "openapi", "openapi_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "workflows", "workflows_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "lifecycle", "lifecycle_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "automation", "automation_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "dispatch", "dispatch_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "appschema", "appschema_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "businessreferences", "businessreferences_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "publicationhandoff", "publication_handoff_routes.go"))
-	files = append(files, filepath.Join(filepath.Dir(current), "businesssystem", "businesssystem_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "operations", "operations_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "businessevents", "businessevents_routes.go"))
 	files = append(files, filepath.Join(filepath.Dir(current), "notifications", "notifications_routes.go"))
@@ -345,28 +289,6 @@ func declaredRuntimeRoutes(t *testing.T) map[string]bool {
 		})
 	}
 	return routes
-}
-
-func runtimeRouteOpenAPIExclusion(_ string, path string) string {
-	for _, prefix := range []string{"/agent/", "/auth/", "/identity/", "/discovery/i18n/", "/uploads/"} {
-		if strings.HasPrefix(path, prefix) {
-			return "internal or separately governed protocol surface"
-		}
-	}
-	switch path {
-	case "/", "/health", "/metrics", "/uploads":
-		return "operational or binary transport endpoint"
-	case "/integration/events/process-due", "/integration/events/{eventID}/status",
-		"/integration/invocations/{invocationID}/status", "/integration/outbox/process-due",
-		"/integration/outbox/{messageID}/status":
-		return "internal worker control endpoint"
-	default:
-		return ""
-	}
-}
-
-func isSchemaDerivedOpenAPIPath(path string) bool {
-	return strings.HasPrefix(path, "/records/{objectKey}") || strings.Contains(path, "/actions/{actionKey}")
 }
 
 func isHTTPMethod(value string) bool {

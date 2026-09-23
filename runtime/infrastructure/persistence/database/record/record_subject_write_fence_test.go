@@ -13,6 +13,14 @@ func TestErasedRecordCannotBeRecreatedByRawCommitOrLocalizedWriters(t *testing.T
 	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE member_profile(workspace_id TEXT NOT NULL,id TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,name TEXT,create_by TEXT,update_by TEXT,owner_user_id TEXT,PRIMARY KEY(workspace_id,id))`); err != nil {
 		t.Fatal(err)
 	}
+	for _, statement := range []string{
+		`CREATE TABLE _subject_requests (id TEXT NOT NULL, workspace_id TEXT NOT NULL, request_type TEXT NOT NULL, kind TEXT NOT NULL, resolved_identity TEXT NOT NULL, PRIMARY KEY(workspace_id,id))`,
+		`CREATE TABLE _subject_steps (workspace_id TEXT NOT NULL, request_id TEXT NOT NULL, owner TEXT NOT NULL, operation TEXT NOT NULL, payload_json TEXT NOT NULL, completed_at TEXT NOT NULL, PRIMARY KEY(workspace_id,request_id,owner,operation))`,
+	} {
+		if _, err := store.DB().ExecContext(t.Context(), statement); err != nil {
+			t.Fatal(err)
+		}
+	}
 	object := definitionmodel.ObjectSchema{Key: "member_profile", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text", Config: map[string]any{"localized": true}}}}
 	records := NewRecordStore(store)
 	for _, item := range []struct{ workspace, id string }{{"workspace-a", "alice"}, {"workspace-a", "bob"}, {"workspace-b", "alice"}} {
@@ -20,11 +28,17 @@ func TestErasedRecordCannotBeRecreatedByRawCommitOrLocalizedWriters(t *testing.T
 			t.Fatal(err)
 		}
 	}
-	for _, fence := range []struct{ kind, object, id string }{{"record", "member_profile", "alice"}, {"subject", "", "alice"}} {
-		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_evidence_erasure_fences(workspace_id,kind,object_key,record_id,request_id) VALUES(?,?,?,?,?)`, "workspace-a", fence.kind, fence.object, fence.id, "erase-alice"); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_requests(id,workspace_id,request_type,kind,resolved_identity) VALUES('erase-alice','workspace-a','subject_request','erase','alice')`); err != nil {
+		t.Fatal(err)
 	}
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_steps(workspace_id,request_id,owner,operation,payload_json,completed_at) VALUES('workspace-a','erase-alice','lifecycle','erase_fence','{}','2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	planStep := `{"workspace_id":"workspace-a","request_id":"erase-alice","owner":"runtime_evidence","operation":"erase_plan","payload":{"request_id":"erase-alice","workspace_id":"workspace-a","subject_id":"alice","resources":[{"object_key":"member_profile","record_id":"alice"}],"event_ids":[],"rows":[]},"completed_at":"2026-01-01T00:00:00Z"}`
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_steps(workspace_id,request_id,owner,operation,payload_json,completed_at) VALUES(?,?,?,?,?,?)`, "workspace-a", "erase-alice", "runtime_evidence", "erase_plan", planStep, "2026-01-01T00:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
+	store.BindSubjectLifecyclePersistence()
 	late := recordmodel.Record{ID: "alice", CreatedAt: "before", UpdatedAt: "late", Data: map[string]any{"name": "alice@private.example"}}
 	if err := records.UpdateRecord(t.Context(), "workspace-a", object, late); err == nil {
 		t.Fatal("raw update restored erased fields")

@@ -15,8 +15,8 @@ type monitoringModuleHost struct {
 	identity modulehost.Identity
 }
 
-func newMonitoringModuleHost(status *deploymentapplication.DeploymentRuntimeStatusApplicationService, templateID, templateVersion string) monitoringModuleHost {
-	return monitoringModuleHost{status: status, identity: modulehost.Identity{TemplateID: templateID, TemplateVersion: templateVersion}}
+func newMonitoringModuleHost(status *deploymentapplication.DeploymentRuntimeStatusApplicationService, projectKey, schemaVersion string) monitoringModuleHost {
+	return monitoringModuleHost{status: status, identity: modulehost.Identity{TemplateID: projectKey, TemplateVersion: schemaVersion}}
 }
 
 func (h monitoringModuleHost) Identity() modulehost.Identity {

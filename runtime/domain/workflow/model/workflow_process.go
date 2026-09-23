@@ -5,6 +5,7 @@ import definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/defi
 type WorkflowProcessInstance struct {
 	WorkspaceID         string                         `json:"workspace_id"`
 	ID                  string                         `json:"id"`
+	OperationID         string                         `json:"operation_id,omitempty"`
 	WorkflowKey         string                         `json:"workflow_key"`
 	WorkflowName        string                         `json:"workflow_name"`
 	DefinitionVersionID string                         `json:"workflow_definition_version_id,omitempty"`

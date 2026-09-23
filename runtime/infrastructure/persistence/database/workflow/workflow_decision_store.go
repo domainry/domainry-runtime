@@ -294,8 +294,8 @@ func (r WorkflowDecisionStore) updateProcessTx(ctx context.Context, tx *sql.Tx, 
 	currentNodes, _ := json.Marshal(process.CurrentNodeIDs)
 	variables, _ := json.Marshal(database.NonNilMap(process.Variables))
 	result, _ := json.Marshal(database.NonNilMap(process.Result))
-	columns := []string{"workflow_key", "workflow_name", "workflow_definition_version_id", "definition_version", "definition_hash", "definition_json", "object_key", "record_id", "initiator_id", "initiator_role_key", "status", "current_node_ids_json", "variables_json", "result_json", "error_code", "created_at", "updated_at", "completed_at"}
-	values := []any{process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, process.CreatedAt, process.UpdatedAt, database.NullableText(process.CompletedAt)}
+	columns := []string{"operation_id", "workflow_key", "workflow_name", "workflow_definition_version_id", "definition_version", "definition_hash", "definition_json", "object_key", "record_id", "initiator_id", "initiator_role_key", "status", "current_node_ids_json", "variables_json", "result_json", "error_code", "created_at", "updated_at", "completed_at"}
+	values := []any{process.OperationID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, process.CreatedAt, process.UpdatedAt, database.NullableText(process.CompletedAt)}
 	return r.updateTx(ctx, tx, "_workflow_process_instances", process.WorkspaceID, process.ID, columns, values)
 }
 

@@ -3,7 +3,6 @@ package testkit
 import (
 	"context"
 
-	"github.com/domainry/domainry-foundation/modulecapability"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 )
 
@@ -12,7 +11,7 @@ import (
 // satisfy Runtime's required Identity dependency without importing an
 // Identity module implementation or making the production dependency
 // optional.
-type IdentityBindingStub struct{ modulecapability.Binding }
+type IdentityBindingStub struct{ identitysdk.Binding }
 
 func (IdentityBindingStub) Descriptor() identitysdk.Descriptor {
 	return identitysdk.Descriptor{ProtocolVersion: identitysdk.CurrentProtocolVersion, BundleVersion: identitysdk.CurrentPolicyBundleVersion, AuthorizationVersion: identitysdk.CurrentAuthorizationContractVersion, Mode: identitysdk.DeploymentModeModule}

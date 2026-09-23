@@ -19,7 +19,7 @@ func TestWorkflowProcessStoreLifecycleAndCancellation(t *testing.T) {
 	}
 	repository := NewWorkflowProcessStore(store)
 	const workspaceID = "workspace-a"
-	process := workflowmodel.WorkflowProcessInstance{ID: "process-1", WorkflowKey: "expense", WorkflowName: "Expense", DefinitionVersionID: "version-1", DefinitionVersion: 1, DefinitionHash: "hash", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "expense", Name: "Expense"}, InitiatorID: "user-1", Status: "running", CurrentNodeIDs: []string{"approve"}, Variables: map[string]any{"amount": 10}, Result: map[string]any{}, CreatedAt: "v1", UpdatedAt: "v1"}
+	process := workflowmodel.WorkflowProcessInstance{ID: "process-1", OperationID: "operation-1", WorkflowKey: "expense", WorkflowName: "Expense", DefinitionVersionID: "version-1", DefinitionVersion: 1, DefinitionHash: "hash", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "expense", Name: "Expense"}, InitiatorID: "user-1", Status: "running", CurrentNodeIDs: []string{"approve"}, Variables: map[string]any{"amount": 10}, Result: map[string]any{}, CreatedAt: "v1", UpdatedAt: "v1"}
 	if err := repository.InsertProcess(t.Context(), workspaceID, process); err != nil {
 		t.Fatalf("insert process: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestWorkflowProcessStoreLifecycleAndCancellation(t *testing.T) {
 	if err := repository.UpdateTask(t.Context(), workspaceID, task); err != nil {
 		t.Fatalf("update task: %v", err)
 	}
-	if value, found, err := repository.GetProcess(t.Context(), workspaceID, process.ID); err != nil || !found || value.Status != "waiting" || value.DefinitionSnapshot.DefinitionVersionID != "version-1" || value.DefinitionSnapshot.PublishedVersion != 1 {
+	if value, found, err := repository.GetProcess(t.Context(), workspaceID, process.ID); err != nil || !found || value.OperationID != "operation-1" || value.Status != "waiting" || value.DefinitionSnapshot.DefinitionVersionID != "version-1" || value.DefinitionSnapshot.PublishedVersion != 1 {
 		t.Fatalf("get process=%#v found=%v err=%v", value, found, err)
 	}
 	if values, err := repository.ListProcesses(t.Context(), workspaceID, workflowmodel.WorkflowProcessFilter{Status: "waiting", Limit: 10}); err != nil || len(values) != 1 {

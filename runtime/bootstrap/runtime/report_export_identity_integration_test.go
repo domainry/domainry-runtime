@@ -62,6 +62,9 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = bootstrap.Close(context.Background()) })
+	if err := bootstrap.BindOperationsPersistence(); err != nil {
+		t.Fatal(err)
+	}
 	catalog := identitysdk.ProjectRoleCatalog{Application: identitysdk.ApplicationRef{ApplicationKey: "runtime"}, InitialWorkspaceAdministratorRoleKey: "member", Roles: []identitysdk.ProjectRoleDefinition{
 		{Key: "member", Name: "Member", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true, Permissions: []identitysdk.ProjectRolePermission{{PermissionKey: dataexchange.ActionDataExchangeJobGet, DataScope: "owner"}, {PermissionKey: dataexchange.ActionDataExchangeJobDownload, DataScope: "owner"}, {PermissionKey: "customer.read", DataScope: "owner"}, {PermissionKey: "customer.export", DataScope: "owner"}}},
 		{Key: "member_onboarding", Name: "Onboarding", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true, Permissions: []identitysdk.ProjectRolePermission{{PermissionKey: "identity.users.list", DataScope: "owner"}}},
@@ -95,6 +98,9 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = identity.Close(context.Background()) })
+	if err := identity.(identitysdk.OperationsPersistenceBinding).BindOperationsPersistence(); err != nil {
+		t.Fatal(err)
+	}
 	if err := identity.(identitysdk.BootstrapProjectRoleCatalogBinder).BindBootstrapProjectRoleCatalog(ctx, catalog); err != nil {
 		t.Fatal(err)
 	}

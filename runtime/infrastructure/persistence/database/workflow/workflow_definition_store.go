@@ -1,264 +1,590 @@
 package workflow
 
 import (
+	"bytes"
 	"context"
-	"database/sql"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"sort"
 	"strings"
+	"time"
 
-	"github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-foundation/mutation"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
+	metadatamodulehost "github.com/domainry/domainry-metadata-sdk/modulehost"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
+const (
+	workflowDefinitionKind            = "workflow"
+	workflowDefinitionSourceKind      = "workflow_management"
+	workflowDefinitionContractVersion = "domainry-workflow-definition-v1"
+	workflowVersionContractVersion    = "domainry-workflow-definition-version-v1"
+	workflowVersionResourcePrefix     = "version:"
+	workflowDefinitionMutationRetries = 64
+)
+
+type workflowDefinitionState struct {
+	ContractVersion string                           `json:"contract_version"`
+	Definition      workflowmodel.WorkflowDefinition `json:"definition"`
+}
+
+type workflowVersionState struct {
+	ContractVersion       string                                  `json:"contract_version"`
+	PublishIdempotencyKey string                                  `json:"publish_idempotency_key,omitempty"`
+	Version               workflowmodel.WorkflowDefinitionVersion `json:"version"`
+}
+
+type storedWorkflowDefinition struct {
+	metadata metadatasdk.Definition
+	state    workflowDefinitionState
+}
+
+type storedWorkflowVersion struct {
+	metadata metadatasdk.Definition
+	state    workflowVersionState
+}
+
 type WorkflowDefinitionStore struct {
-	store *database.RuntimeStore
-	db    workflowDatabase
+	store  *database.RuntimeStore
+	shared metadatasdk.DefinitionStore
 }
 
 func NewWorkflowDefinitionStore(store *database.RuntimeStore) WorkflowDefinitionStore {
-	return WorkflowDefinitionStore{store: store}
+	var shared metadatasdk.DefinitionStore
+	if store != nil && store.Metadata() != nil {
+		shared = store.Metadata().DefinitionStore()
+	}
+	return WorkflowDefinitionStore{store: store, shared: shared}
 }
 
-func (r WorkflowDefinitionStore) database() workflowDatabase {
-	if r.db != nil {
-		return r.db
+func (r WorkflowDefinitionStore) validate() error {
+	if r.store == nil || r.store.DB() == nil || r.shared == nil {
+		return fmt.Errorf("Workflow shared Definition store is unavailable")
 	}
-	return r.store.DB()
+	return nil
 }
 
 func (r WorkflowDefinitionStore) InsertDefinition(ctx context.Context, definition workflowmodel.WorkflowDefinition, draft workflowmodel.WorkflowDefinitionVersion) error {
-	tx, err := r.database().BeginTx(ctx, recordMutationTxOptions())
+	if err := r.validate(); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(definition.ID) == "" || strings.TrimSpace(definition.Key) == "" || strings.TrimSpace(draft.ID) == "" || strings.TrimSpace(draft.DefinitionID) != strings.TrimSpace(definition.ID) {
+		return fmt.Errorf("Workflow definition and draft identity are required")
+	}
+	tx, err := r.store.DB().BeginTx(ctx, recordMutationTxOptions())
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-	queryValue, args, err := query.NewInsertBuilder(r.store.SQLRenderer, "_workflow_definitions").Columns(workflowDefinitionColumns()...).Values(definition.ID, definition.Key, definition.Name, database.NullableText(definition.OwnerUserID), database.BoolInt(definition.Enabled), database.NullableText(draft.ID), nil, definition.CreatedAt, definition.UpdatedAt).Build()
-	if err != nil {
+	defer func() { _ = tx.Rollback() }()
+	sharedCtx := metadatamodulehost.WithExecutor(ctx, tx)
+	if _, found, err := r.loadDefinitionByKey(sharedCtx, definition.Key); err != nil {
+		return err
+	} else if found {
+		return fmt.Errorf("Workflow definition %q already exists", definition.Key)
+	}
+	if _, found, err := r.loadVersionByID(sharedCtx, draft.ID); err != nil {
+		return err
+	} else if found {
+		return fmt.Errorf("Workflow definition version %q already exists", draft.ID)
+	}
+	definition.CurrentDraftVersionID = draft.ID
+	definition.CurrentPublishedVersionID = ""
+	if _, err := r.publishVersion(sharedCtx, metadatasdk.DefinitionNoCurrentVersion, workflowVersionState{ContractVersion: workflowVersionContractVersion, Version: draft}); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, queryValue, args...); err != nil {
-		return err
-	}
-	if err = r.insertVersion(ctx, tx, draft, ""); err != nil {
+	if _, err := r.publishDefinition(sharedCtx, metadatasdk.DefinitionNoCurrentVersion, workflowDefinitionState{ContractVersion: workflowDefinitionContractVersion, Definition: definition}); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
 func (r WorkflowDefinitionStore) GetDefinitionByKey(ctx context.Context, key string) (workflowmodel.WorkflowDefinition, bool, error) {
-	queryValue, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definitions").Columns(workflowDefinitionColumns()...).Where(query.Equal("workflow_key", strings.TrimSpace(key))).Build()
-	if err != nil {
+	if err := r.validate(); err != nil {
 		return workflowmodel.WorkflowDefinition{}, false, err
 	}
-	row := r.database().QueryRowContext(ctx, queryValue, args...)
-	definition, err := scanWorkflowDefinition(row)
-	if err == sql.ErrNoRows {
-		return workflowmodel.WorkflowDefinition{}, false, nil
+	stored, found, err := r.loadDefinitionByKey(ctx, key)
+	if err != nil || !found {
+		return workflowmodel.WorkflowDefinition{}, found, err
 	}
+	definition, err := r.hydrateDefinition(ctx, stored.state.Definition)
 	return definition, err == nil, err
 }
 
 func (r WorkflowDefinitionStore) ListDefinitions(ctx context.Context) ([]workflowmodel.WorkflowDefinition, error) {
-	queryValue, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definitions").Columns(workflowDefinitionColumns()...).OrderBy(query.Ascending("workflow_key"), query.Ascending("id")).Build()
+	if err := r.validate(); err != nil {
+		return nil, err
+	}
+	stored, err := r.listStoredDefinitions(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.database().QueryContext(ctx, queryValue, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []workflowmodel.WorkflowDefinition{}
-	for rows.Next() {
-		value, err := scanWorkflowDefinition(rows)
+	definitions := make([]workflowmodel.WorkflowDefinition, 0, len(stored))
+	for _, value := range stored {
+		definition, err := r.hydrateDefinition(ctx, value.state.Definition)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, value)
+		definitions = append(definitions, definition)
 	}
-	return out, rows.Err()
+	sort.Slice(definitions, func(i, j int) bool {
+		if definitions[i].Key == definitions[j].Key {
+			return definitions[i].ID < definitions[j].ID
+		}
+		return definitions[i].Key < definitions[j].Key
+	})
+	return definitions, nil
 }
 
 func (r WorkflowDefinitionStore) GetVersion(ctx context.Context, versionID string) (workflowmodel.WorkflowDefinitionVersion, bool, error) {
-	queryValue, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Columns(workflowDefinitionVersionColumns()...).Where(query.Equal("id", versionID)).Build()
-	if err != nil {
+	if err := r.validate(); err != nil {
 		return workflowmodel.WorkflowDefinitionVersion{}, false, err
 	}
-	row := r.database().QueryRowContext(ctx, queryValue, args...)
-	version, err := scanWorkflowDefinitionVersion(row)
-	if err == sql.ErrNoRows {
-		return workflowmodel.WorkflowDefinitionVersion{}, false, nil
+	stored, found, err := r.loadVersionByID(ctx, versionID)
+	if err != nil || !found {
+		return workflowmodel.WorkflowDefinitionVersion{}, found, err
 	}
-	return version, err == nil, err
+	return stored.state.Version, true, nil
 }
 
 func (r WorkflowDefinitionStore) ListVersions(ctx context.Context, definitionID string) ([]workflowmodel.WorkflowDefinitionVersion, error) {
-	builder := query.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Columns(workflowDefinitionVersionColumns()...).OrderBy(query.Descending("version_no"), query.Descending("id"))
-	if definitionID = strings.TrimSpace(definitionID); definitionID != "" {
-		builder.Where(query.Equal("definition_id", definitionID))
+	if err := r.validate(); err != nil {
+		return nil, err
 	}
-	queryValue, args, err := builder.Build()
+	stored, err := r.listStoredVersions(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.database().QueryContext(ctx, queryValue, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []workflowmodel.WorkflowDefinitionVersion{}
-	for rows.Next() {
-		value, err := scanWorkflowDefinitionVersion(rows)
-		if err != nil {
-			return nil, err
+	definitionID = strings.TrimSpace(definitionID)
+	versions := make([]workflowmodel.WorkflowDefinitionVersion, 0, len(stored))
+	for _, value := range stored {
+		if definitionID == "" || strings.TrimSpace(value.state.Version.DefinitionID) == definitionID {
+			versions = append(versions, value.state.Version)
 		}
-		out = append(out, value)
 	}
-	return out, rows.Err()
+	sort.Slice(versions, func(i, j int) bool {
+		if versions[i].Version == versions[j].Version {
+			return versions[i].ID > versions[j].ID
+		}
+		return versions[i].Version > versions[j].Version
+	})
+	return versions, nil
 }
 
 func (r WorkflowDefinitionStore) UpdateDraft(ctx context.Context, version workflowmodel.WorkflowDefinitionVersion, expectedRevision int) (bool, error) {
-	workflowJSON, _ := json.Marshal(version.Workflow)
-	reportJSON, _ := json.Marshal(version.ValidationReport)
-	queryValue, args, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Set("workflow_json", string(workflowJSON)).Set("validation_report_json", string(reportJSON)).SetExpression("revision", query.Add(query.Column("revision"), query.Value(1))).Set("updated_at", version.UpdatedAt).Where(query.And(query.Equal("id", version.ID), query.Equal("status", workflowmodel.WorkflowVersionDraft), query.Equal("revision", expectedRevision))).Build()
-	if err != nil {
-		return false, err
-	}
-	result, err := r.database().ExecContext(ctx, queryValue, args...)
-	if err != nil {
-		return false, err
-	}
-	count, err := result.RowsAffected()
-	return count == 1, err
+	return r.mutate(ctx, func(sharedCtx context.Context) (bool, error) {
+		stored, found, err := r.loadVersionByID(sharedCtx, version.ID)
+		if err != nil || !found {
+			return false, err
+		}
+		current := stored.state.Version
+		if current.Status != workflowmodel.WorkflowVersionDraft || current.Revision != expectedRevision {
+			return false, nil
+		}
+		current.Workflow = version.Workflow
+		current.ValidationReport = version.ValidationReport
+		current.Revision = expectedRevision + 1
+		current.UpdatedAt = version.UpdatedAt
+		_, err = r.publishVersion(sharedCtx, stored.metadata.CurrentVersionID, workflowVersionState{ContractVersion: workflowVersionContractVersion, Version: current})
+		return err == nil, err
+	})
 }
 
 func (r WorkflowDefinitionStore) InsertDraftVersion(ctx context.Context, definitionID string, draft workflowmodel.WorkflowDefinitionVersion) (bool, error) {
-	tx, err := r.database().BeginTx(ctx, recordMutationTxOptions())
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback()
-	queryValue, args, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definitions").Set("current_draft_version_id", draft.ID).Set("updated_at", draft.UpdatedAt).Where(query.And(query.Equal("id", definitionID), query.IsNull("current_draft_version_id"))).Build()
-	if err != nil {
-		return false, err
-	}
-	result, err := tx.ExecContext(ctx, queryValue, args...)
-	if err != nil {
-		return false, err
-	}
-	count, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	if count != 1 {
-		return false, nil
-	}
-	if err = r.insertVersion(ctx, tx, draft, ""); err != nil {
-		return false, err
-	}
-	return true, tx.Commit()
+	return r.mutate(ctx, func(sharedCtx context.Context) (bool, error) {
+		definition, found, err := r.loadDefinitionByID(sharedCtx, definitionID)
+		if err != nil || !found {
+			return false, err
+		}
+		if strings.TrimSpace(definition.state.Definition.CurrentDraftVersionID) != "" {
+			return false, nil
+		}
+		if strings.TrimSpace(draft.ID) == "" || strings.TrimSpace(draft.DefinitionID) != strings.TrimSpace(definitionID) {
+			return false, fmt.Errorf("Workflow draft identity does not match its definition")
+		}
+		if _, found, err := r.loadVersionByID(sharedCtx, draft.ID); err != nil {
+			return false, err
+		} else if found {
+			return false, fmt.Errorf("Workflow definition version %q already exists", draft.ID)
+		}
+		versions, err := r.listStoredVersions(sharedCtx)
+		if err != nil {
+			return false, err
+		}
+		for _, value := range versions {
+			if value.state.Version.DefinitionID == definitionID && value.state.Version.Version == draft.Version {
+				return false, fmt.Errorf("Workflow definition version number %d already exists", draft.Version)
+			}
+		}
+		if _, err := r.publishVersion(sharedCtx, metadatasdk.DefinitionNoCurrentVersion, workflowVersionState{ContractVersion: workflowVersionContractVersion, Version: draft}); err != nil {
+			return false, err
+		}
+		definition.state.Definition.CurrentDraftVersionID = draft.ID
+		definition.state.Definition.UpdatedAt = draft.UpdatedAt
+		_, err = r.publishDefinition(sharedCtx, definition.metadata.CurrentVersionID, definition.state)
+		return err == nil, err
+	})
 }
 
 func (r WorkflowDefinitionStore) DeleteDraft(ctx context.Context, definitionID, versionID string) (bool, error) {
-	tx, err := r.database().BeginTx(ctx, recordMutationTxOptions())
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback()
-	queryValue, args, err := query.NewDeleteBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Where(query.And(query.Equal("id", versionID), query.Equal("definition_id", definitionID), query.Equal("status", workflowmodel.WorkflowVersionDraft))).Build()
-	if err != nil {
-		return false, err
-	}
-	result, err := tx.ExecContext(ctx, queryValue, args...)
-	if err != nil {
-		return false, err
-	}
-	count, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	if count != 1 {
-		return false, nil
-	}
-	queryValue, args, err = query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definitions").Set("current_draft_version_id", nil).Where(query.And(query.Equal("id", definitionID), query.Equal("current_draft_version_id", versionID))).Build()
-	if err != nil {
-		return false, err
-	}
-	if _, err = tx.ExecContext(ctx, queryValue, args...); err != nil {
-		return false, err
-	}
-	return true, tx.Commit()
+	return r.mutate(ctx, func(sharedCtx context.Context) (bool, error) {
+		definition, found, err := r.loadDefinitionByID(sharedCtx, definitionID)
+		if err != nil || !found {
+			return false, err
+		}
+		version, found, err := r.loadVersionByID(sharedCtx, versionID)
+		if err != nil || !found {
+			return false, err
+		}
+		if version.state.Version.DefinitionID != definitionID || version.state.Version.Status != workflowmodel.WorkflowVersionDraft || definition.state.Definition.CurrentDraftVersionID != versionID {
+			return false, nil
+		}
+		definition.state.Definition.CurrentDraftVersionID = ""
+		if _, err := r.publishDefinition(sharedCtx, definition.metadata.CurrentVersionID, definition.state); err != nil {
+			return false, err
+		}
+		err = r.shared.Disable(sharedCtx, metadatasdk.DefinitionDisableCommand{
+			Owner: metadatasdk.DefinitionOwnerWorkflow, ResourceType: workflowDefinitionKind,
+			ResourceKey: workflowVersionResourceKey(versionID), ExpectedCurrentVersionID: version.metadata.CurrentVersionID,
+			DisabledBy: "system:workflow",
+		})
+		return err == nil, err
+	})
 }
 
 func (r WorkflowDefinitionStore) PublishDraft(ctx context.Context, definition workflowmodel.WorkflowDefinition, version workflowmodel.WorkflowDefinitionVersion, idempotencyKey string) (bool, error) {
-	tx, err := r.database().BeginTx(ctx, recordMutationTxOptions())
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback()
-	report, _ := json.Marshal(version.ValidationReport)
-	workflowJSON, _ := json.Marshal(version.Workflow)
-	queryValue, args, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Set("status", workflowmodel.WorkflowVersionPublished).Set("content_hash", version.ContentHash).Set("validation_report_json", string(report)).Set("publish_note", version.PublishNote).Set("published_by", version.PublishedBy).Set("publish_idempotency_key", idempotencyKey).Set("published_at", version.PublishedAt).Set("updated_at", version.UpdatedAt).Where(query.And(query.Equal("id", version.ID), query.Equal("status", workflowmodel.WorkflowVersionDraft), query.Equal("revision", version.Revision), query.Equal("workflow_json", string(workflowJSON)))).Build()
-	if err != nil {
-		return false, err
-	}
-	result, err := tx.ExecContext(ctx, queryValue, args...)
-	if err != nil {
-		return false, err
-	}
-	count, err := result.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	if count != 1 {
-		return false, nil
-	}
-	queryValue, args, err = query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definitions").Set("current_draft_version_id", nil).Set("current_published_version_id", version.ID).Set("updated_at", definition.UpdatedAt).Where(query.Equal("id", definition.ID)).Build()
-	if err != nil {
-		return false, err
-	}
-	if _, err = tx.ExecContext(ctx, queryValue, args...); err != nil {
-		return false, err
-	}
-	return true, tx.Commit()
+	return r.mutate(ctx, func(sharedCtx context.Context) (bool, error) {
+		storedDefinition, found, err := r.loadDefinitionByID(sharedCtx, definition.ID)
+		if err != nil || !found {
+			return false, err
+		}
+		storedVersion, found, err := r.loadVersionByID(sharedCtx, version.ID)
+		if err != nil || !found {
+			return false, err
+		}
+		current := storedVersion.state.Version
+		if storedDefinition.state.Definition.CurrentDraftVersionID != version.ID || current.DefinitionID != definition.ID || current.Status != workflowmodel.WorkflowVersionDraft || current.Revision != version.Revision || !workflowSchemasEqual(current.Workflow, version.Workflow) {
+			return false, nil
+		}
+		versions, err := r.listStoredVersions(sharedCtx)
+		if err != nil {
+			return false, err
+		}
+		for _, value := range versions {
+			candidate := value.state.Version
+			if candidate.DefinitionID == definition.ID && candidate.ID != version.ID && strings.TrimSpace(candidate.PublishIdempotencyKey) == strings.TrimSpace(idempotencyKey) && strings.TrimSpace(idempotencyKey) != "" {
+				return false, fmt.Errorf("Workflow publish idempotency key %q already exists", idempotencyKey)
+			}
+		}
+		current.Status = workflowmodel.WorkflowVersionPublished
+		current.ContentHash = version.ContentHash
+		current.ValidationReport = version.ValidationReport
+		current.PublishNote = version.PublishNote
+		current.PublishedBy = version.PublishedBy
+		current.PublishIdempotencyKey = idempotencyKey
+		current.PublishedAt = version.PublishedAt
+		current.UpdatedAt = version.UpdatedAt
+		if _, err := r.publishVersion(sharedCtx, storedVersion.metadata.CurrentVersionID, workflowVersionState{ContractVersion: workflowVersionContractVersion, Version: current}); err != nil {
+			return false, err
+		}
+		storedDefinition.state.Definition.CurrentDraftVersionID = ""
+		storedDefinition.state.Definition.CurrentPublishedVersionID = version.ID
+		storedDefinition.state.Definition.UpdatedAt = definition.UpdatedAt
+		_, err = r.publishDefinition(sharedCtx, storedDefinition.metadata.CurrentVersionID, storedDefinition.state)
+		return err == nil, err
+	})
 }
 
 func (r WorkflowDefinitionStore) ArchiveVersion(ctx context.Context, definitionID, versionID, archivedAt string) (bool, error) {
-	current := query.NewSelectBuilder(r.store.SQLRenderer, "_workflow_definitions").Columns("current_published_version_id").Where(query.Equal("id", definitionID))
-	queryValue, args, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Set("status", workflowmodel.WorkflowVersionArchived).Set("archived_at", archivedAt).Set("updated_at", archivedAt).Where(query.And(query.Equal("id", versionID), query.Equal("definition_id", definitionID), query.Equal("status", workflowmodel.WorkflowVersionPublished), query.NotInSubquery("id", current))).Build()
-	if err != nil {
-		return false, err
-	}
-	result, err := r.database().ExecContext(ctx, queryValue, args...)
-	if err != nil {
-		return false, err
-	}
-	count, err := result.RowsAffected()
-	return count == 1, err
+	return r.mutate(ctx, func(sharedCtx context.Context) (bool, error) {
+		definition, found, err := r.loadDefinitionByID(sharedCtx, definitionID)
+		if err != nil || !found {
+			return false, err
+		}
+		version, found, err := r.loadVersionByID(sharedCtx, versionID)
+		if err != nil || !found {
+			return false, err
+		}
+		if definition.state.Definition.CurrentPublishedVersionID == versionID || version.state.Version.DefinitionID != definitionID || version.state.Version.Status != workflowmodel.WorkflowVersionPublished {
+			return false, nil
+		}
+		version.state.Version.Status = workflowmodel.WorkflowVersionArchived
+		version.state.Version.ArchivedAt = archivedAt
+		version.state.Version.UpdatedAt = archivedAt
+		_, err = r.publishVersion(sharedCtx, version.metadata.CurrentVersionID, version.state)
+		return err == nil, err
+	})
 }
 
 func (r WorkflowDefinitionStore) SetDefinitionEnabled(ctx context.Context, definitionID string, enabled bool, updatedAt string) (bool, error) {
-	queryValue, args, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_workflow_definitions").Set("enabled", database.BoolInt(enabled)).Set("updated_at", updatedAt).Where(query.Equal("id", definitionID)).Build()
-	if err != nil {
-		return false, err
-	}
-	result, err := r.database().ExecContext(ctx, queryValue, args...)
-	if err != nil {
-		return false, err
-	}
-	count, err := result.RowsAffected()
-	return count == 1, err
+	return r.mutate(ctx, func(sharedCtx context.Context) (bool, error) {
+		definition, found, err := r.loadDefinitionByID(sharedCtx, definitionID)
+		if err != nil || !found {
+			return false, err
+		}
+		definition.state.Definition.Enabled = enabled
+		definition.state.Definition.UpdatedAt = updatedAt
+		_, err = r.publishDefinition(sharedCtx, definition.metadata.CurrentVersionID, definition.state)
+		return err == nil, err
+	})
 }
 
-func (r WorkflowDefinitionStore) insertVersion(ctx context.Context, tx *sql.Tx, version workflowmodel.WorkflowDefinitionVersion, idempotencyKey string) error {
-	workflowJSON, _ := json.Marshal(version.Workflow)
-	reportJSON, _ := json.Marshal(version.ValidationReport)
-	values := []any{version.ID, version.DefinitionID, version.Version, version.Status, version.Revision, database.NullableText(version.ContentHash), string(workflowJSON), string(reportJSON), database.NullableText(version.PublishNote), version.CreatedBy, database.NullableText(version.PublishedBy), database.NullableText(idempotencyKey), version.CreatedAt, version.UpdatedAt, database.NullableText(version.PublishedAt), database.NullableText(version.ArchivedAt)}
-	queryValue, args, err := query.NewInsertBuilder(r.store.SQLRenderer, "_workflow_definition_versions").Columns(workflowDefinitionVersionColumns()...).Values(values...).Build()
-	if err != nil {
-		return err
+func (r WorkflowDefinitionStore) hydrateDefinition(ctx context.Context, definition workflowmodel.WorkflowDefinition) (workflowmodel.WorkflowDefinition, error) {
+	definition.CurrentDraftVersion, definition.CurrentDraftStatus = 0, ""
+	definition.CurrentPublishedVersion, definition.LastPublishedAt, definition.LastPublishedBy = 0, "", ""
+	if definition.CurrentDraftVersionID != "" {
+		version, found, err := r.loadVersionByID(ctx, definition.CurrentDraftVersionID)
+		if err != nil {
+			return workflowmodel.WorkflowDefinition{}, err
+		}
+		if !found || version.state.Version.DefinitionID != definition.ID {
+			return workflowmodel.WorkflowDefinition{}, fmt.Errorf("Workflow definition %q references a missing draft", definition.Key)
+		}
+		definition.CurrentDraftVersion = version.state.Version.Version
+		definition.CurrentDraftStatus = version.state.Version.Status
 	}
-	_, err = tx.ExecContext(ctx, queryValue, args...)
-	return err
+	if definition.CurrentPublishedVersionID != "" {
+		version, found, err := r.loadVersionByID(ctx, definition.CurrentPublishedVersionID)
+		if err != nil {
+			return workflowmodel.WorkflowDefinition{}, err
+		}
+		if !found || version.state.Version.DefinitionID != definition.ID {
+			return workflowmodel.WorkflowDefinition{}, fmt.Errorf("Workflow definition %q references a missing published version", definition.Key)
+		}
+		definition.CurrentPublishedVersion = version.state.Version.Version
+		definition.LastPublishedAt = version.state.Version.PublishedAt
+		definition.LastPublishedBy = version.state.Version.PublishedBy
+	}
+	return definition, nil
+}
+
+func (r WorkflowDefinitionStore) loadDefinitionByKey(ctx context.Context, key string) (storedWorkflowDefinition, bool, error) {
+	metadata, found, err := r.shared.Get(ctx, metadatasdk.DefinitionOwnerWorkflow, workflowDefinitionKind, workflowDefinitionResourceKey(key))
+	if err != nil || !found {
+		return storedWorkflowDefinition{}, found, err
+	}
+	state, err := decodeWorkflowDefinition(metadata)
+	return storedWorkflowDefinition{metadata: metadata, state: state}, err == nil, err
+}
+
+func (r WorkflowDefinitionStore) loadDefinitionByID(ctx context.Context, definitionID string) (storedWorkflowDefinition, bool, error) {
+	definitions, err := r.listStoredDefinitions(ctx)
+	if err != nil {
+		return storedWorkflowDefinition{}, false, err
+	}
+	definitionID = strings.TrimSpace(definitionID)
+	for _, definition := range definitions {
+		if definition.state.Definition.ID == definitionID {
+			return definition, true, nil
+		}
+	}
+	return storedWorkflowDefinition{}, false, nil
+}
+
+func (r WorkflowDefinitionStore) loadVersionByID(ctx context.Context, versionID string) (storedWorkflowVersion, bool, error) {
+	metadata, found, err := r.shared.Get(ctx, metadatasdk.DefinitionOwnerWorkflow, workflowDefinitionKind, workflowVersionResourceKey(versionID))
+	if err != nil || !found {
+		return storedWorkflowVersion{}, found, err
+	}
+	state, err := decodeWorkflowVersion(metadata)
+	return storedWorkflowVersion{metadata: metadata, state: state}, err == nil, err
+}
+
+func (r WorkflowDefinitionStore) listStoredDefinitions(ctx context.Context) ([]storedWorkflowDefinition, error) {
+	definitions, err := r.shared.List(ctx, metadatasdk.DefinitionQuery{Owner: metadatasdk.DefinitionOwnerWorkflow, ResourceType: workflowDefinitionKind})
+	if err != nil {
+		return nil, err
+	}
+	values := []storedWorkflowDefinition{}
+	for _, definition := range definitions {
+		if strings.HasPrefix(definition.ResourceKey, workflowVersionResourcePrefix) {
+			continue
+		}
+		state, err := decodeWorkflowDefinition(definition)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, storedWorkflowDefinition{metadata: definition, state: state})
+	}
+	return values, nil
+}
+
+func (r WorkflowDefinitionStore) listStoredVersions(ctx context.Context) ([]storedWorkflowVersion, error) {
+	definitions, err := r.shared.List(ctx, metadatasdk.DefinitionQuery{Owner: metadatasdk.DefinitionOwnerWorkflow, ResourceType: workflowDefinitionKind})
+	if err != nil {
+		return nil, err
+	}
+	values := []storedWorkflowVersion{}
+	for _, definition := range definitions {
+		if !strings.HasPrefix(definition.ResourceKey, workflowVersionResourcePrefix) {
+			continue
+		}
+		state, err := decodeWorkflowVersion(definition)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, storedWorkflowVersion{metadata: definition, state: state})
+	}
+	return values, nil
+}
+
+func decodeWorkflowDefinition(metadata metadatasdk.Definition) (workflowDefinitionState, error) {
+	var state workflowDefinitionState
+	if err := json.Unmarshal(metadata.Payload, &state); err != nil {
+		return workflowDefinitionState{}, fmt.Errorf("decode shared Workflow definition: %w", err)
+	}
+	if state.ContractVersion != workflowDefinitionContractVersion || strings.TrimSpace(state.Definition.ID) == "" || strings.TrimSpace(state.Definition.Key) == "" || workflowDefinitionResourceKey(state.Definition.Key) != metadata.ResourceKey || strings.TrimSpace(metadata.ObjectKey) != strings.TrimSpace(state.Definition.ID) {
+		return workflowDefinitionState{}, fmt.Errorf("shared Workflow definition identity is inconsistent")
+	}
+	return state, nil
+}
+
+func decodeWorkflowVersion(metadata metadatasdk.Definition) (workflowVersionState, error) {
+	var state workflowVersionState
+	if err := json.Unmarshal(metadata.Payload, &state); err != nil {
+		return workflowVersionState{}, fmt.Errorf("decode shared Workflow definition version: %w", err)
+	}
+	if state.ContractVersion != workflowVersionContractVersion || strings.TrimSpace(state.Version.ID) == "" || strings.TrimSpace(state.Version.DefinitionID) == "" || workflowVersionResourceKey(state.Version.ID) != metadata.ResourceKey || strings.TrimSpace(metadata.ObjectKey) != strings.TrimSpace(state.Version.ID) {
+		return workflowVersionState{}, fmt.Errorf("shared Workflow definition version identity is inconsistent")
+	}
+	state.Version.PublishIdempotencyKey = state.PublishIdempotencyKey
+	return state, nil
+}
+
+func (r WorkflowDefinitionStore) publishDefinition(ctx context.Context, expectedVersionID string, state workflowDefinitionState) (metadatasdk.DefinitionPublishResult, error) {
+	state.ContractVersion = workflowDefinitionContractVersion
+	payload, hash, err := workflowDefinitionPayload(state)
+	if err != nil {
+		return metadatasdk.DefinitionPublishResult{}, err
+	}
+	return r.shared.Publish(ctx, metadatasdk.DefinitionPublishCommand{
+		Owner: metadatasdk.DefinitionOwnerWorkflow, ResourceType: workflowDefinitionKind,
+		ResourceKey: workflowDefinitionResourceKey(state.Definition.Key), ExpectedCurrentVersionID: expectedVersionID,
+		SchemaVersion: workflowDefinitionContractVersion + ":" + hash, SchemaHash: hash,
+		ObjectKey: state.Definition.ID, Name: state.Definition.Name, Payload: payload,
+		SourceKind: workflowDefinitionSourceKind, SourceID: state.Definition.ID, PublishedBy: workflowDefinitionPublishedBy(state.Definition, nil),
+	})
+}
+
+func (r WorkflowDefinitionStore) publishVersion(ctx context.Context, expectedVersionID string, state workflowVersionState) (metadatasdk.DefinitionPublishResult, error) {
+	state.ContractVersion = workflowVersionContractVersion
+	state.PublishIdempotencyKey = state.Version.PublishIdempotencyKey
+	payload, hash, err := workflowDefinitionPayload(state)
+	if err != nil {
+		return metadatasdk.DefinitionPublishResult{}, err
+	}
+	return r.shared.Publish(ctx, metadatasdk.DefinitionPublishCommand{
+		Owner: metadatasdk.DefinitionOwnerWorkflow, ResourceType: workflowDefinitionKind,
+		ResourceKey: workflowVersionResourceKey(state.Version.ID), ExpectedCurrentVersionID: expectedVersionID,
+		SchemaVersion: workflowVersionContractVersion + ":" + hash, SchemaHash: hash,
+		ObjectKey: state.Version.ID, Name: state.Version.Workflow.Name, Payload: payload,
+		SourceKind: workflowDefinitionSourceKind, SourceID: state.Version.DefinitionID, PublishedBy: workflowDefinitionPublishedBy(workflowmodel.WorkflowDefinition{}, &state.Version),
+	})
+}
+
+func workflowDefinitionPayload(value any) ([]byte, string, error) {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return nil, "", err
+	}
+	digest := sha256.Sum256(payload)
+	return payload, hex.EncodeToString(digest[:]), nil
+}
+
+func workflowDefinitionResourceKey(key string) string { return strings.TrimSpace(key) }
+
+func workflowVersionResourceKey(id string) string {
+	return workflowVersionResourcePrefix + strings.TrimSpace(id)
+}
+
+func workflowDefinitionPublishedBy(definition workflowmodel.WorkflowDefinition, version *workflowmodel.WorkflowDefinitionVersion) string {
+	if version != nil {
+		for _, actor := range []string{version.PublishedBy, version.CreatedBy} {
+			if strings.TrimSpace(actor) != "" {
+				return strings.TrimSpace(actor)
+			}
+		}
+	}
+	if strings.TrimSpace(definition.OwnerUserID) != "" {
+		return strings.TrimSpace(definition.OwnerUserID)
+	}
+	return "system:workflow"
+}
+
+func workflowSchemasEqual(left, right any) bool {
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
+}
+
+func (r WorkflowDefinitionStore) mutate(ctx context.Context, change func(context.Context) (bool, error)) (bool, error) {
+	if err := r.validate(); err != nil {
+		return false, err
+	}
+	var lastErr error
+	for attempt := 0; attempt < workflowDefinitionMutationRetries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		tx, err := r.store.DB().BeginTx(ctx, recordMutationTxOptions())
+		if err != nil {
+			if !workflowDefinitionRetryable(err) {
+				return false, err
+			}
+			lastErr = err
+			if err := waitWorkflowDefinitionRetry(ctx, attempt); err != nil {
+				return false, err
+			}
+			continue
+		}
+		sharedCtx := metadatamodulehost.WithExecutor(ctx, tx)
+		changed, changeErr := change(sharedCtx)
+		if changeErr == nil && changed {
+			changeErr = tx.Commit()
+		} else {
+			_ = tx.Rollback()
+		}
+		if changeErr == nil {
+			return changed, nil
+		}
+		_ = tx.Rollback()
+		if !workflowDefinitionRetryable(changeErr) {
+			return false, changeErr
+		}
+		lastErr = changeErr
+		if err := waitWorkflowDefinitionRetry(ctx, attempt); err != nil {
+			return false, err
+		}
+	}
+	return false, lastErr
+}
+
+func workflowDefinitionRetryable(err error) bool {
+	var metadataErr *metadatasdk.Error
+	if errors.As(err, &metadataErr) && metadataErr.StatusCode == 409 {
+		return true
+	}
+	return mutation.IsTransactionTransient(mutation.TransactionError(err, "workflow_definition", "publication"), "")
+}
+
+func waitWorkflowDefinitionRetry(ctx context.Context, attempt int) error {
+	delay := time.Duration(attempt+1) * time.Millisecond
+	if delay > 10*time.Millisecond {
+		delay = 10 * time.Millisecond
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

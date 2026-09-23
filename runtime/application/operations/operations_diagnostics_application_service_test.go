@@ -33,8 +33,6 @@ func (p *operationsDiagnosticsProbe) OperationsDiagnosticsSnapshot(_ context.Con
 var errOperationsDiagnosticsProbe = errors.New("diagnostics probe failed")
 
 func TestOperationsDiagnosticsIsBoundedAndReceiptReplayDoesNotRecapture(t *testing.T) {
-	var nilService *OperationsApplicationService
-	nilService.UseDirectAuthoringProjection(nil)
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
 	service := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, func() time.Time { return now }, func() string { return "diagnostics" })
 	probe := &operationsDiagnosticsProbe{}

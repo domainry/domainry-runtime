@@ -1,6 +1,8 @@
 package action
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -21,4 +23,16 @@ func businessHandlerInput(action definitionmodel.ActionSchema, payload map[strin
 		}
 	}
 	return input
+}
+
+// nativeBusinessHandlerInputSafe permits direct Go-object delivery only when
+// Runtime's governed payload is JSON-equivalent to the original projection.
+// Defaults or normalization therefore force the ordinary decoded path.
+func nativeBusinessHandlerInputSafe(original, governed map[string]any) bool {
+	originalJSON, err := json.Marshal(original)
+	if err != nil {
+		return false
+	}
+	governedJSON, err := json.Marshal(governed)
+	return err == nil && bytes.Equal(originalJSON, governedJSON)
 }

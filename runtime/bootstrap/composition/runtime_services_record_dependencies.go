@@ -6,6 +6,7 @@ import (
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
 	"strings"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -16,7 +17,6 @@ import (
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -43,13 +43,15 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 		}
 	}
 	return recordapplication.RecordApplicationDependencies{
-		Repository:              s.recordRepo,
-		MutationKernel:          recordmutation.NewMutationKernelApplicationService(s.recordRepo, revisionResolver),
-		QueryPolicy:             s.RecordQueryPolicyDomainService,
-		Pipeline:                s.PipelineApplicationService,
-		Validation:              s.RecordValidationDomainService,
-		IdentityProjection:      s.identityProjection,
-		Audit:                   s.auditApplicationService.AppendWithMetadata,
+		Repository:         s.recordRepo,
+		MutationKernel:     recordmutation.NewMutationKernelApplicationService(s.recordRepo, revisionResolver),
+		QueryPolicy:        s.RecordQueryPolicyDomainService,
+		Pipeline:           s.PipelineApplicationService,
+		Validation:         s.RecordValidationDomainService,
+		IdentityProjection: s.identityProjection,
+		Audit: func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, before, after, metadata map[string]any) {
+			s.auditApplicationService.AppendWithMetadata(ctx, auditmodel.EventFamilyBusinessEntity, event, objectKey, recordID, principal, summary, before, after, metadata)
+		},
 		BuildAudit:              auditapplication.AuditBuildEvent,
 		RecordMutationExecution: s.RecordMutationExecutionRuntime,
 		DataExchange:            s.dataExchange,
@@ -131,13 +133,12 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 	}
 }
 
-func initializeIntegrationAndBusinessSystem(ctx context.Context, s *runtimeAssembly, manifest manifestmodel.ManifestSchema, deps RuntimeServicesDependencies, queryPolicy recordQueryPolicyAdapter) {
-	s.actionService = assembleActionApplication(s, s, queryPolicy, s.applicationSchemaService, deps.ProjectExtensions, func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, metadata map[string]any) {
-		s.auditApplicationService.AppendWithMetadata(ctx, event, objectKey, recordID, principal, summary, nil, nil, metadata)
+func initializeActionsAndPublication(ctx context.Context, s *runtimeAssembly, deps RuntimeServicesDependencies, queryPolicy recordQueryPolicyAdapter) {
+	s.actionService = assembleActionApplication(s, queryPolicy, deps.ProjectExtensions, func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, metadata map[string]any) {
+		s.auditApplicationService.AppendWithMetadata(ctx, auditmodel.EventFamilyBusinessAction, event, objectKey, recordID, principal, summary, nil, nil, metadata)
 	})
 	s.runtimeStatusService = deployment.NewDeploymentRuntimeStatusApplicationServiceWithWorker(s, s.schedulerDefinitionSource, deps.RuntimeStatus, deps.Records, s.auditApplicationService, deps.WorkflowWorker, nil, s.workerDependencies)
 	s.workflowProcesses = assembleWorkflowProcessEngine(s)
 	integrationsService := publicationHandoffApplication(s)
 	s.publicationHandoffService = integrationsService
-	s.businessSystemService = assembleBusinessSystemApplication(s.schemaService, s.metadataDefinitions, s.workflowApplicationService, s.automationApplicationService, integrationsService, s.recordApplicationService, s.schedulerDefinitionSource, s.runtimeStatusService, s.businessEvidenceRepo)
 }

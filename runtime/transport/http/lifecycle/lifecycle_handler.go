@@ -9,15 +9,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	requestcontext "github.com/domainry/domainry-foundation/requestcontext"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
+	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
 type OperationRunner interface {
 	ExecuteOwnerOperation(context.Context, operationsapplication.OperationsOwnerExecutionRequest, principalmodel.Principal, func(context.Context) (any, error)) (operationsapplication.OperationsOwnerExecutionResult, error)
+}
+
+type CleanupJobInspector interface {
+	InspectCleanupJob(context.Context, string, string, lifecycleaccess.Principal) (lifecyclemodel.CleanupJob, error)
 }
 
 type LifecycleDependencies struct {
@@ -72,6 +78,14 @@ func (h *LifecycleHandler) runCleanupJob(w http.ResponseWriter, r *http.Request)
 		Kind: "retention.cleanup", ResourceType: "retention_policy", ResourceID: jobID,
 		Key: strings.TrimSpace(r.Header.Get("Idempotency-Key")), Reason: operationReason(r, "operator requested retention cleanup"),
 		Reference: strings.TrimSpace(r.Header.Get("X-Operation-Reference")), Payload: map[string]any{"job_id": jobID, "batch_size": batch},
+		ReplayReadiness: func(ctx context.Context, _ any) error {
+			inspector, ok := h.service.(CleanupJobInspector)
+			if !ok {
+				return apperror.New(apperror.KindInternal, "backend.lifecycle.cleanup_inspection_unavailable", nil, nil)
+			}
+			_, err := inspector.InspectCleanupJob(ctx, principal.WorkspaceID, jobID, h.cleanupProcessorPrincipal)
+			return err
+		},
 	}, principal, run)
 	writeOperationHeaders(w, result)
 	if err != nil {

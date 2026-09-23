@@ -22,18 +22,3 @@ type RecordRepository interface {
 	CommitRecordMutationBatch(ctx context.Context, workspaceID string, commits []transactionmodel.RecordMutationCommit) error
 	UniqueExists(ctx context.Context, workspaceID, objectKey, fieldKey, currentID string, value any) (bool, error)
 }
-
-// RecordIdentitySeedRepository persists Identity-owned object rows materialized
-// from a manifest.
-type RecordIdentitySeedRepository interface {
-	GetRecord(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error)
-	InsertRecord(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record) error
-}
-
-// RecordBusinessSeedRepository persists generated business seed rows after the
-// Application layer has resolved ordering and references.
-type RecordBusinessSeedRepository interface {
-	ListRecords(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error)
-	GetRecord(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error)
-	InsertRecord(context.Context, string, definitionmodel.ObjectSchema, recordmodel.Record) error
-}

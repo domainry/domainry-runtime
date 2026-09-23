@@ -27,8 +27,8 @@ func (store *CommercialConfigurationStore) LockWorkspaceCommercialConfiguration(
 	if executor == nil {
 		return actionapplication.WorkspaceCommercialConfiguration{}, fmt.Errorf("Action transaction is required to lock Workspace commercial configuration")
 	}
-	builder := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspace_commercial_configuration").
-		Columns("max_stores", "revision").Where(query.Equal("workspace_id", workspaceID))
+	builder := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").
+		Columns("max_stores", "commercial_revision", "company_organization_id").Where(query.Equal("id", workspaceID))
 	builder, err := store.runtime.RuntimeProfile().ApplyClaimLock(builder, false)
 	if err != nil {
 		return actionapplication.WorkspaceCommercialConfiguration{}, fmt.Errorf("apply Workspace commercial configuration lock: %w", err)
@@ -38,7 +38,8 @@ func (store *CommercialConfigurationStore) LockWorkspaceCommercialConfiguration(
 		return actionapplication.WorkspaceCommercialConfiguration{}, err
 	}
 	var result actionapplication.WorkspaceCommercialConfiguration
-	if err := executor.QueryRowContext(ctx, statement, arguments...).Scan(&result.MaxStores, &result.Revision); errors.Is(err, sql.ErrNoRows) {
+	var companyID sql.NullString
+	if err := executor.QueryRowContext(ctx, statement, arguments...).Scan(&result.MaxStores, &result.Revision, &companyID); errors.Is(err, sql.ErrNoRows) {
 		return actionapplication.WorkspaceCommercialConfiguration{}, fmt.Errorf("Workspace commercial configuration is missing")
 	} else if err != nil {
 		return actionapplication.WorkspaceCommercialConfiguration{}, err
@@ -46,37 +47,10 @@ func (store *CommercialConfigurationStore) LockWorkspaceCommercialConfiguration(
 	if result.MaxStores < 1 || result.Revision < 1 {
 		return actionapplication.WorkspaceCommercialConfiguration{}, fmt.Errorf("Workspace commercial configuration is invalid")
 	}
-	receiptBuilder := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspace_provisioning_receipts_v3").
-		Columns("company_id").
-		Where(query.And(query.Equal("workspace_id", workspaceID), query.Equal("receipt_status", "committed")))
-	receiptStatement, receiptArguments, err := receiptBuilder.Build()
-	if err != nil {
-		return actionapplication.WorkspaceCommercialConfiguration{}, err
-	}
-	rows, err := executor.QueryContext(ctx, receiptStatement, receiptArguments...)
-	if err != nil {
-		return actionapplication.WorkspaceCommercialConfiguration{}, fmt.Errorf("resolve Workspace company authority: %w", err)
-	}
-	defer rows.Close()
-	companyIDs := map[string]struct{}{}
-	for rows.Next() {
-		var companyID sql.NullString
-		if err := rows.Scan(&companyID); err != nil {
-			return actionapplication.WorkspaceCommercialConfiguration{}, err
-		}
-		if candidate := strings.TrimSpace(companyID.String); companyID.Valid && candidate != "" {
-			companyIDs[candidate] = struct{}{}
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return actionapplication.WorkspaceCommercialConfiguration{}, err
-	}
-	if len(companyIDs) != 1 {
+	if !companyID.Valid || strings.TrimSpace(companyID.String) == "" {
 		return actionapplication.WorkspaceCommercialConfiguration{}, fmt.Errorf("Workspace company authority is missing or ambiguous")
 	}
-	for companyID := range companyIDs {
-		result.CompanyOrganizationID = companyID
-	}
+	result.CompanyOrganizationID = strings.TrimSpace(companyID.String)
 	return result, nil
 }
 

@@ -8,12 +8,12 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
-	workflowvalidation "github.com/domainry/domainry-runtime/runtime/domain/workflow/validation"
 )
 
 func (s *WorkflowApplicationService) ProcessDueWorkflowExecutionsForScheduledWindow(ctx context.Context, targetKey string, scheduledFor time.Time, limit int, principal principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {
@@ -157,49 +157,6 @@ func (s *WorkflowApplicationService) SimulateWorkflow(ctx context.Context, workf
 	}, nil
 }
 
-func (s *WorkflowApplicationService) SimulateWorkflowCandidate(ctx context.Context, workflow definitionmodel.WorkflowSchema, payload map[string]any, principal principalmodel.Principal) (workflowmodel.WorkflowSimulationResult, error) {
-	if err := workflowAuthorizeQuery(principal); err != nil {
-		return workflowmodel.WorkflowSimulationResult{}, err
-	}
-	workflow.Key = strings.TrimSpace(workflow.Key)
-	if workflow.Key == "" {
-		return workflowmodel.WorkflowSimulationResult{}, badRequest("backend.workflow.key_required")
-	}
-	if err := workflowvalidation.WorkflowValidateGraph(workflow.Graph); err != nil {
-		return workflowmodel.WorkflowSimulationResult{}, err
-	}
-	wouldExecute := workflow.Enabled && workflowpolicy.WorkflowConditionMatches(ctx, workflow, payload)
-	status := "skipped"
-	message := "Workflow condition did not match"
-	if wouldExecute {
-		status = "simulated"
-		message = "Workflow would execute"
-	}
-	if !workflow.Enabled {
-		message = "Workflow is disabled"
-	}
-	nodes := []workflowmodel.WorkflowSimulationNode{}
-	if wouldExecute {
-		var err error
-		nodes, err = s.processEngine.Simulate(ctx, workflow, payload, principal)
-		if err != nil {
-			return workflowmodel.WorkflowSimulationResult{}, err
-		}
-	}
-	return workflowmodel.WorkflowSimulationResult{
-		WorkflowKey:    workflow.Key,
-		Name:           workflow.Name,
-		Status:         status,
-		WouldExecute:   wouldExecute,
-		Action:         workflowpolicy.WorkflowCloneMap(workflow.Action),
-		Payload:        workflowpolicy.WorkflowCloneMap(payload),
-		RunAs:          workflowpolicy.WorkflowRunAs(workflow),
-		IdempotencyKey: workflowpolicy.WorkflowIdempotencyKey(workflow, payload),
-		Message:        message,
-		Nodes:          nodes,
-	}, nil
-}
-
 func (s *WorkflowApplicationService) RetryWorkflowExecution(ctx context.Context, executionID string, principal principalmodel.Principal) (workflowmodel.WorkflowRunResult, error) {
 	return s.RetryWorkflowExecutionWithKey(ctx, executionID, "system:"+strings.TrimSpace(executionID)+":retry", principal)
 }
@@ -276,6 +233,7 @@ func (s *WorkflowApplicationService) RetryWorkflowExecutionWithKey(ctx context.C
 		return workflowmodel.WorkflowRunResult{}, err
 	}
 	previous.Status = "skipped"
+	previous.OperationID = requestcontext.OwnerExecutionID(ctx)
 	previous.NextRunAt = ""
 	previous.Message = "workflow.message.retryContinued"
 	previous.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -323,6 +281,7 @@ func (s *WorkflowApplicationService) ResolveWorkflowExecution(ctx context.Contex
 		reason = "Acknowledged and removed from active dead-letter queue"
 	}
 	execution.Status = "resolved"
+	execution.OperationID = requestcontext.OwnerExecutionID(ctx)
 	execution.NextRunAt = ""
 	execution.Message = "workflow.message.deadLetterResolved"
 	execution.UpdatedAt = now

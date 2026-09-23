@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	publicresourcemodel "github.com/domainry/domainry-runtime/runtime/domain/publicresource/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -18,7 +17,7 @@ func TestGetPublishesOnlyAllowlistedDataAndLiveFilePaths(t *testing.T) {
 	repository := &publicResourceRepositoryProbe{projection: publicresourcemodel.Projection{
 		WorkspaceID: "workspace-secret", RecordID: "record-secret", Data: map[string]any{"full_name": "Yuki", "theme": "business"}, FileRecords: map[string]string{"portrait_file": "file-secret"},
 	}, found: true}
-	service := NewService(manifestmodel.ManifestSchema{Objects: []definitionmodel.ObjectSchema{object}}, repository, publicResourceRecordProbe{}, nil, nil)
+	service := NewService([]definitionmodel.ObjectSchema{object}, repository, publicResourceRecordProbe{}, nil, nil)
 	resource, err := service.Get(t.Context(), "digital_business_card", "abcdefghijklmnopqrstuvwx")
 	if err != nil {
 		t.Fatal(err)

@@ -30,7 +30,7 @@ func ActorFromPrincipal(principal principalmodel.Principal) sdkcontract.Actor {
 
 func AppendRequest(request auditcontract.AuditAppendRequest) sdkcontract.AppendRequest {
 	return sdkcontract.AppendRequest{
-		IdempotencyKey: request.IdempotencyKey, Event: request.Event,
+		IdempotencyKey: request.IdempotencyKey, Family: request.Family, Event: request.Event,
 		ObjectKey: request.ObjectKey, RecordID: request.RecordID,
 		Actor: ActorFromPrincipal(request.Principal), Summary: request.Summary,
 		Before: request.Before, After: request.After, Metadata: request.Metadata,

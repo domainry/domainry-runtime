@@ -6,6 +6,8 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
 var (
@@ -13,6 +15,7 @@ var (
 	ErrHandlerContractRequired  = errors.New("business handler input/output type identities are required")
 	ErrHandlerContractInvalid   = errors.New("business handler contract identity is invalid")
 	ErrHandlerRevisionRequired  = errors.New("business handler revision is required")
+	ErrHandlerOperationRequired = errors.New("business handler operation metadata is required")
 	ErrHandlerCapabilityInvalid = errors.New("business handler capability is invalid")
 )
 
@@ -93,8 +96,20 @@ type Handler[Capabilities, Input, Output any] func(context.Context, Capabilities
 // Handler wrapper.
 type HandlerDescriptor struct {
 	ActionKey                 string
+	ObjectKey                 string
+	Label                     string
+	Kind                      string
+	RiskLevel                 string
+	Preconditions             []string
+	AuditEvent                string
 	InputType                 string
 	OutputType                string
+	PayloadFields             []definitionmodel.ActionPayloadField
+	OutputFields              []definitionmodel.ActionOutputField
+	Defaults                  map[string]any
+	OptimisticConcurrency     bool
+	ConcurrencyField          string
+	AssurancePolicy           *definitionmodel.ActionAssurancePolicy
 	HandlerRevision           string
 	ObjectCapabilities        []ActionObjectCapability
 	ConnectorCapabilities     []ActionConnectorCapability
@@ -127,9 +142,10 @@ func (d HandlerDescriptor) Validate() error {
 	}
 	objects := map[string]bool{}
 	allowed := map[string]bool{
-		"get": true, "get_for_update": true, "optional": true, "list": true, "exists": true, "count": true,
-		"create": true, "update": true, "conditional_update": true, "delete": true, "restore": true,
-		"conditional_update_many":            true,
+		ObjectCapabilityGet: true, ObjectCapabilityGetForUpdate: true, ObjectCapabilityOptional: true,
+		ObjectCapabilityList: true, ObjectCapabilityExists: true, ObjectCapabilityCount: true,
+		ObjectCapabilityCreate: true, ObjectCapabilityUpdate: true, ObjectCapabilityConditionalUpdate: true,
+		ObjectCapabilityDelete: true, ObjectCapabilityRestore: true, ObjectCapabilityConditionalUpdateMany: true,
 		RecordNotificationRecipientOperation: true,
 	}
 	for _, capability := range d.ObjectCapabilities {
@@ -222,7 +238,7 @@ func (d HandlerDescriptor) Validate() error {
 					continue
 				}
 				for _, operation := range capability.Operations {
-					if operation == "get_for_update" {
+					if operation == ObjectCapabilityGetForUpdate {
 						allowed = true
 					}
 				}
@@ -289,4 +305,14 @@ func handlerDeliveryMutatesIdentity(operations []IdentityHandlerOperation) bool 
 type BusinessHandler interface {
 	Descriptor() HandlerDescriptor
 	Invoke(context.Context, ActionExecution, json.RawMessage) (json.RawMessage, error)
+}
+
+// NativeBusinessHandler is the in-process fast path implemented by typed
+// project handlers. accepted is false when input is not the handler's exact Go
+// input type, allowing Runtime callers without a native value to use Invoke.
+// Runtime still validates and governs the metadata projection before calling
+// this method.
+type NativeBusinessHandler interface {
+	BusinessHandler
+	InvokeNative(context.Context, ActionExecution, any) (output json.RawMessage, accepted bool, err error)
 }

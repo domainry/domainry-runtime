@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
@@ -105,6 +106,18 @@ func (h *OperationsHandler) mutate(w http.ResponseWriter, r *http.Request, reset
 		Kind: kind, ResourceType: "idempotency_receipt", ResourceID: receiptID,
 		Key: strings.TrimSpace(r.Header.Get("Idempotency-Key")), Reason: OwnerOperationReason(r, "operator requested "+kind),
 		Reference: strings.TrimSpace(r.Header.Get("X-Operation-Reference")), Payload: map[string]any{"owner": owner, "receipt_id": receiptID},
+		ReplayReadiness: func(ctx context.Context, _ any) error {
+			receipts, err := h.service.LegacyReceipts(ctx, principal, "", 1000)
+			if err != nil {
+				return err
+			}
+			for _, receipt := range receipts {
+				if receipt.Owner == owner && receipt.ID == receiptID {
+					return nil
+				}
+			}
+			return apperror.New(apperror.KindNotFound, "backend.operations.owner_receipt_not_found", nil, nil)
+		},
 	}, principal, func(ctx context.Context) (any, error) {
 		var ownerErr error
 		if reset {

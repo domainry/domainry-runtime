@@ -1,7 +1,7 @@
 # Scheduler 模块
 
 状态：Module 与 SaaS 已接入  
-Owner：schedule definition/state、run、run event、dead letter、clock worker 与重调度命令  
+Owner：schedule definition/state、run（含 retry/cancel/dead-letter 失败与处置字段）、clock worker 与重调度命令  
 实现/SDK：`domainry-scheduler` / `domainry-scheduler-sdk`
 
 ## 边界与模式
@@ -11,6 +11,8 @@ Runtime 通过 `SchedulerFactory` 选择拓扑。Bootstrap 对 Module Factory �
 Scheduler definition、state、run、dead-letter、preview 与 operator command API 不再挂载到 Runtime。它们由 `domainry-scheduler` 的 Module/SaaS 边界发布，Runtime 不导入这些 HTTP Action，也不登记对应权限。
 
 Runtime Bootstrap 只把已发布 definition projection 作为 Scheduler `Binding.Reconcile` 的宿主输入；Runtime Application 不再存在 Scheduler service。Scheduler 服务是唯一调度入口；它解析并认领 run 后，用 HMAC 签名把自包含的 target execution（definition key、execution id、幂等键、完整目标、到期时间）提交到 Runtime-owned `POST /dispatch/executions`，Runtime 验签后启动目标。该入口的 `source_owner=dispatch`。Runtime 不回查 Scheduler definition，也不提供 definition、clock、run、retry、cancel 或 DLQ 调度语义。
+
+Scheduler 的 canonical definitions、snapshot cursor 与 active publisher fence 作为一个带版本的 typed aggregate 写入共享 `_definitions` / `_definition_versions`（owner=`scheduler`、kind=`scheduler`、key=Runtime ID）。`_scheduler_schedules` 只保留执行投影和产品 Schedule；共享 Definition CAS 与执行投影 fence 在同一事务推进，因此较旧发布者或较旧读快照都不能覆盖新配置。Scheduler 不再拥有私有 definition、snapshot、publication 表。
 
 Runtime Record Timer 是独立能力：Application 位于 `runtime/application/recordtimer`，Domain 位于 `runtime/domain/recordtimer`，配置只使用 `RECORD_TIMER_*`。它不导入 Scheduler，也不复用 Scheduler worker、clock、lease 或 principal。Workflow deadline 仍由 Workflow owner 负责；只有 recurrence/run ownership 明确属于 Scheduler 的状态才归 Scheduler。
 

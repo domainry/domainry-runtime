@@ -10,7 +10,7 @@ infrastructure-owned executable configured by `RUNTIME_DRILL_DRIVER`.
 
 | Profile | Required environment | Evidence | Release meaning |
 | --- | --- | --- | --- |
-| `deterministic` | local Go toolchain and SQLite | correctness, worker recovery, HTTP/OpenAPI/Runbook, migration and bounded-capacity logs | deterministic mock and local database contract |
+| `deterministic` | local Go toolchain and SQLite | correctness, worker recovery, HTTP route/handler contracts, Runbook, migration and bounded-capacity logs | deterministic mock and local database contract |
 | `race` | race-capable Go platform | worker, metrics/capacity/cache, lifecycle, Operations and Runtime drain logs | no detected shared-memory race in the reviewed operational paths |
 | `real-dialects` | real PostgreSQL and MySQL DSNs; SQLite is created locally | serialized cross-package logs; concurrent tests still run inside packages | the same idempotency, fencing, migration and workspace contracts hold on all three SQL dialects |
 | `drill` | absolute executable `RUNTIME_DRILL_DRIVER`, real PostgreSQL and MySQL DSNs | per-engine restore JSON with actual RPO/RTO plus lifecycle-retention logs | backup/restore remains infrastructure-owned while Runtime verifies migrations and restored module state |
@@ -31,7 +31,7 @@ inside each package remains enabled.
 | fencing, retry, DLQ, cancel and drain | worker testkit scenarios, owner DLQ adapters, lease release and two-instance rolling drain tests |
 | three SQL dialects and two Runtime instances | `TestOperationsContractAcrossRealDialects` plus existing dialect lock/lease suites |
 | migration, checksum, lock and restore | Runtime migration tests plus the infrastructure-owned `RUNTIME_DRILL_DRIVER` receipt contract |
-| HTTP, Capability, OpenAPI and Runbook | HTTP/OpenAPI suites and Operations boundary tests |
+| HTTP route/handler contracts and Runbook | HTTP and Operations boundary tests |
 | load, soak, retry storm, backlog recovery | Foundation capacity/rate-limit soak, PostgreSQL pool soak, record queue and integration pressure recovery tests |
 | rolling deployment and restart | controlled two-instance drain and bounded Runtime shutdown tests |
 | telemetry, alert and audit | diagnostics/readiness, break-glass audit alert and mandatory-audit tests |

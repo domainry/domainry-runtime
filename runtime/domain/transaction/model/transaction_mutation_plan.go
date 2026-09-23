@@ -209,7 +209,6 @@ func mutationCloneAuthorizationScope(scope *recordmodel.RecordScopeExpression) *
 func mutationCloneObjectSchema(object definitionmodel.ObjectSchema) definitionmodel.ObjectSchema {
 	result := object
 	result.I18n = mutationCloneLocalizedText(object.I18n)
-	result.UX = mutationCloneMap(object.UX)
 	result.Config = mutationCloneMap(object.Config)
 	result.Fields = append(result.Fields[:0:0], object.Fields...)
 	for index := range result.Fields {

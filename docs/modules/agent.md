@@ -17,7 +17,7 @@ Runtime 不再拥有 `agent_dialog` Handler、Agent Application Service、Agent 
 - 供 Agent 调用的窄化 Host Ports 与 workflow task 完成回调；
 - Agent Binding、HTTP Adapter 和宿主 middleware 的组合。
 
-项目组合根通过 `runtimehost.Options.AgentFactory` 选择 Module 或 SaaS。两种拓扑必须提供相同 SDK 能力和同一 Agent-owned HTTP Adapter；Runtime 只负责挂载 Adapter，不复制路径、Handler 或 OpenAPI operation。
+项目组合根通过 `runtimehost.Options.AgentFactory` 选择 Module 或 SaaS。两种拓扑必须提供相同 SDK 能力和同一 Agent-owned HTTP Adapter；Runtime 只负责挂载 Adapter，不复制路径、Handler 或 API 描述表。
 
 ## 调用方向与异步边界
 
@@ -41,7 +41,7 @@ Workflow Agent 节点按以下时序执行：
 - 协议：`domainry-agent-protocol-v1`
 - 执行能力：`task.start`、`task.poll`、`task.cancel`、`interactive.run`、`dialog.state`、`execution.state`、`structured_output`、`usage`、`tool_callback`
 - Agent 产品 HTTP Adapter：统一位于 `/agent/*`，覆盖 run、stream、session、proposal、task-run、task-tool、analysis、diagnostics 和 task operator mutation。
-- Agent Adapter 自己声明全部 route metadata 与 OpenAPI operation；Runtime 基础 OpenAPI 和 Runtime API contract 不声明 Agent 路径或 `agent_*` schema。
+- Agent Adapter 自己声明全部 typed route metadata；Agent 当前 SDK 源码和契约测试定义精确接口。Runtime 不声明 Agent 路径或 `agent_*` 文档 schema。
 - SaaS 内部协议使用固定的 definition、lifecycle 和 execution-state 路径，不暴露通用 repository operation 或 task mutation endpoint。
 
 ## 数据、事务与 worker
@@ -74,6 +74,6 @@ Agent 只能通过 `InteractiveHost`、`TaskHost`、`ProposalHost`、`AuditHost`
 
 - Runtime 生产代码不得出现 Agent aggregate/repository/state-machine 实现，也不得自行声明 `/agent/*` 路由。
 - Agent 不得 import `domainry-runtime`。
-- Runtime 的 Agent capability contract 不得再包含 Agent 产品路径或 `agent_*` schema；最终 OpenAPI 通过挂载 Agent Adapter 合成。
-- Module/SaaS 必须执行相同 Agent contract tests，并验证 Start 幂等、fencing、terminal callback 重放和 HTTP/OpenAPI parity。
+- Runtime 的 Agent capability contract 不得再包含 Agent 产品路径或 `agent_*` 文档 schema。
+- Module/SaaS 必须执行相同 Agent contract tests，并验证 Start 幂等、fencing、terminal callback 重放和 HTTP route parity。
 - 切换拓扑前必须停止新 claim 并排空或冻结 running provider runs；禁止 Module 与 SaaS 同时接受同一 application/idempotency namespace。

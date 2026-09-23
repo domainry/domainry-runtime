@@ -48,3 +48,19 @@ func TestBusinessEventStatusWriterPreservesResponseController(t *testing.T) {
 		t.Fatalf("flush capability lost: %v", err)
 	}
 }
+
+func TestBusinessEventPublicationFailureIsOperationalMetricNotAuditEvidence(t *testing.T) {
+	service := businesseventapplication.NewBusinessEventApplicationService(nil, businesseventapplication.Limits{})
+	router := &HTTPRouter{businessEvents: service}
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a"}}
+	handler := router.withBusinessEventPublication(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, requestWithPrincipal(httptest.NewRequest(http.MethodPost, "/records/customer", nil), principal))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("mutation response changed after refresh publication failure: %d", response.Code)
+	}
+	stats := service.Snapshot(t.Context())
+	if stats.PublishFailedTotal != 1 || stats.PublishedTotal != 0 {
+		t.Fatalf("publication failure was not kept in operational metrics: %+v", stats)
+	}
+}

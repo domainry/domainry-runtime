@@ -9,13 +9,16 @@ import (
 	"sync"
 	"time"
 
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
 	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	operationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	"github.com/domainry/domainry-scheduler-sdk/modulehost"
 )
@@ -31,13 +34,13 @@ type schedulerSDKModuleHost struct {
 	workerID          string
 	mu                sync.RWMutex
 	revision          int64
-	authored          []map[string]any
+	authored          []schedulersdk.Definition
 	businessCalendars map[string]businesscalendarmodel.BusinessCalendarSchema
 	authoredSet       bool
 }
 
-func NewSchedulerSDKModuleHost(definitions SchedulerDefinitionSource, executions *dispatchapplication.TargetExecutionApplicationService, publications schedulerPublicationAcceptor, requirements []integrationsdk.ConnectionRequirement, store *persistence.RuntimeStore, workerID string, authoredDefinitions []map[string]any, businessCalendars []businesscalendarmodel.BusinessCalendarSchema) modulehost.ModuleHost {
-	host := &schedulerSDKModuleHost{definitionsSource: definitions, publications: publications, store: store, workerID: strings.TrimSpace(workerID), authoredSet: true, authored: cloneSchedulerDefinitionMaps(authoredDefinitions), businessCalendars: make(map[string]businesscalendarmodel.BusinessCalendarSchema, len(businessCalendars))}
+func NewSchedulerSDKModuleHost(definitions SchedulerDefinitionSource, executions *dispatchapplication.TargetExecutionApplicationService, publications schedulerPublicationAcceptor, requirements []integrationsdk.ConnectionRequirement, store *persistence.RuntimeStore, workerID string, authoredDefinitions []schedulersdk.Definition, businessCalendars []businesscalendarmodel.BusinessCalendarSchema) modulehost.ModuleHost {
+	host := &schedulerSDKModuleHost{definitionsSource: definitions, publications: publications, store: store, workerID: strings.TrimSpace(workerID), authoredSet: true, authored: append([]schedulersdk.Definition(nil), authoredDefinitions...), businessCalendars: make(map[string]businesscalendarmodel.BusinessCalendarSchema, len(businessCalendars))}
 	for _, calendar := range businessCalendars {
 		host.businessCalendars[strings.TrimSpace(calendar.Key)] = calendar
 	}
@@ -50,6 +53,15 @@ func (h *schedulerSDKModuleHost) HTTPConnections() modulehost.HTTPConnectionProv
 func (h *schedulerSDKModuleHost) Database() modulehost.Database                      { return h.store.DB() }
 func (h *schedulerSDKModuleHost) Dialect() modulehost.Dialect                        { return h.store.SQLRenderer }
 func (h *schedulerSDKModuleHost) WorkerID() string                                   { return h.workerID }
+func (h *schedulerSDKModuleHost) OperationStore() sharedoperation.Store {
+	return operationpersistence.NewSharedCommandStore(h.store)
+}
+func (h *schedulerSDKModuleHost) DefinitionStore() metadatasdk.DefinitionStore {
+	if h.store == nil || h.store.Metadata() == nil {
+		return nil
+	}
+	return h.store.Metadata().DefinitionStore()
+}
 func (h *schedulerSDKModuleHost) Migrations() modulehost.MigrationRegistrar {
 	return schedulerSDKMigrationRegistrar{store: h.store}
 }
@@ -84,14 +96,10 @@ func (r schedulerSDKMigrationRegistrar) ApplyOwnedMigrations(ctx context.Context
 func (h *schedulerSDKModuleHost) Snapshot(ctx context.Context) (schedulersdk.DefinitionSnapshot, error) {
 	var published []SchedulerPublishedDefinition
 	if h.authoredSet {
-		published = make([]SchedulerPublishedDefinition, 0, len(h.authored))
-		for _, definition := range h.authored {
-			key := schedulerSDKString(definition, "key")
-			if key == "" {
-				return schedulersdk.DefinitionSnapshot{}, fmt.Errorf("Scheduler manifest definition key is required")
-			}
-			published = append(published, SchedulerPublishedDefinition{Key: key, Data: cloneSchedulerDefinitionMap(definition), UpdatedAt: schedulerSDKStringDefault(definition, "revision", "published")})
-		}
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		h.revision++
+		return schedulersdk.DefinitionSnapshot{Revision: h.revision, Definitions: append([]schedulersdk.Definition(nil), h.authored...)}, nil
 	} else {
 		if h.definitionsSource == nil {
 			return schedulersdk.DefinitionSnapshot{}, fmt.Errorf("Runtime Scheduler definition source is unavailable")

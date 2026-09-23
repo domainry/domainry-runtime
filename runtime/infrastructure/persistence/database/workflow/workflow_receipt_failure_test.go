@@ -34,12 +34,19 @@ func workflowClaimRequest(now time.Time) workflowmodel.WorkflowExecutionClaimReq
 }
 
 func workflowReceiptRow(now time.Time) workflowSQLQueryStep {
+	value := workflowmodel.WorkflowExecutionReceipt{
+		ID: "receipt", WorkspaceID: "workspace", WorkflowKey: "workflow", IdempotencyKey: "key", RequestFingerprint: "fingerprint",
+		Status: string(idempotency.StatusProcessing), LeaseOwner: "old-owner", LeaseExpiresAt: now.Add(-time.Minute).Format(time.RFC3339Nano), FencingToken: 1,
+		CreatedAt: now.Add(-time.Hour).Format(time.RFC3339Nano), UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339Nano),
+	}
+	values := workflowReceiptValues(value)
+	row := make([]driver.Value, len(values))
+	for index, item := range values {
+		row[index] = item
+	}
 	return workflowSQLQueryStep{
 		columns: workflowReceiptColumns(),
-		rows: [][]driver.Value{{
-			"receipt", "workspace", "workflow", "key", "fingerprint", string(idempotency.StatusProcessing), "", "old-owner",
-			now.Add(-time.Minute).Format(time.RFC3339Nano), int64(1), now.Add(-time.Hour).Format(time.RFC3339Nano), now.Add(-time.Hour).Format(time.RFC3339Nano), "",
-		}},
+		rows:    [][]driver.Value{row},
 	}
 }
 

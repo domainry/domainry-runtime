@@ -859,7 +859,7 @@ func TestActionSuccessAuditAndReceiptShareTransactionWithoutBusinessMutation(t *
 		BusinessHandlers: newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{}),
 		UnitOfWork:       NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
 		Audit: ActionAudit{BuildSuccess: func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
-			return auditmodel.AuditEvent{ID: "action-audit-1", WorkspaceID: "workspace-a", Event: "booking.previewed", CreatedAt: "2026-07-22T00:00:00Z"}
+			return auditmodel.AuditEvent{ID: "action-audit-1", WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "booking.previewed", CreatedAt: "2026-07-22T00:00:00Z"}
 		}},
 	})
 	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, IdempotencyKey: "booking-preview-1", Principal: actionTestPrincipal("booking.preview")})
@@ -958,7 +958,7 @@ func TestBookClassCommitsClassBookingAuditOutboxAndReceiptThroughOneUnitOfWork(t
 		}),
 		UnitOfWork: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
 		Audit: ActionAudit{BuildSuccess: func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
-			return auditmodel.AuditEvent{ID: "book-class-audit-1", WorkspaceID: "workspace-a", Event: "gym.class_booked", CreatedAt: "2026-07-23T00:00:00Z"}
+			return auditmodel.AuditEvent{ID: "book-class-audit-1", WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "gym.class_booked", CreatedAt: "2026-07-23T00:00:00Z"}
 		}},
 	})
 	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{

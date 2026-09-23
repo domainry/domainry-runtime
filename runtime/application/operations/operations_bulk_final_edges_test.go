@@ -38,6 +38,14 @@ func TestOperationsBulkFinalFilterActionAndReplayConditions(t *testing.T) {
 	if err != nil || replayed.DryRunOperationID != first.DryRunOperationID {
 		t.Fatalf("dry replay=%#v err=%v", replayed, err)
 	}
+	current := owner.items["a"]
+	current.AllowedActions = []string{"resolve"}
+	owner.items["a"] = current
+	if _, err := service.DryRunBulkDeadLetters(t.Context(), request, "dry", principal); apperror.CodeOf(err) != "backend.operations.bulk_owner_state_changed" {
+		t.Fatalf("changed owner replay error = %v", err)
+	}
+	current.AllowedActions = []string{"retry", "resolve", "ack"}
+	owner.items["a"] = current
 	replaceOperationsReceiptKind(ledger, "bulk_operation.dry_run", func(receipt *operationsmodel.OperationsReceipt) {
 		receipt.Command.Status = operationsmodel.OperationsStatusFailed
 	})

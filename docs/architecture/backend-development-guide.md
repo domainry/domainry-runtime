@@ -51,7 +51,7 @@
 - Control Plane **MAY** import Runtime 稳定 `domain/model/contract` 等公开合同；
 - Control Plane **MUST NOT** import Runtime `application`、`bootstrap`、`transport` 或 `infrastructure` implementation；
 - Control Plane 不得通过文件、数据库或进程内对象读取某个 Runtime 实例的运行状态；
-- 两个进程的集成通过版本化 JSON/OpenAPI/artifact 合同完成，不通过跨进程内部 package 假共享。
+- 两个进程的集成通过版本化 wire DTO、typed SDK、公开客户端和契约测试完成，不通过跨进程内部 package 假共享。
 
 ## B3. 后端目标目录
 
@@ -191,7 +191,7 @@ go build ./...
 git diff --check
 ```
 
-完成态必须同时证明：进程所有权清晰、依赖无反向 implementation import、Domain/Application/Bootstrap/Transport/Infrastructure 各归其位、Control Plane stages 不混写、稳定 JSON/OpenAPI/Manifest/权限合同兼容、architecture inventory 与真实目录一致，并且不存在“测试通过但旧大包仍是事实 owner”的伪完成。
+完成态必须同时证明：进程所有权清晰、依赖无反向 implementation import、Domain/Application/Bootstrap/Transport/Infrastructure 各归其位、Control Plane stages 不混写、稳定 wire DTO/typed SDK/权限合同闭合、公开客户端与 Handler 契约测试通过、architecture inventory 与真实目录一致，并且不存在“测试通过但旧大包仍是事实 owner”的伪完成。
 
 ## R1. 规约级别
 
@@ -549,7 +549,9 @@ Runtime、Identity **MUST NOT** 再声明自己的 `domain/audit`、`application
 - Audit 模块使用宿主 Database、Dialect、Transaction、Migration lock 和全局 `_schema_migrations`。
 - Audit source module 提交自己拥有的 migration；宿主不得复制 Audit DDL/DML。
 - 持久化 DDL/DML 使用 `github.com/domainry/domainry-orm`；没有 ORM 等价能力时才允许带本地理由和方言测试的原生 SQL。
-- 当前 source-owned 表为 `_audit_events` 与 `_audit_export_artifacts`，不得恢复 `business_audit_export_artifacts` 或模块私有迁移账本。
+- Audit source-owned 表只有 `_audit_events`；导出元数据与 requester binding
+  使用共享 `_artifacts` / `_artifact_bindings`，CSV 字节使用 deployment
+  BlobStore。不得恢复私有 export artifact 表、SQL base64 内容或模块私有迁移账本。
 
 完成态门禁必须同时证明：
 
@@ -629,7 +631,7 @@ HTTP Handler 和 Dependencies **MUST** 直接依赖对应 owner 的 concrete `*A
 
 `<owner>_handler.go` 只持有 Handler、Dependencies、构造函数和 owner 级通用协议 helper；`<owner>_routes.go` 只注册路由。新增 endpoint 必须进入带 owner 前缀的资源文件，不得为了减少文件数把路由注册重新塞回 Handler 文件。
 
-HTTP owner 的 Go 标识符也必须携带具体业务名，不能因为 package 已表达 owner 就省略。目录名按业务词转换为 MixedCaps，复数 owner 保持复数，initialism 保持完整大写：`identity` 使用 `IdentityHandler` / `IdentityDependencies` / `NewIdentityHandler`，`records` 使用 `RecordsHandler`，`openapi` 使用 `OpenAPIHandler`。禁止声明通用的 `Handler`、`Dependencies`、`NewHandler`。
+HTTP owner 的 Go 标识符也必须携带具体业务名，不能因为 package 已表达 owner 就省略。目录名按业务词转换为 MixedCaps，复数 owner 保持复数，initialism 保持完整大写：`identity` 使用 `IdentityHandler` / `IdentityDependencies` / `NewIdentityHandler`，`records` 使用 `RecordsHandler`。禁止声明通用的 `Handler`、`Dependencies`、`NewHandler`。
 
 ## R6. Infrastructure 目录
 
@@ -683,7 +685,7 @@ Platform **MUST NOT** 引用具体 domain owner、transport 或 infrastructure i
 cmd/<command-name>/
 ```
 
-- command 目录 **MUST** 使用 `lower-kebab-case`，例如 `openapi-audit`。
+- command 目录 **MUST** 使用 `lower-kebab-case`，例如 `runtime-health`。
 - command package **MUST** 为 `main`。
 - `main.go` **MUST** 只处理参数、信号、启动和退出。
 - 业务规则、repository 实现和 HTTP handler **MUST NOT** 位于 cmd。
@@ -764,7 +766,7 @@ Domain Service **MUST** 是无状态业务行为或只持有 port/dependency，�
 
 ### R10.5 Transport 类型和 DTO
 
-- HTTP owner 的入口 struct **MUST** 命名为 `<Owner>Handler`，依赖输入为 `<Owner>Dependencies`，构造函数为 `New<Owner>Handler`。`<Owner>` 必须对应实际 HTTP owner 目录的业务名并保持其单复数，initialism 完整大写，例如 `identity/IdentityHandler`、`records/RecordsHandler`、`openapi/OpenAPIHandler`；禁止 `Handler`、`Dependencies`、`NewHandler`。
+- HTTP owner 的入口 struct **MUST** 命名为 `<Owner>Handler`，依赖输入为 `<Owner>Dependencies`，构造函数为 `New<Owner>Handler`。`<Owner>` 必须对应实际 HTTP owner 目录的业务名并保持其单复数，initialism 完整大写，例如 `identity/IdentityHandler`、`records/RecordsHandler`；禁止 `Handler`、`Dependencies`、`NewHandler`。
 - transport 本地输入使用未导出的 `<useCase>Request`，输出使用未导出的 `<useCase>Response`；只有确实作为跨 package 协议合同复用时才导出。
 - Domain/Application 已广泛使用 `<UseCase>Request` 表达业务操作输入，这是当前系统稳定命名，不要求机械改成 `Command`。这类 Request **MUST NOT** 包含 HTTP header、status、query encoding、cookie 或 JSON response shape 等协议事实。
 - 新 Domain/Application 运算输出优先使用 `<UseCase>Result`、`Snapshot` 或 `Projection`；`Response` 默认保留给 transport/boundary representation。既有 `AuthSessionResponse` 等是 reviewed legacy contract，不作为新 Domain 类型范例。
@@ -827,7 +829,7 @@ object := func(key string) (definitionmodel.ObjectSchema, bool) {
 | Application service | owner + use case + `ApplicationService` | `RecordApplicationService` / `record_application_service.go` |
 | Domain port | owner + capability + `Repository` | `RecordRepository`、`WorkflowProcessRepository`、`AuditRepository` |
 | Persistence implementation | owner/capability + `Store` | `RecordStore` / `record_store.go`、`IdentitySQLStore` / `identity_sql_store.go` |
-| HTTP entry | owner + `Handler`/`Dependencies`/`New<Owner>Handler` | `RecordsHandler` / `records_handler.go`、`OpenAPIHandler` / `openapi_handler.go` |
+| HTTP entry | owner + `Handler`/`Dependencies`/`New<Owner>Handler` | `RecordsHandler` / `records_handler.go`、`IdentityHandler` / `identity_handler.go` |
 | Executable definition | business noun + `Schema` | `ObjectSchema`、`WorkflowSchema`、`AutomationRuleSchema` |
 | Operation contract | business noun + `Request`/`Result` | `BulkActionRequest`、`WorkflowRunResult` |
 | Read model | business noun + `Snapshot`/`Projection` | `BusinessSystemSnapshot`、`AuthoringCapabilityProjection` |

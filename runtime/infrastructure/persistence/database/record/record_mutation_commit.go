@@ -138,7 +138,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 				builder.Set(field.Key, dbFieldValue(s.RuntimeEngine, field, value))
 			}
 		}
-		predicates := []query.Predicate{query.Equal("id", commit.Record.ID), s.SubjectRecordWriteAllowed(workspaceID, commit.Object.Key, guardActor)}
+		predicates := []query.Predicate{query.Equal("id", commit.Record.ID), s.SubjectRecordWriteAllowed(workspaceID, commit.Object.Key, commit.Record.ID, guardActor)}
 		if commit.AuthorizationScope != nil {
 			authorizationPredicate, err := querypersistence.BuildTenantPredicate(s, workspaceID, recordmodel.RecordListQuery{
 				AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: commit.Object.Key, ScopeExpression: commit.AuthorizationScope,
@@ -210,7 +210,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		if id == "" {
 			id = commit.Record.ID
 		}
-		predicates := []query.Predicate{query.Equal("id", id), s.SubjectRecordWriteAllowed(workspaceID, commit.Object.Key, guardActor)}
+		predicates := []query.Predicate{query.Equal("id", id), s.SubjectRecordWriteAllowed(workspaceID, commit.Object.Key, id, guardActor)}
 		if commit.AuthorizationScope != nil {
 			authorizationPredicate, err := querypersistence.BuildTenantPredicate(s, workspaceID, recordmodel.RecordListQuery{
 				AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: commit.Object.Key, ScopeExpression: commit.AuthorizationScope,
@@ -309,6 +309,9 @@ func (r RecordStore) applyConditionalUpdateManyTx(ctx context.Context, tx Transa
 		seen[id] = true
 		ids = append(ids, id)
 	}
+	if err := r.store.GuardSubjectRecordsWrite(ctx, tx, workspaceID, commit.Object.Key, commit.SetRecordIDs, commit.Record.UpdateBy); err != nil {
+		return err
+	}
 	filter, err := recordvalidation.RecordNormalizeFilterExpression(commit.Object, commit.SetFilterExpression)
 	if err != nil {
 		return fmt.Errorf("normalize conditional update-many filter: %w", err)
@@ -351,7 +354,7 @@ func (r RecordStore) applyConditionalUpdateManyTx(ctx context.Context, tx Transa
 	for _, key := range fields {
 		builder.Set(key, dbFieldValue(r.store.RuntimeEngine, fieldCatalog[key], commit.Record.Data[key]))
 	}
-	predicate = query.And(predicate, query.In(coverageFieldKey, coverageValues...), r.store.SubjectRecordWriteAllowed(workspaceID, commit.Object.Key, commit.Record.UpdateBy))
+	predicate = query.And(predicate, query.In(coverageFieldKey, coverageValues...))
 	statement, args, err := builder.Where(predicate).Build()
 	if err != nil {
 		return err
@@ -368,30 +371,4 @@ func (r RecordStore) applyConditionalUpdateManyTx(ctx context.Context, tx Transa
 		return mutation.PolicyConflict("backend.action.conditional_update_many_affected_mismatch", commit.Object.Key, commit.Record.ID, "affected_count")
 	}
 	return nil
-}
-
-func recordMutationScopeAllowedTx(ctx context.Context, tx TransactionExecutor, store *database.RuntimeStore, workspaceID string, object definitionmodel.ObjectSchema, recordID string, scope *recordmodel.RecordScopeExpression) (bool, error) {
-	predicate, err := querypersistence.BuildTenantPredicate(store, workspaceID, recordmodel.RecordListQuery{
-		AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key, ScopeExpression: scope,
-	})
-	if err != nil {
-		return false, fmt.Errorf("compile record mutation scope inspection: %w", err)
-	}
-	statement, args, err := query.NewWorkspaceSelectBuilder(store.SQLRenderer, object.Key, workspaceID).
-		Columns("id").
-		Where(query.And(query.Equal("id", recordID), predicate)).
-		Limit(1).
-		Build()
-	if err != nil {
-		return false, err
-	}
-	var found string
-	err = tx.QueryRowContext(ctx, statement, args...).Scan(&found)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("inspect record mutation authorization scope: %w", err)
-	}
-	return strings.TrimSpace(found) != "", nil
 }

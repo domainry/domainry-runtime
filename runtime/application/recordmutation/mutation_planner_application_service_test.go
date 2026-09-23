@@ -71,6 +71,10 @@ func TestMutationPlannerEnforcesPublishedObjectWritePolicy(t *testing.T) {
 	if _, err := planner.Plan(actionCtx, principal, commit, map[string]any{"status": "pending"}); err != nil {
 		t.Fatalf("published Action must be allowed: %v", err)
 	}
+	projectCtx := WithMutationInvocation(t.Context(), MutationInvocation{Source: transactionmodel.MutationSourceProjectHTTP})
+	if _, err := planner.Plan(projectCtx, principal, commit, map[string]any{"status": "pending"}); err != nil {
+		t.Fatalf("project Engine mutation must be allowed: %v", err)
+	}
 }
 
 func TestMutationPlannerEnforcesLifecyclePolicyForEveryInvocationSource(t *testing.T) {

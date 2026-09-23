@@ -12,19 +12,19 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
-type CapabilityAuthoringSchemaProvider interface {
+type SchemaProvider interface {
 	SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot
 }
 
 // ApplicationSchemaDomainService owns read-only schema and permission projections.
 // Its dependency is the immutable snapshot contract, not RuntimeServices state.
-// ApplicationSchemaDomainService exposes the current authoring schema.
+// ApplicationSchemaDomainService exposes the loaded project schema.
 type ApplicationSchemaDomainService struct {
-	schema   CapabilityAuthoringSchemaProvider
+	schema   SchemaProvider
 	metadata metadatasdk.Localization
 }
 
-func NewApplicationSchemaDomainService(schema CapabilityAuthoringSchemaProvider, metadata metadatasdk.Localization) *ApplicationSchemaDomainService {
+func NewApplicationSchemaDomainService(schema SchemaProvider, metadata metadatasdk.Localization) *ApplicationSchemaDomainService {
 	return &ApplicationSchemaDomainService{schema: schema, metadata: metadata}
 }
 

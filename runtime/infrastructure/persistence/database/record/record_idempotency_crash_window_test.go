@@ -93,7 +93,7 @@ func TestRecordIdempotencyCrashWindowBeforeAndAfterClaim(t *testing.T) {
 		t.Fatal("claim before crash injection: expected cancelled context error")
 	}
 	var receiptCount int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _record_mutation_executions`).Scan(&receiptCount); err != nil || receiptCount != 0 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE owner = 'record'`).Scan(&receiptCount); err != nil || receiptCount != 0 {
 		t.Fatalf("claim before crash injection persisted receipt: count=%d err=%v", receiptCount, err)
 	}
 
@@ -197,14 +197,14 @@ func TestRecordIdempotencyCrashWindowRollsBackBusinessWriteBeforeReceiptCompleti
 	if err != nil || claim.Decision != idempotency.DecisionAcquired {
 		t.Fatalf("claim=%+v err=%v", claim, err)
 	}
-	if _, err := store.DB().Exec(`CREATE TRIGGER fail_receipt_completion BEFORE UPDATE OF status ON _record_mutation_executions WHEN NEW.status = 'succeeded' BEGIN SELECT RAISE(ABORT, 'injected crash before receipt completion'); END`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TRIGGER fail_receipt_completion BEFORE UPDATE OF status ON _operations WHEN NEW.owner = 'record' AND NEW.status = 'succeeded' BEGIN SELECT RAISE(ABORT, 'injected crash before receipt completion'); END`); err != nil {
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "crash_window_record", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	record := recordmodel.Record{ID: "record-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"name": "Acme"}}
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create", Object: object, Record: record,
-		Audit:           &auditmodel.AuditEvent{ID: "crash-audit-1", Event: "record_created", ObjectKey: object.Key, RecordID: record.ID, CreatedAt: now.Format(time.RFC3339Nano)},
+		Audit:           &auditmodel.AuditEvent{ID: "crash-audit-1", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_created", ObjectKey: object.Key, RecordID: record.ID, CreatedAt: now.Format(time.RFC3339Nano)},
 		Outbox:          []publicationmodel.Message{{ID: "crash-outbox-1", WorkspaceID: "workspace-a", ConnectorKey: "webhook", Operation: "record.created", DedupKey: "crash-record-created"}},
 		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "crash-workflow-1", WorkflowKey: "crash-created", Trigger: "record_created", Status: "pending", ObjectKey: object.Key, RecordID: record.ID, ActorID: "admin", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}

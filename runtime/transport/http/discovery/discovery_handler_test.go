@@ -12,7 +12,6 @@ import (
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
 
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -20,13 +19,12 @@ import (
 type discoverySchemaProvider struct{}
 
 func (discoverySchemaProvider) SchemaForPrincipal(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
-	return appschemamodel.ApplicationSchemaSnapshot{TemplateID: "discovery", SchemaHash: "schema-hash"}
+	return appschemamodel.ApplicationSchemaSnapshot{ProjectKey: "discovery", SchemaHash: "schema-hash"}
 }
 
 func discoveryTestHandler() *DiscoveryHandler {
 	return NewDiscoveryHandler(DiscoveryDependencies{
-		Schema:     appschemaapplication.NewApplicationSchemaQueryApplicationService(discoverySchemaProvider{}, nil),
-		References: capabilityapplication.NewCapabilityAuthoringApplicationService(nil),
+		Schema: appschemaapplication.NewApplicationSchemaQueryApplicationService(discoverySchemaProvider{}, nil),
 		Principal: func(*http.Request) principalmodel.Principal {
 			return principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}
 		},
@@ -37,9 +35,6 @@ func discoveryTestHandler() *DiscoveryHandler {
 		WriteError: func(w http.ResponseWriter, _ *http.Request, status int, code string, _ ...string) {
 			w.Header().Set("X-Error-Code", code)
 			w.WriteHeader(status)
-		},
-		WriteServiceError: func(w http.ResponseWriter, _ *http.Request, _ error) {
-			w.WriteHeader(http.StatusUnprocessableEntity)
 		},
 	})
 }
@@ -120,24 +115,5 @@ func TestDiscoveryPublishedRuntimeRoutes(t *testing.T) {
 	handler.getPortalRuntimeSchema(response, request)
 	if response.Code != http.StatusNotModified {
 		t.Fatalf("cached runtime schema status=%d", response.Code)
-	}
-}
-
-func TestDiscoveryResolvesRuntimeInstanceReferences(t *testing.T) {
-	handler := discoveryTestHandler()
-	request := httptest.NewRequest(http.MethodGet, "/discovery/references/object_key", nil)
-	request.SetPathValue("kind", "object_key")
-	response := httptest.NewRecorder()
-	handler.referenceValues(response, request)
-	if response.Code != http.StatusOK || response.Header().Get("ETag") == "" {
-		t.Fatalf("reference status=%d etag=%q body=%s", response.Code, response.Header().Get("ETag"), response.Body.String())
-	}
-
-	request = httptest.NewRequest(http.MethodGet, "/discovery/references/unknown", nil)
-	request.SetPathValue("kind", "unknown")
-	response = httptest.NewRecorder()
-	handler.referenceValues(response, request)
-	if response.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("unknown reference status=%d body=%s", response.Code, response.Body.String())
 	}
 }

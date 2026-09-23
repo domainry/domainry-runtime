@@ -108,7 +108,7 @@ func TestHandlerDescriptorRequiresStableIdentityAndContracts(t *testing.T) {
 }
 
 func TestRuntimeextContractIdentityIsCurrent(t *testing.T) {
-	if ContractVersion != "runtimeext-v42" {
+	if ContractVersion != "runtimeext-v47" {
 		t.Fatalf("contract version = %q", ContractVersion)
 	}
 	if got := ComputedContractSHA256(); got != ContractSHA256 {
@@ -584,8 +584,10 @@ func TestAssigneeResolverDescriptorConfigAndRegistryGovernance(t *testing.T) {
 
 func TestProjectExtensionRegistryProjectExtensionsRegistrationIsAtomic(t *testing.T) {
 	registry := NewProjectExtensionRegistry()
-	duplicate := validTestBusinessHandler("group_class.book_class")
-	err := registry.RegisterProjectExtensions(ProjectExtensions{BusinessHandlers: []BusinessHandler{duplicate, duplicate}})
+	first := validTestBusinessHandler("group_class.book_class")
+	second := validTestBusinessHandler("group_class.book_class")
+	second.descriptor.HandlerRevision = "different-handler-revision"
+	err := registry.RegisterProjectExtensions(ProjectExtensions{BusinessHandlers: []BusinessHandler{first, second}})
 	if !errors.Is(err, ErrBusinessHandlerDuplicate) {
 		t.Fatalf("duplicate extension set error = %v", err)
 	}

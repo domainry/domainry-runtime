@@ -17,6 +17,7 @@ import (
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 	"github.com/domainry/domainry-scheduler-sdk/schedule"
 )
 
@@ -42,17 +43,17 @@ func schedulerBusinessActionAuthorizationVersion(definitionKey, actionKey, objec
 // SchedulerBusinessActionWorkloadBindings projects the exact authorization
 // identity embedded in Scheduler targets. Schedule/status changes deliberately
 // do not rotate this identity; changing Action, Object, or role does.
-func SchedulerBusinessActionWorkloadBindings(definitions []map[string]any) ([]workflowapplication.ManagedWorkloadBinding, error) {
+func SchedulerBusinessActionWorkloadBindings(definitions []schedulersdk.Definition) ([]workflowapplication.ManagedWorkloadBinding, error) {
 	result := make([]workflowapplication.ManagedWorkloadBinding, 0, len(definitions))
 	seen := make(map[string]struct{}, len(definitions))
 	for _, definition := range definitions {
-		if strings.ToLower(schedulerSDKString(definition, "target_type")) != "business_action" {
+		if strings.ToLower(strings.TrimSpace(definition.Target.Owner)) != "business_action" {
 			continue
 		}
-		definitionKey := schedulerSDKString(definition, "key")
-		actionKey := schedulerSDKString(definition, "target_key")
-		objectKey := schedulerSDKString(definition, "target_object")
-		roleKey := schedulerSDKString(definition, "run_as_role")
+		definitionKey := strings.TrimSpace(definition.Key)
+		actionKey := strings.TrimSpace(definition.Target.Operation)
+		objectKey := strings.TrimSpace(definition.Target.ObjectKey)
+		roleKey := strings.TrimSpace(definition.Target.RunAsRole)
 		if definitionKey == "" || actionKey == "" || objectKey == "" || roleKey == "" {
 			return nil, fmt.Errorf("Scheduler business Action workload declaration is incomplete for %q", definitionKey)
 		}

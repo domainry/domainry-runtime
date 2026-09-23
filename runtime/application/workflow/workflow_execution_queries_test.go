@@ -267,39 +267,3 @@ func TestManualWorkflowRunAsKeepsServicePrincipalAndTrustedHumanInitiator(t *tes
 		t.Fatalf("caller payload mutated: %#v", payload)
 	}
 }
-
-func TestWorkflowDraftSimulationContracts(t *testing.T) {
-	service := newWorkflowExecutionService(&workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}})
-	principal := workflowExecutionPrincipal()
-	unknown := principal
-	unknown.Known = false
-	if _, err := service.SimulateWorkflowCandidate(t.Context(), definitionmodel.WorkflowSchema{}, nil, unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
-		t.Fatalf("unknown=%v", err)
-	}
-	if _, err := service.SimulateWorkflowCandidate(t.Context(), definitionmodel.WorkflowSchema{}, nil, principal); apperror.CodeOf(err) != "backend.workflow.key_required" {
-		t.Fatalf("key=%v", err)
-	}
-	invalid := workflowExecutionSchema()
-	invalid.Graph = nil
-	if _, err := service.SimulateWorkflowCandidate(t.Context(), invalid, nil, principal); err == nil {
-		t.Fatal("expected graph validation error")
-	}
-	disabled := workflowExecutionSchema()
-	disabled.Enabled = false
-	if result, err := service.SimulateWorkflowCandidate(t.Context(), disabled, nil, principal); err != nil || result.Message != "Workflow is disabled" {
-		t.Fatalf("disabled=%#v err=%v", result, err)
-	}
-	actionFailure := workflowExecutionSchema()
-	actionFailure.Key = "action-failure"
-	actionFailure.Graph.Nodes = append(actionFailure.Graph.Nodes, definitionmodel.WorkflowGraphNode{
-		ID: "action", Type: "action", Name: "Missing action",
-		Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "missing"}},
-	})
-	actionFailure.Graph.Edges = []definitionmodel.WorkflowGraphEdge{{ID: "start-action", Source: "start", Target: "action", Branch: "success"}}
-	if _, err := service.SimulateWorkflowCandidate(t.Context(), actionFailure, nil, principal); apperror.CodeOf(err) != "backend.workflow.action_not_found" {
-		t.Fatalf("action simulation=%v", err)
-	}
-	if result, err := service.SimulateWorkflowCandidate(t.Context(), workflowExecutionSchema(), nil, principal); err != nil || !result.WouldExecute || len(result.Nodes) != 1 {
-		t.Fatalf("result=%#v err=%v", result, err)
-	}
-}

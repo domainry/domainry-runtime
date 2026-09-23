@@ -21,26 +21,25 @@ import (
 
 // ApplicationSchemaStore is the request-aware storage boundary for metadata.
 type ApplicationSchemaStore struct {
-	store                *database.RuntimeStore
-	db                   *sql.DB
-	schemaDB             runtimeschema.SQLDatabase
-	createIndex          func(context.Context, string, string, bool, ...string) error
-	storage              appschemastorage.Profile
-	exactDecimalMigrator metadataExactDecimalMigrator
-	metadata             metadatasdk.Binding
+	store       *database.RuntimeStore
+	db          *sql.DB
+	schemaDB    runtimeschema.SQLDatabase
+	createIndex func(context.Context, string, string, bool, ...string) error
+	storage     appschemastorage.Profile
+	metadata    metadatasdk.Binding
 }
 
-type metadataProfileFactory func() (appschemastorage.Profile, metadataExactDecimalMigrator)
+type metadataProfileFactory func() appschemastorage.Profile
 
 var metadataProfileFactories = map[ormdialect.Name]metadataProfileFactory{
-	ormdialect.SQLite: func() (appschemastorage.Profile, metadataExactDecimalMigrator) {
-		return appschemasqlite.NewApplicationSchemaStorageProfile(), sqliteExactDecimalMigrator{}
+	ormdialect.SQLite: func() appschemastorage.Profile {
+		return appschemasqlite.NewApplicationSchemaStorageProfile()
 	},
-	ormdialect.MySQL: func() (appschemastorage.Profile, metadataExactDecimalMigrator) {
-		return appschemamysql.NewApplicationSchemaStorageProfile(), mysqlExactDecimalMigrator{}
+	ormdialect.MySQL: func() appschemastorage.Profile {
+		return appschemamysql.NewApplicationSchemaStorageProfile()
 	},
-	ormdialect.Postgres: func() (appschemastorage.Profile, metadataExactDecimalMigrator) {
-		return appschemapostgres.NewApplicationSchemaStorageProfile(), postgresExactDecimalMigrator{}
+	ormdialect.Postgres: func() appschemastorage.Profile {
+		return appschemapostgres.NewApplicationSchemaStorageProfile()
 	},
 }
 
@@ -54,24 +53,21 @@ func (r ApplicationSchemaStore) SnapshotRevision(ctx context.Context, scope prin
 	if actionExecutor := database.ActionExecutionTransaction(ctx); actionExecutor != nil {
 		executor = actionExecutor
 	}
-	var sourceHash, schemaHash string
-	query := "SELECT " + r.store.Identifier("source_hash") + ", " + r.store.Identifier("schema_hash") + " FROM " + r.store.TableIdentifier("_application_schema_projection") + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(1)
-	err := executor.QueryRowContext(ctx, query, "current").Scan(&sourceHash, &schemaHash)
+	var modelHash, catalogHash string
+	query := "SELECT " + r.store.Identifier("model_hash") + ", " + r.store.Identifier("catalog_hash") + " FROM " + r.store.TableIdentifier("_project_model_state") + " WHERE " + r.store.Identifier("id") + " = " + r.store.Placeholder(1)
+	err := executor.QueryRowContext(ctx, query, "current").Scan(&modelHash, &catalogHash)
 	if err == sql.ErrNoRows {
 		if refreshErr := r.refreshCatalogHashWithExecutor(ctx, executor); refreshErr != nil {
 			return "", refreshErr
 		}
-		err = executor.QueryRowContext(ctx, query, "current").Scan(&sourceHash, &schemaHash)
+		err = executor.QueryRowContext(ctx, query, "current").Scan(&modelHash, &catalogHash)
 	}
 	if err != nil {
 		return "", fmt.Errorf("load metadata snapshot revision: %w", err)
 	}
-	// source_hash changes when the generated manifest changes (including names
-	// and artifact metadata), while schema_hash changes when the effective
-	// catalog changes through another authoring source. A watcher must observe
-	// both; using schema_hash alone left peer Runtime instances stale after a
-	// generated-only publication.
-	return strings.TrimSpace(sourceHash) + ":" + strings.TrimSpace(schemaHash), nil
+	// The model hash identifies the immutable model.json; the catalog hash
+	// identifies the current Metadata projection derived from that model.
+	return strings.TrimSpace(modelHash) + ":" + strings.TrimSpace(catalogHash), nil
 }
 
 func NewApplicationSchemaStore(store *database.RuntimeStore) ApplicationSchemaStore {
@@ -79,8 +75,7 @@ func NewApplicationSchemaStore(store *database.RuntimeStore) ApplicationSchemaSt
 	if factory == nil {
 		panic(fmt.Sprintf("unsupported Metadata storage profile %q", store.Engine.Name()))
 	}
-	profile, migrator := factory()
-	return ApplicationSchemaStore{store: store, db: store.DB(), storage: profile, exactDecimalMigrator: migrator, metadata: store.Metadata()}
+	return ApplicationSchemaStore{store: store, db: store.DB(), storage: factory(), metadata: store.Metadata()}
 }
 
 func (r ApplicationSchemaStore) database() *sql.DB {

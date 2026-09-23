@@ -43,7 +43,7 @@ func TestWorkflowContinuationRecoveryDiscoversRegisteredWorkspaces(t *testing.T)
 
 func workflowWorkerEdgeExecution(id string) workflowmodel.WorkflowExecution {
 	return workflowmodel.WorkflowExecution{
-		ID: id, WorkflowKey: "approval", Name: "Approval", Trigger: "manual", Status: "pending", ActionType: "record",
+		ID: id, OperationID: "operation-1", WorkflowKey: "approval", Name: "Approval", Trigger: "manual", Status: "pending", ActionType: "record",
 		Action: map[string]any{"kind": "record"}, Payload: map[string]any{"id": id}, Result: map[string]any{},
 		ActorID: "user", Attempt: 0, MaxAttempts: 3, CreatedAt: "2026-07-20T00:00:00Z", UpdatedAt: "2026-07-20T00:00:00Z",
 	}
@@ -63,7 +63,7 @@ func TestWorkflowWorkerExecutionCRUDAndBoundaryEdges(t *testing.T) {
 	if err := repository.InsertExecution(t.Context(), " workspace-a ", execution); err != nil {
 		t.Fatal(err)
 	}
-	if got, found, err := repository.GetExecution(t.Context(), "workspace-a", execution.ID); err != nil || !found || got.WorkspaceID != "workspace-a" {
+	if got, found, err := repository.GetExecution(t.Context(), "workspace-a", execution.ID); err != nil || !found || got.WorkspaceID != "workspace-a" || got.OperationID != "operation-1" {
 		t.Fatalf("execution=%+v found=%v error=%v", got, found, err)
 	}
 	if _, found, err := repository.GetExecution(t.Context(), "workspace-a", "missing"); err != nil || found {

@@ -31,19 +31,6 @@ CREATE TABLE _workspaces (
 );
 INSERT INTO _workspaces VALUES ('workspace-primary','primary','Primary','active',NULL,1,'2026-09-07T00:00:00Z','2026-09-07T00:00:00Z');
 
-CREATE TABLE _report_export_prepare_receipts (
-  id TEXT NOT NULL, operation_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
-  requester_user_id TEXT NOT NULL, use_case TEXT NOT NULL, report_key TEXT NOT NULL,
-  object_key TEXT NOT NULL, audit_id TEXT NOT NULL, idempotency_key TEXT NOT NULL,
-  request_fingerprint TEXT NOT NULL, status TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '',
-  business_job_key TEXT NOT NULL DEFAULT '', job_id TEXT NOT NULL DEFAULT '',
-  completion_artifact_id TEXT NOT NULL DEFAULT '', completion_fingerprint TEXT NOT NULL DEFAULT '',
-  terminal_error_code TEXT NOT NULL DEFAULT '', lease_owner TEXT NOT NULL,
-  lease_expires_at TEXT NOT NULL, fencing_token BIGINT NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, expires_at TEXT NOT NULL DEFAULT '',
-  PRIMARY KEY (workspace_id, id)
-);
-
 CREATE TABLE _application_schema_projection (
   id TEXT PRIMARY KEY, contract_version TEXT NOT NULL DEFAULT '',
   source_hash TEXT NOT NULL DEFAULT '', schema_hash TEXT NOT NULL DEFAULT '',
@@ -53,16 +40,6 @@ CREATE TABLE _application_schema_projection (
   materialized_at TEXT NOT NULL DEFAULT '', time_zone TEXT NOT NULL DEFAULT 'UTC'
 );
 INSERT INTO _application_schema_projection (id,template_id,name) VALUES ('current','legacy-026','Legacy application');
-CREATE TABLE _dispatch_callback_receipts (
-  id TEXT NOT NULL, workspace_id TEXT NOT NULL, runtime_id TEXT NOT NULL,
-  method TEXT NOT NULL, path TEXT NOT NULL, idempotency_key TEXT NOT NULL,
-  request_fingerprint TEXT NOT NULL, status TEXT NOT NULL, execution_id TEXT NOT NULL,
-  downstream_id TEXT NOT NULL DEFAULT '', downstream_owner TEXT NOT NULL DEFAULT '',
-  downstream_status TEXT NOT NULL DEFAULT '', lease_owner TEXT NOT NULL,
-  lease_expires_at TEXT NOT NULL, fencing_token BIGINT NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, expires_at TEXT NOT NULL DEFAULT '',
-  PRIMARY KEY (workspace_id, id)
-);
 
 CREATE TABLE _application_schema_upgrade_receipts (
   id TEXT PRIMARY KEY, from_version TEXT NOT NULL DEFAULT '', to_version TEXT NOT NULL DEFAULT '',
@@ -81,8 +58,3 @@ CREATE TABLE _workflow_route_steps (
   node_instance_id TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY (workspace_id, id)
 );
-INSERT INTO _report_export_prepare_receipts
-  (id, operation_id, workspace_id, requester_user_id, use_case, report_key, object_key, audit_id, idempotency_key,
-   request_fingerprint, status, payload_json, business_job_key, job_id, lease_owner, lease_expires_at, created_at, updated_at)
-VALUES ('receipt-026', 'operation-026', 'workspace-primary', 'user-026', 'report_export_prepare', 'report-026', 'object-026', 'audit-026', 'key-026',
-        'frozen-fingerprint', 'submitted', '{"historical":"payload"}', 'frozen-business-key', 'failed-job-026', '', '', '2026-09-07T00:00:00Z', '2026-09-07T00:00:00Z');

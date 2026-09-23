@@ -104,7 +104,7 @@ func (a *ReportRecordAdapter) AuthorizeReportObjectSQLField(_ context.Context, p
 	// Record envelope columns are not authored ObjectSchema fields, so Identity
 	// cannot project role field permissions for them. ObjectForAction above
 	// still enforces object read, and the execution query applies RLS; only
-	// manifest business fields enter the field-level authorization path below.
+	// project-model business fields enter the field-level authorization path below.
 	if fieldKey != "id" && fieldKey != "created_at" && fieldKey != "updated_at" && fieldKey != "workspace_id" {
 		found := false
 		for _, field := range object.Fields {

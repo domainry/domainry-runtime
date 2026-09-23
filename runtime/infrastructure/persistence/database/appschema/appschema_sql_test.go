@@ -8,7 +8,6 @@ import (
 	"io"
 	"testing"
 
-	"github.com/domainry/domainry-foundation/modulecapability"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -142,13 +141,16 @@ func scriptedApplicationSchemaStore(t *testing.T, state *metadataSQLState, store
 }
 
 type metadataBindingStub struct {
-	modulecapability.Binding
+	metadatasdk.Binding
 	state *metadataStateStub
 }
 
 func (b metadataBindingStub) Descriptor() metadatasdk.Descriptor { return metadatasdk.Descriptor{} }
 func (b metadataBindingStub) Definitions() metadatasdk.Definitions {
 	return metadataDefinitionsStub{state: b.state}
+}
+func (b metadataBindingStub) DefinitionStore() metadatasdk.DefinitionStore {
+	return metadataDefinitionStoreStub{state: b.state}
 }
 func (b metadataBindingStub) Localization() metadatasdk.Localization {
 	return metadataLocalizationStub{state: b.state}
@@ -181,37 +183,76 @@ func (s metadataDefinitionsStub) List(_ context.Context, query metadatasdk.Defin
 	}
 	values := []metadatasdk.Definition{}
 	for _, definition := range s.state.snapshot.Definitions {
-		if (query.ResourceType == "" || definition.ResourceType == query.ResourceType) && (query.SourceID == "" || definition.SourceID == query.SourceID) {
+		if (query.Owner == "" || definition.Owner == query.Owner) && (query.ResourceType == "" || definition.ResourceType == query.ResourceType) && (query.SourceID == "" || definition.SourceID == query.SourceID) {
 			values = append(values, definition)
 		}
 	}
 	return values, nil
 }
 
-func (s metadataDefinitionsStub) Get(_ context.Context, resourceType, key string) (metadatasdk.Definition, bool, error) {
+func (s metadataDefinitionsStub) Get(_ context.Context, owner, resourceType, key string) (metadatasdk.Definition, bool, error) {
 	if s.state.err != nil {
 		return metadatasdk.Definition{}, false, s.state.err
 	}
 	for _, definition := range s.state.snapshot.Definitions {
-		if definition.ResourceType == resourceType && definition.ResourceKey == key {
+		if definition.Owner == owner && definition.ResourceType == resourceType && definition.ResourceKey == key {
 			return definition, true, nil
 		}
 	}
 	return metadatasdk.Definition{}, false, nil
 }
 
-func (s metadataDefinitionsStub) Snapshot(context.Context) (metadatasdk.DefinitionSnapshot, error) {
-	return s.state.snapshot, s.state.err
+func (s metadataDefinitionsStub) Snapshot(ctx context.Context, query metadatasdk.DefinitionQuery) (metadatasdk.DefinitionSnapshot, error) {
+	values, err := s.List(ctx, query)
+	return metadatasdk.DefinitionSnapshot{Definitions: values}, err
 }
 
 type metadataProjectionStub struct{ state *metadataStateStub }
+
+type metadataDefinitionStoreStub struct{ state *metadataStateStub }
+
+func (s metadataDefinitionStoreStub) List(ctx context.Context, query metadatasdk.DefinitionQuery) ([]metadatasdk.Definition, error) {
+	return (metadataDefinitionsStub{state: s.state}).List(ctx, query)
+}
+func (s metadataDefinitionStoreStub) Get(ctx context.Context, owner, resourceType, key string) (metadatasdk.Definition, bool, error) {
+	return (metadataDefinitionsStub{state: s.state}).Get(ctx, owner, resourceType, key)
+}
+func (s metadataDefinitionStoreStub) Snapshot(ctx context.Context, query metadatasdk.DefinitionQuery) (metadatasdk.DefinitionSnapshot, error) {
+	return (metadataDefinitionsStub{state: s.state}).Snapshot(ctx, query)
+}
+func (s metadataDefinitionStoreStub) ReplaceSourceSnapshot(ctx context.Context, snapshot metadatasdk.ProjectionSnapshot) error {
+	return (metadataProjectionStub{state: s.state}).Sync(ctx, snapshot)
+}
+func (s metadataDefinitionStoreStub) Publish(context.Context, metadatasdk.DefinitionPublishCommand) (metadatasdk.DefinitionPublishResult, error) {
+	return metadatasdk.DefinitionPublishResult{}, nil
+}
+func (s metadataDefinitionStoreStub) Disable(context.Context, metadatasdk.DefinitionDisableCommand) error {
+	return nil
+}
+func (s metadataDefinitionStoreStub) GetVersion(context.Context, metadatasdk.DefinitionVersionQuery) (metadatasdk.DefinitionVersion, bool, error) {
+	return metadatasdk.DefinitionVersion{}, false, nil
+}
 
 func (p metadataProjectionStub) Sync(_ context.Context, snapshot metadatasdk.ProjectionSnapshot) error {
 	if p.state.err != nil {
 		return p.state.err
 	}
-	p.state.snapshot = metadatasdk.DefinitionSnapshot{Definitions: append([]metadatasdk.Definition(nil), snapshot.Definitions...)}
-	p.state.localized = append([]metadatasdk.LocalizedText(nil), snapshot.LocalizedText...)
+	retained := make([]metadatasdk.Definition, 0, len(p.state.snapshot.Definitions)+len(snapshot.Definitions))
+	for _, definition := range p.state.snapshot.Definitions {
+		if definition.Owner != snapshot.Owner || definition.SourceKind != snapshot.SourceKind || definition.SourceID != snapshot.SourceID {
+			retained = append(retained, definition)
+		}
+	}
+	for _, definition := range snapshot.Definitions {
+		definition.Owner = snapshot.Owner
+		definition.SourceKind = snapshot.SourceKind
+		definition.SourceID = snapshot.SourceID
+		retained = append(retained, definition)
+	}
+	p.state.snapshot = metadatasdk.DefinitionSnapshot{Definitions: retained}
+	if len(snapshot.LocalizedText) > 0 {
+		p.state.localized = append([]metadatasdk.LocalizedText(nil), snapshot.LocalizedText...)
+	}
 	return nil
 }
 

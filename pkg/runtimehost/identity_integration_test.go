@@ -1,6 +1,7 @@
 package runtimehost
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,6 +38,17 @@ func (moduleBindingStub) Descriptor() identitysdk.Descriptor {
 }
 func (binding moduleBindingStub) HTTPAdapters() []identityhttpapi.Adapter {
 	return append([]identityhttpapi.Adapter(nil), binding.adapters...)
+}
+
+type operationsModuleBindingStub struct {
+	moduleBindingStub
+	bound   bool
+	bindErr error
+}
+
+func (binding *operationsModuleBindingStub) BindOperationsPersistence() error {
+	binding.bound = true
+	return binding.bindErr
 }
 
 func TestProjectHostMountsModuleIdentityHTTPOutsideRuntime(t *testing.T) {
@@ -87,6 +99,24 @@ func TestProjectIdentityTopologyRejectsMissingModuleHTTPAndSaaSSurfaces(t *testi
 	}
 	if binding, adapters, err := openProjectIdentity(t.Context(), cfg, identityFactoryStub{binding: identityBindingStub{}}); err != nil || binding == nil || len(adapters) != 0 {
 		t.Fatalf("SaaS binding=%#v adapters=%d err=%v", binding, len(adapters), err)
+	}
+}
+
+func TestEmbeddedIdentityOperationsBindOnlyForModuleAfterSchemaPreparation(t *testing.T) {
+	if err := bindEmbeddedIdentityOperations(moduleBindingStub{}); err == nil {
+		t.Fatal("module binding without shared Operations contract was accepted")
+	}
+	module := &operationsModuleBindingStub{}
+	if err := bindEmbeddedIdentityOperations(module); err != nil || !module.bound {
+		t.Fatalf("module bound=%t err=%v", module.bound, err)
+	}
+	wantErr := errors.New("bind failed")
+	failed := &operationsModuleBindingStub{bindErr: wantErr}
+	if err := bindEmbeddedIdentityOperations(failed); !errors.Is(err, wantErr) {
+		t.Fatalf("bind error=%v", err)
+	}
+	if err := bindEmbeddedIdentityOperations(identityBindingStub{}); err != nil {
+		t.Fatalf("SaaS binding received embedded persistence: %v", err)
 	}
 }
 

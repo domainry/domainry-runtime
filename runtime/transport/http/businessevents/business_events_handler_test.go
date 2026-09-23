@@ -84,8 +84,8 @@ func TestBusinessEventHandlerStreamsFilteredSignalsHeartbeatAndCleansUp(t *testi
 	}
 	auditMu.Lock()
 	defer auditMu.Unlock()
-	if !contains(audits, "business_event_stream_connected") || !contains(audits, "business_event_stream_disconnected") {
-		t.Fatalf("missing lifecycle audits: %v", audits)
+	if len(audits) != 0 {
+		t.Fatalf("operational connection lifecycle leaked into Audit: %v", audits)
 	}
 }
 
@@ -93,7 +93,13 @@ func TestBusinessEventHandlerEmitsResyncForUnknownCursorAndRejectsInvalidFilter(
 	service := businesseventapplication.NewBusinessEventApplicationService(businesseventmemory.NewBusinessEventBackplane(2, 2), businesseventapplication.Limits{})
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a"}}
 	_, _ = service.Publish(t.Context(), "workspace-a", "order", "mutation")
-	handler := NewBusinessEventsHandler(BusinessEventsDependencies{Service: service, Principal: func(*http.Request) principalmodel.Principal { return principal }, WriteServiceError: testWriteServiceError})
+	var audits []string
+	handler := NewBusinessEventsHandler(BusinessEventsDependencies{
+		Service: service, Principal: func(*http.Request) principalmodel.Principal { return principal }, WriteServiceError: testWriteServiceError,
+		SecurityAuditForPrincipal: func(_ *http.Request, _ principalmodel.Principal, event, _ string, _ map[string]any) {
+			audits = append(audits, event)
+		},
+	})
 
 	invalid := httptest.NewRecorder()
 	invalidRequest := httptest.NewRequest(http.MethodGet, Route+"?objects=bad/value", nil)
@@ -101,6 +107,9 @@ func TestBusinessEventHandlerEmitsResyncForUnknownCursorAndRejectsInvalidFilter(
 	handler.stream(invalid, invalidRequest)
 	if invalid.Code != http.StatusBadRequest || !strings.Contains(invalid.Body.String(), "backend.event_stream.filter_invalid") {
 		t.Fatalf("invalid response=%d %s", invalid.Code, invalid.Body.String())
+	}
+	if len(audits) != 0 {
+		t.Fatalf("malformed filter leaked into Audit: %v", audits)
 	}
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -117,7 +126,13 @@ func TestBusinessEventHandlerEmitsResyncForUnknownCursorAndRejectsInvalidFilter(
 func TestBusinessEventHandlerRequiresBearerSessionAndMapsConnectionCapacity(t *testing.T) {
 	service := businesseventapplication.NewBusinessEventApplicationService(businesseventmemory.NewBusinessEventBackplane(2, 2), businesseventapplication.Limits{GlobalConnections: 1, WorkspaceConnections: 1, PrincipalConnections: 1})
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a"}}
-	handler := NewBusinessEventsHandler(BusinessEventsDependencies{Service: service, Principal: func(*http.Request) principalmodel.Principal { return principal }, WriteServiceError: testWriteServiceError})
+	var audits []string
+	handler := NewBusinessEventsHandler(BusinessEventsDependencies{
+		Service: service, Principal: func(*http.Request) principalmodel.Principal { return principal }, WriteServiceError: testWriteServiceError,
+		SecurityAuditForPrincipal: func(_ *http.Request, _ principalmodel.Principal, event, _ string, _ map[string]any) {
+			audits = append(audits, event)
+		},
+	})
 
 	noSession := httptest.NewRecorder()
 	handler.stream(noSession, httptest.NewRequest(http.MethodGet, Route, nil))
@@ -136,6 +151,9 @@ func TestBusinessEventHandlerRequiresBearerSessionAndMapsConnectionCapacity(t *t
 	handler.stream(limited, limitedRequest)
 	if limited.Code != http.StatusTooManyRequests || !strings.Contains(limited.Body.String(), "backend.event_stream.capacity_exceeded") {
 		t.Fatalf("capacity response=%d %s", limited.Code, limited.Body.String())
+	}
+	if len(audits) != 1 || audits[0] != "business_event_stream_rejected" {
+		t.Fatalf("only the missing bearer session should create security Audit evidence: %v", audits)
 	}
 }
 
@@ -159,13 +177,4 @@ func testWriteServiceError(w http.ResponseWriter, _ *http.Request, err error) {
 	}
 	w.WriteHeader(status)
 	_, _ = io.WriteString(w, apperror.CodeOf(err))
-}
-
-func contains(values []string, expected string) bool {
-	for _, value := range values {
-		if value == expected {
-			return true
-		}
-	}
-	return false
 }

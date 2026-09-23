@@ -10,6 +10,7 @@ type MutationSource string
 
 const (
 	MutationSourceHTTP        MutationSource = "http"
+	MutationSourceProjectHTTP MutationSource = "project_http"
 	MutationSourceAction      MutationSource = "action"
 	MutationSourceWorkflow    MutationSource = "workflow"
 	MutationSourceAutomation  MutationSource = "automation"
@@ -147,7 +148,7 @@ func (c MutationContext) HasEffectAuthority() bool {
 
 func mutationSourceValid(source MutationSource) bool {
 	switch source {
-	case MutationSourceHTTP, MutationSourceAction, MutationSourceWorkflow, MutationSourceAutomation, MutationSourceImport, MutationSourceScheduler, MutationSourceIntegration, MutationSourceInternal:
+	case MutationSourceHTTP, MutationSourceProjectHTTP, MutationSourceAction, MutationSourceWorkflow, MutationSourceAutomation, MutationSourceImport, MutationSourceScheduler, MutationSourceIntegration, MutationSourceInternal:
 		return true
 	default:
 		return false

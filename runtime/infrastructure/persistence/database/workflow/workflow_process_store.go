@@ -29,7 +29,7 @@ func (r WorkflowProcessStore) database() workflowDatabase {
 	return r.store.DB()
 }
 
-var workflowProcessColumns = []string{"workspace_id", "id", "workflow_key", "workflow_name", "workflow_definition_version_id", "definition_version", "definition_hash", "definition_json", "object_key", "record_id", "initiator_id", "initiator_role_key", "status", "current_node_ids_json", "variables_json", "result_json", "error_code", "created_at", "updated_at", "completed_at"}
+var workflowProcessColumns = []string{"workspace_id", "id", "operation_id", "workflow_key", "workflow_name", "workflow_definition_version_id", "definition_version", "definition_hash", "definition_json", "object_key", "record_id", "initiator_id", "initiator_role_key", "status", "current_node_ids_json", "variables_json", "result_json", "error_code", "created_at", "updated_at", "completed_at"}
 var workflowNodeColumns = []string{"workspace_id", "id", "process_id", "node_id", "node_type", "iteration", "status", "input_json", "output_json", "error_code", "started_at", "completed_at"}
 var workflowEventColumns = []string{"workspace_id", "id", "process_id", "node_id", "task_id", "event", "actor_id", "summary", "metadata_json", "created_at"}
 
@@ -38,7 +38,7 @@ func workflowProcessValues(process workflowmodel.WorkflowProcessInstance) []any 
 	currentNodes, _ := json.Marshal(process.CurrentNodeIDs)
 	variables, _ := json.Marshal(database.NonNilMap(process.Variables))
 	result, _ := json.Marshal(database.NonNilMap(process.Result))
-	return []any{process.WorkspaceID, process.ID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, process.CreatedAt, process.UpdatedAt, database.NullableText(process.CompletedAt)}
+	return []any{process.WorkspaceID, process.ID, process.OperationID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, process.CreatedAt, process.UpdatedAt, database.NullableText(process.CompletedAt)}
 }
 
 func (r WorkflowProcessStore) InsertProcess(ctx context.Context, workspaceID string, process workflowmodel.WorkflowProcessInstance) error {

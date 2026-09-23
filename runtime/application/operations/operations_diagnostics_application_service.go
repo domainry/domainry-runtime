@@ -6,26 +6,10 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
-
-type OperationsDirectAuthoringProjection func(context.Context, string, principalmodel.Principal) (capabilitycontract.CapabilityAuthoringSuccessProjection, error)
-
-type OperationsDirectAuthoringSuccessResult struct {
-	Resource            any                                                      `json:"resource"`
-	ResourceHash        string                                                   `json:"resource_hash"`
-	SnapshotHash        string                                                   `json:"snapshot_hash"`
-	AvailableSuccessors []capabilitycontract.CapabilityAuthoringSuccessorSummary `json:"available_successors"`
-}
-
-func (s *OperationsApplicationService) UseDirectAuthoringProjection(projection OperationsDirectAuthoringProjection) {
-	if s != nil {
-		s.directAuthoringProjection = projection
-	}
-}
 
 const operationsDiagnosticSectionCount = 6
 
@@ -94,7 +78,11 @@ func (s *OperationsApplicationService) CaptureDiagnostics(ctx context.Context, c
 	}
 	if decision == operationsmodel.OperationsSubmissionReplay && receipt.Command.Status == operationsmodel.OperationsStatusSucceeded {
 		var snapshot operationsmodel.OperationsDiagnosticsSnapshot
-		if json.Unmarshal(receipt.Result, &snapshot) != nil {
+		resultJSON, readErr := s.receiptResult(ctx, receipt)
+		if readErr != nil {
+			return OperationsDiagnosticsResult{}, readErr
+		}
+		if json.Unmarshal(resultJSON, &snapshot) != nil {
 			return OperationsDiagnosticsResult{}, apperror.New(apperror.KindInternal, "backend.operations.diagnostics_receipt_invalid", nil, nil)
 		}
 		return OperationsDiagnosticsResult{Snapshot: snapshot, Receipt: receipt}, nil

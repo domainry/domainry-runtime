@@ -28,7 +28,7 @@ func ResolveApplicationTimeZone(execution ActionExecution) (string, error) {
 	return zone, nil
 }
 
-// A missing value is unavailable, not UTC. Runtime applies the manifest's UTC
+// A missing value is unavailable, not UTC. Runtime applies the model's UTC
 // default before capturing this contract, so old adapters cannot silently pick
 // a different accounting policy.
 func ValidateApplicationTimeZone(zone string) error {

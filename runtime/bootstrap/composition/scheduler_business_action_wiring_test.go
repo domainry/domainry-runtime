@@ -12,6 +12,7 @@ import (
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 type schedulerManagedPrincipalProbe struct {
@@ -111,9 +112,9 @@ func TestSchedulerBusinessActionFailsClosedBeforeActionInvocation(t *testing.T) 
 }
 
 func TestSchedulerBusinessActionWorkloadProjectionIsDeterministic(t *testing.T) {
-	definitions := []map[string]any{
-		{"key": "snapshot", "target_type": "report_snapshot_refresh", "target_key": "daily"},
-		{"key": "expire-orders", "target_type": "business_action", "target_key": "order.expire", "target_object": "order", "run_as_role": "order_automation"},
+	definitions := []schedulersdk.Definition{
+		{Key: "snapshot", Target: schedulersdk.TargetRef{Owner: "report", Operation: "daily"}},
+		{Key: "expire-orders", Target: schedulersdk.TargetRef{Owner: "business_action", Operation: "order.expire", ObjectKey: "order", RunAsRole: "order_automation"}},
 	}
 	bindings, err := SchedulerBusinessActionWorkloadBindings(definitions)
 	if err != nil || len(bindings) != 1 || bindings[0].WorkloadKey != "scheduler:expire-orders" || bindings[0].RoleKey != "order_automation" || len(bindings[0].ActionKeys) != 1 || bindings[0].ActionKeys[0] != "order.expire" {

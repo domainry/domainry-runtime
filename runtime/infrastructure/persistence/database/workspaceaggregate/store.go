@@ -98,13 +98,10 @@ func (store *Store) ResolveActive(ctx context.Context, scope principalmodel.Syst
 			query.Project(query.QualifiedColumn("workspace", "id")),
 			query.Project(query.QualifiedColumn("workspace", "canonical_code")),
 			query.Project(query.QualifiedColumn("workspace", "name")),
-			query.Project(query.QualifiedColumn("commercial", "plan")),
-			query.Project(query.QualifiedColumn("commercial", "included_user_limit")),
-			query.Project(query.QualifiedColumn("commercial", "max_user_limit")),
+			query.Project(query.QualifiedColumn("workspace", "plan")),
+			query.Project(query.QualifiedColumn("workspace", "included_user_limit")),
+			query.Project(query.QualifiedColumn("workspace", "max_user_limit")),
 		).
-		Join(query.InnerJoin("_workspace_commercial_configuration", "commercial", query.EqualExpressions(
-			query.QualifiedColumn("commercial", "workspace_id"), query.QualifiedColumn("workspace", "id"),
-		))).
 		Where(query.And(
 			query.InExpression(query.QualifiedColumn("workspace", "id"), values...),
 			query.EqualValue(query.QualifiedColumn("workspace", "status"), "active"),
@@ -154,9 +151,6 @@ func (store *Store) ResolveUsageWorkspace(ctx context.Context, scope principalmo
 	}
 	builder := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Alias("workspace").
 		Projections(workspaceUsageProjections()...).
-		Join(query.InnerJoin("_workspace_commercial_configuration", "commercial", query.EqualExpressions(
-			query.QualifiedColumn("commercial", "workspace_id"), query.QualifiedColumn("workspace", "id"),
-		))).
 		Where(query.EqualExpressions(query.QualifiedColumn("workspace", "canonical_code"), query.Value(canonicalCode))).Limit(1)
 	var err error
 	builder, err = store.runtime.RuntimeProfile().ApplyClaimLock(builder, false)
@@ -208,9 +202,9 @@ func workspaceUsageProjections() []query.Projection {
 	for _, column := range []string{
 		"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit",
 		"included_store_limit", "max_stores", "contract_date", "billing_day", "billing_contact_name",
-		"billing_contact_phone", "billing_contact_email", "billing_contact_address", "billing_contact_notes", "revision",
+		"billing_contact_phone", "billing_contact_email", "billing_contact_address", "billing_contact_notes", "commercial_revision",
 	} {
-		result = append(result, query.Project(query.QualifiedColumn("commercial", column)))
+		result = append(result, query.Project(query.QualifiedColumn("workspace", column)))
 	}
 	return result
 }

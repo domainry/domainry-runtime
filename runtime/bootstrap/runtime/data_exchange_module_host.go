@@ -10,10 +10,12 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	dataexchangemodulehost "github.com/domainry/domainry-data-exchange-sdk/modulehost"
 	dataexchangesaashost "github.com/domainry/domainry-data-exchange-sdk/saashost"
+	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	artifactstore "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/artifact"
 )
 
 type dataExchangeModuleHost struct {
@@ -22,6 +24,9 @@ type dataExchangeModuleHost struct {
 }
 
 func (h dataExchangeModuleHost) Database() *sql.DB { return h.store.DB() }
+func (h dataExchangeModuleHost) ArtifactStore() sharedartifact.Store {
+	return artifactstore.NewStore(h.store)
+}
 func (h dataExchangeModuleHost) Migrations() dataexchangemodulehost.MigrationRegistrar {
 	return dataExchangeMigrationRegistrar{store: h.store}
 }
@@ -57,6 +62,26 @@ func (r dataExchangeMigrationRegistrar) ApplyOwnedMigrations(ctx context.Context
 		values[i] = notificationmodulehost.SchemaMigration{Version: uint(i + 1), Name: name, Statements: []string{migration.SQL}}
 	}
 	return r.store.ApplyOwnedMigrations(ctx, owner, values)
+}
+
+func openOptionalDataExchangeBinding(ctx context.Context, factory dataexchange.Factory, application dataexchange.ApplicationRef, store *persistence.RuntimeStore, providerKey string, importProvider dataexchangemodulehost.ImportProvider, exportProvider dataexchangemodulehost.ExportProvider) (dataexchange.Binding, *recordapplication.DataExchangeProviders, error) {
+	if factory == nil {
+		return nil, nil, nil
+	}
+	providers := recordapplication.NewDataExchangeProviders(nil)
+	if strings.TrimSpace(providerKey) != "" {
+		if err := providers.RegisterImportProvider(providerKey, importProvider); err != nil {
+			return nil, nil, fmt.Errorf("register Data Exchange import provider: %w", err)
+		}
+		if err := providers.RegisterExportProvider(providerKey, exportProvider); err != nil {
+			return nil, nil, fmt.Errorf("register Data Exchange export provider: %w", err)
+		}
+	}
+	binding, err := openDataExchangeBinding(ctx, factory, application, dataExchangeModuleHost{store: store, providers: providers})
+	if err != nil {
+		return nil, nil, fmt.Errorf("open Data Exchange module: %w", err)
+	}
+	return binding, providers, nil
 }
 
 func openDataExchangeBinding(ctx context.Context, factory dataexchange.Factory, application dataexchange.ApplicationRef, host dataExchangeModuleHost) (dataexchange.Binding, error) {

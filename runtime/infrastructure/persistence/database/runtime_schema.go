@@ -21,7 +21,32 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "029_upload_subject_bindings"
+const CurrentRuntimeSchemaVersion = "030_shared_persistence_kernel"
+
+type RuntimeSchemaCapabilities struct {
+	Workflow            bool
+	Automation          bool
+	Uploads             bool
+	Lifecycle           bool
+	ReleaseCoordination bool
+}
+
+func (capabilities RuntimeSchemaCapabilities) IncludesTable(table string) bool {
+	switch strings.TrimSpace(table) {
+	case "_workflow_executions", "_workflow_process_instances", "_workflow_node_instances", "_workflow_tasks", "_workflow_process_events", "_workflow_route_steps":
+		return capabilities.Workflow
+	case "_automation_runs":
+		return capabilities.Automation
+	case "_release_cohorts", "_release_instances":
+		return capabilities.ReleaseCoordination
+	default:
+		return true
+	}
+}
+
+func FullRuntimeSchemaCapabilities() RuntimeSchemaCapabilities {
+	return RuntimeSchemaCapabilities{Workflow: true, Automation: true, Uploads: true, Lifecycle: true, ReleaseCoordination: true}
+}
 
 const (
 	managedDatabaseCohortTable           = "_domainry_managed_runtime_database_cohort"
@@ -29,12 +54,18 @@ const (
 )
 
 func SupportedRuntimeSchemaUpgradeVersions() []string {
-	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "007_identity_global_names", "008_identity_account_projection", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox", "012_rate_limit_schema_owner", "013_agent_schema_owner", "020_tenant_initialization", "021_workspace_only_foundation", "022_report_export_prepare_receipts", "023_dispatch_callback_receipts", "024_application_time_zone", "025_definition_upgrade_receipts", "026_workflow_route_steps", "028_subject_execution_evidence"}
+	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "007_identity_global_names", "008_identity_account_projection", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox", "012_rate_limit_schema_owner", "013_agent_schema_owner", "021_workspace_only_foundation", "024_application_time_zone", "026_workflow_route_steps", "028_subject_execution_evidence"}
 }
 
 func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
+	return s.EnsureRuntimeSchemaFor(ctx, FullRuntimeSchemaCapabilities())
+}
+
+func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities RuntimeSchemaCapabilities) error {
+	s.runtimeCapabilities = capabilities
+	s.runtimeCapabilitiesSelected = true
 	if s.config.EffectiveDatabaseMigrationMode() == "verify" {
-		if err := s.verifyRuntimeSchema(ctx); err != nil {
+		if err := s.verifyRuntimeSchemaFor(ctx, capabilities); err != nil {
 			return err
 		}
 		if err := s.verifyManagedDatabaseCohortMarker(ctx); err != nil {
@@ -44,7 +75,7 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	}
 	if s.migrationDB != nil {
 		migrationStore := s.runtimeMigrationStore()
-		if err := migrationStore.EnsureRuntimeSchema(ctx); err != nil {
+		if err := migrationStore.EnsureRuntimeSchemaFor(ctx, capabilities); err != nil {
 			return err
 		}
 		return nil
@@ -55,7 +86,8 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	}
 	defer release()
 	startedAt := time.Now()
-	pending, err := s.runtimeSchemaMigrationPending(ctx, CurrentRuntimeSchemaVersion)
+	checksum := currentRuntimeSchemaChecksum(capabilities)
+	pending, err := s.runtimeSchemaMigrationPendingFor(ctx, CurrentRuntimeSchemaVersion, checksum)
 	if err != nil {
 		return err
 	}
@@ -74,7 +106,7 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := s.ensureMigrationBackupForExistingData(ctx, s.runtimeMigrationConfig()); err != nil {
 		return err
 	}
-	if err := s.startRuntimeSchemaMigration(ctx, CurrentRuntimeSchemaVersion); err != nil {
+	if err := s.startRuntimeSchemaMigrationFor(ctx, CurrentRuntimeSchemaVersion, checksum); err != nil {
 		return err
 	}
 	if err := s.ensureManagedDatabaseCohortMarker(ctx); err != nil {
@@ -86,13 +118,10 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := runtimeschema.EnsureWorkspaceProvisioningSchema(ctx, s); err != nil {
 		return err
 	}
-	if err := s.migrateLegacyWorkspaceAuthorities(ctx); err != nil {
+	if err := s.EnsureApplicationSchemaFor(ctx, capabilities); err != nil {
 		return err
 	}
-	if err := s.EnsureApplicationSchema(ctx); err != nil {
-		return err
-	}
-	if err := s.EnsureEvidenceSchema(ctx); err != nil {
+	if err := s.EnsureEvidenceSchemaFor(ctx, capabilities); err != nil {
 		return err
 	}
 	if err := s.ensureAuditModuleSchemaLocked(ctx); err != nil {
@@ -103,16 +132,15 @@ func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	if err := s.RuntimeProfile().NormalizeEvidenceSchema(ctx, s.schemaDatabase(), s.RuntimeRenderer()); err != nil {
 		return err
 	}
-	if err := s.EnsureWorkflowProcessSchema(ctx); err != nil {
-		return err
+	if capabilities.Workflow {
+		if err := s.EnsureWorkflowProcessSchema(ctx); err != nil {
+			return err
+		}
 	}
 	if err := s.EnsureRateLimitSchema(ctx); err != nil {
 		return err
 	}
 	if err := s.recordRuntimeSchemaMigration(ctx, CurrentRuntimeSchemaVersion, time.Since(startedAt)); err != nil {
-		return err
-	}
-	if err := s.removeObsoleteMigrationLedgers(ctx); err != nil {
 		return err
 	}
 	return nil
@@ -260,33 +288,46 @@ func legacyAuditPrimaryKeyReplacementSQL(driver, table, workspace, id, constrain
 
 func (s *RuntimeStore) runtimeMigrationStore() *RuntimeStore {
 	return &RuntimeStore{
-		SQLDatabase:          base.NewSQLDatabase(s.migrationDB, s.engine, s.databaseSchema),
-		db:                   s.migrationDB,
-		engine:               s.engine,
-		config:               s.config,
-		databaseSchema:       s.databaseSchema,
-		postgresProfile:      s.postgresProfile,
-		postgresCapabilities: s.postgresCapabilities,
-		migratorCapabilities: s.migratorCapabilities,
-		expectedMigrations:   s.expectedMigrations,
-		expectedChecksums:    s.expectedChecksums,
-		secretMaterialKey:    s.secretMaterialKey,
-		secretKeyProvider:    s.secretKeyProvider,
-		migrationBackupReady: s.migrationBackupReady,
-		migrationCompatible:  s.migrationCompatible,
-		migrationBackupID:    s.migrationBackupID,
-		idempotencyMetrics:   s.idempotencyMetrics,
-		sqlMetrics:           s.sqlMetrics,
-		operationalMetrics:   s.operationalMetrics,
-		workerScopeCursor:    s.workerScopeCursor,
-		workerWakeups:        s.workerWakeups,
-		schemaAssembler:      s.schemaAssembler,
-		backupChecksum:       s.backupChecksum,
-		migrationReadDir:     s.migrationReadDir,
+		SQLDatabase:                 base.NewSQLDatabase(s.migrationDB, s.engine, s.databaseSchema),
+		db:                          s.migrationDB,
+		engine:                      s.engine,
+		config:                      s.config,
+		databaseSchema:              s.databaseSchema,
+		postgresProfile:             s.postgresProfile,
+		postgresCapabilities:        s.postgresCapabilities,
+		migratorCapabilities:        s.migratorCapabilities,
+		expectedMigrations:          s.expectedMigrations,
+		expectedChecksums:           s.expectedChecksums,
+		secretMaterialKey:           s.secretMaterialKey,
+		secretKeyProvider:           s.secretKeyProvider,
+		migrationBackupReady:        s.migrationBackupReady,
+		migrationCompatible:         s.migrationCompatible,
+		migrationBackupID:           s.migrationBackupID,
+		idempotencyMetrics:          s.idempotencyMetrics,
+		sqlMetrics:                  s.sqlMetrics,
+		operationalMetrics:          s.operationalMetrics,
+		workerScopeCursor:           s.workerScopeCursor,
+		workerWakeups:               s.workerWakeups,
+		schemaAssembler:             s.schemaAssembler,
+		backupChecksum:              s.backupChecksum,
+		migrationReadDir:            s.migrationReadDir,
+		runtimeCapabilities:         s.runtimeCapabilities,
+		runtimeCapabilitiesSelected: s.runtimeCapabilitiesSelected,
 	}
 }
 
+func (s *RuntimeStore) RuntimeSchemaCapabilities() RuntimeSchemaCapabilities {
+	if s == nil || !s.runtimeCapabilitiesSelected {
+		return FullRuntimeSchemaCapabilities()
+	}
+	return s.runtimeCapabilities
+}
+
 func (s *RuntimeStore) verifyRuntimeSchema(ctx context.Context) error {
+	return s.verifyRuntimeSchemaFor(ctx, FullRuntimeSchemaCapabilities())
+}
+
+func (s *RuntimeStore) verifyRuntimeSchemaFor(ctx context.Context, capabilities RuntimeSchemaCapabilities) error {
 	var checksum string
 	var dirty bool
 	queryValue := "SELECT " + s.identifier("checksum") + ", " + s.identifier("dirty") + " FROM " + s.tableIdentifier("_schema_migrations") + " WHERE " + s.identifier("path") + " = " + s.placeholder(1)
@@ -296,7 +337,7 @@ func (s *RuntimeStore) verifyRuntimeSchema(ctx context.Context) error {
 	if dirty {
 		return fmt.Errorf("migration.dirty: runtime schema %s", CurrentRuntimeSchemaVersion)
 	}
-	if checksum != currentRuntimeSchemaChecksum() {
+	if checksum != currentRuntimeSchemaChecksum(capabilities) {
 		return fmt.Errorf("migration.checksum_drift: runtime schema %s", CurrentRuntimeSchemaVersion)
 	}
 	return nil
@@ -332,11 +373,33 @@ func (s *RuntimeStore) EnsureApplicationSchema(ctx context.Context) error {
 	return runtimeschema.EnsureApplicationSchema(ctx, s)
 }
 
+func (s *RuntimeStore) EnsureApplicationSchemaFor(ctx context.Context, capabilities RuntimeSchemaCapabilities) error {
+	if s.schemaAssembler != nil {
+		if capabilities != FullRuntimeSchemaCapabilities() {
+			return fmt.Errorf("capability-selected Runtime schema does not support a custom schema assembler")
+		}
+		return s.schemaAssembler.EnsureApplicationSchema(ctx, s)
+	}
+	return runtimeschema.EnsureApplicationSchemaFor(ctx, s, capabilities.Lifecycle)
+}
+
 func (s *RuntimeStore) EnsureEvidenceSchema(ctx context.Context) error {
 	if s.schemaAssembler != nil {
 		return s.schemaAssembler.EnsureEvidenceSchema(ctx, s)
 	}
 	return runtimeschema.EnsureEvidenceSchema(ctx, s)
+}
+
+func (s *RuntimeStore) EnsureEvidenceSchemaFor(ctx context.Context, capabilities RuntimeSchemaCapabilities) error {
+	if s.schemaAssembler != nil {
+		if capabilities != FullRuntimeSchemaCapabilities() {
+			return fmt.Errorf("capability-selected Runtime schema does not support a custom schema assembler")
+		}
+		return s.schemaAssembler.EnsureEvidenceSchema(ctx, s)
+	}
+	return runtimeschema.EnsureEvidenceSchemaFor(ctx, s, runtimeschema.EvidenceSchemaCapabilities{
+		Workflow: capabilities.Workflow, Automation: capabilities.Automation, Lifecycle: capabilities.Lifecycle, ReleaseCoordination: capabilities.ReleaseCoordination,
+	})
 }
 
 func (s *RuntimeStore) EnsureWorkflowProcessSchema(ctx context.Context) error {
@@ -365,6 +428,10 @@ func (s *RuntimeStore) runtimeMigrationConfig() config.Config {
 }
 
 func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, version string) (bool, error) {
+	return s.runtimeSchemaMigrationPendingFor(ctx, version, currentRuntimeSchemaChecksum())
+}
+
+func (s *RuntimeStore) runtimeSchemaMigrationPendingFor(ctx context.Context, version, expectedChecksum string) (bool, error) {
 	db := s.schemaDatabase()
 	if err := s.ensureMigrationLedger(ctx); err != nil {
 		return false, fmt.Errorf("prepare runtime schema migration ledger: %w", err)
@@ -386,19 +453,23 @@ func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, versio
 		return false, fmt.Errorf("migration.dirty: runtime schema %s", version)
 	}
 	if strings.TrimSpace(checksum) == "" {
-		_, err := db.ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_migrations")+" SET "+s.identifier("checksum")+" = "+s.placeholder(1)+" WHERE "+s.identifier("path")+" = "+s.placeholder(2), currentRuntimeSchemaChecksum(), path)
+		_, err := db.ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_migrations")+" SET "+s.identifier("checksum")+" = "+s.placeholder(1)+" WHERE "+s.identifier("path")+" = "+s.placeholder(2), expectedChecksum, path)
 		return false, err
 	}
-	if checksum != currentRuntimeSchemaChecksum() {
+	if checksum != expectedChecksum {
 		return false, fmt.Errorf("migration.checksum_drift: runtime schema %s", version)
 	}
 	return false, nil
 }
 
 func (s *RuntimeStore) startRuntimeSchemaMigration(ctx context.Context, version string) error {
+	return s.startRuntimeSchemaMigrationFor(ctx, version, currentRuntimeSchemaChecksum())
+}
+
+func (s *RuntimeStore) startRuntimeSchemaMigrationFor(ctx context.Context, version, checksum string) error {
 	columns := []string{"path", "version", "name", "kind", "checksum", "dirty", "applied_at", "runtime_version", "duration_ms", "operator", "instance_id", "backup_id"}
 	queryValue := "INSERT INTO " + s.tableIdentifier("_schema_migrations") + " (" + strings.Join(quotedColumns(s, columns), ", ") + ") VALUES (" + strings.Join(placeholders(s, len(columns)), ", ") + ")"
-	_, err := s.schemaDatabase().ExecContext(ctx, queryValue, runtimeSchemaMigrationPath(version), version, "managed_database_cohort", "runtime_schema", currentRuntimeSchemaChecksum(), true, time.Now().UTC().Format(time.RFC3339), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
+	_, err := s.schemaDatabase().ExecContext(ctx, queryValue, runtimeSchemaMigrationPath(version), version, "managed_database_cohort", "runtime_schema", checksum, true, time.Now().UTC().Format(time.RFC3339), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
 	return err
 }
 
@@ -414,18 +485,13 @@ func runtimeSchemaMigrationPath(version string) string {
 	return "runtime_schema_" + strings.TrimSpace(version)
 }
 
-func (s *RuntimeStore) removeObsoleteMigrationLedgers(ctx context.Context) error {
-
-	for _, table := range []string{"_schema_materializations", "_runtime_schema_migrations"} {
-		if _, err := s.schemaDatabase().ExecContext(ctx, "DROP TABLE IF EXISTS "+s.tableIdentifier(table)); err != nil {
-			return fmt.Errorf("remove obsolete migration ledger %s: %w", table, err)
-		}
+func currentRuntimeSchemaChecksum(selected ...RuntimeSchemaCapabilities) string {
+	capabilities := FullRuntimeSchemaCapabilities()
+	if len(selected) != 0 {
+		capabilities = selected[0]
 	}
-	return nil
-}
-
-func currentRuntimeSchemaChecksum() string {
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":metadata_projection,object_fields,record_data,evidence,lifecycle,operations,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_only_provisioning,typed_commercial_configuration,legacy_workspace_authority_migration,report_export_prepare_receipts,dispatch_callback_receipts,definition_upgrade_receipts,workflow_route_steps,report_export_retry_lineage,subject_execution_evidence_fences_receipts"))
+	capabilityIdentity := fmt.Sprintf("workflow=%t,automation=%t,uploads=%t,lifecycle=%t,release_coordination=%t", capabilities.Workflow, capabilities.Automation, capabilities.Uploads, capabilities.Lifecycle, capabilities.ReleaseCoordination)
+	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":project_model_projection,object_fields,record_data,evidence,lifecycle,operations,_operations,_artifacts,_artifact_bindings,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_only_provisioning,workspace_commercial_configuration_in_aggregate,workspace_provisioning_in_operations,workspace_administration_in_operations,report_export_prepare_in_operations,dispatch_callbacks_in_operations,upload_subject_bindings_in_artifact_bindings,database_retirements_in_operations,workflow_route_steps,subject_execution_evidence_fences_receipts,native_capabilities=" + capabilityIdentity))
 	return hex.EncodeToString(sum[:])
 }
 

@@ -84,11 +84,9 @@ func (r AutomationWorkerStore) claimOnce(ctx context.Context, workspaceID string
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, fmt.Errorf("encode automation instruction result: %w", err)
 	}
-	columns := automationInstructionExecutionColumns()
-	values := []any{execution.ID, execution.WorkspaceID, execution.IdempotencyKey, execution.RuleKey, execution.ObjectKey, execution.RecordID, execution.RecordVersion, execution.Operation, execution.InstructionKey, execution.Status, string(resultJSON), execution.ErrorCode, execution.LeaseOwner, execution.LeaseExpiresAt, execution.FencingToken, execution.CreatedAt, execution.UpdatedAt}
-	insertColumns := append(append([]string{}, columns[:1]...), columns[2:]...)
-	insertValues := append(append([]any{}, values[:1]...), values[2:]...)
-	builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, "_automation_instruction_executions", insertColumns, insertValues)
+	insertColumns := []string{"id", "run_kind", "idempotency_key", "rule_key", "object_key", "record_id", "record_version", "operation", "instruction_key", "status", "result_json", "error_code", "lease_owner", "lease_expires_at", "fencing_token", "created_at", "updated_at"}
+	insertValues := []any{execution.ID, automationInstructionKind, execution.IdempotencyKey, execution.RuleKey, execution.ObjectKey, execution.RecordID, execution.RecordVersion, execution.Operation, execution.InstructionKey, execution.Status, string(resultJSON), execution.ErrorCode, execution.LeaseOwner, execution.LeaseExpiresAt, execution.FencingToken, execution.CreatedAt, execution.UpdatedAt}
+	builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, automationRunsTable, insertColumns, insertValues)
 	if buildErr != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, buildErr
 	}
@@ -115,7 +113,7 @@ func (r AutomationWorkerStore) claimOnce(ctx context.Context, workspaceID string
 	if existing.Status == "succeeded" {
 		return existing, false, nil
 	}
-	queryValue, args, err = query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_automation_instruction_executions", workspaceID).Set("status", string(idempotency.StatusProcessing)).Set("result_json", "{}").Set("error_code", "").Set("lease_owner", execution.LeaseOwner).Set("lease_expires_at", leaseExpiresAt).SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", now).Where(query.And(query.Equal("idempotency_key", execution.IdempotencyKey), r.store.SubjectEvidenceRowWriteAllowed(workspaceID, "_automation_instruction_executions"), query.Or(query.NotEqual("status", string(idempotency.StatusProcessing)), query.LessThanOrEqual("lease_expires_at", now)))).Build()
+	queryValue, args, err = query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, automationRunsTable, workspaceID).Set("status", string(idempotency.StatusProcessing)).Set("result_json", "{}").Set("error_code", "").Set("lease_owner", execution.LeaseOwner).Set("lease_expires_at", leaseExpiresAt).SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", now).Where(query.And(query.Equal("run_kind", automationInstructionKind), query.Equal("idempotency_key", execution.IdempotencyKey), r.store.SubjectEvidenceWriteAllowed(workspaceID, automationRunsTable, execution.ID), query.Or(query.NotEqual("status", string(idempotency.StatusProcessing)), query.LessThanOrEqual("lease_expires_at", now)))).Build()
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, fmt.Errorf("build automation instruction reclaim: %w", err)
 	}
@@ -154,7 +152,8 @@ func (r AutomationWorkerStore) CompleteInstruction(ctx context.Context, workspac
 	if now == "" {
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("automation instruction completion time is required")
 	}
-	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_automation_instruction_executions", workspaceID).Set("status", strings.TrimSpace(status)).Set("result_json", string(resultJSON)).Set("error_code", strings.TrimSpace(errorCode)).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).Where(query.And(automationInstructionLeasePredicate(idempotencyKey, expectedLeaseOwner, expectedFencingToken), r.store.SubjectEvidenceRowWriteAllowed(workspaceID, "_automation_instruction_executions"))).Build()
+	executionID := "automation_instruction:" + businessActionShortHash(workspaceID+":"+idempotencyKey)
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, automationRunsTable, workspaceID).Set("status", strings.TrimSpace(status)).Set("result_json", string(resultJSON)).Set("error_code", strings.TrimSpace(errorCode)).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).Where(query.And(automationInstructionLeasePredicate(idempotencyKey, expectedLeaseOwner, expectedFencingToken), r.store.SubjectEvidenceWriteAllowed(workspaceID, automationRunsTable, executionID))).Build()
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("build automation instruction completion: %w", err)
 	}
@@ -188,7 +187,8 @@ func (r AutomationWorkerStore) HeartbeatInstruction(ctx context.Context, workspa
 	if now == "" {
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("automation instruction heartbeat time is required")
 	}
-	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_automation_instruction_executions", workspaceID).Set("lease_expires_at", strings.TrimSpace(leaseExpiresAt)).Set("updated_at", now).Where(query.And(automationInstructionLeasePredicate(idempotencyKey, expectedLeaseOwner, expectedFencingToken), r.store.SubjectEvidenceRowWriteAllowed(workspaceID, "_automation_instruction_executions"))).Build()
+	executionID := "automation_instruction:" + businessActionShortHash(workspaceID+":"+idempotencyKey)
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, automationRunsTable, workspaceID).Set("lease_expires_at", strings.TrimSpace(leaseExpiresAt)).Set("updated_at", now).Where(query.And(automationInstructionLeasePredicate(idempotencyKey, expectedLeaseOwner, expectedFencingToken), r.store.SubjectEvidenceWriteAllowed(workspaceID, automationRunsTable, executionID))).Build()
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("build automation instruction heartbeat: %w", err)
 	}
@@ -212,7 +212,7 @@ func (r AutomationWorkerStore) find(ctx context.Context, workspaceID, idempotenc
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, err
 	}
-	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_automation_instruction_executions", workspaceID).Columns(automationInstructionExecutionColumns()...).Where(query.Equal("idempotency_key", strings.TrimSpace(idempotencyKey))).Limit(1).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, automationRunsTable, workspaceID).Columns(automationInstructionExecutionColumns()...).Where(query.And(query.Equal("run_kind", automationInstructionKind), query.Equal("idempotency_key", strings.TrimSpace(idempotencyKey)))).Limit(1).Build()
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, err
 	}
@@ -228,7 +228,7 @@ func (r AutomationWorkerStore) find(ctx context.Context, workspaceID, idempotenc
 }
 
 func automationInstructionLeasePredicate(idempotencyKey, owner string, token int64) query.Predicate {
-	return query.And(query.Equal("idempotency_key", strings.TrimSpace(idempotencyKey)), query.Equal("status", string(idempotency.StatusProcessing)), query.Equal("lease_owner", strings.TrimSpace(owner)), query.Equal("fencing_token", token))
+	return query.And(query.Equal("run_kind", automationInstructionKind), query.Equal("idempotency_key", strings.TrimSpace(idempotencyKey)), query.Equal("status", string(idempotency.StatusProcessing)), query.Equal("lease_owner", strings.TrimSpace(owner)), query.Equal("fencing_token", token))
 }
 
 func automationInstructionExecutionColumns() []string {

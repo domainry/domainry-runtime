@@ -22,13 +22,13 @@ func TestOperationsStorePersistsReplayConflictAndWorkspaceIsolation(t *testing.T
 	store := NewOperationsStore(runtimeStore)
 	now := time.Date(2026, 7, 19, 10, 0, 0, 0, time.UTC)
 	receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{
-		ID: "operation-1", Kind: "backup.create", ActionKey: "runtime.operations.create_backup",
+		ID: "operation-1", Owner: "persistence", Kind: "backup.create", ActionKey: "runtime.operations.create_backup",
 		Scope:          operationsmodel.OperationsScope{WorkspaceID: "workspace-a", ResourceType: "database"},
 		IdempotencyKey: "backup-1", RequestFingerprint: "fingerprint-a", RequestedBy: "operator-a", Reason: "release", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now,
 	}, StatusURL: "/operations/operation-1"}
 
 	persisted, decision, err := store.RegisterOperationsCommand(t.Context(), receipt)
-	if err != nil || decision != operationsmodel.OperationsSubmissionAccepted || persisted.Command.ID != receipt.Command.ID {
+	if err != nil || decision != operationsmodel.OperationsSubmissionAccepted || persisted.Command.ID != receipt.Command.ID || persisted.Command.Owner != "persistence" {
 		t.Fatalf("persisted=%#v decision=%s err=%v", persisted, decision, err)
 	}
 	replayed, decision, err := store.RegisterOperationsCommand(t.Context(), receipt)
@@ -60,7 +60,7 @@ func TestOperationsStoreFencesLifecycleTransitionByExpectedStatus(t *testing.T) 
 	}
 	store := NewOperationsStore(runtimeStore)
 	now := time.Now().UTC()
-	receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{ID: "operation-transition", Kind: "restore.run", ActionKey: "runtime.operations.restore_backup", Scope: operationsmodel.OperationsScope{WorkspaceID: "workspace-a", ResourceType: "database"}, IdempotencyKey: "restore-1", RequestFingerprint: "same", RequestedBy: "operator", Reason: "drill", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now}, StatusURL: "/operations/operation-transition"}
+	receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{ID: "operation-transition", Owner: "persistence", Kind: "restore.run", ActionKey: "runtime.operations.restore_backup", Scope: operationsmodel.OperationsScope{WorkspaceID: "workspace-a", ResourceType: "database"}, IdempotencyKey: "restore-1", RequestFingerprint: "same", RequestedBy: "operator", Reason: "drill", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now}, StatusURL: "/operations/operation-transition"}
 	if _, _, err := store.RegisterOperationsCommand(t.Context(), receipt); err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestOperationsStoreSearchFiltersAndSummarizesBeforeLimit(t *testing.T) {
 		t.Helper()
 		current := base.Add(offset)
 		receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{
-			ID: id, Kind: "workflow.process.retry", ActionKey: "runtime.workflows.retry_ops_workflow_process",
+			ID: id, Owner: "workflow", Kind: "workflow.process.retry", ActionKey: "runtime.workflows.retry_ops_workflow_process",
 			Scope:          operationsmodel.OperationsScope{WorkspaceID: workspaceID, ResourceType: "workflow_process", ResourceID: "process-1"},
 			IdempotencyKey: id, RequestFingerprint: id, RequestedBy: requestedBy, Reason: reason,
 			Status: operationsmodel.OperationsStatusCreated, CreatedAt: current, UpdatedAt: current,

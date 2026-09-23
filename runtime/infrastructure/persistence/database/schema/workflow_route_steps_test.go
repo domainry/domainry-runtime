@@ -18,7 +18,9 @@ type routeStepSchemaIndex struct {
 }
 
 type routeStepSchemaStore struct {
-	timeZoneSchemaStore
+	Store
+	database SQLDatabase
+	renderer ormdialect.Renderer
 	indexes  []routeStepSchemaIndex
 	indexErr error
 }
@@ -46,7 +48,7 @@ func TestWorkflowRouteStepsSchemaRendersAllDialectsAndPropagatesFailures(t *test
 			state := &schemaSQLState{}
 			database := openSchemaScriptedDB(state)
 			t.Cleanup(func() { _ = database.Close() })
-			store := &routeStepSchemaStore{timeZoneSchemaStore: timeZoneSchemaStore{database: database, renderer: test.renderer}}
+			store := &routeStepSchemaStore{database: database, renderer: test.renderer}
 			if err := EnsureWorkflowRouteStepsSchema(t.Context(), store); err != nil {
 				t.Fatal(err)
 			}

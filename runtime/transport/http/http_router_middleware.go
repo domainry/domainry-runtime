@@ -1,7 +1,6 @@
 package http
 
 import (
-	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -252,8 +251,8 @@ func CORSMiddleware(allowedOrigins []string, next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match, Last-Event-ID, Traceparent, Tracestate, Baggage, X-API-Key, X-User-ID, X-Role, X-User-Role, X-Preview-Role, X-Preview-User-ID, X-Workspace-ID, X-Request-ID, X-Correlation-ID, X-Operation-Reason, X-Operation-Confirmation, Builder-Task-ID, Idempotency-Key, Expected-Schema-Hash, Runtime-Authoring-Evidence-Step-Token")
-		w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, X-Correlation-ID, X-Resource-Hash, X-Operation-ID, X-Operation-Status, X-Operation-Replayed, Operation-ID, Operation-Location, Idempotency-Replayed, Runtime-Authoring-Step-Receipt, Runtime-Authoring-Evidence-Error")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match, Last-Event-ID, Traceparent, Tracestate, Baggage, X-API-Key, X-User-ID, X-Role, X-User-Role, X-Preview-Role, X-Preview-User-ID, X-Workspace-ID, X-Request-ID, X-Correlation-ID, X-Operation-Reason, X-Operation-Confirmation, Idempotency-Key")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, X-Correlation-ID, X-Resource-Hash, X-Operation-ID, X-Operation-Status, X-Operation-Replayed, Operation-ID, Operation-Location, Idempotency-Replayed")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -348,11 +347,16 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 			return
 		}
 		if s.allowDevAuthHeaders && devAuthHeadersPresent(r) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if operationscontract.BuilderTaskID(r.Context()) != "" {
-			next.ServeHTTP(w, r)
+			if s.projectHTTP == nil || !strings.HasPrefix(policy.path, "/api/") {
+				next.ServeHTTP(w, r)
+				return
+			}
+			principal := s.principalFromRequest(r)
+			if !principal.Known {
+				writeError(w, r, http.StatusUnauthorized, "auth.session_expired")
+				return
+			}
+			next.ServeHTTP(w, requestWithPrincipal(r, principal))
 			return
 		}
 		if s.identityAuthentication == nil || s.identityPrincipal == nil {

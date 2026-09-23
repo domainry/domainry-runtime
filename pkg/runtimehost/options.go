@@ -14,46 +14,68 @@ import (
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/pkg/codingruntime"
+	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 // Options is the complete project-owned input to Runtime process composition.
-// Project code supplies generated identities and extensions, never Runtime
+// Project code supplies build identities and extensions, never Runtime
 // internal services or infrastructure objects.
 type Options struct {
 	Identity BuildIdentity
-	// IdentityFactory is selected by the generated project composition root.
+	// ModelFile is the only handwritten Domainry model input. Runtime decodes
+	// it strictly and fails startup when it is absent or invalid.
+	ModelFile string
+	// IdentityFactory is selected by the project composition root.
 	// A module build injects domainry-identity/module.Factory; a SaaS build
 	// injects domainry-identity-sdk/remote.Factory. Runtime never selects or
 	// switches the deployment topology.
 	IdentityFactory identitysdk.Factory
-	// IntegrationFactory selects the source-owned in-process Module or SaaS
-	// Binding. Runtime owns only the durable outbound handoff.
+	// IntegrationFactory optionally selects the source-owned in-process Module
+	// or SaaS Binding. Runtime owns only the durable outbound handoff. Nil leaves
+	// Integration storage, HTTP and workers uninstalled and is rejected when
+	// project definitions declare connector/integration behavior.
 	IntegrationFactory integrationsdk.Factory
-	// ReportFactory selects the Report Module or SaaS Binding. Report-owned
-	// definitions and snapshot state are never assembled inside Runtime.
+	// ReportFactory optionally selects the Report Module or SaaS Binding.
+	// Report-owned definitions and snapshot state are never assembled inside
+	// Runtime. Nil leaves Report module storage, HTTP and application ports
+	// uninstalled and is rejected when the project declares Report references.
 	ReportFactory reportsdk.Factory
 	// AnalysisTableSourceFactory is assembled by project code from a Knowledge
 	// or data-service public adapter. Runtime supplies the resolved instance ID
 	// and consumes only the Report SDK owner port.
 	AnalysisTableSourceFactory func(string) (reportmodulehost.AnalysisTableSource, error)
-	// NotificationFactory is selected by generated composition. Module builds
-	// inject domainry-notification/module; SaaS builds inject the SDK Remote
-	// Factory. Runtime never switches topology from environment at startup.
+	// NotificationFactory is optionally selected by project composition. Module
+	// builds inject domainry-notification/module; SaaS builds inject the SDK
+	// Remote Factory. Nil leaves Notification storage, HTTP and workers
+	// uninstalled and is rejected when the project declares Notification data.
 	NotificationFactory notificationsdk.Factory
-	// MonitoringFactory selects the Monitoring Module or SaaS Binding.
+	// MonitoringFactory optionally selects the Monitoring Module or SaaS
+	// Binding. Nil leaves the module uninstalled.
 	MonitoringFactory monitoringsdk.Factory
-	// SchedulerFactory selects the in-process clock Module or SaaS Binding.
+	// SchedulerFactory optionally selects the in-process clock Module or SaaS
+	// Binding. Nil leaves Scheduler storage, HTTP and workers uninstalled.
 	SchedulerFactory schedulersdk.Factory
-	// DataExchangeFactory selects the in-process large-file engine or its SaaS
-	// Remote binding. Generated composition owns this topology decision.
+	// DataExchangeFactory optionally selects the in-process large-file engine or
+	// its SaaS Remote binding. Nil leaves import/export jobs, their routes,
+	// workers, lifecycle owner, and storage uninstalled.
 	DataExchangeFactory dataexchangesdk.Factory
-	// AgentFactory selects the in-process domainry-agent Module or its SaaS
-	// Remote Binding. Runtime receives the topology only through this factory.
+	// AgentFactory optionally selects the in-process domainry-agent Module or
+	// its SaaS Remote Binding. Nil is valid when the project declares no Agent
+	// definitions or conversation capability.
 	AgentFactory      agentsdk.Factory
 	ProjectExtensions ProjectExtensionFactory
-	Connectors        connector.ProviderSetFactory
+	// ProjectHTTP mounts a project-owned router below /api/. Runtime injects a
+	// governed in-process Engine and keeps authentication and workspace policy
+	// outside the project transport implementation.
+	ProjectHTTP runtimeengine.HTTPFactory
+	// DevelopmentData enables one-shot generated sample records after the
+	// project model has materialized. Runtime accepts it only in development or
+	// demo environments and only while every eligible business object is empty.
+	// No sample row is described in model.json or SQL.
+	DevelopmentData *DevelopmentDataOptions
+	Connectors      connector.ProviderSetFactory
 	// ConnectorProcesses is an explicit host policy for optional Provider
 	// subprocesses. The zero value denies every executable.
 	ConnectorProcesses ConnectorProcessPolicy
@@ -67,19 +89,23 @@ type Options struct {
 	FileScanner runtimefile.FileScanner
 	// InitialWorkspaceCredentialDelivery is the process-local, one-shot sink
 	// used only while creating the first Workspace. It never becomes a Runtime
-	// HTTP, manifest, audit, receipt, or logging surface.
+	// HTTP, project model, audit, receipt, or logging surface.
 	InitialWorkspaceCredentialDelivery InitialWorkspaceCredentialDelivery
 	// InstallationAdministratorCredentialDelivery is a startup-only seam for
 	// private acceptance environments. Production normally selects the
 	// create-only file sink through explicit process configuration.
 	InstallationAdministratorCredentialDelivery InstallationAdministratorCredentialDelivery
 	// ProjectConfigFile and ProjectI18nDir point to Git-owned extensions.
-	// ProjectNavigationFile points to the finalizer-produced template compiled
-	// from frontend navigation source plus backend role-menu relations. Paths are
-	// relative to the backend working directory.
-	ProjectConfigFile     string
-	ProjectI18nDir        string
-	ProjectNavigationFile string
+	ProjectConfigFile string
+	ProjectI18nDir    string
+}
+
+// DevelopmentDataOptions is process policy, not project metadata. Seed makes
+// generated values reproducible in tests; zero selects a fresh random
+// default. RecordsPerObject defaults to three and is capped by Runtime.
+type DevelopmentDataOptions struct {
+	Seed             int64
+	RecordsPerObject int
 }
 
 type InitialWorkspaceCredential struct {

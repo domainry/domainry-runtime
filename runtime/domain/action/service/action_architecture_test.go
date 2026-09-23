@@ -38,7 +38,7 @@ func TestBusinessActionArchitectureHasOneInvocationAndMutationExecutor(t *testin
 	assertSourceCount(t, production, "func (e *SystemOperationExecutor) execute(", 1)
 	assertSourceCount(t, production, "BusinessHandlers.execute(", 1)
 	assertSourceCount(t, production, "SystemOperations.execute(", 1)
-	assertSourceCount(t, production, "binding.Handler.Invoke(", 1)
+	assertSourceCount(t, production, "return handler.Invoke(", 1)
 	assertSourceCount(t, production, "governedActionExecution{", 1)
 	assertSourceCount(t, production, "unitOfWork.commit(", 1)
 	assertSourceCount(t, production, "ExecuteActionWithContext", 0)
@@ -53,7 +53,7 @@ func TestBusinessActionArchitectureHasOneInvocationAndMutationExecutor(t *testin
 		if strings.Contains(source, "BusinessHandlers.execute(") && !strings.HasSuffix(filepath.ToSlash(path), "application/action/action_application_service.go") {
 			t.Fatalf("Business Handler bypasses governed Action Application in %s", path)
 		}
-		if strings.Contains(source, "binding.Handler.Invoke(") && !strings.HasSuffix(filepath.ToSlash(path), "application/action/action_executor.go") {
+		if strings.Contains(source, "return handler.Invoke(") && !strings.HasSuffix(filepath.ToSlash(path), "application/action/action_executor.go") {
 			t.Fatalf("Business Handler invocation escaped its executor in %s", path)
 		}
 		if strings.Contains(source, "SystemOperations.execute(") && !strings.HasSuffix(filepath.ToSlash(path), "application/action/action_application_service.go") {

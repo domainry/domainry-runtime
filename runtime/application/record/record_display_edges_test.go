@@ -16,14 +16,7 @@ func TestRecordApplicationDisplaySelection(t *testing.T) {
 		wantDisplay string
 	}{
 		{
-			name:    "declared title field",
-			object:  definitionmodel.ObjectSchema{UX: map[string]any{"display": map[string]any{"title_field": "legal_name"}}},
-			record:  recordmodel.Record{ID: "record-1", Data: map[string]any{"legal_name": "Acme"}},
-			wantKey: "legal_name", wantDisplay: "Acme",
-		},
-		{
-			name:    "blank declared value falls back to conventional field",
-			object:  definitionmodel.ObjectSchema{UX: map[string]any{"display": map[string]any{"title_field": "legal_name"}}},
+			name:    "conventional field",
 			record:  recordmodel.Record{ID: "record-2", Data: map[string]any{"legal_name": " ", "name": "Fallback"}},
 			wantKey: "name", wantDisplay: "Fallback",
 		},
@@ -34,19 +27,16 @@ func TestRecordApplicationDisplaySelection(t *testing.T) {
 		},
 		{
 			name:    "blank configured title key",
-			object:  definitionmodel.ObjectSchema{UX: map[string]any{"display": map[string]any{"title_field": " "}}},
 			record:  recordmodel.Record{ID: "record-4", Data: map[string]any{"name": " "}},
 			wantKey: "id", wantDisplay: "record-4",
 		},
 		{
 			name:    "nil configured title key",
-			object:  definitionmodel.ObjectSchema{UX: map[string]any{"display": map[string]any{}}},
 			record:  recordmodel.Record{ID: "record-5"},
 			wantKey: "id", wantDisplay: "record-5",
 		},
 		{
 			name:    "missing configured title value",
-			object:  definitionmodel.ObjectSchema{UX: map[string]any{"display": map[string]any{"title_field": "legal_name"}}},
 			record:  recordmodel.Record{ID: "record-6"},
 			wantKey: "id", wantDisplay: "record-6",
 		},

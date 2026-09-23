@@ -16,7 +16,6 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -95,19 +94,6 @@ type runtimeNotificationCompiler interface {
 	CompileInboxIntent(notificationmodel.NotificationIntent, principalmodel.SystemScope) (notificationmodel.NotificationEvent, error)
 }
 
-func runtimeActionRevisions(manifest manifestmodel.ManifestSchema) (string, string) {
-	projectRevision, metadataRevision := manifest.ManifestHash, manifest.ManifestHash
-	if manifest.GeneratedDomainSDK != nil {
-		if manifest.GeneratedDomainSDK.ArtifactSHA256 != "" {
-			projectRevision = manifest.GeneratedDomainSDK.ArtifactSHA256
-		}
-		if manifest.GeneratedDomainSDK.ApplicationSchemaSnapshotSHA256 != "" {
-			metadataRevision = manifest.GeneratedDomainSDK.ApplicationSchemaSnapshotSHA256
-		}
-	}
-	return projectRevision, metadataRevision
-}
-
 func notificationIntentPublisherCallback(publisher notificationIntentPublisher) func(context.Context, notificationmodel.NotificationIntent) error {
 	return func(ctx context.Context, intent notificationmodel.NotificationIntent) error {
 		if publisher == nil {
@@ -172,7 +158,7 @@ func newSchedulerNotificationActionAuthorizer(definitions metadatasdk.Definition
 		if definitions == nil {
 			return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.notification.inbox_action_unavailable"}
 		}
-		_, found, err := definitions.Get(ctx, "scheduler", resourceID)
+		_, found, err := definitions.Get(ctx, metadatasdk.DefinitionOwnerScheduler, "scheduler", resourceID)
 		if err != nil {
 			return err
 		}

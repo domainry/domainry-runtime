@@ -150,22 +150,6 @@ func TestIntegrationSaaSTopologyDoesNotStartOwnerWorkers(t *testing.T) {
 	}
 }
 
-func TestRuntimeStartSchedulerWorkerRegistersControlledOwner(t *testing.T) {
-	runtime := New(t.Context(), bootstrapTestConfig(t), runtimeIdentityBindingStub{}, runtimeTestNotificationFactory(), runtimeTestDataExchangeFactory(), runtimeTestIntegrationFactory())
-	doneBefore, cancelsBefore := len(runtime.workerDone), len(runtime.workerCancels)
-	runtime.startSchedulerWorker(t.Context())
-	if len(runtime.workerDone) != doneBefore+1 || len(runtime.workerCancels) != cancelsBefore+1 {
-		t.Fatalf(
-			"scheduler supervisor registration delta = done:%d cancels:%d, want 1 each",
-			len(runtime.workerDone)-doneBefore,
-			len(runtime.workerCancels)-cancelsBefore,
-		)
-	}
-	if err := runtime.CloseContext(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestWorkflowContinuationWorkerProcessesImmediateQueue(t *testing.T) {
 	workerID, err := workerplatform.NewWorkerID("workflow-continuation-test")
 	if err != nil {

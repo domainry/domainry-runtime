@@ -13,9 +13,9 @@ Report 通过 SDK `ApplicationBinding` 独占以下用例与规则：
 - summary 与 Object SQL 查询、字段投影、稳定分页和 source-version fencing；
 - snapshot refresh、幂等 claim、lease、fencing、重试和 Report 自有 DML；
 - export scope、声明式 query/tag predicate、字段投影、masking、定义/授权哈希与 prepare 语义；
-- 四条产品 HTTP：summary、Object SQL query、snapshot refresh、export prepare，以及对应 OpenAPI/governance 声明。
+- 四条产品 HTTP：summary、Object SQL query、snapshot refresh、export prepare，以及对应 typed Action/governance 声明。
 
-Runtime 不再发布 Report handler、静态 OpenAPI path、endpoint policy、第二套 query/snapshot application service 或 `ReportDomainService` 执行引擎。Runtime 保留的代码必须属于宿主或跨 owner 边界：身份解析，授权后的 Record/SQL 读取，source version，execution audit，snapshot terminal 与 Notification 的原子提交，以及 Report export 与 Audit、Record、Data Exchange 的编排适配。Report 负责 fallback join、cardinality、filter、aggregate、analysis、Object SQL 规划和全部 export policy；Runtime adapter 只回答当前 Record/field 授权事实并执行 Report 已编译的 SQL plan。Data Exchange 的 Report worker 通过 SDK `Exports.ResolveExecution`、`ReadPage`、`SourceVersion` 完成当前定义解析、scope 授权、分页执行和 fencing；不得从 Runtime Application Schema、Manifest 副本或 Runtime 自建 Report 引擎读取/执行。
+Runtime 不再发布 Report handler、第二套路由描述、endpoint policy、第二套 query/snapshot application service 或 `ReportDomainService` 执行引擎。Runtime 保留的代码必须属于宿主或跨 owner 边界：身份解析，授权后的 Record/SQL 读取，source version，execution audit，snapshot terminal 与 Notification 的原子提交，以及 Report export 与 Audit、Record、Data Exchange 的编排适配。Report 负责 fallback join、cardinality、filter、aggregate、analysis、Object SQL 规划和全部 export policy；Runtime adapter 只回答当前 Record/field 授权事实并执行 Report 已编译的 SQL plan。Data Exchange 的 Report worker 通过 SDK `Exports.ResolveExecution`、`ReadPage`、`SourceVersion` 完成当前定义解析、scope 授权、分页执行和 fencing；不得从 Runtime Application Schema、Manifest 副本或 Runtime 自建 Report 引擎读取/执行。
 
 数据集计划验证、Object SQL 定义编译、canonical hash/filename 和 portable object/field metadata 在 `domainry-report-sdk/contract` 与 `domainry-report-sdk/query` 单源维护。Runtime 不得导入 `domainry-report/contract` 或 `domainry-report/query/*`；Report 实现仓只保留向 SDK 转发的兼容 facade 与在线执行引擎。
 

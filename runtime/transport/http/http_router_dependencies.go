@@ -13,7 +13,6 @@ import (
 	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	businesseventcontract "github.com/domainry/domainry-runtime/runtime/domain/businessevent/contract"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 
@@ -21,13 +20,10 @@ import (
 	appschemahttp "github.com/domainry/domainry-runtime/runtime/transport/http/appschema"
 	automationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/automation"
 	businesseventhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessevents"
-	businessreferencehttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessreferences"
-	businesssystemhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businesssystem"
 	discoveryhttp "github.com/domainry/domainry-runtime/runtime/transport/http/discovery"
 	dispatchhttp "github.com/domainry/domainry-runtime/runtime/transport/http/dispatch"
 	lifecyclehttp "github.com/domainry/domainry-runtime/runtime/transport/http/lifecycle"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
-	openapihttp "github.com/domainry/domainry-runtime/runtime/transport/http/openapi"
 	operationshttp "github.com/domainry/domainry-runtime/runtime/transport/http/operations"
 	publicationhandoffhttp "github.com/domainry/domainry-runtime/runtime/transport/http/publicationhandoff"
 	recordhttp "github.com/domainry/domainry-runtime/runtime/transport/http/records"
@@ -125,49 +121,49 @@ type WorkspaceAdmission interface {
 }
 
 type SecurityAuditAppender interface {
-	AppendWithMetadata(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
+	AppendWithMetadata(context.Context, string, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 }
 
-type DeploymentRuntimeStatusProvider interface {
+type DeploymentRuntimeHealthProvider interface {
 	Health(context.Context) map[string]any
+}
+
+type DeploymentRuntimeReadinessProvider interface {
 	StorageReadiness(context.Context) error
 	MigrationReadiness(context.Context) error
 }
 
 type HTTPRouterDependencies struct {
-	IdentityAuthentication           IdentityRequestMiddleware
-	IdentityPrincipal                IdentityPrincipalProjection
-	IntegrationAuthentication        IntegrationAuthenticationPrincipalProvider
-	IdentityAuthorization            identitysdk.PrincipalResolver
-	AuthorizationActions             func() *actioncontract.Registry
-	BusinessPrincipal                BusinessPrincipalResolver
-	WorkspaceAdmission               WorkspaceAdmission
-	SecurityAudit                    SecurityAuditAppender
-	RuntimeStatus                    DeploymentRuntimeStatusProvider
-	TechnicalMetrics                 TechnicalMetricsProvider
-	Backpressure                     func(context.Context) bool
-	WorkerControl                    *workerplatform.Controller
-	OperationsControlState           OperationsControlStateProvider
-	RuntimeReleaseAdmission          RuntimeReleaseAdmissionProvider
-	RuntimeReleaseIntegrity          RuntimeReleaseIntegrityProvider
-	RuntimeInstanceID                string
-	BusinessEventBackplane           businesseventcontract.Backplane
-	RateLimiter                      ratelimit.Limiter
-	ModuleHTTPAdapters               []modulehttp.Adapter
-	RuntimeAuthoringScenarioReceipts *businesssystemapplication.RuntimeAuthoringScenarioReceiptService
+	IdentityAuthentication    IdentityRequestMiddleware
+	IdentityPrincipal         IdentityPrincipalProjection
+	IntegrationAuthentication IntegrationAuthenticationPrincipalProvider
+	IdentityAuthorization     identitysdk.PrincipalResolver
+	AuthorizationActions      func() *actioncontract.Registry
+	BusinessPrincipal         BusinessPrincipalResolver
+	WorkspaceAdmission        WorkspaceAdmission
+	SecurityAudit             SecurityAuditAppender
+	RuntimeHealth             DeploymentRuntimeHealthProvider
+	RuntimeReadiness          DeploymentRuntimeReadinessProvider
+	TechnicalMetrics          TechnicalMetricsProvider
+	Backpressure              func(context.Context) bool
+	WorkerControl             *workerplatform.Controller
+	OperationsControlState    OperationsControlStateProvider
+	RuntimeReleaseAdmission   RuntimeReleaseAdmissionProvider
+	RuntimeReleaseIntegrity   RuntimeReleaseIntegrityProvider
+	RuntimeInstanceID         string
+	BusinessEventBackplane    businesseventcontract.Backplane
+	RateLimiter               ratelimit.Limiter
+	ModuleHTTPAdapters        []modulehttp.Adapter
 }
 
 type HTTPRouterHandlers struct {
 	Records            *recordhttp.RecordsHandler
 	Uploads            *uploadhttp.UploadsHandler
 	Discovery          *discoveryhttp.DiscoveryHandler
-	OpenAPI            *openapihttp.OpenAPIHandler
 	Workflows          *workflowhttp.WorkflowsHandler
 	Automation         *automationhttp.AutomationHandler
 	Dispatch           *dispatchhttp.ExecutionHandler
-	BusinessReferences *businessreferencehttp.BusinessReferencesHandler
 	PublicationHandoff *publicationhandoffhttp.Handler
-	BusinessSystem     *businesssystemhttp.BusinessSystemHandler
 	ApplicationSchema  *appschemahttp.ApplicationSchemaHandler
 	Notifications      *notificationhttp.NotificationsHandler
 	Operations         *operationshttp.OperationsHandler
@@ -184,6 +180,5 @@ type HandlerCallbacks struct {
 	DecodeJSON                func(http.ResponseWriter, *http.Request, any) bool
 	SecurityAudit             func(*http.Request, string, string, map[string]any)
 	SecurityAuditForPrincipal func(*http.Request, principalmodel.Principal, string, string, map[string]any)
-	ProvisionRequired         http.HandlerFunc
 	Locale                    func(*http.Request) string
 }

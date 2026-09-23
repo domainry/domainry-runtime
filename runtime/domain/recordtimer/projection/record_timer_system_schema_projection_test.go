@@ -36,7 +36,7 @@ func TestRecordTimerPublishesDurableIdentityAndOrderedClaimContract(t *testing.T
 			t.Fatalf("identity field %s is unbounded", field)
 		}
 	}
-	for _, field := range []string{"status", "due_at", "priority", "sequence", "object_key", "record_id"} {
+	for _, field := range []string{"operation_id", "status", "due_at", "priority", "sequence", "object_key", "record_id"} {
 		if !indexed[field] {
 			t.Fatalf("claim field %s is not indexed", field)
 		}

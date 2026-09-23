@@ -9,7 +9,7 @@ import (
 
 func validOperationsCommand(now time.Time) operationsmodel.OperationsCommand {
 	return operationsmodel.OperationsCommand{
-		ID: "operation", Kind: "scheduler.retry", ActionKey: "scheduler.retry",
+		ID: "operation", Owner: "scheduler", Kind: "scheduler.retry", ActionKey: "scheduler.retry",
 		Scope:          operationsmodel.OperationsScope{WorkspaceID: "workspace", ResourceType: "run", ResourceID: "run-1"},
 		IdempotencyKey: "key", RequestFingerprint: "fingerprint", RequestedBy: "operator",
 		Reason: "recover", Reference: "INC-1", Status: operationsmodel.OperationsStatusCreated,
@@ -25,6 +25,7 @@ func TestOperationsValidateCommandCompleteMatrix(t *testing.T) {
 		mutate func(*operationsmodel.OperationsCommand)
 	}{
 		{name: "id", mutate: func(command *operationsmodel.OperationsCommand) { command.ID = "" }},
+		{name: "owner", mutate: func(command *operationsmodel.OperationsCommand) { command.Owner = "" }},
 		{name: "kind", mutate: func(command *operationsmodel.OperationsCommand) { command.Kind = "" }},
 		{name: "action", mutate: func(command *operationsmodel.OperationsCommand) { command.ActionKey = "" }},
 		{name: "idempotency", mutate: func(command *operationsmodel.OperationsCommand) { command.IdempotencyKey = "" }},

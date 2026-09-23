@@ -79,9 +79,6 @@ var automationHTTPPermissions = []string{
 	"runtime.automation.list_automation_rules",
 	"runtime.automation.get_automation_rule",
 	"runtime.automation.list_automation_executions",
-	"runtime.automation.validate_automation_rule",
-	"runtime.automation.validate_automation_authoring_fragment",
-	"runtime.automation.simulate_rule_candidate",
 	"runtime.automation.simulate_rule",
 }
 
@@ -147,36 +144,6 @@ func TestAutomationRoutesBindMethodsAndPaths(t *testing.T) {
 	}
 }
 
-func TestAutomationAuthoringFragmentValidationRoute(t *testing.T) {
-	fixture := newAutomationHandlerFixture()
-	mux := http.NewServeMux()
-	fixture.handler.RegisterRoutes(mux)
-
-	valid := httptest.NewRecorder()
-	mux.ServeHTTP(valid, httptest.NewRequest(http.MethodPost, "/automation/fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"any"}`)))
-	if valid.Code != http.StatusOK || !strings.Contains(valid.Body.String(), `"valid":true`) || !strings.Contains(valid.Body.String(), `"capability_key":"automation.condition_group"`) {
-		t.Fatalf("valid status=%d body=%s", valid.Code, valid.Body.String())
-	}
-
-	invalid := httptest.NewRecorder()
-	mux.ServeHTTP(invalid, httptest.NewRequest(http.MethodPost, "/automation/fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"none"}`)))
-	if invalid.Code != http.StatusOK || !strings.Contains(invalid.Body.String(), `"valid":false`) || !strings.Contains(invalid.Body.String(), `backend.automation.condition_mode_invalid`) {
-		t.Fatalf("invalid status=%d body=%s", invalid.Code, invalid.Body.String())
-	}
-
-	badJSON := httptest.NewRecorder()
-	mux.ServeHTTP(badJSON, httptest.NewRequest(http.MethodPost, "/automation/fragments/automation.condition_group/validate", strings.NewReader(`{`)))
-	if badJSON.Code != http.StatusBadRequest {
-		t.Fatalf("bad JSON status=%d", badJSON.Code)
-	}
-	accessfixture.Set(fixture.principal, accessfixture.Bundle{})
-	denied := httptest.NewRecorder()
-	mux.ServeHTTP(denied, httptest.NewRequest(http.MethodPost, "/automation/fragments/automation.condition_group/validate", strings.NewReader(`{"mode":"any"}`)))
-	if denied.Code != http.StatusUnprocessableEntity || fixture.capture.serviceErr == nil {
-		t.Fatalf("denied status=%d error=%v", denied.Code, fixture.capture.serviceErr)
-	}
-}
-
 func TestAutomationHandlersListCapabilitiesHistoryAndGet(t *testing.T) {
 	fixture := newAutomationHandlerFixture()
 	rules := httptest.NewRecorder()
@@ -239,29 +206,7 @@ func TestAutomationHandlersMapHistoryRulesAndCapabilityErrors(t *testing.T) {
 	}
 }
 
-func TestAutomationHandlersValidateDecodeSuccessAndFailures(t *testing.T) {
-	fixture := newAutomationHandlerFixture()
-	ruleJSON, _ := json.Marshal(automationTestRule(""))
-	validateBadJSON := httptest.NewRecorder()
-	fixture.handler.validateAutomationRule(validateBadJSON, automationRequest(http.MethodPost, "/", "{", ""))
-	if validateBadJSON.Code != http.StatusBadRequest {
-		t.Fatalf("validate bad JSON status=%d", validateBadJSON.Code)
-	}
-	validation := httptest.NewRecorder()
-	fixture.handler.validateAutomationRule(validation, automationRequest(http.MethodPost, "/", string(ruleJSON), ""))
-	if validation.Code != http.StatusOK || !strings.Contains(validation.Body.String(), `"valid":true`) {
-		t.Fatalf("validation status=%d body=%s", validation.Code, validation.Body.String())
-	}
-	accessfixture.Set(fixture.principal, accessfixture.Bundle{})
-	fixture.capture.serviceErr = nil
-	validationFailure := httptest.NewRecorder()
-	fixture.handler.validateAutomationRule(validationFailure, automationRequest(http.MethodPost, "/", string(ruleJSON), ""))
-	if validationFailure.Code != http.StatusUnprocessableEntity || fixture.capture.serviceErr == nil {
-		t.Fatalf("validation failure status=%d error=%v", validationFailure.Code, fixture.capture.serviceErr)
-	}
-}
-
-func TestAutomationSimulationHandlerSuccessProjectedFailureAndServiceFailure(t *testing.T) {
+func TestAutomationSimulationHandlerSuccessAndServiceFailure(t *testing.T) {
 	fixture := newAutomationHandlerFixture()
 	badJSON := httptest.NewRecorder()
 	fixture.handler.simulateAutomationRule(badJSON, automationRequest(http.MethodPost, "/", "{", "welcome"))
@@ -273,15 +218,6 @@ func TestAutomationSimulationHandlerSuccessProjectedFailureAndServiceFailure(t *
 	fixture.handler.simulateAutomationRule(success, automationRequest(http.MethodPost, "/", `{"input":{"name":"Test"}}`, " welcome "))
 	if success.Code != http.StatusOK || !strings.Contains(success.Body.String(), `"rule_key":"welcome"`) || !strings.Contains(success.Body.String(), `"tested_node_id":"save"`) {
 		t.Fatalf("success status=%d body=%s", success.Code, success.Body.String())
-	}
-
-	invalidRule := automationTestRule("projected-error")
-	invalidRule.Instructions = []automationmodel.AutomationInstructionSchema{{Key: "bad", Type: "unknown"}}
-	body, _ := json.Marshal(map[string]any{"rule": invalidRule})
-	projected := httptest.NewRecorder()
-	fixture.handler.simulateAutomationRule(projected, automationRequest(http.MethodPost, "/", string(body), ""))
-	if projected.Code != http.StatusOK || !strings.Contains(projected.Body.String(), `"rule_key":"projected-error"`) || !strings.Contains(projected.Body.String(), `"status":"blocked"`) {
-		t.Fatalf("projected status=%d body=%s", projected.Code, projected.Body.String())
 	}
 
 	fixture.capture.serviceErr = nil

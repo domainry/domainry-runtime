@@ -14,7 +14,6 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
-	"github.com/domainry/domainry-foundation/modulecapability"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
@@ -26,7 +25,6 @@ import (
 )
 
 type reportDataExchangeBindingProbe struct {
-	modulecapability.Binding
 	mu         sync.Mutex
 	job        dataexchange.Job
 	submission dataexchange.ExportRequest

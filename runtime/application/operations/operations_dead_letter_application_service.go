@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -91,17 +92,26 @@ func (s *OperationsApplicationService) ActOnDeadLetter(ctx context.Context, owne
 	}
 	if decision == operationsmodel.OperationsSubmissionReplay && receipt.Command.Status == operationsmodel.OperationsStatusSucceeded {
 		var item OperationsDeadLetterItem
-		if json.Unmarshal(receipt.Result, &item) != nil {
+		resultJSON, readErr := s.receiptResult(ctx, receipt)
+		if readErr != nil {
+			return OperationsDeadLetterActionResult{}, readErr
+		}
+		if json.Unmarshal(resultJSON, &item) != nil {
 			return OperationsDeadLetterActionResult{}, apperror.New(apperror.KindInternal, "backend.operations.dead_letter_receipt_invalid", nil, nil)
 		}
-		return OperationsDeadLetterActionResult{Item: item, Receipt: receipt}, nil
+		current, inspectErr := adapter.Inspect(ctx, id, principal)
+		if inspectErr != nil {
+			return OperationsDeadLetterActionResult{}, inspectErr
+		}
+		return OperationsDeadLetterActionResult{Item: current, Receipt: receipt}, nil
 	}
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "execute owner-controlled dead-letter transition")
 	receipt, err = s.Start(ctx, receipt.Command.ID, receipt.Command.Scope, scope)
 	if err != nil {
 		return OperationsDeadLetterActionResult{}, err
 	}
-	item, ownerErr := adapter.Act(ctx, id, action, strings.TrimSpace(request.Reason), key, principal)
+	ownerContext := requestcontext.WithOwnerExecutionID(ctx, receipt.Command.ID)
+	item, ownerErr := adapter.Act(ownerContext, id, action, strings.TrimSpace(request.Reason), key, principal)
 	if ownerErr != nil {
 		receipt.Command.Status, receipt.FailureClass, receipt.ErrorCode = operationsmodel.OperationsStatusFailed, operationsmodel.OperationsFailureManualIntervention, "backend.operations.dead_letter_owner_rejected"
 		receipt.NextAction = "inspect the owner state and readiness before retrying with a new idempotency key"

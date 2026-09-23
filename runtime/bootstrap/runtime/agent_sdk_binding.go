@@ -12,14 +12,18 @@ import (
 	agentmodulehost "github.com/domainry/domainry-agent-sdk/modulehost"
 	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	agentsaashost "github.com/domainry/domainry-agent-sdk/saashost"
+	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	artifactpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/artifact"
 )
 
 type runtimeAgentHost struct {
-	runtimeID string
-	store     *persistence.RuntimeStore
+	runtimeID       string
+	store           *persistence.RuntimeStore
+	artifactContent sharedartifact.ContentStore
+	artifactWriter  sharedartifact.ContentWriter
 }
 
 func (runtimeAgentHost) DeferConversationHostBinding() bool { return true }
@@ -31,26 +35,26 @@ type runtimeAgentSaaSHost struct{ runtimeID string }
 
 func (h runtimeAgentSaaSHost) RuntimeID() string { return h.runtimeID }
 
-func synchronizeAgentDefinitions(ctx context.Context, binding agentsdk.Binding, manifest *manifestmodel.ManifestSchema) error {
+func synchronizeAgentDefinitions(ctx context.Context, binding agentsdk.Binding, sourceID, revision string, definitions runtimeext.ProjectDefinitions) error {
 	repositories, ok := binding.(agentpersistence.DefinitionBinding)
 	if !ok || repositories.DefinitionRepository() == nil {
-		if len(manifest.Skills) == 0 && len(manifest.Agents) == 0 && len(manifest.AgentTasks) == 0 && len(manifest.AgentEntrypoints) == 0 && len(manifest.AgentServicePrincipals) == 0 {
+		if !projectDefinitionsUseAgent(definitions) {
 			return nil
 		}
 		return errors.New("Agent Binding returned no definition repository")
 	}
-	sourceID := strings.TrimSpace(manifest.TemplateID)
+	sourceID = strings.TrimSpace(sourceID)
 	if sourceID == "" {
-		sourceID = "generated-template"
+		sourceID = "project"
 	}
-	version := strings.TrimSpace(manifest.Version)
+	version := strings.TrimSpace(revision)
 	if version == "" {
 		version = "1"
 	}
 	snapshot := agentpersistence.DefinitionSnapshot{
-		SchemaVersion: version, SourceKind: "manifest", SourceID: sourceID,
-		Skills: manifest.Skills, Agents: manifest.Agents, Tasks: manifest.AgentTasks,
-		Entrypoints: manifest.AgentEntrypoints, Principals: manifest.AgentServicePrincipals,
+		SchemaVersion: version, SourceKind: "project_registry", SourceID: sourceID,
+		Skills: definitions.AgentSkills, Agents: definitions.Agents, Tasks: definitions.AgentTasks,
+		Entrypoints: definitions.AgentEntrypoints, Principals: definitions.AgentServicePrincipals,
 	}
 	raw, err := json.Marshal(struct {
 		Skills      []agentsdk.SkillSchema
@@ -67,12 +71,6 @@ func synchronizeAgentDefinitions(ctx context.Context, binding agentsdk.Binding, 
 	if err := repositories.DefinitionRepository().SyncDefinitions(ctx, snapshot); err != nil {
 		return err
 	}
-	persisted, err := repositories.DefinitionRepository().DefinitionSnapshot(ctx)
-	if err != nil {
-		return err
-	}
-	manifest.Skills, manifest.Agents, manifest.AgentTasks = persisted.Skills, persisted.Agents, persisted.Tasks
-	manifest.AgentEntrypoints, manifest.AgentServicePrincipals = persisted.Entrypoints, persisted.Principals
 	return nil
 }
 
@@ -81,6 +79,15 @@ func (h runtimeAgentHost) Database() agentmodulehost.Database { return h.store.D
 func (h runtimeAgentHost) Dialect() agentmodulehost.Dialect   { return h.store.SQLRenderer }
 func (h runtimeAgentHost) Migrations() agentmodulehost.MigrationRegistrar {
 	return runtimeAgentMigrationRegistrar{store: h.store}
+}
+func (h runtimeAgentHost) ArtifactStore() sharedartifact.ManagedStore {
+	return artifactpersistence.NewStore(h.store)
+}
+func (h runtimeAgentHost) ArtifactContentStore() sharedartifact.ContentStore {
+	return h.artifactContent
+}
+func (h runtimeAgentHost) ArtifactContentWriter() sharedartifact.ContentWriter {
+	return h.artifactWriter
 }
 
 type runtimeAgentMigrationRegistrar struct{ store *persistence.RuntimeStore }
@@ -109,12 +116,12 @@ func (r runtimeAgentMigrationRegistrar) ApplyOwnedMigrations(ctx context.Context
 	return r.store.ApplyOwnedMigrations(ctx, owner, values)
 }
 
-func openAgentBinding(ctx context.Context, runtimeID string, store *persistence.RuntimeStore, factory agentsdk.Factory) (agentsdk.Binding, error) {
+func openAgentBinding(ctx context.Context, runtimeID string, store *persistence.RuntimeStore, artifactContent sharedartifact.ContentStore, artifactWriter sharedartifact.ContentWriter, factory agentsdk.Factory) (agentsdk.Binding, error) {
 	if factory == nil {
 		return nil, nil
 	}
 	application := agentsdk.ApplicationRef{RuntimeID: runtimeID}
-	host := runtimeAgentHost{runtimeID: runtimeID, store: store}
+	host := runtimeAgentHost{runtimeID: runtimeID, store: store, artifactContent: artifactContent, artifactWriter: artifactWriter}
 	var binding agentsdk.Binding
 	var err error
 	if moduleFactory, ok := factory.(agentmodulehost.Factory); ok {
@@ -137,21 +144,17 @@ func openAgentBinding(ctx context.Context, runtimeID string, store *persistence.
 	return binding, nil
 }
 
-func openManifestAgentBinding(ctx context.Context, runtimeID string, store *persistence.RuntimeStore, factory agentsdk.Factory, manifest manifestmodel.ManifestSchema) (agentsdk.Binding, error) {
+func openProjectAgentBinding(ctx context.Context, runtimeID string, store *persistence.RuntimeStore, artifactContent sharedartifact.ContentStore, artifactWriter sharedartifact.ContentWriter, factory agentsdk.Factory, definitions runtimeext.ProjectDefinitions) (agentsdk.Binding, error) {
+	usesAgent := projectDefinitionsUseAgent(definitions)
 	conversations := false
 	if configured, ok := factory.(agentsdk.ConversationFactory); ok {
 		conversations = configured.ConversationEnabled()
 	}
-	if !manifestUsesAgent(manifest) && !conversations {
+	if !usesAgent && !conversations {
 		return nil, nil
 	}
-	return openAgentBinding(ctx, runtimeID, store, factory)
-}
-
-func manifestUsesAgent(manifest manifestmodel.ManifestSchema) bool {
-	return len(manifest.Skills) != 0 ||
-		len(manifest.Agents) != 0 ||
-		len(manifest.AgentTasks) != 0 ||
-		len(manifest.AgentEntrypoints) != 0 ||
-		len(manifest.AgentServicePrincipals) != 0
+	if factory == nil {
+		return nil, errors.New("project Agent definitions require an Agent SDK Factory")
+	}
+	return openAgentBinding(ctx, runtimeID, store, artifactContent, artifactWriter, factory)
 }

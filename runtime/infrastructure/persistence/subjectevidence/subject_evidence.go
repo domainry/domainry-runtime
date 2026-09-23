@@ -13,7 +13,9 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
+	foundationartifact "github.com/domainry/domainry-foundation/artifact"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	"github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
@@ -60,7 +62,7 @@ type spec struct {
 }
 
 var specs = []spec{
-	{table: "_action_executions", status: "status", busy: []string{"pending", "processing"}, fence: true, set: map[string]any{"result_json": "{}", "idempotency_key": "", "request_fingerprint": "", "actor_id": "anonymous", "role_key": "", "status": "failed", "error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": ""}},
+	{table: "_operations", status: "status", busy: []string{"running", "executing", "processing"}, fence: true, set: map[string]any{"requested_by": "anonymous", "reason": "", "reference": "", "result_json": "{}", "metadata_json": "{}", "related_ids_json": "[]", "evidence_json": "[]", "next_action": "", "request_fingerprint": "", "idempotency_key": "", "status": "failed", "error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": ""}},
 	{table: "_workflow_process_instances", status: "status", set: map[string]any{"workflow_name": "", "definition_json": "{}", "initiator_id": "anonymous", "initiator_role_key": "", "current_node_ids_json": "[]", "variables_json": "{}", "result_json": "{}", "status": "cancelled", "error_code": "runtime.subject_erased"}},
 	{table: "_workflow_executions", status: "status", busy: []string{"running", "processing", "executing"}, fence: true, set: map[string]any{"name": "", "action_json": "{}", "payload_json": "{}", "result_json": "{}", "actor_id": "anonymous", "run_as": "", "idempotency_key": "", "last_error": "", "message": "", "status": "cancelled", "next_run_at": "", "lease_owner": "", "lease_expires_at": ""}},
 	{table: "_workflow_node_instances", status: "status", busy: []string{"running", "processing"}, set: map[string]any{"input_json": "{}", "output_json": "{}", "status": "cancelled", "error_code": "runtime.subject_erased"}},
@@ -69,12 +71,8 @@ var specs = []spec{
 	{table: "_workflow_route_steps", status: "status", set: map[string]any{"title": "", "assignee_snapshot_json": "[]", "configured_by": "anonymous", "status": "cancelled"}},
 	{table: "_publication_outbox", status: "status", busy: []string{"sending", "processing", "running"}, fence: true, set: map[string]any{"intent_json": "{}", "payload_json": "{}", "created_by": "anonymous", "request_ref": "", "response_ref": "", "request_fingerprint": "", "error": "", "last_error": "", "status": "failed", "last_error_code": "runtime.subject_erased", "next_attempt_at": "", "lease_owner": "", "lease_expires_at": ""}},
 	{table: "_action_assurance_grants"},
-	{table: "_upload_subject_bindings"},
-	{table: "_record_mutation_executions", status: "status", busy: []string{"processing", "pending"}, fence: true, set: map[string]any{"result_json": "{}", "actor_id": "anonymous", "idempotency_key": "", "request_fingerprint": "", "status": "failed", "error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": ""}},
-	{table: "_report_export_prepare_receipts", status: "status", busy: []string{"processing"}, fence: true, set: map[string]any{"payload_json": "", "requester_user_id": "anonymous", "request_fingerprint": "", "completion_fingerprint": "", "idempotency_key": "", "status": "failed", "terminal_error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": ""}},
-	{table: "_automation_rule_executions", status: "status", busy: []string{"processing", "running"}, set: map[string]any{"actor_id": "anonymous", "role_key": "", "candidate_json": "{}", "trace_json": "{}", "status": "failed", "error_code": "runtime.subject_erased"}},
-	{table: "_automation_instruction_executions", status: "status", busy: []string{"processing", "running"}, fence: true, set: map[string]any{"idempotency_key": "", "result_json": "{}", "status": "failed", "error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": ""}},
-	{table: "_operation_requests", status: "status", busy: []string{"running", "executing", "processing"}, set: map[string]any{"requested_by": "anonymous", "reason": "", "reference": "", "result_json": "{}", "related_ids_json": "[]", "evidence_json": "{}", "next_action": "", "request_fingerprint": "", "idempotency_key": "", "status": "failed", "error_code": "runtime.subject_erased"}},
+	{table: "_artifact_bindings"},
+	{table: "_automation_runs", status: "status", busy: []string{"processing", "running"}, fence: true, set: map[string]any{"actor_id": "anonymous", "role_key": "", "candidate_json": "{}", "trace_json": "{}", "idempotency_key": "", "result_json": "{}", "status": "failed", "error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": ""}},
 	{table: "_operation_break_glass_grants", set: map[string]any{"actor_id": "anonymous", "approver_ids_json": "[]", "reason": "", "incident_ref": "", "alert_target": "", "revocation_note": "", "revoked_by": "anonymous", "state": "revoked"}},
 }
 
@@ -94,6 +92,18 @@ func refsPredicateWithColumn(resources []recordmodel.SubjectRecordReference, rec
 	}
 	return query.Or(items...)
 }
+
+func operationRefsPredicate(resources []recordmodel.SubjectRecordReference, owners ...string) query.Predicate {
+	items := []query.Predicate{query.AlwaysFalse()}
+	for _, ref := range resources {
+		items = append(items, query.And(query.Equal("resource_type", ref.ObjectKey), query.Equal("resource_id", ref.RecordID)))
+	}
+	ownerValues := make([]any, len(owners))
+	for index, owner := range owners {
+		ownerValues[index] = owner
+	}
+	return query.And(query.In("owner", ownerValues...), query.Or(items...))
+}
 func in(column string, ids []string) query.Predicate {
 	values := make([]any, len(ids))
 	for i, id := range ids {
@@ -108,21 +118,15 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 	items := []rowReference{}
 	processIDs, executionIDs, actionIDs := []string{}, []string{}, []string{}
 	for _, s := range specs {
+		if !h.store.RuntimeSchemaCapabilities().IncludesTable(s.table) {
+			continue
+		}
 		var predicate query.Predicate
 		switch s.table {
-		case "_action_executions":
+		case "_automation_runs":
 			predicate = query.Or(query.Equal("actor_id", subject), refsPredicate(resources))
-
-		case "_record_mutation_executions":
-			predicate = query.Or(query.Equal("actor_id", subject), refsPredicateWithColumn(resources, "target_id"))
-		case "_report_export_prepare_receipts":
-			predicate = query.Equal("requester_user_id", subject)
-		case "_automation_rule_executions":
-			predicate = query.Or(query.Equal("actor_id", subject), refsPredicate(resources))
-		case "_automation_instruction_executions":
-			predicate = refsPredicate(resources)
-		case "_operation_requests":
-			predicate = query.Equal("requested_by", subject)
+		case "_operations":
+			predicate = query.Or(query.Equal("requested_by", subject), operationRefsPredicate(resources, "action", "record"))
 		case "_operation_break_glass_grants":
 			predicate = query.Equal("actor_id", subject)
 		case "_workflow_process_instances":
@@ -137,8 +141,13 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 			predicate = query.Or(in("process_id", processIDs), query.Equal("configured_by", subject))
 		case "_workflow_node_instances":
 			predicate = in("process_id", processIDs)
-		case "_upload_subject_bindings":
-			predicate = query.Equal("user_id", subject)
+		case "_artifact_bindings":
+			predicate = query.And(
+				query.Equal("owner", foundationartifact.OwnerUploads),
+				query.Equal("kind", foundationartifact.BindingSubject),
+				query.Equal("resource_type", "identity_user"),
+				query.Equal("resource_id", subject),
+			)
 		case "_action_assurance_grants":
 			predicate = query.Or(query.Equal("user_id", subject), refsPredicate(resources))
 		case "_publication_outbox":
@@ -147,6 +156,9 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 		columns := []string{"id"}
 		if s.status != "" {
 			columns = append(columns, s.status)
+		}
+		if s.table == "_operations" {
+			columns = append(columns, "owner")
 		}
 		builder := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, s.table, workspace).Columns(columns...).Where(predicate).OrderBy(query.Ascending("id"))
 		if lock && h.store.RuntimeEngine.Capabilities().RowLock {
@@ -163,9 +175,13 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 		for rows.Next() {
 			var id string
 			var status sql.NullString
+			var rowOwner sql.NullString
 			destinations := []any{&id}
 			if s.status != "" {
 				destinations = append(destinations, &status)
+			}
+			if s.table == "_operations" {
+				destinations = append(destinations, &rowOwner)
 			}
 			if err = rows.Scan(destinations...); err != nil {
 				rows.Close()
@@ -181,8 +197,10 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 				processIDs = append(processIDs, id)
 			case "_workflow_executions":
 				executionIDs = append(executionIDs, id)
-			case "_action_executions":
-				actionIDs = append(actionIDs, id)
+			case "_operations":
+				if rowOwner.String == "action" {
+					actionIDs = append(actionIDs, id)
+				}
 			}
 		}
 		if err = rows.Err(); err != nil {
@@ -336,20 +354,96 @@ func (h *Handler) ExportSubjectForRequest(ctx context.Context, _ string, workspa
 func (*Handler) EraseSubjectForRequest(context.Context, string, string, string, []lifecyclemodel.LegalHold) (json.RawMessage, error) {
 	return nil, fmt.Errorf("Runtime evidence erasure requires a persisted plan")
 }
-func (h *Handler) receipt(ctx context.Context, tx interface {
+
+const (
+	sharedSubjectExecutionStepsTable = "_subject_steps"
+	runtimeEvidenceOwner             = "runtime_evidence"
+	subjectErasePlanOperation        = "erase_plan"
+	subjectEraseOperation            = "erase"
+)
+
+func (h *Handler) sharedStep(ctx context.Context, tx interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
-}, workspace, request, subject string) (string, string, error) {
-	statement, args, err := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, "_subject_evidence_erasure_receipts", workspace).Columns("subject_id", "plan_json", "result_json").Where(query.Equal("request_id", request)).Build()
+}, workspace, request, operation string) (json.RawMessage, bool, error) {
+	statement, args, err := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, sharedSubjectExecutionStepsTable, workspace).
+		Columns("payload_json").Where(query.And(
+		query.Equal("request_id", request),
+		query.Equal("owner", runtimeEvidenceOwner),
+		query.Equal("operation", operation),
+	)).Build()
 	if err != nil {
-		return "", "", err
+		return nil, false, err
 	}
-	var savedSubject, p, result string
-	err = tx.QueryRowContext(ctx, statement, args...).Scan(&savedSubject, &p, &result)
-	if err == nil && savedSubject != subject {
-		err = fmt.Errorf("Runtime erasure receipt subject mismatch")
+	var raw string
+	if err = tx.QueryRowContext(ctx, statement, args...).Scan(&raw); errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	} else if err != nil {
+		return nil, false, err
 	}
-	return p, result, err
+	var step lifecyclemodel.SubjectExecutionStep
+	if json.Unmarshal([]byte(raw), &step) != nil || step.WorkspaceID != workspace || step.RequestID != request || step.Owner != runtimeEvidenceOwner || step.Operation != operation || !json.Valid(step.Payload) {
+		return nil, false, fmt.Errorf("Runtime shared subject execution step invalid")
+	}
+	return append(json.RawMessage(nil), step.Payload...), true, nil
 }
+
+func (h *Handler) saveSharedStep(ctx context.Context, tx interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, workspace, request, operation string, payload json.RawMessage) error {
+	if !json.Valid(payload) {
+		return fmt.Errorf("Runtime shared subject execution payload invalid")
+	}
+	if previous, found, err := h.sharedStep(ctx, tx, workspace, request, operation); err != nil {
+		return err
+	} else if found {
+		if !bytes.Equal(previous, payload) {
+			return fmt.Errorf("Runtime shared subject execution step payload conflict")
+		}
+		return nil
+	}
+	completedAt := time.Now().UTC()
+	step := lifecyclemodel.SubjectExecutionStep{
+		WorkspaceID: workspace,
+		RequestID:   request,
+		Owner:       runtimeEvidenceOwner,
+		Operation:   operation,
+		Payload:     append(json.RawMessage(nil), payload...),
+		CompletedAt: completedAt,
+	}
+	raw, err := json.Marshal(step)
+	if err != nil {
+		return err
+	}
+	statement, args, err := query.NewWorkspaceInsertBuilder(h.store.SQLRenderer, sharedSubjectExecutionStepsTable, workspace).
+		Columns("request_id", "owner", "operation", "payload_json", "completed_at").
+		Values(request, runtimeEvidenceOwner, operation, string(raw), completedAt.Format(time.RFC3339Nano)).Build()
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, statement, args...)
+	return err
+}
+
+func (h *Handler) requireSharedFence(ctx context.Context, tx interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, workspace, request, subject string) error {
+	seed := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, sharedSubjectExecutionStepsTable, workspace).
+		Projections(query.ProjectAs(query.CountAll(), "step_count")).Where(query.AlwaysFalse())
+	statement, args, err := query.NewSelectFromSubquery(h.store.SQLRenderer, seed, "subject_fence_seed").
+		Columns("step_count").Where(h.store.SubjectErasureFenceMatches(workspace, request, subject)).Build()
+	if err != nil {
+		return err
+	}
+	var marker int
+	if err = tx.QueryRowContext(ctx, statement, args...).Scan(&marker); errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("Runtime subject erasure requires Lifecycle fence")
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (h *Handler) PrepareSubjectErasure(ctx context.Context, request, workspace, subject string) (json.RawMessage, error) {
 	if err := scope(ctx, workspace, subject); err != nil {
 		return nil, err
@@ -357,10 +451,14 @@ func (h *Handler) PrepareSubjectErasure(ctx context.Context, request, workspace,
 	if strings.TrimSpace(request) == "" {
 		return nil, fmt.Errorf("Runtime erasure request required")
 	}
-	if saved, _, err := h.receipt(ctx, h.store.DB(), workspace, request, subject); err == nil {
-		return json.RawMessage(saved), nil
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	if saved, found, err := h.sharedStep(ctx, h.store.DB(), workspace, request, subjectErasePlanOperation); err != nil {
 		return nil, err
+	} else if found {
+		var previous plan
+		if json.Unmarshal(saved, &previous) != nil || previous.RequestID != request || previous.WorkspaceID != workspace || previous.SubjectID != subject {
+			return nil, fmt.Errorf("Runtime shared subject plan scope mismatch")
+		}
+		return saved, nil
 	}
 	resources, err := h.resolve(ctx, workspace, subject)
 	if err != nil {
@@ -376,9 +474,16 @@ func (h *Handler) PrepareSubjectErasure(ctx context.Context, request, workspace,
 		return nil, err
 	}
 	defer tx.Rollback()
-	if saved, _, err := h.receipt(ctx, tx, workspace, request, subject); err == nil {
-		return json.RawMessage(saved), nil
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	if saved, found, err := h.sharedStep(ctx, tx, workspace, request, subjectErasePlanOperation); err != nil {
+		return nil, err
+	} else if found {
+		var previous plan
+		if json.Unmarshal(saved, &previous) != nil || previous.RequestID != request || previous.WorkspaceID != workspace || previous.SubjectID != subject {
+			return nil, fmt.Errorf("Runtime shared subject plan scope mismatch")
+		}
+		return saved, nil
+	}
+	if err = h.requireSharedFence(ctx, tx, workspace, request, subject); err != nil {
 		return nil, err
 	}
 	items, err := h.collect(ctx, tx, workspace, subject, resources, events, true)
@@ -390,40 +495,6 @@ func (h *Handler) PrepareSubjectErasure(ctx context.Context, request, workspace,
 	if err != nil {
 		return nil, err
 	}
-	fence := func(kind, object, id string) error {
-		statement, args, err := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, "_subject_evidence_erasure_fences", workspace).Columns("request_id").Where(query.And(query.Equal("kind", kind), query.Equal("object_key", object), query.Equal("record_id", id))).Build()
-		if err != nil {
-			return err
-		}
-		var previous string
-		err = tx.QueryRowContext(ctx, statement, args...).Scan(&previous)
-		if err == nil {
-			return nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		statement, args, err = query.NewWorkspaceInsertBuilder(h.store.SQLRenderer, "_subject_evidence_erasure_fences", workspace).Columns("kind", "object_key", "record_id", "request_id").Values(kind, object, id, request).Build()
-		if err != nil {
-			return err
-		}
-		_, err = tx.ExecContext(ctx, statement, args...)
-		return err
-	}
-	if err = fence("subject", "", subject); err != nil {
-		return nil, err
-	}
-	for _, ref := range resources {
-		if err = fence("record", ref.ObjectKey, ref.RecordID); err != nil {
-			return nil, err
-		}
-	}
-	for _, ref := range items {
-		if err = fence(ref.Table, "", ref.ID); err != nil {
-			return nil, err
-		}
-	}
-
 	for _, ref := range items {
 		if ref.Table != "_workflow_process_instances" {
 			continue
@@ -459,11 +530,7 @@ func (h *Handler) PrepareSubjectErasure(ctx context.Context, request, workspace,
 			}
 		}
 	}
-	statement, args, err := query.NewWorkspaceInsertBuilder(h.store.SQLRenderer, "_subject_evidence_erasure_receipts", workspace).Columns("request_id", "subject_id", "plan_json", "result_json").Values(request, subject, string(raw), "").Build()
-	if err != nil {
-		return nil, err
-	}
-	if _, err = tx.ExecContext(ctx, statement, args...); err != nil {
+	if err = h.saveSharedStep(ctx, tx, workspace, request, subjectErasePlanOperation, raw); err != nil {
 		return nil, err
 	}
 	if err = tx.Commit(); err != nil {
@@ -487,15 +554,17 @@ func (h *Handler) ErasePreparedSubject(ctx context.Context, request, workspace, 
 		return nil, err
 	}
 	defer tx.Rollback()
-	saved, result, err := h.receipt(ctx, tx, workspace, request, subject)
+	saved, found, err := h.sharedStep(ctx, tx, workspace, request, subjectErasePlanOperation)
 	if err != nil {
 		return nil, err
 	}
-	if !bytes.Equal([]byte(saved), raw) {
-		return nil, fmt.Errorf("Runtime evidence plan differs from source receipt")
+	if !found || !bytes.Equal(saved, raw) {
+		return nil, fmt.Errorf("Runtime evidence plan differs from shared Lifecycle step")
 	}
-	if result != "" {
-		return json.RawMessage(result), nil
+	if result, completed, err := h.sharedStep(ctx, tx, workspace, request, subjectEraseOperation); err != nil {
+		return nil, err
+	} else if completed {
+		return result, nil
 	}
 	for _, ref := range p.Rows {
 		var found *spec
@@ -544,11 +613,7 @@ func (h *Handler) ErasePreparedSubject(ctx context.Context, request, workspace, 
 	if err != nil {
 		return nil, err
 	}
-	statement, args, err := query.NewWorkspaceUpdateBuilder(h.store.SQLRenderer, "_subject_evidence_erasure_receipts", workspace).Set("result_json", string(out)).Where(query.Equal("request_id", request)).Build()
-	if err != nil {
-		return nil, err
-	}
-	if _, err = tx.ExecContext(ctx, statement, args...); err != nil {
+	if err = h.saveSharedStep(ctx, tx, workspace, request, subjectEraseOperation, out); err != nil {
 		return nil, err
 	}
 	if err = tx.Commit(); err != nil {

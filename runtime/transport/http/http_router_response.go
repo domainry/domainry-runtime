@@ -11,12 +11,9 @@ import (
 	"strings"
 	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
-	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
-	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
-	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/logging"
@@ -36,6 +33,16 @@ func requestWithPrincipal(r *http.Request, principal principalmodel.Principal) *
 
 func principalFromContext(r *http.Request) (principalmodel.Principal, bool) {
 	principal, ok := r.Context().Value(principalContextKey{}).(principalmodel.Principal)
+	return principal, ok && principal.Known
+}
+
+// PrincipalFromContext is the trusted bridge used by the in-process project
+// Engine after Runtime authentication has populated the request context.
+func (s *HTTPRouter) PrincipalFromContext(ctx context.Context) (principalmodel.Principal, bool) {
+	if ctx == nil {
+		return principalmodel.Principal{}, false
+	}
+	principal, ok := ctx.Value(principalContextKey{}).(principalmodel.Principal)
 	return principal, ok && principal.Known
 }
 
@@ -164,21 +171,6 @@ func valueOrDefault(value, fallback string) string {
 func (s *HTTPRouter) principalFromRequest(r *http.Request) principalmodel.Principal {
 	requestID := requestIDFromRequest(r)
 	workspaceID := workspaceIDFromRequest(r)
-	if builderTaskID := operationscontract.BuilderTaskID(r.Context()); builderTaskID != "" && bearerTokenFromRequest(r) == "" && apiKeyTokenFromRequest(r) == "" && strings.TrimSpace(r.Header.Get("X-User-ID")) == "" && strings.TrimSpace(r.Header.Get("X-Role")) == "" && strings.TrimSpace(r.Header.Get("X-User-Role")) == "" {
-		principal := principalmodel.NewSystemPrincipal(
-			"runtime-builder:"+builderTaskID,
-			principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "runtime_direct_authoring"),
-			businesssystemapplication.ActionBusinessSystemSnapshot,
-			businesssystemapplication.ActionValidateRuntimeAuthoring,
-			businesssystemapplication.ActionVerifyRuntimeAuthoringDelivery,
-			schedulersdk.ActionSchedulerDefinitionsList,
-			"runtime.automation.list_automation_rules",
-			"runtime.automation.list_automation_executions",
-		)
-		principal.RequestID = requestID
-		principal.WorkspaceID = workspaceID
-		return principal
-	}
 	if principal, ok := principalFromContext(r); ok {
 		principal.RequestID = requestID
 		if workspaceID != "" && !strings.EqualFold(workspaceID, "default") {
@@ -339,7 +331,7 @@ func (s *HTTPRouter) appendSecurityAuditForPrincipal(r *http.Request, principal 
 	}
 	metadata["path"] = r.URL.Path
 	metadata["method"] = r.Method
-	s.securityAudit.AppendWithMetadata(r.Context(), event, "auth", "", principal, summary, nil, nil, metadata)
+	s.securityAudit.AppendWithMetadata(r.Context(), auditmodel.EventFamilyRuntimeSecurity, event, "auth", "", principal, summary, nil, nil, metadata)
 }
 
 func (s *HTTPRouter) auditPrincipalFromRequest(r *http.Request) principalmodel.Principal {
@@ -428,23 +420,9 @@ func writeErrorWithParams(w http.ResponseWriter, r *http.Request, status int, co
 		code = "backend.request_failed"
 	}
 	params = apperror.SanitizeParams(params)
-	contract := capabilitycontract.RuntimeAuthoringErrorContract(code, params)
 	response := map[string]any{
 		"error": code, "code": code, "message": code, "message_key": code, "params": params,
-		"request_id":       requestIDFromRequest(r),
-		"contract_version": contract.ContractVersion,
-	}
-	if contract.FieldPath != "" {
-		response["field_path"] = contract.FieldPath
-	}
-	if contract.CapabilityKey != "" {
-		response["capability_key"] = contract.CapabilityKey
-	}
-	if runtimeAuthoringRequestTrusted(r) {
-		semantics := runtimeAuthoringSemantics(status, code)
-		response["error_class"] = semantics.Class
-		response["repair_action"] = semantics.RepairAction
-		response["retryable"] = semantics.Retryable
+		"request_id": requestIDFromRequest(r),
 	}
 	writeJSON(w, status, response)
 }

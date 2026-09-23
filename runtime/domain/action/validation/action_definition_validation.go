@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	capabilitycontract "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
@@ -248,11 +247,13 @@ func actionValidateAssurancePolicy(action definitionmodel.ActionSchema, objects 
 }
 
 func actionDefinitionValidationIssue(code, fieldPath string, params map[string]string) appschemamodel.ApplicationDefinitionValidationIssue {
-	contract := capabilitycontract.RuntimeAuthoringErrorContract(code, params)
 	if strings.TrimSpace(fieldPath) == "" {
-		fieldPath = contract.FieldPath
+		fieldPath = strings.TrimSpace(params["field_path"])
+		if fieldPath == "" {
+			fieldPath = strings.TrimSpace(params["field"])
+		}
 	}
-	return appschemamodel.ApplicationDefinitionValidationIssue{FieldPath: fieldPath, ErrorCode: code, MessageKey: code, CapabilityKey: contract.CapabilityKey, ContractVersion: contract.ContractVersion, Params: params}
+	return appschemamodel.ApplicationDefinitionValidationIssue{FieldPath: fieldPath, ErrorCode: code, MessageKey: code, Params: params}
 }
 
 func actionSupportedKind(kind string) bool {

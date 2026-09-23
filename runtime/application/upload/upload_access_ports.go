@@ -13,7 +13,7 @@ type CatalogPort interface {
 }
 
 type AuditPort interface {
-	AppendWithMetadata(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
+	AppendWithMetadata(context.Context, string, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 }
 
 type RecordQueryPort interface {

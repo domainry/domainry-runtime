@@ -27,6 +27,7 @@ import (
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
+	metadatamodulefixture "github.com/domainry/domainry-runtime/testsupport/metadatamodulefixture"
 )
 
 // integrationTestIdentityProjection models the external Identity projection at
@@ -79,6 +80,7 @@ func objectActionTestDependencies(ctx context.Context, store *persistence.Runtim
 	if store == nil {
 		return RuntimeServicesDependencies{}
 	}
+	metadatamodulefixture.EnsureBinding(ctx, store)
 	return RuntimeServicesDependencies{
 		Records:                      recordpersistence.NewRecordStore(store),
 		Audit:                        auditpersistence.NewAuditStoreFromRuntimeStore(ctx, store),
@@ -91,7 +93,6 @@ func objectActionTestDependencies(ctx context.Context, store *persistence.Runtim
 		WorkflowDecisions:            workflowpersistence.NewWorkflowDecisionStore(store),
 		AutomationWorker:             automationpersistence.NewAutomationWorkerStore(store),
 		AutomationExecutions:         automationpersistence.NewAutomationExecutionStore(store),
-		BusinessEvidence:             nil,
 		ActionExecutions:             actionpersistence.NewActionBusinessExecutionStore(store),
 	}
 }

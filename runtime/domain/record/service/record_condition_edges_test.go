@@ -12,7 +12,7 @@ import (
 )
 
 func TestReadRemainingConditionOperands(t *testing.T) {
-	object := definitionmodel.ObjectSchema{Key: "employee_profile", UX: map[string]any{"kind": "identity_profile_extension", "config": map[string]any{"identity_relation_field": "identity_user"}}}
+	object := definitionmodel.ObjectSchema{Key: "employee_profile"}
 	service := NewRecordReadDomainService(RecordReadDependencies{
 		Repository: &readRepositoryProbe{}, Policy: readPolicyProbe{object: object, allow: true},
 		IdentityProfileExtensions: func() []profilebindingmodel.Binding {

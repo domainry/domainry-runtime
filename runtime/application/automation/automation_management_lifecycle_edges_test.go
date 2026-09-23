@@ -59,9 +59,6 @@ func TestAutomationManagementAuthorizationContextAndDependencyFailures(t *testin
 	if _, err := service.ExecutionHistory(t.Context(), automationmodel.AutomationExecutionFilter{}, denied); apperror.CodeOf(err) != "auth.permission_denied" {
 		t.Fatalf("history denied err=%v", err)
 	}
-	if _, err := service.ValidateRule(t.Context(), automationmodel.AutomationRuleSchema{}, denied); apperror.CodeOf(err) != "auth.permission_denied" {
-		t.Fatalf("validate denied err=%v", err)
-	}
 	if _, err := service.SimulateRule(t.Context(), automationmodel.AutomationRuleSchema{}, automationcontract.AutomationSimulationRequest{}, denied); apperror.CodeOf(err) != "auth.permission_denied" {
 		t.Fatalf("simulate denied err=%v", err)
 	}
@@ -71,9 +68,6 @@ func TestAutomationManagementAuthorizationContextAndDependencyFailures(t *testin
 	}
 	if _, err := service.Rule(t.Context(), "rule", unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("rule unknown err=%v", err)
-	}
-	if _, err := service.ValidateRule(t.Context(), automationmodel.AutomationRuleSchema{}, unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
-		t.Fatalf("validate unknown err=%v", err)
 	}
 	if _, err := service.SimulateRule(t.Context(), automationmodel.AutomationRuleSchema{}, automationcontract.AutomationSimulationRequest{}, unknown); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("simulate unknown err=%v", err)
@@ -129,9 +123,6 @@ func TestAutomationManagementValidationAndSimulationFailureOutcomes(t *testing.T
 			return errAutomationFacadeProbe
 		},
 	})
-	if result, err := service.ValidateRule(t.Context(), rule, principal); !errors.Is(err, errAutomationFacadeProbe) || result.Valid {
-		t.Fatalf("validation=%#v err=%v", result, err)
-	}
 	if _, err := service.SimulateRule(t.Context(), rule, automationcontract.AutomationSimulationRequest{}, principal); !errors.Is(err, errAutomationFacadeProbe) {
 		t.Fatalf("simulate validation err=%v", err)
 	}

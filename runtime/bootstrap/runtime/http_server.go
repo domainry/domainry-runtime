@@ -33,7 +33,8 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 		Store:                runtime.store, RateLimiter: runtime.rateLimiter,
 		AgentRepositories:        agentRepositories,
 		AgentBinding:             runtime.agentBinding,
-		Manifest:                 runtime.manifest,
+		ProjectModel:             runtime.projectModel,
+		SchemaCapabilities:       &runtime.schemaCapabilities,
 		WorkspaceRolePolicy:      runtime.workspaceRolePolicy,
 		WorkerControl:            runtime.worker.Control,
 		Clock:                    runtime.worker.Clock,
@@ -44,6 +45,7 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 		ModuleHTTPAdapters:       runtime.ModuleHTTPAdapters(),
 		NotificationInboxActions: runtime.notificationHTTP,
 		ProjectExtensions:        runtime.projectExtensions,
+		ProjectHTTP:              runtime.projectHTTP,
 		BlobStore:                runtime.blobStore,
 	})
 	return runtime

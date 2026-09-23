@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -305,6 +306,7 @@ func (s *WorkflowApplicationService) RetryWorkflowProcessWithKey(ctx context.Con
 	}
 	process.Result["retry_count"] = workflowpolicy.WorkflowRetryCount(process.Result["retry_count"]) + 1
 	workflowRecordCommand(&process, "process.retry", commandKey)
+	process.OperationID = requestcontext.OwnerExecutionID(ctx)
 	process.Status, process.ErrorCode, process.CompletedAt = "running", "", ""
 	process.CurrentNodeIDs = []string{failedNodeID}
 	process.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -334,6 +336,7 @@ func (s *WorkflowApplicationService) ResolveWorkflowProcessFailure(ctx context.C
 		return process, conflict("backend.workflow.process_not_resolvable")
 	}
 	process.Status = "resolved"
+	process.OperationID = requestcontext.OwnerExecutionID(ctx)
 	process.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	if process.CompletedAt == "" {
 		process.CompletedAt = process.UpdatedAt

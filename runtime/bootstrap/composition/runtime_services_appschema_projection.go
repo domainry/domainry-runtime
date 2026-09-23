@@ -1,77 +1,73 @@
 package composition
 
 import (
-	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"strings"
 
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
-
-	agentsdk "github.com/domainry/domainry-agent-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	appschemaprojection "github.com/domainry/domainry-runtime/runtime/domain/appschema/projection"
 	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 )
 
-// applyManifestMetadata replaces the RuntimeServices-owned schema indexes. It is
-// mutable composition state, not a Metadata application use case.
-func (s *runtimeAssembly) applyManifestMetadata(templateID, templateVersion, name, timeZone string, objects []definitionmodel.ObjectSchema, actions []definitionmodel.ActionSchema, workflows []definitionmodel.WorkflowSchema, businessCalendars []businesscalendarmodel.BusinessCalendarSchema, automationRules []automationmodel.AutomationRuleSchema, dictionaries []appschemamodel.DictionarySchema, integrations connectormodel.IntegrationSchema, reports []reportmodel.ReportSchema, skills []agentsdk.SkillSchema, agents []agentsdk.AgentSchema, profileBindings []profilebindingmodel.Binding) {
-	objects = appschemaprojection.ApplicationSchemaEnrichObjectsWithFieldValueDomains(objects, dictionaries)
+// applyProjectMetadata builds Runtime's read-only application-schema indexes
+// from the storage/security model plus frozen code registries. It is an
+// in-memory projection only; no combined manifest is serialized or persisted.
+func (s *runtimeAssembly) applyProjectMetadata(model projectmodel.RuntimeModel, actions []definitionmodel.ActionSchema, definitions runtimeext.ProjectDefinitions, integrations appschemamodel.IntegrationSchema) {
+	reports := make([]reportmodel.ReportSchema, 0, len(definitions.Reports))
+	for _, definition := range definitions.Reports {
+		reports = append(reports, definition.Report)
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.schemaGeneration++
-	s.templateID = strings.TrimSpace(templateID)
-	s.templateVersion = strings.TrimSpace(templateVersion)
-	s.name = strings.TrimSpace(name)
-	s.timeZone = timeZone
-	s.schema = make(map[string]definitionmodel.ObjectSchema, len(objects))
+	s.templateID = strings.TrimSpace(model.ProjectKey)
+	s.templateVersion = strings.TrimSpace(model.ContentHash)
+	s.name = strings.TrimSpace(model.ProjectName)
+	s.timeZone = model.EffectiveTimeZone()
+	s.schema = make(map[string]definitionmodel.ObjectSchema, len(model.Objects))
 	s.actions = make(map[string]definitionmodel.ActionSchema, len(actions))
-	s.workflows = make(map[string]definitionmodel.WorkflowSchema, len(workflows))
-	s.businessCalendars = append([]businesscalendarmodel.BusinessCalendarSchema(nil), businessCalendars...)
-	s.automationRules = make(map[string]automationmodel.AutomationRuleSchema, len(automationRules))
-	s.dictionaries = append([]appschemamodel.DictionarySchema(nil), dictionaries...)
+	s.workflows = make(map[string]definitionmodel.WorkflowSchema, len(definitions.Workflows))
+	s.businessCalendars = append([]businesscalendarmodel.BusinessCalendarSchema(nil), definitions.BusinessCalendars...)
+	s.automationRules = make(map[string]automationmodel.AutomationRuleSchema, len(definitions.AutomationRules))
+	s.dictionaries = nil
 	s.integrations = appschemaservice.CloneIntegrationSchema(integrations)
 	if s.connectorRegistry == nil {
 		s.connectorRegistry = newRuntimeConnectorCatalog(integrations)
 	} else {
 		s.connectorRegistry.ReplaceSchema(integrations)
 	}
-	s.reports = append([]reportmodel.ReportSchema(nil), reports...)
-	s.skills = append([]agentsdk.SkillSchema(nil), skills...)
-	s.agents = append([]agentsdk.AgentSchema(nil), agents...)
-	s.identityProfileExtensions = append([]profilebindingmodel.Binding(nil), profileBindings...)
-	for _, object := range objects {
-		if strings.TrimSpace(object.Key) != "" {
-			s.schema[object.Key] = object
+	s.reports = reports
+	s.skills = append(s.skills[:0], definitions.AgentSkills...)
+	s.agents = append(s.agents[:0], definitions.Agents...)
+	s.agentTasks = append(s.agentTasks[:0], definitions.AgentTasks...)
+	s.agentEntrypoints = append(s.agentEntrypoints[:0], definitions.AgentEntrypoints...)
+	s.agentServicePrincipals = append(s.agentServicePrincipals[:0], definitions.AgentServicePrincipals...)
+	s.identityProfileExtensions = append(s.identityProfileExtensions[:0], model.IdentityProfiles...)
+	for _, object := range model.Objects {
+		if key := strings.TrimSpace(object.Key); key != "" {
+			s.schema[key] = object
 		}
 	}
 	for _, action := range actions {
-		if strings.TrimSpace(action.Key) != "" {
-			s.actions[action.Key] = action
+		if key := strings.TrimSpace(action.Key); key != "" {
+			s.actions[key] = action
 		}
 	}
-	for _, workflow := range workflows {
-		if strings.TrimSpace(workflow.Key) != "" {
-			s.workflows[workflow.Key] = workflow
+	for _, workflow := range definitions.Workflows {
+		if key := strings.TrimSpace(workflow.Key); key != "" {
+			s.workflows[key] = workflow
 		}
 	}
-	for _, rule := range automationRules {
-		if strings.TrimSpace(rule.Key) != "" {
-			s.automationRules[rule.Key] = rule
+	for _, rule := range definitions.AutomationRules {
+		if key := strings.TrimSpace(rule.Key); key != "" {
+			s.automationRules[key] = rule
 		}
 	}
-}
-
-func (s *runtimeAssembly) applyManifestAgentMetadata(tasks []agentsdk.AgentTaskDefinition, entrypoints []agentsdk.AgentEntrypointAssignment, principals []agentsdk.AgentServicePrincipalBinding) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.schemaGeneration++
-	s.agentTasks = append([]agentsdk.AgentTaskDefinition(nil), tasks...)
-	s.agentEntrypoints = append([]agentsdk.AgentEntrypointAssignment(nil), entrypoints...)
-	s.agentServicePrincipals = append([]agentsdk.AgentServicePrincipalBinding(nil), principals...)
 }
 
 func (s *runtimeAssembly) businessCalendarSnapshot() []businesscalendarmodel.BusinessCalendarSchema {

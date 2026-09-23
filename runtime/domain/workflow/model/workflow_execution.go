@@ -3,6 +3,7 @@ package workflowmodel
 type WorkflowExecution struct {
 	WorkspaceID    string         `json:"workspace_id"`
 	ID             string         `json:"id"`
+	OperationID    string         `json:"operation_id,omitempty"`
 	WorkflowKey    string         `json:"workflow_key"`
 	Name           string         `json:"name"`
 	Trigger        string         `json:"trigger"`

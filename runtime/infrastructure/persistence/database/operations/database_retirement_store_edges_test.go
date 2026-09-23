@@ -120,9 +120,6 @@ func TestDatabaseRetirementAccessSQLStages(t *testing.T) {
 			t.Fatalf("invalid access accepted: %+v", input)
 		}
 	}
-	if retirementTime(nil) != "" || retirementSources(nil) != "{}" {
-		t.Fatal("empty retirement projections changed")
-	}
 	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{retirementQueryStep(retirement)}})
 	if err := store.RecordDatabaseRetirementAccess(t.Context(), retirement.ID, "write", "worker", now); err != nil {
 		t.Fatalf("write access rejected: %v", err)

@@ -1,10 +1,5 @@
 package profilebindingmodel
 
-const (
-	ContractVersion      = "identity-profile-extension"
-	MinimumReaderVersion = "identity-profile-extension-reader"
-)
-
 type ClaimBinding struct {
 	ClaimKey string `json:"claim_key"`
 	FieldKey string `json:"field_key"`
@@ -34,28 +29,13 @@ type Lifecycle struct {
 // Binding is the Runtime-owned metadata contract that joins
 // one domain profile object to an Identity user.
 type Binding struct {
-	ContractVersion          string                  `json:"contract_version"`
-	MinReaderVersion         string                  `json:"min_reader_version"`
-	ObjectKey                string                  `json:"object_key"`
-	IdentityRelationField    string                  `json:"identity_relation_field"`
-	Cardinality              string                  `json:"cardinality"`
-	BusinessIdentity         BusinessIdentityBinding `json:"business_identity"`
-	BindingLifecycle         Lifecycle               `json:"binding_lifecycle,omitempty"`
-	SummaryFields            []string                `json:"summary_fields,omitempty"`
-	ProfileTabs              []string                `json:"profile_tabs,omitempty"`
-	ProfileTabLabels         map[string]string       `json:"profile_tab_labels,omitempty"`
-	ProfileTabFields         map[string][]string     `json:"profile_tab_fields,omitempty"`
-	ProfileTabRelatedObjects map[string][]string     `json:"profile_tab_related_objects,omitempty"`
-	ProfileTabComponents     map[string][]string     `json:"profile_tab_components,omitempty"`
-	DefaultVisibility        string                  `json:"default_visibility"`
-	RequiredPermissions      []string                `json:"required_permissions,omitempty"`
-	StandaloneWorkspace      bool                    `json:"standalone_workspace,omitempty"`
-	Provenance               *Provenance             `json:"provenance,omitempty"`
-}
-
-type Provenance struct {
-	Owner        string   `json:"owner,omitempty"`
-	Contributors []string `json:"contributors,omitempty"`
+	ObjectKey             string                  `json:"object_key"`
+	IdentityRelationField string                  `json:"identity_relation_field"`
+	Cardinality           string                  `json:"cardinality"`
+	BusinessIdentity      BusinessIdentityBinding `json:"business_identity"`
+	BindingLifecycle      Lifecycle               `json:"binding_lifecycle,omitempty"`
+	DefaultVisibility     string                  `json:"default_visibility"`
+	RequiredPermissions   []string                `json:"required_permissions,omitempty"`
 }
 
 // ClaimValue is a business-record fact made available to SDK policy

@@ -32,7 +32,7 @@ func TestOperationsSubmitAndStartFailureBoundaries(t *testing.T) {
 	admin := operationsAdminPrincipal()
 	request := OperationsSubmitRequest{Kind: "retention.cleanup", ResourceType: "retention_policy", Reason: "cleanup"}
 	var nilService *OperationsApplicationService
-	if _, _, err := nilService.submit(t.Context(), request, "runtime.operations.run_lifecycle_cleanup_job", "key", admin.UserID, operationsmodel.OperationsScope{WorkspaceID: admin.WorkspaceID}); apperror.CodeOf(err) != "backend.operations.repository_unavailable" {
+	if _, _, err := nilService.submit(t.Context(), request, "lifecycle", "runtime.operations.run_lifecycle_cleanup_job", "key", admin.UserID, operationsmodel.OperationsScope{WorkspaceID: admin.WorkspaceID}); apperror.CodeOf(err) != "backend.operations.repository_unavailable" {
 		t.Fatalf("nil repository error = %v", err)
 	}
 	service := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, nil, nil)
@@ -131,7 +131,46 @@ func TestOperationsFinishDefaultsValidationPersistenceAndConflict(t *testing.T) 
 	service, _, receipt, scope = newStartedOperationsReceipt(t)
 	receipt.Command.Status = operationsmodel.OperationsStatusSucceeded
 	finished, err := service.Finish(t.Context(), receipt, scope)
-	if err != nil || finished.Command.FinishedAt == nil || finished.NextAction == "" || len(finished.RelatedIDs) != 1 || finished.Correlation != receipt.Command.ID || len(finished.Evidence) != 1 {
+	expiresAt, parseErr := time.Parse(time.RFC3339Nano, finished.ExpiresAt)
+	if err != nil || parseErr != nil || finished.Command.FinishedAt == nil || expiresAt.Sub(*finished.Command.FinishedAt) != 365*24*time.Hour || finished.NextAction == "" || len(finished.RelatedIDs) != 1 || finished.Correlation != receipt.Command.ID || len(finished.Evidence) != 1 {
 		t.Fatalf("finished=%#v err=%v", finished, err)
+	}
+}
+
+func TestOperationsFinishAppliesRegisteredTechnicalAndFailedAuditRetention(t *testing.T) {
+	now := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
+	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "retention registration test")
+	for _, test := range []struct {
+		name      string
+		request   OperationsSubmitRequest
+		status    operationsmodel.OperationsStatus
+		errorCode string
+		failure   operationsmodel.OperationsFailureClass
+		want      time.Duration
+	}{
+		{name: "technical success", request: OperationsSubmitRequest{Kind: "dead_letter.inspect", ResourceType: "dead_letter", ResourceID: "dead-1", Reason: "inspect"}, status: operationsmodel.OperationsStatusSucceeded, want: 30 * 24 * time.Hour},
+		{name: "legal audit failure", request: OperationsSubmitRequest{Kind: "retention.cleanup", ResourceType: "retention_policy", ResourceID: "policy-1", Reason: "cleanup"}, status: operationsmodel.OperationsStatusFailed, errorCode: "backend.cleanup.failed", failure: operationsmodel.OperationsFailureManualIntervention, want: 7 * 365 * 24 * time.Hour},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
+			service := NewOperationsApplicationService(repository, nil, func() time.Time { return now }, func() string { return test.name })
+			receipt, _, err := service.Submit(t.Context(), test.request, "key", operationsAdminPrincipal())
+			if err != nil {
+				t.Fatal(err)
+			}
+			receipt, err = service.Start(t.Context(), receipt.Command.ID, receipt.Command.Scope, scope)
+			if err != nil {
+				t.Fatal(err)
+			}
+			receipt.Command.Status, receipt.ErrorCode, receipt.FailureClass = test.status, test.errorCode, test.failure
+			finished, err := service.Finish(t.Context(), receipt, scope)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expiresAt, err := time.Parse(time.RFC3339Nano, finished.ExpiresAt)
+			if err != nil || expiresAt.Sub(*finished.Command.FinishedAt) != test.want {
+				t.Fatalf("expiry=%s finished=%s want=%s err=%v", expiresAt, finished.Command.FinishedAt, test.want, err)
+			}
+		})
 	}
 }

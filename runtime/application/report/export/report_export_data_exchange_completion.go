@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	reportcontract "github.com/domainry/domainry-report-sdk/contract"
@@ -85,7 +86,7 @@ func (p *DataExchangeProvider) CompleteExport(ctx context.Context, completion da
 				return &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_scope_changed"}
 			}
 		default:
-			// Historical manifests collapse prepared and downloaded into one
+			// Some report definitions collapse prepared and downloaded into one
 			// completed status, so the audit status cannot prove which phase ran.
 			// The receipt's exact job/artifact/completion binding is authoritative:
 			// reapply the same-status metadata transition to recover any crash
@@ -190,7 +191,7 @@ func (p *DataExchangeProvider) audit(ctx context.Context, key, event, objectKey 
 		}
 		return nil
 	}
-	return p.dependencies.Audit.AppendAudit(ctx, auditcontract.AuditAppendRequest{IdempotencyKey: key, Event: event, ObjectKey: objectKey, RecordID: auditID, Principal: principal, Summary: event, Metadata: metadata})
+	return p.dependencies.Audit.AppendAudit(ctx, auditcontract.AuditAppendRequest{IdempotencyKey: key, Family: auditmodel.EventFamilyRuntimeReport, Event: event, ObjectKey: objectKey, RecordID: auditID, Principal: principal, Summary: event, Metadata: metadata})
 }
 
 func StatusAllowed(status string, allowed []string) bool {

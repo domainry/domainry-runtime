@@ -21,7 +21,7 @@ func bindIdentitySecurityChallengeDelivery(binding identitysdk.Binding, operatio
 		return nil
 	}
 	if operations == nil {
-		return fmt.Errorf("Integration Operations are required for Identity security challenge delivery")
+		return nil
 	}
 	return binder.BindSecurityChallengeDelivery(runtimeIdentitySecurityChallengeDelivery{operations: operations})
 }

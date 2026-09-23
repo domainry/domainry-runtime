@@ -117,10 +117,16 @@ func TestRuntimeDoesNotReclaimIntegrationOwnerState(t *testing.T) {
 
 	forbiddenFragments := map[string]string{
 		"_application_schema_connector_requirements": "retired Connector catalog table",
-		"_integration_connector_definitions":         "Integration-owned Connector materialization table",
+		"_integration_connector_definitions":         "retired private Connector definition table",
+		"_integration_event_mapping_definitions":     "retired private event-mapping definition table",
+		"_integration_connector_provider_states":     "retired private Provider state table",
+		"_integration_connector_provider_commits":    "retired private Provider commit table",
+		"_integration_event_mapping_intents":         "retired private event execution projection table",
+		"_integration_credential_refresh_leases":     "retired unused credential refresh lease table",
+		"_integration_provider_runs":                 "Integration-owned Provider run table",
 		"_integration_connections":                   "Integration-owned connection table",
 		"_integration_secrets":                       "Integration-owned secret table",
-		"_integration_api_keys":                      "Integration-owned API key table",
+		"_integration_api_keys":                      "retired private API key table",
 		"_integration_external_identities":           "Integration-owned external identity table",
 		"_integration_webhook_subscriptions":         "Integration-owned webhook subscription table",
 		"_integration_web_push_subscriptions":        "Integration-owned Web Push subscription table",
@@ -228,7 +234,7 @@ func TestRuntimeConsumesMetadataThroughOneSDKBinding(t *testing.T) {
 		"/management/metadata/localized-texts/export",
 		"/management/metadata/localized-texts/export.xlsx",
 	}
-	for _, relative := range []string{"domain/endpoint/model/endpoint_route_policy.go", "transport/http/openapi/business_builder_paths.go", "transport/http/openapi/paths.go"} {
+	for _, relative := range []string{"domain/endpoint/model/endpoint_route_policy.go"} {
 		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relative)))
 		if err != nil {
 			t.Fatal(err)

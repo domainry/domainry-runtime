@@ -10,8 +10,8 @@ import (
 )
 
 type ApplicationSchemaSnapshot struct {
-	TemplateID                string                                         `json:"template_id"`
-	TemplateVersion           string                                         `json:"template_version"`
+	ProjectKey                string                                         `json:"project_key"`
+	SchemaVersion             string                                         `json:"schema_version"`
 	Name                      string                                         `json:"name,omitempty"`
 	TimeZone                  string                                         `json:"time_zone"`
 	SchemaHash                string                                         `json:"schema_hash"`

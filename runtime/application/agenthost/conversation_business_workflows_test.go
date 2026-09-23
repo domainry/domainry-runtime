@@ -14,7 +14,7 @@ import (
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/invocation"
+	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/invocation/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"

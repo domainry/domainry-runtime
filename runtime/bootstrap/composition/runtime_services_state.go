@@ -28,9 +28,6 @@ import (
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
-	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
-	capabilityapplication "github.com/domainry/domainry-runtime/runtime/application/capability"
-	changeplanapplication "github.com/domainry/domainry-runtime/runtime/application/changeplan"
 	deploymentbusiness "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
 	pipelineapplication "github.com/domainry/domainry-runtime/runtime/application/pipeline"
@@ -47,7 +44,6 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
 	businesscalendarmodel "github.com/domainry/domainry-runtime/runtime/domain/businesscalendar/model"
-	changeplanrepository "github.com/domainry/domainry-runtime/runtime/domain/changeplan/repository"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -57,6 +53,7 @@ import (
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workspaceaggregatecontract "github.com/domainry/domainry-runtime/runtime/domain/workspaceaggregate/contract"
 	reportadapter "github.com/domainry/domainry-runtime/runtime/modulehost/report"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 // runtimeAssembly is the private, constructor-only composition graph.
@@ -71,7 +68,7 @@ type runtimeAssembly struct {
 	actions                                     map[string]definitionmodel.ActionSchema
 	workflows                                   map[string]definitionmodel.WorkflowSchema
 	businessCalendars                           []businesscalendarmodel.BusinessCalendarSchema
-	schedulerDefinitions                        []map[string]any
+	schedulerDefinitions                        []schedulersdk.Definition
 	automationRules                             map[string]automationmodel.AutomationRuleSchema
 	dictionaries                                []appschemamodel.DictionarySchema
 	integrations                                connectormodel.IntegrationSchema
@@ -106,7 +103,6 @@ type runtimeAssembly struct {
 	*recordservice.RecordDomainService
 	recordRuntimeState
 	*actionruntime.ActionExecutionRuntime
-	businessSystemService               *businesssystemapplication.BusinessSystemApplicationService
 	publicationHandoffService           *publicationhandoff.PublicationHandoffApplicationService
 	integrationPublicationWorkerRepo    publicationrepository.WorkerRepository
 	workerWakeups                       *workerplatform.WakeupBroker
@@ -137,7 +133,6 @@ type runtimeAssembly struct {
 	metadataLocalization                metadatasdk.Localization
 	automationWorkerRepo                automationcontract.AutomationWorkerStore
 	automationExecutionRepo             automationrepository.AutomationExecutionRepository
-	businessEvidenceRepo                changeplanrepository.ChangePlanEvidenceRepository
 	runtimeStatusRepo                   deploymentrepository.DeploymentRuntimeStatusRepository
 	identityProjection                  identitysdk.Projection
 	identityHandlerDeliveryBinder       identitysdk.HandlerDeliveryUnitOfWorkBinder
@@ -160,8 +155,6 @@ type runtimeAssembly struct {
 	workspaceUsageResolver              workspaceaggregatecontract.UsageResolver
 	workspaceAggregateRepository        workspaceaggregatecontract.Repository
 	prepareOutboxPayload                publicationhandoff.PayloadPreparer
-	authoringCapabilities               *capabilityapplication.CapabilityAuthoringApplicationService
-	businessReferences                  *changeplanapplication.ChangePlanReferenceApplicationService
 	reportExportsService                *reportexportapplication.ReportExportApplicationService
 	reportApplication                   reportsdk.ApplicationBinding
 	reportModuleQueryHost               *reportadapter.ReportModuleQueryHost

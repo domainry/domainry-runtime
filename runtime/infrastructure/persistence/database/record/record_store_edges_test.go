@@ -340,8 +340,8 @@ func TestRecordMutationSQLFailureAndSideEffectEdges(t *testing.T) {
 	_ = tx.Rollback()
 
 	for name, commit := range map[string]transactionmodel.RecordMutationCommit{
-		"audit":    {Operation: "create", Object: object, Record: value, Audit: &auditmodel.AuditEvent{ID: "audit"}},
-		"audits":   {Operation: "create", Object: object, Record: value, Audits: []auditmodel.AuditEvent{{ID: "audit"}}},
+		"audit":    {Operation: "create", Object: object, Record: value, Audit: &auditmodel.AuditEvent{ID: "audit", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_created", CreatedAt: "2026-07-19T00:00:00Z"}},
+		"audits":   {Operation: "create", Object: object, Record: value, Audits: []auditmodel.AuditEvent{{ID: "audit", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_created", CreatedAt: "2026-07-19T00:00:00Z"}}},
 		"outbox":   {Operation: "create", Object: object, Record: value, Outbox: []publicationmodel.Message{{ID: "outbox", WorkspaceID: "workspace", DedupKey: "key"}}},
 		"workflow": {Operation: "create", Object: object, Record: value, WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "workflow"}}},
 	} {
@@ -370,9 +370,9 @@ func TestRecordMutationSQLFailureAndSideEffectEdges(t *testing.T) {
 	}
 	_ = tx.Rollback()
 	for name, event := range map[string]auditmodel.AuditEvent{
-		"before":   {ID: "audit", Before: map[string]any{"bad": bad}},
-		"after":    {ID: "audit", After: map[string]any{"bad": bad}},
-		"metadata": {ID: "audit", Metadata: map[string]any{"bad": bad}},
+		"before":   {ID: "audit", WorkspaceID: "workspace", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", Before: map[string]any{"bad": bad}, CreatedAt: "2026-07-19T00:00:00Z"},
+		"after":    {ID: "audit", WorkspaceID: "workspace", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", After: map[string]any{"bad": bad}, CreatedAt: "2026-07-19T00:00:00Z"},
+		"metadata": {ID: "audit", WorkspaceID: "workspace", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", Metadata: map[string]any{"bad": bad}, CreatedAt: "2026-07-19T00:00:00Z"},
 	} {
 		store = scriptedRecordStore(t, &recordSQLState{})
 		tx, _ := store.database().BeginTx(t.Context(), nil)

@@ -8,8 +8,7 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-agent-sdk/modulehost"
-	"github.com/domainry/domainry-foundation/modulecapability"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -41,7 +40,7 @@ func (*agentSDKRunnerStub) Run(context.Context, agentsdk.InteractiveRequest) (ag
 }
 
 type agentSDKBindingStub struct {
-	modulecapability.Binding
+	agentsdk.Binding
 	runner     *agentSDKRunnerStub
 	descriptor agentsdk.Descriptor
 	closed     bool
@@ -74,7 +73,7 @@ func TestOpenAgentBindingUsesModuleFactoryAndValidatesDescriptor(t *testing.T) {
 	binding := &agentSDKBindingStub{runner: runner, descriptor: agentsdk.Descriptor{ProtocolVersion: agentsdk.ProtocolVersionV1, Mode: agentsdk.DeploymentModeModule, Capabilities: []string{agentsdk.CapabilityTaskStart, agentsdk.CapabilityTaskPoll, agentsdk.CapabilityTaskCancel, agentsdk.CapabilityInteractiveRun, agentsdk.CapabilityLifecycleExecute}}}
 	factory := &agentSDKModuleFactoryStub{binding: binding}
 	store := openAgentBindingRuntimeStore(t)
-	opened, err := openAgentBinding(t.Context(), "runtime", store, factory)
+	opened, err := openAgentBinding(t.Context(), "runtime", store, nil, nil, factory)
 	if err != nil || opened != binding || factory.runtimeID != "runtime" {
 		t.Fatalf("opened=%#v runtime=%q err=%v", opened, factory.runtimeID, err)
 	}
@@ -85,21 +84,21 @@ func TestOpenAgentBindingUsesModuleFactoryAndValidatesDescriptor(t *testing.T) {
 }
 func TestOpenAgentBindingFailsClosedAndClosesInvalidBinding(t *testing.T) {
 	store := openAgentBindingRuntimeStore(t)
-	if binding, err := openAgentBinding(t.Context(), "runtime", store, nil); err != nil || binding != nil {
+	if binding, err := openAgentBinding(t.Context(), "runtime", store, nil, nil, nil); err != nil || binding != nil {
 		t.Fatalf("binding=%#v err=%v", binding, err)
 	}
 	invalid := &agentSDKBindingStub{runner: &agentSDKRunnerStub{}, descriptor: agentsdk.Descriptor{ProtocolVersion: "old", Mode: agentsdk.DeploymentModeModule}}
-	if _, err := openAgentBinding(t.Context(), "runtime", store, &agentSDKModuleFactoryStub{binding: invalid}); err == nil || !invalid.closed {
+	if _, err := openAgentBinding(t.Context(), "runtime", store, nil, nil, &agentSDKModuleFactoryStub{binding: invalid}); err == nil || !invalid.closed {
 		t.Fatalf("invalid descriptor err=%v closed=%v", err, invalid.closed)
 	}
-	if _, err := openAgentBinding(t.Context(), "runtime", store, &agentSDKModuleFactoryStub{}); err == nil {
+	if _, err := openAgentBinding(t.Context(), "runtime", store, nil, nil, &agentSDKModuleFactoryStub{}); err == nil {
 		t.Fatal("nil Binding accepted")
 	}
 }
 
-func TestOpenManifestAgentBindingSkipsUnusedAgentTopology(t *testing.T) {
+func TestOpenProjectAgentBindingSkipsUnusedAgentTopology(t *testing.T) {
 	factory := &agentSDKModuleFactoryStub{err: errors.New("must not open")}
-	binding, err := openManifestAgentBinding(t.Context(), "runtime", nil, factory, manifestmodel.ManifestSchema{})
+	binding, err := openProjectAgentBinding(t.Context(), "runtime", nil, nil, nil, factory, runtimeext.ProjectDefinitions{})
 	if err != nil || binding != nil || factory.runtimeID != "" {
 		t.Fatalf("binding=%#v runtime=%q err=%v", binding, factory.runtimeID, err)
 	}
@@ -112,33 +111,33 @@ type conversationModuleFactoryStub struct {
 
 func (f *conversationModuleFactoryStub) ConversationEnabled() bool { return f.enabled }
 
-func TestOpenManifestAgentBindingSupportsConversationsWithoutLegacyDefinitions(t *testing.T) {
+func TestOpenProjectAgentBindingSupportsConversationsWithoutDefinitions(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		runner := &agentSDKRunnerStub{}
 		binding := &agentSDKBindingStub{runner: runner, descriptor: agentsdk.Descriptor{ProtocolVersion: agentsdk.ProtocolVersionV1, Mode: agentsdk.DeploymentModeModule, Capabilities: []string{agentsdk.CapabilityTaskStart, agentsdk.CapabilityTaskPoll, agentsdk.CapabilityTaskCancel, agentsdk.CapabilityInteractiveRun, agentsdk.CapabilityLifecycleExecute}}}
 		factory := &conversationModuleFactoryStub{agentSDKModuleFactoryStub: &agentSDKModuleFactoryStub{binding: binding}, enabled: enabled}
-		opened, err := openManifestAgentBinding(t.Context(), "runtime", openAgentBindingRuntimeStore(t), factory, manifestmodel.ManifestSchema{})
+		opened, err := openProjectAgentBinding(t.Context(), "runtime", openAgentBindingRuntimeStore(t), nil, nil, factory, runtimeext.ProjectDefinitions{})
 		if err != nil || (opened != nil) != enabled || (factory.runtimeID != "") != enabled {
 			t.Fatalf("enabled=%v opened=%v err=%v", enabled, opened, err)
 		}
 	}
 }
 
-func TestManifestUsesAgentForEveryOwnedDefinitionCollection(t *testing.T) {
+func TestProjectDefinitionsUseAgentForEveryOwnedDefinitionCollection(t *testing.T) {
 	cases := []struct {
-		name     string
-		manifest manifestmodel.ManifestSchema
+		name        string
+		definitions runtimeext.ProjectDefinitions
 	}{
-		{name: "skill", manifest: manifestmodel.ManifestSchema{Skills: []agentsdk.SkillSchema{{Key: "reader"}}}},
-		{name: "agent", manifest: manifestmodel.ManifestSchema{Agents: []agentsdk.AgentSchema{{Key: "assistant"}}}},
-		{name: "task", manifest: manifestmodel.ManifestSchema{AgentTasks: []agentsdk.AgentTaskDefinition{{Key: "review"}}}},
-		{name: "entrypoint", manifest: manifestmodel.ManifestSchema{AgentEntrypoints: []agentsdk.AgentEntrypointAssignment{{Key: "assistant.global"}}}},
-		{name: "service principal", manifest: manifestmodel.ManifestSchema{AgentServicePrincipals: []agentsdk.AgentServicePrincipalBinding{{Key: "assistant_service"}}}},
+		{name: "skill", definitions: runtimeext.ProjectDefinitions{AgentSkills: []agentsdk.SkillSchema{{Key: "reader"}}}},
+		{name: "agent", definitions: runtimeext.ProjectDefinitions{Agents: []agentsdk.AgentSchema{{Key: "assistant"}}}},
+		{name: "task", definitions: runtimeext.ProjectDefinitions{AgentTasks: []agentsdk.AgentTaskDefinition{{Key: "review"}}}},
+		{name: "entrypoint", definitions: runtimeext.ProjectDefinitions{AgentEntrypoints: []agentsdk.AgentEntrypointAssignment{{Key: "assistant.global"}}}},
+		{name: "service principal", definitions: runtimeext.ProjectDefinitions{AgentServicePrincipals: []agentsdk.AgentServicePrincipalBinding{{Key: "assistant_service"}}}},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			if !manifestUsesAgent(test.manifest) {
-				t.Fatal("Agent-owned manifest definition did not require Agent Binding")
+			if !projectDefinitionsUseAgent(test.definitions) {
+				t.Fatal("Agent-owned project definition did not require Agent Binding")
 			}
 		})
 	}

@@ -15,21 +15,22 @@ import (
 var _ operationsrepository.OperationsLeaseRepository = OperationsStore{}
 
 type operationsLeaseSpec struct {
-	owner string
-	table string
+	owner       string
+	table       string
+	scopeColumn string
+	scopeValue  string
 }
 
 var operationsLeaseSpecs = []operationsLeaseSpec{
-	{owner: "dispatch_callback", table: "_dispatch_callback_receipts"},
-	{owner: "workflow", table: "_workflow_execution_receipts"},
+	{owner: "dispatch_callback", table: "_operations", scopeColumn: "owner", scopeValue: "dispatch"},
+	{owner: "workflow", table: "_operations", scopeColumn: "owner", scopeValue: "workflow"},
 	{owner: "workflow_execution", table: "_workflow_executions"},
 	{owner: "workflow_deadline", table: "_workflow_tasks"},
-	{owner: "business_action", table: "_action_executions"},
-	{owner: "record_mutation", table: "_record_mutation_executions"},
-	{owner: "idempotency_cleanup", table: "_idempotency_cleanup_leases"},
-	{owner: "automation", table: "_automation_instruction_executions"},
+	{owner: "business_action", table: "_operations", scopeColumn: "owner", scopeValue: "action"},
+	{owner: "record_mutation", table: "_operations", scopeColumn: "owner", scopeValue: "record"},
+	{owner: "idempotency_cleanup", table: "_worker_scopes", scopeColumn: "owner", scopeValue: "idempotency_cleanup"},
+	{owner: "automation", table: "_automation_runs", scopeColumn: "run_kind", scopeValue: "instruction"},
 	{owner: "runtime_publication_outbox", table: "_publication_outbox"},
-	{owner: "transaction_boundary", table: "_transaction_boundary_intents"},
 }
 
 func (s OperationsStore) OperationsLeaseSnapshot(ctx context.Context, instanceID string, now time.Time) (operationsmodel.OperationsLeaseSnapshot, error) {
@@ -39,7 +40,10 @@ func (s OperationsStore) OperationsLeaseSnapshot(ctx context.Context, instanceID
 	instanceID = strings.TrimSpace(instanceID)
 	snapshot := operationsmodel.OperationsLeaseSnapshot{InstanceID: instanceID, CheckedAt: now.UTC(), Owners: make([]operationsmodel.OperationsLeaseCount, 0, len(operationsLeaseSpecs))}
 	for _, spec := range operationsLeaseSpecs {
-		live, expired, err := s.operationsLeaseCounts(ctx, spec.table, instanceID, now.UTC())
+		if !s.store.RuntimeSchemaCapabilities().IncludesTable(spec.table) {
+			continue
+		}
+		live, expired, err := s.operationsLeaseCounts(ctx, spec.table, spec.scopeColumn, spec.scopeValue, instanceID, now.UTC())
 		if err != nil {
 			return operationsmodel.OperationsLeaseSnapshot{}, fmt.Errorf("read %s leases: %w", spec.owner, err)
 		}
@@ -52,9 +56,12 @@ func (s OperationsStore) OperationsLeaseSnapshot(ctx context.Context, instanceID
 	return snapshot, nil
 }
 
-func (s OperationsStore) operationsLeaseCounts(ctx context.Context, table, instanceID string, now time.Time) (int64, int64, error) {
+func (s OperationsStore) operationsLeaseCounts(ctx context.Context, table, scopeColumn, scopeValue, instanceID string, now time.Time) (int64, int64, error) {
 	nowText := now.Format(time.RFC3339Nano)
 	predicate := query.Predicate(query.NotEqual("lease_owner", ""))
+	if scopeColumn != "" {
+		predicate = query.And(predicate, query.Equal(scopeColumn, scopeValue))
+	}
 	if instanceID != "" {
 		predicate = query.And(predicate, query.Or(query.Equal("lease_owner", instanceID), query.Like("lease_owner", instanceID+":%"), query.Like("lease_owner", instanceID+"-%")))
 	}

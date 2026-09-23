@@ -15,7 +15,7 @@ import (
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/invocation"
+	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/invocation/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 

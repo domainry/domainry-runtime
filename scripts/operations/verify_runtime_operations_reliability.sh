@@ -72,14 +72,12 @@ deterministic_gate() {
   run_test integration-owner-workers go test -count=1 -timeout=5m \
     github.com/domainry/domainry-integration/internal/infrastructure/persistence/database/integration \
     -run '^TestLocalWorkersPersistProviderStateBeforeDispatchingEvent$'
-  run_test protocol-observability go test -count=1 -timeout=5m \
-    ./runtime/transport/http \
-    ./runtime/transport/http/openapi
+	run_test protocol-observability go test -count=1 -timeout=5m \
+		./runtime/transport/http
   run_test operations-boundaries go test -count=1 -timeout=5m \
-    ./runtime/application/operations \
-    ./runtime/transport/http/operations \
-    ./runtime/transport/http/openapi \
-    ./runtime/boundary
+		./runtime/application/operations \
+		./runtime/transport/http/operations \
+		./runtime/boundary
   run_test migration-recovery go test -count=1 -timeout=5m \
     ./runtime/infrastructure/persistence/database/migration
   run_test capacity go test -count=1 -timeout=5m \
@@ -242,7 +240,7 @@ summary = {
         if "CurrentRuntimeSchemaVersion" in line
     ),
     "contracts": {
-        "openapi_contract_sha256": digest_tree("runtime/transport/http/openapi"),
+		"runtime_endpoint_contract_sha256": digest_tree("runtime/domain/endpoint"),
         "operations_inventory_sha256": digest("docs/architecture/runtime-operations-inventory.md"),
         "test_matrix_sha256": digest("scripts/operations/contracts/runtime-operations-reliability-test-matrix.md"),
         "config_contract_sha256": digest_tree("runtime/platform/config"),

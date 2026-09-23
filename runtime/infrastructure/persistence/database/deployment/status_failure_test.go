@@ -161,7 +161,7 @@ func deploymentOperationalStatusSteps(cleanupRow []driver.Value) []deploymentQue
 		)
 	}
 	return append(steps, deploymentQueryStep{
-		columns: []string{"lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "last_deleted", "last_error"},
+		columns: []string{"lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "checkpoint", "last_error"},
 		rows:    [][]driver.Value{cleanupRow},
 	})
 }
@@ -208,13 +208,13 @@ func TestCleanupLeaseAndDeleteStages(t *testing.T) {
 		{name: "delete rows", state: &deploymentDBState{querySteps: []deploymentQueryStep{{columns: []string{"id", "workspace_id"}, rows: [][]driver.Value{{"id", "workspace"}}}}, execSteps: []deploymentExecStep{{rowsErr: wantErr}}}},
 	} {
 		store, closeDB := scriptedDeploymentStore(base, test.state)
-		if _, err := store.deleteExpiredReceiptBatch(t.Context(), "receipts", "worker", 1, "now", 1); err == nil {
+		if _, err := store.deleteExpiredReceiptBatch(t.Context(), idempotencyReceiptTable{table: "receipts"}, "worker", 1, "now", 1); err == nil {
 			t.Fatalf("delete stage=%s succeeded", test.name)
 		}
 		closeDB()
 	}
 	store, closeDB := scriptedDeploymentStore(base, &deploymentDBState{querySteps: []deploymentQueryStep{{columns: []string{"id", "workspace_id"}}}})
-	deleted, err := store.deleteExpiredReceiptBatch(t.Context(), "receipts", "worker", 1, "now", 1)
+	deleted, err := store.deleteExpiredReceiptBatch(t.Context(), idempotencyReceiptTable{table: "receipts"}, "worker", 1, "now", 1)
 	closeDB()
 	if err != nil || deleted != 0 {
 		t.Fatalf("empty delete=%d err=%v", deleted, err)

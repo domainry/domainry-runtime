@@ -45,23 +45,19 @@ type WorkflowDefinitionVersion struct {
 }
 
 type WorkflowValidation struct {
-	Valid         bool                      `json:"valid"`
-	CapabilityKey string                    `json:"capability_key,omitempty"`
-	Fragment      map[string]any            `json:"fragment,omitempty"`
-	Issues        []WorkflowValidationIssue `json:"issues"`
-	ValidatedAt   string                    `json:"validated_at"`
+	Valid       bool                      `json:"valid"`
+	Issues      []WorkflowValidationIssue `json:"issues"`
+	ValidatedAt string                    `json:"validated_at"`
 }
 
 type WorkflowValidationIssue struct {
-	Severity        string            `json:"severity"`
-	Code            string            `json:"code"`
-	MessageKey      string            `json:"message_key"`
-	Message         string            `json:"message"`
-	FieldPath       string            `json:"field_path"`
-	NodeID          string            `json:"node_id,omitempty"`
-	EdgeID          string            `json:"edge_id,omitempty"`
-	Params          map[string]string `json:"params,omitempty"`
-	CapabilityKey   string            `json:"capability_key"`
-	ContractVersion string            `json:"contract_version"`
-	Diagnostic      string            `json:"diagnostic,omitempty"`
+	Severity   string            `json:"severity"`
+	Code       string            `json:"code"`
+	MessageKey string            `json:"message_key"`
+	Message    string            `json:"message"`
+	FieldPath  string            `json:"field_path"`
+	NodeID     string            `json:"node_id,omitempty"`
+	EdgeID     string            `json:"edge_id,omitempty"`
+	Params     map[string]string `json:"params,omitempty"`
+	Diagnostic string            `json:"diagnostic,omitempty"`
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/datamigration"
@@ -26,13 +27,21 @@ func TestSQLiteDatabaseRetirementExecutorDropsOnlyTypedApprovedObject(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := executor.ExecuteDatabaseRetirement(t.Context(), retirement, plan)
+	ctx := requestcontext.WithOwnerExecutionID(t.Context(), "operation-1")
+	result, err := executor.ExecuteDatabaseRetirement(ctx, retirement, plan)
 	if err != nil || result.Dirty || result.ExecutedStatements != 1 || result.AuditEventID == "" {
 		t.Fatalf("execution result=%+v err=%v", result, err)
 	}
 	var count int
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'old_table'`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("retired table still exists: count=%d err=%v", count, err)
+	}
+	var event, recordID, operationID, ownerRunID string
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT "+store.Identifier("event")+", "+store.Identifier("record_id")+", "+store.Identifier("operation_id")+", "+store.Identifier("owner_run_id")+" FROM "+store.TableIdentifier("_audit_events")+" WHERE "+store.Identifier("id")+" = "+store.Placeholder(1), result.AuditEventID).Scan(&event, &recordID, &operationID, &ownerRunID); err != nil {
+		t.Fatalf("load immutable retirement audit event: %v", err)
+	}
+	if event != "database_retirement_completed" || recordID != retirement.ID || operationID != "operation-1" || ownerRunID != retirement.ID {
+		t.Fatalf("retirement audit event=%q record=%q operation=%q owner_run=%q", event, recordID, operationID, ownerRunID)
 	}
 }
 

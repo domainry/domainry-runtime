@@ -26,7 +26,6 @@ import (
 // create an implementation-detail dependency cycle.
 var (
 	_ recordrepository.RecordRepository                      = recordpersistence.RecordStore{}
-	_ recordrepository.RecordBusinessSeedRepository          = recordpersistence.RecordStore{}
 	_ auditrepository.AuditRepository                        = (*auditpersistence.AuditStore)(nil)
 	_ auditrepository.AuditEventWriterRepository             = (*auditpersistence.AuditStore)(nil)
 	_ auditrepository.AuditEventRepository                   = (*auditpersistence.AuditStore)(nil)
@@ -39,7 +38,6 @@ var (
 	_ workflowcontract.WorkflowDecisionStore                 = workflowpersistence.WorkflowDecisionStore{}
 	_ automationcontract.AutomationWorkerStore               = automationpersistence.AutomationWorkerStore{}
 	_ automationrepository.AutomationExecutionRepository     = automationpersistence.AutomationExecutionStore{}
-	_ automationrepository.ExecutionSeedRepository           = automationpersistence.AutomationExecutionStore{}
 	_ workflowrepository.WorkflowExecutionRepository         = workflowpersistence.WorkflowWorkerStore{}
 	_ actioncontract.ActionExecutionStore                    = actionpersistence.ActionBusinessExecutionStore{}
 	_ actioncontract.ActionExecutionTransactionStore         = actionpersistence.ActionBusinessExecutionStore{}

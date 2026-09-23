@@ -7,5 +7,4 @@ func (h *DiscoveryHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /discovery/i18n/resources", h.i18nResources)
 	mux.HandleFunc("GET /discovery/schema/administration", h.getSchema)
 	mux.HandleFunc("GET /discovery/schema", h.getPublishedRuntimeSchema)
-	mux.HandleFunc("GET /discovery/references/{kind}", h.referenceValues)
 }

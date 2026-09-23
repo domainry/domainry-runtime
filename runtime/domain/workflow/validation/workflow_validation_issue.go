@@ -7,17 +7,15 @@ import (
 	"strings"
 )
 
-const WorkflowRuntimeAuthoringContractVersion = "runtime-authoring-v1"
-
 func WorkflowValidationIssueFromError(err error, code, diagnostic string) workflowmodel.WorkflowValidationIssue {
 	params := workflowErrorParams(err)
 	nodeID, edgeID := strings.TrimSpace(params["node"]), strings.TrimSpace(params["edge"])
-	return workflowmodel.WorkflowValidationIssue{Severity: "error", Code: code, MessageKey: code, Message: code, FieldPath: workflowValidationFieldPath(code, nodeID, edgeID), NodeID: nodeID, EdgeID: edgeID, Params: params, CapabilityKey: workflowValidationCapabilityKey(code), ContractVersion: WorkflowRuntimeAuthoringContractVersion, Diagnostic: diagnostic}
+	return workflowmodel.WorkflowValidationIssue{Severity: "error", Code: code, MessageKey: code, Message: code, FieldPath: workflowValidationFieldPath(code, nodeID, edgeID), NodeID: nodeID, EdgeID: edgeID, Params: params, Diagnostic: diagnostic}
 }
 
 func WorkflowReferenceValidationIssue(code, nodeID, reference string) workflowmodel.WorkflowValidationIssue {
 	params := map[string]string{"reference": reference}
-	return workflowmodel.WorkflowValidationIssue{Severity: "error", Code: code, MessageKey: code, Message: code, FieldPath: workflowValidationFieldPath(code, nodeID, ""), NodeID: nodeID, Params: params, CapabilityKey: workflowValidationCapabilityKey(code), ContractVersion: WorkflowRuntimeAuthoringContractVersion, Diagnostic: "reference=" + reference}
+	return workflowmodel.WorkflowValidationIssue{Severity: "error", Code: code, MessageKey: code, Message: code, FieldPath: workflowValidationFieldPath(code, nodeID, ""), NodeID: nodeID, Params: params, Diagnostic: "reference=" + reference}
 }
 
 func workflowErrorParams(err error) map[string]string {
@@ -64,24 +62,5 @@ func workflowValidationFieldPath(code, nodeID, edgeID string) string {
 		return prefix + ".outgoing_edges"
 	default:
 		return prefix
-	}
-}
-
-func workflowValidationCapabilityKey(code string) string {
-	switch {
-	case strings.Contains(code, "resolver"), strings.Contains(code, "assignee"):
-		return "workflow.assignee_resolver"
-	case strings.Contains(code, "approval"):
-		return "workflow.node.approval"
-	case strings.Contains(code, "condition"):
-		return "workflow.condition_contract"
-	case strings.Contains(code, "action"):
-		return "workflow.node.action"
-	case strings.Contains(code, "edge"), strings.Contains(code, "branch"):
-		return "workflow.graph_edge"
-	case strings.Contains(code, "trigger"):
-		return "workflow.trigger_contract"
-	default:
-		return "workflow.graph_v2"
 	}
 }

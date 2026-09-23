@@ -673,8 +673,8 @@ LIMIT 100
 <td>同一业务可以先共进程部署，再按容量和隔离需求演进为 SaaS</td>
 </tr>
 <tr>
-<td>模块提供自己的 HTTP Surface 和 OpenAPI operations</td>
-<td>Runtime 统一挂载认证、listener exposure、容量治理，并将模块 operations 合并进最终 OpenAPI</td>
+<td>模块提供自己的 typed HTTP Adapter、公开 SDK/客户端和 usage 文档</td>
+<td>Runtime 统一挂载认证、listener exposure 与容量治理，但不聚合或托管 API 文档</td>
 <td>模块可独立演进产品 API，而项目仍保持统一入口和治理</td>
 </tr>
 <tr>
@@ -929,7 +929,7 @@ LIMIT 100
 <p><strong>正例</strong></p>
 <p>早期项目将 Scheduler 作为 Module 运行，共享宿主数据库并减少部署单元；任务规模增长后，在完成 worker fencing、状态迁移和切流校验后切换到 Scheduler SaaS。</p>
 <p><strong>常规开发达到同等保障的代价</strong></p>
-<p>每项可拆分能力都要先定义稳定 SDK/HTTP 合同、模式与版本协商、认证 audience、超时、幂等、Receipt 和不可用策略，再分别实现本地与远程 Binding、产品 HTTP/OpenAPI parity、状态与 Worker 所有权、迁移切流、双 Worker fencing 和回滚验证。单纯把函数改成 HTTP 调用只完成了传输替换，没有完成一致性和运维语义。</p>
+<p>每项可拆分能力都要先定义稳定 SDK/HTTP 合同、模式与版本协商、认证 audience、超时、幂等、Receipt 和不可用策略，再分别实现本地与远程 Binding、产品 HTTP 语义一致性、状态与 Worker 所有权、迁移切流、双 Worker fencing 和回滚验证。单纯把函数改成 HTTP 调用只完成了传输替换，没有完成一致性和运维语义。</p>
 <p><strong>解决的问题</strong></p>
 <ul>
 <li>避免为了未来规模过早承担微服务复杂度；</li>

@@ -54,7 +54,11 @@ func (s *OperationsLeaseApplicationService) ForceRelease(ctx context.Context, co
 	}
 	if decision == operationsmodel.OperationsSubmissionReplay && receipt.Command.Status == operationsmodel.OperationsStatusSucceeded {
 		var release operationsmodel.OperationsLeaseReleaseResult
-		if err := json.Unmarshal(receipt.Result, &release); err != nil {
+		resultJSON, readErr := s.operations.receiptResult(ctx, receipt)
+		if readErr != nil {
+			return OperationsLeaseReleaseReceipt{}, readErr
+		}
+		if err := json.Unmarshal(resultJSON, &release); err != nil {
 			return OperationsLeaseReleaseReceipt{}, apperror.New(apperror.KindInternal, "backend.operations.lease_receipt_invalid", err, nil)
 		}
 		return OperationsLeaseReleaseReceipt{Release: release, Receipt: receipt}, nil

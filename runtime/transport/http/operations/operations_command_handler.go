@@ -28,7 +28,9 @@ func (h *OperationsHandler) listOperations(w http.ResponseWriter, r *http.Reques
 	page, err := h.service.SearchReceipts(r.Context(), operationsmodel.OperationsReceiptFilter{
 		Status:       operationsmodel.OperationsStatus(strings.TrimSpace(values.Get("status"))),
 		FailureClass: operationsmodel.OperationsFailureClass(strings.TrimSpace(values.Get("failure_class"))),
+		Owner:        values.Get("owner"),
 		Kind:         values.Get("kind"),
+		ParentID:     values.Get("parent_operation_id"),
 		ResourceType: values.Get("resource_type"),
 		ResourceID:   values.Get("resource_id"),
 		RequestedBy:  values.Get("requested_by"),

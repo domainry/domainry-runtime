@@ -4,12 +4,15 @@ import (
 	"context"
 	"testing"
 
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
+	metadatamodule "github.com/domainry/domainry-metadata/module"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	reportmodule "github.com/domainry/domainry-report/module"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
 type runtimeReportAnalysisTableSourceStub struct{}
@@ -32,11 +35,24 @@ func TestRuntimeReportApplicationHostExposesComposedAnalysisTableSource(t *testi
 	}
 }
 
+func bindReportTestMetadata(t *testing.T, store *persistence.RuntimeStore) {
+	t.Helper()
+	binding, err := metadatamodule.NewFactory().OpenModule(t.Context(), metadatasdk.ApplicationRef{InstallationID: "report-test"}, runtimeMetadataModuleHost{store: store})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = binding.Close(t.Context()) })
+	if err := store.BindMetadata(binding); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) {
 	store := openAgentBindingRuntimeStore(t)
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	bindReportTestMetadata(t, store)
 	_, err := store.DB().ExecContext(t.Context(), `CREATE TABLE _report_snapshots (
 		id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, report_key TEXT NOT NULL,
 		access_scope_hash TEXT NOT NULL, idempotency_key TEXT NOT NULL, status TEXT NOT NULL,
@@ -59,21 +75,27 @@ func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest := manifestmodel.ManifestSchema{TemplateID: "template", Version: "7", Reports: []reportmodel.ReportSchema{{Key: "summary", Name: "Summary"}}}
-	if err := SynchronizeReportDefinitions(t.Context(), binding, manifest); err != nil {
+	reportDefinitions := []runtimeext.ReportDefinition{{Report: reportmodel.ReportSchema{Key: "summary", Name: "Summary"}}}
+	if err := SynchronizeReportDefinitions(t.Context(), binding, "template", "7", reportDefinitions); err != nil {
 		t.Fatal(err)
 	}
-	var snapshots, definitions, migrations int
+	var snapshots, definitions, definitionVersions, migrations, retiredDefinitionTables int
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _report_snapshots WHERE id='snapshot-1'`).Scan(&snapshots); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _report_definitions WHERE resource_key='summary' AND schema_version='7'`).Scan(&definitions); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _definitions WHERE owner='report' AND kind='report' AND definition_key='summary' AND schema_version='7'`).Scan(&definitions); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _definition_versions WHERE owner='report' AND kind='report' AND definition_key='summary' AND schema_version='7'`).Scan(&definitionVersions); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('_report_definitions','_report_operation_state_examples','_report_sensitive_field_policies','_report_export_controls')`).Scan(&retiredDefinitionTables); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:report' AND dirty=FALSE`).Scan(&migrations); err != nil {
 		t.Fatal(err)
 	}
-	if snapshots != 1 || definitions != 1 || migrations != 1 {
-		t.Fatalf("snapshots=%d definitions=%d migrations=%d", snapshots, definitions, migrations)
+	if snapshots != 1 || definitions != 1 || definitionVersions != 1 || migrations != 1 || retiredDefinitionTables != 0 {
+		t.Fatalf("snapshots=%d definitions=%d definition_versions=%d migrations=%d retired_definition_tables=%d", snapshots, definitions, definitionVersions, migrations, retiredDefinitionTables)
 	}
 }

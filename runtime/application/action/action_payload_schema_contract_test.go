@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/manifest/contract/invocation"
+	invocationcontract "github.com/domainry/domainry-runtime/runtime/domain/invocation/contract"
 )
 
 func TestPublishedPayloadSchemaMatchesCanonicalRuntimeInputsAndDefaults(t *testing.T) {

@@ -96,6 +96,7 @@ func TestReportExportDeliveryMaterializesSmallResultWithBusinessTTL(t *testing.T
 	if err = store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _data_exchange_jobs WHERE workspace_id = ? AND provider = ? AND operation = ?`, principal.WorkspaceID, "reports", "export").Scan(&jobCount); err != nil || jobCount != 1 {
 		t.Fatalf("data exchange jobs=%d err=%v", jobCount, err)
 	}
+	assertDataExchangeSharedArtifact(t, store, principal.WorkspaceID, result.Job.ID)
 }
 
 func TestReportExportDurableReceiptWithRealSQLiteDataExchangeBinding(t *testing.T) {
@@ -208,9 +209,26 @@ func TestReportExportDurableReceiptWithRealSQLiteDataExchangeBinding(t *testing.
 	if err = store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _data_exchange_jobs WHERE workspace_id = ? AND provider = ? AND operation = ?`, principal.WorkspaceID, "reports", "export").Scan(&jobCount); err != nil || jobCount != 1 {
 		t.Fatalf("data exchange jobs=%d err=%v", jobCount, err)
 	}
+	assertDataExchangeSharedArtifact(t, store, principal.WorkspaceID, completed.ID)
 	var ledgerTables int
 	if err = store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name LIKE '%schema_migrations%'`).Scan(&ledgerTables); err != nil || ledgerTables != 1 {
 		t.Fatalf("migration ledger tables=%d err=%v", ledgerTables, err)
+	}
+}
+
+func assertDataExchangeSharedArtifact(t *testing.T, store *persistence.RuntimeStore, workspaceID, jobID string) {
+	t.Helper()
+	var artifacts, retiredTables int
+	err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*)
+FROM _artifacts a
+JOIN _artifact_bindings b ON b.workspace_id=a.workspace_id AND b.artifact_id=a.id
+WHERE a.workspace_id=? AND a.owner='data_exchange' AND a.kind='output' AND a.status='available'
+AND b.owner='data_exchange' AND b.kind='job' AND b.resource_type='data_exchange_job' AND b.resource_id=?`, workspaceID, jobID).Scan(&artifacts)
+	if err != nil || artifacts != 1 {
+		t.Fatalf("shared Data Exchange artifacts=%d err=%v", artifacts, err)
+	}
+	if err = store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_data_exchange_artifacts'`).Scan(&retiredTables); err != nil || retiredTables != 0 {
+		t.Fatalf("retired Data Exchange artifact tables=%d err=%v", retiredTables, err)
 	}
 }
 

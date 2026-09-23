@@ -3,6 +3,7 @@ package upload
 import (
 	"context"
 
+	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -32,10 +33,10 @@ func (s *UploadAccessApplicationService) authorizeRecordDownload(ctx context.Con
 		}
 	}
 	if objectKey == "document" && uploadRecordBoolean(record.Data["sensitive"]) && !principal.HasExactPermission("document.sensitive.read") {
-		s.audit.AppendWithMetadata(ctx, "sensitive_file_download_denied", objectKey, recordID, principal, "Sensitive document download denied", nil, nil, map[string]any{"filename": filename, "field_key": fieldKey, "reason": "sensitive"})
+		s.audit.AppendWithMetadata(ctx, auditmodel.EventFamilyRuntimeUpload, "sensitive_file_download_denied", objectKey, recordID, principal, "Sensitive document download denied", nil, nil, map[string]any{"filename": filename, "field_key": fieldKey, "reason": "sensitive"})
 		return uploadAccessError(apperror.KindForbidden, "backend.upload.permission_denied")
 	}
-	s.audit.AppendWithMetadata(ctx, "file_downloaded", objectKey, recordID, principal, "", nil, nil, map[string]any{
+	s.audit.AppendWithMetadata(ctx, auditmodel.EventFamilyRuntimeUpload, "file_downloaded", objectKey, recordID, principal, "", nil, nil, map[string]any{
 		"file_id": reference.FileID, "filename": reference.Filename, "content_type": reference.ContentType, "size": reference.Size,
 		"content_sha256": reference.ContentSHA256, "field_key": fieldKey,
 	})
@@ -43,6 +44,6 @@ func (s *UploadAccessApplicationService) authorizeRecordDownload(ctx context.Con
 }
 
 func (s *UploadAccessApplicationService) denyDownload(ctx context.Context, objectKey, fieldKey, recordID, filename string, principal principalmodel.Principal, summary, reason string, kind apperror.ErrorKind, code string) error {
-	s.audit.AppendWithMetadata(ctx, "file_download_denied", objectKey, recordID, principal, summary, nil, nil, map[string]any{"filename": filename, "field_key": fieldKey, "reason": reason})
+	s.audit.AppendWithMetadata(ctx, auditmodel.EventFamilyRuntimeUpload, "file_download_denied", objectKey, recordID, principal, summary, nil, nil, map[string]any{"filename": filename, "field_key": fieldKey, "reason": reason})
 	return uploadAccessError(kind, code)
 }

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
@@ -39,11 +40,12 @@ func TestRecordTimerFailureRecoveryOwnsStateAndEvidence(t *testing.T) {
 	if err != nil || inspected.ID != failed.ID {
 		t.Fatalf("inspect=%#v err=%v", inspected, err)
 	}
-	requeued, err := service.RetryFailure(t.Context(), failed.ID, "dependency restored", recordTimerTestPrincipal(operationscontract.ActionRetryDeadLetter))
+	recoveryContext := requestcontext.WithOwnerExecutionID(t.Context(), "operation-retry")
+	requeued, err := service.RetryFailure(recoveryContext, failed.ID, "dependency restored", recordTimerTestPrincipal(operationscontract.ActionRetryDeadLetter))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if requeued.Data["status"] != "scheduled" || requeued.Data["attempt"] != 0 || len(committed) != 2 || committed[1].Record.Data["event_type"] != "requeued" {
+	if requeued.Data["status"] != "scheduled" || requeued.Data["operation_id"] != "operation-retry" || requeued.Data["attempt"] != 0 || len(committed) != 2 || committed[1].Record.Data["event_type"] != "requeued" {
 		t.Fatalf("requeued=%#v commits=%#v", requeued, committed)
 	}
 	resolved, err := service.ResolveFailure(t.Context(), failed.ID, "obsolete", recordTimerTestPrincipal(operationscontract.ActionRetryDeadLetter))

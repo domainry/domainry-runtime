@@ -13,6 +13,7 @@ import (
 	"github.com/domainry/domainry-foundation/modulehttp"
 	publicresourceapplication "github.com/domainry/domainry-runtime/runtime/application/publicresource"
 	hostsurfacemodel "github.com/domainry/domainry-runtime/runtime/domain/hostsurface/model"
+	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
 // ModuleHTTPAdapters returns routes owned by in-process module Bindings.
@@ -140,12 +141,20 @@ func (adapter runtimeActionHTTPAdapter) Routes() []modulehttp.Route {
 func (runtimePublicResourceHTTPAdapter) ContractVersion() string { return modulehttp.ContractVersion }
 func (runtimePublicResourceHTTPAdapter) Owner() string           { return "public-resources" }
 func (runtimePublicResourceHTTPAdapter) Name() string            { return "resources" }
-func (runtimePublicResourceHTTPAdapter) Routes() []modulehttp.Route {
-	return []modulehttp.Route{{Action: hostsurfacemodel.PublicResourceReadAction()}, {Action: hostsurfacemodel.PublicResourceFileReadAction()}}
+func (adapter runtimePublicResourceHTTPAdapter) Routes() []modulehttp.Route {
+	routes := []modulehttp.Route{{Action: hostsurfacemodel.PublicResourceReadAction()}}
+	if adapter.runtime.effectiveSchemaCapabilities().Uploads {
+		routes = append(routes, modulehttp.Route{Action: hostsurfacemodel.PublicResourceFileReadAction()})
+	}
+	return routes
 }
 
-func runtimeModuleInventoryActions(identityAudience string) []actioncontract.ActionDefinition {
-	return []actioncontract.ActionDefinition{runtimeModuleInventoryAction(), runtimePermissionUsageQueryAction(identityAudience), hostsurfacemodel.PublicResourceReadAction(), hostsurfacemodel.PublicResourceFileReadAction()}
+func runtimeModuleInventoryActions(identityAudience string, selected ...persistence.RuntimeSchemaCapabilities) []actioncontract.ActionDefinition {
+	actions := []actioncontract.ActionDefinition{runtimeModuleInventoryAction(), runtimePermissionUsageQueryAction(identityAudience), hostsurfacemodel.PublicResourceReadAction()}
+	if selectedRuntimeSchemaCapabilities(selected).Uploads {
+		actions = append(actions, hostsurfacemodel.PublicResourceFileReadAction())
+	}
+	return actions
 }
 
 func runtimeModuleInventoryAction() actioncontract.ActionDefinition {
@@ -229,6 +238,9 @@ func (s runtimePublicResourceHTTPAdapter) Handler() http.Handler {
 		}
 		_ = json.NewEncoder(response).Encode(resource)
 	})
+	if !s.runtime.effectiveSchemaCapabilities().Uploads {
+		return mux
+	}
 	mux.HandleFunc("GET /public-resources/{resourceKey}/{accessKey}/files/{fieldKey}", func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Cache-Control", "no-store")
 		response.Header().Set("X-Content-Type-Options", "nosniff")

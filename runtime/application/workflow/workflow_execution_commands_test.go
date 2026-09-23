@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -101,12 +102,13 @@ func TestWorkflowRetryExecutionStatusLimitsAndSuccess(t *testing.T) {
 
 	previous := workflowmodel.WorkflowExecution{ID: "previous", WorkflowKey: workflow.Key, Status: "failed", Attempt: -1, Payload: map[string]any{"order": "one"}, Result: map[string]any{}}
 	worker.executions[previous.ID] = previous
-	result, err := service.RetryWorkflowExecutionWithKey(t.Context(), previous.ID, "key", principal)
-	if err != nil || result.Execution.ID == "" || result.Execution.Attempt != 1 {
+	operationContext := requestcontext.WithOwnerExecutionID(t.Context(), "operation-retry")
+	result, err := service.RetryWorkflowExecutionWithKey(operationContext, previous.ID, "key", principal)
+	if err != nil || result.Execution.ID == "" || result.Execution.OperationID != "operation-retry" || result.Execution.Attempt != 1 {
 		t.Fatalf("result=%#v err=%v", result, err)
 	}
 	stored := worker.executions[previous.ID]
-	if stored.Status != "skipped" || stored.Result["manual_retry_execution_id"] != result.Execution.ID || len(worker.updated) != 1 {
+	if stored.Status != "skipped" || stored.OperationID != "operation-retry" || stored.Result["manual_retry_execution_id"] != result.Execution.ID || len(worker.updated) != 1 {
 		t.Fatalf("stored=%#v updated=%d", stored, len(worker.updated))
 	}
 
@@ -158,8 +160,9 @@ func TestWorkflowResolveExecutionContracts(t *testing.T) {
 		t.Fatalf("update=%v", err)
 	}
 	worker.updateErr = nil
-	result, err := service.ResolveWorkflowExecution(t.Context(), deadLetter.ID, "", principal)
-	if err != nil || result.Status != "resolved" || result.Execution.Result["resolve_reason"] == "" || audits != 1 {
+	operationContext := requestcontext.WithOwnerExecutionID(t.Context(), "operation-resolve")
+	result, err := service.ResolveWorkflowExecution(operationContext, deadLetter.ID, "", principal)
+	if err != nil || result.Status != "resolved" || result.Execution.OperationID != "operation-resolve" || result.Execution.Result["resolve_reason"] == "" || audits != 1 {
 		t.Fatalf("result=%#v audits=%d err=%v", result, audits, err)
 	}
 }

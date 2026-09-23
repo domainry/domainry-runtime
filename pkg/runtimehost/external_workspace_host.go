@@ -11,22 +11,22 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 	workspaceprovision "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 )
 
 type runtimeExternalWorkspaceHost struct {
 	mu          sync.RWMutex
 	database    *bootstrap.ProjectDatabase
-	manifest    manifestmodel.ManifestSchema
+	model       projectmodel.RuntimeModel
 	participant runtimeext.WorkspaceBootstrapParticipant
 	configured  bool
 }
 
-func (host *runtimeExternalWorkspaceHost) configure(manifest manifestmodel.ManifestSchema, participant runtimeext.WorkspaceBootstrapParticipant) {
+func (host *runtimeExternalWorkspaceHost) configure(model projectmodel.RuntimeModel, participant runtimeext.WorkspaceBootstrapParticipant) {
 	host.mu.Lock()
 	defer host.mu.Unlock()
-	host.manifest, host.participant, host.configured = manifest, participant, true
+	host.model, host.participant, host.configured = model, participant, true
 }
 
 func (host *runtimeExternalWorkspaceHost) CreateExternalWorkspace(ctx context.Context, request identitysdk.ExternalWorkspaceCreate, transaction identitysdk.EmbeddedTransaction) error {
@@ -35,7 +35,7 @@ func (host *runtimeExternalWorkspaceHost) CreateExternalWorkspace(ctx context.Co
 	if !host.configured {
 		return fmt.Errorf("external Workspace bootstrap is not configured")
 	}
-	return workspaceprovision.CreateExternalWorkspace(ctx, host.database, request, transaction, host.manifest, host.participant)
+	return workspaceprovision.CreateExternalWorkspace(ctx, host.database, request, transaction, host.model, host.participant)
 }
 
 func (host *runtimeExternalWorkspaceHost) InitializeExternalWorkspaceApplication(ctx context.Context, request identitysdk.ExternalWorkspaceCreate, transaction identitysdk.EmbeddedTransaction) error {
@@ -44,7 +44,7 @@ func (host *runtimeExternalWorkspaceHost) InitializeExternalWorkspaceApplication
 	if !host.configured {
 		return fmt.Errorf("external Workspace bootstrap is not configured")
 	}
-	return workspaceprovision.InitializeExternalWorkspaceApplication(ctx, host.database, request, transaction, host.manifest, host.participant)
+	return workspaceprovision.InitializeExternalWorkspaceApplication(ctx, host.database, request, transaction, host.model, host.participant)
 }
 
 func (host *runtimeExternalWorkspaceHost) ExternalWorkspaceActive(ctx context.Context, workspaceID string) (bool, error) {

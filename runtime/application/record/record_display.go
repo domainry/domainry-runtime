@@ -341,13 +341,6 @@ func (s *RecordApplicationService) IdentityProfileReferences(ctx context.Context
 }
 
 func recordApplicationDisplay(object definitionmodel.ObjectSchema, record recordmodel.Record) (string, string) {
-	if display, ok := object.UX["display"].(map[string]any); ok {
-		if key := strings.TrimSpace(fmt.Sprint(display["title_field"])); key != "" && key != "<nil>" {
-			if value := strings.TrimSpace(fmt.Sprint(record.Data[key])); value != "" && value != "<nil>" {
-				return key, value
-			}
-		}
-	}
 	for _, key := range []string{"name", "title", "subject", "number", "code", "display_name", "short_name"} {
 		if value := strings.TrimSpace(fmt.Sprint(record.Data[key])); value != "" && value != "<nil>" {
 			return key, value

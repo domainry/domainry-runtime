@@ -15,6 +15,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
 type SchedulerPublishedDefinition struct {
@@ -30,7 +31,7 @@ type SchedulerDefinitionSource interface {
 
 type schedulerDefinitionSourceAdapter struct {
 	definitions metadatasdk.Definitions
-	authored    []map[string]any
+	authored    []schedulersdk.Definition
 }
 
 // Status reports the Runtime-side definition projection only. Scheduler service
@@ -61,12 +62,12 @@ func (s schedulerDefinitionSourceAdapter) Status(ctx context.Context, scope prin
 
 func (s schedulerDefinitionSourceAdapter) ListSchedulerDefinitions(ctx context.Context) ([]SchedulerPublishedDefinition, error) {
 	if s.authored != nil {
-		return schedulerAuthoredRecords(s.authored)
+		return schedulerRegistryRecords(s.authored)
 	}
 	if s.definitions == nil {
 		return nil, nil
 	}
-	definitions, err := s.definitions.List(ctx, metadatasdk.DefinitionQuery{ResourceType: "scheduler"})
+	definitions, err := s.definitions.List(ctx, metadatasdk.DefinitionQuery{Owner: metadatasdk.DefinitionOwnerScheduler, ResourceType: "scheduler"})
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +84,7 @@ func (s schedulerDefinitionSourceAdapter) ListSchedulerDefinitions(ctx context.C
 
 func (s schedulerDefinitionSourceAdapter) GetSchedulerDefinition(ctx context.Context, key string) (SchedulerPublishedDefinition, bool, error) {
 	if s.authored != nil {
-		records, err := schedulerAuthoredRecords(s.authored)
+		records, err := schedulerRegistryRecords(s.authored)
 		if err != nil {
 			return SchedulerPublishedDefinition{}, false, err
 		}
@@ -98,7 +99,7 @@ func (s schedulerDefinitionSourceAdapter) GetSchedulerDefinition(ctx context.Con
 	if s.definitions == nil {
 		return SchedulerPublishedDefinition{}, false, nil
 	}
-	definition, found, err := s.definitions.Get(ctx, "scheduler", key)
+	definition, found, err := s.definitions.Get(ctx, metadatasdk.DefinitionOwnerScheduler, "scheduler", key)
 	if err != nil || !found {
 		return SchedulerPublishedDefinition{}, found, err
 	}
@@ -118,6 +119,26 @@ func schedulerAuthoredRecords(definitions []map[string]any) ([]SchedulerPublishe
 			revision = "published"
 		}
 		records = append(records, SchedulerPublishedDefinition{Key: key, Data: cloneSchedulerDefinitionMap(definition), CreatedAt: revision, UpdatedAt: revision})
+	}
+	return records, nil
+}
+
+func schedulerRegistryRecords(definitions []schedulersdk.Definition) ([]SchedulerPublishedDefinition, error) {
+	records := make([]SchedulerPublishedDefinition, 0, len(definitions))
+	for _, definition := range definitions {
+		payload, err := json.Marshal(definition)
+		if err != nil {
+			return nil, fmt.Errorf("encode Scheduler registry definition %q: %w", definition.Key, err)
+		}
+		data := map[string]any{}
+		if err := json.Unmarshal(payload, &data); err != nil {
+			return nil, fmt.Errorf("project Scheduler registry definition %q: %w", definition.Key, err)
+		}
+		revision := strings.TrimSpace(definition.Revision)
+		if revision == "" {
+			revision = "published"
+		}
+		records = append(records, SchedulerPublishedDefinition{Key: definition.Key, Data: data, CreatedAt: revision, UpdatedAt: revision})
 	}
 	return records, nil
 }

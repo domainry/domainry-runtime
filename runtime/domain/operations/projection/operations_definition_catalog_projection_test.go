@@ -14,6 +14,7 @@ func TestOperationsDefinitionCatalogDeclaresCompleteOperationContract(t *testing
 	}
 	seen := map[string]bool{}
 	actionKeys := map[string]string{}
+	retentionClasses := map[operationsmodel.OperationsRetentionClass]int{}
 	for _, definition := range definitions {
 		if seen[definition.Kind] {
 			t.Errorf("duplicate kind %s", definition.Kind)
@@ -31,6 +32,19 @@ func TestOperationsDefinitionCatalogDeclaresCompleteOperationContract(t *testing
 		}
 		if len(definition.FailureSemantics) != 3 {
 			t.Errorf("failure semantics incomplete: %#v", definition)
+		}
+		if strings.TrimSpace(definition.Retention.PolicyKey) == "" || definition.Retention.SucceededRetentionSeconds < definition.Retention.MinimumRetentionSeconds || definition.Retention.FailedRetentionSeconds < definition.Retention.MinimumRetentionSeconds {
+			t.Errorf("retention incomplete: %#v", definition)
+		}
+		retentionClasses[definition.Retention.Class]++
+	}
+	if retentionClasses[operationsmodel.OperationsRetentionTechnical] != 3 || retentionClasses[operationsmodel.OperationsRetentionLegalAudit] != 27 {
+		t.Fatalf("retention classes=%#v", retentionClasses)
+	}
+	for _, kind := range []string{"dead_letter.inspect", "bulk_operation.dry_run", "diagnostics.snapshot"} {
+		definition, _ := OperationsDefinition(kind)
+		if definition.Retention.Class != operationsmodel.OperationsRetentionTechnical || definition.Retention.PolicyKey != operationsTechnicalRetentionPolicy {
+			t.Errorf("technical kind %s retention=%#v", kind, definition.Retention)
 		}
 	}
 	for _, required := range []string{"workflow.execution.retry", "automation.rule.enable", "runtime.publication.retry", "backup.create", "backup.restore", "retention.cleanup", "database.retirement.execute", "runtime.maintenance.enable", "worker.owner.pause", "runtime.instance.drain", "worker.lease.force_release", "dead_letter.retry", "bulk_operation.dry_run", "diagnostics.snapshot", "break_glass.enable"} {

@@ -107,11 +107,10 @@ type ObjectSchema struct {
 	// object exports. Record-bound selector fields are intentionally not used.
 	ExportAssurancePolicy *ActionAssurancePolicy `json:"export_assurance_policy,omitempty"`
 	PublicResources       []ObjectPublicResource `json:"public_resources,omitempty"`
-	UX                    map[string]any         `json:"ux,omitempty"`
 	Config                map[string]any         `json:"config,omitempty"`
 }
 
-// ObjectPublicResource is a manifest-governed anonymous projection of one
+// ObjectPublicResource is a code-governed anonymous projection of one
 // business Object. AccessKeyField is an opaque capability key, StateField and
 // ActiveState are the revocation gate, and Fields is the complete public JSON
 // allowlist. No generic Record identity is part of the response contract.

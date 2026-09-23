@@ -16,6 +16,28 @@ type OperationsRepository interface {
 	UpdateOperationsReceipt(context.Context, operationsmodel.OperationsReceipt, operationsmodel.OperationsStatus) (bool, error)
 }
 
+type OperationsResultArtifact struct {
+	OperationID string
+	WorkspaceID string
+	CreatedBy   string
+	Content     []byte
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+}
+
+type OperationsResultArtifactReference struct {
+	ID            string
+	ContentSHA256 string
+	SizeBytes     int64
+}
+
+// OperationsResultArtifactRepository keeps large replay bodies out of the
+// command ledger while preserving an authorized, integrity-checked replay.
+type OperationsResultArtifactRepository interface {
+	PutOperationsResult(context.Context, OperationsResultArtifact) (OperationsResultArtifactReference, error)
+	GetOperationsResult(context.Context, string, string, string) ([]byte, OperationsResultArtifactReference, error)
+}
+
 // OperationsControlRepository stores desired maintenance, owner-pause and
 // instance-drain state so all Runtime instances observe the same controls.
 type OperationsControlRepository interface {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -90,8 +91,16 @@ func (s *OperationsApplicationService) DryRunBulkDeadLetters(ctx context.Context
 	}
 	if decision == operationsmodel.OperationsSubmissionReplay && receipt.Command.Status == operationsmodel.OperationsStatusSucceeded {
 		var plan OperationsBulkPlan
-		if json.Unmarshal(receipt.Result, &plan) != nil {
+		resultJSON, readErr := s.receiptResult(ctx, receipt)
+		if readErr != nil {
+			return OperationsBulkPlan{}, readErr
+		}
+		if json.Unmarshal(resultJSON, &plan) != nil {
 			return OperationsBulkPlan{}, apperror.New(apperror.KindInternal, "backend.operations.bulk_receipt_invalid", nil, nil)
+		}
+		plan, err = refreshBulkReplayPlan(ctx, plan, adapter, principal, s.now().UTC())
+		if err != nil {
+			return OperationsBulkPlan{}, err
 		}
 		plan.Receipt = receipt
 		return plan, nil
@@ -140,21 +149,36 @@ func (s *OperationsApplicationService) ApplyBulkDeadLetters(ctx context.Context,
 		return OperationsBulkApplyResult{}, apperror.New(apperror.KindConflict, "backend.operations.bulk_dry_run_invalid", err, nil)
 	}
 	var plan OperationsBulkPlan
-	if json.Unmarshal(dryReceipt.Result, &plan) != nil || plan.ConfirmationToken != strings.TrimSpace(request.ConfirmationToken) || !plan.ExpiresAt.After(s.now().UTC()) {
+	dryResultJSON, readErr := s.receiptResult(ctx, dryReceipt)
+	if readErr != nil {
+		return OperationsBulkApplyResult{}, readErr
+	}
+	if json.Unmarshal(dryResultJSON, &plan) != nil || plan.ConfirmationToken != strings.TrimSpace(request.ConfirmationToken) || !plan.ExpiresAt.After(s.now().UTC()) {
 		return OperationsBulkApplyResult{}, apperror.New(apperror.KindConflict, "backend.operations.bulk_confirmation_mismatch", nil, nil)
 	}
 	adapter, err := s.deadLetterOwner(plan.Owner)
 	if err != nil {
 		return OperationsBulkApplyResult{}, err
 	}
-	receipt, decision, err := s.Submit(ctx, OperationsSubmitRequest{Kind: "bulk_operation.apply", ResourceType: "bulk_operation", ResourceID: plan.DryRunOperationID, Reason: request.Reason, Reference: request.Reference, Payload: map[string]any{"dry_run_operation_id": plan.DryRunOperationID, "confirmation_token": plan.ConfirmationToken}}, key, principal)
+	receipt, decision, err := s.Submit(ctx, OperationsSubmitRequest{Kind: "bulk_operation.apply", ParentOperationID: plan.DryRunOperationID, ResourceType: "bulk_operation", ResourceID: plan.DryRunOperationID, Reason: request.Reason, Reference: request.Reference, Payload: map[string]any{"dry_run_operation_id": plan.DryRunOperationID, "confirmation_token": plan.ConfirmationToken}}, key, principal)
 	if err != nil {
 		return OperationsBulkApplyResult{}, err
 	}
 	if decision == operationsmodel.OperationsSubmissionReplay && receipt.Command.Status == operationsmodel.OperationsStatusSucceeded {
 		var result OperationsBulkApplyResult
-		if json.Unmarshal(receipt.Result, &result) != nil {
+		resultJSON, readErr := s.receiptResult(ctx, receipt)
+		if readErr != nil {
+			return OperationsBulkApplyResult{}, readErr
+		}
+		if json.Unmarshal(resultJSON, &result) != nil {
 			return OperationsBulkApplyResult{}, apperror.New(apperror.KindInternal, "backend.operations.bulk_receipt_invalid", nil, nil)
+		}
+		for index := range result.Items {
+			current, inspectErr := adapter.Inspect(ctx, result.Items[index].ID, principal)
+			if inspectErr != nil {
+				return OperationsBulkApplyResult{}, inspectErr
+			}
+			result.Items[index].Item = current
 		}
 		result.Receipt = receipt
 		return result, nil
@@ -165,11 +189,12 @@ func (s *OperationsApplicationService) ApplyBulkDeadLetters(ctx context.Context,
 		return OperationsBulkApplyResult{}, err
 	}
 	result := OperationsBulkApplyResult{DryRunOperationID: plan.DryRunOperationID}
+	ownerContext := requestcontext.WithOwnerExecutionID(ctx, receipt.Command.ID)
 	for _, candidate := range plan.Candidates {
 		if !candidate.Eligible {
 			continue
 		}
-		item, actionErr := adapter.Act(ctx, candidate.ID, plan.Action, strings.TrimSpace(request.Reason), receipt.Command.ID+":"+candidate.ID, principal)
+		item, actionErr := adapter.Act(ownerContext, candidate.ID, plan.Action, strings.TrimSpace(request.Reason), receipt.Command.ID+":"+candidate.ID, principal)
 		itemResult := OperationsBulkItemResult{ID: candidate.ID, Item: item, Status: "succeeded"}
 		if actionErr != nil {
 			itemResult.Status, itemResult.ErrorCode = "failed", "backend.operations.dead_letter_owner_rejected"
@@ -225,4 +250,27 @@ func eligibleBulkIDs(candidates []OperationsBulkCandidate) []string {
 		}
 	}
 	return ids
+}
+
+func refreshBulkReplayPlan(ctx context.Context, plan OperationsBulkPlan, adapter OperationsDeadLetterOwner, principal principalmodel.Principal, now time.Time) (OperationsBulkPlan, error) {
+	if !plan.ExpiresAt.After(now) {
+		return OperationsBulkPlan{}, apperror.New(apperror.KindConflict, "backend.operations.bulk_plan_expired", nil, nil)
+	}
+	for index := range plan.Candidates {
+		current, err := adapter.Inspect(ctx, plan.Candidates[index].ID, principal)
+		if err != nil {
+			return OperationsBulkPlan{}, err
+		}
+		eligible, reason := true, ""
+		if plan.Filter.Status != "" && current.Status != plan.Filter.Status {
+			eligible, reason = false, "status_mismatch"
+		} else if !containsBulkAction(current.AllowedActions, plan.Action) {
+			eligible, reason = false, "action_not_allowed"
+		}
+		if eligible != plan.Candidates[index].Eligible {
+			return OperationsBulkPlan{}, apperror.New(apperror.KindConflict, "backend.operations.bulk_owner_state_changed", nil, nil)
+		}
+		plan.Candidates[index].Item, plan.Candidates[index].Reason = current, reason
+	}
+	return plan, nil
 }

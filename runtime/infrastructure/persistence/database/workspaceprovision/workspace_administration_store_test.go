@@ -49,13 +49,17 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 		t.Fatalf("catalog next=%+v more=%t err=%v", next, more, err)
 	}
 
-	actor := workspaceprovisionmodel.AdministrationActor{WorkspaceID: "workspace-initial", UserID: "admin-a", RoleKey: workspaceprovisionapplication.WorkspaceAdministratorRoleKey, RequestID: "request-a", AuthorizationRevision: "auth-1"}
+	actor := workspaceprovisionmodel.AdministrationActor{WorkspaceID: "workspace-initial", UserID: "admin-a", RoleKey: workspaceprovisionapplication.WorkspaceAdministratorRoleKey, RequestID: "request-a", CausationID: "cause-a", AuthorizationRevision: "auth-1"}
 	suspended, err := store.SetWorkspaceStatus(t.Context(), actor, "alpha", 1, workspaceprovisionmodel.WorkspaceStatusSuspended, "suspend-1")
 	if err != nil || suspended.Replayed || suspended.Workspace.Status != workspaceprovisionmodel.WorkspaceStatusSuspended || suspended.Workspace.Revision != 2 || suspended.RevokedSessions != 1 {
 		t.Fatalf("suspend=%+v err=%v", suspended, err)
 	}
 	assertWorkspaceAdministrationState(t, runtimeStore.DB(), "workspace-target", "suspended", 2, "session-a", true)
 	assertWorkspaceAdministrationEvidence(t, runtimeStore.DB(), 1, 1)
+	var operationID, causationID string
+	if err := runtimeStore.DB().QueryRowContext(t.Context(), `SELECT operation_id,causation_id FROM _audit_events WHERE event=?`, workspaceprovisionapplication.SuspendWorkspaceActionKey).Scan(&operationID, &causationID); err != nil || operationID != workspaceAdministrationReceiptID(actor, workspaceprovisionapplication.SuspendWorkspaceActionKey, "suspend-1") || causationID != "cause-a" {
+		t.Fatalf("workspace administration audit operation=%q causation=%q err=%v", operationID, causationID, err)
+	}
 	replay, err := store.SetWorkspaceStatus(t.Context(), actor, "alpha", 1, workspaceprovisionmodel.WorkspaceStatusSuspended, "suspend-1")
 	if err != nil || !replay.Replayed || replay.Workspace.Revision != 2 || replay.RevokedSessions != 1 {
 		t.Fatalf("suspend replay=%+v err=%v", replay, err)
@@ -96,7 +100,7 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 	}
 	var plan string
 	var commercialRevision int
-	if err := runtimeStore.DB().QueryRowContext(t.Context(), `SELECT plan,revision FROM _workspace_commercial_configuration WHERE workspace_id=?`, "workspace-target").Scan(&plan, &commercialRevision); err != nil || plan != "premium" || commercialRevision != 2 {
+	if err := runtimeStore.DB().QueryRowContext(t.Context(), `SELECT plan,commercial_revision FROM _workspaces WHERE id=?`, "workspace-target").Scan(&plan, &commercialRevision); err != nil || plan != "premium" || commercialRevision != 2 {
 		t.Fatalf("commercial rollback plan=%q revision=%d err=%v", plan, commercialRevision, err)
 	}
 	assertWorkspaceAdministrationState(t, runtimeStore.DB(), "workspace-target", "active", 4, "session-a", true)
@@ -119,7 +123,7 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 func insertWorkspaceAdministrationAuditCollision(t *testing.T, store *database.RuntimeStore, auditID, now string) {
 	t.Helper()
 	if err := auditmoduleimpl.AppendPreparedWithin(t.Context(), store.RuntimeRenderer(), runtimeauditmodule.NewTransaction(store.DB()), auditmodel.AuditEvent{
-		ID: auditID, WorkspaceID: "workspace-target", Event: "existing", ActorID: "test", RoleKey: "test", Summary: "collision", CreatedAt: now,
+		ID: auditID, WorkspaceID: "workspace-target", Family: auditmodel.EventFamilyRuntimeWorkspace, Event: "existing", ActorID: "test", RoleKey: "test", Summary: "collision", Metadata: map[string]any{"action_key": "collision"}, CreatedAt: now,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -131,13 +135,12 @@ func insertWorkspaceAdministrationFixture(t *testing.T, db *sql.DB, id, code, na
 	if installationIdentity != "" {
 		installation = installationIdentity
 	}
-	if _, err := db.ExecContext(t.Context(), `INSERT INTO _workspaces(id,canonical_code,name,status,initial_installation_identity,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)`, id, code, name, "active", installation, 1, now, now); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.ExecContext(t.Context(), `INSERT INTO _workspace_commercial_configuration(
-		workspace_id,plan,included_user_limit,max_user_limit,included_customer_limit,max_customer_limit,included_store_limit,max_stores,
-		contract_date,billing_day,billing_contact_name,billing_contact_phone,billing_contact_email,billing_contact_address,billing_contact_notes,revision,created_at,updated_at
-	) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, "standard", 1, 2, 1, 2, 1, 2, "2026-09-06", 1, "", "", "", "", "", 1, now, now); err != nil {
+	if _, err := db.ExecContext(t.Context(), `INSERT INTO _workspaces(
+		id,canonical_code,name,status,initial_installation_identity,
+		plan,included_user_limit,max_user_limit,included_customer_limit,max_customer_limit,included_store_limit,max_stores,
+		contract_date,billing_day,billing_contact_name,billing_contact_phone,billing_contact_email,billing_contact_address,billing_contact_notes,
+		commercial_revision,revision,created_at,updated_at
+	) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, code, name, "active", installation, "standard", 1, 2, 1, 2, 1, 2, "2026-09-06", 1, "", "", "", "", "", 1, 1, now, now); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -161,8 +164,12 @@ func assertWorkspaceAdministrationEvidence(t *testing.T, db *sql.DB, audits, rec
 	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _audit_events WHERE event=?`, workspaceprovisionapplication.SuspendWorkspaceActionKey).Scan(&gotAudits); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _workspace_administration_receipts_v1`).Scan(&gotReceipts); err != nil {
+	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE system_purpose = 'workspace_administration' AND owner = 'workspace' AND kind = 'workspace.administration'`).Scan(&gotReceipts); err != nil {
 		t.Fatal(err)
+	}
+	var legacyTables int
+	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_workspace_administration_receipts_v1'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
+		t.Fatalf("legacy Workspace administration receipt tables=%d err=%v", legacyTables, err)
 	}
 	if gotAudits != audits || gotReceipts != receipts {
 		t.Fatalf("audits=%d receipts=%d want=%d/%d", gotAudits, gotReceipts, audits, receipts)

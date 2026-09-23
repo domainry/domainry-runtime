@@ -15,6 +15,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-orm/query"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -94,10 +95,7 @@ func (s PublicationStore) InsertOutbox(ctx context.Context, workspaceID string, 
 		value.DedupKey = value.RequestRef
 	}
 	if value.DedupKey == "" {
-		if strings.TrimSpace(value.ID) == "" {
-			value.ID = publicationIdentity(workspaceID, value.ConnectorKey, value.ConnectionKey, value.Operation, fmt.Sprint(time.Now().UTC().UnixNano()))
-		}
-		value.DedupKey = "legacy:" + value.ID
+		return publicationmodel.Message{}, fmt.Errorf("Runtime publication deduplication identity is required")
 	}
 	fingerprint, err := idempotency.Fingerprint(idempotency.FingerprintInput{
 		UseCase: "runtime.publication.enqueue", ResourceType: "outbox", TargetID: value.ConnectorKey + ":" + value.ConnectionKey + ":" + value.Operation,
@@ -125,8 +123,8 @@ func (s PublicationStore) InsertOutbox(ctx context.Context, workspaceID string, 
 	if err != nil {
 		return publicationmodel.Message{}, fmt.Errorf("encode Runtime publication payload: %w", err)
 	}
-	columns := []string{"id", "publication_type", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at"}
-	values := []any{value.ID, "integration.connector", value.ConnectorKey, value.ConnectionKey, value.Operation, value.Status, string(payload), value.EventID, value.RequestRef, value.DedupKey, value.RequestFingerprint, value.ResponseRef, value.Error, value.AttemptCount, value.NextAttemptAt, value.LastAttemptAt, value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.CreatedBy, value.CreatedAt, value.UpdatedAt}
+	columns := []string{"id", "publication_type", "operation_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at"}
+	values := []any{value.ID, "integration.connector", value.OperationID, value.ConnectorKey, value.ConnectionKey, value.Operation, value.Status, string(payload), value.EventID, value.RequestRef, value.DedupKey, value.RequestFingerprint, value.ResponseRef, value.Error, value.AttemptCount, value.NextAttemptAt, value.LastAttemptAt, value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.CreatedBy, value.CreatedAt, value.UpdatedAt}
 	if err := s.store.GuardSubjectEvidenceWrite(ctx, s.db, workspaceID, "_publication_outbox", columns, values); err != nil {
 		return publicationmodel.Message{}, err
 	}
@@ -164,7 +162,11 @@ func (s PublicationStore) UpdateOutboxStatus(ctx context.Context, workspaceID, i
 		return publicationmodel.Message{}, fmt.Errorf("Runtime publication id is required")
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	queryValue, args, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
+	builder := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID)
+	if operationID := requestcontext.OwnerExecutionID(ctx); operationID != "" {
+		builder.Set("operation_id", operationID)
+	}
+	queryValue, args, err := builder.
 		Set("status", strings.TrimSpace(status)).Set("response_ref", strings.TrimSpace(responseRef)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", "").Set("updated_at", now).
 		Where(publicationPredicate(query.And(query.Equal("id", id), s.store.SubjectEvidenceWriteAllowed(workspaceID, "_publication_outbox", id)))).Build()
 	if err != nil {
@@ -205,6 +207,9 @@ func (s PublicationStore) ScheduleOutboxRetry(ctx context.Context, workspaceID, 
 	nowText, next := now.Format(time.RFC3339), now.Add(time.Duration(delay)*time.Second).Format(time.RFC3339)
 	builder := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 		Set("status", "queued").SetExpression("attempt_count", query.Add(query.Column("attempt_count"), query.Value(1))).Set("next_attempt_at", next).Set("last_attempt_at", nowText).Set("updated_at", nowText)
+	if operationID := requestcontext.OwnerExecutionID(ctx); operationID != "" {
+		builder.Set("operation_id", operationID)
+	}
 	if errorText = strings.TrimSpace(errorText); errorText != "" {
 		builder.Set("error", errorText)
 	}
@@ -236,7 +241,7 @@ var _ publicationrepository.Repository = PublicationStore{}
 var _ publicationrepository.Reader = PublicationStore{}
 
 var publicationColumns = []string{
-	"id", "workspace_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at",
+	"id", "workspace_id", "operation_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at",
 }
 
 type publicationScanner interface{ Scan(...any) error }
@@ -245,7 +250,7 @@ func scanPublication(row publicationScanner) (publicationmodel.Message, error) {
 	var message publicationmodel.Message
 	var payloadJSON string
 	var connectionKey, eventID, requestRef, responseRef, errorText sql.NullString
-	if err := row.Scan(&message.ID, &message.WorkspaceID, &message.ConnectorKey, &connectionKey, &message.Operation, &message.Status, &payloadJSON, &eventID, &requestRef, &message.DedupKey, &message.RequestFingerprint, &responseRef, &errorText, &message.AttemptCount, &message.NextAttemptAt, &message.LastAttemptAt, &message.LeaseOwner, &message.LeaseExpiresAt, &message.FencingToken, &message.CreatedBy, &message.CreatedAt, &message.UpdatedAt); err != nil {
+	if err := row.Scan(&message.ID, &message.WorkspaceID, &message.OperationID, &message.ConnectorKey, &connectionKey, &message.Operation, &message.Status, &payloadJSON, &eventID, &requestRef, &message.DedupKey, &message.RequestFingerprint, &responseRef, &errorText, &message.AttemptCount, &message.NextAttemptAt, &message.LastAttemptAt, &message.LeaseOwner, &message.LeaseExpiresAt, &message.FencingToken, &message.CreatedBy, &message.CreatedAt, &message.UpdatedAt); err != nil {
 		return publicationmodel.Message{}, err
 	}
 	message.ConnectionKey, message.EventID, message.RequestRef = connectionKey.String, eventID.String, requestRef.String
@@ -301,38 +306,7 @@ func registerPublicationWorkerScope(ctx context.Context, store *database.Runtime
 	if store == nil || executor == nil || workspaceID == "" {
 		return fmt.Errorf("Runtime publication worker scope is required")
 	}
-	if updatedAt = strings.TrimSpace(updatedAt); updatedAt == "" {
-		updatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	}
-	digest := sha256.Sum256([]byte("runtime_publication_outbox\x00" + workspaceID))
-	id := "worker_scope:" + hex.EncodeToString(digest[:12])
-	update, updateArgs, err := query.NewUpdateBuilder(store.SQLRenderer, "_worker_queue_scopes").Set("updated_at", updatedAt).Where(query.Equal("id", id)).Build()
-	if err != nil {
-		return fmt.Errorf("build Runtime publication worker scope refresh: %w", err)
-	}
-	updated, err := executor.ExecContext(ctx, update, updateArgs...)
-	if err != nil {
-		return fmt.Errorf("refresh Runtime publication worker scope: %w", err)
-	}
-	if affected, rowsErr := updated.RowsAffected(); rowsErr != nil {
-		return rowsErr
-	} else if affected > 0 {
-		return nil
-	}
-	insert, insertArgs, err := query.NewInsertBuilder(store.SQLRenderer, "_worker_queue_scopes").Columns("id", "queue_kind", "scope_key", "updated_at").Values(id, "runtime_publication_outbox", workspaceID, updatedAt).Build()
-	if err != nil {
-		return fmt.Errorf("build Runtime publication worker scope registration: %w", err)
-	}
-	if _, err := executor.ExecContext(ctx, insert, insertArgs...); err != nil {
-		retried, retryErr := executor.ExecContext(ctx, update, updateArgs...)
-		if retryErr == nil {
-			if affected, rowsErr := retried.RowsAffected(); rowsErr == nil && affected > 0 {
-				return nil
-			}
-		}
-		return fmt.Errorf("register Runtime publication worker scope: %w", err)
-	}
-	return nil
+	return store.RegisterWorkerQueueScope(ctx, executor, database.WorkerScopeOwnerRuntimePublicationOutbox, workspaceID, updatedAt)
 }
 
 func RegisterWorkerScope(ctx context.Context, store *database.RuntimeStore, executor publicationScopeExecutor, workspaceID, updatedAt string) error {

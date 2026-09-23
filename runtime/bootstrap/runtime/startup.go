@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
@@ -20,6 +19,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	metadatamodule "github.com/domainry/domainry-metadata/module"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
@@ -28,27 +28,24 @@ import (
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
-	reportmodule "github.com/domainry/domainry-report/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
-	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	notificationfacade "github.com/domainry/domainry-runtime/runtime/application/notificationfacade"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
-	manifestseed "github.com/domainry/domainry-runtime/runtime/application/seed/globalcapability"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	transportbootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/transport"
-	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
-	manifestvalidation "github.com/domainry/domainry-runtime/runtime/domain/manifest/validation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
+	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 	workspaceprovisionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
@@ -60,91 +57,6 @@ import (
 	schedulermodulehost "github.com/domainry/domainry-scheduler-sdk/modulehost"
 	schedulersaashost "github.com/domainry/domainry-scheduler-sdk/saashost"
 )
-
-func New(ctx context.Context, cfg config.Config, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, dataExchangeFactory dataexchangesdk.Factory, integrationFactory integrationsdk.Factory) *Runtime {
-	projectExtensions := runtimeext.NewProjectExtensionRegistry()
-	projectExtensions.Freeze()
-	connectorProviders := emptyConnectorProviderRegistry()
-	return NewWithExtensions(ctx, cfg, projectExtensions, connectorProviders, identityBinding, notificationFactory, dataExchangeFactory, integrationFactory)
-}
-
-func NewWithScheduler(ctx context.Context, cfg config.Config, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, integrationFactory integrationsdk.Factory, agent ...agentsdk.Factory) *Runtime {
-	projectExtensions := runtimeext.NewProjectExtensionRegistry()
-	projectExtensions.Freeze()
-	var agentFactory agentsdk.Factory
-	if len(agent) > 0 {
-		agentFactory = agent[0]
-	}
-	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, projectExtensions, emptyConnectorProviderRegistry(), runtimehttp.RuntimeReleaseIdentity{}, identityBinding, notificationFactory, nil, schedulerFactory, dataExchangeFactory, agentFactory, integrationFactory, reportmodule.NewFactory(), nil, ProjectStartupOptions{})
-}
-
-func NewWithProjectExtensions(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, dataExchangeFactory dataexchangesdk.Factory, integrationFactory integrationsdk.Factory) *Runtime {
-	connectorProviders := emptyConnectorProviderRegistry()
-	return NewWithExtensions(ctx, cfg, projectExtensions, connectorProviders, identityBinding, notificationFactory, dataExchangeFactory, integrationFactory)
-}
-
-func NewWithProjectExtensionsAndScheduler(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, integrationFactory integrationsdk.Factory, agent ...agentsdk.Factory) *Runtime {
-	var agentFactory agentsdk.Factory
-	if len(agent) > 0 {
-		agentFactory = agent[0]
-	}
-	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, projectExtensions, emptyConnectorProviderRegistry(), runtimehttp.RuntimeReleaseIdentity{}, identityBinding, notificationFactory, nil, schedulerFactory, dataExchangeFactory, agentFactory, integrationFactory, reportmodule.NewFactory(), nil, ProjectStartupOptions{})
-}
-
-func emptyConnectorProviderRegistry() *connector.Registry {
-	registry := connector.NewRegistry()
-	registry.Freeze()
-	return registry
-}
-
-func NewWithExtensions(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, connectorProviders *connector.Registry, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, dataExchangeFactory dataexchangesdk.Factory, integrationFactory integrationsdk.Factory) *Runtime {
-	return newWithExtensions(ctx, cfg, projectExtensions, connectorProviders, runtimehttp.RuntimeReleaseIdentity{}, identityBinding, notificationFactory, dataExchangeFactory, integrationFactory)
-}
-
-// NewProjectWithIdentity assembles Runtime against one already-opened SDK
-// Binding. The generated project host owns Module/SaaS selection, Identity
-// lifecycle, and optional Identity HTTP adapters.
-func NewProjectWithIdentity(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, dataExchangeFactory dataexchangesdk.Factory, integrationFactory integrationsdk.Factory) *Runtime {
-	return newWithExtensionsUsingStore(ctx, cfg, projectExtensions, connectorProviders, releaseIdentity, binding, notificationFactory, dataExchangeFactory, integrationFactory, nil, artifactEvidence)
-}
-
-func NewProjectWithIdentityAndDatabase(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, dataExchangeFactory dataexchangesdk.Factory, integrationFactory integrationsdk.Factory, store *persistence.RuntimeStore) *Runtime {
-	return newWithExtensionsUsingStore(ctx, cfg, projectExtensions, connectorProviders, releaseIdentity, binding, notificationFactory, dataExchangeFactory, integrationFactory, store, artifactEvidence)
-}
-
-func NewProjectWithFactoriesAndDatabase(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, store *persistence.RuntimeStore) *Runtime {
-	return newWithExtensionsUsingFactoriesAndStore(ctx, cfg, projectExtensions, connectorProviders, releaseIdentity, identity, notification, dataExchange, integration, store, artifactEvidence)
-}
-
-// NewProjectWithAllFactoriesAndDatabase lets a generated project select the
-// remaining source-owned module topologies explicitly.
-func NewProjectWithAllFactoriesAndDatabase(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, store *persistence.RuntimeStore, monitoring ...monitoringsdk.Factory) *Runtime {
-	var factory monitoringsdk.Factory
-	if len(monitoring) > 0 {
-		factory = monitoring[0]
-	}
-	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, projectExtensions, connectorProviders, releaseIdentity, identity, notification, factory, nil, dataExchange, nil, integration, reportmodule.NewFactory(), store, ProjectStartupOptions{}, artifactEvidence)
-}
-
-func NewProjectWithOwnerFactoriesAndDatabase(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, artifactEvidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, store *persistence.RuntimeStore, agent ...agentsdk.Factory) *Runtime {
-	var agentFactory agentsdk.Factory
-	if len(agent) > 0 {
-		agentFactory = agent[0]
-	}
-	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, projectExtensions, connectorProviders, releaseIdentity, identity, notification, monitoring, scheduler, dataExchange, agentFactory, integration, reportmodule.NewFactory(), store, ProjectStartupOptions{}, artifactEvidence)
-}
-
-func newWithExtensions(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, dataExchangeFactory dataexchangesdk.Factory, integrationFactory integrationsdk.Factory, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
-	return newWithExtensionsUsingStore(ctx, cfg, projectExtensions, connectorProviders, releaseIdentity, identityBinding, notificationFactory, dataExchangeFactory, integrationFactory, nil, artifactEvidence...)
-}
-
-func newWithExtensionsUsingStore(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, dataExchangeFactory dataexchangesdk.Factory, integrationFactory integrationsdk.Factory, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
-	return newWithExtensionsUsingFactoriesAndStore(ctx, cfg, projectExtensions, connectorProviders, releaseIdentity, identityBinding, notificationFactory, dataExchangeFactory, integrationFactory, preparedStore, artifactEvidence...)
-}
-
-func newWithExtensionsUsingFactoriesAndStore(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, dataExchangeFactory dataexchangesdk.Factory, integrationFactory integrationsdk.Factory, preparedStore *persistence.RuntimeStore, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
-	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, projectExtensions, connectorProviders, releaseIdentity, identityBinding, notificationFactory, nil, nil, dataExchangeFactory, nil, integrationFactory, reportmodule.NewFactory(), preparedStore, ProjectStartupOptions{}, artifactEvidence...)
-}
 
 func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, integrationFactory integrationsdk.Factory, reportFactory reportsdk.Factory, preparedStore *persistence.RuntimeStore, startupOptions ProjectStartupOptions, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
 	if ctx == nil {
@@ -159,34 +71,35 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if identityBinding == nil {
 		panic("bootstrap.NewWithExtensions requires an Identity SDK Binding")
 	}
-	if notificationFactory == nil {
-		panic("bootstrap.NewWithExtensions requires a Notification SDK Factory")
-	}
-	if dataExchangeFactory == nil {
-		panic("bootstrap.NewWithExtensions requires a Data Exchange SDK Factory")
-	}
-	if integrationFactory == nil {
-		panic("bootstrap.NewWithExtensions requires an Integration SDK Factory")
-	}
-	if reportFactory == nil {
-		panic("bootstrap.NewWithExtensions requires a Report SDK Factory")
-	}
 	cfg = normalizeRuntimeConfig(cfg)
 	mustCompleteRuntimeStartup(principalmodel.ConfigureInstallationWorkspaceID(cfg.IdentityWorkspaceID))
 	mustCompleteRuntimeStartup(cfg.ValidateSecurity())
-	// Connectors-owned definitions arrive through Integration after its Binding opens.
-	manifestPreparationConfig := cfg
-	manifestPreparationConfig.SkipManifestValidation = true
-	seedManifest, err := prepareRuntimeManifest(ctx, manifestPreparationConfig)
-	mustCompleteRuntimeStartup(err)
+	if strings.TrimSpace(startupOptions.ProjectModel.ContentHash) == "" {
+		panic("bootstrap Runtime requires a validated project model")
+	}
+	projectModel := startupOptions.ProjectModel
+	projectDefinitions := projectExtensions.ProjectDefinitions()
+	handlerDescriptors := projectExtensions.BusinessHandlerDescriptors()
+	schemaCapabilities := ProjectSchemaCapabilities(projectModel, projectExtensions)
+	schemaCapabilities.ReleaseCoordination = cfg.RuntimeReplicaCount > 1
+	mustCompleteRuntimeStartup(validateSelectedCapabilityFactories(projectDefinitions, handlerDescriptors, notificationFactory, reportFactory, integrationFactory, len(connectorProviders.Descriptors()) != 0, schedulerFactory, agentFactory))
+	var err error
 	store := preparedStore
 	if store == nil {
-		store, err = prepareRuntimeStore(ctx, cfg)
+		store, err = prepareRuntimeStore(ctx, cfg, schemaCapabilities)
+		mustCompleteRuntimeStartup(err)
+	}
+	if startupOptions.BlobStore == nil {
+		uploadDirectory := cfg.UploadDir
+		if uploadDirectory == "" {
+			uploadDirectory = "../data/uploads"
+		}
+		startupOptions.BlobStore, err = blobstore.NewLocalStore(uploadDirectory)
 		mustCompleteRuntimeStartup(err)
 	}
 	workerDependencies, err := newRuntimeWorkerDependencies(cfg.RuntimeInstanceID)
 	mustCompleteRuntimeStartup(err)
-	releaseCohort := deploymentapplication.NewDeploymentRuntimeReleaseCohortApplicationService(deploymentpersistence.NewRuntimeReleaseCohortStore(store))
+	var releaseCohort *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
 	releaseAdmission := &deploymentapplication.RuntimeReleaseAdmission{}
 	var releaseLease deploymentmodel.RuntimeReleaseCohortLease
 	startupOwnsStore := preparedStore == nil
@@ -196,14 +109,20 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		}
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.HTTPShutdownTimeout)
 		defer cancel()
-		_ = releaseCohort.Leave(cleanupCtx, releaseLease)
+		if releaseCohort != nil {
+			_ = releaseCohort.Leave(cleanupCtx, releaseLease)
+		}
 		_ = store.Close()
 	}()
-	releaseLease, err = releaseCohort.Join(ctx, workerDependencies.WorkerID.String(), releaseIdentity, workerDependencies.Clock.Now())
-	mustCompleteRuntimeStartup(err)
-	bootstrapReleaseHeartbeat := startRuntimeReleaseBootstrapHeartbeat(ctx, releaseCohort.HeartbeatInterval(), releaseLease, func(heartbeatCtx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease) (deploymentmodel.RuntimeReleaseCohortLease, error) {
-		return releaseCohort.Heartbeat(heartbeatCtx, lease, workerDependencies.Clock.Now())
-	})
+	var bootstrapReleaseHeartbeat *runtimeReleaseBootstrapHeartbeat
+	if schemaCapabilities.ReleaseCoordination {
+		releaseCohort = deploymentapplication.NewDeploymentRuntimeReleaseCohortApplicationService(deploymentpersistence.NewRuntimeReleaseCohortStore(store))
+		releaseLease, err = releaseCohort.Join(ctx, workerDependencies.WorkerID.String(), releaseIdentity, workerDependencies.Clock.Now())
+		mustCompleteRuntimeStartup(err)
+		bootstrapReleaseHeartbeat = startRuntimeReleaseBootstrapHeartbeat(ctx, releaseCohort.HeartbeatInterval(), releaseLease, func(heartbeatCtx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease) (deploymentmodel.RuntimeReleaseCohortLease, error) {
+			return releaseCohort.Heartbeat(heartbeatCtx, lease, workerDependencies.Clock.Now())
+		})
+	}
 	defer func() {
 		if bootstrapReleaseHeartbeat == nil {
 			return
@@ -213,31 +132,37 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 			releaseLease = latestLease
 		}
 	}()
-	metadataBinding, err := metadatamodule.NewFactory().OpenModule(ctx, metadatasdk.ApplicationRef{InstallationID: valueOrDefault(seedManifest.TemplateID, "domainry-runtime")}, runtimeMetadataModuleHost{store: store})
+	metadataBinding, err := metadatamodule.NewFactory().OpenModule(ctx, metadatasdk.ApplicationRef{InstallationID: projectModel.ProjectKey}, runtimeMetadataModuleHost{store: store})
 	mustCompleteRuntimeStartup(err)
 	mustCompleteRuntimeStartup(metadataBinding.Descriptor().Validate())
 	mustCompleteRuntimeStartup(store.BindMetadata(metadataBinding))
 	reportPersistenceHost := runtimeReportModuleHost{store: store}
-	reportBinding, err := reportFactory.Open(ctx, reportsdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}, reportPersistenceHost)
-	mustCompleteRuntimeStartup(err)
-	mustCompleteRuntimeStartup(reportBinding.Descriptor().Validate())
-	if reportBinding.Snapshots() == nil {
-		mustCompleteRuntimeStartup(errors.New("Report Binding returned no snapshot repository"))
+	var reportBinding reportsdk.Binding
+	if reportFactory != nil {
+		reportBinding, err = reportFactory.Open(ctx, reportsdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}, reportPersistenceHost)
+		mustCompleteRuntimeStartup(err)
+		if reportBinding == nil {
+			mustCompleteRuntimeStartup(errors.New("Report SDK Factory returned no Binding"))
+		}
+		mustCompleteRuntimeStartup(reportBinding.Descriptor().Validate())
+		if reportBinding.Snapshots() == nil {
+			mustCompleteRuntimeStartup(errors.New("Report Binding returned no snapshot repository"))
+		}
 	}
 	integrationTriggers := &runtimeIntegrationTriggerRelay{}
 	integrationOwner, err := openRuntimeIntegration(ctx, integrationsdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}, integrationFactory, runtimeIntegrationModuleHost{store: store, providers: connectorProviders, triggers: integrationTriggers})
 	mustCompleteRuntimeStartup(err)
 	mustCompleteRuntimeStartup(bindIdentitySecurityChallengeDelivery(identityBinding, integrationOwner.Operations))
-	ownerProjectedManifest, validationErr := addIntegrationOwnerValidationCatalog(ctx, seedManifest, integrationOwner.Catalog)
-	mustCompleteRuntimeStartup(validationErr)
-	if !cfg.SkipManifestValidation && !(cfg.AllowEmptyAuthoringManifest && runtimeManifestHasNoBusinessObjects(seedManifest)) {
-		mustCompleteRuntimeStartup(manifestvalidation.ValidateManifest(ownerProjectedManifest))
-	}
-	mustCompleteRuntimeStartup(SynchronizeReportDefinitions(ctx, reportBinding, seedManifest))
-	restoredMetadata, err := restoreRuntimeMetadata(ctx, store, seedManifest, cfg.EffectiveDefinitionUpgradeMode())
+	projectIntegrations, err := projectIntegrationSchema(ctx, integrationOwner.Catalog, projectDefinitions.IntegrationMappings)
 	mustCompleteRuntimeStartup(err)
-	manifest := restoredMetadata.manifest
-	auditBinding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: valueOrDefault(manifest.TemplateID, "domainry-runtime")}, runtimeauditmodule.NewHost(store))
+	if reportBinding != nil {
+		mustCompleteRuntimeStartup(SynchronizeReportDefinitions(ctx, reportBinding, startupOptions.ProjectModel.ProjectKey, startupOptions.ProjectModel.ContentHash, projectDefinitions.Reports))
+	}
+	metadataStore, err := initializeRuntimeProjectModel(ctx, store, projectModel)
+	mustCompleteRuntimeStartup(err)
+	mustCompleteRuntimeStartup(generateDevelopmentData(ctx, cfg, store, projectModel, startupOptions.DevelopmentData))
+	artifactContent := blobstore.LifecycleContentStore{Blobs: startupOptions.BlobStore}
+	auditBinding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: projectModel.ProjectKey}, runtimeauditmodule.NewHost(store, artifactContent, artifactContent, operationspersistence.NewSharedCommandStore(store)))
 	mustCompleteRuntimeStartup(err)
 	mustCompleteRuntimeStartup(auditBinding.Descriptor().Validate())
 	runtimeAuditRepository := runtimeauditmodule.NewAuditStore(auditBinding)
@@ -267,7 +192,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	expectedSchemaRevision := ""
 	if releaseIdentity.Coordinated() {
 		scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "establish project Runtime schema identity")
-		expectedSchemaRevision, err = restoredMetadata.metadataStore.SnapshotRevision(ctx, scope)
+		expectedSchemaRevision, err = metadataStore.SnapshotRevision(ctx, scope)
 		mustCompleteRuntimeStartup(err)
 		mustCompleteRuntimeStartup(requireRuntimeSchemaRevision(expectedSchemaRevision))
 	}
@@ -275,29 +200,19 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		releaseIdentity, firstRuntimeReleaseArtifactEvidence(artifactEvidence), expectedSchemaRevision,
 		func(checkCtx context.Context) (string, error) {
 			scope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "verify project Runtime schema identity")
-			return restoredMetadata.metadataStore.SnapshotRevision(checkCtx, scope)
+			return metadataStore.SnapshotRevision(checkCtx, scope)
 		},
 		projectExtensions, connectorProviders,
 	)
-	mustCompleteRuntimeStartup(integrationOwner.Requirements.SynchronizeConnections(ctx, composition.IntegrationConnectionRequirements(manifest.Integrations.Connections)))
-	mustCompleteRuntimeStartup(integrationOwner.Requirements.SynchronizeEventMappings(ctx, composition.IntegrationEventMappingRequirements(manifest.Integrations.EventMappings)))
-	mustCompleteRuntimeStartup(manifestseed.SyncRows(ctx, runtimeAuditRepository, workflowpersistence.NewWorkflowWorkerStore(store)))
-	templateID := valueOrDefault(manifest.TemplateID, generatedTemplateID)
-	runtimeNotificationEventTypes, err := NotificationRuntimeEventTypes(manifest.NotificationEventTypes, localization.SupportedLocales(), localization.DefaultLocale, localization.Lookup)
-	mustCompleteRuntimeStartup(err)
-	workflowNotificationTasks := workflowpersistence.NewWorkflowProcessStore(store)
-	notificationActionAuthorizers := notificationfacade.NewActionAuthorizerRegistry()
+	if integrationOwner.Requirements != nil {
+		mustCompleteRuntimeStartup(integrationOwner.Requirements.SynchronizeConnections(ctx, nil))
+		mustCompleteRuntimeStartup(integrationOwner.Requirements.SynchronizeEventMappings(ctx, projectDefinitions.IntegrationMappings))
+	}
+	templateID := projectModel.ProjectKey
 	reportNotificationActions := &runtimeNotificationActionAuthorizerBinding{}
-	notificationActionAuthorizers.Register("report", reportNotificationActions.Authorize)
 	automationNotificationActions := &runtimeNotificationActionAuthorizerBinding{}
-	notificationActionAuthorizers.Register("automation_rule", automationNotificationActions.Authorize)
 	projectRecordNotificationActions := &runtimeNotificationResolvedActionAuthorizerBinding{}
-	notificationActionAuthorizers.RegisterResolved("project_record", projectRecordNotificationActions.Authorize)
 	recordExportNotificationActions := &runtimeNotificationResolvedActionAuthorizerBinding{}
-	notificationActionAuthorizers.RegisterResolved("record_export", recordExportNotificationActions.Authorize)
-	notificationActionAuthorizers.Register("workflow_task", newWorkflowTaskNotificationActionAuthorizer(workflowNotificationTasks.GetTask))
-	notificationActionAuthorizers.Register("scheduler_job", newSchedulerNotificationActionAuthorizer(metadataBinding.Definitions()))
-	notificationActionAuthorizers.Freeze()
 	var templateRenderer composition.NotificationRenderer
 	var notificationHTTP *notificationfacade.NotificationApplicationService
 	var notificationCompiler runtimeNotificationCompiler
@@ -306,8 +221,24 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	var notificationBinding notificationsdk.Binding
 	var notificationWorkers notificationsdk.LocalWorkers
 	var notificationRelay *notificationpublication.Relay
-	{
-		catalog, catalogErr := notificationSDKCatalog(valueOrDefault(manifest.DefaultLocale, cfg.AppLocale), manifest, runtimeNotificationEventTypes)
+	var notificationSubjectLifecycle lifecyclecontract.SubjectExecutionHandler
+	var notificationRetention lifecyclecontract.OwnerLifecycleExecutor
+	notificationArchives := &notificationSDKRetentionArchiveStore{}
+	if notificationFactory != nil {
+		runtimeNotificationEventTypes, eventTypesErr := NotificationRuntimeEventTypes(projectDefinitions.NotificationEventTypes, localization.SupportedLocales(), localization.DefaultLocale, localization.Lookup)
+		mustCompleteRuntimeStartup(eventTypesErr)
+		workflowNotificationTasks := workflowpersistence.NewWorkflowProcessStore(store)
+		notificationActionAuthorizers := notificationfacade.NewActionAuthorizerRegistry()
+		if reportBinding != nil {
+			notificationActionAuthorizers.Register("report", reportNotificationActions.Authorize)
+		}
+		notificationActionAuthorizers.Register("automation_rule", automationNotificationActions.Authorize)
+		notificationActionAuthorizers.RegisterResolved("project_record", projectRecordNotificationActions.Authorize)
+		notificationActionAuthorizers.RegisterResolved("record_export", recordExportNotificationActions.Authorize)
+		notificationActionAuthorizers.Register("workflow_task", newWorkflowTaskNotificationActionAuthorizer(workflowNotificationTasks.GetTask))
+		notificationActionAuthorizers.Register("scheduler_job", newSchedulerNotificationActionAuthorizer(metadataBinding.Definitions()))
+		notificationActionAuthorizers.Freeze()
+		catalog, catalogErr := notificationSDKCatalog(valueOrDefault(startupOptions.ProjectModel.DefaultLocale, cfg.AppLocale), projectDefinitions.NotificationTemplates, runtimeNotificationEventTypes, projectDefinitions.NotificationRules)
 		mustCompleteRuntimeStartup(catalogErr)
 		sdkDeliveryGateway = &notificationSDKDeliveryGateway{repository: publicationhandoffpersistence.NewPublicationStore(store), productName: cfg.EffectiveProductBrandName()}
 		notificationScope, scopeErr := resolveNotificationWorkspaceScope(cfg)
@@ -317,7 +248,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 			host := notificationSDKModuleHost{
 				store: store, identity: identityBinding, clock: workerDependencies.Clock, workerID: workerDependencies.WorkerID.String(), catalog: catalog,
 				projection: identityProjection, workflow: workflowNotificationTasks.GetTask, delivery: sdkDeliveryGateway,
-				metrics: notificationSDKDeliveryMetrics{operations: integrationOwner.Operations, clock: workerDependencies.Clock}, validator: modulehost.DefaultProviderTemplateValidator{},
+				metrics: notificationSDKDeliveryMetrics{operations: integrationOwner.Operations, clock: workerDependencies.Clock}, validator: modulehost.DefaultProviderTemplateValidator{}, archives: notificationArchives,
 			}
 			notificationBinding, err = moduleFactory.OpenModule(ctx, application, host)
 		} else {
@@ -352,28 +283,24 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		mustCompleteRuntimeStartup(facadeErr)
 		notificationHTTP = facade
 		notificationPublisher = facade.PublishInboxIntent
+		systemTemplateBinding, ok := notificationBinding.(notificationsdk.SystemTemplateBinding)
+		if !ok || systemTemplateBinding.SystemTemplates() == nil {
+			mustCompleteRuntimeStartup(errors.New("Notification Binding returned no system template restoration port"))
+		}
+		templateCatalog := sdkNotificationTemplateCatalog{system: systemTemplateBinding.SystemTemplates()}
+		err = templateCatalog.SyncPublished(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "synchronize project notification templates"), projectDefinitions.NotificationTemplates)
+		mustCompleteRuntimeStartup(err)
+		systemSubjectBinding, ok := notificationBinding.(notificationsdk.SystemSubjectBinding)
+		if !ok || systemSubjectBinding.SystemSubjects() == nil {
+			mustCompleteRuntimeStartup(errors.New("Notification Binding returned no system subject lifecycle port"))
+		}
+		systemRetentionBinding, ok := notificationBinding.(notificationsdk.SystemRetentionBinding)
+		if !ok || systemRetentionBinding.SystemRetention() == nil {
+			mustCompleteRuntimeStartup(errors.New("Notification Binding returned no system retention port"))
+		}
+		notificationSubjectLifecycle = notificationSystemSubjectLifecycle{subjects: systemSubjectBinding.SystemSubjects()}
+		notificationRetention = notificationSystemRetention{retention: systemRetentionBinding.SystemRetention()}
 	}
-	systemTemplateBinding, ok := notificationBinding.(notificationsdk.SystemTemplateBinding)
-	if !ok || systemTemplateBinding.SystemTemplates() == nil {
-		mustCompleteRuntimeStartup(errors.New("Notification Binding returned no system template restoration port"))
-	}
-	// The second restoration pass reconciles notification templates through the
-	// Notification module; the physical definition upgrade already ran above, so
-	// its plan is now empty and apply mode only rewrites nothing.
-	manifest, err = restoreRuntimeManifest(ctx, sdkNotificationTemplateCatalog{system: systemTemplateBinding.SystemTemplates()}, restoredMetadata.metadataStore, seedManifest, cfg.EffectiveDefinitionUpgradeMode())
-	mustCompleteRuntimeStartup(err)
-	manifest, err = addIntegrationOwnerValidationCatalog(ctx, manifest, integrationOwner.Catalog)
-	mustCompleteRuntimeStartup(err)
-	systemSubjectBinding, ok := notificationBinding.(notificationsdk.SystemSubjectBinding)
-	if !ok || systemSubjectBinding.SystemSubjects() == nil {
-		mustCompleteRuntimeStartup(errors.New("Notification Binding returned no system subject lifecycle port"))
-	}
-	systemRetentionBinding, ok := notificationBinding.(notificationsdk.SystemRetentionBinding)
-	if !ok || systemRetentionBinding.SystemRetention() == nil {
-		mustCompleteRuntimeStartup(errors.New("Notification Binding returned no system retention port"))
-	}
-	manifest.TemplateID = templateID
-	manifest.Version = valueOrDefault(manifest.Version, generatedTemplateVersion)
 	sharedRateLimiter, err := openSharedRateLimiter(ctx, cfg, store)
 	mustCompleteRuntimeStartup(err)
 	rateLimiterTransferred := false
@@ -396,13 +323,17 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	}()
 	workflowNotificationScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "compile workflow notification intent")
 	startupCallbacks := runtimeStartupCallbacks{records: nil, notificationManagement: notificationCompiler, workflowNotificationScope: workflowNotificationScope}
+	var compileNotification func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
+	if notificationCompiler != nil {
+		compileNotification = startupCallbacks.CompileNotification
+	}
 	var agentBinding agentsdk.Binding
-	agentBinding, err = openManifestAgentBinding(ctx, cfg.RuntimeInstanceID, store, agentFactory, manifest)
+	agentBinding, err = openProjectAgentBinding(ctx, cfg.RuntimeInstanceID, store, artifactContent, artifactContent, agentFactory, projectDefinitions)
 	mustCompleteRuntimeStartup(err)
-	mustCompleteRuntimeStartup(synchronizeAgentDefinitions(ctx, agentBinding, &manifest))
-	serviceAssembly, err := assembleRuntimeServices(ctx, cfg, manifest, templateRenderer, store, identityProjection, identityPrincipals, runtimeAudit, workerDependencies, runtimeExtensionRegistries{
+	mustCompleteRuntimeStartup(synchronizeAgentDefinitions(ctx, agentBinding, startupOptions.ProjectModel.ProjectKey, startupOptions.ProjectModel.ContentHash, projectDefinitions))
+	serviceAssembly, err := assembleRuntimeServices(ctx, cfg, projectModel, projectDefinitions, projectIntegrations, templateRenderer, store, identityProjection, identityPrincipals, runtimeAudit, workerDependencies, runtimeExtensionRegistries{
 		projectExtensions: projectExtensions, connectorProviders: connectorProviders,
-		notificationCompiler:            startupCallbacks.CompileNotification,
+		notificationCompiler:            compileNotification,
 		taskNotificationCommitter:       workflowpersistence.NewWorkflowTaskNotificationStore(store),
 		notificationPublisher:           notificationPublisher,
 		integrationOwnerDelivery:        integrationOwner.Delivery,
@@ -410,15 +341,18 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		integrationOwnerManagement:      integrationOwner.Management,
 		integrationOwnerOperations:      integrationOwner.Operations,
 		integrationOwnerSubjects:        integrationOwner.Subjects,
+		integrationSubjectPersistence:   integrationOwner.SubjectPersistence,
 		dataExchangeProviderKey:         identityDataExchangeKey,
 		dataExchangeImportProvider:      identityDataExchangeImport,
 		dataExchangeExportProvider:      identityDataExchangeExport,
-		integrationMode:                 integrationOwner.Binding.Descriptor().Mode,
+		integrationMode:                 integrationDeploymentMode(integrationOwner.Binding),
 		identitySubjectLifecycle:        identitySystemSubjectLifecycle{binding: identityBinding},
-		notificationSubjectLifecycle:    notificationSystemSubjectLifecycle{subjects: systemSubjectBinding.SystemSubjects()},
-		notificationRetention:           notificationSystemRetention{retention: systemRetentionBinding.SystemRetention()},
+		notificationSubjectLifecycle:    notificationSubjectLifecycle,
+		notificationRetention:           notificationRetention,
+		notificationArchives:            notificationArchives,
 		auditRepository:                 runtimeAuditRepository,
 		auditSubjectLifecycle:           runtimeauditmodule.NewSubjectLifecycle(auditBinding),
+		auditBinding:                    auditBinding,
 		dataExchangeFactory:             dataExchangeFactory,
 		agentBinding:                    agentBinding,
 		reportBinding:                   reportBinding,
@@ -456,16 +390,18 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		mustCompleteRuntimeStartup(errors.New("Audit Binding returned an unexpected product HTTP adapter"))
 	}
 	mustCompleteRuntimeStartup(modulehttp.ValidateAdapter(auditAdapter))
-	reportHostBinder, ok := reportBinding.(reportsdk.ApplicationHostBinder)
-	if !ok {
-		mustCompleteRuntimeStartup(errors.New("Report Binding does not accept application host capabilities"))
+	if reportBinding != nil {
+		reportHostBinder, ok := reportBinding.(reportsdk.ApplicationHostBinder)
+		if !ok {
+			mustCompleteRuntimeStartup(errors.New("Report Binding does not accept application host capabilities"))
+		}
+		mustCompleteRuntimeStartup(reportHostBinder.BindApplicationHost(runtimeReportApplicationHost{
+			runtimeReportModuleHost: reportPersistenceHost,
+			ports:                   records.ReportModuleApplicationPorts(),
+			cursorKey:               []byte(cfg.AuditExportTokenKey),
+		}))
+		mustCompleteRuntimeStartup(records.BindReportApplication(reportBinding))
 	}
-	mustCompleteRuntimeStartup(reportHostBinder.BindApplicationHost(runtimeReportApplicationHost{
-		runtimeReportModuleHost: reportPersistenceHost,
-		ports:                   records.ReportModuleApplicationPorts(),
-		cursorKey:               []byte(cfg.AuditExportTokenKey),
-	}))
-	mustCompleteRuntimeStartup(records.BindReportApplication(reportBinding))
 	// Bind Agent only after its business owner ports, including Report, are ready.
 	mustCompleteRuntimeStartup(transportbootstrap.BindAgentApplicationHost(transportbootstrap.AgentApplicationHostDependencies{
 		RuntimeID:   cfg.RuntimeInstanceID,
@@ -499,17 +435,19 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		}
 		mustCompleteRuntimeStartup(records.BindAgentBusinessEvents(events))
 	}
-	integrationTriggers.Bind(newRuntimeIntegrationTriggerSink(records, identityPrincipals))
+	if integrationOwner.Binding != nil {
+		integrationTriggers.Bind(newRuntimeIntegrationTriggerSink(records, identityPrincipals))
+	}
 	var monitoringBinding monitoringsdk.Binding
 	if monitoringFactory != nil {
 		application := monitoringsdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}
-		monitoringBinding, err = openMonitoringBinding(ctx, monitoringFactory, application, newMonitoringModuleHost(records.Applications().RuntimeStatus, manifest.TemplateID, manifest.Version))
+		monitoringBinding, err = openMonitoringBinding(ctx, monitoringFactory, application, newMonitoringModuleHost(records.Applications().RuntimeStatus, projectModel.ProjectKey, projectModel.ContentHash))
 		mustCompleteRuntimeStartup(err)
 	}
 	var schedulerBinding schedulersdk.Binding
 	if schedulerFactory != nil {
 		application := schedulersdk.ApplicationRef{RuntimeID: cfg.RuntimeInstanceID}
-		host := composition.NewSchedulerSDKModuleHost(records.SchedulerDefinitionSource(), records.Applications().TargetExecutions, records.Applications().PublicationHandoff, composition.IntegrationConnectionRequirements(manifest.Integrations.Connections), store, workerDependencies.WorkerID.String(), manifest.SchedulerDefinitions, manifest.BusinessCalendars)
+		host := composition.NewSchedulerSDKModuleHost(records.SchedulerDefinitionSource(), records.Applications().TargetExecutions, records.Applications().PublicationHandoff, nil, store, workerDependencies.WorkerID.String(), projectDefinitions.Schedules, projectDefinitions.BusinessCalendars)
 		if moduleFactory, ok := schedulerFactory.(schedulermodulehost.Factory); ok {
 			schedulerBinding, err = moduleFactory.OpenModule(ctx, application, host)
 		} else if saasFactory, ok := schedulerFactory.(schedulersaashost.Factory); ok {
@@ -541,26 +479,26 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		authorizationModuleActions = append(authorizationModuleActions, identityAuthorizationActions...)
 	}
 	workspaceRolePolicy := workspaceprovisionpersistence.WorkspaceBootstrapRolePolicyEvidence{}
-	handlerDescriptors := projectExtensions.BusinessHandlerDescriptors()
-	for _, role := range manifest.Roles {
+	initialWorkspaceAdministratorRole := projectModel.InitialWorkspaceAdministratorRole
+	for _, role := range projectModel.Roles {
 		if !role.ProvisionToWorkspaces || identityBinding.Descriptor().Mode == identitysdk.DeploymentModeExternal {
 			continue
 		}
-		bootstrapRoleCatalog, catalogErr := RuntimeWorkspaceBootstrapRoleCatalog(records.Schema().Objects, manifest.Roles, manifest.InitialWorkspaceAdministratorRole, cfg.IdentityAudience, handlerDescriptors...)
+		bootstrapRoleCatalog, catalogErr := RuntimeWorkspaceBootstrapRoleCatalog(records.Schema().Objects, projectModel.Roles, initialWorkspaceAdministratorRole, cfg.IdentityAudience, handlerDescriptors...)
 		mustCompleteRuntimeStartup(catalogErr)
-		workspaceRolePolicy, catalogErr = workspaceprovisionpersistence.NewWorkspaceBootstrapRolePolicyEvidence(bootstrapRoleCatalog, startupOptions.ProjectNavigationCatalog)
+		workspaceRolePolicy, catalogErr = workspaceprovisionpersistence.NewWorkspaceBootstrapRolePolicyEvidence(bootstrapRoleCatalog)
 		mustCompleteRuntimeStartup(catalogErr)
-		manifest.InitialWorkspaceAdministratorRole = bootstrapRoleCatalog.InitialWorkspaceAdministratorRoleKey
+		initialWorkspaceAdministratorRole = bootstrapRoleCatalog.InitialWorkspaceAdministratorRoleKey
 		break
 	}
-	authorizationRegistry, err := reconcileRuntimeIdentityAuthorization(ctx, identityBinding, records.Schema(), authorizationModuleActions, nil, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs)
+	authorizationRegistry, err := reconcileRuntimeIdentityAuthorization(ctx, identityBinding, records.Schema(), authorizationModuleActions, nil, projectModel.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs, schemaCapabilities)
 	mustCompleteRuntimeStartup(err)
 	authorizationRegistrySnapshot := &runtimeAuthorizationRegistrySnapshot{}
 	authorizationRegistrySnapshot.Store(authorizationRegistry)
 	if binder, embedded := identityBinding.(identitysdk.PermissionUsageProviderBinder); embedded {
 		mustCompleteRuntimeStartup(binder.BindPermissionUsageProvider(authorizationRegistrySnapshot))
 	}
-	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, records.Schema().Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.InstallationAdministratorBootstrapEnabled, handlerDescriptors...))
+	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, records.Schema().Objects, projectModel.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.InstallationAdministratorBootstrapEnabled, handlerDescriptors...))
 	mustCompleteRuntimeStartup(publishRuntimeProjectProfileExtensions(ctx, identityBinding, records.Schema().IdentityProfileExtensions))
 	startupCallbacks.records = records
 	notificationWakeup := func(message publicationmodel.Message) {
@@ -574,7 +512,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	projectRecordNotificationActions.authorize = newProjectRecordNotificationActionAuthorizer(records.Applications().Records.GetRecordForAction)
 	recordExportNotificationActions.authorize = newRecordExportNotificationActionAuthorizer(serviceAssembly.dataExchangeBinding)
 	mustCompleteRuntimeStartup(validateRuntimeActionReadiness(records.Applications().Actions))
-	schedulerWorkloads, err := composition.SchedulerBusinessActionWorkloadBindings(manifest.SchedulerDefinitions)
+	schedulerWorkloads, err := composition.SchedulerBusinessActionWorkloadBindings(projectDefinitions.Schedules)
 	mustCompleteRuntimeStartup(err)
 	restoreSchedulerWorkloads, err := records.Applications().Workflows.ReplaceManagedWorkloadBindings(schedulerWorkloads)
 	mustCompleteRuntimeStartup(err)
@@ -582,68 +520,19 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	// catalog. Publish the complete project roles and their permissions above
 	// before activating workflows, including on an existing workspace upgrade.
 	workflowScope := principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "initialize published workflow definitions")
-	if err := records.Applications().Workflows.InitializePublishedWorkflowDefinitions(ctx, manifest.Workflows, workflowScope); err != nil {
+	var workflowInitializationErr error
+	if schemaCapabilities.Workflow {
+		workflowInitializationErr = records.Applications().Workflows.InitializePublishedWorkflowDefinitions(ctx, projectDefinitions.Workflows, workflowScope)
+	} else {
+		workflowInitializationErr = records.Applications().Workflows.SynchronizeManagedWorkloadBindings(ctx)
+	}
+	if workflowInitializationErr != nil {
 		if restoreSchedulerWorkloads != nil {
 			restoreSchedulerWorkloads()
 		}
-		mustCompleteRuntimeStartup(fmt.Errorf("initialize workflow definitions: %w", err))
+		mustCompleteRuntimeStartup(fmt.Errorf("initialize workflow definitions: %w", workflowInitializationErr))
 	}
-	referenceResolver := newIdentityBusinessSeedReferenceResolver(cfg.IdentityWorkspaceID, cfg.IdentityAudience, identityProjection, startupOptions.BusinessSeedReferenceCandidates)
-	err = synchronizeRuntimeSeeds(ctx, store, manifest, !cfg.BusinessSeedSyncDisabled, referenceResolver)
-	mustCompleteRuntimeStartup(err)
-	refreshRuntimeActionCatalog := func(_ context.Context, snapshot appschemamodel.ApplicationSchemaSnapshot) (appschemaapplication.ApplicationSchemaReloadCommit, error) {
-		return func() { records.Applications().Actions.ReplaceDefinitions(snapshot.Actions) }, nil
-	}
-	records.Applications().ApplicationSchema.AddReloadObserver(func(ctx context.Context, snapshot appschemamodel.ApplicationSchemaSnapshot) (appschemaapplication.ApplicationSchemaReloadPreparation, error) {
-		commit, err := refreshRuntimeActionCatalog(ctx, snapshot)
-		return appschemaapplication.ApplicationSchemaReloadPreparation{Commit: commit}, err
-	})
-	records.Applications().ApplicationSchema.AddReloadObserver(func(_ context.Context, snapshot appschemamodel.ApplicationSchemaSnapshot) (appschemaapplication.ApplicationSchemaReloadPreparation, error) {
-		publishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		defer cancel()
-		previousRegistry := authorizationRegistrySnapshot.Load()
-		candidateRegistry, err := reconcileRuntimeIdentityAuthorization(publishCtx, identityBinding, snapshot, authorizationModuleActions, previousRegistry, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs)
-		if err != nil {
-			return appschemaapplication.ApplicationSchemaReloadPreparation{}, fmt.Errorf("reconcile Runtime authorization definitions with Identity: %w", err)
-		}
-		preparation := appschemaapplication.ApplicationSchemaReloadPreparation{
-			Commit: func() { authorizationRegistrySnapshot.Store(candidateRegistry) },
-		}
-		if identityBinding != nil {
-			previousSnapshot := records.Schema()
-			application := identitysdk.ApplicationRef{
-				WorkspaceID: identitysdk.WorkspaceID(strings.TrimSpace(cfg.IdentityWorkspaceID)), ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(cfg.IdentityAudience)),
-			}
-			rollbackIdentityPublication := func(rollbackCtx context.Context) error {
-				return errors.Join(
-					reconcileRuntimePermissionRegistries(rollbackCtx, identityBinding.Permissions(), application, candidateRegistry, previousRegistry),
-					publishRuntimeProjectRoles(rollbackCtx, identityBinding, previousSnapshot.Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.InstallationAdministratorBootstrapEnabled, handlerDescriptors...),
-					publishRuntimeProjectProfileExtensions(rollbackCtx, identityBinding, previousSnapshot.IdentityProfileExtensions),
-					records.Applications().Workflows.RestoreWorkflowWorkloadBindings(rollbackCtx),
-				)
-			}
-			preparation.Abort = func(abortCtx context.Context) error {
-				rollbackCtx, rollbackCancel := context.WithTimeout(context.WithoutCancel(abortCtx), 10*time.Second)
-				defer rollbackCancel()
-				return rollbackIdentityPublication(rollbackCtx)
-			}
-			if err := publishRuntimeProjectRoles(publishCtx, identityBinding, snapshot.Objects, manifest.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.InstallationAdministratorBootstrapEnabled, handlerDescriptors...); err != nil {
-				return appschemaapplication.ApplicationSchemaReloadPreparation{}, errors.Join(
-					fmt.Errorf("publish Runtime project roles and objects to Identity: %w", err),
-					fmt.Errorf("rollback Runtime Identity publication after project catalog failure: %w", rollbackIdentityPublication(publishCtx)),
-				)
-			}
-			if err := publishRuntimeProjectProfileExtensions(publishCtx, identityBinding, snapshot.IdentityProfileExtensions); err != nil {
-				return appschemaapplication.ApplicationSchemaReloadPreparation{}, errors.Join(
-					fmt.Errorf("publish Runtime profile extensions to Identity: %w", err),
-					fmt.Errorf("rollback Runtime Identity publication after profile-extension failure: %w", rollbackIdentityPublication(publishCtx)),
-				)
-			}
-		}
-		return preparation, nil
-	})
 	records.Applications().Actions.ReplaceDefinitions(records.Schema().Actions)
-	manifest.ManifestHash = seedManifest.ManifestHash
 	if bootstrapReleaseHeartbeat != nil {
 		releaseLease, err = bootstrapReleaseHeartbeat.Stop()
 		mustCompleteRuntimeStartup(err)
@@ -659,7 +548,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		identityProjection:   identityProjection,
 		identityPrincipals:   identityPrincipals,
 		principalCache:       principalCache,
-		integrationMode:      integrationOwner.Binding.Descriptor().Mode,
+		integrationMode:      integrationDeploymentMode(integrationOwner.Binding),
 		integrationBinding:   integrationOwner.Binding,
 		integrationWorkers:   integrationOwner.Workers,
 		dataExchangeBinding:  serviceAssembly.dataExchangeBinding,
@@ -667,7 +556,8 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		fileScanProcessor:    serviceAssembly.fileScanProcessor,
 		blobStore:            serviceAssembly.blobStore,
 		publicResources:      serviceAssembly.publicResources,
-		manifest:             manifest,
+		projectModel:         startupOptions.ProjectModel,
+		schemaCapabilities:   schemaCapabilities,
 		workspaceRolePolicy:  workspaceRolePolicy,
 		recordRepository:     recordRepository,
 		rateLimiter:          sharedRateLimiter,
@@ -683,6 +573,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		notificationRelay:    notificationRelay,
 		worker:               serviceAssembly.worker,
 		projectExtensions:    projectExtensions,
+		projectHTTP:          startupOptions.ProjectHTTP,
 		connectorProviders:   connectorProviders,
 		releaseIdentity:      releaseIdentity,
 		releaseCohort:        releaseCohort,
@@ -691,7 +582,6 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		releaseIntegrity:     releaseIntegrity,
 	})
 	runtime.borrowedStore = preparedStore != nil
-	runtime.startMetadataSnapshotWatcher(ctx)
 	startupOwnsStore = false
 	rateLimiterTransferred = true
 	principalCacheTransferred = true

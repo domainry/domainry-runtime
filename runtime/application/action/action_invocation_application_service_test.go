@@ -67,7 +67,7 @@ func TestEveryInvocationSourceUsesTheSameExactActionPermissionBoundary(t *testin
 		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, handlers), SystemOperations: executor,
 		UnitOfWork: newActionTestUnitOfWork().manager,
 		Audit: ActionAudit{BuildSuccess: func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
-			return auditmodel.AuditEvent{ID: "audit", Event: "action.executed", WorkspaceID: "workspace-a", CreatedAt: "2026-09-02T00:00:00Z"}
+			return auditmodel.AuditEvent{ID: "audit", Event: "action.executed", Family: auditmodel.EventFamilyBusinessEntity, WorkspaceID: "workspace-a", CreatedAt: "2026-09-02T00:00:00Z"}
 		}},
 	})
 	sources := []actionmodel.ActionSource{ActionSourceHTTP, ActionSourceWorkflow, ActionSourceAutomation, actionmodel.ActionSourceRecordTimer, ActionSourceScheduler, ActionSourceIntegration, ActionSourceAgent, ActionSourceNested, ActionSourceBulk}

@@ -62,9 +62,12 @@ func TestPackagedFrontendServesHTMLNavigationAndAssetsWithoutOwningAPIRoutes(t *
 	forwardedPath := ""
 	handler := assets.wrap(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		forwardedPath = request.URL.Path
+		if request.URL.Path == "/auth/login" {
+			http.SetCookie(writer, &http.Cookie{Name: "refresh", Value: "opaque", Path: "/auth", HttpOnly: true})
+		}
 		writer.WriteHeader(http.StatusTeapot)
 		_, _ = writer.Write([]byte("api"))
-	}))
+	}), false)
 	for _, path := range []string{"/", "/orders", "/orders/one"} {
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, path, nil)
@@ -88,6 +91,29 @@ func TestPackagedFrontendServesHTMLNavigationAndAssetsWithoutOwningAPIRoutes(t *
 	handler.ServeHTTP(prefixedAPI, httptest.NewRequest(http.MethodGet, "/api/records/orders", nil))
 	if prefixedAPI.Code != http.StatusTeapot || forwardedPath != "/records/orders" {
 		t.Fatalf("prefixed API response=%d path=%q", prefixedAPI.Code, forwardedPath)
+	}
+	projectRecordHandler := assets.wrap(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		forwardedPath = request.URL.Path
+		writer.WriteHeader(http.StatusTeapot)
+	}), true)
+	projectRecordAPI := httptest.NewRecorder()
+	projectRecordHandler.ServeHTTP(projectRecordAPI, httptest.NewRequest(http.MethodGet, "/api/records/orders", nil))
+	if projectRecordAPI.Code != http.StatusTeapot || forwardedPath != "/api/records/orders" {
+		t.Fatalf("project record API response=%d path=%q", projectRecordAPI.Code, forwardedPath)
+	}
+	projectAPI := httptest.NewRecorder()
+	handler.ServeHTTP(projectAPI, httptest.NewRequest(http.MethodGet, "/api/crm/opportunities", nil))
+	if projectAPI.Code != http.StatusTeapot || forwardedPath != "/api/crm/opportunities" {
+		t.Fatalf("project API response=%d path=%q", projectAPI.Code, forwardedPath)
+	}
+	identityAPI := httptest.NewRecorder()
+	handler.ServeHTTP(identityAPI, httptest.NewRequest(http.MethodPost, "/api/auth/login", nil))
+	if identityAPI.Code != http.StatusTeapot || forwardedPath != "/auth/login" {
+		t.Fatalf("identity API response=%d path=%q", identityAPI.Code, forwardedPath)
+	}
+	identityCookies := identityAPI.Result().Cookies()
+	if len(identityCookies) != 1 || identityCookies[0].Path != "/api/auth" || !identityCookies[0].HttpOnly {
+		t.Fatalf("identity API cookie=%#v", identityCookies)
 	}
 	post := httptest.NewRecorder()
 	postRequest := httptest.NewRequest(http.MethodPost, "/orders", nil)

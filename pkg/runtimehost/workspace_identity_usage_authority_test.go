@@ -25,7 +25,7 @@ func (stub workspaceIdentityUsageAuthenticatorStub) Authenticate(context.Context
 func TestRuntimeWorkspaceIdentityUsageAuthorityDurablyAuthorizesThenResolvesCanonicalScopeInsideActionTransaction(t *testing.T) {
 	cfg := serverTestConfig()
 	cfg.DBPath = filepath.Join(t.TempDir(), "workspace-identity-usage-authority.db")
-	store, err := bootstrap.PrepareProjectDatabase(t.Context(), cfg)
+	store, err := bootstrap.PrepareProjectDatabase(t.Context(), cfg, database.FullRuntimeSchemaCapabilities())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestRuntimeWorkspaceIdentityUsageAuthorityDurablyAuthorizesThenResolvesCano
 func TestRuntimeWorkspaceIdentityUsageAuthorityDeniesStaffAndHeadquartersAdministratorAndAuditsDecisions(t *testing.T) {
 	cfg := serverTestConfig()
 	cfg.DBPath = filepath.Join(t.TempDir(), "workspace-identity-usage-denial.db")
-	store, err := bootstrap.PrepareProjectDatabase(t.Context(), cfg)
+	store, err := bootstrap.PrepareProjectDatabase(t.Context(), cfg, database.FullRuntimeSchemaCapabilities())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,23 +123,17 @@ func seedWorkspaceIdentityUsageAuthorityWorkspace(t *testing.T, store *bootstrap
 		installationIdentity = value
 	}
 	statement, arguments, err := query.NewInsertBuilder(store.RuntimeRenderer(), "_workspaces").
-		Columns("id", "canonical_code", "name", "status", "initial_installation_identity", "revision", "created_at", "updated_at").
-		Values(workspaceID, canonicalCode, canonicalCode, "active", installationIdentity, 1, "2026-09-06T00:00:00Z", "2026-09-06T00:00:00Z").Build()
+		Columns(
+			"id", "canonical_code", "name", "status", "initial_installation_identity",
+			"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit", "included_store_limit", "max_stores",
+			"contract_date", "billing_day", "billing_contact_name", "billing_contact_phone", "billing_contact_email", "billing_contact_address", "billing_contact_notes",
+			"commercial_revision", "revision", "created_at", "updated_at",
+		).
+		Values(workspaceID, canonicalCode, canonicalCode, "active", installationIdentity, "standard", 5, 25, 100, 1000, 1, 5, "2026-09-01", 25, "", "", "", "", "", 1, 1, "2026-09-06T00:00:00Z", "2026-09-06T00:00:00Z").Build()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), statement, arguments...); err != nil {
-		t.Fatal(err)
-	}
-	statement, arguments, err = query.NewInsertBuilder(store.RuntimeRenderer(), "_workspace_commercial_configuration").Columns(
-		"workspace_id", "plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit", "included_store_limit", "max_stores",
-		"contract_date", "billing_day", "billing_contact_name", "billing_contact_phone", "billing_contact_email", "billing_contact_address", "billing_contact_notes",
-		"revision", "created_at", "updated_at",
-	).Values(workspaceID, "standard", 5, 25, 100, 1000, 1, 5, "2026-09-01", 25, "", "", "", "", "", 1, "2026-09-06T00:00:00Z", "2026-09-06T00:00:00Z").Build()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.DB().ExecContext(t.Context(), statement, arguments...); err != nil {
+	if _, err = store.DB().ExecContext(t.Context(), statement, arguments...); err != nil {
 		t.Fatal(err)
 	}
 }

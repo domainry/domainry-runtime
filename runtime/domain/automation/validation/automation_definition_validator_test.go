@@ -30,21 +30,6 @@ func TestValidateOperationInputRejectsProtocolTypeMismatch(t *testing.T) {
 	assertDefinitionError(t, err, apperror.KindBadRequest, "backend.automation.operation_input_type_mismatch", "amount")
 }
 
-func TestValidateActiveInstructionIssuesLocatesInstructionType(t *testing.T) {
-	rule := automationmodel.AutomationRuleSchema{Instructions: []automationmodel.AutomationInstructionSchema{{Key: "send", Type: "integration_call"}}}
-	issues := AutomationValidateActiveInstructionIssues(rule)
-	if len(issues) != 1 {
-		t.Fatalf("expected one issue, got %#v", issues)
-	}
-	issue := issues[0]
-	if issue.ErrorCode != "backend.automation.instruction_type_invalid" || issue.FieldPath != "instructions[0].type" || issue.InstructionKey != "send" {
-		t.Fatalf("unexpected issue: %#v", issue)
-	}
-	if issue.ContractVersion != AutomationRuntimeAuthoringContractVersion {
-		t.Fatalf("unexpected contract version: %q", issue.ContractVersion)
-	}
-}
-
 func assertDefinitionError(t *testing.T, err error, kind apperror.ErrorKind, code, field string) {
 	t.Helper()
 	var appErr *apperror.AppError

@@ -113,7 +113,7 @@ LIMIT 100
 | 接入者只需要选择或提供 | Runtime 自动保证 | 项目获得的灵活性 |
 | --- | --- | --- |
 | 为某个能力注入 Module Factory 或 Remote Factory | Binding/Descriptor、协议、mode、capability 和必要 adapter 校验；Runtime 不复制模块私有状态 | 同一业务可以先共进程部署，再按容量和隔离需求演进为 SaaS |
-| 模块提供自己的 HTTP Adapter 和 OpenAPI operations | Runtime 统一挂载认证、listener exposure、容量治理，并将模块 operations 合并进最终 OpenAPI | 模块可独立演进产品 API，而项目仍保持统一入口和治理 |
+| 模块提供自己的 typed HTTP Adapter、公开 SDK/客户端和 usage 文档 | Runtime 统一挂载认证、listener exposure 与容量治理，但不聚合或托管 API 文档 | 模块可独立演进产品 API，而项目仍保持统一入口和治理 |
 | 提供新的 Connector ProviderSet | Runtime 注入 HTTP/MQTT/filesystem/process 等受控 Transport；process 默认拒绝并使用 executable/working-directory allowlist | 新增供应商适配不要求修改 Runtime，也不能绕过宿主传输策略 |
 | 在项目中提供 Business Handler | Runtime 只通过稳定 `runtimeext` 注册和调用，并在启动时冻结、计算 Registry hash | 项目可以自由实现领域逻辑，同时不接触 Runtime 内部 Service/Repository |
 | 选择 SQLite、PostgreSQL 或 MySQL | Runtime 和嵌入模块复用宿主方言、事务、迁移锁和唯一 `_schema_migrations`；持久化通过 domainry-orm 渲染 | 开发、单机交付和服务化环境可以选择不同数据库而不复制业务代码 |
@@ -371,7 +371,7 @@ Runtime 和模块为长任务提供幂等 Receipt、Run/Event、Lease、Heartbea
 
 **常规开发达到同等保障的代价**
 
-每项可拆分能力都要先定义稳定 SDK/HTTP 合同、模式与版本协商、认证 audience、超时、幂等、Receipt 和不可用策略，再分别实现本地与远程 Binding、产品 HTTP/OpenAPI parity、状态与 Worker 所有权、迁移切流、双 Worker fencing 和回滚验证。单纯把函数改成 HTTP 调用只完成了传输替换，没有完成一致性和运维语义。
+每项可拆分能力都要先定义稳定 SDK/HTTP 合同、模式与版本协商、认证 audience、超时、幂等、Receipt 和不可用策略，再分别实现本地与远程 Binding、产品 HTTP 语义一致性、状态与 Worker 所有权、迁移切流、双 Worker fencing 和回滚验证。单纯把函数改成 HTTP 调用只完成了传输替换，没有完成一致性和运维语义。
 
 **解决的问题**
 

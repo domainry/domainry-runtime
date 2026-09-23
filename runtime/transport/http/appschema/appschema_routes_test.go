@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestRuntimeOnlyRegistersRuntimeOwnedApplicationSchemaRoutes(t *testing.T) {
+func TestRuntimeOnlyRegistersRuntimeOwnedApplicationSchemaDiagnostics(t *testing.T) {
 	handler := NewApplicationSchemaHandler(ApplicationSchemaDependencies{
 		Authenticated: func(http.HandlerFunc) http.HandlerFunc {
 			return func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
@@ -15,9 +15,14 @@ func TestRuntimeOnlyRegistersRuntimeOwnedApplicationSchemaRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/application-schema/definitions/object/account/validate", nil))
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/application-schema/diagnostics", nil))
 	if response.Code != http.StatusNoContent {
-		t.Fatalf("Runtime authoring validation status=%d", response.Code)
+		t.Fatalf("Runtime diagnostics status=%d", response.Code)
+	}
+	legacy := httptest.NewRecorder()
+	mux.ServeHTTP(legacy, httptest.NewRequest(http.MethodPost, "/application-schema/definitions/object/account/validate", nil))
+	if legacy.Code != http.StatusNotFound {
+		t.Fatalf("removed online model authoring route status=%d", legacy.Code)
 	}
 	for _, route := range []struct{ method, path string }{
 		{http.MethodGet, "/metadata/definitions/object"},
@@ -32,7 +37,7 @@ func TestRuntimeOnlyRegistersRuntimeOwnedApplicationSchemaRoutes(t *testing.T) {
 	}
 }
 
-func TestRegisterRoutesWithoutProvisionHandler(t *testing.T) {
+func TestRegisterRoutesDoesNotPublishLegacyProvisionHandler(t *testing.T) {
 	handler := &ApplicationSchemaHandler{authenticated: func(handle http.HandlerFunc) http.HandlerFunc { return handle }}
 	mux := http.NewServeMux()
 

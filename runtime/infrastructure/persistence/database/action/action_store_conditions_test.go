@@ -223,7 +223,7 @@ func TestActionExecutionCompletionLeaseAndLookupStages(t *testing.T) {
 		t.Fatal("normalization helpers failed")
 	}
 	invalidJSON := actionExecutionRow(now, string(idempotency.StatusSucceeded), "fingerprint")
-	invalidJSON[8] = "{"
+	invalidJSON[14] = "{"
 	value, err := actionScanBusinessActionExecution(actionRowScanner{values: invalidJSON})
 	if err != nil || value.Result == nil {
 		t.Fatalf("invalid result projection=%#v err=%v", value, err)
@@ -436,7 +436,17 @@ func scriptedActionStore(runtimeStore *database.RuntimeStore, state *actionDBSta
 }
 
 func actionExecutionRow(now time.Time, status, fingerprint string) []driver.Value {
-	return []driver.Value{"execution", "workspace-primary", "object", "record", "action", "idem", fingerprint, status, `{}`, "owner", now.Add(time.Minute).Format(time.RFC3339Nano), int64(1), int64(200), "", now.Add(time.Hour).Format(time.RFC3339Nano), "actor", "role", now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)}
+	value := actionmodel.ActionBusinessExecution{
+		ID: "execution", WorkspaceID: "workspace-primary", ObjectKey: "object", RecordID: "record", ActionKey: "action", IdempotencyKey: "idem",
+		RequestFingerprint: fingerprint, Status: status, LeaseOwner: "owner", LeaseExpiresAt: now.Add(time.Minute).Format(time.RFC3339Nano), FencingToken: 1,
+		ResponseStatus: 200, ExpiresAt: now.Add(time.Hour).Format(time.RFC3339Nano), ActorID: "actor", RoleKey: "role", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano),
+	}
+	values := actionExecutionValues(value, `{}`)
+	row := make([]driver.Value, len(values))
+	for index, item := range values {
+		row[index] = item
+	}
+	return row
 }
 
 type actionExecStep struct {

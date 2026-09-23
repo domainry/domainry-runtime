@@ -2,7 +2,6 @@ package transport
 
 import (
 	"context"
-	"crypto/sha256"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
@@ -20,10 +19,10 @@ import (
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
+	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
-	businesssystemapplication "github.com/domainry/domainry-runtime/runtime/application/businesssystem"
 	operationsapplication "github.com/domainry/domainry-runtime/runtime/application/operations"
 	principalapplication "github.com/domainry/domainry-runtime/runtime/application/principal"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
@@ -35,9 +34,9 @@ import (
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	businesseventcontract "github.com/domainry/domainry-runtime/runtime/domain/businessevent/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	manifestmodel "github.com/domainry/domainry-runtime/runtime/domain/manifest/model"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 	businesseventmemory "github.com/domainry/domainry-runtime/runtime/infrastructure/broadcast/memory"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
@@ -64,7 +63,8 @@ type HTTPServerDependencies struct {
 	AgentBinding             agentsdk.Binding
 	LifecycleBinding         lifecyclesdk.Binding
 	RateLimiter              ratelimit.Limiter
-	Manifest                 manifestmodel.ManifestSchema
+	ProjectModel             projectmodel.RuntimeModel
+	SchemaCapabilities       *persistence.RuntimeSchemaCapabilities
 	WorkspaceRolePolicy      workspaceprovisionpersistence.WorkspaceBootstrapRolePolicyEvidence
 	WorkerControl            *workerplatform.Controller
 	Clock                    identitysdk.Clock
@@ -76,21 +76,28 @@ type HTTPServerDependencies struct {
 	ModuleHTTPAdapters       []modulehttp.Adapter
 	NotificationInboxActions notificationhttp.NotificationInboxActionResolver
 	ProjectExtensions        *runtimeext.ProjectExtensionRegistry
+	ProjectHTTP              runtimeengine.HTTPFactory
 	BlobStore                runtimefile.BlobStore
 }
 
 type httpServerAssembly struct {
-	dependencies     HTTPServerDependencies
-	server           *runtimehttp.HTTPRouter
-	callbacks        runtimehttp.HandlerCallbacks
-	handlers         runtimehttp.HTTPRouterHandlers
-	recordQueries    *recordapplication.RecordApplicationService
-	publications     *publicationhandoff.PublicationHandoffApplicationService
-	metadata         *appschemaapplication.ApplicationSchemaApplicationService
-	operations       *operationsapplication.OperationsApplicationService
-	identityHTTP     *identityhttpmiddleware.Middleware
-	principals       identitysdk.PrincipalResolver
-	scenarioReceipts *businesssystemapplication.RuntimeAuthoringScenarioReceiptService
+	dependencies  HTTPServerDependencies
+	server        *runtimehttp.HTTPRouter
+	callbacks     runtimehttp.HandlerCallbacks
+	handlers      runtimehttp.HTTPRouterHandlers
+	recordQueries *recordapplication.RecordApplicationService
+	publications  *publicationhandoff.PublicationHandoffApplicationService
+	metadata      *appschemaapplication.ApplicationSchemaApplicationService
+	operations    *operationsapplication.OperationsApplicationService
+	identityHTTP  *identityhttpmiddleware.Middleware
+	principals    identitysdk.PrincipalResolver
+}
+
+func (a *httpServerAssembly) schemaCapabilities() persistence.RuntimeSchemaCapabilities {
+	if a == nil || a.dependencies.SchemaCapabilities == nil {
+		return persistence.FullRuntimeSchemaCapabilities()
+	}
+	return *a.dependencies.SchemaCapabilities
 }
 
 func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDependencies) *runtimehttp.HTTPRouter {
@@ -127,8 +134,6 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	}
 	workspaceAdministrationStore := workspaceprovisionpersistence.NewWorkspaceAdministrationStore(dependencies.Store)
 	var integrationAuthentication runtimehttp.IntegrationAuthenticationPrincipalProvider
-	scenarioReceiptKey := sha256.Sum256([]byte("domainry-runtime-authoring-scenario-receipt-v1:" + dependencies.Config.IntegrationSecretKey))
-	scenarioReceipts := businesssystemapplication.NewRuntimeAuthoringScenarioReceiptService(scenarioReceiptKey[:])
 	server := runtimehttp.NewHTTPRouter(runtimehttp.HTTPRouterConfig{
 		WorkspaceProvisionClientID:      dependencies.Config.RuntimeWorkspaceProvisionClientID,
 		WorkspaceProvisionSigningSecret: dependencies.Config.RuntimeWorkspaceProvisionSigningSecret,
@@ -174,29 +179,36 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 			},
 		}),
 		WorkspaceAdmission: workspaceAdministrationStore,
-		SecurityAudit:      records.Applications().Audit, RuntimeStatus: dependencies.MonitoringBinding,
+		SecurityAudit:      records.Applications().Audit,
+		RuntimeHealth:      dependencies.MonitoringBinding,
+		RuntimeReadiness:   records.Applications().RuntimeStatus,
 		TechnicalMetrics: func(ctx context.Context) string {
 			return runtimeTechnicalOpenMetrics(ctx, dependencies.Store, records.Applications().RuntimeStatus) + runtimeOptionalWorkerMetrics(dependencies.WorkerControl)
 		},
-		WorkerControl:                    dependencies.WorkerControl,
-		RuntimeInstanceID:                dependencies.RuntimeInstanceID,
-		OperationsControlState:           runtimeOperationsControlState(dependencies.Store),
-		RuntimeReleaseAdmission:          dependencies.ReleaseAdmission,
-		RuntimeReleaseIntegrity:          dependencies.ReleaseIntegrity,
-		BusinessEventBackplane:           backplane,
-		ModuleHTTPAdapters:               dependencies.ModuleHTTPAdapters,
-		RuntimeAuthoringScenarioReceipts: scenarioReceipts,
+		WorkerControl:           dependencies.WorkerControl,
+		RuntimeInstanceID:       dependencies.RuntimeInstanceID,
+		OperationsControlState:  runtimeOperationsControlState(dependencies.Store),
+		RuntimeReleaseAdmission: dependencies.ReleaseAdmission,
+		RuntimeReleaseIntegrity: dependencies.ReleaseIntegrity,
+		BusinessEventBackplane:  backplane,
+		ModuleHTTPAdapters:      dependencies.ModuleHTTPAdapters,
 	})
+	if dependencies.ProjectHTTP != nil {
+		engine := newProjectEngine(recordApplication, records.Applications().Actions, server.PrincipalFromContext)
+		projectHandler := dependencies.ProjectHTTP(engine)
+		if projectHandler == nil {
+			panic("project HTTP factory returned a nil handler")
+		}
+		server = runtimehttp.UseProjectHTTP(server, projectHandler)
+	}
 	assembly := &httpServerAssembly{
 		dependencies: dependencies, server: server, callbacks: server.HandlerCallbacks(),
 		recordQueries: recordApplication, publications: publications,
 		metadata: records.Applications().ApplicationSchema, identityHTTP: identityAuthentication,
-		principals:       identityPrincipals,
-		scenarioReceipts: scenarioReceipts,
+		principals: identityPrincipals,
 	}
 	assembly.wireOperationsApplication()
 	assembly.bindAgentApplicationHost()
-	assembly.wireIdentityReferences(ctx)
 	assembly.wireRecordAndProcessHandlers()
 	assembly.wireMetadataAndProjectExtensions()
 	assembly.wireRuntimePublicationHandoff()
@@ -205,7 +217,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	server = runtimehttp.UseHandlers(server, assembly.handlers)
 	server = runtimehttp.UseServiceIdentity(server, dependencies.Config.RuntimeVersion)
 	server = runtimehttp.UseRuntimeReleaseIdentity(server, dependencies.ReleaseIdentity)
-	return runtimehttp.UseManifest(server, dependencies.Manifest)
+	return runtimehttp.UseProjectModelIdentity(server, dependencies.ProjectModel.ProjectKey, dependencies.ProjectModel.ContentHash)
 }
 
 func (a *httpServerAssembly) wireWorkspaceProvisioning(ctx context.Context) {
@@ -215,7 +227,7 @@ func (a *httpServerAssembly) wireWorkspaceProvisioning(ctx context.Context) {
 	repository := workspaceprovisionpersistence.NewWorkspaceProvisionStoreWithFailureInjector(
 		a.dependencies.Store,
 		a.dependencies.IdentityBinding,
-		a.dependencies.Manifest,
+		a.dependencies.ProjectModel,
 		a.workspaceBootstrapParticipant(),
 		workspaceprovisionpersistence.NewAcceptanceFailureInjector(a.dependencies.Config.WorkspaceProvisionFailurePoint),
 		a.dependencies.WorkspaceRolePolicy,

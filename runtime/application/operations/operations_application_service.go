@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -27,40 +28,50 @@ type OperationsIdempotencyReceiptControl interface {
 }
 
 type OperationsSubmitRequest struct {
-	Kind         string `json:"kind"`
-	ResourceType string `json:"resource_type"`
-	ResourceID   string `json:"resource_id,omitempty"`
-	Reason       string `json:"reason"`
-	Reference    string `json:"reference,omitempty"`
-	Payload      any    `json:"payload,omitempty"`
+	Kind              string `json:"kind"`
+	ParentOperationID string `json:"parent_operation_id,omitempty"`
+	ResourceType      string `json:"resource_type"`
+	ResourceID        string `json:"resource_id,omitempty"`
+	Reason            string `json:"reason"`
+	Reference         string `json:"reference,omitempty"`
+	Payload           any    `json:"payload,omitempty"`
 }
 
 type OperationsApplicationService struct {
-	repository                operationsrepository.OperationsRepository
-	legacy                    OperationsIdempotencyReceiptControl
-	now                       func() time.Time
-	newID                     func() string
-	deadLetterMu              sync.RWMutex
-	deadLetterOwners          map[string]OperationsDeadLetterOwner
-	diagnostics               operationsrepository.OperationsDiagnosticsRepository
-	instanceID                string
-	breakGlass                operationsrepository.OperationsBreakGlassRepository
-	breakGlassAlerts          OperationsBreakGlassAlertSink
-	directAuthoringProjection OperationsDirectAuthoringProjection
+	repository       operationsrepository.OperationsRepository
+	legacy           OperationsIdempotencyReceiptControl
+	definitions      map[string]operationsmodel.OperationsDefinition
+	now              func() time.Time
+	newID            func() string
+	deadLetterMu     sync.RWMutex
+	deadLetterOwners map[string]OperationsDeadLetterOwner
+	diagnostics      operationsrepository.OperationsDiagnosticsRepository
+	instanceID       string
+	breakGlass       operationsrepository.OperationsBreakGlassRepository
+	breakGlassAlerts OperationsBreakGlassAlertSink
+	resultArtifacts  operationsrepository.OperationsResultArtifactRepository
 }
 
-func NewOperationsApplicationService(repository operationsrepository.OperationsRepository, legacy OperationsIdempotencyReceiptControl, now func() time.Time, newID func() string) *OperationsApplicationService {
+func NewOperationsApplicationService(repository operationsrepository.OperationsRepository, legacy OperationsIdempotencyReceiptControl, now func() time.Time, newID func() string, selectedDefinitions ...[]operationsmodel.OperationsDefinition) *OperationsApplicationService {
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
 	if newID == nil {
 		newID = requestcontext.NewRequestID
 	}
-	return &OperationsApplicationService{repository: repository, legacy: legacy, now: now, newID: newID, deadLetterOwners: map[string]OperationsDeadLetterOwner{}}
+	definitions := operationsprojection.OperationsDefinitions()
+	if len(selectedDefinitions) != 0 {
+		definitions = append([]operationsmodel.OperationsDefinition(nil), selectedDefinitions[0]...)
+	}
+	definitionsByKind := make(map[string]operationsmodel.OperationsDefinition, len(definitions))
+	for _, definition := range definitions {
+		definitionsByKind[strings.TrimSpace(definition.Kind)] = definition
+	}
+	return &OperationsApplicationService{repository: repository, legacy: legacy, definitions: definitionsByKind, now: now, newID: newID, deadLetterOwners: map[string]OperationsDeadLetterOwner{}}
 }
 
 func (s *OperationsApplicationService) Submit(ctx context.Context, request OperationsSubmitRequest, key string, principal principalmodel.Principal) (operationsmodel.OperationsReceipt, operationsmodel.OperationsSubmissionDecision, error) {
-	definition, found := operationsprojection.OperationsDefinition(strings.TrimSpace(request.Kind))
+	definition, found := s.definition(request.Kind)
 	if !found {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, "backend.operations.kind_not_registered", nil, nil)
 	}
@@ -73,14 +84,14 @@ func (s *OperationsApplicationService) Submit(ctx context.Context, request Opera
 	if err := operationsAuthorize(principal, definition.ActionKey); err != nil {
 		return operationsmodel.OperationsReceipt{}, "", err
 	}
-	return s.submit(ctx, request, definition.ActionKey, key, principal.UserID, operationsmodel.OperationsScope{WorkspaceID: principal.WorkspaceID, ResourceType: request.ResourceType, ResourceID: request.ResourceID})
+	return s.submit(ctx, request, definition.Owner, definition.ActionKey, key, principal.UserID, operationsmodel.OperationsScope{WorkspaceID: principal.WorkspaceID, ResourceType: request.ResourceType, ResourceID: request.ResourceID})
 }
 
 // SubmitSystem registers a Runtime-global operation after authenticating the
 // human operator through their workspace principal. Execution still requires
 // an explicit SystemScope through Start/Finish.
 func (s *OperationsApplicationService) SubmitSystem(ctx context.Context, request OperationsSubmitRequest, key, systemPurpose string, principal principalmodel.Principal) (operationsmodel.OperationsReceipt, operationsmodel.OperationsSubmissionDecision, error) {
-	definition, found := operationsprojection.OperationsDefinition(strings.TrimSpace(request.Kind))
+	definition, found := s.definition(request.Kind)
 	if !found {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, "backend.operations.kind_not_registered", nil, nil)
 	}
@@ -93,23 +104,31 @@ func (s *OperationsApplicationService) SubmitSystem(ctx context.Context, request
 	if err := operationsAuthorize(principal, definition.ActionKey); err != nil {
 		return operationsmodel.OperationsReceipt{}, "", err
 	}
-	return s.submit(ctx, request, definition.ActionKey, key, principal.UserID, operationsmodel.OperationsScope{SystemPurpose: strings.TrimSpace(systemPurpose), ResourceType: request.ResourceType, ResourceID: request.ResourceID})
+	return s.submit(ctx, request, definition.Owner, definition.ActionKey, key, principal.UserID, operationsmodel.OperationsScope{SystemPurpose: strings.TrimSpace(systemPurpose), ResourceType: request.ResourceType, ResourceID: request.ResourceID})
 }
 
-func (s *OperationsApplicationService) submit(ctx context.Context, request OperationsSubmitRequest, actionKey, key, requestedBy string, scope operationsmodel.OperationsScope) (operationsmodel.OperationsReceipt, operationsmodel.OperationsSubmissionDecision, error) {
+func (s *OperationsApplicationService) submit(ctx context.Context, request OperationsSubmitRequest, owner, actionKey, key, requestedBy string, scope operationsmodel.OperationsScope) (operationsmodel.OperationsReceipt, operationsmodel.OperationsSubmissionDecision, error) {
 	if s == nil || s.repository == nil {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindInternal, "backend.operations.repository_unavailable", nil, nil)
 	}
+	parentID := strings.TrimSpace(request.ParentOperationID)
+	if parentID != "" {
+		if _, found, parentErr := s.repository.GetOperationsReceipt(ctx, scope, parentID); parentErr != nil {
+			return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindInternal, "backend.operations.parent_read_failed", parentErr, nil)
+		} else if !found {
+			return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, "backend.operations.parent_not_found", nil, nil)
+		}
+	}
 	fingerprint, err := idempotency.Fingerprint(idempotency.FingerprintInput{
 		UseCase: strings.TrimSpace(request.Kind), ResourceType: strings.TrimSpace(request.ResourceType), TargetID: strings.TrimSpace(request.ResourceID), Payload: request.Payload,
-		Preconditions: map[string]any{"action_key": strings.TrimSpace(actionKey)},
+		Preconditions: map[string]any{"action_key": strings.TrimSpace(actionKey), "owner": strings.TrimSpace(owner), "parent_operation_id": parentID},
 	})
 	if err != nil {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, "backend.operations.payload_invalid", err, nil)
 	}
 	now := s.now().UTC()
 	command := operationsmodel.OperationsCommand{
-		ID: "operation_" + strings.TrimSpace(s.newID()), Kind: request.Kind, ActionKey: strings.TrimSpace(actionKey),
+		ID: "operation_" + strings.TrimSpace(s.newID()), Owner: owner, Kind: request.Kind, ActionKey: strings.TrimSpace(actionKey), ParentID: parentID,
 		Scope:          scope,
 		IdempotencyKey: key, RequestFingerprint: fingerprint, RequestedBy: requestedBy, Reason: request.Reason,
 		Reference: request.Reference, Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now,
@@ -129,7 +148,25 @@ func (s *OperationsApplicationService) submit(ctx context.Context, request Opera
 }
 
 func (s *OperationsApplicationService) Definitions() []operationsmodel.OperationsDefinition {
-	return operationsprojection.OperationsDefinitions()
+	if s == nil {
+		return nil
+	}
+	definitions := make([]operationsmodel.OperationsDefinition, 0, len(s.definitions))
+	for _, definition := range s.definitions {
+		definition.Preconditions = append([]string(nil), definition.Preconditions...)
+		definition.FailureSemantics = append([]operationsmodel.OperationsFailureClass(nil), definition.FailureSemantics...)
+		definitions = append(definitions, definition)
+	}
+	sort.Slice(definitions, func(i, j int) bool { return definitions[i].Kind < definitions[j].Kind })
+	return definitions
+}
+
+func (s *OperationsApplicationService) definition(kind string) (operationsmodel.OperationsDefinition, bool) {
+	if s == nil {
+		return operationsmodel.OperationsDefinition{}, false
+	}
+	definition, found := s.definitions[strings.TrimSpace(kind)]
+	return definition, found
 }
 
 func (s *OperationsApplicationService) Receipt(ctx context.Context, id string, principal principalmodel.Principal) (operationsmodel.OperationsReceipt, error) {
@@ -175,7 +212,9 @@ func (s *OperationsApplicationService) SearchReceipts(ctx context.Context, filte
 }
 
 func normalizeOperationsReceiptFilter(filter operationsmodel.OperationsReceiptFilter) operationsmodel.OperationsReceiptFilter {
+	filter.Owner = strings.TrimSpace(filter.Owner)
 	filter.Kind = strings.TrimSpace(filter.Kind)
+	filter.ParentID = strings.TrimSpace(filter.ParentID)
 	filter.ResourceType = strings.TrimSpace(filter.ResourceType)
 	filter.ResourceID = strings.TrimSpace(filter.ResourceID)
 	filter.RequestedBy = strings.TrimSpace(filter.RequestedBy)
@@ -236,6 +275,21 @@ func (s *OperationsApplicationService) Finish(ctx context.Context, receipt opera
 	if receipt.Command.Status != operationsmodel.OperationsStatusSucceeded && receipt.Command.Status != operationsmodel.OperationsStatusFailed {
 		return operationsmodel.OperationsReceipt{}, apperror.New(apperror.KindBadRequest, "backend.operations.terminal_status_required", nil, nil)
 	}
+	definition, found := s.definition(receipt.Command.Kind)
+	if !found || strings.TrimSpace(receipt.Command.Owner) != definition.Owner || strings.TrimSpace(receipt.Command.ActionKey) != definition.ActionKey || strings.TrimSpace(receipt.Command.Scope.ResourceType) != definition.ResourceType {
+		return operationsmodel.OperationsReceipt{}, apperror.New(apperror.KindBadRequest, "backend.operations.definition_mismatch", nil, nil)
+	}
+	retention, err := operationspolicy.OperationsRetentionDuration(definition, receipt.Command.Status)
+	if err != nil {
+		return operationsmodel.OperationsReceipt{}, apperror.New(apperror.KindInternal, "backend.operations.retention_invalid", err, nil)
+	}
+	now := s.now().UTC()
+	receipt.Command.FinishedAt, receipt.Command.UpdatedAt = &now, now
+	receipt.ExpiresAt = now.Add(retention).Format(time.RFC3339Nano)
+	receipt, err = s.prepareResultEvidence(ctx, receipt)
+	if err != nil {
+		return operationsmodel.OperationsReceipt{}, err
+	}
 	if strings.TrimSpace(receipt.NextAction) == "" {
 		receipt.NextAction = "inspect the operation receipt and verify the owner state before continuing"
 	}
@@ -248,8 +302,6 @@ func (s *OperationsApplicationService) Finish(ctx context.Context, receipt opera
 	if len(receipt.Evidence) == 0 {
 		receipt.Evidence = []string{receipt.StatusURL}
 	}
-	now := s.now().UTC()
-	receipt.Command.FinishedAt, receipt.Command.UpdatedAt = &now, now
 	if err := operationspolicy.OperationsValidateReceipt(receipt); err != nil {
 		return operationsmodel.OperationsReceipt{}, apperror.New(apperror.KindBadRequest, err.Error(), err, nil)
 	}

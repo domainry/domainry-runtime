@@ -22,26 +22,28 @@ SaaS mode keeps them in the remote Identity service.
 Registered schema tables:
 
 - `_schema_migrations` — `installation_scoped` and the sole host/module migration ledger
-- `_workspaces`, `_tenant_registry` — `runtime_global`; they are the platform
-  registries for canonical workspace and tenant identities, and their canonical
-  codes are globally unique rather than inferred from a caller workspace
-- `_tenant_installation` — `installation_scoped`; its singleton row is written
-  atomically with the first tenant and binds this Runtime installation to that
-  real tenant/workspace before tenant-facing services are assembled
-- `_workspace_configuration` — `workspace_scoped`; every row is keyed by the
-  newly provisioned workspace and is created in the same guarded transaction
-- `_workspace_provisioning_receipts` — `runtime_global`; request idempotency is
-  enforced for the platform-wide provisioning operation and never supplies an
-  implicit tenant scope
+- `_workspaces` — `runtime_global`; it is the platform registry for canonical
+  Workspace identity, initial-installation identity and current company
+  organization authority; its typed commercial limits, billing contact and
+  commercial revision are fields of the same aggregate row
+- owner=`workspace`, kind=`workspace.provisioning` or
+  `workspace.administration` rows in `_operations` — `runtime_global`; request
+  idempotency is enforced for platform-wide Workspace operations without an
+  implicit tenant scope, and resulting Workspace/company/user identities are
+  linked from the operation
 - `_release_cohorts`, `_release_instances` — `installation_scoped`;
   they coordinate one process release identity across the whole Runtime
   installation and must never be partitioned by tenant workspace
-- `_operation_requests` — explicit discriminator: tenant commands are
+- `_operations` — explicit discriminator: tenant commands are
   `workspace_scoped`; system-purpose commands are `runtime_global`
+- `_artifacts`, `_artifact_bindings` — `workspace_scoped`; owner and kind
+  registrations partition shared metadata while content remains in the
+  deployment BlobStore
 - `_operation_controls` — `runtime_global`; every row requires an
   explicit system purpose and does not accept a tenant workspace discriminator
-- `_worker_queue_scopes` — `runtime_global`; it enumerates explicit
-  workspace scope keys for governed cross-workspace worker queue discovery
+- `_worker_scopes` — `runtime_global`; it enumerates registered owner/scope
+  keys for governed cross-workspace discovery and holds bounded technical
+  checkpoints, capacity and fenced singleton leases
 - `_rate_limit_buckets` — `runtime_global` technical storage used by the
   `database` rate-limit backend; the bucket
   key supplied by each tenant-facing caller includes its explicit workspace or
@@ -54,58 +56,87 @@ Registered schema tables:
 - `_operation_break_glass_grants` — `workspace_scoped`; every grant names one
   target workspace and its audited approval/revocation lifecycle cannot be
   queried through a wildcard tenant scope
-- `_operation_database_retirements` — `runtime_global`; object retirement, access
-  observations, approvals and backup evidence never inherit tenant scope
-- `_audit_events`, `_audit_export_artifacts`, `_transaction_boundary_intents` — `workspace_scoped`
-- record/action/idempotency: `_action_executions`,
-  `_action_assurance_grants`, `_record_mutation_executions`
-  — `workspace_scoped`
-- `_idempotency_cleanup_leases` — `runtime_global`
-- workflow definitions: `_workflow_definitions`,
-  `_workflow_definition_versions` — `installation_scoped`
-- workflow execution: `_workflow_executions`, `_workflow_execution_receipts`, `_workflow_process_instances`,
+- owner=`operations`, kind=`database_retirement` rows in `_operations` —
+  `runtime_global`; object retirement, access observations, approvals and
+  backup evidence never inherit tenant scope
+- `_audit_events`, `_artifacts`, `_artifact_bindings` — `workspace_scoped`
+- record/action/idempotency: `_action_assurance_grants`, owner=`action`,
+  kind=`action.execution` rows, and owner=`record`, kind=`record.mutation` rows
+  in `_operations` — `workspace_scoped`
+- idempotency cleanup uses the registered `idempotency_cleanup` row in
+  `_worker_scopes`; no owner-specific lease table exists
+- workflow definitions use shared `_definitions` / `_definition_versions`
+  under owner=`workflow`, kind=`workflow`; root resources are keyed by Workflow
+  key and semantic versions by `version:<version-id>` —
+  `installation_owner_kind_scoped`
+- workflow execution: `_workflow_executions`, owner=`workflow`,
+  kind=`workflow.execution.start` rows in `_operations`, `_workflow_process_instances`,
   `_workflow_node_instances`, `_workflow_tasks`, `_workflow_process_events`
-  — `workspace_scoped`
-- `_automation_rule_executions`, `_automation_instruction_executions` — `workspace_scoped`
-- `_application_schema_projection`, `_application_schema_seed_checkpoints`, `_application_schema_exact_decimal_migration_receipts`
-  — `runtime_global`
+  — `workspace_scoped`; operator-controlled execution/process rows link back
+  to the accepted shared receipt through `operation_id`
+- notification delivery policy, template roots and immutable template versions
+  use shared `_definitions` / `_definition_versions` under owner=`notification`;
+  owner=`notification`, kind=`template_publication` rows in `_operations` hold
+  workspace-scoped approval/scheduling state and fenced worker claims
+- `_automation_runs` — `workspace_scoped`
+- `_project_model_state` — `runtime_global`
 - `_record_localized_values` — `workspace_scoped`
-- Metadata Module-owned `_metadata_definitions`,
-  `_metadata_definition_versions`, and `_metadata_projection` —
-  `installation_scoped`; `_metadata_localized_texts` — `workspace_scoped`.
+- Shared `_definitions` and `_definition_versions` —
+  `installation_owner_kind_scoped`;
+  `_metadata_localized_texts` — `workspace_scoped`.
   Runtime reaches them only through the Metadata SDK Binding.
-- Integration Module-owned `_integration_connector_definitions` and
-  `_integration_event_mapping_definitions` — `installation_scoped`
-- Scheduler Module-owned `_scheduler_definitions` — `installation_scoped`
-- Report Module-owned `_report_definitions`, `_report_operation_state_examples`,
-  `_report_sensitive_field_policies`, `_report_export_controls` — `installation_scoped`;
-  `_report_snapshots` — `workspace_scoped`
+- Integration connector catalog and workspace event-mapping requirements use
+  shared `_definitions` / `_definition_versions` under owner=`integration`,
+  kinds `integration_connector` and `integration_event_mapping` —
+  `installation_owner_kind_scoped` with workspace source isolation for mappings
+- Scheduler definitions, snapshot cursor and publisher fence use shared
+  `_definitions` / `_definition_versions` under owner=`scheduler`,
+  kind=`scheduler`, keyed by Runtime ID — `installation_owner_kind_scoped`;
+  Scheduler execution schedules remain Module-owned `_scheduler_schedules`
+- Report definitions, operation-state examples, sensitive-field policies and
+  export controls use shared `_definitions` / `_definition_versions` under
+  owner=`report`, kind=`report` — `installation_owner_kind_scoped`;
+  Report Module-owned `_report_snapshots` — `workspace_scoped`
 - Identity-owned `_identity_profile_binding_definitions`,
   `_identity_profile_binding_definition_versions`, `_identity_role_definitions`,
   and `_identity_role_definition_versions` — `installation_scoped`
 - Agent Module-owned `_agent_skill_definitions`, `_agent_definitions`, `_agent_entrypoint_definitions`,
   `_agent_service_principal_definitions`, `_agent_task_definitions` — `installation_scoped`
-- Data Exchange Module-owned `_data_exchange_jobs`, `_data_exchange_job_chunks`, `_data_exchange_artifacts` — `workspace_scoped`; `_data_exchange_queue_scopes` contains only payload-free workspace scheduling identities. SaaS mode keeps the same ownership boundary remotely.
-- Integration Module-owned tables in the borrowed Runtime database (or isolated behind Integration SaaS): `_integration_connections`, `_integration_api_keys`,
+- Data Exchange Module-owned `_data_exchange_jobs` and `_data_exchange_job_chunks` — `workspace_scoped`; output metadata and job associations use shared `_artifacts` / `_artifact_bindings` with owner=`data_exchange`; owner=`data_exchange` rows in `_worker_scopes` contain only payload-free workspace scheduling identities. SaaS mode keeps the same application boundary remotely.
+- Integration Module-owned tables in the borrowed Runtime database (or isolated behind Integration SaaS): `_integration_connections`,
   `_integration_secret_materials`, `_integration_secrets`,
-  `_integration_external_identities`, `_integration_credential_refresh_leases`,
+  `_integration_external_identities`,
   `_integration_webhook_subscriptions`, `_integration_webhook_nonces`,
   `_integration_web_push_subscriptions`,
   `_integration_events`, `_integration_invocations`,
-  `_integration_event_mapping_intents`,
-  `_integration_connector_provider_states`
+  `_integration_provider_runs`
   — `workspace_scoped`
 - Runtime durable publication handoff: `_publication_outbox`
   — `workspace_scoped`; `publication_type` separates `integration.connector`
   from `notification.saas` while sharing lease, retry, fencing and recovery.
+  Operator recovery stores the shared receipt in `operation_id`.
   Notification-owned tables remain outside the Runtime schema and are governed
   by the selected Module or SaaS Binding.
-- lifecycle governance: `_lifecycle_policy_versions`, `_lifecycle_legal_holds`,
-  `_lifecycle_cleanup_jobs`, `_lifecycle_subject_requests`,
-  `_lifecycle_external_erasure_requests`, `_lifecycle_audit_evidence`,
-  `_lifecycle_archive_entries`, `_lifecycle_deletion_registry`,
-  `_lifecycle_file_artifacts`
-  — `workspace_scoped`
+- lifecycle retention policy definitions: `_definitions`, `_definition_versions`
+  — installation catalog partitioned by owner `lifecycle`, kind
+  `retention_policy`, and workspace `source_id`; current publication and
+  immutable history use Definition CAS.
+- lifecycle governance: `_lifecycle_legal_holds`, `_lifecycle_cleanup_jobs`, `_subject_requests`,
+  `_subject_steps`
+  — `workspace_scoped`; subject requests use indexed typed rows for ordinary
+  requests, account-erasure approvals and external reconciliation, and the
+  successful erase root carries backup replay state. Subject erasure admission
+  is the indexed root request plus its owner `lifecycle`, operation
+  `erase_fence` step, not a separate fence table.
+  Operator-triggered cleanup stores the shared receipt in
+  `_lifecycle_cleanup_jobs.operation_id`; autonomous worker claims preserve it.
+- lifecycle archives and upload files: shared `_artifacts` and
+  `_artifact_bindings` — `workspace_scoped`; owner/kind partitions metadata,
+  bindings carry cleanup-job/source-resource relationships, and BlobStore owns
+  immutable bytes. There are no Lifecycle-private archive or file tables.
+- lifecycle compliance and sensitive-access facts: shared `_audit_events`
+  — `workspace_scoped`; Lifecycle appends only registered fact families through
+  the Audit Binding. Cleanup progress/failure attempts remain cleanup-job state.
 - Runtime health/version capability response (no persisted tenant data) — `public`
 
 ## File and object-storage adapters

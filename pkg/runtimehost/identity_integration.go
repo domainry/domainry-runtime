@@ -12,6 +12,10 @@ import (
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
 
+type identityOperationsPersistenceBinding interface {
+	BindOperationsPersistence() error
+}
+
 func openProjectIdentity(ctx context.Context, cfg config.Config, factory identitysdk.Factory, databases ...identitysdk.DatabaseHandle) (identitysdk.Binding, []identityhttpapi.Adapter, error) {
 	if factory == nil {
 		return nil, nil, fmt.Errorf("generated project composition did not supply an Identity SDK Factory")
@@ -60,6 +64,31 @@ func openProjectIdentity(ctx context.Context, cfg config.Config, factory identit
 		return nil, nil, fmt.Errorf("unsupported Identity deployment mode %q", binding.Descriptor().Mode)
 	}
 	return binding, append([]identityhttpapi.Adapter(nil), adapters...), nil
+}
+
+// bindEmbeddedIdentityOperations enables Identity receipt and write-fence
+// persistence only after Runtime has prepared the project database. SaaS and
+// external bindings own a different database and must bind their persistence
+// inside the owner service instead.
+func bindEmbeddedIdentityOperations(binding identitysdk.Binding) error {
+	if binding == nil {
+		return fmt.Errorf("Identity binding is required")
+	}
+	if binding.Descriptor().Mode != identitysdk.DeploymentModeModule {
+		return nil
+	}
+	return bindIdentityOperationsPersistence(binding, "embedded Identity")
+}
+
+func bindIdentityOperationsPersistence(binding any, scope string) error {
+	binder, ok := binding.(identityOperationsPersistenceBinding)
+	if !ok {
+		return fmt.Errorf("%s binding does not expose shared Operations persistence", scope)
+	}
+	if err := binder.BindOperationsPersistence(); err != nil {
+		return fmt.Errorf("bind %s shared Operations persistence: %w", scope, err)
+	}
+	return nil
 }
 
 type identityAdapterRouter = moduleAdapterRouter
