@@ -199,8 +199,10 @@ func (s *PublicationHandoffApplicationService) recoverLocators(ctx context.Conte
 	}
 	due, err := s.workerRepo.ListDueOutbox(ctx, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "poll Runtime publication outbox"), limit, s.worker.Clock.Now().Format(time.RFC3339))
 	if err != nil {
+		workerplatform.ObserveOutcome(queueKind, "failed")
 		return nil, err
 	}
+	workerplatform.SetQueueMetrics(queueKind, len(due), oldestPublicationLag(due, s.worker.Clock.Now()))
 	result := make([]workerplatform.DurableTaskLocator, 0, len(due))
 	for _, message := range due {
 		result = append(result, workerplatform.DurableTaskLocator{QueueKind: queueKind, WorkspaceID: message.WorkspaceID, TaskID: message.ID})
@@ -223,8 +225,14 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 	now := s.worker.Clock.Now()
 	claimed, claimedOK, err := s.workerRepo.ClaimOutbox(ctx, message.WorkspaceID, message.ID, s.worker.WorkerID.String(), now.Format(time.RFC3339))
 	if err != nil || !claimedOK {
+		if err != nil {
+			workerplatform.ObserveOutcome(queueKind, "failed")
+		} else {
+			workerplatform.ObserveOutcome(queueKind, "skipped")
+		}
 		return claimed, err
 	}
+	workerplatform.ObserveOutcome(queueKind, "claimed")
 	workCtx, stopHeartbeat := workerplatform.WithHeartbeat(ctx, 90*time.Second, func(heartbeatCtx context.Context) error {
 		if heartbeatErr := workerplatform.CheckFault(heartbeatCtx, s.worker.Faults, workerplatform.FaultWorkerHeartbeat); heartbeatErr != nil {
 			return heartbeatErr
@@ -262,6 +270,11 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 					if err == nil {
 						err = workerplatform.CheckFault(ctx, s.worker.Faults, workerplatform.FaultWorkerAfterComplete)
 					}
+					if err == nil {
+						workerplatform.ObserveOutcome(queueKind, "completed")
+					} else {
+						workerplatform.ObserveOutcome(queueKind, "failed")
+					}
 					return completed, err
 				}
 			}
@@ -273,18 +286,45 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 	if ctx.Err() != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		return s.workerRepo.UpdateOutboxStatus(cleanupCtx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "queued", "", "", s.worker.Clock.Now().Format(time.RFC3339))
+		queued, updateErr := s.workerRepo.UpdateOutboxStatus(cleanupCtx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "queued", "", "", s.worker.Clock.Now().Format(time.RFC3339))
+		workerplatform.ObserveOutcome(queueKind, "cancelled")
+		return queued, updateErr
 	}
 	if claimed.AttemptCount >= maxHandoffAttempts {
-		return s.workerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "dead_letter", "", stableError(err), s.worker.Clock.Now().Format(time.RFC3339))
+		dead, updateErr := s.workerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "dead_letter", "", stableError(err), s.worker.Clock.Now().Format(time.RFC3339))
+		if updateErr == nil {
+			workerplatform.ObserveOutcome(queueKind, "dead_letter")
+		} else {
+			workerplatform.ObserveOutcome(queueKind, "failed")
+		}
+		return dead, updateErr
 	}
 	// Delivery.Accept is idempotent by message/deduplication key, so an unknown
 	// transport outcome is safely retried without Runtime interpreting provider state.
 	retry, retryErr := s.workerRepo.ScheduleOutboxRetry(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, retryDelay(claimed.AttemptCount), stableError(err), s.worker.Clock.Now().Format(time.RFC3339))
 	if retryErr != nil {
+		workerplatform.ObserveOutcome(queueKind, "failed")
 		return claimed, retryErr
 	}
+	workerplatform.ObserveOutcome(queueKind, "retry")
 	return retry, err
+}
+
+func oldestPublicationLag(messages []publicationmodel.Message, now time.Time) time.Duration {
+	var lag time.Duration
+	for _, message := range messages {
+		createdAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(message.CreatedAt))
+		if err != nil {
+			createdAt, err = time.Parse(time.RFC3339, strings.TrimSpace(message.CreatedAt))
+		}
+		if err != nil || !now.After(createdAt) {
+			continue
+		}
+		if candidate := now.Sub(createdAt); candidate > lag {
+			lag = candidate
+		}
+	}
+	return lag
 }
 
 func stableError(err error) string {
