@@ -32,7 +32,7 @@ func runtimeSchemaLedgerQueries(count int64, checksum string, dirty bool) []data
 }
 
 func TestRuntimeSchemaHelpersAndDatabaseSelection(t *testing.T) {
-	if CurrentRuntimeSchemaVersion != "033_foundation_worker_scope_kernel" {
+	if CurrentRuntimeSchemaVersion != "001_runtime_schema" {
 		t.Fatalf("current schema version=%q", CurrentRuntimeSchemaVersion)
 	}
 	store := runtimeSchemaStore(t, &databaseSQLState{})
@@ -138,9 +138,9 @@ func TestRuntimeSchemaMigrationLedgerFailures(t *testing.T) {
 			}
 		})
 	}
-	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(1, "", false), execSteps: []databaseSQLExecStep{{rows: 1}, {err: errDatabaseSQL}}})
-	if _, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); !errors.Is(err, errDatabaseSQL) {
-		t.Fatalf("backfill error=%v", err)
+	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(1, "", false)})
+	if _, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); err == nil || !strings.Contains(err.Error(), "checksum_drift") {
+		t.Fatalf("empty checksum error=%v", err)
 	}
 }
 

@@ -21,7 +21,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "033_foundation_worker_scope_kernel"
+const CurrentRuntimeSchemaVersion = "001_runtime_schema"
 
 type RuntimeSchemaCapabilities struct {
 	Workflow            bool
@@ -401,10 +401,6 @@ func (s *RuntimeStore) runtimeSchemaMigrationPendingFor(ctx context.Context, ver
 	if dirty {
 		return false, fmt.Errorf("migration.dirty: runtime schema %s", version)
 	}
-	if strings.TrimSpace(checksum) == "" {
-		_, err := db.ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_migrations")+" SET "+s.identifier("checksum")+" = "+s.placeholder(1)+" WHERE "+s.identifier("path")+" = "+s.placeholder(2), expectedChecksum, path)
-		return false, err
-	}
 	if checksum != expectedChecksum {
 		return false, fmt.Errorf("migration.checksum_drift: runtime schema %s", version)
 	}
@@ -418,7 +414,7 @@ func (s *RuntimeStore) startRuntimeSchemaMigration(ctx context.Context, version 
 func (s *RuntimeStore) startRuntimeSchemaMigrationFor(ctx context.Context, version, checksum string) error {
 	columns := []string{"path", "version", "name", "kind", "checksum", "dirty", "applied_at", "runtime_version", "duration_ms", "operator", "instance_id", "backup_id"}
 	queryValue := "INSERT INTO " + s.tableIdentifier("_schema_migrations") + " (" + strings.Join(quotedColumns(s, columns), ", ") + ") VALUES (" + strings.Join(placeholders(s, len(columns)), ", ") + ")"
-	_, err := s.schemaDatabase().ExecContext(ctx, queryValue, runtimeSchemaMigrationPath(version), version, "managed_database_cohort", "runtime_schema", checksum, true, time.Now().UTC().Format(time.RFC3339), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
+	_, err := s.schemaDatabase().ExecContext(ctx, queryValue, runtimeSchemaMigrationPath(version), version, "create_runtime_schema", "runtime_schema", checksum, true, time.Now().UTC().Format(time.RFC3339), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
 	return err
 }
 
@@ -440,7 +436,7 @@ func currentRuntimeSchemaChecksum(selected ...RuntimeSchemaCapabilities) string 
 		capabilities = selected[0]
 	}
 	capabilityIdentity := fmt.Sprintf("workflow=%t,automation=%t,uploads=%t,lifecycle=%t,release_coordination=%t", capabilities.Workflow, capabilities.Automation, capabilities.Uploads, capabilities.Lifecycle, capabilities.ReleaseCoordination)
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":project_model_projection,object_fields,record_data,evidence,lifecycle,operations,foundation_operations_kernel,foundation_artifact_kernel,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_only_provisioning,workspace_commercial_configuration_in_aggregate,workspace_provisioning_in_operations,workspace_administration_in_operations,report_export_prepare_in_operations,dispatch_callbacks_in_operations,upload_subject_bindings_in_artifact_bindings,database_retirements_in_operations,workflow_route_steps,workflow_composite_primary_keys,workflow_source_ownership,subject_execution_evidence_fences_receipts,native_capabilities=" + capabilityIdentity))
+	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":final_runtime_schema,native_capabilities=" + capabilityIdentity))
 	return hex.EncodeToString(sum[:])
 }
 

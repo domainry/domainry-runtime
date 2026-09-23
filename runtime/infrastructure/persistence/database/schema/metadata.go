@@ -31,12 +31,9 @@ func EnsureApplicationSchemaFor(ctx context.Context, s Store, _ bool) error {
 		s.Identifier("locale")+" "+s.LocalizedTextKeyColumnType()+" NOT NULL, "+
 		s.Identifier("text_value")+" TEXT NOT NULL, "+
 		s.Identifier("created_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
-		s.Identifier("updated_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL)"); err != nil {
+		s.Identifier("updated_at")+" "+s.ApplicationSchemaIDColumnType()+" NOT NULL, "+
+		"PRIMARY KEY ("+s.Identifier("workspace_id")+", "+s.Identifier("object_key")+", "+s.Identifier("record_id")+", "+s.Identifier("field_key")+", "+s.Identifier("locale")+"))"); err != nil {
 		return fmt.Errorf("create _record_localized_values: %w", err)
-	}
-	if err := s.CreateIndexIfMissing(ctx, "_record_localized_values", "uniq_business_record_localized_value", true,
-		"workspace_id", "object_key", "record_id", "field_key", "locale"); err != nil {
-		return fmt.Errorf("create business record localized value unique index: %w", err)
 	}
 	if err := s.CreateIndexIfMissing(ctx, "_record_localized_values", "idx_business_record_localized_search", false,
 		"workspace_id", "object_key", "locale", "field_key", "record_id"); err != nil {
