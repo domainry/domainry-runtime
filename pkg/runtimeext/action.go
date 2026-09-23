@@ -87,13 +87,13 @@ func (c ActionConnectorCapability) Valid() bool {
 	}
 }
 
-// Handler is the fixed source-owned function shape used by generated project
-// code. Capabilities is generated per Action and must not be a project-wide
+// Handler is the fixed source-owned function shape used by project code.
+// Capabilities is bound per Action and must not be a project-wide
 // service container.
 type Handler[Capabilities, Input, Output any] func(context.Context, Capabilities, Input) (Output, error)
 
-// HandlerDescriptor is the Runtime-readable identity of a generated typed
-// Handler wrapper.
+// HandlerDescriptor is the Runtime-readable identity of a typed Handler
+// wrapper.
 type HandlerDescriptor struct {
 	ActionKey                 string
 	ObjectKey                 string

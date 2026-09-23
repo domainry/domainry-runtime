@@ -18,7 +18,7 @@ type identityOperationsPersistenceBinding interface {
 
 func openProjectIdentity(ctx context.Context, cfg config.Config, factory identitysdk.Factory, databases ...identitysdk.DatabaseHandle) (identitysdk.Binding, []identityhttpapi.Adapter, error) {
 	if factory == nil {
-		return nil, nil, fmt.Errorf("generated project composition did not supply an Identity SDK Factory")
+		return nil, nil, fmt.Errorf("project composition did not supply an Identity SDK Factory")
 	}
 	application := identitysdk.ApplicationRef{
 		WorkspaceID:    identitysdk.WorkspaceID(cfg.IdentityWorkspaceID),

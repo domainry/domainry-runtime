@@ -337,7 +337,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	cfg.RuntimeVersion = options.Identity.RuntimeVersion
 	identityFactory := options.IdentityFactory
 	if identityFactory == nil {
-		return fmt.Errorf("configure Identity factory: generated project composition did not supply an SDK Factory")
+		return fmt.Errorf("configure Identity factory: project composition did not supply an SDK Factory")
 	}
 	notificationFactory := options.NotificationFactory
 	monitoringFactory := options.MonitoringFactory

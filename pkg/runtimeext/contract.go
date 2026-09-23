@@ -144,7 +144,7 @@ AcceptanceFixtureContract=runtime-acceptance-fixture-v2|workspace_code
 `
 
 // ComputedContractSHA256 returns the canonical public contract identity used
-// by generated project code and Runtime readiness checks.
+// by source-owned project composition and Runtime readiness checks.
 func ComputedContractSHA256() string {
 	structs := []any{
 		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, FileDownloadRequest{}, FileDownloadTicket{}, DerivedFileRequest{}, DerivedFileEvidence{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{},
