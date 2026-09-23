@@ -251,6 +251,20 @@ func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
 	if got := recordTimestampValue("version-1"); got != "version-1" {
 		t.Fatalf("text timestamp=%q", got)
 	}
+	stamp := "2026-09-24T01:02:03.123456Z"
+	mysqlValue, ok := recordTimestampDBValue(testEngineProfile("mysql"), stamp).(time.Time)
+	if !ok || mysqlValue.UTC().Format(time.RFC3339Nano) != stamp {
+		t.Fatalf("mysql timestamp=%#v", mysqlValue)
+	}
+	if got := recordTimestampDBValue(testEngineProfile("postgres"), stamp); got != stamp {
+		t.Fatalf("postgres timestamp=%#v", got)
+	}
+	if got := recordTimestampDBValue(testEngineProfile("sqlite"), stamp); got != stamp {
+		t.Fatalf("sqlite timestamp=%#v", got)
+	}
+	if got := recordTimestampDBValue(testEngineProfile("mysql"), "version-1"); got != "version-1" {
+		t.Fatalf("invalid mysql timestamp=%#v", got)
+	}
 	for name, rows := range map[string]recordRows{
 		"columns":  fakeRecordRows{columnsErr: errRecordSQL},
 		"scan":     fakeRecordRows{columns: []string{"id"}, next: true, scanErr: errRecordSQL},
@@ -259,6 +273,32 @@ func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
 		if _, err := recordsFromRows(testEngineProfile("sqlite"), object, rows); !errors.Is(err, errRecordSQL) {
 			t.Fatalf("%s row error=%v", name, err)
 		}
+	}
+}
+
+func TestRecordStoreBindsMySQLSystemTimestampsAsNativeTimes(t *testing.T) {
+	state := &recordSQLState{}
+	store := scriptedRecordStore(t, state)
+	store.store.RuntimeEngine = testEngineProfile("mysql")
+	stamp := "2026-09-24T01:02:03.123456Z"
+	record := recordmodel.Record{ID: "record-1", CreatedAt: stamp, UpdatedAt: stamp, Data: map[string]any{"name": "Acme"}}
+	if err := store.InsertRecord(t.Context(), "workspace", recordObjectFixture(), record); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.execArguments) != 1 {
+		t.Fatalf("exec argument batches=%d", len(state.execArguments))
+	}
+	nativeTimestamps := 0
+	for _, argument := range state.execArguments[0] {
+		if timestamp, ok := argument.Value.(time.Time); ok {
+			nativeTimestamps++
+			if got := timestamp.UTC().Format(time.RFC3339Nano); got != stamp {
+				t.Fatalf("timestamp=%s want=%s", got, stamp)
+			}
+		}
+	}
+	if nativeTimestamps != 2 {
+		t.Fatalf("native timestamp arguments=%d values=%#v", nativeTimestamps, state.execArguments[0])
 	}
 }
 

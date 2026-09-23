@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
@@ -97,6 +98,17 @@ func recordTimestampValue(value any) string {
 		return timestamp.UTC().Format(time.RFC3339Nano)
 	}
 	return fmt.Sprint(value)
+}
+
+func recordTimestampDBValue(profile persistencedriver.EngineProfile, value string) any {
+	if profile == nil || profile.Name() != ormdialect.MySQL {
+		return value
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(value))
+	if err != nil {
+		return value
+	}
+	return parsed.UTC()
 }
 
 func recordDeletedValue(value any) bool {

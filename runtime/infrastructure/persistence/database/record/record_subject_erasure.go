@@ -40,12 +40,13 @@ func (r RecordStore) ApplySubjectErasure(ctx context.Context, workspaceID string
 		if err != nil {
 			return err
 		}
-		var updatedAt string
-		if err := tx.QueryRowContext(ctx, statement, args...).Scan(&updatedAt); errors.Is(err, sql.ErrNoRows) {
+		var rawUpdatedAt any
+		if err := tx.QueryRowContext(ctx, statement, args...).Scan(&rawUpdatedAt); errors.Is(err, sql.ErrNoRows) {
 			continue
 		} else if err != nil {
 			return err
 		}
+		updatedAt := recordTimestampValue(rawUpdatedAt)
 		if updatedAt == mutation.AfterUpdatedAt {
 			continue
 		}
@@ -61,7 +62,7 @@ func (r RecordStore) ApplySubjectErasure(ctx context.Context, workspaceID string
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
-		builder := query.NewWorkspaceUpdateBuilder(r.store.RuntimeRenderer(), object.Key, workspaceID).Set("updated_at", mutation.AfterUpdatedAt)
+		builder := query.NewWorkspaceUpdateBuilder(r.store.RuntimeRenderer(), object.Key, workspaceID).Set("updated_at", recordTimestampDBValue(r.store.RuntimeEngine, mutation.AfterUpdatedAt))
 		for _, key := range keys {
 			field, found := fields[key]
 			if !found || recordFieldIsSystemOwned(key) || recordpolicy.RecordSubjectEraseMode(field) == recordpolicy.RecordLifecycleEraseRetain {
@@ -82,7 +83,7 @@ func (r RecordStore) ApplySubjectErasure(ctx context.Context, workspaceID string
 				}
 			}
 		}
-		statement, args, err = builder.Where(query.And(query.Equal("id", mutation.RecordID), query.Equal("updated_at", mutation.BeforeUpdatedAt))).Build()
+		statement, args, err = builder.Where(query.And(query.Equal("id", mutation.RecordID), query.Equal("updated_at", recordTimestampDBValue(r.store.RuntimeEngine, mutation.BeforeUpdatedAt)))).Build()
 		if err != nil {
 			return err
 		}
