@@ -21,6 +21,10 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 	text := s.ApplicationSchemaIDColumnType()
 	indexText := s.RuntimeProfile().TextKeyColumnType(191)
 	timestampText := s.RuntimeProfile().TextKeyColumnType(40)
+	automationWorkspaceText := s.RuntimeProfile().TextKeyColumnType(128)
+	automationKindText := s.RuntimeProfile().TextKeyColumnType(32)
+	automationDefinitionText := s.RuntimeProfile().TextKeyColumnType(128)
+	automationStatusText := s.RuntimeProfile().TextKeyColumnType(64)
 	types := s.RuntimeProfile().EvidenceSchemaTypes(text)
 	idempotencyScopeText := types.IdempotencyScope
 	tables := map[string][]string{
@@ -88,17 +92,17 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 		},
 		"_automation_runs": {
 			"id " + text + " PRIMARY KEY",
-			"workspace_id " + indexText + " NOT NULL",
-			"run_kind " + indexText + " NOT NULL",
+			"workspace_id " + automationWorkspaceText + " NOT NULL",
+			"run_kind " + automationKindText + " NOT NULL",
 			"idempotency_key " + indexText + " NOT NULL",
-			"rule_key " + indexText + " NOT NULL",
-			"object_key " + indexText + " NOT NULL",
+			"rule_key " + automationDefinitionText + " NOT NULL",
+			"object_key " + automationDefinitionText + " NOT NULL",
 			"record_id " + indexText + " NOT NULL DEFAULT ''",
 			"record_version " + text + " NOT NULL DEFAULT ''",
 			"phase " + text + " NOT NULL DEFAULT ''",
 			"operation " + text + " NOT NULL",
 			"instruction_key " + text + " NOT NULL DEFAULT ''",
-			"status " + indexText + " NOT NULL",
+			"status " + automationStatusText + " NOT NULL",
 			"actor_id " + text + " NOT NULL DEFAULT ''",
 			"role_key " + text + " NOT NULL DEFAULT ''",
 			"request_id " + text + " NOT NULL DEFAULT ''",
