@@ -49,7 +49,6 @@ func FullRuntimeSchemaCapabilities() RuntimeSchemaCapabilities {
 }
 
 const (
-	managedDatabaseCohortTable           = "_domainry_managed_runtime_database_cohort"
 	managedDatabaseCohortContractVersion = "domainry-managed-runtime-database-cohort-v1"
 )
 
@@ -445,8 +444,10 @@ func (s *RuntimeStore) ensureManagedDatabaseCohortMarker(ctx context.Context) er
 		return nil
 	}
 	database := s.schemaDatabase()
-	table := s.tableIdentifier(managedDatabaseCohortTable)
-	statement := "CREATE TABLE IF NOT EXISTS " + table + " (" + s.identifier("marker_id") + " SMALLINT NOT NULL PRIMARY KEY, " + s.identifier("contract_version") + " VARCHAR(128) NOT NULL, " + s.identifier("database_identity_sha256") + " CHAR(64) NOT NULL)"
+	statement, err := runtimeschema.ManagedDatabaseCohortCreateStatement(s.sqlBase().SQLRenderer)
+	if err != nil {
+		return fmt.Errorf("build managed database cohort marker: %w", err)
+	}
 	if _, err := database.ExecContext(ctx, statement); err != nil {
 		return fmt.Errorf("prepare managed database cohort marker: %w", err)
 	}
@@ -455,7 +456,7 @@ func (s *RuntimeStore) ensureManagedDatabaseCohortMarker(ctx context.Context) er
 		return fmt.Errorf("generate managed database cohort marker: %w", err)
 	}
 	identity := sha256.Sum256(seed)
-	insert, arguments, err := query.NewInsertBuilder(s.sqlBase().SQLRenderer, managedDatabaseCohortTable).
+	insert, arguments, err := query.NewInsertBuilder(s.sqlBase().SQLRenderer, runtimeschema.ManagedDatabaseCohortTable).
 		Columns("marker_id", "contract_version", "database_identity_sha256").
 		Values(1, managedDatabaseCohortContractVersion, hex.EncodeToString(identity[:])).
 		OnConflictDoNothing("marker_id").Build()
@@ -477,7 +478,7 @@ func (s *RuntimeStore) verifyManagedDatabaseCohortMarker(ctx context.Context) er
 
 func (s *RuntimeStore) verifyManagedDatabaseCohortMarkerWith(ctx context.Context, database schemaDatabase) error {
 	var contractVersion, identity string
-	queryValue := "SELECT " + s.identifier("contract_version") + ", " + s.identifier("database_identity_sha256") + " FROM " + s.tableIdentifier(managedDatabaseCohortTable) + " WHERE " + s.identifier("marker_id") + " = " + s.placeholder(1)
+	queryValue := "SELECT " + s.identifier("contract_version") + ", " + s.identifier("database_identity_sha256") + " FROM " + s.tableIdentifier(runtimeschema.ManagedDatabaseCohortTable) + " WHERE " + s.identifier("marker_id") + " = " + s.placeholder(1)
 	if err := database.QueryRowContext(ctx, queryValue, 1).Scan(&contractVersion, &identity); err != nil {
 		return fmt.Errorf("verify managed database cohort marker: %w", err)
 	}
@@ -511,7 +512,7 @@ func (s *RuntimeStore) InstallationIdentity(ctx context.Context) (string, error)
 		sum := sha256.Sum256([]byte("domainry-runtime/sqlite-installation/v1\x00" + filepath.Clean(absolute)))
 		return hex.EncodeToString(sum[:]), nil
 	}
-	statement, arguments, err := query.NewSelectBuilder(s.sqlBase().SQLRenderer, managedDatabaseCohortTable).
+	statement, arguments, err := query.NewSelectBuilder(s.sqlBase().SQLRenderer, runtimeschema.ManagedDatabaseCohortTable).
 		Columns("contract_version", "database_identity_sha256").Where(query.Equal("marker_id", 1)).Build()
 	if err != nil {
 		return "", fmt.Errorf("build Runtime installation identity query: %w", err)
