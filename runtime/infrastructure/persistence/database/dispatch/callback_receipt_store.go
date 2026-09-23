@@ -95,18 +95,12 @@ func (s *CallbackReceiptStore) reclaimCallback(ctx context.Context, requested di
 	}
 	filter := callbackRecordFilter(requested)
 	filter.RequestFingerprint = requested.BodySHA256
-	filter.Status = string(idempotency.StatusFailedRetryable)
+	filter.LeaseExpiresAtOrBefore = updatedAt
+	filter.ReclaimableStatus = string(idempotency.StatusFailedRetryable)
+	filter.ExpiredLeaseStatus = string(idempotency.StatusProcessing)
 	changed, err := ledger.PatchRecord(ctx, filter, changes)
 	if err != nil {
 		return dispatchmodel.CallbackClaimResult{}, err
-	}
-	if !changed {
-		filter.Status = string(idempotency.StatusProcessing)
-		filter.LeaseExpiresAtOrBefore = updatedAt
-		changed, err = ledger.PatchRecord(ctx, filter, changes)
-		if err != nil {
-			return dispatchmodel.CallbackClaimResult{}, err
-		}
 	}
 	current, found, err := s.findCallbackByScope(ctx, requested)
 	if err != nil {

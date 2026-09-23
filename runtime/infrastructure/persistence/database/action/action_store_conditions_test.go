@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"io"
 	"strings"
@@ -213,23 +214,17 @@ func TestActionExecutionCompletionLeaseAndLookupStages(t *testing.T) {
 	}
 
 	store := NewActionBusinessExecutionStore(base)
-	if err := store.actionLeaseMutationResult(t.Context(), actionResult{rowsErr: wantErr}, nil, "execution"); !errors.Is(err, wantErr) {
-		t.Fatalf("rows affected error=%v", err)
-	}
-	if err := store.actionLeaseMutationResult(t.Context(), nil, wantErr, "execution"); !errors.Is(err, wantErr) {
+	if err := store.actionLeaseMutationResult(t.Context(), false, wantErr, "execution"); !errors.Is(err, wantErr) {
 		t.Fatalf("execution error=%v", err)
 	}
 	if integrationWorkspaceID(" ") != "" || integrationWorkspaceID(" workspace ") != "workspace" || nonNilMap(nil) == nil || nonNilMap(map[string]any{"ok": true})["ok"] != true {
 		t.Fatal("normalization helpers failed")
 	}
-	invalidJSON := actionExecutionRow(now, string(idempotency.StatusSucceeded), "fingerprint")
-	invalidJSON[14] = "{"
-	value, err := actionScanBusinessActionExecution(actionRowScanner{values: invalidJSON})
+	projection := actionmodel.ActionBusinessExecution{ID: "execution", WorkspaceID: "workspace-primary", ObjectKey: "object", RecordID: "record", ActionKey: "action", IdempotencyKey: "idem", RequestFingerprint: "fingerprint", Status: string(idempotency.StatusSucceeded), CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}
+	record := actionExecutionRecord(projection, json.RawMessage(`{`))
+	value, err := actionBusinessExecution(record)
 	if err != nil || value.Result == nil {
 		t.Fatalf("invalid result projection=%#v err=%v", value, err)
-	}
-	if _, err := actionScanBusinessActionExecution(actionRowScanner{err: wantErr}); !errors.Is(err, wantErr) {
-		t.Fatalf("scan error=%v", err)
 	}
 }
 
@@ -447,6 +442,22 @@ func actionExecutionRow(now time.Time, status, fingerprint string) []driver.Valu
 		row[index] = item
 	}
 	return row
+}
+
+func actionExecutionColumns() []string {
+	return []string{"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
+}
+
+func actionExecutionValues(value actionmodel.ActionBusinessExecution, resultJSON string) []any {
+	record := actionExecutionRecord(value, json.RawMessage(resultJSON))
+	return []any{
+		record.ID, record.WorkspaceID, record.SystemPurpose, record.Owner, record.Kind, record.ActionKey, record.ParentID,
+		record.ResourceType, record.ResourceID, record.IdempotencyKey, record.RequestFingerprint, record.RequestedBy,
+		record.Reason, record.Reference, record.Status, record.StatusURL, string(record.ResultJSON), string(record.MetadataJSON),
+		record.ErrorCode, record.FailureClass, record.NextAction, string(record.RelatedIDsJSON), record.Correlation,
+		string(record.EvidenceJSON), record.LeaseOwner, record.LeaseExpiresAt, record.FencingToken, record.ExpiresAt,
+		record.CreatedAt, record.StartedAt, record.FinishedAt, record.UpdatedAt,
+	}
 }
 
 type actionExecStep struct {
