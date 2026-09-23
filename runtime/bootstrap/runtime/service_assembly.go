@@ -663,20 +663,6 @@ func bindEmbeddedIdentitySubjectLifecyclePersistence(binding identitysdk.Binding
 	return nil
 }
 
-type agentSchemaOwner interface {
-	EnsureSchema(context.Context) error
-}
-
-func ensureAgentRuntimeSchemas(ctx context.Context, migration agentSchemaOwner, tasks interface{ BackfillWorkerScopes(context.Context) error }) error {
-	if err := migration.EnsureSchema(ctx); err != nil {
-		return fmt.Errorf("ensure agent schema migration: %w", err)
-	}
-	if err := tasks.BackfillWorkerScopes(ctx); err != nil {
-		return fmt.Errorf("backfill agent task worker scopes: %w", err)
-	}
-	return nil
-}
-
 func completeRuntimeServiceAssembly(result runtimeServiceAssembly, installLifecycle func() error, configure func()) (runtimeServiceAssembly, error) {
 	if err := installLifecycle(); err != nil {
 		return runtimeServiceAssembly{}, fmt.Errorf("install lifecycle policies: %w", err)
