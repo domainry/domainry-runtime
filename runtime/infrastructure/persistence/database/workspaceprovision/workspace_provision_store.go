@@ -7,12 +7,12 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	workspaceProvisioningReceiptTable = "_operations"
+	workspaceProvisioningReceiptTable = sharedoperation.TableName
 	workspaceProvisioningPurpose      = "workspace_provisioning"
 	workspaceProvisioningOwner        = "workspace"
 	workspaceProvisioningKind         = "workspace.provisioning"
@@ -474,17 +474,22 @@ func (store *WorkspaceProvisionStore) insertConfigurationAndReceipt(ctx context.
 		return err
 	}
 	operationID := workspaceProvisioningOperationID(request.RequestID)
-	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), workspaceProvisioningReceiptTable).Columns(
-		"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id",
-		"idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json",
-		"error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at",
-		"fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at",
-	).Values(
-		operationID, "", workspaceProvisioningPurpose, workspaceProvisioningOwner, workspaceProvisioningKind, workspaceProvisioningAction, "", "workspace", result.WorkspaceID,
-		request.RequestID, fingerprint, result.InitialAdminUserID, request.WorkspaceName, result.CanonicalCode, "succeeded", "/operations/"+operationID, resultJSON, metadataJSON,
-		"", "", "", relatedIDsJSON, identityReceipt.ReceiptID, evidenceJSON, "", "", 0, "", now, now, now, now,
-	)); err != nil {
+	inserted, err := sharedoperation.NewSQLStore(store.runtime.DB(), store.runtime.RuntimeRenderer()).InsertRecord(
+		sharedoperation.WithExecutor(ctx, tx),
+		sharedoperation.Record{
+			ID: operationID, SystemPurpose: workspaceProvisioningPurpose, Owner: workspaceProvisioningOwner, Kind: workspaceProvisioningKind,
+			ActionKey: workspaceProvisioningAction, ResourceType: "workspace", ResourceID: result.WorkspaceID, IdempotencyKey: request.RequestID,
+			RequestFingerprint: fingerprint, RequestedBy: result.InitialAdminUserID, Reason: request.WorkspaceName, Reference: result.CanonicalCode,
+			Status: "succeeded", StatusURL: "/operations/" + operationID, ResultJSON: json.RawMessage(resultJSON), MetadataJSON: json.RawMessage(metadataJSON),
+			RelatedIDsJSON: json.RawMessage(relatedIDsJSON), Correlation: identityReceipt.ReceiptID, EvidenceJSON: json.RawMessage(evidenceJSON),
+			CreatedAt: now, StartedAt: now, FinishedAt: now, UpdatedAt: now,
+		},
+	)
+	if err != nil {
 		return err
+	}
+	if !inserted {
+		return fmt.Errorf("workspace provisioning receipt was not inserted")
 	}
 	return store.inject(FailureAfterReceipt)
 }
@@ -499,31 +504,19 @@ func insert(ctx context.Context, tx *sql.Tx, builder *query.InsertBuilder) error
 }
 
 func (store *WorkspaceProvisionStore) receipt(ctx context.Context, requestID, fingerprint string) (workspaceprovisionmodel.Result, bool, error) {
-	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), workspaceProvisioningReceiptTable).Columns(
-		"request_fingerprint", "result_json",
-	).Where(query.And(
-		query.Equal("system_purpose", workspaceProvisioningPurpose),
-		query.Equal("owner", workspaceProvisioningOwner),
-		query.Equal("kind", workspaceProvisioningKind),
-		query.Equal("idempotency_key", strings.TrimSpace(requestID)),
-	)).Build()
-	if err != nil {
-		return workspaceprovisionmodel.Result{}, false, err
+	record, found, err := sharedoperation.NewSQLStore(store.runtime.DB(), store.runtime.RuntimeRenderer()).GetRecord(ctx, sharedoperation.RecordFilter{
+		SystemPurpose: workspaceProvisioningPurpose, Owner: workspaceProvisioningOwner, Kind: workspaceProvisioningKind,
+		IdempotencyKey: strings.TrimSpace(requestID),
+	})
+	if err != nil || !found {
+		return workspaceprovisionmodel.Result{}, found, err
 	}
-	var stored, resultJSON string
 	var result workspaceprovisionmodel.Result
-	err = store.runtime.DB().QueryRowContext(ctx, statement, arguments...).Scan(&stored, &resultJSON)
-	if errors.Is(err, sql.ErrNoRows) {
-		return workspaceprovisionmodel.Result{}, false, nil
-	}
-	if err != nil {
-		return workspaceprovisionmodel.Result{}, false, err
-	}
-	if stored != fingerprint {
+	if record.RequestFingerprint != fingerprint {
 		return workspaceprovisionmodel.Result{}, true, workspaceprovisionmodel.ErrIdempotencyConflict
 	}
 	var storedResult workspaceProvisioningOperationResult
-	if err := json.Unmarshal([]byte(resultJSON), &storedResult); err != nil {
+	if err := json.Unmarshal(record.ResultJSON, &storedResult); err != nil {
 		return workspaceprovisionmodel.Result{}, true, workspaceprovisionmodel.ErrIdentityUnavailable
 	}
 	result = workspaceprovisionmodel.Result{

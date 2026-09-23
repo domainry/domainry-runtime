@@ -13,6 +13,7 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	auditmoduleimpl "github.com/domainry/domainry-audit/module"
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-orm/query"
 	workspaceprovisionapplication "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
 	workspaceprovisionmodel "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/model"
@@ -23,10 +24,9 @@ import (
 )
 
 const (
-	workspaceAdministrationReceiptTable = "_operations"
-	workspaceAdministrationPurpose      = "workspace_administration"
-	workspaceAdministrationOwner        = "workspace"
-	workspaceAdministrationKind         = "workspace.administration"
+	workspaceAdministrationPurpose = "workspace_administration"
+	workspaceAdministrationOwner   = "workspace"
+	workspaceAdministrationKind    = "workspace.administration"
 )
 
 type WorkspaceAdministrationStore struct{ runtime *database.RuntimeStore }
@@ -445,25 +445,17 @@ func (store *WorkspaceAdministrationStore) receiptJSON(ctx context.Context, exec
 	if store == nil || store.runtime == nil || executor == nil {
 		return false, workspaceprovisionmodel.ErrAdministrationUnavailable
 	}
-	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), workspaceAdministrationReceiptTable).
-		Columns("request_fingerprint", "result_json").Where(query.And(
-		query.Equal("id", id),
-		query.Equal("system_purpose", workspaceAdministrationPurpose),
-		query.Equal("owner", workspaceAdministrationOwner),
-		query.Equal("kind", workspaceAdministrationKind),
-	)).Limit(1).Build()
-	if err != nil {
+	record, found, err := sharedoperation.NewSQLStore(store.runtime.DB(), store.runtime.RuntimeRenderer()).GetRecord(
+		sharedoperation.WithExecutor(ctx, executor),
+		sharedoperation.RecordFilter{SystemPurpose: workspaceAdministrationPurpose, ID: id, Owner: workspaceAdministrationOwner, Kind: workspaceAdministrationKind},
+	)
+	if err != nil || !found {
 		return false, err
 	}
-	var stored string
-	if err := executor.QueryRowContext(ctx, statement, arguments...).Scan(&stored, result); errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	} else if err != nil {
-		return false, err
-	}
-	if stored != fingerprint {
+	if record.RequestFingerprint != fingerprint {
 		return true, workspaceprovisionmodel.ErrIdempotencyConflict
 	}
+	*result = string(record.ResultJSON)
 	return true, nil
 }
 
@@ -478,23 +470,24 @@ func (store *WorkspaceAdministrationStore) insertReceipt(ctx context.Context, tx
 	}
 	related, _ := json.Marshal([]string{workspaceID})
 	evidence, _ := json.Marshal([]string{id})
-	statement, arguments, err := query.NewInsertBuilder(store.runtime.RuntimeRenderer(), workspaceAdministrationReceiptTable).
-		Columns(
-			"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id",
-			"idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json",
-			"error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at",
-			"fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at",
-		).
-		Values(
-			id, "", workspaceAdministrationPurpose, workspaceAdministrationOwner, workspaceAdministrationKind, actionKey, "", "workspace", workspaceID,
-			id, fingerprint, actor.UserID, "Governed Workspace administration", actor.RequestID, "succeeded", "/operations/"+id, string(payload), string(metadata),
-			"", "", "", string(related), actor.RequestID, string(evidence), "", "", 0, "", now, now, now, now,
-		).Build()
+	inserted, err := sharedoperation.NewSQLStore(store.runtime.DB(), store.runtime.RuntimeRenderer()).InsertRecord(
+		sharedoperation.WithExecutor(ctx, tx),
+		sharedoperation.Record{
+			ID: id, SystemPurpose: workspaceAdministrationPurpose, Owner: workspaceAdministrationOwner, Kind: workspaceAdministrationKind,
+			ActionKey: actionKey, ResourceType: "workspace", ResourceID: workspaceID, IdempotencyKey: id,
+			RequestFingerprint: fingerprint, RequestedBy: actor.UserID, Reason: "Governed Workspace administration", Reference: actor.RequestID,
+			Status: "succeeded", StatusURL: "/operations/" + id, ResultJSON: payload, MetadataJSON: metadata,
+			RelatedIDsJSON: related, Correlation: actor.RequestID, EvidenceJSON: evidence,
+			CreatedAt: now, StartedAt: now, FinishedAt: now, UpdatedAt: now,
+		},
+	)
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, statement, arguments...)
-	return err
+	if !inserted {
+		return fmt.Errorf("workspace administration receipt was not inserted")
+	}
+	return nil
 }
 
 func workspaceAdministrationReceiptID(actor workspaceprovisionmodel.AdministrationActor, actionKey, idempotencyKey string) string {
