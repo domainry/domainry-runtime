@@ -23,12 +23,12 @@ type operationsLeaseReleaseSpec struct {
 }
 
 var operationsLeaseReleaseSpecs = map[string]operationsLeaseReleaseSpec{
-	"dispatch_callback":          {table: "_operations", idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "dispatch"},
-	"workflow":                   {table: "_operations", idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "workflow"},
+	"dispatch_callback":          {table: sharedoperation.TableName, idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "dispatch"},
+	"workflow":                   {table: sharedoperation.TableName, idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "workflow"},
 	"workflow_execution":         {table: "_workflow_executions", idColumn: "id", workspaceColumn: "workspace_id"},
 	"workflow_deadline":          {table: "_workflow_tasks", idColumn: "id", workspaceColumn: "workspace_id"},
-	"business_action":            {table: "_operations", idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "action"},
-	"record_mutation":            {table: "_operations", idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "record"},
+	"business_action":            {table: sharedoperation.TableName, idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "action"},
+	"record_mutation":            {table: sharedoperation.TableName, idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "record"},
 	"idempotency_cleanup":        {table: "_worker_scopes", idColumn: "id", scopeColumn: "owner", scopeValue: "idempotency_cleanup"},
 	"automation":                 {table: "_automation_runs", idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "run_kind", scopeValue: "instruction"},
 	"runtime_publication_outbox": {table: "_publication_outbox", idColumn: "id", workspaceColumn: "workspace_id", publicationType: "integration.connector"},

@@ -12,6 +12,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
 	"github.com/domainry/domainry-foundation/idempotency"
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -48,54 +49,21 @@ func (r RuntimeStatusStore) idempotencyOperationalStatus(ctx context.Context, wo
 	}
 	nowText := now.UTC().Format(time.RFC3339Nano)
 	for _, spec := range idempotencyReceiptTables {
-		if !r.store.RuntimeSchemaCapabilities().IncludesTable(spec.table) {
-			continue
-		}
-		builder := query.NewSelectBuilder(r.store.SQLRenderer, spec.table).
-			Projections(query.Project(query.Column("status")), query.Project(query.CountAll())).
-			GroupBy(query.Column("status"))
-		predicate := idempotencyReceiptOwnerPredicate(spec)
-		if workspaceID != "" {
-			predicate = query.And(predicate, query.Equal("workspace_id", workspaceID))
-		}
-		builder.Where(predicate)
-		queryValue, args, buildErr := builder.Build()
-		if buildErr != nil {
-			return status, fmt.Errorf("build %s idempotency backlog summary: %w", spec.owner, buildErr)
-		}
-		rows, err := r.db.QueryContext(ctx, queryValue, args...)
+		filter := idempotencyOperationFilter(workspaceID, spec, "")
+		summary, err := r.operationStore().SummarizeRecords(ctx, filter)
 		if err != nil {
 			return status, fmt.Errorf("summarize %s idempotency backlog: %w", spec.owner, err)
 		}
-		for rows.Next() {
-			var receiptStatus string
-			var count int
-			if err := rows.Scan(&receiptStatus, &count); err != nil {
-				_ = rows.Close()
-				return status, err
-			}
+		for receiptStatus, count := range summary.Statuses {
 			status.Backlog[receiptStatus] += count
 			status.BacklogTotal += count
 		}
-		if err := rows.Err(); err != nil {
-			_ = rows.Close()
-			return status, err
-		}
-		_ = rows.Close()
-
-		expiredPredicate := query.And(idempotencyReceiptOwnerPredicate(spec), query.Equal("status", string(idempotency.StatusProcessing)), query.NotEqual("lease_expires_at", ""), query.LessThanOrEqual("lease_expires_at", nowText))
-		if workspaceID != "" {
-			expiredPredicate = query.And(expiredPredicate, query.Equal("workspace_id", workspaceID))
-		}
-		expiredQuery, expiredArgs, buildErr := query.NewSelectBuilder(r.store.SQLRenderer, spec.table).Projections(query.Project(query.CountAll())).Where(expiredPredicate).Build()
-		if buildErr != nil {
-			return status, fmt.Errorf("build %s expired idempotency lease count: %w", spec.owner, buildErr)
-		}
-		var expired int
-		if err := r.db.QueryRowContext(ctx, expiredQuery, expiredArgs...).Scan(&expired); err != nil {
+		filter.Status = string(idempotency.StatusProcessing)
+		expired, err := r.operationStore().CountExpiredLeases(ctx, filter, nowText)
+		if err != nil {
 			return status, fmt.Errorf("count %s expired idempotency leases: %w", spec.owner, err)
 		}
-		status.ExpiredLeases += expired
+		status.ExpiredLeases += int(expired)
 	}
 
 	metrics := r.IdempotencyMetrics(ctx)
@@ -148,11 +116,47 @@ type idempotencyReceiptTable struct {
 }
 
 var idempotencyReceiptTables = []idempotencyReceiptTable{
-	{owner: "dispatch", table: "_operations", scopeColumn: "kind", targetColumn: "resource_id", rowOwner: "dispatch"},
-	{owner: "record", table: "_operations", scopeColumn: "action_key", targetColumn: "resource_id", keyColumn: "reference", rowOwner: "record"},
-	{owner: "action", table: "_operations", scopeColumn: "action_key", targetColumn: "resource_id", keyColumn: "reference", rowOwner: "action"},
-	{owner: "workflow", table: "_operations", scopeColumn: "action_key", targetColumn: "resource_id", keyColumn: "reference", rowOwner: "workflow"},
-	{owner: "report", table: "_operations", scopeColumn: "action_key", targetColumn: "reference", rowOwner: "report"},
+	{owner: "dispatch", scopeColumn: "kind", targetColumn: "resource_id", rowOwner: "dispatch"},
+	{owner: "record", scopeColumn: "action_key", targetColumn: "resource_id", keyColumn: "reference", rowOwner: "record"},
+	{owner: "action", scopeColumn: "action_key", targetColumn: "resource_id", keyColumn: "reference", rowOwner: "action"},
+	{owner: "workflow", scopeColumn: "action_key", targetColumn: "resource_id", keyColumn: "reference", rowOwner: "workflow"},
+	{owner: "report", scopeColumn: "action_key", targetColumn: "reference", rowOwner: "report"},
+}
+
+func (r RuntimeStatusStore) operationStore() *sharedoperation.SQLStore {
+	return sharedoperation.NewSQLStore(r.db, r.store.SQLRenderer)
+}
+
+func idempotencyOperationFilter(workspaceID string, spec idempotencyReceiptTable, status string) sharedoperation.RecordFilter {
+	filter := sharedoperation.RecordFilter{Owner: spec.rowOwner, Status: strings.TrimSpace(status)}
+	if workspaceID = strings.TrimSpace(workspaceID); workspaceID == "" {
+		filter.AllScopes = true
+	} else {
+		filter.WorkspaceID = workspaceID
+	}
+	return filter
+}
+
+func idempotencyRecordValue(record sharedoperation.Record, column string) string {
+	switch column {
+	case "kind":
+		return record.Kind
+	case "action_key":
+		return record.ActionKey
+	case "resource_id":
+		return record.ResourceID
+	case "reference":
+		return record.Reference
+	default:
+		return ""
+	}
+}
+
+func idempotencyReceiptOwnerPredicate(spec idempotencyReceiptTable) query.Predicate {
+	if spec.rowOwner == "" {
+		return query.AlwaysTrue()
+	}
+	return query.Equal("owner", spec.rowOwner)
 }
 
 func (r RuntimeStatusStore) ListIdempotencyReceipts(ctx context.Context, workspaceID, status string, limit int) ([]idempotency.ReceiptSummary, error) {
@@ -163,51 +167,20 @@ func (r RuntimeStatusStore) ListIdempotencyReceipts(ctx context.Context, workspa
 	workspaceID, status = workspace.String(), strings.TrimSpace(status)
 	values := []idempotency.ReceiptSummary{}
 	for _, spec := range idempotencyReceiptTables {
-		if !r.store.RuntimeSchemaCapabilities().IncludesTable(spec.table) {
-			continue
-		}
-		scopeExpression := query.Value("")
-		if spec.scopeColumn != "" {
-			scopeExpression = query.Column(spec.scopeColumn)
-		}
-		targetExpression := query.Value("")
-		if spec.targetColumn != "" {
-			targetExpression = query.Column(spec.targetColumn)
-		}
-		keyColumn := spec.keyColumn
-		if keyColumn == "" {
-			keyColumn = "idempotency_key"
-		}
-		builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, spec.table, workspaceID).
-			Projections(query.Project(query.Column("id")), query.Project(query.Column("workspace_id")), query.Project(scopeExpression), query.Project(targetExpression), query.Project(query.Column(keyColumn)), query.Project(query.Column("request_fingerprint")), query.Project(query.Column("status")), query.Project(query.Column("fencing_token")), query.Project(query.Column("updated_at")), query.Project(query.Column("expires_at")))
-		predicate := idempotencyReceiptOwnerPredicate(spec)
-		if status != "" {
-			predicate = query.And(predicate, query.Equal("status", status))
-		}
-		builder.Where(predicate)
-		queryValue, args, buildErr := builder.OrderBy(query.Descending("updated_at"), query.Descending("id")).Limit(limit).Build()
-		if buildErr != nil {
-			return nil, fmt.Errorf("build %s idempotency receipt list: %w", spec.owner, buildErr)
-		}
-		rows, err := r.db.QueryContext(ctx, queryValue, args...)
+		filter := idempotencyOperationFilter(workspaceID, spec, status)
+		filter.Limit = limit
+		records, err := r.operationStore().ListRecords(ctx, filter)
 		if err != nil {
 			return nil, fmt.Errorf("list %s idempotency receipts: %w", spec.owner, err)
 		}
-		for rows.Next() {
-			var id, workspace, scopeValue, targetValue, key, fingerprint, receiptStatus, updatedAt, expiresAt string
-			var fencingToken int64
-			if err := rows.Scan(&id, &workspace, &scopeValue, &targetValue, &key, &fingerprint, &receiptStatus, &fencingToken, &updatedAt, &expiresAt); err != nil {
-				_ = rows.Close()
-				return nil, err
+		for _, record := range records {
+			scopeValue, targetValue, key := idempotencyRecordValue(record, spec.scopeColumn), idempotencyRecordValue(record, spec.targetColumn), idempotencyRecordValue(record, spec.keyColumn)
+			if spec.keyColumn == "" {
+				key = record.IdempotencyKey
 			}
 			scope := idempotencyReceiptScope(spec.owner, scopeValue, targetValue)
-			values = append(values, idempotency.ReceiptSummaryFromValues(spec.owner, id, workspace, scope, key, fingerprint, receiptStatus, fencingToken, updatedAt, expiresAt))
+			values = append(values, idempotency.ReceiptSummaryFromValues(spec.owner, record.ID, record.WorkspaceID, scope, key, record.RequestFingerprint, record.Status, record.FencingToken, record.UpdatedAt, record.ExpiresAt))
 		}
-		if err := rows.Err(); err != nil {
-			_ = rows.Close()
-			return nil, err
-		}
-		_ = rows.Close()
 	}
 	sort.Slice(values, func(i, j int) bool { return values[i].UpdatedAt > values[j].UpdatedAt })
 	if len(values) > limit {
@@ -260,26 +233,15 @@ func (r RuntimeStatusStore) transitionIdempotencyReceipt(ctx context.Context, wo
 			break
 		}
 	}
-	if selected.table == "" || !r.store.RuntimeSchemaCapabilities().IncludesTable(selected.table) || strings.TrimSpace(id) == "" {
+	if selected.owner == "" || strings.TrimSpace(id) == "" {
 		return false, nil
 	}
-	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, selected.table, workspace.String()).Set("status", toStatus).Set("lease_owner", "").Set("lease_expires_at", "").SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", time.Now().UTC().Format(time.RFC3339Nano)).Where(query.And(idempotencyReceiptOwnerPredicate(selected), query.Equal("id", strings.TrimSpace(id)), query.Equal("status", fromStatus))).Build()
-	if buildErr != nil {
-		return false, buildErr
-	}
-	result, err := r.db.ExecContext(ctx, queryValue, args...)
-	if err != nil {
-		return false, err
-	}
-	changed, err := result.RowsAffected()
-	return changed == 1, err
-}
-
-func idempotencyReceiptOwnerPredicate(spec idempotencyReceiptTable) query.Predicate {
-	if spec.rowOwner == "" {
-		return query.AlwaysTrue()
-	}
-	return query.Equal("owner", spec.rowOwner)
+	empty, updatedAt := "", time.Now().UTC().Format(time.RFC3339Nano)
+	return r.operationStore().PatchRecord(ctx, sharedoperation.RecordFilter{
+		WorkspaceID: workspace.String(), ID: strings.TrimSpace(id), Owner: selected.rowOwner, Status: fromStatus,
+	}, sharedoperation.RecordChanges{
+		Status: &toStatus, LeaseOwner: &empty, LeaseExpiresAt: &empty, IncrementFencingToken: true, UpdatedAt: &updatedAt,
+	})
 }
 
 func (r RuntimeStatusStore) Ping(ctx context.Context) error {

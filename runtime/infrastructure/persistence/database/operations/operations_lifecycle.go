@@ -1,6 +1,7 @@
 package operations
 
 import (
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-orm/query"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
@@ -11,7 +12,7 @@ import (
 
 func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.ArchiveStore) lifecyclecontract.OwnerLifecycleExecutor {
 	specs := operationsLifecycleSpecs()
-	specs = append(specs, lifecyclepersistence.RelationalCleanupSpec{PolicyKey: "operations.break_glass.v1", Table: "_operation_break_glass_grants", IDColumn: "id", TenantColumn: "workspace_id", TimeColumn: "expires_at"})
+	specs = append(specs, lifecyclepersistence.RelationalCleanupSpec{PolicyKey: "operations.break_glass.v1", Table: sharedoperation.BreakGlassTableName, IDColumn: "id", TenantColumn: "workspace_id", TimeColumn: "expires_at"})
 	return lifecyclepersistence.NewRelationalOwnerExecutor(store, archives, "operations", specs...)
 }
 
@@ -38,13 +39,13 @@ func operationsLifecycleSpecs() []lifecyclepersistence.RelationalCleanupSpec {
 				operationsmodel.OperationsStatusFailed,
 			} {
 				specs = append(specs, lifecyclepersistence.RelationalCleanupSpec{
-					PolicyKey: definitions[0].Retention.PolicyKey, Table: "_operations", IDColumn: "id",
+					PolicyKey: definitions[0].Retention.PolicyKey, Table: sharedoperation.TableName, IDColumn: "id",
 					TenantColumn: tenantColumn, TimeColumn: "finished_at", StatusColumn: "status",
 					EligibleStatuses: []string{string(status)}, RetentionGroup: string(status),
 					AdditionalPredicate: operationsLifecyclePredicate(definitions, scope),
 					ReferenceChecks: []lifecyclepersistence.RelationalReferenceCheck{
 						{Table: "_artifact_bindings", TenantColumn: "workspace_id", ReferenceColumn: "resource_id", FixedColumn: "owner", FixedValue: "operations"},
-						{Table: "_operations", TenantColumn: tenantColumn, ReferenceColumn: "parent_id"},
+						{Table: sharedoperation.TableName, TenantColumn: tenantColumn, ReferenceColumn: "parent_id"},
 					},
 				})
 			}

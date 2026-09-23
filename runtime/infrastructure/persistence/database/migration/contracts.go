@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 )
 
 type artifactFile interface {
@@ -229,7 +231,7 @@ type ReconciliationAction struct {
 func RestoreReconciliationPlan() []ReconciliationAction {
 	return []ReconciliationAction{
 		{Table: "_automation_runs", Action: "release_expired_processing_lease", Guard: "run_kind = 'instruction' AND lease_expires_at <= restored_at"},
-		{Table: "_operations", Action: "release_expired_processing_lease", Guard: "owner IN ('action', 'dispatch', 'record', 'workflow') AND lease_expires_at <= restored_at"},
+		{Table: sharedoperation.TableName, Action: "release_expired_processing_lease", Guard: "owner IN ('action', 'dispatch', 'record', 'workflow') AND lease_expires_at <= restored_at"},
 		{Table: "_publication_outbox", Action: "requeue_expired_delivery", Guard: "lease_expires_at <= restored_at AND terminal_at IS NULL"},
 	}
 }

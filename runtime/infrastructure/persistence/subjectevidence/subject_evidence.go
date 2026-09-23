@@ -16,6 +16,7 @@ import (
 	"time"
 
 	foundationartifact "github.com/domainry/domainry-foundation/artifact"
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	"github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
@@ -62,7 +63,7 @@ type spec struct {
 }
 
 var specs = []spec{
-	{table: "_operations", status: "status", busy: []string{"running", "executing", "processing"}, fence: true, set: map[string]any{"requested_by": "anonymous", "reason": "", "reference": "", "result_json": "{}", "metadata_json": "{}", "related_ids_json": "[]", "evidence_json": "[]", "next_action": "", "request_fingerprint": "", "idempotency_key": "", "status": "failed", "error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": ""}},
+	{table: sharedoperation.TableName, status: "status", busy: []string{"running", "executing", "processing"}, fence: true},
 	{table: "_workflow_process_instances", status: "status", set: map[string]any{"workflow_name": "", "definition_json": "{}", "initiator_id": "anonymous", "initiator_role_key": "", "current_node_ids_json": "[]", "variables_json": "{}", "result_json": "{}", "status": "cancelled", "error_code": "runtime.subject_erased"}},
 	{table: "_workflow_executions", status: "status", busy: []string{"running", "processing", "executing"}, fence: true, set: map[string]any{"name": "", "action_json": "{}", "payload_json": "{}", "result_json": "{}", "actor_id": "anonymous", "run_as": "", "idempotency_key": "", "last_error": "", "message": "", "status": "cancelled", "next_run_at": "", "lease_owner": "", "lease_expires_at": ""}},
 	{table: "_workflow_node_instances", status: "status", busy: []string{"running", "processing"}, set: map[string]any{"input_json": "{}", "output_json": "{}", "status": "cancelled", "error_code": "runtime.subject_erased"}},
@@ -73,7 +74,7 @@ var specs = []spec{
 	{table: "_action_assurance_grants"},
 	{table: "_artifact_bindings"},
 	{table: "_automation_runs", status: "status", busy: []string{"processing", "running"}, fence: true, set: map[string]any{"actor_id": "anonymous", "role_key": "", "candidate_json": "{}", "trace_json": "{}", "idempotency_key": "", "result_json": "{}", "status": "failed", "error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": ""}},
-	{table: "_operation_break_glass_grants", set: map[string]any{"actor_id": "anonymous", "approver_ids_json": "[]", "reason": "", "incident_ref": "", "alert_target": "", "revocation_note": "", "revoked_by": "anonymous", "state": "revoked"}},
+	{table: sharedoperation.BreakGlassTableName},
 }
 
 func scope(ctx context.Context, workspace, subject string) error {
@@ -93,17 +94,6 @@ func refsPredicateWithColumn(resources []recordmodel.SubjectRecordReference, rec
 	return query.Or(items...)
 }
 
-func operationRefsPredicate(resources []recordmodel.SubjectRecordReference, owners ...string) query.Predicate {
-	items := []query.Predicate{query.AlwaysFalse()}
-	for _, ref := range resources {
-		items = append(items, query.And(query.Equal("resource_type", ref.ObjectKey), query.Equal("resource_id", ref.RecordID)))
-	}
-	ownerValues := make([]any, len(owners))
-	for index, owner := range owners {
-		ownerValues[index] = owner
-	}
-	return query.And(query.In("owner", ownerValues...), query.Or(items...))
-}
 func in(column string, ids []string) query.Predicate {
 	values := make([]any, len(ids))
 	for i, id := range ids {
@@ -121,14 +111,41 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 		if !h.store.RuntimeSchemaCapabilities().IncludesTable(s.table) {
 			continue
 		}
+		ledger := sharedoperation.NewSQLStore(h.store.DB(), h.store.SQLRenderer)
+		if s.table == sharedoperation.TableName {
+			subjectResources := make([]sharedoperation.SubjectResource, 0, len(resources))
+			for _, resource := range resources {
+				subjectResources = append(subjectResources, sharedoperation.SubjectResource{Type: resource.ObjectKey, ID: resource.RecordID})
+			}
+			records, err := ledger.ListSubjectRecords(sharedoperation.WithExecutor(ctx, tx), workspace, subject, subjectResources, 10001, lock && h.store.RuntimeEngine.Capabilities().RowLock)
+			if err != nil {
+				return nil, err
+			}
+			for _, record := range records {
+				if lock && slices.Contains(s.busy, record.Status) {
+					return nil, fmt.Errorf("runtime.subject_evidence_busy: %s", s.table)
+				}
+				items = append(items, rowReference{Table: s.table, ID: record.ID})
+				if record.Owner == "action" {
+					actionIDs = append(actionIDs, record.ID)
+				}
+			}
+			continue
+		}
+		if s.table == sharedoperation.BreakGlassTableName {
+			records, err := ledger.ListBreakGlassByActor(sharedoperation.WithExecutor(ctx, tx), workspace, subject, 10000, lock && h.store.RuntimeEngine.Capabilities().RowLock)
+			if err != nil {
+				return nil, err
+			}
+			for _, record := range records {
+				items = append(items, rowReference{Table: s.table, ID: record.ID})
+			}
+			continue
+		}
 		var predicate query.Predicate
 		switch s.table {
 		case "_automation_runs":
 			predicate = query.Or(query.Equal("actor_id", subject), refsPredicate(resources))
-		case "_operations":
-			predicate = query.Or(query.Equal("requested_by", subject), operationRefsPredicate(resources, "action", "record"))
-		case "_operation_break_glass_grants":
-			predicate = query.Equal("actor_id", subject)
 		case "_workflow_process_instances":
 			predicate = query.Or(query.Equal("initiator_id", subject), refsPredicate(resources))
 		case "_workflow_executions":
@@ -157,9 +174,6 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 		if s.status != "" {
 			columns = append(columns, s.status)
 		}
-		if s.table == "_operations" {
-			columns = append(columns, "owner")
-		}
 		builder := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, s.table, workspace).Columns(columns...).Where(predicate).OrderBy(query.Ascending("id"))
 		if lock && h.store.RuntimeEngine.Capabilities().RowLock {
 			builder.ForUpdate()
@@ -175,13 +189,9 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 		for rows.Next() {
 			var id string
 			var status sql.NullString
-			var rowOwner sql.NullString
 			destinations := []any{&id}
 			if s.status != "" {
 				destinations = append(destinations, &status)
-			}
-			if s.table == "_operations" {
-				destinations = append(destinations, &rowOwner)
 			}
 			if err = rows.Scan(destinations...); err != nil {
 				rows.Close()
@@ -197,10 +207,6 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 				processIDs = append(processIDs, id)
 			case "_workflow_executions":
 				executionIDs = append(executionIDs, id)
-			case "_operations":
-				if rowOwner.String == "action" {
-					actionIDs = append(actionIDs, id)
-				}
 			}
 		}
 		if err = rows.Err(); err != nil {
@@ -311,6 +317,27 @@ func (h *Handler) ExportSubjectForRequest(ctx context.Context, _ string, workspa
 	}
 	out := map[string][]map[string]any{}
 	for _, ref := range p.Rows {
+		ledger := sharedoperation.NewSQLStore(h.store.DB(), h.store.SQLRenderer)
+		if ref.Table == sharedoperation.TableName {
+			record, found, err := ledger.GetRecord(ctx, sharedoperation.RecordFilter{WorkspaceID: workspace, ID: ref.ID})
+			if err != nil {
+				return nil, err
+			}
+			if found {
+				out[ref.Table] = append(out[ref.Table], operationRecordExport(record))
+			}
+			continue
+		}
+		if ref.Table == sharedoperation.BreakGlassTableName {
+			record, found, err := ledger.GetBreakGlass(ctx, ref.ID)
+			if err != nil {
+				return nil, err
+			}
+			if found {
+				out[ref.Table] = append(out[ref.Table], breakGlassExport(record))
+			}
+			continue
+		}
 		statement, args, err := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, ref.Table, workspace).Projections(query.Project(query.AllColumns())).Where(query.Equal("id", ref.ID)).Build()
 		if err != nil {
 			return nil, err
@@ -350,6 +377,31 @@ func (h *Handler) ExportSubjectForRequest(ctx context.Context, _ string, workspa
 		}
 	}
 	return json.Marshal(out)
+}
+
+func operationRecordExport(record sharedoperation.Record) map[string]any {
+	return map[string]any{
+		"id": record.ID, "workspace_id": record.WorkspaceID, "system_purpose": record.SystemPurpose, "owner": record.Owner,
+		"kind": record.Kind, "action_key": record.ActionKey, "parent_id": record.ParentID, "resource_type": record.ResourceType,
+		"resource_id": record.ResourceID, "idempotency_key": record.IdempotencyKey, "request_fingerprint": record.RequestFingerprint,
+		"requested_by": record.RequestedBy, "reason": record.Reason, "reference": record.Reference, "status": record.Status,
+		"status_url": record.StatusURL, "result_json": string(record.ResultJSON), "metadata_json": string(record.MetadataJSON),
+		"error_code": record.ErrorCode, "failure_class": record.FailureClass, "next_action": record.NextAction,
+		"related_ids_json": string(record.RelatedIDsJSON), "correlation": record.Correlation, "evidence_json": string(record.EvidenceJSON),
+		"lease_owner": record.LeaseOwner, "lease_expires_at": record.LeaseExpiresAt, "fencing_token": record.FencingToken,
+		"expires_at": record.ExpiresAt, "created_at": record.CreatedAt, "started_at": record.StartedAt,
+		"finished_at": record.FinishedAt, "updated_at": record.UpdatedAt,
+	}
+}
+
+func breakGlassExport(record sharedoperation.BreakGlassGrant) map[string]any {
+	return map[string]any{
+		"id": record.ID, "workspace_id": record.WorkspaceID, "state": record.State, "actor_id": record.ActorID,
+		"approver_ids_json": string(record.ApproverIDsJSON), "reason": record.Reason, "incident_ref": record.IncidentRef,
+		"alert_target": record.AlertTarget, "audit_event_id": record.AuditEventID, "expires_at": record.ExpiresAt,
+		"revision": record.Revision, "created_at": record.CreatedAt, "updated_at": record.UpdatedAt,
+		"revoked_at": record.RevokedAt, "revoked_by": record.RevokedBy, "revocation_note": record.RevocationNote,
+	}
 }
 func (*Handler) EraseSubjectForRequest(context.Context, string, string, string, []lifecyclemodel.LegalHold) (json.RawMessage, error) {
 	return nil, fmt.Errorf("Runtime evidence erasure requires a persisted plan")
@@ -514,6 +566,17 @@ func (h *Handler) PrepareSubjectErasure(ctx context.Context, request, workspace,
 			if s.table != ref.Table || !s.fence {
 				continue
 			}
+			if ref.Table == sharedoperation.TableName {
+				changed, err := sharedoperation.NewSQLStore(h.store.DB(), h.store.SQLRenderer).
+					FenceRecordsForErasure(sharedoperation.WithExecutor(ctx, tx), workspace, []string{ref.ID})
+				if err != nil {
+					return nil, err
+				}
+				if changed != 1 {
+					return nil, fmt.Errorf("Runtime subject operation fence disappeared")
+				}
+				continue
+			}
 			builder := query.NewWorkspaceUpdateBuilder(h.store.SQLRenderer, ref.Table, workspace).Set("status", "failed").Set("lease_owner", "").Set("lease_expires_at", "").SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1)))
 			if ref.Table == "_workflow_executions" {
 				builder.Set("status", "cancelled").Set("next_run_at", "")
@@ -576,6 +639,30 @@ func (h *Handler) ErasePreparedSubject(ctx context.Context, request, workspace, 
 		}
 		if found == nil {
 			return nil, fmt.Errorf("Runtime evidence table invalid")
+		}
+		ledger := sharedoperation.NewSQLStore(h.store.DB(), h.store.SQLRenderer)
+		if ref.Table == sharedoperation.TableName {
+			digest := sha256.Sum256([]byte(ref.Table + ":" + ref.ID))
+			changed, err := ledger.EraseRecords(sharedoperation.WithExecutor(ctx, tx), workspace, []sharedoperation.RecordErasure{{
+				ID: ref.ID, IdempotencyKey: "erased:" + hex.EncodeToString(digest[:]),
+			}})
+			if err != nil {
+				return nil, err
+			}
+			if changed != 1 {
+				return nil, fmt.Errorf("Runtime subject operation disappeared")
+			}
+			continue
+		}
+		if ref.Table == sharedoperation.BreakGlassTableName {
+			changed, err := ledger.EraseBreakGlass(sharedoperation.WithExecutor(ctx, tx), workspace, ref.ID)
+			if err != nil {
+				return nil, err
+			}
+			if !changed {
+				return nil, fmt.Errorf("Runtime subject break-glass grant disappeared")
+			}
+			continue
 		}
 		if len(found.set) == 0 {
 			statement, args, err := query.NewWorkspaceDeleteBuilder(h.store.SQLRenderer, ref.Table, workspace).Where(query.Equal("id", ref.ID)).Build()

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/domainry/domainry-orm/query"
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
 )
@@ -23,37 +23,33 @@ func (s OperationsStore) CreateOperationsBreakGlass(ctx context.Context, grant o
 		return false, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	var active int64
-	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_operation_break_glass_grants", grant.WorkspaceID).Projections(query.Project(query.CountAll())).Where(query.And(query.Equal("state", string(operationsmodel.OperationsBreakGlassActive)), query.GreaterThan("expires_at", grant.CreatedAt.UTC().Format(time.RFC3339Nano)))).Build()
-	if buildErr != nil {
-		return false, buildErr
-	}
-	if err := tx.QueryRowContext(ctx, queryValue, args...).Scan(&active); err != nil || active > 0 {
-		return false, err
-	}
-	approvers, _ := json.Marshal(grant.ApproverIDs)
-	columns := []string{"id", "state", "actor_id", "approver_ids_json", "reason", "incident_ref", "alert_target", "audit_event_id", "expires_at", "revision", "created_at", "updated_at", "revoked_at", "revoked_by", "revocation_note"}
-	values := []any{grant.ID, string(grant.State), grant.ActorID, string(approvers), grant.Reason, grant.IncidentRef, grant.AlertTarget, grant.AuditEventID, grant.ExpiresAt.UTC().Format(time.RFC3339Nano), grant.Revision, grant.CreatedAt.UTC().Format(time.RFC3339Nano), grant.UpdatedAt.UTC().Format(time.RFC3339Nano), "", "", ""}
-	actorFences := []query.Predicate{}
-	for _, actor := range grant.ApproverIDs {
-		actorFences = append(actorFences, s.store.SubjectActorWriteAllowed(grant.WorkspaceID, actor))
-	}
-	builder, buildErr := s.store.SubjectEvidenceInsertBuilder(grant.WorkspaceID, "_operation_break_glass_grants", columns, values, actorFences...)
-	if buildErr != nil {
-		return false, buildErr
-	}
-	queryValue, args, buildErr = builder.Build()
-	if buildErr != nil {
-		return false, buildErr
-	}
-	result, err := tx.ExecContext(ctx, queryValue, args...)
+	ledger, err := s.ledger()
 	if err != nil {
 		return false, err
 	}
-	if affected, err := result.RowsAffected(); err != nil {
+	txContext := sharedoperation.WithExecutor(ctx, tx)
+	active, err := ledger.CountActiveBreakGlass(txContext, grant.WorkspaceID, string(operationsmodel.OperationsBreakGlassActive), grant.CreatedAt.UTC().Format(time.RFC3339Nano))
+	if err != nil || active > 0 {
 		return false, err
-	} else if affected != 1 {
-		return false, fmt.Errorf("runtime.subject_erased")
+	}
+	approvers, _ := json.Marshal(grant.ApproverIDs)
+	if err := s.store.GuardSubjectEvidenceWrite(ctx, tx, grant.WorkspaceID, sharedoperation.BreakGlassTableName,
+		[]string{"id", "actor_id"}, []any{grant.ID, grant.ActorID}); err != nil {
+		return false, err
+	}
+	for _, actor := range grant.ApproverIDs {
+		if err := s.store.GuardSubjectRecordsWrite(ctx, tx, grant.WorkspaceID, "", nil, actor); err != nil {
+			return false, err
+		}
+	}
+	inserted, err := ledger.InsertBreakGlass(txContext, sharedoperation.BreakGlassGrant{
+		ID: grant.ID, WorkspaceID: grant.WorkspaceID, State: string(grant.State), ActorID: grant.ActorID, ApproverIDsJSON: approvers,
+		Reason: grant.Reason, IncidentRef: grant.IncidentRef, AlertTarget: grant.AlertTarget, AuditEventID: grant.AuditEventID,
+		ExpiresAt: grant.ExpiresAt.UTC().Format(time.RFC3339Nano), Revision: grant.Revision,
+		CreatedAt: grant.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: grant.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	})
+	if err != nil || !inserted {
+		return false, err
 	}
 	if err := tx.Commit(); err != nil {
 		return false, err
@@ -65,14 +61,15 @@ func (s OperationsStore) GetOperationsBreakGlass(ctx context.Context, id string)
 	if s.database() == nil {
 		return operationsmodel.OperationsBreakGlassGrant{}, false, fmt.Errorf("operations store unavailable")
 	}
-	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, "_operation_break_glass_grants").Columns(operationsBreakGlassColumns()...).Where(query.Equal("id", id)).Build()
-	if buildErr != nil {
-		return operationsmodel.OperationsBreakGlassGrant{}, false, buildErr
+	ledger, err := s.ledger()
+	if err != nil {
+		return operationsmodel.OperationsBreakGlassGrant{}, false, err
 	}
-	grant, err := operationsScanBreakGlass(s.database().QueryRowContext(ctx, queryValue, args...))
-	if err == sql.ErrNoRows {
-		return operationsmodel.OperationsBreakGlassGrant{}, false, nil
+	record, found, err := ledger.GetBreakGlass(ctx, id)
+	if err != nil || !found {
+		return operationsmodel.OperationsBreakGlassGrant{}, found, err
 	}
+	grant, err := operationsBreakGlassFromRecord(record)
 	return grant, err == nil, err
 }
 
@@ -80,24 +77,23 @@ func (s OperationsStore) ListOperationsBreakGlass(ctx context.Context, workspace
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_operation_break_glass_grants", workspaceID).Columns(operationsBreakGlassColumns()...).OrderBy(query.Descending("created_at"), query.Descending("id")).Limit(limit).Build()
-	if buildErr != nil {
-		return nil, buildErr
-	}
-	rows, err := s.database().QueryContext(ctx, queryValue, args...)
+	ledger, err := s.ledger()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	grants := []operationsmodel.OperationsBreakGlassGrant{}
-	for rows.Next() {
-		grant, scanErr := operationsScanBreakGlass(rows)
-		if scanErr != nil {
-			return nil, scanErr
+	records, err := ledger.ListBreakGlass(ctx, workspaceID, limit)
+	if err != nil {
+		return nil, err
+	}
+	grants := make([]operationsmodel.OperationsBreakGlassGrant, 0, len(records))
+	for _, record := range records {
+		grant, err := operationsBreakGlassFromRecord(record)
+		if err != nil {
+			return nil, err
 		}
 		grants = append(grants, grant)
 	}
-	return grants, rows.Err()
+	return grants, nil
 }
 
 func (s OperationsStore) RevokeOperationsBreakGlass(ctx context.Context, grant operationsmodel.OperationsBreakGlassGrant, expectedRevision int64) (bool, error) {
@@ -105,46 +101,62 @@ func (s OperationsStore) RevokeOperationsBreakGlass(ctx context.Context, grant o
 	if grant.RevokedAt != nil {
 		revokedAt = grant.RevokedAt.UTC().Format(time.RFC3339Nano)
 	}
-	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_operation_break_glass_grants", grant.WorkspaceID).Set("state", string(grant.State)).Set("revision", grant.Revision).Set("updated_at", grant.UpdatedAt.UTC().Format(time.RFC3339Nano)).Set("revoked_at", revokedAt).Set("revoked_by", grant.RevokedBy).Set("revocation_note", grant.RevocationNote).Where(query.And(query.Equal("id", grant.ID), query.Equal("state", string(operationsmodel.OperationsBreakGlassActive)), query.Equal("revision", expectedRevision), s.store.SubjectEvidenceWriteAllowed(grant.WorkspaceID, "_operation_break_glass_grants", grant.ID), s.store.SubjectActorWriteAllowed(grant.WorkspaceID, grant.RevokedBy))).Build()
-	if buildErr != nil {
-		return false, buildErr
-	}
-	result, err := s.database().ExecContext(ctx, queryValue, args...)
+	tx, err := s.database().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return false, err
 	}
-	rows, err := result.RowsAffected()
-	return rows == 1, err
+	defer func() { _ = tx.Rollback() }()
+	if err := s.store.GuardSubjectEvidenceWrite(ctx, tx, grant.WorkspaceID, sharedoperation.BreakGlassTableName,
+		[]string{"id", "revoked_by"}, []any{grant.ID, grant.RevokedBy}); err != nil {
+		return false, err
+	}
+	ledger, err := s.ledger()
+	if err != nil {
+		return false, err
+	}
+	record := sharedoperation.BreakGlassGrant{
+		ID: grant.ID, WorkspaceID: grant.WorkspaceID, State: string(grant.State), ActorID: grant.ActorID,
+		ApproverIDsJSON: json.RawMessage(`[]`), Reason: grant.Reason, IncidentRef: grant.IncidentRef, AlertTarget: grant.AlertTarget,
+		AuditEventID: grant.AuditEventID, ExpiresAt: grant.ExpiresAt.UTC().Format(time.RFC3339Nano), Revision: grant.Revision,
+		CreatedAt: grant.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: grant.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		RevokedAt: revokedAt, RevokedBy: grant.RevokedBy, RevocationNote: grant.RevocationNote,
+	}
+	approvers, _ := json.Marshal(grant.ApproverIDs)
+	record.ApproverIDsJSON = approvers
+	changed, err := ledger.RevokeBreakGlass(sharedoperation.WithExecutor(ctx, tx), record, string(operationsmodel.OperationsBreakGlassActive), expectedRevision)
+	if err != nil || !changed {
+		return changed, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
-func operationsBreakGlassColumns() []string {
-	return []string{"id", "workspace_id", "state", "actor_id", "approver_ids_json", "reason", "incident_ref", "alert_target", "audit_event_id", "expires_at", "revision", "created_at", "updated_at", "revoked_at", "revoked_by", "revocation_note"}
-}
-func operationsScanBreakGlass(scanner operationsScanner) (operationsmodel.OperationsBreakGlassGrant, error) {
-	var grant operationsmodel.OperationsBreakGlassGrant
-	var state, approvers, expiresAt, createdAt, updatedAt, revokedAt string
-	err := scanner.Scan(&grant.ID, &grant.WorkspaceID, &state, &grant.ActorID, &approvers, &grant.Reason, &grant.IncidentRef, &grant.AlertTarget, &grant.AuditEventID, &expiresAt, &grant.Revision, &createdAt, &updatedAt, &revokedAt, &grant.RevokedBy, &grant.RevocationNote)
+func operationsBreakGlassFromRecord(record sharedoperation.BreakGlassGrant) (operationsmodel.OperationsBreakGlassGrant, error) {
+	grant := operationsmodel.OperationsBreakGlassGrant{
+		ID: record.ID, WorkspaceID: record.WorkspaceID, State: operationsmodel.OperationsBreakGlassState(record.State), ActorID: record.ActorID,
+		Reason: record.Reason, IncidentRef: record.IncidentRef, AlertTarget: record.AlertTarget, AuditEventID: record.AuditEventID,
+		Revision: record.Revision, RevokedBy: record.RevokedBy, RevocationNote: record.RevocationNote,
+	}
+	var err error
+	if err = json.Unmarshal(record.ApproverIDsJSON, &grant.ApproverIDs); err != nil {
+		return grant, err
+	}
+	grant.ExpiresAt, err = time.Parse(time.RFC3339Nano, record.ExpiresAt)
 	if err != nil {
 		return grant, err
 	}
-	grant.State = operationsmodel.OperationsBreakGlassState(state)
-	if err = json.Unmarshal([]byte(approvers), &grant.ApproverIDs); err != nil {
-		return grant, err
-	}
-	grant.ExpiresAt, err = time.Parse(time.RFC3339Nano, expiresAt)
+	grant.CreatedAt, err = time.Parse(time.RFC3339Nano, record.CreatedAt)
 	if err != nil {
 		return grant, err
 	}
-	grant.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAt)
+	grant.UpdatedAt, err = time.Parse(time.RFC3339Nano, record.UpdatedAt)
 	if err != nil {
 		return grant, err
 	}
-	grant.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAt)
-	if err != nil {
-		return grant, err
-	}
-	if revokedAt != "" {
-		parsed, parseErr := time.Parse(time.RFC3339Nano, revokedAt)
+	if record.RevokedAt != "" {
+		parsed, parseErr := time.Parse(time.RFC3339Nano, record.RevokedAt)
 		if parseErr != nil {
 			return grant, parseErr
 		}

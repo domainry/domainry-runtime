@@ -136,19 +136,27 @@ func TestRuntimeStatusCleanupStatesAndReceiptLimit(t *testing.T) {
 		})
 	}
 
-	columns := []string{"id", "workspace", "scope", "target", "key", "fingerprint", "status", "fencing", "updated", "expires"}
 	steps := make([]deploymentQueryStep, 0, len(idempotencyReceiptTables))
-	for index := range idempotencyReceiptTables {
-		steps = append(steps, deploymentQueryStep{columns: columns, rows: [][]driver.Value{{
-			"id", "workspace-primary", "scope", "target", "key", "fingerprint", "processing", int64(index),
-			fmt.Sprintf("2026-07-20T12:00:0%dZ", index), "expires",
-		}}})
+	for index, spec := range idempotencyReceiptTables {
+		steps = append(steps, deploymentQueryStep{columns: deploymentOperationColumns(), rows: [][]driver.Value{deploymentOperationRow(spec, index)}})
 	}
 	store, closeDB := scriptedDeploymentStore(base, &deploymentDBState{querySteps: steps})
 	defer closeDB()
 	values, err := store.ListIdempotencyReceipts(t.Context(), "workspace-primary", "", 1)
 	if err != nil || len(values) != 1 || values[0].FencingToken != int64(len(idempotencyReceiptTables)-1) {
 		t.Fatalf("values=%#v err=%v", values, err)
+	}
+}
+
+func deploymentOperationColumns() []string {
+	return []string{"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
+}
+
+func deploymentOperationRow(spec idempotencyReceiptTable, index int) []driver.Value {
+	updatedAt := fmt.Sprintf("2026-07-20T12:00:0%dZ", index)
+	return []driver.Value{
+		"id", "workspace-primary", "", spec.rowOwner, "scope", "scope", "", "resource", "target", "key", "fingerprint", "actor", "", "key",
+		"processing", "/operations/id", "{}", "{}", "", "", "", "[]", "", "[]", "", "", int64(index), "expires", updatedAt, updatedAt, "", updatedAt,
 	}
 }
 
@@ -241,8 +249,12 @@ func TestCleanupRunLoopAndCompletionStages(t *testing.T) {
 	}
 
 	store, closeDB := scriptedDeploymentStore(base, &deploymentDBState{
-		querySteps: []deploymentQueryStep{token, {columns: []string{"id", "workspace_id"}, rows: [][]driver.Value{{"receipt", "workspace-primary"}}}},
-		execSteps:  []deploymentExecStep{{rows: 1}, {rows: 1}, {rows: 1}, {rows: 1}},
+		querySteps: []deploymentQueryStep{
+			token,
+			{columns: []string{"id", "workspace_id"}, rows: [][]driver.Value{{"receipt", "workspace-primary"}}},
+			{columns: []string{"id"}, rows: [][]driver.Value{{idempotencyCleanupLeaseID}}},
+		},
+		execSteps: []deploymentExecStep{{rows: 1}, {rows: 1}, {rows: 1}, {rows: 1}},
 	})
 	result, err := store.RunIdempotencyCleanup(t.Context(), deploymentmodel.IdempotencyCleanupRequest{LeaseOwner: "worker", BatchSize: 1})
 	closeDB()
@@ -327,7 +339,10 @@ type deploymentConn struct{ state *deploymentDBState }
 
 func (*deploymentConn) Prepare(string) (driver.Stmt, error) { return nil, driver.ErrSkip }
 func (*deploymentConn) Close() error                        { return nil }
-func (*deploymentConn) Begin() (driver.Tx, error)           { return nil, driver.ErrSkip }
+func (c *deploymentConn) Begin() (driver.Tx, error)         { return deploymentTx{}, nil }
+func (c *deploymentConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) {
+	return deploymentTx{}, nil
+}
 func (c *deploymentConn) QueryContext(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
 	if len(c.state.querySteps) == 0 {
 		return &deploymentRows{}, nil
@@ -355,6 +370,11 @@ type deploymentResult struct {
 
 func (deploymentResult) LastInsertId() (int64, error)   { return 0, nil }
 func (r deploymentResult) RowsAffected() (int64, error) { return r.rows, r.err }
+
+type deploymentTx struct{}
+
+func (deploymentTx) Commit() error   { return nil }
+func (deploymentTx) Rollback() error { return nil }
 
 type deploymentRows struct {
 	columns  []string

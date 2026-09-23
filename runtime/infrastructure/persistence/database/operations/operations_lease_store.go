@@ -23,12 +23,12 @@ type operationsLeaseSpec struct {
 }
 
 var operationsLeaseSpecs = []operationsLeaseSpec{
-	{owner: "dispatch_callback", table: "_operations", scopeColumn: "owner", scopeValue: "dispatch"},
-	{owner: "workflow", table: "_operations", scopeColumn: "owner", scopeValue: "workflow"},
+	{owner: "dispatch_callback", table: sharedoperation.TableName, scopeColumn: "owner", scopeValue: "dispatch"},
+	{owner: "workflow", table: sharedoperation.TableName, scopeColumn: "owner", scopeValue: "workflow"},
 	{owner: "workflow_execution", table: "_workflow_executions"},
 	{owner: "workflow_deadline", table: "_workflow_tasks"},
-	{owner: "business_action", table: "_operations", scopeColumn: "owner", scopeValue: "action"},
-	{owner: "record_mutation", table: "_operations", scopeColumn: "owner", scopeValue: "record"},
+	{owner: "business_action", table: sharedoperation.TableName, scopeColumn: "owner", scopeValue: "action"},
+	{owner: "record_mutation", table: sharedoperation.TableName, scopeColumn: "owner", scopeValue: "record"},
 	{owner: "idempotency_cleanup", table: "_worker_scopes", scopeColumn: "owner", scopeValue: "idempotency_cleanup"},
 	{owner: "automation", table: "_automation_runs", scopeColumn: "run_kind", scopeValue: "instruction"},
 	{owner: "runtime_publication_outbox", table: "_publication_outbox"},

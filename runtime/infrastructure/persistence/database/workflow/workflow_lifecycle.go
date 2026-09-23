@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -9,7 +10,7 @@ import (
 
 func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.ArchiveStore) lifecyclecontract.OwnerLifecycleExecutor {
 	return lifecyclepersistence.NewRelationalOwnerExecutor(store, archives, "workflow",
-		lifecyclepersistence.RelationalCleanupSpec{PolicyKey: "workflow.receipt.v1", Table: "_operations", IDColumn: "id", TenantColumn: "workspace_id", TimeColumn: "expires_at", StatusColumn: "status", IneligibleStatuses: []string{"processing"}, AdditionalPredicate: func(string) query.Predicate {
+		lifecyclepersistence.RelationalCleanupSpec{PolicyKey: "workflow.receipt.v1", Table: sharedoperation.TableName, IDColumn: "id", TenantColumn: "workspace_id", TimeColumn: "expires_at", StatusColumn: "status", IneligibleStatuses: []string{"processing"}, AdditionalPredicate: func(string) query.Predicate {
 			return query.And(query.Equal("owner", workflowReceiptOwner), query.Equal("kind", workflowReceiptKind))
 		}},
 		lifecyclepersistence.RelationalCleanupSpec{

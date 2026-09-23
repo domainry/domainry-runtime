@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-orm/query"
 )
 
@@ -210,10 +211,10 @@ func (s *RuntimeStore) subjectEvidenceWritePredicate(workspace, table string, co
 
 	addRow(table, data["id"])
 	addRow("_workflow_process_instances", data["process_id"])
-	for _, parent := range []string{"_workflow_executions", "_operations"} {
+	for _, parent := range []string{"_workflow_executions", sharedoperation.TableName} {
 		addRow(parent, data["request_ref"])
 	}
-	if table == "_operations" && (data["owner"] == "record" || data["owner"] == "action") {
+	if table == sharedoperation.TableName && (data["owner"] == "record" || data["owner"] == "action") {
 		addRecord(data["resource_type"], data["resource_id"])
 	}
 	if data["record_id"] == "" {

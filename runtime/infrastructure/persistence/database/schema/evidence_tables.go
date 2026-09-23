@@ -82,8 +82,6 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		{name: "idx_artifact_binding_resource", table: "_artifact_bindings", columns: []string{"workspace_id", "owner", "kind", "resource_type", "resource_id", "artifact_id"}},
 		{name: "idx_runtime_release_instance_expiry", table: "_release_instances", columns: []string{"lease_expires_at"}},
 		{name: "idx_runtime_release_instance_cohort", table: "_release_instances", columns: []string{"generation", "combination_sha256"}},
-		{name: "idx_runtime_break_glass_active", table: "_operation_break_glass_grants", columns: []string{"workspace_id", "state", "expires_at"}},
-		{name: "uniq_runtime_break_glass_audit", table: "_operation_break_glass_grants", columns: []string{"workspace_id", "audit_event_id"}, unique: true},
 	}
 	for _, index := range indexes {
 		if _, selected := tables[index.table]; !selected {

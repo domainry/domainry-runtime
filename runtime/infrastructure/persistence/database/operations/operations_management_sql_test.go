@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 )
 
@@ -25,6 +26,20 @@ func breakGlassQueryStep(grant operationsmodel.OperationsBreakGlassGrant) operat
 		revokedAt = grant.RevokedAt.Format(time.RFC3339Nano)
 	}
 	return operationsSQLQueryStep{columns: operationsBreakGlassColumns(), rows: [][]driver.Value{{grant.ID, grant.WorkspaceID, string(grant.State), grant.ActorID, string(approvers), grant.Reason, grant.IncidentRef, grant.AlertTarget, grant.AuditEventID, grant.ExpiresAt.Format(time.RFC3339Nano), grant.Revision, grant.CreatedAt.Format(time.RFC3339Nano), grant.UpdatedAt.Format(time.RFC3339Nano), revokedAt, grant.RevokedBy, grant.RevocationNote}}}
+}
+
+func operationsBreakGlassColumns() []string {
+	return []string{"id", "workspace_id", "state", "actor_id", "approver_ids_json", "reason", "incident_ref", "alert_target", "audit_event_id", "expires_at", "revision", "created_at", "updated_at", "revoked_at", "revoked_by", "revocation_note"}
+}
+
+func operationsScanBreakGlass(scanner operationsScanner) (operationsmodel.OperationsBreakGlassGrant, error) {
+	var record sharedoperation.BreakGlassGrant
+	var approvers string
+	if err := scanner.Scan(&record.ID, &record.WorkspaceID, &record.State, &record.ActorID, &approvers, &record.Reason, &record.IncidentRef, &record.AlertTarget, &record.AuditEventID, &record.ExpiresAt, &record.Revision, &record.CreatedAt, &record.UpdatedAt, &record.RevokedAt, &record.RevokedBy, &record.RevocationNote); err != nil {
+		return operationsmodel.OperationsBreakGlassGrant{}, err
+	}
+	record.ApproverIDsJSON = json.RawMessage(approvers)
+	return operationsBreakGlassFromRecord(record)
 }
 
 func TestOperationsBreakGlassSQLStages(t *testing.T) {

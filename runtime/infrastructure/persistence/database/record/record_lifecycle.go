@@ -1,6 +1,7 @@
 package record
 
 import (
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -15,7 +16,7 @@ func LifecycleExecutor(store *database.RuntimeStore, archives lifecyclecontract.
 
 func recordLifecycleSpecs(objects ...definitionmodel.ObjectSchema) []lifecyclepersistence.RelationalCleanupSpec {
 	specs := []lifecyclepersistence.RelationalCleanupSpec{{
-		PolicyKey: "execution.idempotency_receipt.v1", Table: "_operations", IDColumn: "id", TenantColumn: "workspace_id", TimeColumn: "expires_at", StatusColumn: "status", IneligibleStatuses: []string{"pending", "processing"},
+		PolicyKey: "execution.idempotency_receipt.v1", Table: sharedoperation.TableName, IDColumn: "id", TenantColumn: "workspace_id", TimeColumn: "expires_at", StatusColumn: "status", IneligibleStatuses: []string{"pending", "processing"},
 		AdditionalPredicate: func(string) query.Predicate { return query.Equal("owner", "record") },
 	}}
 	available := make(map[string]bool, len(objects))

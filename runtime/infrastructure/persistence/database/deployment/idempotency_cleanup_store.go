@@ -2,11 +2,13 @@ package deployment
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/domainry/domainry-foundation/idempotency"
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-orm/query"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -105,6 +107,9 @@ func (r RuntimeStatusStore) ensureIdempotencyCleanupLease(ctx context.Context, n
 }
 
 func (r RuntimeStatusStore) deleteExpiredReceiptBatch(ctx context.Context, spec idempotencyReceiptTable, owner string, fencingToken int64, now string, limit int) (int, error) {
+	if spec.table == "" {
+		return r.deleteExpiredOperationBatch(ctx, spec, owner, fencingToken, now, limit)
+	}
 	lease := cleanupLeaseGuard(r.store.SQLRenderer, owner, fencingToken, now)
 	eligibility := query.And(idempotencyReceiptOwnerPredicate(spec), expiredReceiptEligibility(now))
 	selectQuery, selectArgs, err := query.NewSelectBuilder(r.store.SQLRenderer, spec.table).Columns("id", "workspace_id").Where(query.And(query.ExistsSubquery(lease), eligibility)).OrderBy(query.Ascending("expires_at"), query.Ascending("id")).Limit(limit).Build()
@@ -166,6 +171,45 @@ func (r RuntimeStatusStore) deleteExpiredReceiptBatch(ctx context.Context, spec 
 		total += int(count)
 	}
 	return total, nil
+}
+
+func (r RuntimeStatusStore) deleteExpiredOperationBatch(ctx context.Context, spec idempotencyReceiptTable, owner string, fencingToken int64, now string, limit int) (int, error) {
+	filter := sharedoperation.RecordFilter{AllScopes: true, Owner: spec.rowOwner}
+	records, err := r.operationStore().ListExpiredRecordLocators(ctx, filter, now, string(idempotency.StatusProcessing), limit)
+	if err != nil || len(records) == 0 {
+		return 0, err
+	}
+	if r.beforeDeleteExpiredReceipts != nil {
+		r.beforeDeleteExpiredReceipts()
+	}
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	leaseQuery, leaseArgs, err := cleanupLeaseGuard(r.store.SQLRenderer, owner, fencingToken, now).Build()
+	if err != nil {
+		return 0, err
+	}
+	var leaseID string
+	if err := tx.QueryRowContext(ctx, leaseQuery, leaseArgs...).Scan(&leaseID); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, err
+	}
+	ids := make([]string, 0, len(records))
+	for _, record := range records {
+		ids = append(ids, record.ID)
+	}
+	deleted, err := r.operationStore().DeleteExpiredRecords(sharedoperation.WithExecutor(ctx, tx), filter, ids, now, string(idempotency.StatusProcessing))
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return int(deleted), nil
 }
 
 func expiredReceiptEligibility(now string) query.Predicate {
