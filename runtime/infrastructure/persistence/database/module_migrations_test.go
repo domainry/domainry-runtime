@@ -9,6 +9,8 @@ import (
 
 	shareddefinition "github.com/domainry/domainry-foundation/definition"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
+	"github.com/domainry/domainry-foundation/schemaownership"
+	lifecyclemodule "github.com/domainry/domainry-lifecycle/module"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	ormmigration "github.com/domainry/domainry-orm/migration"
@@ -50,26 +52,39 @@ func TestNotificationModuleInstallsItsOwnCanonicalSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertSourceOwnedModuleSchema(t, store, "Notification", "notification", "_notification_%", migrations, notificationmodule.SchemaOwnership())
+}
+
+func TestLifecycleModuleInstallsItsOwnCanonicalSchema(t *testing.T) {
+	store := openModuleMigrationStore(t)
+	migrations, err := lifecyclemodule.SchemaMigrations(store.SQLRenderer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSourceOwnedModuleSchema(t, store, "Lifecycle", lifecyclemodule.MigrationOwner, "_lifecycle_%", migrations, lifecyclemodule.SchemaOwnership())
+}
+
+func assertSourceOwnedModuleSchema(t *testing.T, store *RuntimeStore, moduleName, owner, tablePattern string, migrations []modulehost.SchemaMigration, ownership []schemaownership.Table) {
+	t.Helper()
 	for _, migration := range migrations {
 		if migration.Baseline != nil {
-			t.Fatalf("Notification migration %d still carries a host adoption baseline", migration.Version)
+			t.Fatalf("%s migration %d still carries a host adoption baseline", moduleName, migration.Version)
 		}
 	}
-	if err := store.ApplyOwnedMigrations(t.Context(), "notification", migrations); err != nil {
+	if err := store.ApplyOwnedMigrations(t.Context(), owner, migrations); err != nil {
 		t.Fatal(err)
 	}
 
-	ownership := notificationmodule.SchemaOwnership()
 	var count int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name LIKE '_notification_%'`).Scan(&count); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name LIKE ?`, tablePattern).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != len(ownership) {
-		t.Fatalf("Notification physical tables=%d ownership=%d", count, len(ownership))
+		t.Fatalf("%s physical tables=%d ownership=%d", moduleName, count, len(ownership))
 	}
 	for _, table := range ownership {
-		if table.Owner != "notification" {
-			t.Fatalf("Notification table %s owner=%q", table.Name, table.Owner)
+		if table.Owner != owner {
+			t.Fatalf("%s table %s owner=%q", moduleName, table.Name, table.Owner)
 		}
 		rows, err := store.DB().QueryContext(t.Context(), `PRAGMA table_info(`+store.Identifier(table.Name)+`)`)
 		if err != nil {
@@ -88,6 +103,10 @@ func TestNotificationModuleInstallsItsOwnCanonicalSchema(t *testing.T) {
 				positions[primaryKey] = name
 			}
 		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			t.Fatal(err)
+		}
 		if err := rows.Close(); err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +115,7 @@ func TestNotificationModuleInstallsItsOwnCanonicalSchema(t *testing.T) {
 			primaryKey[position-1] = name
 		}
 		if !slices.Equal(primaryKey, table.PrimaryKey) {
-			t.Fatalf("Notification table %s physical primary key=%v ownership=%v", table.Name, primaryKey, table.PrimaryKey)
+			t.Fatalf("%s table %s physical primary key=%v ownership=%v", moduleName, table.Name, primaryKey, table.PrimaryKey)
 		}
 	}
 }
