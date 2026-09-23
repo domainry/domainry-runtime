@@ -39,13 +39,21 @@ func workflowReceiptRow(now time.Time) workflowSQLQueryStep {
 		Status: string(idempotency.StatusProcessing), LeaseOwner: "old-owner", LeaseExpiresAt: now.Add(-time.Minute).Format(time.RFC3339Nano), FencingToken: 1,
 		CreatedAt: now.Add(-time.Hour).Format(time.RFC3339Nano), UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339Nano),
 	}
-	values := workflowReceiptValues(value)
+	record := workflowReceiptRecord(value)
+	values := []any{
+		record.ID, record.WorkspaceID, record.SystemPurpose, record.Owner, record.Kind, record.ActionKey, record.ParentID,
+		record.ResourceType, record.ResourceID, record.IdempotencyKey, record.RequestFingerprint, record.RequestedBy,
+		record.Reason, record.Reference, record.Status, record.StatusURL, string(record.ResultJSON), string(record.MetadataJSON),
+		record.ErrorCode, record.FailureClass, record.NextAction, string(record.RelatedIDsJSON), record.Correlation,
+		string(record.EvidenceJSON), record.LeaseOwner, record.LeaseExpiresAt, record.FencingToken, record.ExpiresAt,
+		record.CreatedAt, record.StartedAt, record.FinishedAt, record.UpdatedAt,
+	}
 	row := make([]driver.Value, len(values))
 	for index, item := range values {
 		row[index] = item
 	}
 	return workflowSQLQueryStep{
-		columns: workflowReceiptColumns(),
+		columns: []string{"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"},
 		rows:    [][]driver.Value{row},
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-orm/query"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
@@ -57,6 +58,14 @@ func (s OperationsStore) OperationsLeaseSnapshot(ctx context.Context, instanceID
 }
 
 func (s OperationsStore) operationsLeaseCounts(ctx context.Context, table, scopeColumn, scopeValue, instanceID string, now time.Time) (int64, int64, error) {
+	if table == sharedoperation.TableName {
+		ledger, err := s.ledger()
+		if err != nil {
+			return 0, 0, err
+		}
+		counts, err := ledger.CountLeases(ctx, sharedoperation.RecordFilter{AllScopes: true, Owner: scopeValue}, instanceID, now.Format(time.RFC3339Nano))
+		return counts.Live, counts.Expired, err
+	}
 	nowText := now.Format(time.RFC3339Nano)
 	predicate := query.Predicate(query.NotEqual("lease_owner", ""))
 	if scopeColumn != "" {

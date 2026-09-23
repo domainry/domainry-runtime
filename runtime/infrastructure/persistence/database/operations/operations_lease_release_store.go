@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-orm/query"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
@@ -52,6 +53,9 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 		return operationsmodel.OperationsLeaseReleaseResult{}, false, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if spec.table == sharedoperation.TableName {
+		return s.forceReleaseSharedOperationLease(ctx, tx, request, spec)
+	}
 	predicate := operationsLeaseReleasePredicate(spec, request)
 	selectBuilder := query.NewSelectBuilder(s.store.SQLRenderer, spec.table).Columns("lease_owner", "lease_expires_at", "fencing_token")
 	if spec.workspaceColumn != "" {
@@ -104,6 +108,49 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 		return operationsmodel.OperationsLeaseReleaseResult{}, false, err
 	}
 	return operationsmodel.OperationsLeaseReleaseResult{Owner: request.Owner, WorkspaceID: request.WorkspaceID, ResourceID: request.ResourceID, PreviousLeaseOwner: currentOwner, PreviousFencingToken: currentToken, NextFencingToken: currentToken + 1, PreviousExpiresAt: expires, ReleasedAt: request.Now.UTC(), Eligibility: eligibility}, true, nil
+}
+
+func (s OperationsStore) forceReleaseSharedOperationLease(ctx context.Context, tx *sql.Tx, request operationsmodel.OperationsLeaseReleaseRequest, spec operationsLeaseReleaseSpec) (operationsmodel.OperationsLeaseReleaseResult, bool, error) {
+	ledger, err := s.ledger()
+	if err != nil {
+		return operationsmodel.OperationsLeaseReleaseResult{}, false, err
+	}
+	txContext := sharedoperation.WithExecutor(ctx, tx)
+	token := request.ExpectedFencingToken
+	filter := sharedoperation.RecordFilter{
+		WorkspaceID: request.WorkspaceID, ID: request.ResourceID, Owner: spec.scopeValue,
+		LeaseOwner: request.ExpectedLeaseOwner, FencingToken: &token,
+	}
+	record, found, err := ledger.GetRecord(txContext, filter)
+	if err != nil || !found {
+		return operationsmodel.OperationsLeaseReleaseResult{}, found, err
+	}
+	expires, err := time.Parse(time.RFC3339Nano, record.LeaseExpiresAt)
+	if err != nil {
+		return operationsmodel.OperationsLeaseReleaseResult{}, false, fmt.Errorf("backend.operations.lease_expiry_invalid: %w", err)
+	}
+	eligibility := "expired"
+	if expires.After(request.Now) {
+		if !request.VerifiedStuck {
+			return operationsmodel.OperationsLeaseReleaseResult{}, false, nil
+		}
+		eligibility = "verified_stuck"
+	}
+	empty, updatedAt := "", request.Now.UTC().Format(time.RFC3339Nano)
+	changed, err := ledger.PatchRecord(txContext, filter, sharedoperation.RecordChanges{
+		LeaseOwner: &empty, LeaseExpiresAt: &empty, IncrementFencingToken: true, UpdatedAt: &updatedAt,
+	})
+	if err != nil || !changed {
+		return operationsmodel.OperationsLeaseReleaseResult{}, changed, err
+	}
+	if err := tx.Commit(); err != nil {
+		return operationsmodel.OperationsLeaseReleaseResult{}, false, err
+	}
+	return operationsmodel.OperationsLeaseReleaseResult{
+		Owner: request.Owner, WorkspaceID: request.WorkspaceID, ResourceID: request.ResourceID,
+		PreviousLeaseOwner: record.LeaseOwner, PreviousFencingToken: record.FencingToken, NextFencingToken: record.FencingToken + 1,
+		PreviousExpiresAt: expires, ReleasedAt: request.Now.UTC(), Eligibility: eligibility,
+	}, true, nil
 }
 
 func operationsLeaseReleasePredicate(spec operationsLeaseReleaseSpec, request operationsmodel.OperationsLeaseReleaseRequest) query.Predicate {
