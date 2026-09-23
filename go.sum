@@ -74,6 +74,8 @@ github.com/domainry/domainry-foundation v0.1.12 h1:YseTPqB2plX9mm5q98j3eli7TPt/0
 github.com/domainry/domainry-foundation v0.1.12/go.mod h1:pkwel8FFfbVkjAptEDWsA7BxaoPJM8kiQkOwPaIR7eI=
 github.com/domainry/domainry-foundation v0.1.13 h1:efjaakBEhgNc0NF8PFBtLvymZSuL3joPDpb5pDBvprc=
 github.com/domainry/domainry-foundation v0.1.13/go.mod h1:pkwel8FFfbVkjAptEDWsA7BxaoPJM8kiQkOwPaIR7eI=
+github.com/domainry/domainry-foundation v0.1.14 h1:7SgVHTyMPlqokvhJPr8r1fmYuQIESxHn+jvY1q2u7XE=
+github.com/domainry/domainry-foundation v0.1.14/go.mod h1:pkwel8FFfbVkjAptEDWsA7BxaoPJM8kiQkOwPaIR7eI=
 github.com/domainry/domainry-identity v0.2.18 h1:JD1+ZDJm0kUdzxOahpLI0V/QmGEJuipBp57EvY0EAa8=
 github.com/domainry/domainry-identity v0.2.18/go.mod h1:ZyipQszxfGDWQ5qTW4BYGjMdlPuckdYTC/r61ThmdoY=
 github.com/domainry/domainry-identity v0.2.19 h1:AJGiIhd7KkGodE/sBRIDq00nsez95FnSZyEasiKfJHM=

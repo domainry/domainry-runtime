@@ -6,14 +6,13 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
-	"github.com/domainry/domainry-orm/query"
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -21,7 +20,6 @@ import (
 
 const (
 	reportExportPrepareReceiptLeaseTTL = 5 * time.Minute
-	reportExportPrepareTable           = "_operations"
 	reportExportPrepareOwner           = "report"
 	reportExportPrepareKind            = "report.export.prepare"
 )
@@ -74,21 +72,24 @@ func (s *ReportExportPrepareReceiptStore) tryBeginReportExportPrepareOnce(ctx co
 	receipt.LeaseExpiresAt = now.Add(leaseTTL).Format(time.RFC3339Nano)
 	receipt.FencingToken = 1
 	receipt.CreatedAt, receipt.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
-	columns, values := reportExportPrepareReceiptColumns(), reportExportPrepareReceiptValues(receipt)
-	if err := s.store.GuardSubjectEvidenceWrite(ctx, s.store.DB(), receipt.WorkspaceID, reportExportPrepareTable, columns, values); err != nil {
-		return reportmodel.ReportExportPrepareClaimResult{}, err
+	tx, beginErr := s.store.DB().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if beginErr != nil {
+		return reportmodel.ReportExportPrepareClaimResult{}, beginErr
 	}
-	statement, arguments, buildErr := query.NewWorkspaceInsertBuilder(s.store.SQLRenderer, reportExportPrepareTable, receipt.WorkspaceID).
-		Columns(append(columns[:1], columns[2:]...)...).
-		Values(append(values[:1], values[2:]...)...).
-		Build()
-	if buildErr != nil {
-		return reportmodel.ReportExportPrepareClaimResult{}, fmt.Errorf("build report export prepare receipt insert: %w", buildErr)
+	if guardErr := s.store.GuardSubjectEvidenceWrite(ctx, tx, receipt.WorkspaceID, sharedoperation.TableName,
+		[]string{"id", "owner", "requested_by"}, []any{receipt.ID, reportExportPrepareOwner, receipt.RequesterUserID}); guardErr != nil {
+		_ = tx.Rollback()
+		return reportmodel.ReportExportPrepareClaimResult{}, guardErr
 	}
-	if _, insertErr := s.store.DB().ExecContext(ctx, statement, arguments...); insertErr == nil {
+	inserted, insertErr := s.operationStore().InsertRecord(sharedoperation.WithExecutor(ctx, tx), reportExportPrepareRecord(receipt))
+	if insertErr == nil && inserted {
+		if commitErr := tx.Commit(); commitErr != nil {
+			return reportmodel.ReportExportPrepareClaimResult{}, commitErr
+		}
 		s.store.ObserveIdempotency(ctx, receipt.WorkspaceID, receipt.UseCase, idempotency.OutcomeAcquired)
 		return reportmodel.ReportExportPrepareClaimResult{Decision: idempotency.DecisionAcquired, Receipt: receipt}, nil
 	} else {
+		_ = tx.Rollback()
 		current, found, findErr := s.findReportExportPrepareByOperation(ctx, receipt.WorkspaceID, receipt.OperationID)
 		if findErr != nil {
 			return reportmodel.ReportExportPrepareClaimResult{}, findErr
@@ -127,34 +128,19 @@ func (s *ReportExportPrepareReceiptStore) tryBeginReportExportPrepareOnce(ctx co
 
 func (s *ReportExportPrepareReceiptStore) adoptReportExportPrepareOrphan(ctx context.Context, requested, current reportmodel.ReportExportPrepareReceipt, now time.Time, leaseTTL time.Duration) (reportmodel.ReportExportPrepareReceipt, bool, error) {
 	nowValue, leaseExpiresAt := now.Format(time.RFC3339Nano), now.Add(leaseTTL).Format(time.RFC3339Nano)
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, reportExportPrepareTable, requested.WorkspaceID).
-		Set("id", requested.ID).
-		Set("requested_by", requested.RequesterUserID).
-		Set("metadata_json", reportExportPrepareMetadataJSON(requested)).
-		Set("request_fingerprint", requested.RequestFingerprint).
-		Set("status", string(idempotency.StatusProcessing)).
-		Set("error_code", "").
-		Set("failure_class", "").
-		Set("lease_owner", requested.LeaseOwner).
-		Set("lease_expires_at", leaseExpiresAt).
-		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).
-		Set("updated_at", nowValue).
-		Set("expires_at", "").
-		Where(query.And(
-			query.Equal("id", current.ID),
-			reportExportPrepareOperationPredicate(requested),
-			query.Equal("status", string(idempotency.StatusProcessing)),
-			query.LessThanOrEqual("lease_expires_at", nowValue),
-			query.Equal("result_json", reportExportPrepareResultJSON(current)),
-		)).Build()
-	if err != nil {
-		return reportmodel.ReportExportPrepareReceipt{}, false, fmt.Errorf("build report export prepare orphan adoption: %w", err)
-	}
-	result, err := s.store.DB().ExecContext(ctx, statement, arguments...)
-	if err != nil {
-		return reportmodel.ReportExportPrepareReceipt{}, false, err
-	}
-	rows, err := result.RowsAffected()
+	status, empty := string(idempotency.StatusProcessing), ""
+	metadataJSON := json.RawMessage(reportExportPrepareMetadataJSON(requested))
+	changed, err := s.operationStore().PatchRecord(ctx, sharedoperation.RecordFilter{
+		WorkspaceID: requested.WorkspaceID, ID: current.ID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		ActionKey: requested.UseCase, IdempotencyKey: requested.OperationID, Reference: requested.AuditID,
+		ResourceType: "report", ResourceID: requested.ReportKey, Status: status, LeaseExpiresAtOrBefore: nowValue,
+		ResultJSON: json.RawMessage(reportExportPrepareResultJSON(current)),
+	}, sharedoperation.RecordChanges{
+		ID: &requested.ID, RequestedBy: &requested.RequesterUserID, RequestFingerprint: &requested.RequestFingerprint,
+		MetadataJSON: &metadataJSON, Status: &status, ErrorCode: &empty, FailureClass: &empty,
+		LeaseOwner: &requested.LeaseOwner, LeaseExpiresAt: &leaseExpiresAt, IncrementFencingToken: true,
+		UpdatedAt: &nowValue, ExpiresAt: &empty,
+	})
 	if err != nil {
 		return reportmodel.ReportExportPrepareReceipt{}, false, err
 	}
@@ -165,38 +151,22 @@ func (s *ReportExportPrepareReceiptStore) adoptReportExportPrepareOrphan(ctx con
 	if !found {
 		return reportmodel.ReportExportPrepareReceipt{}, false, fmt.Errorf("report export prepare receipt disappeared during orphan adoption")
 	}
-	return adopted, rows == 1, nil
+	return adopted, changed, nil
 }
 
 func (s *ReportExportPrepareReceiptStore) reclaimReportExportPrepare(ctx context.Context, requested reportmodel.ReportExportPrepareReceipt, now time.Time, leaseTTL time.Duration) (reportmodel.ReportExportPrepareClaimResult, error) {
 	updatedAt, leaseExpiresAt := now.Format(time.RFC3339Nano), now.Add(leaseTTL).Format(time.RFC3339Nano)
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, reportExportPrepareTable, requested.WorkspaceID).
-		Set("status", string(idempotency.StatusProcessing)).
-		Set("error_code", "").
-		Set("failure_class", "").
-		Set("lease_owner", requested.LeaseOwner).
-		Set("lease_expires_at", leaseExpiresAt).
-		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).
-		Set("updated_at", updatedAt).
-		Set("expires_at", "").
-		Where(query.And(
-			reportExportPrepareOperationPredicate(requested),
-			query.Equal("requested_by", requested.RequesterUserID),
-			query.Equal("metadata_json", reportExportPrepareMetadataJSON(requested)),
-			query.Equal("request_fingerprint", requested.RequestFingerprint),
-			query.Or(
-				query.Equal("status", string(idempotency.StatusFailedRetryable)),
-				query.And(query.Equal("status", string(idempotency.StatusProcessing)), query.LessThanOrEqual("lease_expires_at", updatedAt)),
-			),
-		)).Build()
-	if err != nil {
-		return reportmodel.ReportExportPrepareClaimResult{}, fmt.Errorf("build report export prepare reclaim: %w", err)
-	}
-	result, err := s.store.DB().ExecContext(ctx, statement, arguments...)
-	if err != nil {
-		return reportmodel.ReportExportPrepareClaimResult{}, err
-	}
-	rows, err := result.RowsAffected()
+	status, empty := string(idempotency.StatusProcessing), ""
+	metadataJSON := json.RawMessage(reportExportPrepareMetadataJSON(requested))
+	changed, err := s.operationStore().PatchRecord(ctx, sharedoperation.RecordFilter{
+		WorkspaceID: requested.WorkspaceID, ID: requested.ID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		IdempotencyKey: requested.OperationID, RequestFingerprint: requested.RequestFingerprint, RequestedBy: requested.RequesterUserID,
+		MetadataJSON: metadataJSON, LeaseExpiresAtOrBefore: updatedAt,
+		ReclaimableStatus: string(idempotency.StatusFailedRetryable), ExpiredLeaseStatus: string(idempotency.StatusProcessing),
+	}, sharedoperation.RecordChanges{
+		Status: &status, ErrorCode: &empty, FailureClass: &empty, LeaseOwner: &requested.LeaseOwner,
+		LeaseExpiresAt: &leaseExpiresAt, IncrementFencingToken: true, UpdatedAt: &updatedAt, ExpiresAt: &empty,
+	})
 	if err != nil {
 		return reportmodel.ReportExportPrepareClaimResult{}, err
 	}
@@ -207,7 +177,7 @@ func (s *ReportExportPrepareReceiptStore) reclaimReportExportPrepare(ctx context
 	if !found {
 		return reportmodel.ReportExportPrepareClaimResult{}, fmt.Errorf("report export prepare receipt disappeared during reclaim")
 	}
-	if rows == 1 {
+	if changed {
 		s.store.ObserveIdempotency(ctx, requested.WorkspaceID, requested.UseCase, idempotency.OutcomeReclaimed)
 		return reportmodel.ReportExportPrepareClaimResult{Decision: idempotency.DecisionAcquired, Receipt: current}, nil
 	}
@@ -232,21 +202,17 @@ func (s *ReportExportPrepareReceiptStore) SaveReportExportPreparePayload(ctx con
 	next := current
 	next.PayloadJSON, next.BusinessJobKey = payloadJSON, businessJobKey
 	next.UpdatedAt = now.Format(time.RFC3339Nano)
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, reportExportPrepareTable, workspaceID).
-		Set("result_json", reportExportPrepareResultJSON(next)).
-		Set("related_ids_json", reportExportPrepareRelatedIDsJSON(next)).
-		Set("updated_at", next.UpdatedAt).
-		Where(query.And(
-			reportExportPrepareFencePredicate(receiptID, value.LeaseOwner, value.FencingToken),
-			query.Equal("result_json", reportExportPrepareResultJSON(current)),
-			s.store.SubjectEvidenceWriteAllowed(workspaceID, reportExportPrepareTable, receiptID),
-			s.store.SubjectActorWriteAllowed(workspaceID, current.RequesterUserID),
-		)).Build()
+	resultJSON, relatedIDsJSON := json.RawMessage(reportExportPrepareResultJSON(next)), json.RawMessage(reportExportPrepareRelatedIDsJSON(next))
+	changed, err := s.patchRecordWithSubjectGuard(ctx, current, sharedoperation.RecordFilter{
+		WorkspaceID: workspaceID, ID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		Status: string(idempotency.StatusProcessing), LeaseOwner: strings.TrimSpace(value.LeaseOwner), FencingToken: &value.FencingToken,
+		ResultJSON: json.RawMessage(reportExportPrepareResultJSON(current)),
+	}, sharedoperation.RecordChanges{ResultJSON: &resultJSON, RelatedIDsJSON: &relatedIDsJSON, UpdatedAt: &next.UpdatedAt})
 	if err != nil {
-		return reportmodel.ReportExportPrepareReceipt{}, fmt.Errorf("build report export prepare payload binding: %w", err)
-	}
-	if err := expectOneReportExportPrepareMutation(ctx, s.store, statement, arguments, receiptID); err != nil {
 		return reportmodel.ReportExportPrepareReceipt{}, err
+	}
+	if !changed {
+		return reportmodel.ReportExportPrepareReceipt{}, reportExportPrepareLeaseLost(ctx, workspaceID, receiptID, s.store)
 	}
 	receipt, found, err := s.findReportExportPrepareByID(ctx, workspaceID, receiptID)
 	if err != nil {
@@ -279,33 +245,20 @@ func (s *ReportExportPrepareReceiptStore) CompleteReportExportPrepare(ctx contex
 	next.LeaseOwner, next.LeaseExpiresAt = "", ""
 	next.ExpiresAt = value.ExpiresAt.UTC().Format(time.RFC3339Nano)
 	next.UpdatedAt = now.Format(time.RFC3339Nano)
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, reportExportPrepareTable, workspaceID).
-		Set("status", next.Status).
-		Set("result_json", reportExportPrepareResultJSON(next)).
-		Set("related_ids_json", reportExportPrepareRelatedIDsJSON(next)).
-		Set("lease_owner", "").
-		Set("lease_expires_at", "").
-		Set("expires_at", next.ExpiresAt).
-		Set("finished_at", next.UpdatedAt).
-		Set("updated_at", next.UpdatedAt).
-		Where(query.And(
-			reportExportPrepareFencePredicate(receiptID, value.LeaseOwner, value.FencingToken),
-			query.Equal("result_json", reportExportPrepareResultJSON(current)),
-			s.store.SubjectEvidenceWriteAllowed(workspaceID, reportExportPrepareTable, receiptID),
-			s.store.SubjectActorWriteAllowed(workspaceID, current.RequesterUserID),
-		)).Build()
-	if err != nil {
-		return fmt.Errorf("build report export prepare completion: %w", err)
-	}
-	result, err := s.store.DB().ExecContext(ctx, statement, arguments...)
+	status, empty := next.Status, ""
+	resultJSON, relatedIDsJSON := json.RawMessage(reportExportPrepareResultJSON(next)), json.RawMessage(reportExportPrepareRelatedIDsJSON(next))
+	changed, err := s.patchRecordWithSubjectGuard(ctx, current, sharedoperation.RecordFilter{
+		WorkspaceID: workspaceID, ID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		Status: string(idempotency.StatusProcessing), LeaseOwner: strings.TrimSpace(value.LeaseOwner), FencingToken: &value.FencingToken,
+		ResultJSON: json.RawMessage(reportExportPrepareResultJSON(current)),
+	}, sharedoperation.RecordChanges{
+		Status: &status, ResultJSON: &resultJSON, RelatedIDsJSON: &relatedIDsJSON, LeaseOwner: &empty,
+		LeaseExpiresAt: &empty, ExpiresAt: &next.ExpiresAt, FinishedAt: &next.UpdatedAt, UpdatedAt: &next.UpdatedAt,
+	})
 	if err != nil {
 		return err
 	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 1 {
+	if changed {
 		return nil
 	}
 	current, found, err = s.findReportExportPrepareByID(ctx, workspaceID, receiptID)
@@ -339,15 +292,18 @@ func (s *ReportExportPrepareReceiptStore) ReleaseReportExportPrepare(ctx context
 	if !found || current.Status != string(idempotency.StatusProcessing) || current.LeaseOwner != leaseOwner || current.FencingToken != value.FencingToken || current.PayloadJSON != "" || current.BusinessJobKey != "" || current.JobID != "" {
 		return reportExportPrepareLeaseLost(ctx, workspaceID, receiptID, s.store)
 	}
-	statement, arguments, err := query.NewWorkspaceDeleteBuilder(s.store.SQLRenderer, reportExportPrepareTable, workspaceID).
-		Where(query.And(
-			reportExportPrepareFencePredicate(receiptID, leaseOwner, value.FencingToken),
-			query.Equal("result_json", reportExportPrepareResultJSON(current)),
-		)).Build()
+	rows, err := s.operationStore().DeleteRecords(ctx, sharedoperation.RecordFilter{
+		WorkspaceID: workspaceID, ID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		Status: string(idempotency.StatusProcessing), LeaseOwner: leaseOwner, FencingToken: &value.FencingToken,
+		ResultJSON: json.RawMessage(reportExportPrepareResultJSON(current)),
+	})
 	if err != nil {
-		return fmt.Errorf("build report export prepare release: %w", err)
+		return err
 	}
-	return expectOneReportExportPrepareMutation(ctx, s.store, statement, arguments, receiptID)
+	if rows != 1 {
+		return reportExportPrepareLeaseLost(ctx, workspaceID, receiptID, s.store)
+	}
+	return nil
 }
 
 func (s *ReportExportPrepareReceiptStore) finishReportExportPrepareFailure(ctx context.Context, value reportmodel.ReportExportPrepareFailure, status idempotency.Status) error {
@@ -357,20 +313,22 @@ func (s *ReportExportPrepareReceiptStore) finishReportExportPrepareFailure(ctx c
 	if workspaceID == "" || receiptID == "" || leaseOwner == "" || value.FencingToken < 1 || value.ExpiresAt.IsZero() || (status == idempotency.StatusFailedTerminal && errorCode == "") {
 		return fmt.Errorf("report export prepare failure binding is incomplete")
 	}
-	statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, reportExportPrepareTable, workspaceID).
-		Set("status", string(status)).
-		Set("error_code", errorCode).
-		Set("failure_class", reportExportPrepareFailureClass(status)).
-		Set("lease_owner", "").
-		Set("lease_expires_at", "").
-		Set("updated_at", now.Format(time.RFC3339Nano)).
-		Set("finished_at", now.Format(time.RFC3339Nano)).
-		Set("expires_at", value.ExpiresAt.UTC().Format(time.RFC3339Nano)).
-		Where(reportExportPrepareFencePredicate(receiptID, leaseOwner, value.FencingToken)).Build()
+	statusValue, failureClass, empty := string(status), reportExportPrepareFailureClass(status), ""
+	nowValue, expiresAt := now.Format(time.RFC3339Nano), value.ExpiresAt.UTC().Format(time.RFC3339Nano)
+	changed, err := s.operationStore().PatchRecord(ctx, sharedoperation.RecordFilter{
+		WorkspaceID: workspaceID, ID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		Status: string(idempotency.StatusProcessing), LeaseOwner: leaseOwner, FencingToken: &value.FencingToken,
+	}, sharedoperation.RecordChanges{
+		Status: &statusValue, ErrorCode: &errorCode, FailureClass: &failureClass, LeaseOwner: &empty,
+		LeaseExpiresAt: &empty, UpdatedAt: &nowValue, FinishedAt: &nowValue, ExpiresAt: &expiresAt,
+	})
 	if err != nil {
-		return fmt.Errorf("build report export prepare failure transition: %w", err)
+		return err
 	}
-	return expectOneReportExportPrepareMutation(ctx, s.store, statement, arguments, receiptID)
+	if !changed {
+		return reportExportPrepareLeaseLost(ctx, workspaceID, receiptID, s.store)
+	}
+	return nil
 }
 
 func (s *ReportExportPrepareReceiptStore) BindReportExportCompletion(ctx context.Context, binding reportmodel.ReportExportCompletionBinding) (reportmodel.ReportExportCompletionBindingResult, error) {
@@ -402,36 +360,19 @@ func (s *ReportExportPrepareReceiptStore) BindReportExportCompletion(ctx context
 		next.LeaseOwner, next.LeaseExpiresAt = "", ""
 		next.ExpiresAt = binding.ExpiresAt.UTC().Format(time.RFC3339Nano)
 		next.UpdatedAt = normalizedReportExportPrepareTime(binding.Now).Format(time.RFC3339Nano)
-		statement, arguments, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, reportExportPrepareTable, workspaceID).
-			Set("status", next.Status).
-			Set("result_json", reportExportPrepareResultJSON(next)).
-			Set("related_ids_json", reportExportPrepareRelatedIDsJSON(next)).
-			Set("lease_owner", "").
-			Set("lease_expires_at", "").
-			Set("expires_at", next.ExpiresAt).
-			Set("finished_at", next.UpdatedAt).
-			Set("updated_at", next.UpdatedAt).
-			Where(query.And(
-				query.Equal("id", receiptID),
-				query.Equal("owner", reportExportPrepareOwner),
-				query.Equal("kind", reportExportPrepareKind),
-				query.Equal("status", current.Status),
-				query.Equal("result_json", reportExportPrepareResultJSON(current)),
-				s.store.SubjectEvidenceWriteAllowed(workspaceID, reportExportPrepareTable, receiptID),
-				s.store.SubjectActorWriteAllowed(workspaceID, current.RequesterUserID),
-			)).Build()
-		if err != nil {
-			return reportmodel.ReportExportCompletionBindingResult{}, fmt.Errorf("build report export completion binding: %w", err)
-		}
-		result, err := s.store.DB().ExecContext(ctx, statement, arguments...)
+		status, empty := next.Status, ""
+		resultJSON, relatedIDsJSON := json.RawMessage(reportExportPrepareResultJSON(next)), json.RawMessage(reportExportPrepareRelatedIDsJSON(next))
+		changed, err := s.patchRecordWithSubjectGuard(ctx, current, sharedoperation.RecordFilter{
+			WorkspaceID: workspaceID, ID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+			Status: current.Status, ResultJSON: json.RawMessage(reportExportPrepareResultJSON(current)),
+		}, sharedoperation.RecordChanges{
+			Status: &status, ResultJSON: &resultJSON, RelatedIDsJSON: &relatedIDsJSON, LeaseOwner: &empty,
+			LeaseExpiresAt: &empty, ExpiresAt: &next.ExpiresAt, FinishedAt: &next.UpdatedAt, UpdatedAt: &next.UpdatedAt,
+		})
 		if err != nil {
 			return reportmodel.ReportExportCompletionBindingResult{}, err
 		}
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return reportmodel.ReportExportCompletionBindingResult{}, err
-		}
-		if rows == 1 {
+		if changed {
 			return reportmodel.ReportExportCompletionBindingResult{Decision: reportmodel.ReportExportCompletionBound, Receipt: next}, nil
 		}
 	}
@@ -440,27 +381,24 @@ func (s *ReportExportPrepareReceiptStore) BindReportExportCompletion(ctx context
 }
 
 func (s *ReportExportPrepareReceiptStore) findReportExportPrepareByOperation(ctx context.Context, workspaceID, operationID string) (reportmodel.ReportExportPrepareReceipt, bool, error) {
-	return s.findReportExportPrepare(ctx, workspaceID, query.Equal("idempotency_key", strings.TrimSpace(operationID)))
+	return s.findReportExportPrepare(ctx, sharedoperation.RecordFilter{
+		WorkspaceID: strings.TrimSpace(workspaceID), Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		IdempotencyKey: strings.TrimSpace(operationID),
+	})
 }
 
 func (s *ReportExportPrepareReceiptStore) findReportExportPrepareByID(ctx context.Context, workspaceID, receiptID string) (reportmodel.ReportExportPrepareReceipt, bool, error) {
-	return s.findReportExportPrepare(ctx, workspaceID, query.Equal("id", strings.TrimSpace(receiptID)))
+	return s.findReportExportPrepare(ctx, sharedoperation.RecordFilter{
+		WorkspaceID: strings.TrimSpace(workspaceID), ID: strings.TrimSpace(receiptID), Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+	})
 }
 
-func (s *ReportExportPrepareReceiptStore) findReportExportPrepare(ctx context.Context, workspaceID string, predicate query.Predicate) (reportmodel.ReportExportPrepareReceipt, bool, error) {
-	statement, arguments, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, reportExportPrepareTable, strings.TrimSpace(workspaceID)).
-		Columns(reportExportPrepareReceiptColumns()...).Where(query.And(
-		query.Equal("owner", reportExportPrepareOwner),
-		query.Equal("kind", reportExportPrepareKind),
-		predicate,
-	)).Limit(1).Build()
-	if err != nil {
-		return reportmodel.ReportExportPrepareReceipt{}, false, fmt.Errorf("build report export prepare receipt lookup: %w", err)
+func (s *ReportExportPrepareReceiptStore) findReportExportPrepare(ctx context.Context, filter sharedoperation.RecordFilter) (reportmodel.ReportExportPrepareReceipt, bool, error) {
+	record, found, err := s.operationStore().GetRecord(ctx, filter)
+	if err != nil || !found {
+		return reportmodel.ReportExportPrepareReceipt{}, found, err
 	}
-	value, err := scanReportExportPrepareReceipt(s.store.DB().QueryRowContext(ctx, statement, arguments...))
-	if errors.Is(err, sql.ErrNoRows) {
-		return reportmodel.ReportExportPrepareReceipt{}, false, nil
-	}
+	value, err := reportExportPrepareReceipt(record)
 	return value, err == nil, err
 }
 
@@ -523,30 +461,6 @@ func sameReportExportPrepareOperation(left, right reportmodel.ReportExportPrepar
 	return left.OperationID == right.OperationID && left.WorkspaceID == right.WorkspaceID && left.UseCase == right.UseCase && left.ReportKey == right.ReportKey && left.ObjectKey == right.ObjectKey && left.AuditID == right.AuditID && left.RetryOfJobID == right.RetryOfJobID
 }
 
-func reportExportPrepareOperationPredicate(value reportmodel.ReportExportPrepareReceipt) query.Predicate {
-	return query.And(
-		query.Equal("owner", reportExportPrepareOwner),
-		query.Equal("kind", reportExportPrepareKind),
-		query.Equal("action_key", value.UseCase),
-		query.Equal("resource_type", "report"),
-		query.Equal("resource_id", value.ReportKey),
-		query.Equal("idempotency_key", value.OperationID),
-		query.Equal("reason", value.ObjectKey),
-		query.Equal("reference", value.AuditID),
-	)
-}
-
-func reportExportPrepareFencePredicate(receiptID, leaseOwner string, fencingToken int64) query.Predicate {
-	return query.And(
-		query.Equal("id", strings.TrimSpace(receiptID)),
-		query.Equal("owner", reportExportPrepareOwner),
-		query.Equal("kind", reportExportPrepareKind),
-		query.Equal("status", string(idempotency.StatusProcessing)),
-		query.Equal("lease_owner", strings.TrimSpace(leaseOwner)),
-		query.Equal("fencing_token", fencingToken),
-	)
-}
-
 func reportExportPrepareFailureClass(status idempotency.Status) string {
 	if status == idempotency.StatusFailedRetryable {
 		return "retryable"
@@ -581,29 +495,31 @@ func reportExportPrepareOrphanCanBeAdopted(value reportmodel.ReportExportPrepare
 		value.CompletionArtifactID == "" && value.CompletionFingerprint == ""
 }
 
-func expectOneReportExportPrepareMutation(ctx context.Context, store *database.RuntimeStore, statement string, arguments []any, receiptID string) error {
-	result, err := store.DB().ExecContext(ctx, statement, arguments...)
-	if err != nil {
-		return err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows != 1 {
-		store.ObserveIdempotency(ctx, "", reportmodel.ReportExportPrepareUseCase, idempotency.OutcomeLeaseLost)
-		return mutation.MutationConflict("report_export_prepare_receipt", receiptID, mutation.MutationConflictLeaseLost, nil)
-	}
-	return nil
+func (s *ReportExportPrepareReceiptStore) operationStore() *sharedoperation.SQLStore {
+	return sharedoperation.NewSQLStore(s.store.DB(), s.store.SQLRenderer)
 }
 
-func reportExportPrepareReceiptColumns() []string {
-	return []string{"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
+func (s *ReportExportPrepareReceiptStore) patchRecordWithSubjectGuard(ctx context.Context, current reportmodel.ReportExportPrepareReceipt, filter sharedoperation.RecordFilter, changes sharedoperation.RecordChanges) (bool, error) {
+	tx, err := s.store.DB().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.store.GuardSubjectEvidenceWrite(ctx, tx, current.WorkspaceID, sharedoperation.TableName,
+		[]string{"id", "owner", "requested_by"}, []any{current.ID, reportExportPrepareOwner, current.RequesterUserID}); err != nil {
+		return false, err
+	}
+	changed, err := s.operationStore().PatchRecord(sharedoperation.WithExecutor(ctx, tx), filter, changes)
+	if err != nil || !changed {
+		return changed, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
-func reportExportPrepareReceiptValues(value reportmodel.ReportExportPrepareReceipt) []any {
-	resultJSON := reportExportPrepareResultJSON(value)
-	metadataJSON := reportExportPrepareMetadataJSON(value)
+func reportExportPrepareRecord(value reportmodel.ReportExportPrepareReceipt) sharedoperation.Record {
 	relatedIDs, _ := json.Marshal(reportExportPrepareRelatedIDs(value))
 	evidence, _ := json.Marshal([]string{value.AuditID})
 	failureClass := ""
@@ -612,7 +528,16 @@ func reportExportPrepareReceiptValues(value reportmodel.ReportExportPrepareRecei
 	} else if value.Status == string(idempotency.StatusFailedTerminal) {
 		failureClass = "terminal"
 	}
-	return []any{value.ID, value.WorkspaceID, "", reportExportPrepareOwner, reportExportPrepareKind, value.UseCase, "", "report", value.ReportKey, value.OperationID, value.RequestFingerprint, value.RequesterUserID, value.ObjectKey, value.AuditID, value.Status, "/operations/" + value.ID, resultJSON, metadataJSON, value.TerminalErrorCode, failureClass, "", string(relatedIDs), value.OperationID, string(evidence), value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.ExpiresAt, value.CreatedAt, value.CreatedAt, "", value.UpdatedAt}
+	return sharedoperation.Record{
+		ID: value.ID, WorkspaceID: value.WorkspaceID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		ActionKey: value.UseCase, ResourceType: "report", ResourceID: value.ReportKey, IdempotencyKey: value.OperationID,
+		RequestFingerprint: value.RequestFingerprint, RequestedBy: value.RequesterUserID, Reason: value.ObjectKey, Reference: value.AuditID,
+		Status: value.Status, StatusURL: "/operations/" + value.ID, ResultJSON: json.RawMessage(reportExportPrepareResultJSON(value)),
+		MetadataJSON: json.RawMessage(reportExportPrepareMetadataJSON(value)), ErrorCode: value.TerminalErrorCode, FailureClass: failureClass,
+		RelatedIDsJSON: relatedIDs, Correlation: value.OperationID, EvidenceJSON: evidence,
+		LeaseOwner: value.LeaseOwner, LeaseExpiresAt: value.LeaseExpiresAt, FencingToken: value.FencingToken, ExpiresAt: value.ExpiresAt,
+		CreatedAt: value.CreatedAt, StartedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+	}
 }
 
 type reportExportPrepareMetadata struct {
@@ -656,33 +581,23 @@ func reportExportPrepareRelatedIDsJSON(value reportmodel.ReportExportPrepareRece
 	return string(encoded)
 }
 
-type reportExportPrepareScanner interface{ Scan(...any) error }
-
-func scanReportExportPrepareReceipt(scanner reportExportPrepareScanner) (reportmodel.ReportExportPrepareReceipt, error) {
-	var value reportmodel.ReportExportPrepareReceipt
-	var systemPurpose, owner, kind, parentID, resourceType, statusURL string
-	var resultJSON, metadataJSON, failureClass, nextAction, relatedIDs, correlation, evidence string
-	var startedAt, finishedAt string
-	err := scanner.Scan(
-		&value.ID, &value.WorkspaceID, &systemPurpose, &owner, &kind, &value.UseCase, &parentID,
-		&resourceType, &value.ReportKey, &value.OperationID, &value.RequestFingerprint,
-		&value.RequesterUserID, &value.ObjectKey, &value.AuditID, &value.Status, &statusURL,
-		&resultJSON, &metadataJSON, &value.TerminalErrorCode, &failureClass, &nextAction,
-		&relatedIDs, &correlation, &evidence, &value.LeaseOwner, &value.LeaseExpiresAt,
-		&value.FencingToken, &value.ExpiresAt, &value.CreatedAt, &startedAt, &finishedAt, &value.UpdatedAt,
-	)
-	if err != nil {
-		return value, err
+func reportExportPrepareReceipt(record sharedoperation.Record) (reportmodel.ReportExportPrepareReceipt, error) {
+	value := reportmodel.ReportExportPrepareReceipt{
+		ID: record.ID, WorkspaceID: record.WorkspaceID, UseCase: record.ActionKey, ReportKey: record.ResourceID,
+		OperationID: record.IdempotencyKey, RequestFingerprint: record.RequestFingerprint, RequesterUserID: record.RequestedBy,
+		ObjectKey: record.Reason, AuditID: record.Reference, Status: record.Status, TerminalErrorCode: record.ErrorCode,
+		LeaseOwner: record.LeaseOwner, LeaseExpiresAt: record.LeaseExpiresAt, FencingToken: record.FencingToken,
+		ExpiresAt: record.ExpiresAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
-	if systemPurpose != "" || owner != reportExportPrepareOwner || kind != reportExportPrepareKind || resourceType != "report" || correlation != value.OperationID {
+	if record.SystemPurpose != "" || record.Owner != reportExportPrepareOwner || record.Kind != reportExportPrepareKind || record.ResourceType != "report" || record.Correlation != value.OperationID {
 		return value, fmt.Errorf("report export prepare operation identity is invalid")
 	}
 	var metadata reportExportPrepareMetadata
-	if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
+	if err := json.Unmarshal(record.MetadataJSON, &metadata); err != nil {
 		return value, fmt.Errorf("decode report export prepare operation metadata: %w", err)
 	}
 	var result reportExportPrepareResult
-	if err := json.Unmarshal([]byte(resultJSON), &result); err != nil {
+	if err := json.Unmarshal(record.ResultJSON, &result); err != nil {
 		return value, fmt.Errorf("decode report export prepare operation result: %w", err)
 	}
 	value.CallerKey, value.RetryOfJobID = metadata.CallerKey, metadata.RetryOfJobID
