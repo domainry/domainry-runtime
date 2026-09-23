@@ -7,14 +7,14 @@ toolchain go1.26.6
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/creack/pty v1.1.24
-	github.com/domainry/domainry-agent v0.1.32
+	github.com/domainry/domainry-agent v0.1.33
 	github.com/domainry/domainry-agent-sdk v0.1.20
 	github.com/domainry/domainry-audit v0.1.16
 	github.com/domainry/domainry-audit-sdk v0.1.8
 	github.com/domainry/domainry-connector-sdk v0.1.2
 	github.com/domainry/domainry-data-exchange v0.3.16
 	github.com/domainry/domainry-data-exchange-sdk v0.3.9
-	github.com/domainry/domainry-foundation v0.1.25
+	github.com/domainry/domainry-foundation v0.1.26
 	github.com/domainry/domainry-identity v0.2.24
 	github.com/domainry/domainry-identity-sdk v0.1.14
 	github.com/domainry/domainry-integration-sdk v0.1.9
