@@ -230,10 +230,17 @@ type ReconciliationAction struct {
 
 func RestoreReconciliationPlan() []ReconciliationAction {
 	return []ReconciliationAction{
-		{Table: "_automation_runs", Action: "release_expired_processing_lease", Guard: "run_kind = 'instruction' AND lease_expires_at <= restored_at"},
-		{Table: sharedoperation.TableName, Action: "release_expired_processing_lease", Guard: "owner IN ('action', 'dispatch', 'record', 'workflow') AND lease_expires_at <= restored_at"},
-		{Table: "_publication_outbox", Action: "requeue_expired_delivery", Guard: "lease_expires_at <= restored_at AND terminal_at IS NULL"},
+		{Table: "_automation_runs", Action: "release_expired_processing_lease", Guard: "run_kind = 'instruction' AND status = 'processing' AND lease_expires_at <> '' AND lease_expires_at <= restored_at"},
+		{Table: sharedoperation.TableName, Action: "release_expired_processing_lease", Guard: "owner IN ('action', 'dispatch', 'record', 'workflow') AND status = 'started' AND lease_expires_at <> '' AND lease_expires_at <= restored_at"},
+		{Table: "_publication_outbox", Action: "release_expired_delivery_lease", Guard: "status = 'sending' AND lease_expires_at <> '' AND lease_expires_at <= restored_at"},
 	}
+}
+
+type ReconciliationResult struct {
+	Table        string `json:"table"`
+	Action       string `json:"action"`
+	RowsAffected int64  `json:"rows_affected"`
+	Skipped      bool   `json:"skipped"`
 }
 
 type DrillEvidence struct {
