@@ -1,6 +1,7 @@
 package operations
 
 import (
+	foundationartifact "github.com/domainry/domainry-foundation/artifact"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-orm/query"
@@ -44,7 +45,7 @@ func operationsLifecycleSpecs() []lifecyclepersistence.RelationalCleanupSpec {
 					EligibleStatuses: []string{string(status)}, RetentionGroup: string(status),
 					AdditionalPredicate: operationsLifecyclePredicate(definitions, scope),
 					ReferenceChecks: []lifecyclepersistence.RelationalReferenceCheck{
-						{Table: "_artifact_bindings", TenantColumn: "workspace_id", ReferenceColumn: "resource_id", FixedColumn: "owner", FixedValue: "operations"},
+						{Table: foundationartifact.BindingTableName, TenantColumn: "workspace_id", ReferenceColumn: "resource_id", FixedColumn: "owner", FixedValue: foundationartifact.OwnerOperations},
 						{Table: sharedoperation.TableName, TenantColumn: tenantColumn, ReferenceColumn: "parent_id"},
 					},
 				})

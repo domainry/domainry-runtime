@@ -8,7 +8,6 @@ import (
 	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
-	artifactstore "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/artifact"
 )
 
 const runtimeArtifactCleanupBatchSize = 500
@@ -31,7 +30,7 @@ func (a *Runtime) startArtifactCleanupWorker(ctx context.Context) {
 		return
 	}
 	cleanup, err := sharedartifact.NewCleanupService(
-		artifactstore.NewStore(a.store),
+		a.store.ArtifactStore(),
 		blobstore.LifecycleContentStore{Blobs: a.blobStore},
 	)
 	if err != nil {

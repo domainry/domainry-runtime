@@ -14,6 +14,7 @@ import (
 
 	auditmodulehost "github.com/domainry/domainry-audit-sdk/modulehost"
 	auditmodule "github.com/domainry/domainry-audit/module"
+	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	ormmigration "github.com/domainry/domainry-orm/migration"
 	"github.com/domainry/domainry-orm/query"
@@ -22,7 +23,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "031_foundation_operations_kernel"
+const CurrentRuntimeSchemaVersion = "032_foundation_artifact_kernel"
 
 type RuntimeSchemaCapabilities struct {
 	Workflow            bool
@@ -79,10 +80,16 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 		if err := s.verifyManagedDatabaseCohortMarker(ctx); err != nil {
 			return err
 		}
-		return s.ensureOperationsKernel(ctx)
+		if err := s.ensureOperationsKernel(ctx); err != nil {
+			return err
+		}
+		return s.ensureArtifactKernel(ctx)
 	}
 	if s.schemaAssembler == nil {
 		if err := s.ensureOperationsKernel(ctx); err != nil {
+			return err
+		}
+		if err := s.ensureArtifactKernel(ctx); err != nil {
 			return err
 		}
 	}
@@ -394,8 +401,28 @@ func (s *RuntimeStore) EnsureEvidenceSchema(ctx context.Context) error {
 		if err := s.ensureOperationsKernel(ctx); err != nil {
 			return err
 		}
+		if err := s.ensureArtifactKernel(ctx); err != nil {
+			return err
+		}
 	}
 	return s.ensureEvidenceSchemaFor(ctx, FullRuntimeSchemaCapabilities())
+}
+
+func (s *RuntimeStore) ensureArtifactKernel(ctx context.Context) error {
+	if s == nil || s.DB() == nil {
+		return fmt.Errorf("Runtime Artifact persistence host is incomplete")
+	}
+	if _, err := sharedartifact.Open(ctx, s.DB(), s.RuntimeRenderer(), s); err != nil {
+		return fmt.Errorf("open Runtime Artifact persistence: %w", err)
+	}
+	return nil
+}
+
+func (s *RuntimeStore) ArtifactStore() *sharedartifact.SQLStore {
+	if s == nil {
+		return nil
+	}
+	return sharedartifact.NewSQLStore(s.DB(), s.RuntimeRenderer())
 }
 
 func (s *RuntimeStore) ensureOperationsKernel(ctx context.Context) error {
@@ -423,6 +450,9 @@ func (s *RuntimeStore) ensureEvidenceSchemaFor(ctx context.Context, capabilities
 func (s *RuntimeStore) EnsureEvidenceSchemaFor(ctx context.Context, capabilities RuntimeSchemaCapabilities) error {
 	if s.schemaAssembler == nil {
 		if err := s.ensureOperationsKernel(ctx); err != nil {
+			return err
+		}
+		if err := s.ensureArtifactKernel(ctx); err != nil {
 			return err
 		}
 	}
@@ -518,7 +548,7 @@ func currentRuntimeSchemaChecksum(selected ...RuntimeSchemaCapabilities) string 
 		capabilities = selected[0]
 	}
 	capabilityIdentity := fmt.Sprintf("workflow=%t,automation=%t,uploads=%t,lifecycle=%t,release_coordination=%t", capabilities.Workflow, capabilities.Automation, capabilities.Uploads, capabilities.Lifecycle, capabilities.ReleaseCoordination)
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":project_model_projection,object_fields,record_data,evidence,lifecycle,operations,_operations,_artifacts,_artifact_bindings,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_only_provisioning,workspace_commercial_configuration_in_aggregate,workspace_provisioning_in_operations,workspace_administration_in_operations,report_export_prepare_in_operations,dispatch_callbacks_in_operations,upload_subject_bindings_in_artifact_bindings,database_retirements_in_operations,workflow_route_steps,subject_execution_evidence_fences_receipts,native_capabilities=" + capabilityIdentity))
+	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":project_model_projection,object_fields,record_data,evidence,lifecycle,operations,foundation_operations_kernel,foundation_artifact_kernel,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_only_provisioning,workspace_commercial_configuration_in_aggregate,workspace_provisioning_in_operations,workspace_administration_in_operations,report_export_prepare_in_operations,dispatch_callbacks_in_operations,upload_subject_bindings_in_artifact_bindings,database_retirements_in_operations,workflow_route_steps,subject_execution_evidence_fences_receipts,native_capabilities=" + capabilityIdentity))
 	return hex.EncodeToString(sum[:])
 }
 

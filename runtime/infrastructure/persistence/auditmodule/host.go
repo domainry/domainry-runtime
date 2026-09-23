@@ -7,7 +7,6 @@ import (
 	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	artifactpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/artifact"
 )
 
 type Host struct {
@@ -19,12 +18,9 @@ type Host struct {
 func NewHost(store *database.RuntimeStore, content sharedartifact.ContentStore, writer sharedartifact.ContentWriter) Host {
 	return Host{store: store, content: content, writer: writer}
 }
-func (h Host) Database() modulehost.Database             { return h.store.DB() }
-func (h Host) Dialect() modulehost.Dialect               { return h.store.RuntimeRenderer() }
-func (h Host) Migrations() modulehost.MigrationRegistrar { return migrationRegistrar{store: h.store} }
-func (h Host) ArtifactStore() sharedartifact.ManagedStore {
-	return artifactpersistence.NewStore(h.store)
-}
+func (h Host) Database() modulehost.Database                       { return h.store.DB() }
+func (h Host) Dialect() modulehost.Dialect                         { return h.store.RuntimeRenderer() }
+func (h Host) Migrations() modulehost.MigrationRegistrar           { return migrationRegistrar{store: h.store} }
 func (h Host) ArtifactContentStore() sharedartifact.ContentStore   { return h.content }
 func (h Host) ArtifactContentWriter() sharedartifact.ContentWriter { return h.writer }
 

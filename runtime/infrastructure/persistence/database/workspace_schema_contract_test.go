@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -168,7 +169,7 @@ func sqliteTableHasIndexPrefix(t *testing.T, db *sql.DB, quotedTable string, pre
 }
 
 func globallyOwnedUniqueConstraint(table, indexName string, columns []string) bool {
-	if (table == sharedoperation.TableName || table == sharedoperation.BreakGlassTableName) && len(columns) == 1 && columns[0] == "id" {
+	if (table == sharedoperation.TableName || table == sharedoperation.BreakGlassTableName || table == sharedartifact.TableName || table == sharedartifact.BindingTableName) && len(columns) == 1 && columns[0] == "id" {
 		return true
 	}
 	if len(columns) != 1 || columns[0] != "token_hash" {

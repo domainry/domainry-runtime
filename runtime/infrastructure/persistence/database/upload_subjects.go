@@ -35,7 +35,7 @@ func (s *RuntimeStore) InsertUploadSubject(ctx context.Context, value uploadappl
 	}
 	columns := []string{"id", "artifact_id", "owner", "kind", "resource_type", "resource_id", "field_key", "metadata_json", "created_at"}
 	values := []any{uploadSubjectBindingID(value.WorkspaceID, value.Filename), value.FileID, foundationartifact.OwnerUploads, foundationartifact.BindingSubject, uploadSubjectResourceType, value.UserID, value.FieldKey, string(metadata), time.Now().UTC().Format(time.RFC3339Nano)}
-	builder, err := s.SubjectEvidenceInsertBuilder(value.WorkspaceID, "_artifact_bindings", columns, values, s.SubjectActorWriteAllowed(value.WorkspaceID, value.UserID))
+	builder, err := s.SubjectEvidenceInsertBuilder(value.WorkspaceID, foundationartifact.BindingTableName, columns, values, s.SubjectActorWriteAllowed(value.WorkspaceID, value.UserID))
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (s *RuntimeStore) FindUploadSubject(ctx context.Context, workspace, identif
 	if strings.TrimSpace(workspace) == "" || strings.TrimSpace(identifier) == "" {
 		return value, fmt.Errorf("upload subject scope is required")
 	}
-	statement, args, err := query.NewWorkspaceSelectBuilder(s.SQLRenderer, "_artifact_bindings", workspace).
+	statement, args, err := query.NewWorkspaceSelectBuilder(s.SQLRenderer, foundationartifact.BindingTableName, workspace).
 		Columns("workspace_id", "artifact_id", "resource_id", "field_key", "metadata_json").
 		Where(query.And(
 			query.Equal("owner", foundationartifact.OwnerUploads),
@@ -91,7 +91,7 @@ func (s *RuntimeStore) SubjectUploadReferences(ctx context.Context, workspace, s
 	if workspace == "" || subject == "" {
 		return nil, fmt.Errorf("upload subject scope is required")
 	}
-	statement, args, err := query.NewWorkspaceSelectBuilder(s.SQLRenderer, "_artifact_bindings", workspace).
+	statement, args, err := query.NewWorkspaceSelectBuilder(s.SQLRenderer, foundationartifact.BindingTableName, workspace).
 		Columns("id", "metadata_json").Where(query.And(
 		query.Equal("owner", foundationartifact.OwnerUploads),
 		query.Equal("kind", foundationartifact.BindingSubject),
@@ -119,7 +119,7 @@ func (s *RuntimeStore) SubjectUploadReferences(ctx context.Context, workspace, s
 		if strings.TrimSpace(decoded.Filename) == "" {
 			return nil, fmt.Errorf("decode upload subject binding: filename is required")
 		}
-		refs = append(refs, lifecyclecontract.SubjectFileReference{WorkspaceID: workspace, ObjectKey: "_artifact_bindings", RecordID: id, FieldKey: "metadata_json", Reference: "/uploads/" + decoded.Filename})
+		refs = append(refs, lifecyclecontract.SubjectFileReference{WorkspaceID: workspace, ObjectKey: foundationartifact.BindingTableName, RecordID: id, FieldKey: "metadata_json", Reference: "/uploads/" + decoded.Filename})
 	}
 	if err = rows.Err(); err != nil {
 		return nil, err

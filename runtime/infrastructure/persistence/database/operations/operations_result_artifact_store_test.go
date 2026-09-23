@@ -16,7 +16,6 @@ import (
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	artifactstore "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/artifact"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -34,7 +33,7 @@ func TestOperationsResultRegistrationFailureDeletesOnlyUnreferencedBlob(t *testi
 		t.Fatal(err)
 	}
 	registerErr := errors.New("register failed")
-	base := artifactstore.NewStore(runtimeStore)
+	base := runtimeStore.ArtifactStore()
 	artifacts := &failingOperationsArtifactStore{Store: base, err: registerErr}
 	store := NewOperationsResultArtifactStore(artifacts, blobs)
 	now := time.Date(2026, 9, 23, 8, 0, 0, 0, time.UTC)
@@ -93,7 +92,7 @@ func TestOperationsResultArtifactStorePersistsBytesAndOperationBinding(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := NewOperationsResultArtifactStore(artifactstore.NewStore(runtimeStore), blobs)
+	store := NewOperationsResultArtifactStore(runtimeStore.ArtifactStore(), blobs)
 	now := time.Date(2026, 9, 23, 8, 0, 0, 0, time.UTC)
 	content := []byte(`{"items":"` + strings.Repeat("bounded-result", 2000) + `"}`)
 	reference, err := store.PutOperationsResult(t.Context(), operationsrepository.OperationsResultArtifact{

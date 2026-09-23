@@ -10,7 +10,6 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	artifactstore "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/artifact"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -28,7 +27,7 @@ func TestRuntimeArtifactCleanupDeletesOnlyElapsedBlobBackedContent(t *testing.T)
 		t.Fatal(err)
 	}
 	content := blobstore.LifecycleContentStore{Blobs: blobs}
-	artifacts := artifactstore.NewStore(runtimeStore)
+	artifacts := runtimeStore.ArtifactStore()
 	now := time.Date(2026, 9, 23, 15, 0, 0, 0, time.UTC)
 	register := func(id, owner, kind string, expiresAt time.Time) sharedartifact.Artifact {
 		t.Helper()

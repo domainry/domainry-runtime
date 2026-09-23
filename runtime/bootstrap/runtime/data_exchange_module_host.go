@@ -15,7 +15,6 @@ import (
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	artifactstore "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/artifact"
 )
 
 type dataExchangeModuleHost struct {
@@ -24,9 +23,6 @@ type dataExchangeModuleHost struct {
 }
 
 func (h dataExchangeModuleHost) Database() *sql.DB { return h.store.DB() }
-func (h dataExchangeModuleHost) ArtifactStore() sharedartifact.Store {
-	return artifactstore.NewStore(h.store)
-}
 func (h dataExchangeModuleHost) Migrations() dataexchangemodulehost.MigrationRegistrar {
 	return dataExchangeMigrationRegistrar{store: h.store}
 }
@@ -62,6 +58,10 @@ func (r dataExchangeMigrationRegistrar) ApplyOwnedMigrations(ctx context.Context
 		values[i] = notificationmodulehost.SchemaMigration{Version: uint(i + 1), Name: name, Statements: []string{migration.SQL}}
 	}
 	return r.store.ApplyOwnedMigrations(ctx, owner, values)
+}
+
+func (r dataExchangeMigrationRegistrar) ApplyFoundationArtifactMigrations(ctx context.Context, owner string, migrations []sharedartifact.SchemaMigration) error {
+	return r.store.ApplyORMOwnedMigrations(ctx, owner, migrations)
 }
 
 func openOptionalDataExchangeBinding(ctx context.Context, factory dataexchange.Factory, application dataexchange.ApplicationRef, store *persistence.RuntimeStore, providerKey string, importProvider dataexchangemodulehost.ImportProvider, exportProvider dataexchangemodulehost.ExportProvider) (dataexchange.Binding, *recordapplication.DataExchangeProviders, error) {

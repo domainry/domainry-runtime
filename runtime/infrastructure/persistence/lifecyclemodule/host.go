@@ -10,11 +10,9 @@ import (
 
 	auditsdk "github.com/domainry/domainry-audit-sdk"
 	auditcontract "github.com/domainry/domainry-audit-sdk/contract"
-	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-lifecycle-sdk/modulehost"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	artifactstore "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/artifact"
 )
 
 type Host struct {
@@ -52,13 +50,6 @@ func (h Host) AuditTransactionalAppender() auditcontract.TransactionalAppender {
 		return nil
 	}
 	return h.audit.TransactionalAppender()
-}
-
-func (h Host) ArtifactStore() sharedartifact.ManagedStore {
-	if h.store == nil {
-		return nil
-	}
-	return artifactstore.NewStore(h.store)
 }
 
 func (h Host) ArtifactContentStore() lifecyclecontract.ArtifactContentStore {

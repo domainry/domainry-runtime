@@ -8,7 +8,6 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsprojection "github.com/domainry/domainry-runtime/runtime/domain/operations/projection"
-	artifactpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/artifact"
 	operationspersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/operations"
 	appschemahttp "github.com/domainry/domainry-runtime/runtime/transport/http/appschema"
 	discoveryhttp "github.com/domainry/domainry-runtime/runtime/transport/http/discovery"
@@ -21,7 +20,7 @@ func (a *httpServerAssembly) wireOperationsApplication() {
 	operationsStore := operationspersistence.NewOperationsStore(a.dependencies.Store)
 	operationsService := operationsapplication.NewOperationsApplicationService(operationsStore, records.Applications().RuntimeStatus, nil, nil, a.selectedOperationsDefinitions())
 	if a.dependencies.BlobStore != nil {
-		_ = operationsService.RegisterResultArtifacts(operationspersistence.NewOperationsResultArtifactStore(artifactpersistence.NewStore(a.dependencies.Store), a.dependencies.BlobStore))
+		_ = operationsService.RegisterResultArtifacts(operationspersistence.NewOperationsResultArtifactStore(a.dependencies.Store.ArtifactStore(), a.dependencies.BlobStore))
 	}
 	_ = operationsService.RegisterDiagnostics(operationsStore, a.dependencies.RuntimeInstanceID)
 	_ = operationsService.RegisterBreakGlass(operationsStore, operationsBreakGlassAuditAlert{audit: records.Applications().Audit})

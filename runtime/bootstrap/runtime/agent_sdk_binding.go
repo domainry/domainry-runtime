@@ -16,7 +16,6 @@ import (
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	artifactpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/artifact"
 )
 
 type runtimeAgentHost struct {
@@ -79,9 +78,6 @@ func (h runtimeAgentHost) Database() agentmodulehost.Database { return h.store.D
 func (h runtimeAgentHost) Dialect() agentmodulehost.Dialect   { return h.store.SQLRenderer }
 func (h runtimeAgentHost) Migrations() agentmodulehost.MigrationRegistrar {
 	return runtimeAgentMigrationRegistrar{store: h.store}
-}
-func (h runtimeAgentHost) ArtifactStore() sharedartifact.ManagedStore {
-	return artifactpersistence.NewStore(h.store)
 }
 func (h runtimeAgentHost) ArtifactContentStore() sharedartifact.ContentStore {
 	return h.artifactContent
