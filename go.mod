@@ -7,28 +7,31 @@ toolchain go1.26.6
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/creack/pty v1.1.24
-	github.com/domainry/domainry-agent v0.1.47
+	github.com/domainry/domainry-agent v0.1.48
 	github.com/domainry/domainry-agent-sdk v0.1.20
 	github.com/domainry/domainry-audit v0.1.17
 	github.com/domainry/domainry-audit-sdk v0.1.8
 	github.com/domainry/domainry-connector-sdk v0.1.2
-	github.com/domainry/domainry-data-exchange v0.3.18
+	github.com/domainry/domainry-data-exchange v0.3.19
 	github.com/domainry/domainry-data-exchange-sdk v0.3.9
 	github.com/domainry/domainry-foundation v0.1.36
 	github.com/domainry/domainry-identity v0.2.25
 	github.com/domainry/domainry-identity-sdk v0.1.15
 	github.com/domainry/domainry-integration v0.1.25
 	github.com/domainry/domainry-integration-sdk v0.1.9
+	github.com/domainry/domainry-knowledge v0.1.10
 	github.com/domainry/domainry-lifecycle v0.1.20
 	github.com/domainry/domainry-lifecycle-sdk v0.1.16
-	github.com/domainry/domainry-metadata v0.1.15
+	github.com/domainry/domainry-metadata v0.1.16
 	github.com/domainry/domainry-metadata-sdk v0.1.5
 	github.com/domainry/domainry-monitoring-sdk v0.1.4
 	github.com/domainry/domainry-notification v0.1.11
 	github.com/domainry/domainry-notification-sdk v0.1.6
-	github.com/domainry/domainry-report v0.1.22
+	github.com/domainry/domainry-report v0.1.23
 	github.com/domainry/domainry-report-sdk v0.1.13
+	github.com/domainry/domainry-scheduler v0.1.22
 	github.com/domainry/domainry-scheduler-sdk v0.1.12
+	github.com/domainry/domainry-todo v0.1.5
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0
@@ -53,8 +56,6 @@ require (
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/crewjam/saml v0.5.1 // indirect
 	github.com/domainry/domainry-connectors v0.1.4 // indirect
-	github.com/domainry/domainry-knowledge v0.1.10 // indirect
-	github.com/domainry/domainry-todo v0.1.5 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
