@@ -1,13 +1,16 @@
 package database
 
 import (
+	"database/sql"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	shareddefinition "github.com/domainry/domainry-foundation/definition"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
+	notificationmodule "github.com/domainry/domainry-notification/module"
 	ormmigration "github.com/domainry/domainry-orm/migration"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -38,6 +41,63 @@ func TestOwnedModuleMigrationAppliesAndRejectsChecksumDrift(t *testing.T) {
 	migration.Statements[0] = "CREATE TABLE notification_owned_test (id TEXT, changed TEXT)"
 	if err := store.ApplyOwnedMigrations(t.Context(), "notification", []modulehost.SchemaMigration{migration}); err == nil || !strings.Contains(err.Error(), "migration.checksum_drift") {
 		t.Fatalf("checksum drift error=%v", err)
+	}
+}
+
+func TestNotificationModuleInstallsItsOwnCanonicalSchema(t *testing.T) {
+	store := openModuleMigrationStore(t)
+	migrations, err := notificationmodule.SchemaMigrations(store.Driver(), store.DatabaseSchema(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range migrations {
+		if migration.Baseline != nil {
+			t.Fatalf("Notification migration %d still carries a host adoption baseline", migration.Version)
+		}
+	}
+	if err := store.ApplyOwnedMigrations(t.Context(), "notification", migrations); err != nil {
+		t.Fatal(err)
+	}
+
+	ownership := notificationmodule.SchemaOwnership()
+	var count int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name LIKE '_notification_%'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != len(ownership) {
+		t.Fatalf("Notification physical tables=%d ownership=%d", count, len(ownership))
+	}
+	for _, table := range ownership {
+		if table.Owner != "notification" {
+			t.Fatalf("Notification table %s owner=%q", table.Name, table.Owner)
+		}
+		rows, err := store.DB().QueryContext(t.Context(), `PRAGMA table_info(`+store.Identifier(table.Name)+`)`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		positions := map[int]string{}
+		for rows.Next() {
+			var cid, notNull, primaryKey int
+			var name, columnType string
+			var defaultValue sql.NullString
+			if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+				rows.Close()
+				t.Fatal(err)
+			}
+			if primaryKey > 0 {
+				positions[primaryKey] = name
+			}
+		}
+		if err := rows.Close(); err != nil {
+			t.Fatal(err)
+		}
+		primaryKey := make([]string, len(positions))
+		for position, name := range positions {
+			primaryKey[position-1] = name
+		}
+		if !slices.Equal(primaryKey, table.PrimaryKey) {
+			t.Fatalf("Notification table %s physical primary key=%v ownership=%v", table.Name, primaryKey, table.PrimaryKey)
+		}
 	}
 }
 

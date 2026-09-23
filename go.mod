@@ -23,7 +23,7 @@ require (
 	github.com/domainry/domainry-metadata v0.1.15
 	github.com/domainry/domainry-metadata-sdk v0.1.5
 	github.com/domainry/domainry-monitoring-sdk v0.1.4
-	github.com/domainry/domainry-notification v0.1.10
+	github.com/domainry/domainry-notification v0.1.11
 	github.com/domainry/domainry-notification-sdk v0.1.6
 	github.com/domainry/domainry-report v0.1.22
 	github.com/domainry/domainry-report-sdk v0.1.13
