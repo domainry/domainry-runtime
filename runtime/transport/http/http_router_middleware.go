@@ -336,13 +336,7 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 				writeError(w, r, http.StatusForbidden, "backend.workspace_scope_mismatch")
 				return
 			}
-			authenticatedRequest := requestWithPrincipal(r, principal)
-			if principal.Known && principal.AccessBundle != nil {
-				sdkPrincipal := principal.Principal
-				authenticatedRequest = authenticatedRequest.WithContext(identitysdk.WithRequestIdentity(
-					authenticatedRequest.Context(), identitysdk.RequestIdentity{Principal: sdkPrincipal},
-				))
-			}
+			authenticatedRequest := requestWithResolvedIdentity(r, principal)
 			next.ServeHTTP(w, authenticatedRequest)
 			return
 		}
@@ -356,7 +350,7 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 				writeError(w, r, http.StatusUnauthorized, "auth.session_expired")
 				return
 			}
-			next.ServeHTTP(w, requestWithPrincipal(r, principal))
+			next.ServeHTTP(w, requestWithResolvedIdentity(r, principal))
 			return
 		}
 		if s.identityAuthentication == nil || s.identityPrincipal == nil {
@@ -384,10 +378,19 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 				writeError(w, authenticatedRequest, http.StatusForbidden, "backend.workspace_scope_mismatch")
 				return
 			}
-			next.ServeHTTP(w, requestWithPrincipal(authenticatedRequest, principal))
+			next.ServeHTTP(w, requestWithResolvedIdentity(authenticatedRequest, principal))
 		}))
 		s.identityAuthentication.Authenticate(authenticatedBusinessRequest).ServeHTTP(w, r)
 	})
+}
+
+func requestWithResolvedIdentity(request *http.Request, principal principalmodel.Principal) *http.Request {
+	authenticated := requestWithPrincipal(request, principal)
+	requestIdentity, _ := identitysdk.RequestIdentityFromContext(authenticated.Context())
+	requestIdentity.Principal = principal.Principal
+	return authenticated.WithContext(identitysdk.WithRequestIdentity(
+		authenticated.Context(), requestIdentity,
+	))
 }
 
 func (s *HTTPRouter) admitAuthenticatedWorkspace(w http.ResponseWriter, r *http.Request, principal principalmodel.Principal) bool {

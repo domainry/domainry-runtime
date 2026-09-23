@@ -17,6 +17,10 @@ func TestProjectHTTPUsesRuntimeAuthenticationWithoutCompiledActionRoute(t *testi
 		if !ok || principal.UserID != "developer" {
 			t.Fatalf("principal=%+v ok=%v", principal, ok)
 		}
+		identity, ok := identitysdk.RequestIdentityFromContext(request.Context())
+		if !ok || !identity.Principal.Known || identity.Principal.UserID != "developer" {
+			t.Fatalf("request identity=%+v ok=%v", identity, ok)
+		}
 		response.WriteHeader(http.StatusNoContent)
 	})
 	known := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "developer"}}
@@ -33,6 +37,37 @@ func TestProjectHTTPUsesRuntimeAuthenticationWithoutCompiledActionRoute(t *testi
 
 	if response.Code != http.StatusNoContent || !called {
 		t.Fatalf("status=%d called=%v body=%s", response.Code, called, response.Body.String())
+	}
+}
+
+func TestProjectHTTPReceivesResolvedSessionIdentityAndAccessToken(t *testing.T) {
+	bundle := &identitysdk.AccessBundle{
+		FunctionGrants: []identitysdk.FunctionGrant{{Resource: "opportunity", Action: "win", Effect: identitysdk.EffectAllow}},
+		DataPolicies: []identitysdk.DataPolicy{{
+			Key: "opportunity.win", Resource: "opportunity", Action: "win", Effect: identitysdk.EffectAllow,
+			DataScopes: []identitysdk.DataScope{identitysdk.DataScopeAll},
+		}},
+	}
+	principal := identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "seller", AccessBundle: bundle}
+	project := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		identity, ok := identitysdk.RequestIdentityFromContext(request.Context())
+		if !ok || identity.AccessToken != "session-token" || !identity.Principal.HasPermission("opportunity.win") {
+			t.Fatalf("request identity=%+v ok=%v", identity, ok)
+		}
+		response.WriteHeader(http.StatusNoContent)
+	})
+	router := routerWithIdentitySDK(principal)
+	router.projectHTTP = project
+	mux := http.NewServeMux()
+	mux.Handle("/api/", project)
+	handler := router.withAuth(mux, router.withActionAuthorization(mux, mux))
+
+	request := httptest.NewRequest(http.MethodPost, "/api/crm/opportunities/one/win", nil)
+	request.Header.Set("Authorization", "Bearer session-token")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 
