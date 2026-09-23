@@ -50,6 +50,7 @@ func EnsureWorkspaceProvisioningSchema(ctx context.Context, store Store) error {
 		if err != nil {
 			return fmt.Errorf("build %s schema: %w", table.name, err)
 		}
+		statement = store.RuntimeColumnDefinition(statement)
 		if _, err := store.SchemaDB().ExecContext(ctx, statement, arguments...); err != nil {
 			return fmt.Errorf("create %s schema: %w", table.name, err)
 		}
