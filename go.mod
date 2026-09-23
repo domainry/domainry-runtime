@@ -7,7 +7,7 @@ toolchain go1.26.6
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/creack/pty v1.1.24
-	github.com/domainry/domainry-agent v0.1.38
+	github.com/domainry/domainry-agent v0.1.39
 	github.com/domainry/domainry-agent-sdk v0.1.20
 	github.com/domainry/domainry-audit v0.1.16
 	github.com/domainry/domainry-audit-sdk v0.1.8
@@ -53,7 +53,7 @@ require (
 	github.com/crewjam/saml v0.5.1 // indirect
 	github.com/domainry/domainry-connectors v0.1.4 // indirect
 	github.com/domainry/domainry-knowledge v0.1.6 // indirect
-	github.com/domainry/domainry-todo v0.1.1 // indirect
+	github.com/domainry/domainry-todo v0.1.3 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
