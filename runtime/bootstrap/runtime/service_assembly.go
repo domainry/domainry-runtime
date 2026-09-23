@@ -102,6 +102,7 @@ type runtimeExtensionRegistries struct {
 	integrationMode                 integrationsdk.DeploymentMode
 	notificationSubjectLifecycle    lifecyclecontract.SubjectExecutionHandler
 	identitySubjectLifecycle        lifecyclecontract.SubjectExecutionHandler
+	identityBinding                 identitysdk.Binding
 	notificationRetention           lifecyclecontract.OwnerLifecycleExecutor
 	notificationArchives            *notificationSDKRetentionArchiveStore
 	auditRepository                 auditrepository.AuditRepository
@@ -134,6 +135,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 	var integrationSubjectPersistence integrationsdk.SubjectLifecyclePersistenceBinding
 	var notificationSubjectLifecycle lifecyclecontract.SubjectExecutionHandler
 	var identitySubjectLifecycle lifecyclecontract.SubjectExecutionHandler
+	var identityBinding identitysdk.Binding
 	var notificationRetention lifecyclecontract.OwnerLifecycleExecutor
 	var notificationArchives *notificationSDKRetentionArchiveStore
 	var auditRepository auditrepository.AuditRepository
@@ -178,6 +180,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 		integrationSubjectPersistence = extensionRegistries[0].integrationSubjectPersistence
 		notificationSubjectLifecycle = extensionRegistries[0].notificationSubjectLifecycle
 		identitySubjectLifecycle = extensionRegistries[0].identitySubjectLifecycle
+		identityBinding = extensionRegistries[0].identityBinding
 		notificationRetention = extensionRegistries[0].notificationRetention
 		notificationArchives = extensionRegistries[0].notificationArchives
 		if extensionRegistries[0].auditRepository != nil {
@@ -463,6 +466,10 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 			_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
 			return runtimeServiceAssembly{}, fmt.Errorf("bind Lifecycle owner extensions: %w", err)
 		}
+		if err := bindEmbeddedIdentitySubjectLifecyclePersistence(identityBinding); err != nil {
+			_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
+			return runtimeServiceAssembly{}, err
+		}
 		if integrationSubjectPersistence != nil {
 			if err := integrationSubjectPersistence.BindSubjectLifecyclePersistence(ctx); err != nil {
 				_ = lifecycleBinding.Close(context.WithoutCancel(ctx))
@@ -638,6 +645,20 @@ func bindEmbeddedDataExchangeSubjectLifecyclePersistence(binding dataexchangesdk
 	}
 	if err := persistenceBinding.BindSubjectLifecyclePersistence(); err != nil {
 		return fmt.Errorf("bind embedded Data Exchange shared subject lifecycle persistence: %w", err)
+	}
+	return nil
+}
+
+func bindEmbeddedIdentitySubjectLifecyclePersistence(binding identitysdk.Binding) error {
+	if binding == nil || binding.Descriptor().Mode != identitysdk.DeploymentModeModule {
+		return nil
+	}
+	persistenceBinding, ok := binding.(identitysdk.SubjectLifecyclePersistenceBinding)
+	if !ok {
+		return fmt.Errorf("embedded Identity Binding returned no shared subject lifecycle persistence binder")
+	}
+	if err := persistenceBinding.BindSubjectLifecyclePersistence(); err != nil {
+		return fmt.Errorf("bind embedded Identity shared subject lifecycle persistence: %w", err)
 	}
 	return nil
 }

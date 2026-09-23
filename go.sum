@@ -64,8 +64,12 @@ github.com/domainry/domainry-data-exchange-sdk v0.3.9 h1:OgmQu9VAkVqkwJ3h+hPWSUb
 github.com/domainry/domainry-data-exchange-sdk v0.3.9/go.mod h1:t3+tO7BhfC6LQaw2+L1QUi+a6GjSRM6vZUMIcORsngc=
 github.com/domainry/domainry-foundation v0.1.23 h1:pAFJegJjmE9kNIADfvKKKD3jyP63o7KBcwWrSIcteMY=
 github.com/domainry/domainry-foundation v0.1.23/go.mod h1:pkwel8FFfbVkjAptEDWsA7BxaoPJM8kiQkOwPaIR7eI=
+github.com/domainry/domainry-foundation v0.1.24 h1:I+hcPeZmGOxZ1SEtdDaKXK1YURkUNs/TjmV1FlhqKD8=
+github.com/domainry/domainry-foundation v0.1.24/go.mod h1:pkwel8FFfbVkjAptEDWsA7BxaoPJM8kiQkOwPaIR7eI=
 github.com/domainry/domainry-identity v0.2.21 h1:0c3Iq0UL9RXekRRMSPxbDUqpFQfsN4cI9640W+b+zEE=
 github.com/domainry/domainry-identity v0.2.21/go.mod h1:OBNWxJf8BlocC/8ohfGiqottSGa/Tx+q3nrqnCwQaJ0=
+github.com/domainry/domainry-identity v0.2.22 h1:5j29wJFx/2LcGaojPfBw2Vyn8u3sRzUq8OnMxIGdAlU=
+github.com/domainry/domainry-identity v0.2.22/go.mod h1:moOKeKk5bSLyU7503nf9ZNeokj+CJ7F3nfgNL4hzKPg=
 github.com/domainry/domainry-identity-sdk v0.1.14 h1:g4yA2vBz4YAMC3UEyaiy8VXlFexdqs1HMTsL3N7XIrA=
 github.com/domainry/domainry-identity-sdk v0.1.14/go.mod h1:I3jCembUi1Cg07zWq0h9pFk2fzEcoM224GzMqBNZ00s=
 github.com/domainry/domainry-integration-sdk v0.1.9 h1:g5+7Aglf2IpwcDjg2znq+LcgoWMIuc9KMB6Od8kmJGo=
@@ -74,6 +78,8 @@ github.com/domainry/domainry-knowledge v0.1.6 h1:3aLKMDRIk+tAusARKXaXMOjTY0Lv1fh
 github.com/domainry/domainry-knowledge v0.1.6/go.mod h1:SrV+cjlMBzhcR5CzLJSENa0kWlw1AExSgJlBIAEmvbY=
 github.com/domainry/domainry-lifecycle v0.1.18 h1:9qmI3W0kKD+PQtPtoN3aSbZNn4rJQ2TteZP2yMr5R+0=
 github.com/domainry/domainry-lifecycle v0.1.18/go.mod h1:ifcGEa55x4W83zwyVKKs7/63c8qF8oD/7lFOM6DO3q4=
+github.com/domainry/domainry-lifecycle v0.1.19 h1:OXqKWUR2LuU0zOcgA93Mez3gJhezsJaF1t3AYXhQWZU=
+github.com/domainry/domainry-lifecycle v0.1.19/go.mod h1:W59kB4jha1aazre9pXRQVz2+KKNvvBylcUPstZw6mok=
 github.com/domainry/domainry-lifecycle-sdk v0.1.16 h1:Vjuo3axFvAAFv7NEcm2gs8dVXYKEq00aCBLTlkeMi4Q=
 github.com/domainry/domainry-lifecycle-sdk v0.1.16/go.mod h1:zBx8wUBcC9QpxNS0Z9KcpqfNcsjUjKZbu5kWTysvHzc=
 github.com/domainry/domainry-metadata v0.1.13 h1:C4WtdqzqPwWPEiAHgbEilMUyZnn0lnu7f9ajlmTxck4=

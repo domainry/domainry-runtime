@@ -56,8 +56,11 @@ func TestLifecycleModuleAloneAppliesOwnedMigrationToHostLedger(t *testing.T) {
 		}
 	}
 	var migrations int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:lifecycle' AND dirty=FALSE`).Scan(&migrations); err != nil || migrations != 2 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:lifecycle' AND dirty=FALSE`).Scan(&migrations); err != nil || migrations != 1 {
 		t.Fatalf("Lifecycle ledger rows=%d err=%v", migrations, err)
+	}
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:shared/subject-lifecycle' AND dirty=FALSE`).Scan(&migrations); err != nil || migrations != 1 {
+		t.Fatalf("shared Subject Lifecycle ledger rows=%d err=%v", migrations, err)
 	}
 }
 
@@ -70,7 +73,10 @@ func TestLifecycleModuleReopenKeepsDirectOwnedSchemaOnce(t *testing.T) {
 	openLifecycleMigrationBinding(t, store, "lifecycle-first-open")
 	openLifecycleMigrationBinding(t, store, "lifecycle-reopen")
 	var clean int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:lifecycle' AND dirty=FALSE`).Scan(&clean); err != nil || clean != 2 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:lifecycle' AND dirty=FALSE`).Scan(&clean); err != nil || clean != 1 {
 		t.Fatalf("reopened lifecycle ledger rows=%d err=%v", clean, err)
+	}
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind='module:shared/subject-lifecycle' AND dirty=FALSE`).Scan(&clean); err != nil || clean != 1 {
+		t.Fatalf("reopened shared Subject Lifecycle ledger rows=%d err=%v", clean, err)
 	}
 }

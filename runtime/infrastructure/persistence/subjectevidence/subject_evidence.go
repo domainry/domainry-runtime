@@ -18,6 +18,7 @@ import (
 	foundationartifact "github.com/domainry/domainry-foundation/artifact"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	sharedsubject "github.com/domainry/domainry-foundation/subjectlifecycle"
 	"github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
@@ -408,7 +409,7 @@ func (*Handler) EraseSubjectForRequest(context.Context, string, string, string, 
 }
 
 const (
-	sharedSubjectExecutionStepsTable = "_subject_steps"
+	sharedSubjectExecutionStepsTable = sharedsubject.StepTableName
 	runtimeEvidenceOwner             = "runtime_evidence"
 	subjectErasePlanOperation        = "erase_plan"
 	subjectEraseOperation            = "erase"

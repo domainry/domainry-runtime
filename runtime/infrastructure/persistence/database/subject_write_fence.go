@@ -8,12 +8,13 @@ import (
 	"strings"
 
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
+	sharedsubject "github.com/domainry/domainry-foundation/subjectlifecycle"
 	"github.com/domainry/domainry-orm/query"
 )
 
 const (
-	sharedSubjectRequestsTable          = "_subject_requests"
-	lifecycleSubjectExecutionStepsTable = "_subject_steps"
+	sharedSubjectRequestsTable          = sharedsubject.RequestTableName
+	lifecycleSubjectExecutionStepsTable = sharedsubject.StepTableName
 	lifecycleSubjectOwner               = "lifecycle"
 	lifecycleEraseFenceOperation        = "erase_fence"
 	runtimeEvidenceSubjectOwner         = "runtime_evidence"

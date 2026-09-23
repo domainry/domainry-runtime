@@ -346,6 +346,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		dataExchangeExportProvider:      identityDataExchangeExport,
 		integrationMode:                 integrationDeploymentMode(integrationOwner.Binding),
 		identitySubjectLifecycle:        identitySystemSubjectLifecycle{binding: identityBinding},
+		identityBinding:                 identityBinding,
 		notificationSubjectLifecycle:    notificationSubjectLifecycle,
 		notificationRetention:           notificationRetention,
 		notificationArchives:            notificationArchives,
