@@ -13,7 +13,6 @@ import (
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	integrationmodulehost "github.com/domainry/domainry-integration-sdk/modulehost"
 	integrationsaashost "github.com/domainry/domainry-integration-sdk/saashost"
-	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -136,12 +135,6 @@ func (h runtimeIntegrationModuleHost) SecretCipher() integrationmodulehost.Secre
 	return h
 }
 func (h runtimeIntegrationModuleHost) RuntimeTriggers() integrationsdk.TriggerSink { return h.triggers }
-func (h runtimeIntegrationModuleHost) DefinitionStore() metadatasdk.DefinitionStore {
-	if h.store == nil || h.store.Metadata() == nil {
-		return nil
-	}
-	return h.store.Metadata().DefinitionStore()
-}
 func (h runtimeIntegrationModuleHost) EncryptSecretMaterial(ctx context.Context, workspaceID, secretKey, plaintext string) (string, error) {
 	return (secrets.Cipher{Keys: h.store.SecretKeyProvider(), Purpose: "integration-secret"}).Encrypt(ctx, workspaceID, secretKey, []byte(plaintext))
 }

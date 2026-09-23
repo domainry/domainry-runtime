@@ -11,7 +11,6 @@ import (
 
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
-	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
@@ -55,12 +54,6 @@ func (h *schedulerSDKModuleHost) Dialect() modulehost.Dialect                   
 func (h *schedulerSDKModuleHost) WorkerID() string                                   { return h.workerID }
 func (h *schedulerSDKModuleHost) OperationStore() sharedoperation.Store {
 	return operationpersistence.NewSharedCommandStore(h.store)
-}
-func (h *schedulerSDKModuleHost) DefinitionStore() metadatasdk.DefinitionStore {
-	if h.store == nil || h.store.Metadata() == nil {
-		return nil
-	}
-	return h.store.Metadata().DefinitionStore()
 }
 func (h *schedulerSDKModuleHost) Migrations() modulehost.MigrationRegistrar {
 	return schedulerSDKMigrationRegistrar{store: h.store}

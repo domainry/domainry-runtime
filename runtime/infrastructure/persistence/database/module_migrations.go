@@ -15,7 +15,7 @@ import (
 	ormmigration "github.com/domainry/domainry-orm/migration"
 )
 
-var moduleMigrationIdentityPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+var moduleMigrationIdentityPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]*(?:/[a-z][a-z0-9_-]*)?$`)
 var moduleSchemaIdentityPattern = regexp.MustCompile(`^_?[a-z][a-z0-9_]*$`)
 
 // Schema exposes the trusted physical schema to source-owned Module migration

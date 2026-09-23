@@ -13,7 +13,6 @@ import (
 	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-lifecycle-sdk/modulehost"
-	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	artifactstore "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/artifact"
 )
@@ -40,13 +39,6 @@ func (h Host) Migrations() modulehost.MigrationRegistrar {
 	return migrationRegistrar{store: h.store}
 }
 func (h Host) Transactions() modulehost.Transactor { return transactor{db: h.store.DB()} }
-
-func (h Host) DefinitionStore() metadatasdk.DefinitionStore {
-	if h.store == nil || h.store.Metadata() == nil {
-		return nil
-	}
-	return h.store.Metadata().DefinitionStore()
-}
 
 func (h Host) AuditAppender() auditcontract.Appender {
 	if h.audit == nil {
@@ -101,6 +93,5 @@ func (t transactor) WithinTransaction(ctx context.Context, operation func(contex
 }
 
 var _ modulehost.Host = Host{}
-var _ modulehost.DefinitionStoreHost = Host{}
 var _ modulehost.AuditStoreHost = Host{}
 var _ modulehost.ArtifactStoreHost = Host{}

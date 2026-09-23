@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
@@ -26,12 +25,6 @@ func (h runtimeReportModuleHost) DatabaseFor(ctx context.Context) reportmoduleho
 func (h runtimeReportModuleHost) Dialect() reportmodulehost.Dialect { return h.store.SQLRenderer }
 func (h runtimeReportModuleHost) Migrations() reportmodulehost.MigrationRegistrar {
 	return runtimeReportMigrationRegistrar{store: h.store}
-}
-func (h runtimeReportModuleHost) DefinitionStore() metadatasdk.DefinitionStore {
-	if h.store == nil || h.store.Metadata() == nil {
-		return nil
-	}
-	return h.store.Metadata().DefinitionStore()
 }
 
 type runtimeReportApplicationHost struct {

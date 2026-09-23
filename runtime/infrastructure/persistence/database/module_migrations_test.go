@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	shareddefinition "github.com/domainry/domainry-foundation/definition"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	ormmigration "github.com/domainry/domainry-orm/migration"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -36,6 +37,21 @@ func TestOwnedModuleMigrationAppliesAndRejectsChecksumDrift(t *testing.T) {
 	migration.Statements[0] = "CREATE TABLE notification_owned_test (id TEXT, changed TEXT)"
 	if err := store.ApplyOwnedMigrations(t.Context(), "notification", []modulehost.SchemaMigration{migration}); err == nil || !strings.Contains(err.Error(), "migration.checksum_drift") {
 		t.Fatalf("checksum drift error=%v", err)
+	}
+}
+
+func TestOwnedModuleMigrationAcceptsOneSharedKernelNamespace(t *testing.T) {
+	store := openModuleMigrationStore(t)
+	migration := modulehost.SchemaMigration{Version: 1, Name: "shared_kernel", Statements: []string{"CREATE TABLE shared_kernel_test (id TEXT NOT NULL PRIMARY KEY)"}}
+	if err := store.ApplyOwnedMigrations(t.Context(), shareddefinition.MigrationOwner, []modulehost.SchemaMigration{migration}); err != nil {
+		t.Fatal(err)
+	}
+	var kind string
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT kind FROM _schema_migrations WHERE path = ?", moduleMigrationPath(shareddefinition.MigrationOwner, ormmigration.Migration{Version: migration.Version, Name: migration.Name})).Scan(&kind); err != nil || kind != "module:"+shareddefinition.MigrationOwner {
+		t.Fatalf("ledger kind=%q err=%v", kind, err)
+	}
+	if err := store.ApplyOwnedMigrations(t.Context(), "shared/definitions/invalid", []modulehost.SchemaMigration{migration}); err == nil {
+		t.Fatal("nested shared migration namespace was accepted")
 	}
 }
 

@@ -37,6 +37,8 @@ func (*identityBootstrapProbe) BindBootstrapProjectRoleCatalog(context.Context, 
 	return nil
 }
 
+func (*identityBootstrapProbe) BindOperationsPersistence() error { return nil }
+
 func (probe *identityBootstrapProbe) BootstrapWorkspaceIdentity(ctx context.Context, request identitysdk.WorkspaceIdentityBootstrapRequest, transaction identitysdk.EmbeddedTransaction) (identitysdk.WorkspaceIdentityBootstrapReceipt, error) {
 	tx, ok := transaction.Executor.(*sql.Tx)
 	if !ok {

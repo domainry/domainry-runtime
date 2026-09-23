@@ -15,7 +15,6 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
-	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	"github.com/domainry/domainry-notification-sdk/contract"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
@@ -118,12 +117,6 @@ func (h notificationSDKModuleHost) WorkspaceScope() modulehost.WorkspaceScope {
 }
 func (h notificationSDKModuleHost) QueueScopes() modulehost.QueueScopeIndex {
 	return notificationSDKQueueScopes{h.store}
-}
-func (h notificationSDKModuleHost) DefinitionStore() metadatasdk.DefinitionStore {
-	if h.store == nil || h.store.Metadata() == nil {
-		return nil
-	}
-	return h.store.Metadata().DefinitionStore()
 }
 func (h notificationSDKModuleHost) ManagedOperationStore() modulehost.ManagedOperationStore {
 	return operationpersistence.NewSharedManagedStore(h.store)

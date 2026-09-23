@@ -3,7 +3,6 @@ package reportmodulefixture
 import (
 	"context"
 
-	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
@@ -38,36 +37,6 @@ func (h host) DatabaseFor(ctx context.Context) reportmodulehost.DBTX {
 func (h host) Dialect() reportmodulehost.Dialect { return h.store.SQLRenderer }
 func (h host) Migrations() reportmodulehost.MigrationRegistrar {
 	return registrar{store: h.store}
-}
-func (h host) DefinitionStore() metadatasdk.DefinitionStore {
-	if h.store != nil && h.store.Metadata() != nil {
-		return h.store.Metadata().DefinitionStore()
-	}
-	return fixtureDefinitionStore{}
-}
-
-type fixtureDefinitionStore struct{ metadatasdk.Definitions }
-
-func (fixtureDefinitionStore) List(context.Context, metadatasdk.DefinitionQuery) ([]metadatasdk.Definition, error) {
-	return nil, nil
-}
-func (fixtureDefinitionStore) Get(context.Context, string, string, string) (metadatasdk.Definition, bool, error) {
-	return metadatasdk.Definition{}, false, nil
-}
-func (fixtureDefinitionStore) Snapshot(context.Context, metadatasdk.DefinitionQuery) (metadatasdk.DefinitionSnapshot, error) {
-	return metadatasdk.DefinitionSnapshot{}, nil
-}
-func (fixtureDefinitionStore) ReplaceSourceSnapshot(context.Context, metadatasdk.ProjectionSnapshot) error {
-	return nil
-}
-func (fixtureDefinitionStore) Publish(context.Context, metadatasdk.DefinitionPublishCommand) (metadatasdk.DefinitionPublishResult, error) {
-	return metadatasdk.DefinitionPublishResult{}, nil
-}
-func (fixtureDefinitionStore) Disable(context.Context, metadatasdk.DefinitionDisableCommand) error {
-	return nil
-}
-func (fixtureDefinitionStore) GetVersion(context.Context, metadatasdk.DefinitionVersionQuery) (metadatasdk.DefinitionVersion, bool, error) {
-	return metadatasdk.DefinitionVersion{}, false, nil
 }
 
 type registrar struct{ store *database.RuntimeStore }
