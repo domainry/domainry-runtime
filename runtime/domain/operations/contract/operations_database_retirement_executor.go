@@ -19,4 +19,5 @@ type DatabaseRetirementExecutor interface {
 	ApplyDatabaseRetirementTransition(context.Context, operationsmodel.DatabaseRetirement, operationsmodel.DatabaseRetirement) (operationsmodel.DatabaseRetirement, error)
 	PreviewDatabaseRetirement(context.Context, operationsmodel.DatabaseRetirement) (operationsmodel.DatabaseDropPlan, error)
 	ExecuteDatabaseRetirement(context.Context, operationsmodel.DatabaseRetirement, operationsmodel.DatabaseDropPlan) (DatabaseRetirementExecutionResult, error)
+	VerifyDatabaseRetirementCompletionAudit(context.Context, operationsmodel.DatabaseRetirement, string) error
 }

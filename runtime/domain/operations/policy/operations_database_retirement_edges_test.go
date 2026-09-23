@@ -48,8 +48,8 @@ func TestDatabaseRetirementFullOrderedLifecycle(t *testing.T) {
 		t.Fatal("blocked transition without reason accepted")
 	}
 	blocked.BlockedReason, blocked.Evidence.AuditEventID = "reason", ""
-	if err := OperationsValidateDatabaseRetirementTransition(databaseRetirementFixture(baseTime), blocked, baseTime); err == nil {
-		t.Fatal("blocked transition without audit accepted")
+	if err := OperationsValidateDatabaseRetirementTransition(databaseRetirementFixture(baseTime), blocked, baseTime); err != nil {
+		t.Fatalf("blocked transition incorrectly requires terminal Audit evidence: %v", err)
 	}
 }
 
@@ -157,7 +157,6 @@ func TestDatabaseRetirementTransitionIdentityOrderAndEvidenceFailures(t *testing
 	for _, mutateCurrentNext := range []func(*operationsmodel.DatabaseRetirement, *operationsmodel.DatabaseRetirement){
 		func(current, _ *operationsmodel.DatabaseRetirement) { current.Evidence.QuarantineObjectName = "" },
 		func(_, next *operationsmodel.DatabaseRetirement) { next.Evidence.Rollback = "" },
-		func(_, next *operationsmodel.DatabaseRetirement) { next.Evidence.AuditEventID = "" },
 	} {
 		invalidCurrent, invalidNext := quarantined, restored
 		mutateCurrentNext(&invalidCurrent, &invalidNext)
@@ -220,6 +219,11 @@ func TestDatabaseRetirementTransitionStageSpecificFailures(t *testing.T) {
 		t.Fatal("drop before quarantine deadline accepted")
 	}
 	dropped.UpdatedAt = future
+	dropped.Evidence.AuditEventID = ""
+	if err := OperationsValidateDatabaseRetirementTransition(quarantined, dropped, future); err == nil {
+		t.Fatal("drop without verified terminal Audit reference accepted")
+	}
+	dropped.Evidence.AuditEventID = "audit-1"
 	if err := OperationsValidateDatabaseRetirementTransition(quarantined, dropped, future); err != nil {
 		t.Fatal(err)
 	}
@@ -271,13 +275,17 @@ func TestDatabaseDropEvidenceCompleteMatrix(t *testing.T) {
 		func(value *operationsmodel.DatabaseRetirementEvidence) { value.MaintenanceEvidence = "" },
 		func(value *operationsmodel.DatabaseRetirementEvidence) { value.DrainEvidence = "" },
 		func(value *operationsmodel.DatabaseRetirementEvidence) { value.Rollback = "" },
-		func(value *operationsmodel.DatabaseRetirementEvidence) { value.AuditEventID = "" },
 	} {
 		invalid := base
 		mutate(&invalid)
 		if err := OperationsValidateDatabaseDropEvidence(invalid, now); err == nil {
 			t.Fatal("missing drop evidence accepted")
 		}
+	}
+	withoutTerminalAudit := base
+	withoutTerminalAudit.AuditEventID = ""
+	if err := OperationsValidateDatabaseDropEvidence(withoutTerminalAudit, now); err != nil {
+		t.Fatalf("pre-execution readiness incorrectly requires terminal Audit evidence: %v", err)
 	}
 	for _, mutate := range []func(*operationsmodel.DatabaseRetirementEvidence){
 		func(value *operationsmodel.DatabaseRetirementEvidence) { value.BackupVerifiedAt = nil },

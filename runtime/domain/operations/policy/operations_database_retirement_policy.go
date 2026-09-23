@@ -30,7 +30,7 @@ func OperationsValidateDatabaseRetirementTransition(current, next operationsmode
 		return fmt.Errorf("operations.database_retirement_identity_or_time_changed")
 	}
 	if next.State == operationsmodel.DatabaseRetirementBlocked {
-		if strings.TrimSpace(next.BlockedReason) == "" || strings.TrimSpace(next.Evidence.AuditEventID) == "" {
+		if strings.TrimSpace(next.BlockedReason) == "" {
 			return fmt.Errorf("operations.database_retirement_blocked_evidence_required")
 		}
 		return nil
@@ -39,7 +39,7 @@ func OperationsValidateDatabaseRetirementTransition(current, next operationsmode
 	if !restoreFromQuarantine && databaseRetirementStateIndex(next.State) != databaseRetirementStateIndex(current.State)+1 {
 		return fmt.Errorf("operations.database_retirement_transition_invalid")
 	}
-	if restoreFromQuarantine && (strings.TrimSpace(current.Evidence.QuarantineObjectName) == "" || strings.TrimSpace(next.Evidence.Rollback) == "" || strings.TrimSpace(next.Evidence.AuditEventID) == "") {
+	if restoreFromQuarantine && (strings.TrimSpace(current.Evidence.QuarantineObjectName) == "" || strings.TrimSpace(next.Evidence.Rollback) == "") {
 		return fmt.Errorf("operations.database_retirement_restore_evidence_required")
 	}
 	switch next.State {
@@ -68,16 +68,33 @@ func OperationsValidateDatabaseRetirementTransition(current, next operationsmode
 			return fmt.Errorf("operations.database_retirement_quarantine_required")
 		}
 	case operationsmodel.DatabaseRetirementDropped:
-		if err := OperationsValidateDatabaseDropEvidence(next.Evidence, now); err != nil {
+		if err := OperationsValidateDatabaseRetirementDropReadiness(next, now); err != nil {
 			return err
 		}
-		if next.Evidence.QuarantineUntil == nil || now.Before(*next.Evidence.QuarantineUntil) {
-			return fmt.Errorf("operations.database_retirement_quarantine_window_open")
+		if strings.TrimSpace(next.Evidence.AuditEventID) == "" {
+			return fmt.Errorf("operations.database_retirement_terminal_audit_required")
 		}
 	case operationsmodel.DatabaseRetirementCodeRemoved:
 		if strings.TrimSpace(next.Evidence.AuditEventID) == "" {
 			return fmt.Errorf("operations.database_retirement_code_removal_audit_required")
 		}
+	}
+	return nil
+}
+
+// OperationsValidateDatabaseRetirementDropReadiness validates the destructive
+// preconditions that must exist before execution. The terminal Audit event does
+// not exist yet and is deliberately excluded; transition to dropped requires
+// that immutable event after execution.
+func OperationsValidateDatabaseRetirementDropReadiness(retirement operationsmodel.DatabaseRetirement, now time.Time) error {
+	if retirement.State != operationsmodel.DatabaseRetirementQuarantined && retirement.State != operationsmodel.DatabaseRetirementDropped {
+		return fmt.Errorf("operations.database_retirement_not_quarantined")
+	}
+	if err := OperationsValidateDatabaseDropEvidence(retirement.Evidence, now); err != nil {
+		return err
+	}
+	if retirement.Evidence.QuarantineUntil == nil || now.Before(*retirement.Evidence.QuarantineUntil) {
+		return fmt.Errorf("operations.database_retirement_quarantine_window_open")
 	}
 	return nil
 }
@@ -98,7 +115,7 @@ func OperationsValidateDatabaseObservation(observation operationsmodel.DatabaseA
 }
 
 func OperationsValidateDatabaseDropEvidence(evidence operationsmodel.DatabaseRetirementEvidence, now time.Time) error {
-	if strings.TrimSpace(evidence.Owner) == "" || strings.TrimSpace(evidence.ChangePlanID) == "" || strings.TrimSpace(evidence.ApprovalID) == "" || strings.TrimSpace(evidence.BackupID) == "" || strings.TrimSpace(evidence.BackupChecksum) == "" || strings.TrimSpace(evidence.MaintenanceEvidence) == "" || strings.TrimSpace(evidence.DrainEvidence) == "" || strings.TrimSpace(evidence.Rollback) == "" || strings.TrimSpace(evidence.AuditEventID) == "" {
+	if strings.TrimSpace(evidence.Owner) == "" || strings.TrimSpace(evidence.ChangePlanID) == "" || strings.TrimSpace(evidence.ApprovalID) == "" || strings.TrimSpace(evidence.BackupID) == "" || strings.TrimSpace(evidence.BackupChecksum) == "" || strings.TrimSpace(evidence.MaintenanceEvidence) == "" || strings.TrimSpace(evidence.DrainEvidence) == "" || strings.TrimSpace(evidence.Rollback) == "" {
 		return fmt.Errorf("operations.database_retirement_drop_evidence_required")
 	}
 	if evidence.BackupVerifiedAt == nil || evidence.RestoreDrillAt == nil || evidence.BackupVerifiedAt.After(now) || evidence.RestoreDrillAt.After(now) || now.Sub(*evidence.BackupVerifiedAt) > MaximumRetirementEvidenceAge || now.Sub(*evidence.RestoreDrillAt) > MaximumRetirementEvidenceAge {

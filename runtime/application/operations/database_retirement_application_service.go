@@ -50,7 +50,7 @@ func (s *DatabaseRetirementApplicationService) Discover(ctx context.Context, obj
 		return operationsmodel.DatabaseRetirement{}, apperror.New(apperror.KindInternal, "backend.operations.database_retirement_repository_unavailable", nil, nil)
 	}
 	now := s.now().UTC()
-	retirement := operationsmodel.DatabaseRetirement{ID: "database_retirement_" + strings.TrimSpace(s.newID()), Object: object, State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{Owner: strings.TrimSpace(owner), AuditEventID: "discovery:" + strings.TrimSpace(s.newID())}, UpdatedAt: now}
+	retirement := operationsmodel.DatabaseRetirement{ID: "database_retirement_" + strings.TrimSpace(s.newID()), Object: object, State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{Owner: strings.TrimSpace(owner)}, UpdatedAt: now}
 	if err := validateDatabaseRetirementDiscovery(retirement); err != nil {
 		return operationsmodel.DatabaseRetirement{}, apperror.New(apperror.KindBadRequest, err.Error(), err, nil)
 	}
@@ -152,11 +152,19 @@ func (s *DatabaseRetirementApplicationService) Advance(ctx context.Context, id s
 	if err != nil {
 		return operationsmodel.DatabaseRetirement{}, err
 	}
+	if current.State == operationsmodel.DatabaseRetirementDropped || current.State == operationsmodel.DatabaseRetirementCodeRemoved {
+		if err := s.verifyDatabaseRetirementCompletionAudit(ctx, current); err != nil {
+			return operationsmodel.DatabaseRetirement{}, err
+		}
+	}
 	if current.State == nextState {
 		if reflect.DeepEqual(current.Evidence, evidence) {
 			return current, nil
 		}
 		return operationsmodel.DatabaseRetirement{}, apperror.New(apperror.KindConflict, "backend.operations.database_retirement_idempotency_conflict", nil, nil)
+	}
+	if nextState == operationsmodel.DatabaseRetirementDropped {
+		return operationsmodel.DatabaseRetirement{}, apperror.New(apperror.KindConflict, "backend.operations.database_retirement_execute_required", nil, nil)
 	}
 	next := current
 	next.State, next.Evidence, next.UpdatedAt, next.BlockedReason = nextState, evidence, s.now().UTC(), ""
@@ -192,6 +200,9 @@ func (s *DatabaseRetirementApplicationService) Execute(ctx context.Context, id s
 		return operationscontract.DatabaseRetirementExecutionResult{}, err
 	}
 	if current.State == operationsmodel.DatabaseRetirementDropped {
+		if err := s.verifyDatabaseRetirementCompletionAudit(ctx, current); err != nil {
+			return operationscontract.DatabaseRetirementExecutionResult{}, err
+		}
 		return operationscontract.DatabaseRetirementExecutionResult{AuditEventID: current.Evidence.AuditEventID}, nil
 	}
 	if current.State != operationsmodel.DatabaseRetirementQuarantined {
@@ -200,7 +211,7 @@ func (s *DatabaseRetirementApplicationService) Execute(ctx context.Context, id s
 	now := s.now().UTC()
 	next := current
 	next.State, next.UpdatedAt = operationsmodel.DatabaseRetirementDropped, now
-	if err := operationspolicy.OperationsValidateDatabaseRetirementTransition(current, next, now); err != nil {
+	if err := operationspolicy.OperationsValidateDatabaseRetirementDropReadiness(current, now); err != nil {
 		return operationscontract.DatabaseRetirementExecutionResult{}, apperror.New(apperror.KindConflict, err.Error(), err, nil)
 	}
 	plan, err := s.preview(ctx, current)
@@ -214,16 +225,45 @@ func (s *DatabaseRetirementApplicationService) Execute(ctx context.Context, id s
 		if blocked.BlockedReason == "" {
 			blocked.BlockedReason = "destructive execution failed"
 		}
-		blocked.Evidence.AuditEventID = result.AuditEventID
+		// A generated identifier is not evidence. Failed execution has no
+		// terminal Audit reference unless the immutable event is verified.
+		blocked.Evidence.AuditEventID = ""
 		_, _ = s.repository.TransitionDatabaseRetirement(ctx, blocked, current.State)
+		result.AuditEventID = ""
 		return result, apperror.New(apperror.KindInternal, "backend.operations.database_retirement_execute_failed", executeErr, nil)
 	}
+	if verifyErr := s.executor.VerifyDatabaseRetirementCompletionAudit(ctx, current, result.AuditEventID); verifyErr != nil {
+		blocked := current
+		blocked.State, blocked.UpdatedAt, blocked.BlockedReason = operationsmodel.DatabaseRetirementBlocked, now, "terminal Audit evidence verification failed"
+		blocked.Evidence.AuditEventID = ""
+		_, _ = s.repository.TransitionDatabaseRetirement(ctx, blocked, current.State)
+		result.Dirty, result.BlockedReason, result.AuditEventID = true, blocked.BlockedReason, ""
+		return result, apperror.New(apperror.KindInternal, "backend.operations.database_retirement_audit_evidence_unverified", verifyErr, nil)
+	}
 	next.Evidence.AuditEventID = result.AuditEventID
+	if err := operationspolicy.OperationsValidateDatabaseRetirementTransition(current, next, now); err != nil {
+		blocked := current
+		blocked.State, blocked.UpdatedAt, blocked.BlockedReason = operationsmodel.DatabaseRetirementBlocked, now, "terminal retirement state validation failed"
+		blocked.Evidence.AuditEventID = ""
+		_, _ = s.repository.TransitionDatabaseRetirement(ctx, blocked, current.State)
+		result.Dirty, result.BlockedReason, result.AuditEventID = true, blocked.BlockedReason, ""
+		return result, apperror.New(apperror.KindInternal, "backend.operations.database_retirement_terminal_state_invalid", err, nil)
+	}
 	changed, err := s.repository.TransitionDatabaseRetirement(ctx, next, current.State)
 	if err != nil || !changed {
 		return result, apperror.New(apperror.KindInternal, "backend.operations.database_retirement_commit_failed", err, nil)
 	}
 	return result, nil
+}
+
+func (s *DatabaseRetirementApplicationService) verifyDatabaseRetirementCompletionAudit(ctx context.Context, retirement operationsmodel.DatabaseRetirement) error {
+	if s.executor == nil {
+		return apperror.New(apperror.KindInternal, "backend.operations.database_retirement_executor_unavailable", nil, nil)
+	}
+	if err := s.executor.VerifyDatabaseRetirementCompletionAudit(ctx, retirement, retirement.Evidence.AuditEventID); err != nil {
+		return apperror.New(apperror.KindInternal, "backend.operations.database_retirement_audit_evidence_unverified", err, nil)
+	}
+	return nil
 }
 
 func validateDatabaseRetirementDiscovery(retirement operationsmodel.DatabaseRetirement) error {

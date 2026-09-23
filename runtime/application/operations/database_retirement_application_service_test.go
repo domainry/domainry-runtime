@@ -2,11 +2,13 @@ package operations
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
@@ -23,6 +25,9 @@ func TestDatabaseRetirementApplicationDoesNotAcceptSQLAndBlocksEarlyExecution(t 
 	retirement, err := service.Discover(t.Context(), operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table", Name: "old_table"}, "record", principal)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if retirement.Evidence.AuditEventID != "" {
+		t.Fatalf("discovery stored synthetic Audit evidence %q", retirement.Evidence.AuditEventID)
 	}
 	if _, err := service.Execute(t.Context(), retirement.ID, principal); err == nil {
 		t.Fatal("destructive execution before quarantine accepted")
@@ -58,12 +63,42 @@ func TestDatabaseRetirementRetriesAreIdempotent(t *testing.T) {
 	executor := &databaseRetirementExecutorFake{}
 	service := NewDatabaseRetirementApplicationService(repository, executor, func() time.Time { return now }, nil)
 	result, err := service.Execute(t.Context(), retirement.ID, databaseRetirementPrincipal())
-	if err != nil || result.ExecutedStatements != 0 || result.AuditEventID != "audit-success" || executor.executed {
-		t.Fatalf("idempotent execute result=%+v executed=%t err=%v", result, executor.executed, err)
+	if err != nil || result.ExecutedStatements != 0 || result.AuditEventID != "audit-success" || executor.executed || executor.verified != 1 {
+		t.Fatalf("idempotent execute result=%+v executed=%t verified=%d err=%v", result, executor.executed, executor.verified, err)
 	}
 	advanced, err := service.Advance(t.Context(), retirement.ID, retirement.State, retirement.Evidence, databaseRetirementPrincipal())
 	if err != nil || advanced.State != retirement.State {
 		t.Fatalf("idempotent advance=%+v err=%v", advanced, err)
+	}
+}
+
+func TestDatabaseRetirementRejectsUnverifiedTerminalAuditEvidence(t *testing.T) {
+	now := time.Date(2026, 7, 19, 15, 0, 0, 0, time.UTC)
+	quarantineEnded := now.Add(-time.Minute)
+	current := operationsDatabaseRetirementFixture(now)
+	current.State, current.Evidence.QuarantineUntil = operationsmodel.DatabaseRetirementQuarantined, &quarantineEnded
+	repository := &databaseRetirementRepositoryFake{items: map[string]operationsmodel.DatabaseRetirement{current.ID: current}}
+	executor := &databaseRetirementExecutorFake{verifyErr: errors.New("Audit event missing")}
+	service := NewDatabaseRetirementApplicationService(repository, executor, func() time.Time { return now }, nil)
+	if _, err := service.Advance(t.Context(), current.ID, operationsmodel.DatabaseRetirementDropped, current.Evidence, databaseRetirementPrincipal()); apperror.CodeOf(err) != "backend.operations.database_retirement_execute_required" {
+		t.Fatalf("generic Advance bypassed destructive executor: %v", err)
+	}
+
+	result, err := service.Execute(t.Context(), current.ID, databaseRetirementPrincipal())
+	if apperror.CodeOf(err) != "backend.operations.database_retirement_audit_evidence_unverified" || !result.Dirty || result.AuditEventID != "" {
+		t.Fatalf("unverified execution result=%+v err=%v", result, err)
+	}
+	stored := repository.items[current.ID]
+	if stored.State != operationsmodel.DatabaseRetirementBlocked || stored.Evidence.AuditEventID != "" {
+		t.Fatalf("unverified retirement stored=%+v", stored)
+	}
+
+	dropped := current
+	dropped.State, dropped.Evidence.AuditEventID = operationsmodel.DatabaseRetirementDropped, "claimed-audit"
+	repository.items[current.ID] = dropped
+	executor.executed = false
+	if result, err := service.Execute(t.Context(), current.ID, databaseRetirementPrincipal()); apperror.CodeOf(err) != "backend.operations.database_retirement_audit_evidence_unverified" || result.AuditEventID != "" || executor.executed {
+		t.Fatalf("unverified replay result=%+v executed=%t err=%v", result, executor.executed, err)
 	}
 }
 
@@ -157,6 +192,8 @@ type databaseRetirementExecutorFake struct {
 	executeErr    error
 	dirty         bool
 	blockedReason string
+	verifyErr     error
+	verified      int
 }
 
 func (e *databaseRetirementExecutorFake) ApplyDatabaseRetirementTransition(_ context.Context, _ operationsmodel.DatabaseRetirement, next operationsmodel.DatabaseRetirement) (operationsmodel.DatabaseRetirement, error) {
@@ -187,6 +224,14 @@ func (e *databaseRetirementExecutorFake) ExecuteDatabaseRetirement(context.Conte
 		return operationscontract.DatabaseRetirementExecutionResult{Dirty: e.dirty, BlockedReason: e.blockedReason, AuditEventID: "audit-failed"}, e.executeErr
 	}
 	return operationscontract.DatabaseRetirementExecutionResult{ExecutedStatements: 1, AuditEventID: "audit-success"}, nil
+}
+
+func (e *databaseRetirementExecutorFake) VerifyDatabaseRetirementCompletionAudit(_ context.Context, _ operationsmodel.DatabaseRetirement, auditEventID string) error {
+	e.verified++
+	if auditEventID == "" {
+		return context.Canceled
+	}
+	return e.verifyErr
 }
 
 func databaseRetirementPrincipal() principalmodel.Principal {

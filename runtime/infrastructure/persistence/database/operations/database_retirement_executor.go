@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	auditsdk "github.com/domainry/domainry-audit-sdk"
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	"github.com/domainry/domainry-foundation/requestcontext"
@@ -21,6 +22,8 @@ import (
 )
 
 var _ operationscontract.DatabaseRetirementExecutor = DatabaseRetirementSQLExecutor{}
+
+const databaseRetirementCompletedAuditEvent = "database_retirement_completed"
 
 type DatabaseRetirementSQLExecutor struct {
 	store   *database.RuntimeStore
@@ -310,15 +313,15 @@ func appendDatabaseRetirementCompletionAudit(ctx context.Context, store *databas
 	if store == nil || tx == nil {
 		return fmt.Errorf("database retirement audit transaction unavailable")
 	}
-	workspaceID := strings.TrimSpace(principalmodel.InstallationWorkspaceID)
-	if workspaceID == "" {
-		workspaceID = "runtime-installation"
+	workspaceID, err := databaseRetirementAuditWorkspaceID()
+	if err != nil {
+		return err
 	}
 	event := auditmodel.AuditEvent{
 		ID: result.AuditEventID, WorkspaceID: workspaceID,
 		OperationID: requestcontext.OwnerExecutionID(ctx), OwnerRunID: retirement.ID,
 		Family: auditmodel.EventFamilyRuntimeOperations,
-		Event:  "database_retirement_completed", ObjectKey: "database_object", RecordID: retirement.ID,
+		Event:  databaseRetirementCompletedAuditEvent, ObjectKey: "database_object", RecordID: retirement.ID,
 		ActorID: strings.TrimSpace(retirement.Evidence.Owner), RoleKey: "operations",
 		Summary: "Database object retirement completed",
 		Before:  map[string]any{"state": retirement.State, "object": retirement.Object},
@@ -334,6 +337,79 @@ func appendDatabaseRetirementCompletionAudit(ctx context.Context, store *databas
 		return fmt.Errorf("append database retirement completion audit: %w", err)
 	}
 	return nil
+}
+
+func (e DatabaseRetirementSQLExecutor) VerifyDatabaseRetirementCompletionAudit(ctx context.Context, retirement operationsmodel.DatabaseRetirement, auditEventID string) error {
+	if e.store == nil {
+		return fmt.Errorf("database retirement Audit verifier unavailable")
+	}
+	auditEventID = strings.TrimSpace(auditEventID)
+	if auditEventID == "" {
+		return fmt.Errorf("database retirement completion Audit event ID is required")
+	}
+	workspaceID, err := databaseRetirementAuditWorkspaceID()
+	if err != nil {
+		return err
+	}
+	binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(
+		ctx,
+		auditsdk.ApplicationRef{InstallationID: "domainry-runtime"},
+		runtimeauditmodule.NewHost(e.store, nil, nil),
+	)
+	if err != nil {
+		return fmt.Errorf("open Audit Module for database retirement evidence: %w", err)
+	}
+	events, err := binding.Reader().List(ctx, workspaceID, auditmodel.Query{
+		Event:      databaseRetirementCompletedAuditEvent,
+		ObjectKey:  "database_object",
+		RecordID:   retirement.ID,
+		OwnerRunID: retirement.ID,
+		Limit:      100,
+	})
+	if err != nil {
+		return fmt.Errorf("read database retirement completion Audit evidence: %w", err)
+	}
+	for _, event := range events {
+		if strings.TrimSpace(event.ID) != auditEventID {
+			continue
+		}
+		if event.WorkspaceID != workspaceID || event.Family != auditmodel.EventFamilyRuntimeOperations || event.Event != databaseRetirementCompletedAuditEvent || event.ObjectKey != "database_object" || event.RecordID != retirement.ID || event.OwnerRunID != retirement.ID || event.ActorID != strings.TrimSpace(retirement.Evidence.Owner) {
+			return fmt.Errorf("database retirement completion Audit evidence identity mismatch")
+		}
+		if databaseRetirementAuditValue(event.Before, "state") != string(operationsmodel.DatabaseRetirementQuarantined) || databaseRetirementAuditValue(event.After, "state") != string(operationsmodel.DatabaseRetirementDropped) {
+			return fmt.Errorf("database retirement completion Audit evidence state mismatch")
+		}
+		expectedMetadata := map[string]string{
+			"approval_id": retirement.Evidence.ApprovalID, "backup_id": retirement.Evidence.BackupID,
+			"backup_checksum": retirement.Evidence.BackupChecksum, "change_plan_id": retirement.Evidence.ChangePlanID,
+			"disposition": retirement.Evidence.Disposition, "rollback": retirement.Evidence.Rollback,
+		}
+		for key, expected := range expectedMetadata {
+			if databaseRetirementAuditValue(event.Metadata, key) != expected {
+				return fmt.Errorf("database retirement completion Audit evidence %s mismatch", key)
+			}
+		}
+		if _, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(event.CreatedAt)); err != nil {
+			return fmt.Errorf("database retirement completion Audit evidence timestamp is invalid: %w", err)
+		}
+		return nil
+	}
+	return fmt.Errorf("database retirement completion Audit event %q was not found", auditEventID)
+}
+
+func databaseRetirementAuditValue(values map[string]any, key string) string {
+	if values == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(values[key]))
+}
+
+func databaseRetirementAuditWorkspaceID() (string, error) {
+	workspaceID, err := principalmodel.NewWorkspaceID(principalmodel.InstallationWorkspaceID)
+	if err != nil {
+		return "", fmt.Errorf("database retirement installation Workspace is unavailable: %w", err)
+	}
+	return workspaceID.String(), nil
 }
 
 func applyRetirementLockTimeout(ctx context.Context, tx *sql.Tx, engine datamigration.Engine, timeout time.Duration) error {

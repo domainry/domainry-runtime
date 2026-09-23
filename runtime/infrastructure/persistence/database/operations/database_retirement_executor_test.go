@@ -10,6 +10,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/requestcontext"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/datamigration"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -42,6 +43,17 @@ func TestSQLiteDatabaseRetirementExecutorDropsOnlyTypedApprovedObject(t *testing
 	}
 	if event != "database_retirement_completed" || recordID != retirement.ID || operationID != "operation-1" || ownerRunID != retirement.ID {
 		t.Fatalf("retirement audit event=%q record=%q operation=%q owner_run=%q", event, recordID, operationID, ownerRunID)
+	}
+	if err := executor.VerifyDatabaseRetirementCompletionAudit(t.Context(), retirement, result.AuditEventID); err != nil {
+		t.Fatalf("verify immutable retirement Audit event: %v", err)
+	}
+	if err := executor.VerifyDatabaseRetirementCompletionAudit(t.Context(), retirement, "missing-audit"); err == nil {
+		t.Fatal("missing retirement Audit event was accepted")
+	}
+	tampered := retirement
+	tampered.Evidence.Owner = "other-owner"
+	if err := executor.VerifyDatabaseRetirementCompletionAudit(t.Context(), tampered, result.AuditEventID); err == nil {
+		t.Fatal("mismatched retirement Audit event was accepted")
 	}
 }
 
@@ -256,6 +268,9 @@ func datamigrationEngineForTest(name string) datamigration.Engine {
 
 func openDatabaseRetirementExecutorStore(t *testing.T) *database.RuntimeStore {
 	t.Helper()
+	if err := principalmodel.ConfigureInstallationWorkspaceID("workspace-primary"); err != nil {
+		t.Fatal(err)
+	}
 	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "retirement-executor.db"), IntegrationSecretKey: "retirement-test-key"})
 	if err != nil {
 		t.Fatal(err)
