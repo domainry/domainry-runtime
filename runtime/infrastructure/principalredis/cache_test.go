@@ -93,6 +93,50 @@ func TestCacheRejectsEntriesWithoutAccessBundle(t *testing.T) {
 	}
 }
 
+func TestCredentialCacheRoundTripAndSubjectInvalidation(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	cache := New(client, "test:principal:")
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	key := identityprincipal.CredentialCacheKey(strings.Repeat("a", 64))
+	entry := cacheTestEntry(now.Add(5 * time.Minute))
+	if err := cache.SetCredential(t.Context(), key, entry, now); err != nil {
+		t.Fatal(err)
+	}
+	resolved, found, err := cache.GetCredential(t.Context(), key, now)
+	if err != nil || !found || !resolved.Principal.HasPermission("orders.read") {
+		t.Fatalf("resolved=%#v found=%v err=%v", resolved, found, err)
+	}
+	for _, redisKey := range server.Keys() {
+		if strings.Contains(redisKey, string(key)) || strings.Contains(redisKey, "workspace-1") || strings.Contains(redisKey, "user-1") {
+			t.Fatalf("Redis credential cache exposed raw key material in %q", redisKey)
+		}
+	}
+	if err := cache.Invalidate(t.Context(), "user-1", "workspace-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := cache.GetCredential(t.Context(), key, now); err != nil || found {
+		t.Fatalf("invalidated credential remained found=%v err=%v", found, err)
+	}
+}
+
+func TestCacheMultiKeyScriptsUseOneRedisClusterSlot(t *testing.T) {
+	cache := New(redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"}), "test:principal:")
+	t.Cleanup(func() { _ = cache.Close() })
+	key := identityprincipal.CacheKey{WorkspaceID: "workspace-1", SubjectID: "user-1", AuthorizationRevision: "revision-1", TokenID: "token-1"}
+	entryKey := cache.entryKey(key)
+	subjectKey := cache.subjectKey(key.SubjectID, key.WorkspaceID)
+	entryTagStart, entryTagEnd := strings.IndexByte(entryKey, '{'), strings.IndexByte(entryKey, '}')
+	subjectTagStart, subjectTagEnd := strings.IndexByte(subjectKey, '{'), strings.IndexByte(subjectKey, '}')
+	if entryTagStart < 0 || entryTagEnd <= entryTagStart || subjectTagStart < 0 || subjectTagEnd <= subjectTagStart {
+		t.Fatalf("cluster hash tags missing: entry=%q subject=%q", entryKey, subjectKey)
+	}
+	if entryKey[entryTagStart:entryTagEnd+1] != subjectKey[subjectTagStart:subjectTagEnd+1] {
+		t.Fatalf("multi-key script crosses slots: entry=%q subject=%q", entryKey, subjectKey)
+	}
+}
+
 func cacheTestEntry(expiresAt time.Time) identityprincipal.CacheEntry {
 	bundle := identity.AccessBundle{
 		ContractVersion:       identity.CurrentPolicyBundleVersion,

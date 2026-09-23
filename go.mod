@@ -16,7 +16,7 @@ require (
 	github.com/domainry/domainry-data-exchange-sdk v0.3.9
 	github.com/domainry/domainry-foundation v0.1.26
 	github.com/domainry/domainry-identity v0.2.24
-	github.com/domainry/domainry-identity-sdk v0.1.14
+	github.com/domainry/domainry-identity-sdk v0.1.15
 	github.com/domainry/domainry-integration-sdk v0.1.9
 	github.com/domainry/domainry-lifecycle v0.1.19
 	github.com/domainry/domainry-lifecycle-sdk v0.1.16

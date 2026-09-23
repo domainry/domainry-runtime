@@ -19,8 +19,9 @@ func TestIdentityPrincipalCacheConfigFromEnvironment(t *testing.T) {
 	t.Setenv("PRINCIPAL_CACHE_REDIS_URL", "redis://localhost:6379/3")
 	t.Setenv("PRINCIPAL_CACHE_REDIS_PREFIX", "tenant:principal:")
 	t.Setenv("PRINCIPAL_CACHE_REDIS_CONNECT_TIMEOUT", "3s")
+	t.Setenv("PRINCIPAL_CACHE_REDIS_CLUSTER", "true")
 	cfg := FromEnv()
-	if cfg.PrincipalCacheBackend != "redis" || cfg.PrincipalCacheTTL != 5*time.Minute || cfg.PrincipalCacheRedisURL != "redis://localhost:6379/3" || cfg.PrincipalCacheRedisPrefix != "tenant:principal:" || cfg.PrincipalCacheRedisConnectTimeout != 3*time.Second {
+	if cfg.PrincipalCacheBackend != "redis" || cfg.PrincipalCacheTTL != 5*time.Minute || cfg.PrincipalCacheRedisURL != "redis://localhost:6379/3" || cfg.PrincipalCacheRedisPrefix != "tenant:principal:" || cfg.PrincipalCacheRedisConnectTimeout != 3*time.Second || !cfg.PrincipalCacheRedisCluster {
 		t.Fatalf("config=%#v", cfg)
 	}
 }

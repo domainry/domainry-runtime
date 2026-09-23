@@ -22,7 +22,7 @@ func Open(ctx context.Context, cfg config.Config) (identityprincipal.Cache, erro
 		if strings.TrimSpace(cfg.PrincipalCacheRedisURL) == "" {
 			return nil, fmt.Errorf("PRINCIPAL_CACHE_REDIS_URL is required when PRINCIPAL_CACHE_BACKEND=redis")
 		}
-		return principalredis.Open(ctx, cfg.PrincipalCacheRedisURL, cfg.PrincipalCacheRedisPrefix, cfg.PrincipalCacheRedisConnectTimeout)
+		return principalredis.Open(ctx, cfg.PrincipalCacheRedisURL, cfg.PrincipalCacheRedisPrefix, cfg.PrincipalCacheRedisConnectTimeout, cfg.PrincipalCacheRedisCluster)
 	default:
 		return nil, fmt.Errorf("unsupported PRINCIPAL_CACHE_BACKEND %q", cfg.PrincipalCacheBackend)
 	}

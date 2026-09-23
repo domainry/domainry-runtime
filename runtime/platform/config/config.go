@@ -53,6 +53,7 @@ type Config struct {
 	PrincipalCacheRedisURL                  string
 	PrincipalCacheRedisPrefix               string
 	PrincipalCacheRedisConnectTimeout       time.Duration
+	PrincipalCacheRedisCluster              bool
 	CapacityGlobalInFlight                  int
 	CapacityWorkspaceInFlight               int
 	CapacityUseCaseInFlight                 int
@@ -218,6 +219,7 @@ func FromEnv() Config {
 		PrincipalCacheRedisURL:                      strings.TrimSpace(os.Getenv("PRINCIPAL_CACHE_REDIS_URL")),
 		PrincipalCacheRedisPrefix:                   env("PRINCIPAL_CACHE_REDIS_PREFIX", "domainry:identity:principal:v1:"),
 		PrincipalCacheRedisConnectTimeout:           durationEnv("PRINCIPAL_CACHE_REDIS_CONNECT_TIMEOUT", 2*time.Second),
+		PrincipalCacheRedisCluster:                  boolEnv("PRINCIPAL_CACHE_REDIS_CLUSTER", false),
 		CapacityGlobalInFlight:                      intEnv("CAPACITY_GLOBAL_IN_FLIGHT", 256),
 		CapacityWorkspaceInFlight:                   intEnv("CAPACITY_WORKSPACE_IN_FLIGHT", 32),
 		CapacityUseCaseInFlight:                     intEnv("CAPACITY_USE_CASE_IN_FLIGHT", 64),
