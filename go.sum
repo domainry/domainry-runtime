@@ -46,8 +46,8 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dlclark/regexp2 v1.11.0 h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxKI=
 github.com/dlclark/regexp2 v1.11.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
-github.com/domainry/domainry-agent v0.1.39 h1:DazZlWKvfeWoKvx4bYvaD9lDeV5y4oAgaHes5NxiymY=
-github.com/domainry/domainry-agent v0.1.39/go.mod h1:X0DaS3qYBVaPkPjuXJ+Vye7PaaJ0tRYZIowYo0LFVTI=
+github.com/domainry/domainry-agent v0.1.40 h1:qmcvhcW+sxBGEcmB2aTnmnzJ9D7FsnTsiUpbvEvcOSo=
+github.com/domainry/domainry-agent v0.1.40/go.mod h1:ieU3o5Tt7dIKPMIhzS8dNA6jcr/P9fZ5Lus9q5+T65k=
 github.com/domainry/domainry-agent-sdk v0.1.20 h1:PPnnpYOwgKcyBNKKoQev73h1EO7jgtUr2kqEab5HInQ=
 github.com/domainry/domainry-agent-sdk v0.1.20/go.mod h1:n3VEOsKeal2WKfKJ/gYhFM+7y03blkUeZ+1FSD2gbeM=
 github.com/domainry/domainry-audit v0.1.16 h1:6Qyq5uMxVLyH8UWHFfYCF03pkwJL2DYKoTJFlHQkKb4=
@@ -70,8 +70,8 @@ github.com/domainry/domainry-identity-sdk v0.1.15 h1:acnaG04XU5N/bfUOiLG+GMFbzjI
 github.com/domainry/domainry-identity-sdk v0.1.15/go.mod h1:I3jCembUi1Cg07zWq0h9pFk2fzEcoM224GzMqBNZ00s=
 github.com/domainry/domainry-integration-sdk v0.1.9 h1:g5+7Aglf2IpwcDjg2znq+LcgoWMIuc9KMB6Od8kmJGo=
 github.com/domainry/domainry-integration-sdk v0.1.9/go.mod h1:bAxENzxiM3DVeyekkQsXaYnkPxBxYzFaRGmt8qNe3bI=
-github.com/domainry/domainry-knowledge v0.1.6 h1:3aLKMDRIk+tAusARKXaXMOjTY0Lv1fhcrxzDtGIm7yo=
-github.com/domainry/domainry-knowledge v0.1.6/go.mod h1:SrV+cjlMBzhcR5CzLJSENa0kWlw1AExSgJlBIAEmvbY=
+github.com/domainry/domainry-knowledge v0.1.7 h1:FJgZQ6MfcwG2ZO5/HHGken3ztG8BOIuvcs3K+wOKHWk=
+github.com/domainry/domainry-knowledge v0.1.7/go.mod h1:BoKB/Nh/lRw/vlaNsxYJaar8T/KOg09549FolMnn4ag=
 github.com/domainry/domainry-lifecycle v0.1.19 h1:OXqKWUR2LuU0zOcgA93Mez3gJhezsJaF1t3AYXhQWZU=
 github.com/domainry/domainry-lifecycle v0.1.19/go.mod h1:W59kB4jha1aazre9pXRQVz2+KKNvvBylcUPstZw6mok=
 github.com/domainry/domainry-lifecycle-sdk v0.1.16 h1:Vjuo3axFvAAFv7NEcm2gs8dVXYKEq00aCBLTlkeMi4Q=
