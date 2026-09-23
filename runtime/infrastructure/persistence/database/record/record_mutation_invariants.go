@@ -337,6 +337,9 @@ func recordMutationPredicate(object definitionmodel.ObjectSchema, predicate tran
 }
 
 func recordConditionDBValue(profile persistencedriver.EngineProfile, object definitionmodel.ObjectSchema, key string, value any) any {
+	if key == "created_at" || key == "updated_at" {
+		return recordTimestampDBValue(profile, strings.TrimSpace(fmt.Sprint(value)))
+	}
 	for _, field := range object.Fields {
 		if field.Key == key {
 			return dbFieldValue(profile, field, value)

@@ -45,7 +45,7 @@ func (r RecordStore) InsertRecord(ctx context.Context, workspaceID string, objec
 	}
 	s := r.store
 	columns := []string{"id", "created_at", "updated_at"}
-	values := []any{record.ID, record.CreatedAt, record.UpdatedAt}
+	values := []any{record.ID, recordTimestampDBValue(s.RuntimeEngine, record.CreatedAt), recordTimestampDBValue(s.RuntimeEngine, record.UpdatedAt)}
 	columns, values, err = appendRecordInsertMetadata(columns, values, record)
 	if err != nil {
 		return err
@@ -85,7 +85,7 @@ func (r RecordStore) UpdateRecord(ctx context.Context, workspaceID string, objec
 		return err
 	}
 	s := r.store
-	builder := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, object.Key, workspaceID).Set("updated_at", record.UpdatedAt)
+	builder := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, object.Key, workspaceID).Set("updated_at", recordTimestampDBValue(s.RuntimeEngine, record.UpdatedAt))
 	if err := applyRecordUpdateBuilder(builder, record, record.Deleted); err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 		return false, err
 	}
 	s := r.store
-	builder := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, object.Key, workspaceID).Set("updated_at", record.UpdatedAt)
+	builder := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, object.Key, workspaceID).Set("updated_at", recordTimestampDBValue(s.RuntimeEngine, record.UpdatedAt))
 	if err := applyRecordUpdateBuilder(builder, record, record.Deleted); err != nil {
 		return false, err
 	}

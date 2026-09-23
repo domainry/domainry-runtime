@@ -94,7 +94,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 	switch operation {
 	case "create":
 		columns := []string{"id", "created_at", "updated_at"}
-		values := []any{commit.Record.ID, commit.Record.CreatedAt, commit.Record.UpdatedAt}
+		values := []any{commit.Record.ID, recordTimestampDBValue(s.RuntimeEngine, commit.Record.CreatedAt), recordTimestampDBValue(s.RuntimeEngine, commit.Record.UpdatedAt)}
 		columns, values, metadataErr := appendRecordInsertMetadata(columns, values, commit.Record)
 		if metadataErr != nil {
 			return metadataErr
@@ -126,7 +126,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			return fmt.Errorf("runtime.subject_erased")
 		}
 	case "update", "restore":
-		builder := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Set("updated_at", commit.Record.UpdatedAt)
+		builder := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Set("updated_at", recordTimestampDBValue(s.RuntimeEngine, commit.Record.UpdatedAt))
 		if metadataErr := applyRecordUpdateBuilder(builder, commit.Record, operation == "restore" || commit.Record.Deleted); metadataErr != nil {
 			return metadataErr
 		}
@@ -166,7 +166,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			predicates = append(predicates, predicate)
 		}
 		if expected := strings.TrimSpace(commit.OptimisticUpdatedAt()); expected != "" {
-			predicates = append(predicates, query.Equal("updated_at", expected))
+			predicates = append(predicates, query.Equal("updated_at", recordTimestampDBValue(s.RuntimeEngine, expected)))
 		}
 		queryValue, args, buildErr := builder.Where(query.And(predicates...)).Build()
 		if buildErr != nil {
@@ -182,13 +182,13 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		}
 		if affected == 0 {
 			if expected := strings.TrimSpace(commit.OptimisticUpdatedAt()); expected != "" {
-				var current string
+				var current any
 				lookup, lookupArgs, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Columns("updated_at").Where(query.Equal("id", commit.Record.ID)).Limit(1).Build()
 				if buildErr != nil {
 					return buildErr
 				}
 				err := tx.QueryRowContext(ctx, lookup, lookupArgs...).Scan(&current)
-				if errors.Is(err, sql.ErrNoRows) || (err == nil && strings.TrimSpace(current) != expected) {
+				if errors.Is(err, sql.ErrNoRows) || (err == nil && strings.TrimSpace(recordTimestampValue(current)) != expected) {
 					return mutation.MutationConflict(commit.Object.Key, commit.Record.ID, mutation.MutationConflictOptimistic, nil)
 				}
 				if err != nil {
@@ -221,7 +221,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			predicates = append(predicates, authorizationPredicate)
 		}
 		if expected := strings.TrimSpace(commit.OptimisticUpdatedAt()); expected != "" {
-			predicates = append(predicates, query.Equal("updated_at", expected))
+			predicates = append(predicates, query.Equal("updated_at", recordTimestampDBValue(s.RuntimeEngine, expected)))
 		}
 		queryValue, args, buildErr := query.NewWorkspaceDeleteBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Where(query.And(predicates...)).Build()
 		if buildErr != nil {
@@ -331,7 +331,7 @@ func (r RecordStore) applyConditionalUpdateManyTx(ctx context.Context, tx Transa
 	}
 	predicate = query.And(predicate, query.In("id", ids...))
 	builder := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, commit.Object.Key, workspaceID).
-		Set("updated_at", commit.Record.UpdatedAt)
+		Set("updated_at", recordTimestampDBValue(r.store.RuntimeEngine, commit.Record.UpdatedAt))
 	if userID := strings.TrimSpace(commit.Record.UpdateBy); userID != "" {
 		builder.Set("update_by", userID)
 	}
