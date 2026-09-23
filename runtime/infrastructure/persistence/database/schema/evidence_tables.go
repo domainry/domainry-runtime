@@ -5,38 +5,11 @@ import (
 	"fmt"
 )
 
-func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]string, text string) error {
-	workspaceIdentities := prepareWorkspaceScopedIdentities(tables)
+func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]string) error {
+	prepareWorkspaceScopedIdentities(tables)
 	for _, table := range sortedRuntimeSchemaTables(tables) {
 		if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier(table)+" ("+quotedColumnDefinitions(s, tables[table])+")"); err != nil {
 			return fmt.Errorf("create %s: %w", table, err)
-		}
-	}
-	if err := ensureWorkspaceScopedIdentities(ctx, s, workspaceIdentities); err != nil {
-		return err
-	}
-
-	for _, table := range []string{"_automation_runs"} {
-		if _, selected := tables[table]; !selected {
-			continue
-		}
-		if err := s.EnsureRuntimeColumn(ctx, table, "lease_owner", text+" NOT NULL DEFAULT ''"); err != nil {
-			return err
-		}
-	}
-	if _, selected := tables["_automation_runs"]; selected {
-		if err := s.EnsureRuntimeColumn(ctx, "_automation_runs", "fencing_token", "BIGINT NOT NULL DEFAULT 1"); err != nil {
-			return err
-		}
-	}
-	if _, selected := tables["_workflow_executions"]; selected {
-		for column, definition := range map[string]string{
-			"process_id": text, "node_id": text,
-			"lease_owner": text + " NOT NULL DEFAULT ''", "lease_expires_at": text + " NOT NULL DEFAULT ''", "fencing_token": "BIGINT NOT NULL DEFAULT 0",
-		} {
-			if err := s.EnsureRuntimeColumn(ctx, "_workflow_executions", column, definition); err != nil {
-				return err
-			}
 		}
 	}
 	indexes := []struct {
@@ -59,9 +32,8 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		{name: "uniq_action_assurance_token_hash", table: "_action_assurance_grants", columns: []string{"token_hash"}, unique: true},
 		{name: "idx_action_assurance_binding", table: "_action_assurance_grants", columns: []string{"workspace_id", "user_id", "action_key", "object_key", "record_id"}},
 		{name: "idx_action_assurance_expiry", table: "_action_assurance_grants", columns: []string{"expires_at", "consumed_at"}},
-		{name: "uniq_workflow_execution_workspace_id", table: "_workflow_executions", columns: []string{"workspace_id", "id"}, unique: true},
-		{name: "idx_workflow_execution_process", table: "_workflow_executions", columns: []string{"workspace_id", "process_id", "node_id", "status"}},
-		{name: "idx_workflow_execution_operation", table: "_workflow_executions", columns: []string{"workspace_id", "operation_id"}},
+		{name: "idx_workflow_execution_process", table: WorkflowExecutionsTable, columns: []string{"workspace_id", "process_id", "node_id", "status"}},
+		{name: "idx_workflow_execution_operation", table: WorkflowExecutionsTable, columns: []string{"workspace_id", "operation_id"}},
 		{name: "idx_runtime_release_instance_expiry", table: "_release_instances", columns: []string{"lease_expires_at"}},
 		{name: "idx_runtime_release_instance_cohort", table: "_release_instances", columns: []string{"generation", "combination_sha256"}},
 	}

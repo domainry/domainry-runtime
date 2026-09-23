@@ -32,14 +32,8 @@ func runtimeSchemaLedgerQueries(count int64, checksum string, dirty bool) []data
 }
 
 func TestRuntimeSchemaHelpersAndDatabaseSelection(t *testing.T) {
-	versions := SupportedRuntimeSchemaUpgradeVersions()
-	if len(versions) != 15 || versions[0] != "001_connector_runtime_lifecycle" || versions[14] != "028_subject_execution_evidence" || CurrentRuntimeSchemaVersion != "033_foundation_worker_scope_kernel" {
-		t.Fatalf("versions=%#v", versions)
-	}
-	for _, version := range versions {
-		if strings.Contains(version, "directory") || strings.Contains(version, "surface") {
-			t.Fatalf("runtime schema version retains retired Identity vocabulary: %q", version)
-		}
+	if CurrentRuntimeSchemaVersion != "033_foundation_worker_scope_kernel" {
+		t.Fatalf("current schema version=%q", CurrentRuntimeSchemaVersion)
 	}
 	store := runtimeSchemaStore(t, &databaseSQLState{})
 	if store.schemaDatabase() != store.db {
@@ -158,18 +152,6 @@ func TestRuntimeSchemaMutationFailuresAndDefinitions(t *testing.T) {
 	store = runtimeSchemaStore(t, &databaseSQLState{execSteps: []databaseSQLExecStep{{err: errDatabaseSQL}}})
 	if err := store.recordRuntimeSchemaMigration(t.Context(), "version", time.Second); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("record=%v", err)
-	}
-	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: []databaseSQLQueryStep{{closeErr: errDatabaseSQL}}})
-	if err := store.ensureRuntimeColumn(t.Context(), "table", "column", "TEXT"); !errors.Is(err, errDatabaseSQL) {
-		t.Fatalf("close=%v", err)
-	}
-	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: []databaseSQLQueryStep{{err: errDatabaseSQL}}, execSteps: []databaseSQLExecStep{{err: errDatabaseSQL}}})
-	if err := store.ensureRuntimeColumn(t.Context(), "table", "column", "TEXT"); !errors.Is(err, errDatabaseSQL) {
-		t.Fatalf("alter=%v", err)
-	}
-	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: []databaseSQLQueryStep{{err: errDatabaseSQL}}})
-	if err := store.ensureRuntimeColumn(t.Context(), "table", "column", "TEXT"); err != nil {
-		t.Fatal(err)
 	}
 	mysqlStore := &RuntimeStore{engine: mysql.NewEngine()}
 	definition := "TEXT NOT NULL DEFAULT '[]', TEXT NOT NULL DEFAULT '{}', TEXT NOT NULL DEFAULT ''"
@@ -316,31 +298,6 @@ func TestSchemaAssemblerSeamMethods(t *testing.T) {
 	}
 	if err := store.EnsureRateLimitSchema(t.Context()); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestLegacyAuditPrimaryKeyReplacementSQLIsDialectSpecific(t *testing.T) {
-	tests := map[string]string{
-		"postgres": `ALTER TABLE "runtime"."_audit_events" DROP CONSTRAINT "audit_events_pkey", ADD PRIMARY KEY ("workspace_id", "id")`,
-		"mysql":    "ALTER TABLE `runtime`.`_audit_events` DROP PRIMARY KEY, ADD PRIMARY KEY (`workspace_id`, `id`)",
-	}
-	for driver, expected := range tests {
-		t.Run(driver, func(t *testing.T) {
-			table, workspace, id, constraint := `"runtime"."_audit_events"`, `"workspace_id"`, `"id"`, `"audit_events_pkey"`
-			if driver == "mysql" {
-				table, workspace, id, constraint = "`runtime`.`_audit_events`", "`workspace_id`", "`id`", ""
-			}
-			actual, err := legacyAuditPrimaryKeyReplacementSQL(driver, table, workspace, id, constraint)
-			if err != nil || actual != expected {
-				t.Fatalf("statement=%q err=%v", actual, err)
-			}
-		})
-	}
-	if _, err := legacyAuditPrimaryKeyReplacementSQL("postgres", "audit", "workspace", "id", ""); err == nil {
-		t.Fatal("empty Postgres constraint was accepted")
-	}
-	if _, err := legacyAuditPrimaryKeyReplacementSQL("sqlite", "audit", "workspace", "id", ""); err == nil {
-		t.Fatal("SQLite rebuild was incorrectly represented as one ALTER statement")
 	}
 }
 

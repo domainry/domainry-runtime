@@ -22,9 +22,6 @@ func (schemaHelperStore) Placeholder(index int) string        { return "?" }
 func (schemaHelperStore) CreateIndexIfMissing(context.Context, string, string, bool, ...string) error {
 	return nil
 }
-func (schemaHelperStore) EnsureRuntimeColumn(context.Context, string, string, string) error {
-	return nil
-}
 func (schemaHelperStore) RuntimeTableExists(context.Context, string) (bool, error) {
 	return false, nil
 }
@@ -41,7 +38,7 @@ func (schemaHelperStore) RuntimeRenderer() ormdialect.Renderer {
 }
 
 func TestSchemaHelperValueShapes(t *testing.T) {
-	if got := quotedColumnDefinitions(schemaHelperStore{}, []string{"id", "name TEXT NOT NULL"}); got != `"id", "name" normalized:TEXT NOT NULL` {
+	if got := quotedColumnDefinitions(schemaHelperStore{}, []string{"id", "name TEXT NOT NULL", "PRIMARY KEY (workspace_id, id)"}); got != `"id", "name" normalized:TEXT NOT NULL, PRIMARY KEY ("workspace_id", "id")` {
 		t.Fatalf("quoted definitions=%q", got)
 	}
 }

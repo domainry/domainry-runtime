@@ -29,7 +29,6 @@ type Store interface {
 	TableIdentifier(string) string
 	Placeholder(int) string
 	CreateIndexIfMissing(context.Context, string, string, bool, ...string) error
-	EnsureRuntimeColumn(context.Context, string, string, string) error
 	RuntimeTableExists(context.Context, string) (bool, error)
 	ApplicationSchemaIDColumnType() string
 	LocalizedTextKeyColumnType() string
@@ -50,6 +49,10 @@ func sortedRuntimeSchemaTables(tables map[string][]string) []string {
 func quotedColumnDefinitions(store Store, definitions []string) string {
 	quoted := make([]string, 0, len(definitions))
 	for _, definition := range definitions {
+		if constraint, ok := quotedPrimaryKeyConstraint(store, definition); ok {
+			quoted = append(quoted, constraint)
+			continue
+		}
 		parts := strings.SplitN(definition, " ", 2)
 		if len(parts) == 1 {
 			quoted = append(quoted, store.Identifier(parts[0]))
@@ -58,4 +61,17 @@ func quotedColumnDefinitions(store Store, definitions []string) string {
 		quoted = append(quoted, store.Identifier(parts[0])+" "+store.RuntimeColumnDefinition(parts[1]))
 	}
 	return strings.Join(quoted, ", ")
+}
+
+func quotedPrimaryKeyConstraint(store Store, definition string) (string, bool) {
+	definition = strings.TrimSpace(definition)
+	const prefix = "PRIMARY KEY ("
+	if !strings.HasPrefix(strings.ToUpper(definition), prefix) || !strings.HasSuffix(definition, ")") {
+		return "", false
+	}
+	columns := strings.Split(definition[len(prefix):len(definition)-1], ",")
+	for index, column := range columns {
+		columns[index] = store.Identifier(strings.TrimSpace(column))
+	}
+	return "PRIMARY KEY (" + strings.Join(columns, ", ") + ")", true
 }

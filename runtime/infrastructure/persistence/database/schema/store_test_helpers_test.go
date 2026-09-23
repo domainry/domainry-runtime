@@ -48,9 +48,6 @@ func (s *schemaCaptureStore) RuntimeProfile() persistencedriver.EngineProfile {
 	return s.profile
 }
 func (s *schemaCaptureStore) RuntimeRenderer() ormdialect.Renderer { return s.renderer }
-func (*schemaCaptureStore) EnsureRuntimeColumn(context.Context, string, string, string) error {
-	return nil
-}
 func (*schemaCaptureStore) RuntimeTableExists(context.Context, string) (bool, error) {
 	return false, nil
 }

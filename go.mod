@@ -7,25 +7,25 @@ toolchain go1.26.6
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/creack/pty v1.1.24
-	github.com/domainry/domainry-agent v0.1.44
+	github.com/domainry/domainry-agent v0.1.46
 	github.com/domainry/domainry-agent-sdk v0.1.20
-	github.com/domainry/domainry-audit v0.1.16
+	github.com/domainry/domainry-audit v0.1.17
 	github.com/domainry/domainry-audit-sdk v0.1.8
 	github.com/domainry/domainry-connector-sdk v0.1.2
-	github.com/domainry/domainry-data-exchange v0.3.17
+	github.com/domainry/domainry-data-exchange v0.3.18
 	github.com/domainry/domainry-data-exchange-sdk v0.3.9
-	github.com/domainry/domainry-foundation v0.1.35
+	github.com/domainry/domainry-foundation v0.1.36
 	github.com/domainry/domainry-identity v0.2.24
 	github.com/domainry/domainry-identity-sdk v0.1.15
 	github.com/domainry/domainry-integration-sdk v0.1.9
 	github.com/domainry/domainry-lifecycle v0.1.19
 	github.com/domainry/domainry-lifecycle-sdk v0.1.16
-	github.com/domainry/domainry-metadata v0.1.14
+	github.com/domainry/domainry-metadata v0.1.15
 	github.com/domainry/domainry-metadata-sdk v0.1.5
 	github.com/domainry/domainry-monitoring-sdk v0.1.4
 	github.com/domainry/domainry-notification v0.1.10
 	github.com/domainry/domainry-notification-sdk v0.1.6
-	github.com/domainry/domainry-report v0.1.21
+	github.com/domainry/domainry-report v0.1.22
 	github.com/domainry/domainry-report-sdk v0.1.13
 	github.com/domainry/domainry-scheduler-sdk v0.1.12
 	github.com/gin-gonic/gin v1.12.0

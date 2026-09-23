@@ -3,7 +3,6 @@ package migration_test
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -11,27 +10,17 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-func TestRuntimeSchemaMigrationBacksUpExistingDataAndRecordsVersion(t *testing.T) {
+func TestFreshRuntimeSchemaRecordsCurrentVersion(t *testing.T) {
 	tempDir := t.TempDir()
-	cfg := config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(tempDir, "runtime.db"), MigrationDir: filepath.Join(tempDir, "none"), MigrationBackupDir: filepath.Join(tempDir, "backups")}
+	cfg := config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(tempDir, "runtime.db"), MigrationDir: filepath.Join(tempDir, "none")}
 	store, err := OpenContext(t.Context(), cfg)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.DB().ExecContext(t.Context(), "CREATE TABLE customer (id TEXT PRIMARY KEY)"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.DB().ExecContext(t.Context(), "INSERT INTO customer (id) VALUES (?)", "existing"); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	entries, err := os.ReadDir(cfg.MigrationBackupDir)
-	if err != nil || len(entries) != 1 {
-		t.Fatalf("runtime schema backups=%v error=%v", entries, err)
-	}
 	var applied int
 	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _schema_migrations WHERE path = ?", "runtime_schema_"+CurrentRuntimeSchemaVersion).Scan(&applied); err != nil {
 		t.Fatal(err)

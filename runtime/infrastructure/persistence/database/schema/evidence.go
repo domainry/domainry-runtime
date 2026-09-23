@@ -40,9 +40,9 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 			"joined_at " + text + " NOT NULL",
 			"heartbeat_at " + text + " NOT NULL",
 		},
-		"_workflow_executions": {
+		WorkflowExecutionsTable: {
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
-			"id " + text + " NOT NULL",
+			"id " + text + " PRIMARY KEY",
 			"operation_id " + text + " NOT NULL DEFAULT ''",
 			"workflow_key " + text + " NOT NULL",
 			"name TEXT NOT NULL",
@@ -151,7 +151,7 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 		},
 	}
 	if !capabilities.Workflow {
-		delete(tables, "_workflow_executions")
+		delete(tables, WorkflowExecutionsTable)
 	}
 	if !capabilities.Automation {
 		delete(tables, "_automation_runs")
@@ -160,5 +160,5 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 		delete(tables, "_release_cohorts")
 		delete(tables, "_release_instances")
 	}
-	return ensureEvidenceTables(ctx, s, tables, text)
+	return ensureEvidenceTables(ctx, s, tables)
 }

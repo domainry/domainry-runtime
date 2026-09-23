@@ -110,9 +110,8 @@ func (r *schemaSQLRows) Next(values []driver.Value) error {
 }
 
 type scriptedSchemaStore struct {
-	db        *sql.DB
-	ensureErr error
-	driver    string
+	db     *sql.DB
+	driver string
 }
 
 func (s scriptedSchemaStore) SchemaDB() SQLDatabase { return s.db }
@@ -128,9 +127,6 @@ func (scriptedSchemaStore) TableIdentifier(value string) string { return `"` + v
 func (scriptedSchemaStore) Placeholder(int) string              { return "?" }
 func (scriptedSchemaStore) CreateIndexIfMissing(context.Context, string, string, bool, ...string) error {
 	return nil
-}
-func (s scriptedSchemaStore) EnsureRuntimeColumn(context.Context, string, string, string) error {
-	return s.ensureErr
 }
 func (s scriptedSchemaStore) RuntimeTableExists(ctx context.Context, table string) (bool, error) {
 	var count int

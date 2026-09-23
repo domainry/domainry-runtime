@@ -6,9 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
-	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
-	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/sqlite"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -56,54 +53,6 @@ func TestMigrationStatusClassificationsAndVersionBounds(t *testing.T) {
 				t.Fatalf("status=%#v err=%v", status, err)
 			}
 		})
-	}
-}
-
-func TestWorkspaceScopeInventoryAndValidationFailures(t *testing.T) {
-	for _, engine := range []databaseEngine{sqlite.NewEngine(), mysql.NewEngine(), postgres.NewEngine()} {
-		store := runtimeSchemaStore(t, &databaseSQLState{})
-		store.engine = engine
-		if tables, err := store.inventoryWorkspaceTables(t.Context(), store.db); err != nil || len(tables) != 0 {
-			t.Fatalf("engine=%s tables=%#v err=%v", engine.Name(), tables, err)
-		}
-	}
-	for _, step := range []databaseSQLQueryStep{
-		{err: errDatabaseSQL},
-		{columns: []string{"table"}, rows: [][]driver.Value{{nil}}},
-		{columns: []string{"table"}, nextErr: errDatabaseSQL},
-	} {
-		store := runtimeSchemaStore(t, &databaseSQLState{querySteps: []databaseSQLQueryStep{step}})
-		if _, err := store.inventoryWorkspaceTables(t.Context(), store.db); err == nil {
-			t.Fatal("expected inventory error")
-		}
-	}
-	store := runtimeSchemaStore(t, &databaseSQLState{querySteps: []databaseSQLQueryStep{
-		{columns: []string{"table"}, rows: [][]driver.Value{{"records"}}},
-		{err: errDatabaseSQL},
-	}})
-	if err := store.ValidateLegacyWorkspaceScopes(t.Context()); !errors.Is(err, errDatabaseSQL) {
-		t.Fatalf("query error=%v", err)
-	}
-	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: []databaseSQLQueryStep{
-		{columns: []string{"table"}, rows: [][]driver.Value{{"records"}}},
-		{columns: []string{"workspace", "count"}, rows: [][]driver.Value{{nil, int64(1)}}},
-	}})
-	if err := store.ValidateLegacyWorkspaceScopes(t.Context()); err == nil {
-		t.Fatal("scan error was ignored")
-	}
-	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: []databaseSQLQueryStep{
-		{columns: []string{"table"}, rows: [][]driver.Value{{"records"}}},
-		{columns: []string{"workspace", "count"}, nextErr: errDatabaseSQL},
-	}})
-	if err := store.ValidateLegacyWorkspaceScopes(t.Context()); !errors.Is(err, errDatabaseSQL) {
-		t.Fatalf("close error=%v", err)
-	}
-	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: []databaseSQLQueryStep{
-		{columns: []string{"table"}, rows: [][]driver.Value{{"records"}}},
-		{columns: []string{"workspace", "count"}, rows: [][]driver.Value{{"", int64(2)}}},
-	}})
-	if err := store.ValidateLegacyWorkspaceScopes(t.Context()); err == nil || !strings.Contains(err.Error(), "row_count=2") {
-		t.Fatalf("finding error=%v", err)
 	}
 }
 

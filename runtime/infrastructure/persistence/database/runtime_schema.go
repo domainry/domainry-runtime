@@ -4,15 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 
-	auditmodulehost "github.com/domainry/domainry-audit-sdk/modulehost"
 	auditmodule "github.com/domainry/domainry-audit/module"
 	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
@@ -55,10 +52,6 @@ const (
 	managedDatabaseCohortTable           = "_domainry_managed_runtime_database_cohort"
 	managedDatabaseCohortContractVersion = "domainry-managed-runtime-database-cohort-v1"
 )
-
-func SupportedRuntimeSchemaUpgradeVersions() []string {
-	return []string{"001_connector_runtime_lifecycle", "002_data_lifecycle_governance", "003_operations_reliability", "004_runtime_release_cohort", "007_identity_global_names", "008_identity_account_projection", "009_managed_database_cohort", "010_external_identity_ownership", "011_notification_service_publication_outbox", "012_rate_limit_schema_owner", "013_agent_schema_owner", "021_workspace_only_foundation", "024_application_time_zone", "026_workflow_route_steps", "028_subject_execution_evidence"}
-}
 
 func (s *RuntimeStore) EnsureRuntimeSchema(ctx context.Context) error {
 	return s.EnsureRuntimeSchemaFor(ctx, FullRuntimeSchemaCapabilities())
@@ -120,19 +113,10 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 	if !pending {
 		return nil
 	}
-	if err := s.ValidateLegacyWorkspaceScopes(ctx); err != nil {
-		return err
-	}
-	if err := s.ensureMigrationBackupForExistingData(ctx, s.runtimeMigrationConfig()); err != nil {
-		return err
-	}
 	if err := s.startRuntimeSchemaMigrationFor(ctx, CurrentRuntimeSchemaVersion, checksum); err != nil {
 		return err
 	}
 	if err := s.ensureManagedDatabaseCohortMarker(ctx); err != nil {
-		return err
-	}
-	if err := s.ensureWorkspaceV3AuthorityColumns(ctx); err != nil {
 		return err
 	}
 	if err := runtimeschema.EnsureWorkspaceProvisioningSchema(ctx, s); err != nil {
@@ -166,43 +150,10 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 	return nil
 }
 
-func (s *RuntimeStore) ensureWorkspaceV3AuthorityColumns(ctx context.Context) error {
-	exists, err := s.RuntimeTableExists(ctx, "_workspaces")
-	if errors.Is(err, sql.ErrNoRows) {
-		exists, err = false, nil
-	}
-	if err != nil || !exists {
-		return err
-	}
-	if err := s.ensureRuntimeColumn(ctx, "_workspaces", "initial_installation_identity", "TEXT NULL"); err != nil {
-		return err
-	}
-	return s.ensureRuntimeColumn(ctx, "_workspaces", "revision", "INTEGER NOT NULL DEFAULT 1")
-}
-
 func (s *RuntimeStore) ensureAuditModuleSchemaLocked(ctx context.Context) error {
-	exists, err := s.RuntimeTableExists(ctx, "_audit_events")
-	if errors.Is(err, sql.ErrNoRows) {
-		exists, err = false, nil
-	}
-	if err != nil {
-		return fmt.Errorf("inspect legacy Audit schema: %w", err)
-	}
-	if exists {
-		rows, columnErr := s.schemaDatabase().QueryContext(ctx, "SELECT "+s.identifier("workspace_id")+" FROM "+s.tableIdentifier("_audit_events")+" WHERE 1 = 0")
-		if columnErr != nil {
-			return fmt.Errorf("legacy Audit workspace ownership is missing; initialize and adjudicate a real tenant before migration: %w", columnErr)
-		}
-		_ = rows.Close()
-	}
 	migrations, err := auditmodule.SchemaMigrations(s.RuntimeRenderer(), s.Driver())
 	if err != nil {
 		return err
-	}
-	if len(migrations) > 0 {
-		if err := s.migrateLegacyAuditPrimaryKey(ctx, migrations[0]); err != nil {
-			return err
-		}
 	}
 	values := make([]ormmigration.Migration, len(migrations))
 	for index, migration := range migrations {
@@ -222,88 +173,6 @@ func (s *RuntimeStore) ensureAuditModuleSchemaLocked(ctx context.Context) error 
 		}
 	}
 	return s.applyOwnedMigrationsLocked(ctx, "audit", values)
-}
-
-func (s *RuntimeStore) migrateLegacyAuditPrimaryKey(ctx context.Context, migration auditmodulehost.SchemaMigration) error {
-	if migration.Baseline == nil || len(migration.Baseline.Tables) != 1 || len(migration.Statements) == 0 {
-		return nil
-	}
-	actual, exists, err := s.inspectModuleSchemaTable(ctx, "_audit_events")
-	if err != nil || !exists {
-		return err
-	}
-	primary := map[string]bool{}
-	for _, column := range actual.columns {
-		primary[column.name] = column.primaryKey
-	}
-	if primary["workspace_id"] || !primary["id"] {
-		return nil
-	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin legacy Audit primary-key migration: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	table := s.TableIdentifier("_audit_events")
-	workspace := s.Identifier("workspace_id")
-	id := s.Identifier("id")
-	switch strings.ToLower(strings.TrimSpace(s.Driver())) {
-	case "sqlite", "sqlite3":
-		legacyName := "_audit_events_legacy_global_key"
-		legacy := s.TableIdentifier(legacyName)
-		if _, err := tx.ExecContext(ctx, "ALTER TABLE "+table+" RENAME TO "+s.Identifier(legacyName)); err != nil {
-			return fmt.Errorf("rename legacy Audit table: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, migration.Statements[0]); err != nil {
-			return fmt.Errorf("create source-owned Audit table: %w", err)
-		}
-		columns := make([]string, 0, len(migration.Baseline.Tables[0].Columns))
-		for _, column := range migration.Baseline.Tables[0].Columns {
-			columns = append(columns, s.Identifier(column.Name))
-		}
-		projection := strings.Join(columns, ", ")
-		if _, err := tx.ExecContext(ctx, "INSERT INTO "+table+" ("+projection+") SELECT "+projection+" FROM "+legacy); err != nil {
-			return fmt.Errorf("copy legacy Audit rows: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, "DROP TABLE "+legacy); err != nil {
-			return fmt.Errorf("drop retired Audit table: %w", err)
-		}
-	case "postgres", "postgresql", "pgx":
-		var constraint string
-		queryValue := "SELECT constraint_name FROM information_schema.table_constraints WHERE table_schema = current_schema() AND table_name = '_audit_events' AND constraint_type = 'PRIMARY KEY'"
-		if err := tx.QueryRowContext(ctx, queryValue).Scan(&constraint); err != nil {
-			return fmt.Errorf("inspect legacy Audit primary key: %w", err)
-		}
-		statement, _ := legacyAuditPrimaryKeyReplacementSQL(s.Driver(), table, workspace, id, s.Identifier(constraint))
-		if _, err := tx.ExecContext(ctx, statement); err != nil {
-			return fmt.Errorf("replace legacy Audit primary key: %w", err)
-		}
-	case "mysql":
-		statement, _ := legacyAuditPrimaryKeyReplacementSQL(s.Driver(), table, workspace, id, "")
-		if _, err := tx.ExecContext(ctx, statement); err != nil {
-			return fmt.Errorf("replace legacy Audit primary key: %w", err)
-		}
-	default:
-		return fmt.Errorf("unsupported legacy Audit migration driver %q", s.Driver())
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit legacy Audit primary-key migration: %w", err)
-	}
-	return nil
-}
-
-func legacyAuditPrimaryKeyReplacementSQL(driver, table, workspace, id, constraint string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(driver)) {
-	case "postgres", "postgresql", "pgx":
-		if strings.TrimSpace(constraint) == "" {
-			return "", fmt.Errorf("Postgres legacy Audit primary-key constraint is empty")
-		}
-		return "ALTER TABLE " + table + " DROP CONSTRAINT " + constraint + ", ADD PRIMARY KEY (" + workspace + ", " + id + ")", nil
-	case "mysql":
-		return "ALTER TABLE " + table + " DROP PRIMARY KEY, ADD PRIMARY KEY (" + workspace + ", " + id + ")", nil
-	default:
-		return "", fmt.Errorf("unsupported legacy Audit primary-key replacement driver %q", driver)
-	}
 }
 
 func (s *RuntimeStore) runtimeMigrationStore() *RuntimeStore {
@@ -571,7 +440,7 @@ func currentRuntimeSchemaChecksum(selected ...RuntimeSchemaCapabilities) string 
 		capabilities = selected[0]
 	}
 	capabilityIdentity := fmt.Sprintf("workflow=%t,automation=%t,uploads=%t,lifecycle=%t,release_coordination=%t", capabilities.Workflow, capabilities.Automation, capabilities.Uploads, capabilities.Lifecycle, capabilities.ReleaseCoordination)
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":project_model_projection,object_fields,record_data,evidence,lifecycle,operations,foundation_operations_kernel,foundation_artifact_kernel,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_only_provisioning,workspace_commercial_configuration_in_aggregate,workspace_provisioning_in_operations,workspace_administration_in_operations,report_export_prepare_in_operations,dispatch_callbacks_in_operations,upload_subject_bindings_in_artifact_bindings,database_retirements_in_operations,workflow_route_steps,subject_execution_evidence_fences_receipts,native_capabilities=" + capabilityIdentity))
+	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":project_model_projection,object_fields,record_data,evidence,lifecycle,operations,foundation_operations_kernel,foundation_artifact_kernel,indexes,_release_cohorts,_release_instances,managed_database_cohort,external_identity_ownership,rate_limit,module_migrations,workspace_only_provisioning,workspace_commercial_configuration_in_aggregate,workspace_provisioning_in_operations,workspace_administration_in_operations,report_export_prepare_in_operations,dispatch_callbacks_in_operations,upload_subject_bindings_in_artifact_bindings,database_retirements_in_operations,workflow_route_steps,workflow_composite_primary_keys,workflow_source_ownership,subject_execution_evidence_fences_receipts,native_capabilities=" + capabilityIdentity))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -663,19 +532,6 @@ func (s *RuntimeStore) InstallationIdentity(ctx context.Context) (string, error)
 		return "", fmt.Errorf("Runtime installation identity is invalid")
 	}
 	return identity, nil
-}
-
-func (s *RuntimeStore) ensureRuntimeColumn(ctx context.Context, table, column, definition string) error {
-	db := s.schemaDatabase()
-	rows, err := db.QueryContext(ctx, "SELECT "+column+" FROM "+s.tableIdentifier(table)+" WHERE 1 = 0")
-	if err == nil {
-		return rows.Close()
-	}
-	definition = s.runtimeColumnDefinition(definition)
-	if _, alterErr := db.ExecContext(ctx, "ALTER TABLE "+s.tableIdentifier(table)+" ADD COLUMN "+s.identifier(column)+" "+definition); alterErr != nil {
-		return fmt.Errorf("add %s.%s: %w", table, column, alterErr)
-	}
-	return nil
 }
 
 func (s *RuntimeStore) runtimeColumnDefinition(definition string) string {

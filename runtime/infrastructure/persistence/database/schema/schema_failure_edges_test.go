@@ -50,13 +50,6 @@ func (s *schemaFaultStore) CreateIndexIfMissing(ctx context.Context, table, inde
 	return s.Store.CreateIndexIfMissing(ctx, table, index, unique, columns...)
 }
 
-func (s *schemaFaultStore) EnsureRuntimeColumn(ctx context.Context, table, column, definition string) error {
-	if s.fail() {
-		return errSchemaMutationFault
-	}
-	return s.Store.EnsureRuntimeColumn(ctx, table, column, definition)
-}
-
 func (s *schemaFaultStore) fail() bool {
 	s.step++
 	return s.step == s.failAt

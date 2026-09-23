@@ -75,10 +75,6 @@ func (s *RuntimeStore) CreateIndexIfMissing(ctx context.Context, table, index st
 	return runtimeschema.CreateIndexIfMissing(ctx, s, table, index, unique, columns...)
 }
 
-func (s *RuntimeStore) EnsureRuntimeColumn(ctx context.Context, table, column, definition string) error {
-	return s.ensureRuntimeColumn(ctx, table, column, definition)
-}
-
 func (s *RuntimeStore) ApplicationSchemaIDColumnType() string { return s.metadataIDColumnType() }
 func (s *RuntimeStore) RuntimeTableExists(ctx context.Context, table string) (bool, error) {
 	base := s.sqlBase()
