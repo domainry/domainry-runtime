@@ -10,6 +10,7 @@ import (
 	shareddefinition "github.com/domainry/domainry-foundation/definition"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-foundation/schemaownership"
+	integrationmodule "github.com/domainry/domainry-integration/module"
 	lifecyclemodule "github.com/domainry/domainry-lifecycle/module"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	notificationmodule "github.com/domainry/domainry-notification/module"
@@ -62,6 +63,15 @@ func TestLifecycleModuleInstallsItsOwnCanonicalSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertSourceOwnedModuleSchema(t, store, "Lifecycle", lifecyclemodule.MigrationOwner, "_lifecycle_%", migrations, lifecyclemodule.SchemaOwnership())
+}
+
+func TestIntegrationModuleInstallsItsOwnCanonicalSchema(t *testing.T) {
+	store := openModuleMigrationStore(t)
+	migrations, err := integrationmodule.SchemaMigrations(store.Driver(), store.DatabaseSchema())
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSourceOwnedModuleSchema(t, store, "Integration", integrationmodule.MigrationOwner, "_integration_%", migrations, integrationmodule.SchemaOwnership())
 }
 
 func assertSourceOwnedModuleSchema(t *testing.T, store *RuntimeStore, moduleName, owner, tablePattern string, migrations []modulehost.SchemaMigration, ownership []schemaownership.Table) {
