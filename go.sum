@@ -48,6 +48,8 @@ github.com/dlclark/regexp2 v1.11.0 h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxK
 github.com/dlclark/regexp2 v1.11.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
 github.com/domainry/domainry-agent v0.1.37 h1:Q7FlwM9Zp2yEiqg1+b7OLZDQ8vMjh6viqB7Dm/E/o2w=
 github.com/domainry/domainry-agent v0.1.37/go.mod h1:ek0Bd+f+fDAtP4Uws+G4YSuTirHc0bWIj6bmlknPMLM=
+github.com/domainry/domainry-agent v0.1.38 h1:kiTScjpWBpEmOgVKsGidq9pcifFcVHawAHm6ruiCqAI=
+github.com/domainry/domainry-agent v0.1.38/go.mod h1:ek0Bd+f+fDAtP4Uws+G4YSuTirHc0bWIj6bmlknPMLM=
 github.com/domainry/domainry-agent-sdk v0.1.20 h1:PPnnpYOwgKcyBNKKoQev73h1EO7jgtUr2kqEab5HInQ=
 github.com/domainry/domainry-agent-sdk v0.1.20/go.mod h1:n3VEOsKeal2WKfKJ/gYhFM+7y03blkUeZ+1FSD2gbeM=
 github.com/domainry/domainry-audit v0.1.16 h1:6Qyq5uMxVLyH8UWHFfYCF03pkwJL2DYKoTJFlHQkKb4=
