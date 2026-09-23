@@ -20,8 +20,8 @@ require (
 	github.com/domainry/domainry-integration v0.1.25
 	github.com/domainry/domainry-integration-sdk v0.1.9
 	github.com/domainry/domainry-knowledge v0.1.10
-	github.com/domainry/domainry-lifecycle v0.1.20
-	github.com/domainry/domainry-lifecycle-sdk v0.1.16
+	github.com/domainry/domainry-lifecycle v0.1.21
+	github.com/domainry/domainry-lifecycle-sdk v0.1.17
 	github.com/domainry/domainry-metadata v0.1.16
 	github.com/domainry/domainry-metadata-sdk v0.1.5
 	github.com/domainry/domainry-monitoring-sdk v0.1.4
@@ -29,7 +29,7 @@ require (
 	github.com/domainry/domainry-notification-sdk v0.1.6
 	github.com/domainry/domainry-report v0.1.23
 	github.com/domainry/domainry-report-sdk v0.1.13
-	github.com/domainry/domainry-scheduler v0.1.22
+	github.com/domainry/domainry-scheduler v0.1.23
 	github.com/domainry/domainry-scheduler-sdk v0.1.12
 	github.com/domainry/domainry-todo v0.1.5
 	github.com/gin-gonic/gin v1.12.0

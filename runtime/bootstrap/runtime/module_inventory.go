@@ -73,8 +73,8 @@ func (runtime *Runtime) ModuleInventory() (moduleinfo.Inventory, error) {
 		if d.Capabilities.UploadArtifacts {
 			capabilities = append(capabilities, "upload_artifacts")
 		}
-		if d.Capabilities.ArchiveEvidence {
-			capabilities = append(capabilities, "archive_evidence")
+		if d.Capabilities.ArchiveInspection {
+			capabilities = append(capabilities, "archive_inspection")
 		}
 		add("lifecycle", string(d.Mode), capabilities, binding)
 	}
