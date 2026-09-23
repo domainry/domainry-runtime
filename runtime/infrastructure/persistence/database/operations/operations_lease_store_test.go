@@ -1,7 +1,9 @@
 package operations
 
 import (
+	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +39,13 @@ func TestOperationsLeaseSnapshotReportsOnlyTargetInstance(t *testing.T) {
 	}
 	if snapshot.Live != 1 || snapshot.Expired != 1 || len(snapshot.Owners) != 1 || snapshot.Owners[0].Owner != "idempotency_cleanup" {
 		t.Fatalf("snapshot=%#v", snapshot)
+	}
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "table") || strings.Contains(string(raw), "_worker_scopes") {
+		t.Fatalf("lease recovery response leaked physical storage: %s", raw)
 	}
 	operations := NewOperationsStore(store)
 	released, changed, err := operations.ForceReleaseOperationsLease(t.Context(), operationsmodel.OperationsLeaseReleaseRequest{Owner: "idempotency_cleanup", ResourceID: "expired", ExpectedLeaseOwner: "instance-a:cleanup", ExpectedFencingToken: 2, Now: now})

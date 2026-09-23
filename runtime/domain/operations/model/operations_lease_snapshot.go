@@ -4,7 +4,6 @@ import "time"
 
 type OperationsLeaseCount struct {
 	Owner   string `json:"owner"`
-	Table   string `json:"table"`
 	Live    int64  `json:"live"`
 	Expired int64  `json:"expired"`
 }

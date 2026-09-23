@@ -53,7 +53,7 @@ func (s OperationsStore) OperationsLeaseSnapshot(ctx context.Context, instanceID
 			continue
 		}
 		snapshot.Live, snapshot.Expired = snapshot.Live+live, snapshot.Expired+expired
-		snapshot.Owners = append(snapshot.Owners, operationsmodel.OperationsLeaseCount{Owner: spec.owner, Table: spec.table, Live: live, Expired: expired})
+		snapshot.Owners = append(snapshot.Owners, operationsmodel.OperationsLeaseCount{Owner: spec.owner, Live: live, Expired: expired})
 	}
 	return snapshot, nil
 }
