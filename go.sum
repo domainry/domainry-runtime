@@ -54,6 +54,8 @@ github.com/domainry/domainry-agent v0.1.34 h1:lhV6xZtWmzjjSQqD+FvOLaDtrOxsaJUTW/
 github.com/domainry/domainry-agent v0.1.34/go.mod h1:ek0Bd+f+fDAtP4Uws+G4YSuTirHc0bWIj6bmlknPMLM=
 github.com/domainry/domainry-agent v0.1.35 h1:ZHodUJGFgkaMIygL1kpn1+2M+MBzyZ3TGv/TUc8yT+4=
 github.com/domainry/domainry-agent v0.1.35/go.mod h1:ek0Bd+f+fDAtP4Uws+G4YSuTirHc0bWIj6bmlknPMLM=
+github.com/domainry/domainry-agent v0.1.36 h1:xB6odKC68ccloJ5S9KFsLdA1uUhwtmBbDTbfMAqC3Eo=
+github.com/domainry/domainry-agent v0.1.36/go.mod h1:ek0Bd+f+fDAtP4Uws+G4YSuTirHc0bWIj6bmlknPMLM=
 github.com/domainry/domainry-agent-sdk v0.1.20 h1:PPnnpYOwgKcyBNKKoQev73h1EO7jgtUr2kqEab5HInQ=
 github.com/domainry/domainry-agent-sdk v0.1.20/go.mod h1:n3VEOsKeal2WKfKJ/gYhFM+7y03blkUeZ+1FSD2gbeM=
 github.com/domainry/domainry-audit v0.1.16 h1:6Qyq5uMxVLyH8UWHFfYCF03pkwJL2DYKoTJFlHQkKb4=
