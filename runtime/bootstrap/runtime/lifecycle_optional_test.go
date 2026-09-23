@@ -62,7 +62,10 @@ func TestMinimalCRUDCompositionDoesNotInstallUnselectedCapabilityTables(t *testi
 		"_automation_runs":                 true,
 		"_subject_evidence_erasure_fences": true, "_subject_evidence_erasure_receipts": true,
 	}
-	core := map[string]bool{"_audit_events": false, "_operations": false, "_artifacts": false, "_artifact_bindings": false}
+	core := map[string]bool{
+		"_audit_events": false, "_operations": false, "_artifacts": false, "_artifact_bindings": false,
+		"_definitions": false, "_definition_versions": false, "_metadata_localized_texts": false,
+	}
 	for rows.Next() {
 		var table string
 		if err := rows.Scan(&table); err != nil {
