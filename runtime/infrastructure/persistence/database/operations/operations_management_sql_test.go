@@ -109,7 +109,11 @@ func controlFixture(now time.Time) operationsmodel.OperationsControl {
 }
 
 func controlQueryStep(control operationsmodel.OperationsControl) operationsSQLQueryStep {
-	return operationsSQLQueryStep{columns: operationsControlColumns(), rows: [][]driver.Value{{control.SystemPurpose, string(control.Kind), control.Owner, string(control.State), control.Reason, control.Reference, control.UpdatedBy, control.Revision, control.UpdatedAt.Format(time.RFC3339Nano)}}}
+	return operationsSQLQueryStep{columns: operationsControlTestColumns(), rows: [][]driver.Value{{control.SystemPurpose, string(control.Kind), control.Owner, string(control.State), control.Reason, control.Reference, control.UpdatedBy, control.Revision, control.UpdatedAt.Format(time.RFC3339Nano)}}}
+}
+
+func operationsControlTestColumns() []string {
+	return []string{"system_purpose", "control_kind", "owner", "state", "reason", "reference", "updated_by", "revision", "updated_at"}
 }
 
 func TestOperationsControlSQLStages(t *testing.T) {
@@ -141,11 +145,11 @@ func TestOperationsControlSQLStages(t *testing.T) {
 	if _, err := store.ListOperationsControls(t.Context(), control.SystemPurpose, control.Kind, 0); !errors.Is(err, errOperationsSQL) {
 		t.Fatalf("zero-limit list error=%v", err)
 	}
-	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{{columns: operationsControlColumns(), rows: [][]driver.Value{{"short"}}}}})
+	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{{columns: operationsControlTestColumns(), rows: [][]driver.Value{{"short"}}}}})
 	if _, err := store.ListOperationsControls(t.Context(), control.SystemPurpose, "", 10); err == nil {
 		t.Fatal("scan failure swallowed")
 	}
-	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{{columns: operationsControlColumns(), nextErr: errOperationsSQL}}})
+	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{{columns: operationsControlTestColumns(), nextErr: errOperationsSQL}}})
 	if _, err := store.ListOperationsControls(t.Context(), control.SystemPurpose, "", 10); !errors.Is(err, errOperationsSQL) {
 		t.Fatalf("terminal error=%v", err)
 	}
@@ -172,7 +176,8 @@ func TestOperationsControlSQLStages(t *testing.T) {
 	}
 	row := controlQueryStep(control).rows[0]
 	row[8] = "invalid"
-	if _, err := operationsScanControl(scannerValues(row)); err == nil {
+	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{{columns: operationsControlTestColumns(), rows: [][]driver.Value{row}}}})
+	if _, _, err := store.GetOperationsControl(t.Context(), control.SystemPurpose, control.Kind, control.Owner); err == nil {
 		t.Fatal("invalid control time accepted")
 	}
 }

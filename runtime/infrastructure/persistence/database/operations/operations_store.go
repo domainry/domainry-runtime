@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
-	"github.com/domainry/domainry-orm/query"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
@@ -54,9 +54,19 @@ func (s OperationsStore) database() *sql.DB {
 	return s.store.DB()
 }
 
+func (s OperationsStore) ledger() (*sharedoperation.SQLStore, error) {
+	if s.database() == nil || s.store == nil {
+		return nil, fmt.Errorf("operations store unavailable")
+	}
+	return sharedoperation.NewSQLStore(s.database(), s.store.SQLRenderer), nil
+}
+
+type operationsScanner interface{ Scan(...any) error }
+
 func (s OperationsStore) RegisterOperationsCommand(ctx context.Context, receipt operationsmodel.OperationsReceipt) (operationsmodel.OperationsReceipt, operationsmodel.OperationsSubmissionDecision, error) {
-	if s.database() == nil {
-		return operationsmodel.OperationsReceipt{}, "", fmt.Errorf("operations store unavailable")
+	ledger, err := s.ledger()
+	if err != nil {
+		return operationsmodel.OperationsReceipt{}, "", err
 	}
 	if err := workerplatform.CheckFault(ctx, s.faults, workerplatform.FaultTransactionBeforeBegin); err != nil {
 		return operationsmodel.OperationsReceipt{}, "", err
@@ -69,31 +79,17 @@ func (s OperationsStore) RegisterOperationsCommand(ctx context.Context, receipt 
 	if err := workerplatform.CheckFault(ctx, s.faults, workerplatform.FaultTransactionAfterBegin); err != nil {
 		return operationsmodel.OperationsReceipt{}, "", err
 	}
-	values := operationsReceiptValues(receipt)
-	columns := operationsReceiptColumns()
-	var queryValue string
-	var args []any
-	if workspaceID, err := principalmodel.NewWorkspaceID(receipt.Command.Scope.WorkspaceID); err == nil {
-		insertColumns := append(append([]string{}, columns[:1]...), columns[2:]...)
-		insertValues := append(append([]any{}, values[:1]...), values[2:]...)
-		builder, buildErr := s.store.SubjectEvidenceInsertBuilder(workspaceID.String(), "_operations", insertColumns, insertValues)
-		if buildErr != nil {
-			return operationsmodel.OperationsReceipt{}, "", buildErr
-		}
-		queryValue, args, err = builder.Build()
-		if err != nil {
-			return operationsmodel.OperationsReceipt{}, "", err
-		}
-	} else {
-		queryValue, args, err = query.NewInsertBuilder(s.store.SQLRenderer, "_operations").Columns(columns...).Values(values...).Build()
-		if err != nil {
+	if workspaceID, workspaceErr := principalmodel.NewWorkspaceID(receipt.Command.Scope.WorkspaceID); workspaceErr == nil {
+		if err := s.store.GuardSubjectEvidenceWrite(ctx, tx, workspaceID.String(), sharedoperation.TableName,
+			[]string{"id", "owner", "resource_type", "resource_id", "requested_by"},
+			[]any{receipt.Command.ID, receipt.Command.Owner, receipt.Command.Scope.ResourceType, receipt.Command.Scope.ResourceID, receipt.Command.RequestedBy}); err != nil {
 			return operationsmodel.OperationsReceipt{}, "", err
 		}
 	}
 	if err := workerplatform.CheckFault(ctx, s.faults, workerplatform.FaultTransactionBeforeWrite); err != nil {
 		return operationsmodel.OperationsReceipt{}, "", err
 	}
-	result, err := tx.ExecContext(ctx, queryValue, args...)
+	inserted, err := ledger.InsertRecord(sharedoperation.WithExecutor(ctx, tx), operationsRecord(receipt))
 	if err != nil {
 		_ = tx.Rollback()
 		if replay, replayFound, replayErr := s.GetOperationsReceiptByKey(ctx, receipt.Command.Scope, receipt.Command.Kind, receipt.Command.IdempotencyKey); replayErr == nil && replayFound {
@@ -101,9 +97,7 @@ func (s OperationsStore) RegisterOperationsCommand(ctx context.Context, receipt 
 		}
 		return operationsmodel.OperationsReceipt{}, "", err
 	}
-	if affected, err := result.RowsAffected(); err != nil {
-		return operationsmodel.OperationsReceipt{}, "", err
-	} else if affected != 1 {
+	if !inserted {
 		return operationsmodel.OperationsReceipt{}, "", fmt.Errorf("runtime.subject_erased")
 	}
 	if err := workerplatform.CheckFault(ctx, s.faults, workerplatform.FaultTransactionAfterWrite); err != nil {
@@ -122,155 +116,150 @@ func (s OperationsStore) RegisterOperationsCommand(ctx context.Context, receipt 
 }
 
 func (s OperationsStore) GetOperationsReceipt(ctx context.Context, scope operationsmodel.OperationsScope, id string) (operationsmodel.OperationsReceipt, bool, error) {
-	if s.database() == nil {
-		return operationsmodel.OperationsReceipt{}, false, fmt.Errorf("operations store unavailable")
+	filter, err := operationsRecordFilter(scope)
+	if err != nil {
+		return operationsmodel.OperationsReceipt{}, false, err
 	}
-	return s.get(ctx, s.database(), scope, strings.TrimSpace(id), "", "")
+	filter.ID = strings.TrimSpace(id)
+	return s.getRecord(ctx, filter)
 }
 
 func (s OperationsStore) GetOperationsReceiptByKey(ctx context.Context, scope operationsmodel.OperationsScope, kind, key string) (operationsmodel.OperationsReceipt, bool, error) {
-	if s.database() == nil {
-		return operationsmodel.OperationsReceipt{}, false, fmt.Errorf("operations store unavailable")
+	filter, err := operationsRecordFilter(scope)
+	if err != nil {
+		return operationsmodel.OperationsReceipt{}, false, err
 	}
-	return s.get(ctx, s.database(), scope, "", strings.TrimSpace(kind), strings.TrimSpace(key))
+	filter.Kind, filter.IdempotencyKey = strings.TrimSpace(kind), strings.TrimSpace(key)
+	return s.getRecord(ctx, filter)
 }
 
 func (s OperationsStore) ListOperationsReceipts(ctx context.Context, scope operationsmodel.OperationsScope, status operationsmodel.OperationsStatus, limit int) ([]operationsmodel.OperationsReceipt, error) {
-	if s.database() == nil {
-		return nil, fmt.Errorf("operations store unavailable")
-	}
-	workspaceID, predicate, err := operationsScopePredicate(scope)
+	ledger, err := s.ledger()
 	if err != nil {
 		return nil, err
 	}
-	if status != "" {
-		predicate = combineOperationsPredicate(predicate, query.Equal("status", string(status)))
-	}
-	builder := operationsSelectBuilder(s.store, workspaceID).Columns(operationsReceiptColumns()...).Where(predicate).OrderBy(query.Descending("created_at"), query.Descending("id")).Limit(limit)
-	queryValue, args, buildErr := builder.Build()
-	if buildErr != nil {
-		return nil, buildErr
-	}
-	rows, err := s.database().QueryContext(ctx, queryValue, args...)
+	filter, err := operationsRecordFilter(scope)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	result := []operationsmodel.OperationsReceipt{}
-	for rows.Next() {
-		receipt, scanErr := operationsScanReceipt(rows)
-		if scanErr != nil {
-			return nil, scanErr
+	filter.Status, filter.Limit = string(status), limit
+	records, err := ledger.ListRecords(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]operationsmodel.OperationsReceipt, 0, len(records))
+	for _, record := range records {
+		receipt, mapErr := operationsReceipt(record)
+		if mapErr != nil {
+			return nil, mapErr
 		}
 		result = append(result, receipt)
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 func (s OperationsStore) SearchOperationsReceipts(ctx context.Context, scope operationsmodel.OperationsScope, filter operationsmodel.OperationsReceiptFilter) (operationsmodel.OperationsReceiptPage, error) {
-	if s.database() == nil {
-		return operationsmodel.OperationsReceiptPage{}, fmt.Errorf("operations store unavailable")
-	}
-	workspaceID, predicate, scopeErr := operationsScopePredicate(scope)
-	if scopeErr != nil {
-		return operationsmodel.OperationsReceiptPage{}, scopeErr
-	}
-	addExact := func(column string, value any, present bool) {
-		if !present {
-			return
-		}
-		predicate = combineOperationsPredicate(predicate, query.Equal(column, value))
-	}
-	addExact("status", string(filter.Status), filter.Status != "")
-	addExact("failure_class", string(filter.FailureClass), filter.FailureClass != "")
-	addExact("owner", filter.Owner, filter.Owner != "")
-	addExact("kind", filter.Kind, filter.Kind != "")
-	addExact("parent_id", filter.ParentID, filter.ParentID != "")
-	addExact("resource_type", filter.ResourceType, filter.ResourceType != "")
-	addExact("resource_id", filter.ResourceID, filter.ResourceID != "")
-	addExact("requested_by", filter.RequestedBy, filter.RequestedBy != "")
-	addExact("correlation", filter.Correlation, filter.Correlation != "")
-	if filter.CreatedFrom != "" {
-		predicate = combineOperationsPredicate(predicate, query.GreaterThanOrEqual("created_at", filter.CreatedFrom))
-	}
-	if filter.CreatedTo != "" {
-		predicate = combineOperationsPredicate(predicate, query.LessThanOrEqual("created_at", filter.CreatedTo))
-	}
-	if filter.Search != "" {
-		searchColumns := []string{"id", "owner", "kind", "parent_id", "resource_type", "resource_id", "requested_by", "reason", "correlation", "error_code", "next_action"}
-		terms := make([]query.Predicate, 0, len(searchColumns))
-		for _, column := range searchColumns {
-			terms = append(terms, query.LikeValue(query.Lower(query.Column(column)), "%"+strings.ToLower(filter.Search)+"%"))
-		}
-		predicate = combineOperationsPredicate(predicate, query.Or(terms...))
-	}
-	var count int
-	countQuery, countArgs, buildErr := operationsSelectBuilder(s.store, workspaceID).Projections(query.Project(query.CountAll())).Where(predicate).Build()
-	if buildErr != nil {
-		return operationsmodel.OperationsReceiptPage{}, buildErr
-	}
-	if err := s.database().QueryRowContext(ctx, countQuery, countArgs...).Scan(&count); err != nil {
-		return operationsmodel.OperationsReceiptPage{}, err
-	}
-	summary := operationsmodel.OperationsReceiptSummary{}
-	summaryQuery, summaryArgs, buildErr := operationsSelectBuilder(s.store, workspaceID).Projections(query.Project(query.Column("status")), query.Project(query.Column("failure_class")), query.Project(query.CountAll())).Where(predicate).GroupBy(query.Column("status"), query.Column("failure_class")).Build()
-	if buildErr != nil {
-		return operationsmodel.OperationsReceiptPage{}, buildErr
-	}
-	summaryRows, err := s.database().QueryContext(ctx, summaryQuery, summaryArgs...)
+	ledger, err := s.ledger()
 	if err != nil {
 		return operationsmodel.OperationsReceiptPage{}, err
 	}
-	for summaryRows.Next() {
-		var status, failureClass string
-		var amount int
-		if err := summaryRows.Scan(&status, &failureClass, &amount); err != nil {
-			_ = summaryRows.Close()
-			return operationsmodel.OperationsReceiptPage{}, err
-		}
-		switch operationsmodel.OperationsStatus(status) {
-		case operationsmodel.OperationsStatusCreated:
-			summary.Created += amount
-		case operationsmodel.OperationsStatusStarted:
-			summary.Started += amount
-		case operationsmodel.OperationsStatusSucceeded:
-			summary.Succeeded += amount
-		case operationsmodel.OperationsStatusFailed:
-			summary.Failed += amount
-		}
-		if operationsmodel.OperationsFailureClass(failureClass) == operationsmodel.OperationsFailureManualIntervention {
-			summary.ManualIntervention += amount
-		}
-	}
-	if err := summaryRows.Err(); err != nil {
-		_ = summaryRows.Close()
-		return operationsmodel.OperationsReceiptPage{}, err
-	}
-	queryValue, args, buildErr := operationsSelectBuilder(s.store, workspaceID).Columns(operationsReceiptColumns()...).Where(predicate).OrderBy(query.Descending("created_at"), query.Descending("id")).Limit(filter.Limit).Build()
-	if buildErr != nil {
-		return operationsmodel.OperationsReceiptPage{}, buildErr
-	}
-	rows, err := s.database().QueryContext(ctx, queryValue, args...)
+	recordFilter, err := operationsRecordFilter(scope)
 	if err != nil {
 		return operationsmodel.OperationsReceiptPage{}, err
 	}
-	defer rows.Close()
-	items := []operationsmodel.OperationsReceipt{}
-	for rows.Next() {
-		receipt, scanErr := operationsScanReceipt(rows)
-		if scanErr != nil {
-			return operationsmodel.OperationsReceiptPage{}, scanErr
-		}
-		items = append(items, receipt)
-	}
-	if err := rows.Err(); err != nil {
+	recordFilter.Status = string(filter.Status)
+	recordFilter.FailureClass = string(filter.FailureClass)
+	recordFilter.Owner, recordFilter.Kind, recordFilter.ParentID = filter.Owner, filter.Kind, filter.ParentID
+	recordFilter.ResourceType, recordFilter.ResourceID = filter.ResourceType, filter.ResourceID
+	recordFilter.RequestedBy, recordFilter.Correlation = filter.RequestedBy, filter.Correlation
+	recordFilter.CreatedFrom, recordFilter.CreatedTo, recordFilter.Search, recordFilter.Limit = filter.CreatedFrom, filter.CreatedTo, filter.Search, filter.Limit
+	page, err := ledger.SearchRecords(ctx, recordFilter, true)
+	if err != nil {
 		return operationsmodel.OperationsReceiptPage{}, err
 	}
-	return operationsmodel.OperationsReceiptPage{Items: items, Count: count, Summary: summary}, nil
+	result := operationsmodel.OperationsReceiptPage{
+		Items: make([]operationsmodel.OperationsReceipt, 0, len(page.Items)), Count: page.Count,
+		Summary: operationsmodel.OperationsReceiptSummary{
+			Created:            page.Summary.Statuses[string(operationsmodel.OperationsStatusCreated)],
+			Started:            page.Summary.Statuses[string(operationsmodel.OperationsStatusStarted)],
+			Succeeded:          page.Summary.Statuses[string(operationsmodel.OperationsStatusSucceeded)],
+			Failed:             page.Summary.Statuses[string(operationsmodel.OperationsStatusFailed)],
+			ManualIntervention: page.Summary.FailureClasses[string(operationsmodel.OperationsFailureManualIntervention)],
+		},
+	}
+	for _, record := range page.Items {
+		receipt, mapErr := operationsReceipt(record)
+		if mapErr != nil {
+			return operationsmodel.OperationsReceiptPage{}, mapErr
+		}
+		result.Items = append(result.Items, receipt)
+	}
+	return result, nil
 }
 
 func (s OperationsStore) UpdateOperationsReceipt(ctx context.Context, receipt operationsmodel.OperationsReceipt, expected operationsmodel.OperationsStatus) (bool, error) {
-	resultJSON, metadataJSON, relatedJSON, evidenceJSON := operationsReceiptJSON(receipt)
+	ledger, err := s.ledger()
+	if err != nil {
+		return false, err
+	}
+	record := operationsRecord(receipt)
+	if workspaceID, workspaceErr := principalmodel.NewWorkspaceID(receipt.Command.Scope.WorkspaceID); workspaceErr == nil {
+		tx, beginErr := s.database().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+		if beginErr != nil {
+			return false, beginErr
+		}
+		defer func() { _ = tx.Rollback() }()
+		if err := s.store.GuardSubjectEvidenceWrite(ctx, tx, workspaceID.String(), sharedoperation.TableName,
+			[]string{"id", "owner", "resource_type", "resource_id", "requested_by"},
+			[]any{record.ID, record.Owner, record.ResourceType, record.ResourceID, record.RequestedBy}); err != nil {
+			return false, err
+		}
+		changed, updateErr := ledger.UpdateRecord(sharedoperation.WithExecutor(ctx, tx), record, string(expected))
+		if updateErr != nil || !changed {
+			return changed, updateErr
+		}
+		if err := tx.Commit(); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return ledger.UpdateRecord(ctx, record, string(expected))
+}
+
+func (s OperationsStore) getRecord(ctx context.Context, filter sharedoperation.RecordFilter) (operationsmodel.OperationsReceipt, bool, error) {
+	ledger, err := s.ledger()
+	if err != nil {
+		return operationsmodel.OperationsReceipt{}, false, err
+	}
+	record, found, err := ledger.GetRecord(ctx, filter)
+	if err != nil || !found {
+		return operationsmodel.OperationsReceipt{}, found, err
+	}
+	receipt, err := operationsReceipt(record)
+	return receipt, err == nil, err
+}
+
+func operationsRecordFilter(scope operationsmodel.OperationsScope) (sharedoperation.RecordFilter, error) {
+	if workspaceID, err := principalmodel.NewWorkspaceID(scope.WorkspaceID); err == nil {
+		return sharedoperation.RecordFilter{WorkspaceID: workspaceID.String()}, nil
+	}
+	if systemPurpose := strings.TrimSpace(scope.SystemPurpose); systemPurpose != "" {
+		return sharedoperation.RecordFilter{SystemPurpose: systemPurpose}, nil
+	}
+	return sharedoperation.RecordFilter{}, fmt.Errorf("operations scope requires workspace_id or system_purpose")
+}
+
+func operationsRecord(receipt operationsmodel.OperationsReceipt) sharedoperation.Record {
+	resultJSON := receipt.Result
+	if len(resultJSON) == 0 {
+		resultJSON = json.RawMessage(`{}`)
+	}
+	metadataJSON := receipt.Metadata
+	if len(metadataJSON) == 0 {
+		metadataJSON = json.RawMessage(`{}`)
+	}
+	relatedJSON, _ := json.Marshal(receipt.RelatedIDs)
+	evidenceJSON, _ := json.Marshal(receipt.Evidence)
 	startedAt, finishedAt := "", ""
 	if receipt.Command.StartedAt != nil {
 		startedAt = receipt.Command.StartedAt.UTC().Format(time.RFC3339Nano)
@@ -278,171 +267,62 @@ func (s OperationsStore) UpdateOperationsReceipt(ctx context.Context, receipt op
 	if receipt.Command.FinishedAt != nil {
 		finishedAt = receipt.Command.FinishedAt.UTC().Format(time.RFC3339Nano)
 	}
-	workspaceID, scopePredicate, scopeErr := operationsScopePredicate(receipt.Command.Scope)
-	if scopeErr != nil {
-		return false, scopeErr
+	return sharedoperation.Record{
+		ID: receipt.Command.ID, WorkspaceID: receipt.Command.Scope.WorkspaceID, SystemPurpose: receipt.Command.Scope.SystemPurpose,
+		Owner: receipt.Command.Owner, Kind: receipt.Command.Kind, ActionKey: receipt.Command.ActionKey, ParentID: receipt.Command.ParentID,
+		ResourceType: receipt.Command.Scope.ResourceType, ResourceID: receipt.Command.Scope.ResourceID,
+		IdempotencyKey: receipt.Command.IdempotencyKey, RequestFingerprint: receipt.Command.RequestFingerprint,
+		RequestedBy: receipt.Command.RequestedBy, Reason: receipt.Command.Reason, Reference: receipt.Command.Reference,
+		Status: string(receipt.Command.Status), StatusURL: receipt.StatusURL, ResultJSON: resultJSON, MetadataJSON: metadataJSON,
+		ErrorCode: receipt.ErrorCode, FailureClass: string(receipt.FailureClass), NextAction: receipt.NextAction,
+		RelatedIDsJSON: relatedJSON, Correlation: receipt.Correlation, EvidenceJSON: evidenceJSON,
+		LeaseOwner: receipt.LeaseOwner, LeaseExpiresAt: receipt.LeaseExpires, FencingToken: receipt.FencingToken, ExpiresAt: receipt.ExpiresAt,
+		CreatedAt: receipt.Command.CreatedAt.UTC().Format(time.RFC3339Nano), StartedAt: startedAt, FinishedAt: finishedAt,
+		UpdatedAt: receipt.Command.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
-	predicate := combineOperationsPredicate(scopePredicate, query.And(query.Equal("id", receipt.Command.ID), query.Equal("status", string(expected))))
-	builder := query.NewUpdateBuilder(s.store.SQLRenderer, "_operations")
-	if workspaceID != "" {
-		builder = query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_operations", workspaceID)
-		predicate = combineOperationsPredicate(predicate, s.store.SubjectEvidenceWriteAllowed(workspaceID, "_operations", receipt.Command.ID))
-		predicate = combineOperationsPredicate(predicate, s.store.SubjectActorWriteAllowed(workspaceID, receipt.Command.RequestedBy))
+}
+
+func operationsReceipt(record sharedoperation.Record) (operationsmodel.OperationsReceipt, error) {
+	receipt := operationsmodel.OperationsReceipt{
+		Command: operationsmodel.OperationsCommand{
+			ID: record.ID, Owner: record.Owner, Kind: record.Kind, ActionKey: record.ActionKey, ParentID: record.ParentID,
+			Scope:          operationsmodel.OperationsScope{WorkspaceID: record.WorkspaceID, SystemPurpose: record.SystemPurpose, ResourceType: record.ResourceType, ResourceID: record.ResourceID},
+			IdempotencyKey: record.IdempotencyKey, RequestFingerprint: record.RequestFingerprint, RequestedBy: record.RequestedBy,
+			Reason: record.Reason, Reference: record.Reference, Status: operationsmodel.OperationsStatus(record.Status),
+		},
+		StatusURL: record.StatusURL, Result: append(json.RawMessage(nil), record.ResultJSON...), Metadata: append(json.RawMessage(nil), record.MetadataJSON...),
+		ErrorCode: record.ErrorCode, FailureClass: operationsmodel.OperationsFailureClass(record.FailureClass), NextAction: record.NextAction,
+		Correlation: record.Correlation, LeaseOwner: record.LeaseOwner, LeaseExpires: record.LeaseExpiresAt,
+		FencingToken: record.FencingToken, ExpiresAt: record.ExpiresAt,
 	}
-	queryValue, args, buildErr := builder.Set("status", string(receipt.Command.Status)).Set("started_at", startedAt).Set("finished_at", finishedAt).Set("updated_at", receipt.Command.UpdatedAt.UTC().Format(time.RFC3339Nano)).Set("result_json", resultJSON).Set("metadata_json", metadataJSON).Set("error_code", strings.TrimSpace(receipt.ErrorCode)).Set("failure_class", string(receipt.FailureClass)).Set("next_action", strings.TrimSpace(receipt.NextAction)).Set("related_ids_json", relatedJSON).Set("correlation", strings.TrimSpace(receipt.Correlation)).Set("evidence_json", evidenceJSON).Set("lease_owner", strings.TrimSpace(receipt.LeaseOwner)).Set("lease_expires_at", strings.TrimSpace(receipt.LeaseExpires)).Set("fencing_token", receipt.FencingToken).Set("expires_at", strings.TrimSpace(receipt.ExpiresAt)).Where(predicate).Build()
-	if buildErr != nil {
-		return false, buildErr
+	if err := json.Unmarshal(record.RelatedIDsJSON, &receipt.RelatedIDs); err != nil {
+		return operationsmodel.OperationsReceipt{}, err
 	}
-	result, err := s.database().ExecContext(ctx, queryValue, args...)
+	if err := json.Unmarshal(record.EvidenceJSON, &receipt.Evidence); err != nil {
+		return operationsmodel.OperationsReceipt{}, err
+	}
+	var err error
+	receipt.Command.CreatedAt, err = time.Parse(time.RFC3339Nano, record.CreatedAt)
 	if err != nil {
-		return false, err
+		return operationsmodel.OperationsReceipt{}, err
 	}
-	changed, err := result.RowsAffected()
-	return changed == 1, err
-}
-
-type operationsQuery interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}
-
-func (s OperationsStore) get(ctx context.Context, database operationsQuery, scope operationsmodel.OperationsScope, id, kind, key string) (operationsmodel.OperationsReceipt, bool, error) {
-	workspaceID, predicate, scopeErr := operationsScopePredicate(scope)
-	if scopeErr != nil {
-		return operationsmodel.OperationsReceipt{}, false, scopeErr
-	}
-	if id != "" {
-		predicate = combineOperationsPredicate(predicate, query.Equal("id", id))
-	} else {
-		predicate = combineOperationsPredicate(predicate, query.And(query.Equal("kind", kind), query.Equal("idempotency_key", key)))
-	}
-	queryValue, args, buildErr := operationsSelectBuilder(s.store, workspaceID).Columns(operationsReceiptColumns()...).Where(predicate).Build()
-	if buildErr != nil {
-		return operationsmodel.OperationsReceipt{}, false, buildErr
-	}
-	receipt, err := operationsScanReceipt(database.QueryRowContext(ctx, queryValue, args...))
-	if err == sql.ErrNoRows {
-		return operationsmodel.OperationsReceipt{}, false, nil
-	}
-	return receipt, err == nil, err
-}
-
-func operationsScopePredicate(scope operationsmodel.OperationsScope) (string, query.Predicate, error) {
-	if workspaceID, err := principalmodel.NewWorkspaceID(scope.WorkspaceID); err == nil {
-		return workspaceID.String(), nil, nil
-	}
-	if systemPurpose := strings.TrimSpace(scope.SystemPurpose); systemPurpose != "" {
-		return "", query.Equal("system_purpose", systemPurpose), nil
-	}
-	return "", nil, fmt.Errorf("operations scope requires workspace_id or system_purpose")
-}
-
-func (s OperationsStore) scopePredicate(scope operationsmodel.OperationsScope, position int) (string, []any) {
-	workspaceID, predicate, err := operationsScopePredicate(scope)
+	receipt.Command.UpdatedAt, err = time.Parse(time.RFC3339Nano, record.UpdatedAt)
 	if err != nil {
-		return "1 = 0", nil
+		return operationsmodel.OperationsReceipt{}, err
 	}
-	if workspaceID != "" {
-		predicate = query.Equal("workspace_id", workspaceID)
-	}
-	prepared, args, err := query.PreparePredicate(s.store.SQLRenderer, predicate, position-1)
-	if err != nil {
-		return "1 = 0", nil
-	}
-	return prepared, args
-}
-
-func operationsSelectBuilder(store *database.RuntimeStore, workspaceID string) *query.SelectBuilder {
-	if workspaceID != "" {
-		return query.NewWorkspaceSelectBuilder(store.SQLRenderer, "_operations", workspaceID)
-	}
-	return query.NewSelectBuilder(store.SQLRenderer, "_operations")
-}
-
-func combineOperationsPredicate(left, right query.Predicate) query.Predicate {
-	if left == nil {
-		return right
-	}
-	if right == nil {
-		return left
-	}
-	return query.And(left, right)
-}
-
-func operationsReceiptColumns() []string {
-	return []string{"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
-}
-
-func operationsQuotedColumns(store *database.RuntimeStore, columns []string) string {
-	quoted := make([]string, len(columns))
-	for index, column := range columns {
-		quoted[index] = store.Identifier(column)
-	}
-	return strings.Join(quoted, ", ")
-}
-
-func operationsReceiptValues(receipt operationsmodel.OperationsReceipt) []any {
-	resultJSON, metadataJSON, relatedJSON, evidenceJSON := operationsReceiptJSON(receipt)
-	command := receipt.Command
-	return []any{command.ID, command.Scope.WorkspaceID, command.Scope.SystemPurpose, command.Owner, command.Kind, command.ActionKey, command.ParentID, command.Scope.ResourceType, command.Scope.ResourceID, command.IdempotencyKey, command.RequestFingerprint, command.RequestedBy, command.Reason, command.Reference, string(command.Status), receipt.StatusURL, resultJSON, metadataJSON, receipt.ErrorCode, string(receipt.FailureClass), receipt.NextAction, relatedJSON, receipt.Correlation, evidenceJSON, receipt.LeaseOwner, receipt.LeaseExpires, receipt.FencingToken, receipt.ExpiresAt, command.CreatedAt.UTC().Format(time.RFC3339Nano), "", "", command.UpdatedAt.UTC().Format(time.RFC3339Nano)}
-}
-
-func operationsReceiptJSON(receipt operationsmodel.OperationsReceipt) (string, string, string, string) {
-	resultJSON := string(receipt.Result)
-	if resultJSON == "" {
-		resultJSON = "{}"
-	}
-	metadataJSON := string(receipt.Metadata)
-	if metadataJSON == "" {
-		metadataJSON = "{}"
-	}
-	related, _ := json.Marshal(receipt.RelatedIDs)
-	evidence, _ := json.Marshal(receipt.Evidence)
-	return resultJSON, metadataJSON, string(related), string(evidence)
-}
-
-type operationsScanner interface{ Scan(...any) error }
-
-func operationsScanReceipt(scanner operationsScanner) (operationsmodel.OperationsReceipt, error) {
-	var receipt operationsmodel.OperationsReceipt
-	var status, failureClass, resultJSON, metadataJSON, relatedJSON, evidenceJSON, createdAt, startedAt, finishedAt, updatedAt string
-	command := &receipt.Command
-	err := scanner.Scan(&command.ID, &command.Scope.WorkspaceID, &command.Scope.SystemPurpose, &command.Owner, &command.Kind, &command.ActionKey, &command.ParentID, &command.Scope.ResourceType, &command.Scope.ResourceID, &command.IdempotencyKey, &command.RequestFingerprint, &command.RequestedBy, &command.Reason, &command.Reference, &status, &receipt.StatusURL, &resultJSON, &metadataJSON, &receipt.ErrorCode, &failureClass, &receipt.NextAction, &relatedJSON, &receipt.Correlation, &evidenceJSON, &receipt.LeaseOwner, &receipt.LeaseExpires, &receipt.FencingToken, &receipt.ExpiresAt, &createdAt, &startedAt, &finishedAt, &updatedAt)
-	if err != nil {
-		return receipt, err
-	}
-	command.Status, receipt.FailureClass = operationsmodel.OperationsStatus(status), operationsmodel.OperationsFailureClass(failureClass)
-	receipt.Result = json.RawMessage(resultJSON)
-	receipt.Metadata = json.RawMessage(metadataJSON)
-	if !json.Valid(receipt.Metadata) {
-		return receipt, fmt.Errorf("operations receipt metadata is invalid")
-	}
-	if err := json.Unmarshal([]byte(relatedJSON), &receipt.RelatedIDs); err != nil {
-		return receipt, err
-	}
-	if err := json.Unmarshal([]byte(evidenceJSON), &receipt.Evidence); err != nil {
-		return receipt, err
-	}
-	command.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAt)
-	if err != nil {
-		return receipt, err
-	}
-	command.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAt)
-	if err != nil {
-		return receipt, err
-	}
-	if startedAt != "" {
-		value, parseErr := time.Parse(time.RFC3339Nano, startedAt)
+	if record.StartedAt != "" {
+		value, parseErr := time.Parse(time.RFC3339Nano, record.StartedAt)
 		if parseErr != nil {
-			return receipt, parseErr
+			return operationsmodel.OperationsReceipt{}, parseErr
 		}
-		command.StartedAt = &value
+		receipt.Command.StartedAt = &value
 	}
-	if finishedAt != "" {
-		value, parseErr := time.Parse(time.RFC3339Nano, finishedAt)
+	if record.FinishedAt != "" {
+		value, parseErr := time.Parse(time.RFC3339Nano, record.FinishedAt)
 		if parseErr != nil {
-			return receipt, parseErr
+			return operationsmodel.OperationsReceipt{}, parseErr
 		}
-		command.FinishedAt = &value
+		receipt.Command.FinishedAt = &value
 	}
 	return receipt, nil
 }

@@ -14,8 +14,8 @@ require (
 	github.com/domainry/domainry-connector-sdk v0.1.2
 	github.com/domainry/domainry-data-exchange v0.3.14
 	github.com/domainry/domainry-data-exchange-sdk v0.3.8
-	github.com/domainry/domainry-foundation v0.1.4
-	github.com/domainry/domainry-identity v0.2.18
+	github.com/domainry/domainry-foundation v0.1.7
+	github.com/domainry/domainry-identity v0.2.19
 	github.com/domainry/domainry-identity-bridge v0.1.5
 	github.com/domainry/domainry-identity-sdk v0.1.14
 	github.com/domainry/domainry-integration v0.1.24
@@ -27,7 +27,7 @@ require (
 	github.com/domainry/domainry-metadata-sdk v0.1.5
 	github.com/domainry/domainry-monitoring v0.1.12
 	github.com/domainry/domainry-monitoring-sdk v0.1.4
-	github.com/domainry/domainry-notification v0.1.9
+	github.com/domainry/domainry-notification v0.1.10
 	github.com/domainry/domainry-notification-sdk v0.1.6
 	github.com/domainry/domainry-report v0.1.21
 	github.com/domainry/domainry-report-sdk v0.1.13

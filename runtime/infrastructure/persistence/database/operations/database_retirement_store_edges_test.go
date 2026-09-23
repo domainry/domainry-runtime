@@ -2,7 +2,6 @@ package operations
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -11,8 +10,7 @@ import (
 )
 
 func retirementQueryStep(retirement operationsmodel.DatabaseRetirement) operationsSQLQueryStep {
-	raw, _ := json.Marshal(retirement)
-	return operationsSQLQueryStep{columns: []string{"retirement_json"}, rows: [][]driver.Value{{string(raw)}}}
+	return operationsSQLQueryStep{columns: operationsRecordColumns(), rows: [][]driver.Value{operationsReceiptRow(databaseRetirementReceipt(retirement), "", "")}}
 }
 
 func TestDatabaseRetirementStoreSQLStages(t *testing.T) {
@@ -23,7 +21,7 @@ func TestDatabaseRetirementStoreSQLStages(t *testing.T) {
 		if _, err := store.RegisterDatabaseRetirement(t.Context(), retirement); !errors.Is(err, errOperationsSQL) {
 			t.Fatalf("register error=%v", err)
 		}
-		store = scriptedOperationsStore(t, &operationsSQLState{execSteps: []operationsSQLExecStep{step}})
+		store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{retirementQueryStep(retirement)}, execSteps: []operationsSQLExecStep{step}})
 		if _, err := store.TransitionDatabaseRetirement(t.Context(), retirement, operationsmodel.DatabaseRetirementQuarantined); !errors.Is(err, errOperationsSQL) {
 			t.Fatalf("transition error=%v", err)
 		}
@@ -33,7 +31,9 @@ func TestDatabaseRetirementStoreSQLStages(t *testing.T) {
 	if _, found, err := store.GetDatabaseRetirement(t.Context(), "missing"); err != nil || found {
 		t.Fatalf("missing found=%v err=%v", found, err)
 	}
-	for _, step := range []operationsSQLQueryStep{{err: errOperationsSQL}, {columns: []string{"retirement_json"}, rows: [][]driver.Value{{"{"}}}} {
+	corrupt := retirementQueryStep(retirement)
+	corrupt.rows[0][16] = "{"
+	for _, step := range []operationsSQLQueryStep{{err: errOperationsSQL}, corrupt} {
 		store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{step}})
 		if _, _, err := store.GetDatabaseRetirement(t.Context(), retirement.ID); err == nil {
 			t.Fatal("invalid get stage accepted")
@@ -45,19 +45,17 @@ func TestDatabaseRetirementStoreSQLStages(t *testing.T) {
 		t.Fatalf("list query error=%v", err)
 	}
 	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{
-		{columns: []string{"retirement_json", "extra"}, rows: [][]driver.Value{{"{}", "extra"}}},
+		{columns: operationsRecordColumns(), rows: [][]driver.Value{{"short"}}},
 	}})
 	if _, err := store.ListDatabaseRetirements(t.Context(), "", 501); err == nil {
 		t.Fatal("list scan error swallowed")
 	}
-	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{
-		{columns: []string{"retirement_json"}, rows: [][]driver.Value{{"{"}}},
-	}})
+	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{corrupt}})
 	if _, err := store.ListDatabaseRetirements(t.Context(), "", 10); err == nil {
 		t.Fatal("list JSON error swallowed")
 	}
 	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{
-		{columns: []string{"retirement_json"}, nextErr: errOperationsSQL},
+		{columns: operationsRecordColumns(), nextErr: errOperationsSQL},
 	}})
 	if _, err := store.ListDatabaseRetirements(t.Context(), "", 10); !errors.Is(err, errOperationsSQL) {
 		t.Fatalf("list terminal error=%v", err)
@@ -68,6 +66,8 @@ func TestDatabaseRetirementAccessSQLStages(t *testing.T) {
 	now := time.Now().UTC()
 	retirement := executableDatabaseRetirement(now, operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table", Name: "legacy"})
 	retirement.Evidence.Observation.SourceCounts = nil
+	corrupt := retirementQueryStep(retirement)
+	corrupt.rows[0][16] = "{"
 	for _, test := range []struct {
 		name       string
 		state      operationsSQLState
@@ -80,10 +80,8 @@ func TestDatabaseRetirementAccessSQLStages(t *testing.T) {
 			wantSQLErr: true,
 		},
 		{
-			name: "decode",
-			state: operationsSQLState{querySteps: []operationsSQLQueryStep{
-				{columns: []string{"retirement_json"}, rows: [][]driver.Value{{"{"}}},
-			}},
+			name:  "decode",
+			state: operationsSQLState{querySteps: []operationsSQLQueryStep{corrupt}},
 		},
 		{
 			name: "update",

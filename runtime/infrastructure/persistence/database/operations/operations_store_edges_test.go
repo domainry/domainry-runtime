@@ -2,10 +2,12 @@ package operations
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 )
 
@@ -19,13 +21,25 @@ func operationsReceiptFixture(now time.Time) operationsmodel.OperationsReceipt {
 }
 
 func operationsReceiptRow(receipt operationsmodel.OperationsReceipt, startedAt, finishedAt string) []driver.Value {
-	values := operationsReceiptValues(receipt)
-	values[29], values[30] = startedAt, finishedAt
+	record := operationsRecord(receipt)
+	record.StartedAt, record.FinishedAt = startedAt, finishedAt
+	values := []any{
+		record.ID, record.WorkspaceID, record.SystemPurpose, record.Owner, record.Kind, record.ActionKey, record.ParentID,
+		record.ResourceType, record.ResourceID, record.IdempotencyKey, record.RequestFingerprint, record.RequestedBy,
+		record.Reason, record.Reference, record.Status, record.StatusURL, string(record.ResultJSON), string(record.MetadataJSON),
+		record.ErrorCode, record.FailureClass, record.NextAction, string(record.RelatedIDsJSON), record.Correlation,
+		string(record.EvidenceJSON), record.LeaseOwner, record.LeaseExpiresAt, record.FencingToken, record.ExpiresAt,
+		record.CreatedAt, record.StartedAt, record.FinishedAt, record.UpdatedAt,
+	}
 	result := make([]driver.Value, len(values))
 	for index := range values {
 		result[index] = values[index]
 	}
 	return result
+}
+
+func operationsRecordColumns() []string {
+	return []string{"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
 }
 
 func TestOperationsStoreSQLFailureStagesAndScopeEdges(t *testing.T) {
@@ -82,21 +96,20 @@ func TestOperationsStoreSQLFailureStagesAndScopeEdges(t *testing.T) {
 	if _, err := store.ListOperationsReceipts(t.Context(), receipt.Command.Scope, operationsmodel.OperationsStatusCreated, 10); !errors.Is(err, errOperationsSQL) {
 		t.Fatalf("list query error=%v", err)
 	}
-	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{{columns: operationsReceiptColumns(), rows: [][]driver.Value{{"short"}}}}})
+	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{{columns: operationsRecordColumns(), rows: [][]driver.Value{{"short"}}}}})
 	if _, err := store.ListOperationsReceipts(t.Context(), receipt.Command.Scope, "", 10); err == nil {
 		t.Fatal("list scan failure swallowed")
 	}
-	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{{columns: operationsReceiptColumns(), nextErr: errOperationsSQL}}})
+	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{{columns: operationsRecordColumns(), nextErr: errOperationsSQL}}})
 	if _, err := store.ListOperationsReceipts(t.Context(), receipt.Command.Scope, "", 10); !errors.Is(err, errOperationsSQL) {
 		t.Fatalf("list terminal error=%v", err)
 	}
 
-	systemScope := operationsmodel.OperationsScope{SystemPurpose: "maintenance"}
-	if where, args := store.scopePredicate(systemScope, 2); where == "1 = 0" || len(args) != 1 {
-		t.Fatalf("system scope where=%q args=%v", where, args)
+	if filter, err := operationsRecordFilter(operationsmodel.OperationsScope{SystemPurpose: "maintenance"}); err != nil || filter.SystemPurpose != "maintenance" {
+		t.Fatalf("system scope filter=%+v err=%v", filter, err)
 	}
-	if where, args := store.scopePredicate(operationsmodel.OperationsScope{}, 1); where != "1 = 0" || len(args) != 0 {
-		t.Fatalf("invalid scope where=%q args=%v", where, args)
+	if _, err := operationsRecordFilter(operationsmodel.OperationsScope{}); err == nil {
+		t.Fatal("invalid scope accepted")
 	}
 	withNilFaults := NewOperationsStoreWithFaults(store.store, nil)
 	if withNilFaults.faults == nil {
@@ -113,7 +126,7 @@ func TestOperationsStoreSearchFailureAndSummaryEdges(t *testing.T) {
 	count := operationsSQLQueryStep{columns: []string{"count"}, rows: [][]driver.Value{{int64(1)}}}
 	summaryColumns := []string{"status", "failure_class", "count"}
 	receipt := operationsReceiptFixture(time.Now().UTC())
-	itemColumns := operationsReceiptColumns()
+	itemColumns := operationsRecordColumns()
 	itemRow := operationsReceiptRow(receipt, "", "")
 	tests := []struct {
 		name  string
@@ -176,32 +189,33 @@ func TestOperationsUpdateAndReceiptScanEdges(t *testing.T) {
 		t.Fatalf("nil-time update changed=%v err=%v", changed, err)
 	}
 
-	base := operationsReceiptRow(receipt, started.Format(time.RFC3339Nano), finished.Format(time.RFC3339Nano))
-	if scanned, err := operationsScanReceipt(scannerValues(base)); err != nil || scanned.Command.StartedAt == nil || scanned.Command.FinishedAt == nil {
+	baseRecord := operationsRecord(receipt)
+	baseRecord.StartedAt, baseRecord.FinishedAt = started.Format(time.RFC3339Nano), finished.Format(time.RFC3339Nano)
+	if scanned, err := operationsReceipt(baseRecord); err != nil || scanned.Command.StartedAt == nil || scanned.Command.FinishedAt == nil {
 		t.Fatalf("scanned=%+v err=%v", scanned, err)
 	}
 	for _, test := range []struct {
-		name  string
-		index int
-		value driver.Value
+		name   string
+		mutate func(*sharedRecordForTest)
 	}{
-		{name: "metadata", index: 17, value: "{"},
-		{name: "related", index: 21, value: "{"},
-		{name: "evidence", index: 23, value: "{"},
-		{name: "created", index: 28, value: "invalid"},
-		{name: "updated", index: 31, value: "invalid"},
-		{name: "started", index: 29, value: "invalid"},
-		{name: "finished", index: 30, value: "invalid"},
+		{name: "related", mutate: func(value *sharedRecordForTest) { value.RelatedIDsJSON = json.RawMessage(`{`) }},
+		{name: "evidence", mutate: func(value *sharedRecordForTest) { value.EvidenceJSON = json.RawMessage(`{`) }},
+		{name: "created", mutate: func(value *sharedRecordForTest) { value.CreatedAt = "invalid" }},
+		{name: "updated", mutate: func(value *sharedRecordForTest) { value.UpdatedAt = "invalid" }},
+		{name: "started", mutate: func(value *sharedRecordForTest) { value.StartedAt = "invalid" }},
+		{name: "finished", mutate: func(value *sharedRecordForTest) { value.FinishedAt = "invalid" }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			row := append([]driver.Value(nil), base...)
-			row[test.index] = test.value
-			if _, err := operationsScanReceipt(scannerValues(row)); err == nil {
+			value := sharedRecordForTest(baseRecord)
+			test.mutate(&value)
+			if _, err := operationsReceipt(value); err == nil {
 				t.Fatal("corrupt receipt accepted")
 			}
 		})
 	}
 }
+
+type sharedRecordForTest = sharedoperation.Record
 
 type scannerValues []driver.Value
 
