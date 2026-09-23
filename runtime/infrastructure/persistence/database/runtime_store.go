@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
@@ -16,9 +15,9 @@ import (
 	"github.com/domainry/domainry-foundation/secrets"
 	"github.com/domainry/domainry-foundation/telemetry"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	sharedworkerscope "github.com/domainry/domainry-foundation/workerscope"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
-	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -46,6 +45,7 @@ type RuntimeStore struct {
 	sqlMetrics                  *telemetry.SQLMetrics
 	operationalMetrics          *RuntimeOperationalMetrics
 	workerScopeCursor           *runtimeWorkerScopeCursor
+	workerScopes                *sharedworkerscope.Store
 	workerWakeupsMu             sync.Mutex
 	workerWakeups               *workerplatform.WakeupBroker
 	notificationMu              sync.RWMutex
@@ -166,12 +166,20 @@ type runtimeWorkerQueueCursor struct {
 	after string
 }
 
-type WorkerScopeQueryer interface {
-	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}
+type WorkerScopeQueryer = sharedworkerscope.Queryer
+type WorkerScopeExecutor = sharedworkerscope.Executor
 
-type WorkerScopeExecutor interface {
-	ExecContext(context.Context, string, ...any) (sql.Result, error)
+func (s *RuntimeStore) WorkerScopes() *sharedworkerscope.Store {
+	if s == nil {
+		return nil
+	}
+	if s.workerScopes != nil {
+		return s.workerScopes
+	}
+	if s.DB() == nil {
+		return nil
+	}
+	return sharedworkerscope.NewStore(s.DB(), s.SQLRenderer)
 }
 
 func (s *RuntimeStore) RegisterWorkerQueueScope(ctx context.Context, executor WorkerScopeExecutor, queueKind, workspaceID, updatedAt string) error {
@@ -188,44 +196,19 @@ func (s *RuntimeStore) RegisterWorkerQueueScope(ctx context.Context, executor Wo
 	if len(workspaceID) == 0 {
 		return fmt.Errorf("worker queue kind and workspace are required")
 	}
-	if updatedAt == "" {
-		updatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	}
-	digest := sha256.Sum256([]byte(queueKind + "\x00" + workspaceID))
-	id := "worker_scope:" + hex.EncodeToString(digest[:12])
-	update, updateArgs, err := query.NewUpdateBuilder(s.SQLRenderer, "_worker_scopes").
-		Set("updated_at", updatedAt).
-		Where(query.And(query.Equal("owner", queueKind), query.Equal("scope_key", workspaceID))).
-		Build()
-	if err != nil {
-		return fmt.Errorf("build worker queue scope refresh: %w", err)
-	}
-	updated, err := executor.ExecContext(ctx, update, updateArgs...)
-	if err != nil {
-		return fmt.Errorf("refresh worker queue scope: %w", err)
-	}
-	if affected, rowsErr := updated.RowsAffected(); rowsErr != nil {
-		return rowsErr
-	} else if affected > 0 {
-		return nil
-	}
-	insert, insertArgs, err := query.NewInsertBuilder(s.SQLRenderer, "_worker_scopes").
-		Columns("id", "owner", "scope_key", "updated_at").
-		Values(id, queueKind, workspaceID, updatedAt).
-		Build()
-	if err != nil {
-		return fmt.Errorf("build worker queue scope registration: %w", err)
-	}
-	if _, err := executor.ExecContext(ctx, insert, insertArgs...); err != nil {
-		retried, retryErr := executor.ExecContext(ctx, update, updateArgs...)
-		if retryErr == nil {
-			if affected, rowsErr := retried.RowsAffected(); rowsErr == nil && affected > 0 {
-				return nil
-			}
+	when := time.Now().UTC()
+	if updatedAt != "" {
+		value, err := time.Parse(time.RFC3339Nano, updatedAt)
+		if err != nil {
+			return fmt.Errorf("worker queue scope timestamp is invalid: %w", err)
 		}
-		return fmt.Errorf("register worker queue scope: %w", err)
+		when = value
 	}
-	return nil
+	workerScopes := s.WorkerScopes()
+	if workerScopes == nil {
+		return fmt.Errorf("worker queue scope store is required")
+	}
+	return workerScopes.Register(ctx, executor, sharedworkerscope.NewIdentity(queueKind, workspaceID), when)
 }
 
 func (s *RuntimeStore) WorkerQueueScopePage(ctx context.Context, queryer WorkerScopeQueryer, queueKind string, limit int) ([]string, error) {
@@ -263,31 +246,12 @@ func (s *RuntimeStore) WorkerQueueScopePage(ctx context.Context, queryer WorkerS
 	cursor.mu.Lock()
 	defer cursor.mu.Unlock()
 	after := cursor.after
-	selectBuilder := query.NewSelectBuilder(s.SQLRenderer, "_worker_scopes").
-		Columns("scope_key").
-		Where(query.And(query.Equal("owner", queueKind), query.GreaterThan("scope_key", after))).
-		OrderBy(query.Ascending("scope_key")).Limit(limit + 1)
-	statement, args, err := selectBuilder.Build()
+	workerScopes := s.WorkerScopes()
+	if workerScopes == nil {
+		return nil, fmt.Errorf("worker queue scope store is required")
+	}
+	values, err := workerScopes.ScopeKeys(ctx, queryer, sharedworkerscope.ScopeQuery{Owner: queueKind, AfterKey: after, Order: sharedworkerscope.ScopeKeyAscending, Limit: limit + 1})
 	if err != nil {
-		return nil, fmt.Errorf("build worker queue scope page: %w", err)
-	}
-	rows, err := queryer.QueryContext(ctx, statement, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	values := make([]string, 0, limit+1)
-	for rows.Next() {
-		var workspaceID string
-		if err := rows.Scan(&workspaceID); err != nil {
-			return nil, err
-		}
-		workspaceID = strings.TrimSpace(workspaceID)
-		if len(workspaceID) > 0 {
-			values = append(values, workspaceID)
-		}
-	}
-	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	if len(values) > limit {
@@ -339,7 +303,8 @@ func openContextWithDependencies(ctx context.Context, cfg config.Config, depende
 		return nil, fmt.Errorf("initialize integration key ring: %w", err)
 	}
 	databaseSchema := connection.databaseSchema
-	store := &RuntimeStore{SQLDatabase: base.NewSQLDatabase(db, engine, databaseSchema), db: db, migrationDB: migrationDB, engine: engine, config: cfg, databaseSchema: databaseSchema, postgresProfile: connection.postgresProfile, postgresCapabilities: connection.postgresCapabilities, migratorCapabilities: connection.migratorCapabilities, secretMaterialKey: activeMaterial, secretKeyProvider: keyRing, idempotencyMetrics: idempotency.NewMemoryMetricsCollector(4096), sqlMetrics: sqlMetrics, operationalMetrics: operationalMetrics, workerScopeCursor: &runtimeWorkerScopeCursor{}, workerWakeups: workerplatform.NewWakeupBroker()}
+	runtimeDatabase := base.NewSQLDatabase(db, engine, databaseSchema)
+	store := &RuntimeStore{SQLDatabase: runtimeDatabase, db: db, migrationDB: migrationDB, engine: engine, config: cfg, databaseSchema: databaseSchema, postgresProfile: connection.postgresProfile, postgresCapabilities: connection.postgresCapabilities, migratorCapabilities: connection.migratorCapabilities, secretMaterialKey: activeMaterial, secretKeyProvider: keyRing, idempotencyMetrics: idempotency.NewMemoryMetricsCollector(4096), sqlMetrics: sqlMetrics, operationalMetrics: operationalMetrics, workerScopeCursor: &runtimeWorkerScopeCursor{}, workerScopes: sharedworkerscope.NewStore(db, runtimeDatabase.SQLRenderer), workerWakeups: workerplatform.NewWakeupBroker()}
 	var migrationErr error
 	migrationStarted := time.Now()
 	if cfg.EffectiveDatabaseMigrationMode() == "verify" {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/domainry/domainry-foundation/idempotency"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
+	sharedworkerscope "github.com/domainry/domainry-foundation/workerscope"
 	"github.com/domainry/domainry-orm/query"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -31,30 +32,17 @@ func (r RuntimeStatusStore) RunIdempotencyCleanup(ctx context.Context, request d
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	nowText, leaseExpiresAt := now.Format(time.RFC3339Nano), now.Add(request.LeaseTTL).Format(time.RFC3339Nano)
+	nowText := now.Format(time.RFC3339Nano)
 	if err := r.ensureIdempotencyCleanupLease(ctx, nowText); err != nil {
 		return deploymentmodel.IdempotencyCleanupResult{}, err
 	}
-	claim, claimArgs, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_worker_scopes").Set("lease_owner", request.LeaseOwner).Set("lease_expires_at", leaseExpiresAt).SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("last_started_at", nowText).Set("last_error", "").Set("updated_at", nowText).Where(query.And(cleanupScopePredicate(), query.Or(query.Equal("lease_owner", ""), query.LessThanOrEqual("lease_expires_at", nowText)))).Build()
-	if err != nil {
-		return deploymentmodel.IdempotencyCleanupResult{}, fmt.Errorf("build idempotency cleanup lease claim: %w", err)
-	}
-	claimResult, err := r.db.ExecContext(ctx, claim, claimArgs...)
-	if err != nil {
-		return deploymentmodel.IdempotencyCleanupResult{}, fmt.Errorf("claim idempotency cleanup lease: %w", err)
-	}
-	acquired, err := claimResult.RowsAffected()
-	if err != nil || acquired != 1 {
+	lease, acquired, err := r.workerScopeStore().ClaimLease(ctx, nil, sharedworkerscope.LeaseClaim{
+		Identity: idempotencyCleanupIdentity(), LeaseOwner: request.LeaseOwner, Now: now, LeaseExpiresAt: now.Add(request.LeaseTTL),
+	})
+	if err != nil || !acquired {
 		return deploymentmodel.IdempotencyCleanupResult{Acquired: false}, err
 	}
-	result := deploymentmodel.IdempotencyCleanupResult{Acquired: true, LeaseOwner: request.LeaseOwner, StartedAt: nowText}
-	lookup, lookupArgs, err := query.NewSelectBuilder(r.store.SQLRenderer, "_worker_scopes").Columns("fencing_token").Where(cleanupScopePredicate()).Build()
-	if err != nil {
-		return result, err
-	}
-	if err := r.db.QueryRowContext(ctx, lookup, lookupArgs...).Scan(&result.FencingToken); err != nil {
-		return result, err
-	}
+	result := deploymentmodel.IdempotencyCleanupResult{Acquired: true, LeaseOwner: request.LeaseOwner, FencingToken: lease.FencingToken, StartedAt: nowText}
 	for _, spec := range idempotencyReceiptTables {
 		if !r.store.RuntimeSchemaCapabilities().IncludesTable(spec.table) {
 			continue
@@ -70,47 +58,39 @@ func (r RuntimeStatusStore) RunIdempotencyCleanup(ctx context.Context, request d
 		result.Deleted += deleted
 	}
 	result.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	complete, completeArgs, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_worker_scopes").Set("lease_owner", "").Set("lease_expires_at", "").Set("last_completed_at", result.CompletedAt).Set("checkpoint", result.Deleted).Set("updated_at", result.CompletedAt).Where(cleanupLeasePredicate(request.LeaseOwner, result.FencingToken)).Build()
+	completedAt, err := time.Parse(time.RFC3339Nano, result.CompletedAt)
 	if err != nil {
 		return result, err
 	}
-	completed, err := r.db.ExecContext(ctx, complete, completeArgs...)
+	completed, err := r.workerScopeStore().CompleteLease(ctx, nil, sharedworkerscope.LeaseCompletion{
+		Identity: idempotencyCleanupIdentity(), LeaseOwner: request.LeaseOwner, FencingToken: result.FencingToken,
+		CompletedAt: completedAt, Checkpoint: int64(result.Deleted),
+	})
 	if err != nil {
 		return result, err
 	}
-	rows, err := completed.RowsAffected()
-	if err != nil || rows != 1 {
+	if !completed {
 		return result, fmt.Errorf("idempotency cleanup lease lost")
 	}
 	return result, nil
 }
 
 func (r RuntimeStatusStore) ensureIdempotencyCleanupLease(ctx context.Context, now string) error {
-	if _, registered := database.WorkerScopeRegistrationFor(database.WorkerScopeOwnerIdempotencyCleanup); !registered {
-		return fmt.Errorf("idempotency cleanup worker scope owner is not registered")
+	value, err := time.Parse(time.RFC3339Nano, now)
+	if err != nil {
+		return err
 	}
-	queryValue, args, buildErr := query.NewInsertBuilder(r.store.SQLRenderer, "_worker_scopes").Columns("id", "owner", "scope_key", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "checkpoint", "last_error", "updated_at").Values(idempotencyCleanupLeaseID, database.WorkerScopeOwnerIdempotencyCleanup, "receipts", "", "", 0, "", "", 0, "", now).Build()
-	if buildErr != nil {
-		return buildErr
-	}
-	if _, err := r.db.ExecContext(ctx, queryValue, args...); err != nil {
-		var count int
-		check, checkArgs, checkErr := query.NewSelectBuilder(r.store.SQLRenderer, "_worker_scopes").Projections(query.Project(query.CountAll())).Where(cleanupScopePredicate()).Build()
-		if checkErr != nil {
-			return checkErr
-		}
-		if checkErr = r.db.QueryRowContext(ctx, check, checkArgs...).Scan(&count); checkErr != nil || count != 1 {
-			return fmt.Errorf("initialize idempotency cleanup lease: %w", err)
-		}
-	}
-	return nil
+	return r.workerScopeStore().Register(ctx, nil, idempotencyCleanupIdentity(), value)
 }
 
 func (r RuntimeStatusStore) deleteExpiredReceiptBatch(ctx context.Context, spec idempotencyReceiptTable, owner string, fencingToken int64, now string, limit int) (int, error) {
 	if spec.table == "" {
 		return r.deleteExpiredOperationBatch(ctx, spec, owner, fencingToken, now, limit)
 	}
-	lease := cleanupLeaseGuard(r.store.SQLRenderer, owner, fencingToken, now)
+	lease, err := cleanupLeaseGuard(r.workerScopeStore(), owner, fencingToken, now)
+	if err != nil {
+		return 0, err
+	}
 	eligibility := query.And(idempotencyReceiptOwnerPredicate(spec), expiredReceiptEligibility(now))
 	selectQuery, selectArgs, err := query.NewSelectBuilder(r.store.SQLRenderer, spec.table).Columns("id", "workspace_id").Where(query.And(query.ExistsSubquery(lease), eligibility)).OrderBy(query.Ascending("expires_at"), query.Ascending("id")).Limit(limit).Build()
 	if err != nil {
@@ -152,7 +132,7 @@ func (r RuntimeStatusStore) deleteExpiredReceiptBatch(ctx context.Context, spec 
 	total := 0
 	for _, workspaceID := range workspaceOrder {
 		deleteQuery, deleteArgs, buildErr := query.NewDeleteBuilder(r.store.SQLRenderer, spec.table).Where(query.And(
-			query.ExistsSubquery(cleanupLeaseGuard(r.store.SQLRenderer, owner, fencingToken, now)),
+			query.ExistsSubquery(lease),
 			query.Equal("workspace_id", workspaceID),
 			query.In("id", idsByWorkspace[workspaceID]...),
 			eligibility,
@@ -187,7 +167,11 @@ func (r RuntimeStatusStore) deleteExpiredOperationBatch(ctx context.Context, spe
 		return 0, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	leaseQuery, leaseArgs, err := cleanupLeaseGuard(r.store.SQLRenderer, owner, fencingToken, now).Build()
+	lease, err := cleanupLeaseGuard(r.workerScopeStore(), owner, fencingToken, now)
+	if err != nil {
+		return 0, err
+	}
+	leaseQuery, leaseArgs, err := lease.Build()
 	if err != nil {
 		return 0, err
 	}
@@ -221,24 +205,25 @@ func expiredReceiptEligibility(now string) query.Predicate {
 }
 
 func (r RuntimeStatusStore) failIdempotencyCleanup(ctx context.Context, owner string, fencingToken int64, now string, cause error) {
-	queryValue, args, err := query.NewUpdateBuilder(r.store.SQLRenderer, "_worker_scopes").Set("lease_owner", "").Set("lease_expires_at", "").Set("last_error", cause.Error()).Set("updated_at", now).Where(cleanupLeasePredicate(owner, fencingToken)).Build()
-	if err == nil {
-		_, _ = r.db.ExecContext(ctx, queryValue, args...)
+	failedAt, err := time.Parse(time.RFC3339Nano, now)
+	if err != nil {
+		return
 	}
+	_, _ = r.workerScopeStore().FailLease(ctx, nil, sharedworkerscope.LeaseFailure{Identity: idempotencyCleanupIdentity(), LeaseOwner: owner, FencingToken: fencingToken, FailedAt: failedAt, Cause: cause})
 }
 
-func cleanupLeasePredicate(owner string, fencingToken int64) query.Predicate {
-	return query.And(cleanupScopePredicate(), query.Equal("lease_owner", owner), query.Equal("fencing_token", fencingToken))
+func (r RuntimeStatusStore) workerScopeStore() *sharedworkerscope.Store {
+	return sharedworkerscope.NewStore(r.db, r.store.SQLRenderer)
 }
 
-func cleanupLeaseGuard(renderer query.Renderer, owner string, fencingToken int64, now string) *query.SelectBuilder {
-	return query.NewSelectBuilder(renderer, "_worker_scopes").Columns("id").Where(query.And(cleanupLeasePredicate(owner, fencingToken), query.GreaterThan("lease_expires_at", now)))
+func cleanupLeaseGuard(store *sharedworkerscope.Store, owner string, fencingToken int64, now string) (*query.SelectBuilder, error) {
+	value, err := time.Parse(time.RFC3339Nano, now)
+	if err != nil {
+		return nil, err
+	}
+	return store.ActiveLeaseGuard(idempotencyCleanupIdentity(), owner, fencingToken, value)
 }
 
-func cleanupScopePredicate() query.Predicate {
-	return query.And(
-		query.Equal("id", idempotencyCleanupLeaseID),
-		query.Equal("owner", database.WorkerScopeOwnerIdempotencyCleanup),
-		query.Equal("scope_key", "receipts"),
-	)
+func idempotencyCleanupIdentity() sharedworkerscope.Identity {
+	return sharedworkerscope.Identity{ID: idempotencyCleanupLeaseID, Owner: database.WorkerScopeOwnerIdempotencyCleanup, ScopeKey: "receipts"}
 }

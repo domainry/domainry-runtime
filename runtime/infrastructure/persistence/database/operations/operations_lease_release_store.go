@@ -8,6 +8,7 @@ import (
 	"time"
 
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
+	sharedworkerscope "github.com/domainry/domainry-foundation/workerscope"
 	"github.com/domainry/domainry-orm/query"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
@@ -29,7 +30,7 @@ var operationsLeaseReleaseSpecs = map[string]operationsLeaseReleaseSpec{
 	"workflow_deadline":          {table: "_workflow_tasks", idColumn: "id", workspaceColumn: "workspace_id"},
 	"business_action":            {table: sharedoperation.TableName, idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "action"},
 	"record_mutation":            {table: sharedoperation.TableName, idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "record"},
-	"idempotency_cleanup":        {table: "_worker_scopes", idColumn: "id", scopeColumn: "owner", scopeValue: "idempotency_cleanup"},
+	"idempotency_cleanup":        {table: sharedworkerscope.TableName, idColumn: "id", scopeColumn: "owner", scopeValue: sharedworkerscope.OwnerIdempotencyCleanup},
 	"automation":                 {table: "_automation_runs", idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "run_kind", scopeValue: "instruction"},
 	"runtime_publication_outbox": {table: "_publication_outbox", idColumn: "id", workspaceColumn: "workspace_id", publicationType: "integration.connector"},
 }
@@ -55,6 +56,9 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 	defer func() { _ = tx.Rollback() }()
 	if spec.table == sharedoperation.TableName {
 		return s.forceReleaseSharedOperationLease(ctx, tx, request, spec)
+	}
+	if spec.table == sharedworkerscope.TableName {
+		return s.forceReleaseWorkerScopeLease(ctx, tx, request)
 	}
 	predicate := operationsLeaseReleasePredicate(spec, request)
 	selectBuilder := query.NewSelectBuilder(s.store.SQLRenderer, spec.table).Columns("lease_owner", "lease_expires_at", "fencing_token")
@@ -108,6 +112,27 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 		return operationsmodel.OperationsLeaseReleaseResult{}, false, err
 	}
 	return operationsmodel.OperationsLeaseReleaseResult{Owner: request.Owner, WorkspaceID: request.WorkspaceID, ResourceID: request.ResourceID, PreviousLeaseOwner: currentOwner, PreviousFencingToken: currentToken, NextFencingToken: currentToken + 1, PreviousExpiresAt: expires, ReleasedAt: request.Now.UTC(), Eligibility: eligibility}, true, nil
+}
+
+func (s OperationsStore) forceReleaseWorkerScopeLease(ctx context.Context, tx *sql.Tx, request operationsmodel.OperationsLeaseReleaseRequest) (operationsmodel.OperationsLeaseReleaseResult, bool, error) {
+	store := sharedworkerscope.NewStore(s.database(), s.store.SQLRenderer)
+	released, found, err := store.ForceReleaseLease(ctx, tx, sharedworkerscope.LeaseRelease{
+		Identity:           sharedworkerscope.Identity{ID: request.ResourceID, Owner: sharedworkerscope.OwnerIdempotencyCleanup},
+		ExpectedLeaseOwner: request.ExpectedLeaseOwner, ExpectedFencingToken: request.ExpectedFencingToken,
+		Now: request.Now, AllowUnexpired: request.VerifiedStuck,
+	})
+	if err != nil || !found {
+		return operationsmodel.OperationsLeaseReleaseResult{}, found, err
+	}
+	if err := tx.Commit(); err != nil {
+		return operationsmodel.OperationsLeaseReleaseResult{}, false, err
+	}
+	return operationsmodel.OperationsLeaseReleaseResult{
+		Owner: request.Owner, WorkspaceID: request.WorkspaceID, ResourceID: request.ResourceID,
+		PreviousLeaseOwner: released.PreviousLeaseOwner, PreviousFencingToken: released.PreviousFencingToken,
+		NextFencingToken: released.NextFencingToken, PreviousExpiresAt: released.PreviousLeaseExpiresAt,
+		ReleasedAt: request.Now.UTC(), Eligibility: released.Eligibility,
+	}, true, nil
 }
 
 func (s OperationsStore) forceReleaseSharedOperationLease(ctx context.Context, tx *sql.Tx, request operationsmodel.OperationsLeaseReleaseRequest, spec operationsLeaseReleaseSpec) (operationsmodel.OperationsLeaseReleaseResult, bool, error) {

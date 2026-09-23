@@ -85,18 +85,16 @@ func (r RuntimeStatusStore) idempotencyOperationalStatus(ctx context.Context, wo
 	status.LeaseLost = metricTotal(idempotency.OutcomeLeaseLost)
 	status.DuplicateSideEffects = metricTotal(idempotency.OutcomeDuplicateSideEffect)
 
-	cleanupQuery, cleanupArgs, buildErr := query.NewSelectBuilder(r.store.SQLRenderer, "_worker_scopes").Columns("lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "checkpoint", "last_error").Where(cleanupScopePredicate()).Build()
-	if buildErr != nil {
-		return status, fmt.Errorf("build idempotency cleanup status: %w", buildErr)
-	}
-	err := r.db.QueryRowContext(ctx, cleanupQuery, cleanupArgs...).Scan(&status.Cleanup.LeaseOwner, &status.Cleanup.LeaseExpiresAt, &status.Cleanup.FencingToken, &status.Cleanup.LastStartedAt, &status.Cleanup.LastCompletedAt, &status.Cleanup.LastDeleted, &status.Cleanup.LastError)
+	cleanup, found, err := r.workerScopeStore().LeaseStatus(ctx, nil, idempotencyCleanupIdentity())
 	if err != nil {
-		if err == sql.ErrNoRows {
-			status.EvaluateAlerts()
-			return status, nil
-		}
 		return status, fmt.Errorf("read idempotency cleanup status: %w", err)
 	}
+	if !found {
+		status.EvaluateAlerts()
+		return status, nil
+	}
+	status.Cleanup.LeaseOwner, status.Cleanup.LeaseExpiresAt, status.Cleanup.FencingToken = cleanup.LeaseOwner, cleanup.LeaseExpiresAt, cleanup.FencingToken
+	status.Cleanup.LastStartedAt, status.Cleanup.LastCompletedAt, status.Cleanup.LastDeleted, status.Cleanup.LastError = cleanup.LastStartedAt, cleanup.LastCompletedAt, int(cleanup.Checkpoint), cleanup.LastError
 	switch {
 	case status.Cleanup.LeaseOwner != "" && status.Cleanup.LeaseExpiresAt > nowText:
 		status.Cleanup.State = "running"

@@ -16,12 +16,6 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		return err
 	}
 
-	if err := s.CreateIndexIfMissing(ctx, "_worker_scopes", "uniq_runtime_worker_scope", true, "owner", "scope_key"); err != nil {
-		return fmt.Errorf("create uniq_runtime_worker_scope: %w", err)
-	}
-	if err := s.CreateIndexIfMissing(ctx, "_worker_scopes", "idx_runtime_worker_scope_lease", false, "owner", "lease_expires_at"); err != nil {
-		return fmt.Errorf("create idx_runtime_worker_scope_lease: %w", err)
-	}
 	for _, table := range []string{"_automation_runs"} {
 		if _, selected := tables[table]; !selected {
 			continue

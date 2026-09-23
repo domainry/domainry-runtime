@@ -8,6 +8,7 @@ import (
 	"time"
 
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
+	sharedworkerscope "github.com/domainry/domainry-foundation/workerscope"
 	"github.com/domainry/domainry-orm/query"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
@@ -29,7 +30,7 @@ var operationsLeaseSpecs = []operationsLeaseSpec{
 	{owner: "workflow_deadline", table: "_workflow_tasks"},
 	{owner: "business_action", table: sharedoperation.TableName, scopeColumn: "owner", scopeValue: "action"},
 	{owner: "record_mutation", table: sharedoperation.TableName, scopeColumn: "owner", scopeValue: "record"},
-	{owner: "idempotency_cleanup", table: "_worker_scopes", scopeColumn: "owner", scopeValue: "idempotency_cleanup"},
+	{owner: "idempotency_cleanup", table: sharedworkerscope.TableName, scopeColumn: "owner", scopeValue: sharedworkerscope.OwnerIdempotencyCleanup},
 	{owner: "automation", table: "_automation_runs", scopeColumn: "run_kind", scopeValue: "instruction"},
 	{owner: "runtime_publication_outbox", table: "_publication_outbox"},
 }
@@ -64,6 +65,10 @@ func (s OperationsStore) operationsLeaseCounts(ctx context.Context, table, scope
 			return 0, 0, err
 		}
 		counts, err := ledger.CountLeases(ctx, sharedoperation.RecordFilter{AllScopes: true, Owner: scopeValue}, instanceID, now.Format(time.RFC3339Nano))
+		return counts.Live, counts.Expired, err
+	}
+	if table == sharedworkerscope.TableName {
+		counts, err := sharedworkerscope.NewStore(s.database(), s.store.SQLRenderer).CountLeases(ctx, s.database(), scopeValue, instanceID, now)
 		return counts.Live, counts.Expired, err
 	}
 	nowText := now.Format(time.RFC3339Nano)

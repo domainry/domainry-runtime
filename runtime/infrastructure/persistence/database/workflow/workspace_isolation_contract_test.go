@@ -8,6 +8,8 @@ import (
 )
 
 func TestWorkflowStoreWorkspaceIsolationContract(t *testing.T) {
+	const executionV1 = "2026-09-24T00:00:00Z"
+	const executionV2 = "2026-09-24T00:00:01Z"
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
@@ -26,7 +28,7 @@ func TestWorkflowStoreWorkspaceIsolationContract(t *testing.T) {
 		if err := processes.InsertProcess(t.Context(), workspaceID, sharedProcess); err != nil {
 			t.Fatalf("insert process in %s: %v", workspaceID, err)
 		}
-		execution := workflowmodel.WorkflowExecution{ID: "shared-execution", WorkflowKey: "approval", Name: "Approval", Trigger: "manual", Status: "pending", Action: map[string]any{}, Payload: map[string]any{}, Result: map[string]any{}, ActorID: "requester", CreatedAt: "v1", UpdatedAt: "v1"}
+		execution := workflowmodel.WorkflowExecution{ID: "shared-execution", WorkflowKey: "approval", Name: "Approval", Trigger: "manual", Status: "pending", Action: map[string]any{}, Payload: map[string]any{}, Result: map[string]any{}, ActorID: "requester", CreatedAt: executionV1, UpdatedAt: executionV1}
 		if err := workers.InsertExecution(t.Context(), workspaceID, execution); err != nil {
 			t.Fatalf("insert execution in %s: %v", workspaceID, err)
 		}
@@ -49,8 +51,8 @@ func TestWorkflowStoreWorkspaceIsolationContract(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("get workspace A execution: found=%v err=%v", found, err)
 	}
-	executionA.Status, executionA.UpdatedAt = "running", "v2"
-	updated, err := workers.UpdateExecutionWhere(t.Context(), workspaceA, executionA, map[string]any{"status": "pending", "updated_at": "v1"})
+	executionA.Status, executionA.UpdatedAt = "running", executionV2
+	updated, err := workers.UpdateExecutionWhere(t.Context(), workspaceA, executionA, map[string]any{"status": "pending", "updated_at": executionV1})
 	if err != nil || !updated {
 		t.Fatalf("claim workspace A execution: updated=%v err=%v", updated, err)
 	}

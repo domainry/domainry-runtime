@@ -16,6 +16,7 @@ import (
 	auditmodule "github.com/domainry/domainry-audit/module"
 	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
+	sharedworkerscope "github.com/domainry/domainry-foundation/workerscope"
 	ormmigration "github.com/domainry/domainry-orm/migration"
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
@@ -23,7 +24,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "032_foundation_artifact_kernel"
+const CurrentRuntimeSchemaVersion = "033_foundation_worker_scope_kernel"
 
 type RuntimeSchemaCapabilities struct {
 	Workflow            bool
@@ -83,9 +84,15 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 		if err := s.ensureOperationsKernel(ctx); err != nil {
 			return err
 		}
-		return s.ensureArtifactKernel(ctx)
+		if err := s.ensureArtifactKernel(ctx); err != nil {
+			return err
+		}
+		return s.ensureWorkerScopeKernel(ctx)
 	}
 	if s.schemaAssembler == nil {
+		if err := s.ensureWorkerScopeKernel(ctx); err != nil {
+			return err
+		}
 		if err := s.ensureOperationsKernel(ctx); err != nil {
 			return err
 		}
@@ -320,6 +327,7 @@ func (s *RuntimeStore) runtimeMigrationStore() *RuntimeStore {
 		sqlMetrics:                  s.sqlMetrics,
 		operationalMetrics:          s.operationalMetrics,
 		workerScopeCursor:           s.workerScopeCursor,
+		workerScopes:                sharedworkerscope.NewStore(s.migrationDB, s.RuntimeRenderer()),
 		workerWakeups:               s.workerWakeups,
 		schemaAssembler:             s.schemaAssembler,
 		backupChecksum:              s.backupChecksum,
@@ -398,6 +406,9 @@ func (s *RuntimeStore) EnsureApplicationSchemaFor(ctx context.Context, capabilit
 
 func (s *RuntimeStore) EnsureEvidenceSchema(ctx context.Context) error {
 	if s.schemaAssembler == nil {
+		if err := s.ensureWorkerScopeKernel(ctx); err != nil {
+			return err
+		}
 		if err := s.ensureOperationsKernel(ctx); err != nil {
 			return err
 		}
@@ -432,6 +443,18 @@ func (s *RuntimeStore) ensureOperationsKernel(ctx context.Context) error {
 	if _, err := sharedoperation.Open(ctx, s.DB(), s.RuntimeRenderer(), s); err != nil {
 		return fmt.Errorf("open Runtime Operations persistence: %w", err)
 	}
+	return nil
+}
+
+func (s *RuntimeStore) ensureWorkerScopeKernel(ctx context.Context) error {
+	if s == nil || s.DB() == nil {
+		return fmt.Errorf("Runtime Worker Scope persistence host is incomplete")
+	}
+	store, err := sharedworkerscope.Open(ctx, s.DB(), s.RuntimeRenderer(), s)
+	if err != nil {
+		return fmt.Errorf("open Runtime Worker Scope persistence: %w", err)
+	}
+	s.workerScopes = store
 	return nil
 }
 

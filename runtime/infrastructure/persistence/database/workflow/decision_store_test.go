@@ -67,7 +67,7 @@ func TestContextWorkflowDecisionCommitIsAtomic(t *testing.T) {
 				Process: &completedProcess, UpdateNodes: []workflowmodel.WorkflowNodeInstance{completedNode}, Events: []workflowmodel.WorkflowProcessEvent{event},
 				RecordMutations: []transactionmodel.RecordMutationCommit{{
 					Operation: "update", Object: object, Record: recordmodel.Record{ID: "business_1", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "v1",
-					Audit: &auditmodel.AuditEvent{ID: "decision_audit", Event: "workflow_task_decided", ObjectKey: object.Key, RecordID: "business_1", ActorID: "manager", CreatedAt: "v2"},
+					Audit: &auditmodel.AuditEvent{ID: "decision_audit", Family: auditmodel.EventFamilyRuntimeWorkflow, Event: "workflow_task_decided", ObjectKey: object.Key, RecordID: "business_1", ActorID: "manager", CreatedAt: "v2"},
 				}},
 			}
 			committed, err := newAgentWorkflowDecisionStore(store).CommitWorkflowDecision(t.Context(), commit)

@@ -12,6 +12,7 @@ import (
 	dataexchangesaashost "github.com/domainry/domainry-data-exchange-sdk/saashost"
 	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	sharedworkerscope "github.com/domainry/domainry-foundation/workerscope"
 	notificationmodulehost "github.com/domainry/domainry-notification-sdk/modulehost"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -61,6 +62,10 @@ func (r dataExchangeMigrationRegistrar) ApplyOwnedMigrations(ctx context.Context
 }
 
 func (r dataExchangeMigrationRegistrar) ApplyFoundationArtifactMigrations(ctx context.Context, owner string, migrations []sharedartifact.SchemaMigration) error {
+	return r.store.ApplyORMOwnedMigrations(ctx, owner, migrations)
+}
+
+func (r dataExchangeMigrationRegistrar) ApplyFoundationWorkerScopeMigrations(ctx context.Context, owner string, migrations []sharedworkerscope.SchemaMigration) error {
 	return r.store.ApplyORMOwnedMigrations(ctx, owner, migrations)
 }
 
