@@ -57,7 +57,7 @@ func TestRuntimeSchemaInstallsOnlySelectedNativeCapabilities(t *testing.T) {
 	if _, err := minimal.DB().ExecContext(t.Context(), statement, args...); err != nil {
 		t.Fatalf("minimal CRUD write referenced unselected Lifecycle fencing: %v", err)
 	}
-	for _, table := range []string{"_project_model_state", "_audit_events", "_worker_scopes", "_rate_limit_buckets"} {
+	for _, table := range []string{"_project_model_state", "_worker_scopes", "_rate_limit_buckets"} {
 		if !runtimeSchemaTablePresent(t, minimal, table) {
 			t.Fatalf("minimal Runtime schema omitted core table %q", table)
 		}

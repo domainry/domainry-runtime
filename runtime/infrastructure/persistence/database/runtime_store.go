@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	auditsdk "github.com/domainry/domainry-audit-sdk"
+	auditcontract "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/secrets"
 	"github.com/domainry/domainry-foundation/telemetry"
@@ -55,9 +57,35 @@ type RuntimeStore struct {
 	backupChecksum              func(string) (string, error)
 	migrationReadDir            func(string) ([]os.DirEntry, error)
 	metadataBinding             metadatasdk.Binding
+	auditBinding                auditsdk.Binding
 	runtimeCapabilities         RuntimeSchemaCapabilities
 	runtimeCapabilitiesSelected bool
 	subjectLifecycleBound       atomic.Bool
+}
+
+func (s *RuntimeStore) BindAudit(binding auditsdk.Binding) error {
+	if s == nil || binding == nil || binding.PreparedAppender() == nil {
+		return fmt.Errorf("Audit Binding is incomplete")
+	}
+	if s.auditBinding != nil {
+		return fmt.Errorf("Audit Binding is already configured")
+	}
+	s.auditBinding = binding
+	return nil
+}
+
+func (s *RuntimeStore) AppendPreparedAuditWithin(ctx context.Context, tx auditcontract.Transaction, event auditcontract.AuditEvent) error {
+	if s == nil || s.auditBinding == nil || s.auditBinding.PreparedAppender() == nil {
+		return fmt.Errorf("Audit Binding is unavailable")
+	}
+	return s.auditBinding.PreparedAppender().AppendPreparedWithin(ctx, tx, event)
+}
+
+func (s *RuntimeStore) Audit() auditsdk.Binding {
+	if s == nil {
+		return nil
+	}
+	return s.auditBinding
 }
 
 // BindSubjectLifecyclePersistence enables the write fences backed by the

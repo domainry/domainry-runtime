@@ -24,6 +24,7 @@ import (
 	reportnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/reportnotification"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 	reportmodulehost "github.com/domainry/domainry-runtime/runtime/modulehost/report"
+	auditmodulefixture "github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 	metadatamodulefixture "github.com/domainry/domainry-runtime/testsupport/metadatamodulefixture"
 	notificationsdkfixture "github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )
@@ -52,6 +53,7 @@ func NewRuntimeServices(ctx context.Context, config RuntimeServicesConfig) *comp
 		definitions.Reports = append(definitions.Reports, runtimeext.ReportDefinition{Report: report})
 	}
 	if config.Store != nil {
+		auditmodulefixture.EnsureBinding(ctx, config.Store)
 		metadatamodulefixture.EnsureBinding(ctx, config.Store)
 	}
 	if config.Store != nil && config.ApplicationSchemaRepository == nil {
@@ -130,7 +132,7 @@ func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesC
 		ReportSnapshotSources:               reportSQL,
 		ReportSnapshotNotificationCommitter: reportnotification.NewReportSnapshotNotificationCommitter(config.Store, reportBinding.Snapshots()),
 		ReportNotificationCompiler:          compileTestkitReportNotification,
-		Audit:                               auditpersistence.NewAuditStoreFromRuntimeStore(ctx, config.Store),
+		Audit:                               auditpersistence.NewAuditStoreFromRuntimeStore(config.Store),
 		IntegrationPublication:              publicationhandoffpersistence.NewPublicationStore(config.Store),
 		IntegrationPublicationWorker:        publicationhandoffpersistence.NewWorkerStore(config.Store),
 		WorkflowWorker:                      workflowpersistence.NewWorkflowWorkerStore(config.Store),

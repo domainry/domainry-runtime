@@ -47,6 +47,7 @@ type ProjectDatabase = persistence.RuntimeStore
 type RuntimeSchemaCapabilities = persistence.RuntimeSchemaCapabilities
 type ProjectStartupOptions = runtimebootstrap.ProjectStartupOptions
 type DevelopmentDataOptions = runtimebootstrap.DevelopmentDataOptions
+type FoundationModuleFactories = runtimebootstrap.FoundationModuleFactories
 
 func ProjectSchemaCapabilities(model projectmodel.RuntimeModel, extensions *runtimeext.ProjectExtensionRegistry) RuntimeSchemaCapabilities {
 	return runtimebootstrap.ProjectSchemaCapabilities(model, extensions)
@@ -56,8 +57,8 @@ func PrepareProjectDatabase(ctx context.Context, cfg config.Config, capabilities
 	return runtimebootstrap.PrepareProjectDatabase(ctx, cfg, capabilities)
 }
 
-func NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx context.Context, cfg config.Config, handlers *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, report reportsdk.Factory, database *ProjectDatabase, options ProjectStartupOptions, agent ...agentsdk.Factory) *Runtime {
-	return runtimebootstrap.NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, notification, monitoring, scheduler, dataExchange, integration, report, database, options, agent...)
+func NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx context.Context, cfg config.Config, handlers *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, evidence RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, foundationModules FoundationModuleFactories, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, report reportsdk.Factory, database *ProjectDatabase, options ProjectStartupOptions, agent ...agentsdk.Factory) *Runtime {
+	return runtimebootstrap.NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx, cfg, handlers, connectors, releaseIdentity, evidence, identity, foundationModules, notification, monitoring, scheduler, dataExchange, integration, report, database, options, agent...)
 }
 
 func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {

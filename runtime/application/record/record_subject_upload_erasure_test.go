@@ -11,6 +11,7 @@ import (
 
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -43,7 +44,11 @@ func TestRegisteredAbandonedUploadIsExportedAndDeletedFromFrozenPlan(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, err := binding.SubjectArtifacts(root)
+	localContent, err := blobstore.NewLocalStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := binding.SubjectArtifacts(root, blobstore.LifecycleContentStore{Blobs: localContent})
 	if err != nil {
 		t.Fatal(err)
 	}

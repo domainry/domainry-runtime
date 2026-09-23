@@ -761,7 +761,7 @@ func TestBusinessActionExecutionStoreRollsBackMutationAndDurableIntentWhenAction
 		t.Fatal(err)
 	}
 	duplicateAudit := auditmodel.AuditEvent{ID: "action-audit-duplicate", WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "existing_event", CreatedAt: now.Format(time.RFC3339Nano)}
-	if err := auditpersistence.NewAuditStoreFromRuntimeStore(t.Context(), store).InsertAuditEvent(t.Context(), "workspace-a", duplicateAudit); err != nil {
+	if err := auditpersistence.NewAuditStoreFromRuntimeStore(store).InsertAuditEvent(t.Context(), "workspace-a", duplicateAudit); err != nil {
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "action_audit_rollback", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}

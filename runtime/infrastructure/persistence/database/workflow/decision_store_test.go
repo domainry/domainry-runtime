@@ -14,6 +14,7 @@ import (
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	agentsdkfixture "github.com/domainry/domainry-runtime/testsupport/agentsdkfixture"
+	"github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 	metadatamodulefixture "github.com/domainry/domainry-runtime/testsupport/metadatamodulefixture"
 
 	"path/filepath"
@@ -241,6 +242,7 @@ func workflowDecisionStoreFixture(t *testing.T) (*database.RuntimeStore, definit
 		store.Close()
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		store.Close()
 		t.Fatal(err)

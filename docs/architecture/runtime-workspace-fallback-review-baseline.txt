@@ -36,6 +36,9 @@
 # or substitutes a fallback workspace.
 # 2026-09-22 review: the retired worker-queue-scope backfill and its workspace
 # fallback candidate were removed with the shared worker-scope implementation.
+# 2026-09-24 review: retired migration/store fallbacks were removed. Current
+# Operations result evidence, Artifact content, and Runtime status candidates
+# all reject an empty workspace and never substitute a tenant.
 runtime/application/action/action_invocation_receipt_read.go|887c5c451c24ca0c
 runtime/application/action/action_invocation_receipt_read.go|f7281c25559cf6ce
 runtime/application/action/action_workspace_aggregate_execution.go|5bb28c1937a21188
@@ -52,6 +55,8 @@ runtime/application/agenthost/conversation_business_host.go|e3dcace4ac8cd670
 runtime/application/agenthost/conversation_business_write_receipt_read.go|97ea556eec451090
 runtime/application/devdata/generator.go|b2e5ab60c1900c7a
 runtime/application/notificationfacade/module_transactions.go|a53412ab9d129a2d
+runtime/application/operations/operations_result_evidence_application_service.go|4496d7a392fddd26
+runtime/application/operations/operations_result_evidence_application_service.go|b2e5ab60c1900c7a
 runtime/application/publicationhandoff/publication_handoff_application_service.go|3a264f3250c4d24e
 runtime/application/publicationhandoff/publication_handoff_application_service.go|b2e5ab60c1900c7a
 runtime/application/record/record_subject_erasure_plan.go|9fa2685ac2a3d4c7
@@ -73,6 +78,7 @@ runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
 runtime/application/workspaceprovision/workspace_administration_application_service.go|0e4286d03e5f3289
 runtime/application/workspaceprovision/workspace_administration_application_service.go|6a0413e7fa385b92
 runtime/application/workspaceprovision/workspace_administration_application_service.go|b7fd3431341b3beb
+runtime/infrastructure/blobstore/lifecycle_adapter.go|cf5184adabe49643
 runtime/infrastructure/blobstore/local_store.go|2c55a13d781fdec0
 runtime/infrastructure/blobstore/local_store.go|9eacf70f950bff5a
 runtime/infrastructure/blobstore/local_store.go|9eacf70f950bff5a
@@ -83,17 +89,15 @@ runtime/infrastructure/persistence/database/action/action_business_execution_sto
 runtime/infrastructure/persistence/database/automation/sql_values.go|e3a854a480b5fcda
 runtime/infrastructure/persistence/database/datamigration/copy.go|50c2e571441e2111
 runtime/infrastructure/persistence/database/datamigration/verify.go|d6e7f1f7aec0d805
-runtime/infrastructure/persistence/database/deployment/runtime_status_store.go|aa60dbbb6d4212b5
-runtime/infrastructure/persistence/database/deployment/runtime_status_store.go|aa60dbbb6d4212b5
+runtime/infrastructure/persistence/database/deployment/runtime_status_store.go|036305867efec4eb
 runtime/infrastructure/persistence/database/deployment/runtime_status_store.go|b2e5ab60c1900c7a
 runtime/infrastructure/persistence/database/notificationpublication/publication_outbox_store.go|76820ce84ef1ab0b
 runtime/infrastructure/persistence/database/operations/operations_lease_release_store.go|7a71ce1034c84994
 runtime/infrastructure/persistence/database/operations/operations_lease_release_store.go|7a71ce1034c84994
 runtime/infrastructure/persistence/database/operations/operations_lease_release_store.go|7a71ce1034c84994
 runtime/infrastructure/persistence/database/operations/operations_lease_release_store.go|8064de5ad2689fb1
-runtime/infrastructure/persistence/database/operations/operations_store.go|aa60dbbb6d4212b5
-runtime/infrastructure/persistence/database/operations/operations_store.go|aa60dbbb6d4212b5
-runtime/infrastructure/persistence/database/operations/operations_store.go|aa60dbbb6d4212b5
+runtime/infrastructure/persistence/database/operations/operations_result_artifact_store.go|087abc5d6178bad3
+runtime/infrastructure/persistence/database/operations/operations_result_artifact_store.go|4b55c7906fdd470a
 runtime/infrastructure/persistence/database/publicationhandoff/publication_store.go|5a36b4df9408e1f7
 runtime/infrastructure/persistence/database/publicationhandoff/publication_store.go|7b95cd2bfed73c02
 runtime/infrastructure/persistence/database/publicresource/store.go|a46919ba8e779ba1
@@ -106,16 +110,10 @@ runtime/infrastructure/persistence/database/report/report_export_prepare_receipt
 runtime/infrastructure/persistence/database/report/report_export_prepare_receipt_store.go|4d6a2a9b24627125
 runtime/infrastructure/persistence/database/report/report_export_prepare_receipt_store.go|fd8d30675ba2e2a7
 runtime/infrastructure/persistence/database/runtime_store.go|25946a0c038e554c
-runtime/infrastructure/persistence/database/schema/idempotency_receipt_migration.go|e8c3ac38d432ce4d
 runtime/infrastructure/persistence/database/subject_write_fence.go|3933b62c3fd70ac8
-runtime/infrastructure/persistence/database/transaction/boundary_intent_store.go|b2e5ab60c1900c7a
 runtime/infrastructure/persistence/database/upload_subjects.go|1852fa1245f38ae5
 runtime/infrastructure/persistence/database/upload_subjects.go|293422872c41abac
 runtime/infrastructure/persistence/database/workflow_withdrawal.go|d9cd8d473cf6d978
-runtime/infrastructure/persistence/database/workspace_authority_migration.go|0b077f6dc4679960
-runtime/infrastructure/persistence/database/workspace_authority_migration.go|a6eebb2c3352d05c
-runtime/infrastructure/persistence/database/workspace_authority_migration.go|cdc02830ba5f9cbf
-runtime/infrastructure/persistence/database/workspace_authority_migration.go|e4b994b4a4d16fd7
 runtime/infrastructure/persistence/database/workspaceaggregate/store.go|1b8985217bed23e8
 runtime/infrastructure/persistence/database/workspaceaggregate/store.go|2c2c795ac86bd065
 runtime/infrastructure/persistence/database/workspaceaggregate/store.go|5714632398805316

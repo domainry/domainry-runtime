@@ -19,6 +19,7 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 	"github.com/domainry/domainry-runtime/testsupport/notificationsdkfixture"
 )
 
@@ -31,6 +32,7 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		t.Fatal(err)
 	}
@@ -145,6 +147,7 @@ func TestRecordMutationExecutionHundredConcurrentClaimsHaveOneOwner(t *testing.T
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	repository := NewRecordStore(store)
 	now := time.Date(2026, 7, 19, 18, 0, 0, 0, time.UTC)
 	var acquired atomic.Int64
@@ -189,6 +192,7 @@ func TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit(t
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	if _, err := store.DB().Exec(`CREATE TABLE concurrent_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, name TEXT)`); err != nil {
 		t.Fatal(err)
 	}
@@ -273,6 +277,7 @@ func TestRecordMutationOperationCompletionIsFencedAndReplayable(t *testing.T) {
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	repository := NewRecordStore(store)
 	now := time.Date(2026, 7, 19, 19, 0, 0, 0, time.UTC)
 	request := recordmodel.RecordMutationClaimRequest{Execution: recordmodel.RecordMutationExecution{WorkspaceID: "workspace-a", Operation: "import", ObjectKey: "customer", IdempotencyKey: "import-1"}, RequestFingerprint: "csv-fingerprint", LeaseOwner: "runtime-a", LeaseTTL: time.Minute, Now: now}
@@ -303,6 +308,7 @@ func TestRecordMutationTerminalFailureCompletionPersistsReplayEvidenceAtomically
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	repository := NewRecordStore(store)
 	now := time.Date(2026, 8, 30, 0, 30, 14, 0, time.UTC)
 	request := recordmodel.RecordMutationClaimRequest{
@@ -338,6 +344,7 @@ func TestRecordMutationRetryableFailureCanBeReclaimedAndClearsPriorFailure(t *te
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	repository := NewRecordStore(store)
 	now := time.Date(2026, 8, 30, 1, 0, 0, 0, time.UTC)
 	request := recordmodel.RecordMutationClaimRequest{
@@ -371,6 +378,7 @@ func TestRecordMutationExecutionWorkspaceScopeDoesNotConflictOrLeakReplay(t *tes
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	repository := NewRecordStore(store)
 	now := time.Date(2026, 7, 19, 20, 0, 0, 0, time.UTC)
 	claim := func(workspace, owner string) recordmodel.RecordMutationClaimResult {

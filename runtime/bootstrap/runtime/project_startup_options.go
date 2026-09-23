@@ -6,6 +6,7 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
+	toolsdk "github.com/domainry/domainry-tools-sdk"
 )
 
 // ProjectStartupOptions carries trusted process-local inputs. None of these
@@ -14,6 +15,7 @@ type ProjectStartupOptions struct {
 	ProjectModel              projectmodel.RuntimeModel
 	ConversationCodeRuntime   agentsdk.ConversationCodeRuntime
 	ConversationCodingRuntime agentsdk.ConversationCodingRuntime
+	ConversationToolsFactory  toolsdk.ConversationToolFactory
 	DevelopmentData           DevelopmentDataOptions
 	AnalysisTableSource       reportmodulehost.AnalysisTableSource
 	BlobStore                 runtimefile.BlobStore

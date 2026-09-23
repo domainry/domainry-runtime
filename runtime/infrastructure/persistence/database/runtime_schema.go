@@ -10,11 +10,9 @@ import (
 	"strings"
 	"time"
 
-	auditmodule "github.com/domainry/domainry-audit/module"
 	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	sharedworkerscope "github.com/domainry/domainry-foundation/workerscope"
-	ormmigration "github.com/domainry/domainry-orm/migration"
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/base"
 	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
@@ -127,14 +125,6 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 	if err := s.ensureEvidenceSchemaFor(ctx, capabilities); err != nil {
 		return err
 	}
-	if err := s.ensureAuditModuleSchemaLocked(ctx); err != nil {
-		return err
-	}
-	// The MySQL evidence profile normalizes cursor columns owned by the Audit
-	// module, so the source-owned Audit table must exist before normalization.
-	if err := s.RuntimeProfile().NormalizeEvidenceSchema(ctx, s.schemaDatabase(), s.RuntimeRenderer()); err != nil {
-		return err
-	}
 	if capabilities.Workflow {
 		if err := s.EnsureWorkflowProcessSchema(ctx); err != nil {
 			return err
@@ -147,31 +137,6 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 		return err
 	}
 	return nil
-}
-
-func (s *RuntimeStore) ensureAuditModuleSchemaLocked(ctx context.Context) error {
-	migrations, err := auditmodule.SchemaMigrations(s.RuntimeRenderer(), s.Driver())
-	if err != nil {
-		return err
-	}
-	values := make([]ormmigration.Migration, len(migrations))
-	for index, migration := range migrations {
-		values[index] = ormmigration.Migration{Version: migration.Version, Name: migration.Name, Statements: append([]string(nil), migration.Statements...)}
-		if migration.Baseline != nil {
-			baseline := ormmigration.Baseline{Tables: make([]ormmigration.Table, len(migration.Baseline.Tables))}
-			for tableIndex, table := range migration.Baseline.Tables {
-				baseline.Tables[tableIndex] = ormmigration.Table{Name: table.Name, Columns: make([]ormmigration.Column, len(table.Columns)), Indexes: make([]ormmigration.Index, len(table.Indexes))}
-				for columnIndex, column := range table.Columns {
-					baseline.Tables[tableIndex].Columns[columnIndex] = ormmigration.Column{Name: column.Name, Type: column.Type, Nullable: column.Nullable, PrimaryKey: column.PrimaryKey}
-				}
-				for indexIndex, item := range table.Indexes {
-					baseline.Tables[tableIndex].Indexes[indexIndex] = ormmigration.Index{Name: item.Name, Unique: item.Unique, Columns: append([]string(nil), item.Columns...)}
-				}
-			}
-			values[index].Baseline = &baseline
-		}
-	}
-	return s.applyOwnedMigrationsLocked(ctx, "audit", values)
 }
 
 func (s *RuntimeStore) runtimeMigrationStore() *RuntimeStore {

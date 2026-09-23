@@ -83,7 +83,7 @@ func objectActionTestDependencies(ctx context.Context, store *persistence.Runtim
 	metadatamodulefixture.EnsureBinding(ctx, store)
 	return RuntimeServicesDependencies{
 		Records:                      recordpersistence.NewRecordStore(store),
-		Audit:                        auditpersistence.NewAuditStoreFromRuntimeStore(ctx, store),
+		Audit:                        auditpersistence.NewAuditStoreFromRuntimeStore(store),
 		IntegrationPublication:       publicationhandoffpersistence.NewPublicationStore(store),
 		IntegrationPublicationWorker: publicationhandoffpersistence.NewWorkerStore(store),
 		ApplicationSchema:            appschemapersistence.NewApplicationSchemaStore(store),
@@ -111,7 +111,7 @@ func mapFromAny(value any) map[string]any {
 }
 
 func auditStore(ctx context.Context, store *persistence.RuntimeStore) *auditpersistence.AuditStore {
-	return auditpersistence.NewAuditStoreFromRuntimeStore(ctx, store)
+	return auditpersistence.NewAuditStoreFromRuntimeStore(store)
 }
 
 func workflowProcessStore(store *persistence.RuntimeStore) workflowpersistence.WorkflowProcessStore {

@@ -33,6 +33,7 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 		Store:                runtime.store, RateLimiter: runtime.rateLimiter,
 		AgentRepositories:        agentRepositories,
 		AgentBinding:             runtime.agentBinding,
+		ConversationToolsFactory: runtime.conversationToolsFactory,
 		ProjectModel:             runtime.projectModel,
 		SchemaCapabilities:       &runtime.schemaCapabilities,
 		WorkspaceRolePolicy:      runtime.workspaceRolePolicy,

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	. "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 )
 
 func TestContextRecordMutationDialectContracts(t *testing.T) {
@@ -32,6 +33,7 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 			if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 				t.Fatalf("ensure runtime schema: %v", err)
 			}
+			auditmodulefixture.Bind(t, t.Context(), store)
 			if err := store.SetEngineForTesting(driver); err != nil {
 				t.Fatal(err)
 			}
@@ -155,6 +157,7 @@ func TestCommitRecordMutationBatchRollsBackEveryRecordOnConflict(t *testing.T) {
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatalf("ensure runtime schema: %v", err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	object := definitionmodel.ObjectSchema{Key: "atomic_record", Name: "Atomic Record", Fields: []definitionmodel.FieldSchema{{Key: "status", Name: "Status", Type: "text"}}}
 	if _, err := store.DB().Exec(`CREATE TABLE atomic_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT)`); err != nil {
 		t.Fatalf("create table: %v", err)
@@ -188,6 +191,7 @@ func TestRecordMutationAuthorizationScopeGuardsUpdateDeleteAndWholeBatch(t *test
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	object := definitionmodel.ObjectSchema{Key: "scoped_mutation", Fields: []definitionmodel.FieldSchema{
 		{Key: "owner_user_id", Type: "text"},
 		{Key: "status", Type: "text"},
@@ -252,6 +256,7 @@ func TestConditionalMutationPredicateIsAtomicAcrossDialects(t *testing.T) {
 			if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 				t.Fatal(err)
 			}
+			auditmodulefixture.Bind(t, t.Context(), store)
 			if err := store.SetEngineForTesting(driver); err != nil {
 				t.Fatal(err)
 			}
@@ -300,6 +305,7 @@ func TestMutationSideFactFailureWindowsRollbackRecordAuditOutboxAndWorkflowInten
 			if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 				t.Fatal(err)
 			}
+			auditmodulefixture.Bind(t, t.Context(), store)
 			object := definitionmodel.ObjectSchema{Key: "failure_window_record", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
 			if _, err := store.DB().Exec(`CREATE TABLE failure_window_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT)`); err != nil {
 				t.Fatal(err)
@@ -337,6 +343,7 @@ func TestTemporalExclusionIsEnforcedInsideMutationTransaction(t *testing.T) {
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	if _, err := store.DB().Exec(`CREATE TABLE booking_slot (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, owner TEXT, starts_at TEXT, ends_at TEXT, status TEXT)`); err != nil {
 		t.Fatal(err)
 	}
@@ -384,6 +391,7 @@ func TestRelatedAggregateInvariantLocksParentAndUsesExactCandidateAggregate(t *t
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	for _, ddl := range []string{
 		`CREATE TABLE payment_limit (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, paid_amount TEXT)`,
 		`CREATE TABLE refund_fact (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, payment_id TEXT, amount TEXT, status TEXT)`,

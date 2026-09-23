@@ -6,6 +6,7 @@ import (
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 )
 
 func openStoreForGeneratedListTest(t *testing.T) *database.RuntimeStore {
@@ -14,5 +15,10 @@ func openStoreForGeneratedListTest(t *testing.T) *database.RuntimeStore {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	return store
 }

@@ -18,6 +18,7 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 )
 
 func TestRecordIdempotencyMultipleRuntimeStoresSharingDatabaseHaveOneOwner(t *testing.T) {
@@ -185,6 +186,7 @@ func TestRecordIdempotencyCrashWindowRollsBackBusinessWriteBeforeReceiptCompleti
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	if _, err := store.DB().Exec(`CREATE TABLE crash_window_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, name TEXT)`); err != nil {
 		t.Fatal(err)
 	}

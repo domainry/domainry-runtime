@@ -7,9 +7,7 @@ import (
 	"strings"
 	"time"
 
-	auditsdk "github.com/domainry/domainry-audit-sdk"
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
-	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
@@ -333,7 +331,7 @@ func appendDatabaseRetirementCompletionAudit(ctx context.Context, store *databas
 		},
 		CreatedAt: completedAt.Format(time.RFC3339Nano),
 	}
-	if err := auditmoduleimpl.AppendPreparedWithin(ctx, store.RuntimeRenderer(), runtimeauditmodule.NewTransaction(tx), event); err != nil {
+	if err := store.AppendPreparedAuditWithin(ctx, runtimeauditmodule.NewTransaction(tx), event); err != nil {
 		return fmt.Errorf("append database retirement completion audit: %w", err)
 	}
 	return nil
@@ -351,13 +349,9 @@ func (e DatabaseRetirementSQLExecutor) VerifyDatabaseRetirementCompletionAudit(c
 	if err != nil {
 		return err
 	}
-	binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(
-		ctx,
-		auditsdk.ApplicationRef{InstallationID: "domainry-runtime"},
-		runtimeauditmodule.NewHost(e.store, nil, nil),
-	)
-	if err != nil {
-		return fmt.Errorf("open Audit Module for database retirement evidence: %w", err)
+	binding := e.store.Audit()
+	if binding == nil {
+		return fmt.Errorf("Audit Binding is unavailable for database retirement evidence")
 	}
 	events, err := binding.Reader().List(ctx, workspaceID, auditmodel.Query{
 		Event:      databaseRetirementCompletedAuditEvent,

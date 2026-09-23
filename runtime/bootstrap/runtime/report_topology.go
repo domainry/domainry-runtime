@@ -22,10 +22,10 @@ import (
 // NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions is the single
 // Runtime assembly entrypoint. The host must provide a validated project model
 // and explicitly provide only the capability adapters selected by that model.
-func NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx context.Context, cfg config.Config, handlers *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry, release runtimehttp.RuntimeReleaseIdentity, evidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, report reportsdk.Factory, store *persistence.RuntimeStore, options ProjectStartupOptions, agent ...agentsdk.Factory) *Runtime {
+func NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx context.Context, cfg config.Config, handlers *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry, release runtimehttp.RuntimeReleaseIdentity, evidence deploymentapplication.RuntimeReleaseArtifactEvidence, identity identitysdk.Binding, foundationModules FoundationModuleFactories, notification notificationsdk.Factory, monitoring monitoringsdk.Factory, scheduler schedulersdk.Factory, dataExchange dataexchangesdk.Factory, integration integrationsdk.Factory, report reportsdk.Factory, store *persistence.RuntimeStore, options ProjectStartupOptions, agent ...agentsdk.Factory) *Runtime {
 	var agentFactory agentsdk.Factory
 	if len(agent) > 0 {
 		agentFactory = agent[0]
 	}
-	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, handlers, connectors, release, identity, notification, monitoring, scheduler, dataExchange, agentFactory, integration, report, store, options, evidence)
+	return newWithExtensionsUsingAllFactoriesAndStore(ctx, cfg, handlers, connectors, release, identity, foundationModules, notification, monitoring, scheduler, dataExchange, agentFactory, integration, report, store, options, evidence)
 }

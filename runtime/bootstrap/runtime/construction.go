@@ -33,51 +33,53 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
+	toolsdk "github.com/domainry/domainry-tools-sdk"
 )
 
 type runtimeConstructionInput struct {
-	config               config.Config
-	templateID           string
-	store                *persistence.RuntimeStore
-	applicationServices  *composition.RuntimeServices
-	authorizationActions func() *actioncontract.Registry
-	moduleBindings       runtimeModuleBindingInventory
-	identityBinding      identitysdk.Binding
-	identityProjection   identitysdk.Projection
-	identityPrincipals   identitysdk.PrincipalResolver
-	principalCache       identityprincipal.Cache
-	integrationMode      integrationsdk.DeploymentMode
-	integrationBinding   integrationsdk.Binding
-	integrationWorkers   integrationsdk.LocalWorkers
-	dataExchangeBinding  dataexchangesdk.Binding
-	lifecycleBinding     lifecyclesdk.Binding
-	fileScanProcessor    *uploadapplication.FileScanProcessor
-	blobStore            runtimefile.BlobStore
-	publicResources      *publicresourceapplication.Service
-	projectModel         projectmodel.RuntimeModel
-	schemaCapabilities   persistence.RuntimeSchemaCapabilities
-	workspaceRolePolicy  workspaceprovision.WorkspaceBootstrapRolePolicyEvidence
-	recordRepository     recordrepository.RecordRepository
-	rateLimiter          ratelimit.Limiter
-	notificationHTTP     *notificationfacade.NotificationApplicationService
-	notificationBinding  notificationsdk.Binding
-	monitoringBinding    monitoringsdk.Binding
-	schedulerBinding     schedulersdk.Binding
-	agentBinding         agentsdk.Binding
-	auditBinding         auditsdk.Binding
-	metadataBinding      metadatasdk.Binding
-	reportBinding        reportsdk.Binding
-	notificationWorkers  notificationsdk.LocalWorkers
-	notificationRelay    *notificationpublication.Relay
-	worker               workerplatform.Dependencies
-	projectExtensions    *runtimeext.ProjectExtensionRegistry
-	projectHTTP          runtimeengine.HTTPFactory
-	connectorProviders   *connector.Registry
-	releaseIdentity      runtimehttp.RuntimeReleaseIdentity
-	releaseCohort        *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
-	releaseLease         deploymentmodel.RuntimeReleaseCohortLease
-	releaseAdmission     *deploymentapplication.RuntimeReleaseAdmission
-	releaseIntegrity     *deploymentapplication.RuntimeReleaseIntegrity
+	config                   config.Config
+	templateID               string
+	store                    *persistence.RuntimeStore
+	applicationServices      *composition.RuntimeServices
+	authorizationActions     func() *actioncontract.Registry
+	moduleBindings           runtimeModuleBindingInventory
+	identityBinding          identitysdk.Binding
+	identityProjection       identitysdk.Projection
+	identityPrincipals       identitysdk.PrincipalResolver
+	principalCache           identityprincipal.Cache
+	integrationMode          integrationsdk.DeploymentMode
+	integrationBinding       integrationsdk.Binding
+	integrationWorkers       integrationsdk.LocalWorkers
+	dataExchangeBinding      dataexchangesdk.Binding
+	lifecycleBinding         lifecyclesdk.Binding
+	fileScanProcessor        *uploadapplication.FileScanProcessor
+	blobStore                runtimefile.BlobStore
+	publicResources          *publicresourceapplication.Service
+	projectModel             projectmodel.RuntimeModel
+	schemaCapabilities       persistence.RuntimeSchemaCapabilities
+	workspaceRolePolicy      workspaceprovision.WorkspaceBootstrapRolePolicyEvidence
+	recordRepository         recordrepository.RecordRepository
+	rateLimiter              ratelimit.Limiter
+	notificationHTTP         *notificationfacade.NotificationApplicationService
+	notificationBinding      notificationsdk.Binding
+	monitoringBinding        monitoringsdk.Binding
+	schedulerBinding         schedulersdk.Binding
+	agentBinding             agentsdk.Binding
+	auditBinding             auditsdk.Binding
+	metadataBinding          metadatasdk.Binding
+	reportBinding            reportsdk.Binding
+	notificationWorkers      notificationsdk.LocalWorkers
+	notificationRelay        *notificationpublication.Relay
+	worker                   workerplatform.Dependencies
+	projectExtensions        *runtimeext.ProjectExtensionRegistry
+	projectHTTP              runtimeengine.HTTPFactory
+	conversationToolsFactory toolsdk.ConversationToolFactory
+	connectorProviders       *connector.Registry
+	releaseIdentity          runtimehttp.RuntimeReleaseIdentity
+	releaseCohort            *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
+	releaseLease             deploymentmodel.RuntimeReleaseCohortLease
+	releaseAdmission         *deploymentapplication.RuntimeReleaseAdmission
+	releaseIntegrity         *deploymentapplication.RuntimeReleaseIntegrity
 }
 
 func constructRuntime(input runtimeConstructionInput) *Runtime {
@@ -119,6 +121,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		worker:                     workerplatform.NormalizeDependencies(input.worker),
 		projectExtensions:          input.projectExtensions,
 		projectHTTP:                input.projectHTTP,
+		conversationToolsFactory:   input.conversationToolsFactory,
 		connectorProviders:         input.connectorProviders,
 		releaseIdentity:            input.releaseIdentity,
 		releaseCohort:              input.releaseCohort,

@@ -102,7 +102,7 @@ type serverRunDependencies struct {
 	stat                 func(string) (os.FileInfo, error)
 	readFile             func(string) ([]byte, error)
 	prepareDatabase      func(context.Context, config.Config, bootstrap.RuntimeSchemaCapabilities) (*bootstrap.ProjectDatabase, error)
-	newRuntime           func(context.Context, config.Config, *runtimeext.ProjectExtensionRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, bootstrap.ProjectStartupOptions) runtimeProcess
+	newRuntime           func(context.Context, config.Config, *runtimeext.ProjectExtensionRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, bootstrap.FoundationModuleFactories, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, bootstrap.ProjectStartupOptions) runtimeProcess
 	listenAndServe       func(*http.Server) error
 	shutdown             func(context.Context, *http.Server) error
 }
@@ -118,8 +118,8 @@ func defaultServerRunDependencies() serverRunDependencies {
 		stat:                 os.Stat,
 		readFile:             os.ReadFile,
 		prepareDatabase:      bootstrap.PrepareProjectDatabase,
-		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, notificationFactory notificationsdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, integrationFactory integrationsdk.Factory, reportFactory reportsdk.Factory, database *bootstrap.ProjectDatabase, startupOptions bootstrap.ProjectStartupOptions) runtimeProcess {
-			return bootstrapRuntimeProcess{Runtime: bootstrap.NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx, cfg, handlers, connectors, identity, evidence, binding, notificationFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, integrationFactory, reportFactory, database, startupOptions, agentFactory)}
+		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, foundationModules bootstrap.FoundationModuleFactories, notificationFactory notificationsdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, integrationFactory integrationsdk.Factory, reportFactory reportsdk.Factory, database *bootstrap.ProjectDatabase, startupOptions bootstrap.ProjectStartupOptions) runtimeProcess {
+			return bootstrapRuntimeProcess{Runtime: bootstrap.NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx, cfg, handlers, connectors, identity, evidence, binding, foundationModules, notificationFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, integrationFactory, reportFactory, database, startupOptions, agentFactory)}
 		},
 		listenAndServe: func(server *http.Server) error { return server.ListenAndServe() },
 		shutdown:       func(ctx context.Context, server *http.Server) error { return server.Shutdown(ctx) },
@@ -339,6 +339,12 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	if identityFactory == nil {
 		return fmt.Errorf("configure Identity factory: project composition did not supply an SDK Factory")
 	}
+	foundationModules := bootstrap.FoundationModuleFactories{
+		Audit: options.AuditFactory, Metadata: options.MetadataFactory, Lifecycle: options.LifecycleFactory,
+	}
+	if err := foundationModules.Validate(); err != nil {
+		return fmt.Errorf("configure foundation modules: %w", err)
+	}
 	notificationFactory := options.NotificationFactory
 	monitoringFactory := options.MonitoringFactory
 	schedulerFactory := options.SchedulerFactory
@@ -488,9 +494,10 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 					RecordsPerObject: options.DevelopmentData.RecordsPerObject,
 				}
 			}
-			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, projectExtensions, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, notificationFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, agentFactory, integrationFactory, reportFactory, projectDatabase, bootstrap.ProjectStartupOptions{
+			runtime := dependencies.newRuntime(lifecycleCtx, runtimeConfig, projectExtensions, connectorProviders, releaseIdentity, artifactEvidence, identityBinding, foundationModules, notificationFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, agentFactory, integrationFactory, reportFactory, projectDatabase, bootstrap.ProjectStartupOptions{
 				ConversationCodeRuntime:   codeRuntime,
 				ConversationCodingRuntime: codingRuntime,
+				ConversationToolsFactory:  options.ConversationToolsFactory,
 				DevelopmentData:           developmentData,
 				ProjectModel:              runtimeModel,
 				AnalysisTableSource:       analysisTableSource,

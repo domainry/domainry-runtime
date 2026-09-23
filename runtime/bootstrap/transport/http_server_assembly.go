@@ -17,6 +17,7 @@ import (
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
+	toolsdk "github.com/domainry/domainry-tools-sdk"
 
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
@@ -61,6 +62,7 @@ type HTTPServerDependencies struct {
 	IntegrationBinding       integrationsdk.Binding
 	AgentRepositories        agentpersistence.Binding
 	AgentBinding             agentsdk.Binding
+	ConversationToolsFactory toolsdk.ConversationToolFactory
 	LifecycleBinding         lifecyclesdk.Binding
 	RateLimiter              ratelimit.Limiter
 	ProjectModel             projectmodel.RuntimeModel

@@ -39,6 +39,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
+	toolsdk "github.com/domainry/domainry-tools-sdk"
 )
 
 // Runtime owns the process-level composition and lifecycle.
@@ -82,6 +83,7 @@ type Runtime struct {
 	api                        *runtimehttp.HTTPRouter
 	projectExtensions          *runtimeext.ProjectExtensionRegistry
 	projectHTTP                runtimeengine.HTTPFactory
+	conversationToolsFactory   toolsdk.ConversationToolFactory
 	connectorProviders         *connector.Registry
 	releaseIdentity            runtimehttp.RuntimeReleaseIdentity
 	releaseCohort              *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService

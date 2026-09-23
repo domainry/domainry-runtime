@@ -12,7 +12,6 @@ import (
 	"time"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
-	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-orm/query"
 	workspaceprovisionapplication "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
@@ -410,7 +409,7 @@ func (store *WorkspaceAdministrationStore) appendAdministrationAudit(ctx context
 		ActorID: actor.UserID, RoleKey: actor.RoleKey, Summary: "Governed Workspace administration",
 		Before: before, After: after, Metadata: metadata, CreatedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}
-	return auditmoduleimpl.AppendPreparedWithin(ctx, store.runtime.RuntimeRenderer(), runtimeauditmodule.NewTransaction(tx), event)
+	return store.runtime.AppendPreparedAuditWithin(ctx, runtimeauditmodule.NewTransaction(tx), event)
 }
 
 func (store *WorkspaceAdministrationStore) lifecycleReceipt(ctx context.Context, executor workspaceAdministrationTx, id, fingerprint string) (workspaceprovisionmodel.LifecycleResult, bool, error) {

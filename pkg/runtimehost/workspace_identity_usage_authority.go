@@ -262,7 +262,7 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) appendAuthorizationAudi
 	if err != nil {
 		return "", err
 	}
-	if err := runtimeauditmodule.NewAuditStoreFromRuntimeStore(auditCtx, authority.runtime).InsertAuditEvent(auditCtx, installation.WorkspaceID, event); err != nil {
+	if err := runtimeauditmodule.NewAuditStoreFromRuntimeStore(authority.runtime).InsertAuditEvent(auditCtx, installation.WorkspaceID, event); err != nil {
 		return "", err
 	}
 	return event.ID, nil

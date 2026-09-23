@@ -45,7 +45,6 @@ func TestFreshRuntimeSchemaUsesOwnedBusinessNamesAndOneHostLedger(t *testing.T) 
 		"_action_assurance_grants",
 		"_artifact_bindings",
 		"_artifacts",
-		"_audit_events",
 		"_automation_runs",
 		"_operation_break_glass_grants",
 		"_operation_controls",

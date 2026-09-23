@@ -30,6 +30,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
+	toolsdk "github.com/domainry/domainry-tools-sdk"
 )
 
 type agentRecordVisibilityAdapter struct {
@@ -59,6 +60,7 @@ type AgentApplicationHostDependencies struct {
 	NotificationEvents        func(context.Context, notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, bool, error)
 	ConversationCodeRuntime   agentsdk.ConversationCodeRuntime
 	ConversationCodingRuntime agentsdk.ConversationCodingRuntime
+	ConversationToolsFactory  toolsdk.ConversationToolFactory
 }
 
 // BindAgentApplicationHost closes Agent's application boundary before Runtime
@@ -76,6 +78,9 @@ func BindAgentApplicationHost(dependencies AgentApplicationHostDependencies) err
 	}
 	if dependencies.Records == nil || dependencies.Principals == nil {
 		return fmt.Errorf("Agent application host dependencies are incomplete")
+	}
+	if dependencies.ConversationToolsFactory == nil {
+		return fmt.Errorf("Agent application host requires a Conversation Tools SDK Factory")
 	}
 	applications := dependencies.Records.Applications()
 	if applications.AgentAuthorization == nil || applications.Records == nil || applications.Workflows == nil || applications.Audit == nil || applications.Schema == nil || applications.Actions == nil {
@@ -123,7 +128,7 @@ func BindAgentApplicationHost(dependencies AgentApplicationHostDependencies) err
 		return connectionAccountSubjectForPrincipal(principal, action)
 	}
 	followUps := agentFollowUpNotificationPublisher{runtimeID: dependencies.RuntimeID, application: dependencies.Application, principals: dependencies.Principals, publish: dependencies.NotificationEvents}
-	if err := binder.BindApplicationHost(runtimeAgentApplicationHost{interactive: interactive, task: task, proposal: proposal, audit: audit, analysis: analysis, conversations: conversations, followUps: followUps, accounts: accounts, accountReads: accountReads, accountWrites: accountWrites, accountSubject: subject, codeRuntime: dependencies.ConversationCodeRuntime, codingRuntime: dependencies.ConversationCodingRuntime}); err != nil {
+	if err := binder.BindApplicationHost(runtimeAgentApplicationHost{interactive: interactive, task: task, proposal: proposal, audit: audit, analysis: analysis, conversations: conversations, followUps: followUps, accounts: accounts, accountReads: accountReads, accountWrites: accountWrites, accountSubject: subject, codeRuntime: dependencies.ConversationCodeRuntime, codingRuntime: dependencies.ConversationCodingRuntime, conversationToolsFactory: dependencies.ConversationToolsFactory}); err != nil {
 		return fmt.Errorf("bind Agent application host: %w", err)
 	}
 	if err := validateAgentAuthorizationProjection(dependencies.Binding); err != nil {
@@ -200,8 +205,9 @@ func (a *httpServerAssembly) bindAgentApplicationHost() {
 		Application: identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(a.dependencies.Config.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(a.dependencies.Config.IdentityAudience)},
 		Binding:     a.dependencies.AgentBinding, Integration: a.dependencies.IntegrationBinding, Records: a.dependencies.Records, Principals: a.principals,
 		RateLimiter: a.dependencies.RateLimiter, IntegrationSecretKey: a.dependencies.Config.IntegrationSecretKey,
-		IdentityIssuer:     a.dependencies.IdentityBinding.Descriptor().Issuer,
-		NotificationEvents: a.dependencies.Records.NotificationEventPublisher(),
+		IdentityIssuer:           a.dependencies.IdentityBinding.Descriptor().Issuer,
+		NotificationEvents:       a.dependencies.Records.NotificationEventPublisher(),
+		ConversationToolsFactory: a.dependencies.ConversationToolsFactory,
 	}); err != nil {
 		panic(err.Error())
 	}
@@ -220,19 +226,20 @@ func (a *httpServerAssembly) bindAgentApplicationHost() {
 }
 
 type runtimeAgentApplicationHost struct {
-	codeRuntime    agentsdk.ConversationCodeRuntime
-	codingRuntime  agentsdk.ConversationCodingRuntime
-	conversations  *agentapplication.ConversationBusinessHost
-	interactive    agentmodulehost.InteractiveHost
-	task           agentmodulehost.TaskHost
-	proposal       agentmodulehost.ProposalHost
-	audit          agentmodulehost.AuditHost
-	analysis       agentmodulehost.AnalysisHost
-	followUps      agentsdk.ConversationFollowUpPublisher
-	accounts       integrationsdk.ConnectionAccounts
-	accountReads   integrationsdk.ConnectionAccountReads
-	accountWrites  integrationsdk.ConnectionAccountWrites
-	accountSubject func(context.Context, agentsdk.ConversationAuthority, string) (integrationsdk.ConnectionAccountSubject, error)
+	codeRuntime              agentsdk.ConversationCodeRuntime
+	codingRuntime            agentsdk.ConversationCodingRuntime
+	conversations            *agentapplication.ConversationBusinessHost
+	interactive              agentmodulehost.InteractiveHost
+	task                     agentmodulehost.TaskHost
+	proposal                 agentmodulehost.ProposalHost
+	audit                    agentmodulehost.AuditHost
+	analysis                 agentmodulehost.AnalysisHost
+	followUps                agentsdk.ConversationFollowUpPublisher
+	accounts                 integrationsdk.ConnectionAccounts
+	accountReads             integrationsdk.ConnectionAccountReads
+	accountWrites            integrationsdk.ConnectionAccountWrites
+	accountSubject           func(context.Context, agentsdk.ConversationAuthority, string) (integrationsdk.ConnectionAccountSubject, error)
+	conversationToolsFactory toolsdk.ConversationToolFactory
 }
 
 func (h runtimeAgentApplicationHost) ConversationCodeRuntime() agentsdk.ConversationCodeRuntime {

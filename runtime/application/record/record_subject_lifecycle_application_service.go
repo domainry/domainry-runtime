@@ -7,14 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
-	"io/fs"
+	"os"
 	"sort"
 	"strings"
 
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
@@ -147,7 +147,7 @@ func (s *RecordSubjectLifecycleApplicationService) ExportSubject(ctx context.Con
 				return nil, fmt.Errorf("record subject file store unavailable")
 			}
 			evidence, err := s.files.ExportSubjectFile(ctx, ref)
-			if errors.Is(err, fs.ErrNotExist) {
+			if recordSubjectFileNotFound(err) {
 				continue
 			}
 			if err != nil {
@@ -315,6 +315,10 @@ func recordSubjectFileValues(field definitionmodel.FieldSchema, value any) []str
 		result = append(result, "/uploads/"+reference.Filename)
 	}
 	return result
+}
+
+func recordSubjectFileNotFound(err error) bool {
+	return errors.Is(err, lifecyclecontract.ErrArtifactContentNotFound) || errors.Is(err, os.ErrNotExist)
 }
 
 func recordSubjectAnonymousValue(workspaceID, identity, objectKey, recordID string, field definitionmodel.FieldSchema) string {

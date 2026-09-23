@@ -5,10 +5,13 @@ package runtimehost
 import (
 	"context"
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	auditsdk "github.com/domainry/domainry-audit-sdk"
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
+	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
@@ -17,6 +20,7 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
+	toolsdk "github.com/domainry/domainry-tools-sdk"
 )
 
 // Options is the complete project-owned input to Runtime process composition.
@@ -32,6 +36,16 @@ type Options struct {
 	// injects domainry-identity-sdk/remote.Factory. Runtime never selects or
 	// switches the deployment topology.
 	IdentityFactory identitysdk.Factory
+	// AuditFactory is selected by the project composition root. Runtime never
+	// imports or constructs the source Audit implementation.
+	AuditFactory auditsdk.Factory
+	// MetadataFactory is selected by the project composition root. The embedded
+	// implementation receives Runtime's host database and migration registrar;
+	// Runtime never selects the implementation itself.
+	MetadataFactory metadatasdk.Factory
+	// LifecycleFactory is selected by the project composition root. It is opened
+	// only when the project model enables Lifecycle capabilities.
+	LifecycleFactory lifecyclesdk.Factory
 	// IntegrationFactory optionally selects the source-owned in-process Module
 	// or SaaS Binding. Runtime owns only the durable outbound handoff. Nil leaves
 	// Integration storage, HTTP and workers uninstalled and is rejected when
@@ -64,8 +78,11 @@ type Options struct {
 	// AgentFactory optionally selects the in-process domainry-agent Module or
 	// its SaaS Remote Binding. Nil is valid when the project declares no Agent
 	// definitions or conversation capability.
-	AgentFactory      agentsdk.Factory
-	ProjectExtensions ProjectExtensionFactory
+	AgentFactory agentsdk.Factory
+	// ConversationToolsFactory is selected by the project composition root.
+	// Runtime supplies only SDK ports and never imports Tools adapters.
+	ConversationToolsFactory toolsdk.ConversationToolFactory
+	ProjectExtensions        ProjectExtensionFactory
 	// ProjectHTTP mounts a project-owned router below /api/. Runtime injects a
 	// governed in-process Engine and keeps authentication and workspace policy
 	// outside the project transport implementation.

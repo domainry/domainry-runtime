@@ -11,6 +11,7 @@ import (
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 )
 
 type workspaceIdentityUsageAuthenticatorStub struct {
@@ -30,6 +31,7 @@ func TestRuntimeWorkspaceIdentityUsageAuthorityDurablyAuthorizesThenResolvesCano
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.CloseContext(t.Context()) })
+	auditmodulefixture.Bind(t, t.Context(), store)
 	seedWorkspaceIdentityUsageAuthorityWorkspace(t, store, "workspace-installation", "primary", true)
 	seedWorkspaceIdentityUsageAuthorityWorkspace(t, store, "workspace-night", "night-tokyo", false)
 
@@ -91,6 +93,7 @@ func TestRuntimeWorkspaceIdentityUsageAuthorityDeniesStaffAndHeadquartersAdminis
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.CloseContext(t.Context()) })
+	auditmodulefixture.Bind(t, t.Context(), store)
 	seedWorkspaceIdentityUsageAuthorityWorkspace(t, store, "workspace-installation", "primary", true)
 	authority := newRuntimeWorkspaceIdentityUsageAuthority(store, "nightpos")
 	for index, roleKey := range []string{"staff", "headquarters_admin"} {

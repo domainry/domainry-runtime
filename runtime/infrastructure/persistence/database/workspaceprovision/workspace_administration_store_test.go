@@ -9,12 +9,12 @@ import (
 	"time"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
-	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	workspaceprovisionapplication "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
 	workspaceprovisionmodel "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/model"
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 )
 
 func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t *testing.T) {
@@ -26,6 +26,7 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 	if err := runtimeStore.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), runtimeStore)
 	if _, err := runtimeStore.DB().ExecContext(t.Context(), `CREATE TABLE _identity_auth_refresh_tokens (
 		workspace_id TEXT NOT NULL, user_id TEXT NOT NULL, session_id TEXT NOT NULL, expires_at TEXT NOT NULL,
 		revoked_at TEXT, last_used_at TEXT, updated_at TEXT NOT NULL
@@ -122,7 +123,7 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 
 func insertWorkspaceAdministrationAuditCollision(t *testing.T, store *database.RuntimeStore, auditID, now string) {
 	t.Helper()
-	if err := auditmoduleimpl.AppendPreparedWithin(t.Context(), store.RuntimeRenderer(), runtimeauditmodule.NewTransaction(store.DB()), auditmodel.AuditEvent{
+	if err := store.AppendPreparedAuditWithin(t.Context(), runtimeauditmodule.NewTransaction(store.DB()), auditmodel.AuditEvent{
 		ID: auditID, WorkspaceID: "workspace-target", Family: auditmodel.EventFamilyRuntimeWorkspace, Event: "existing", ActorID: "test", RoleKey: "test", Summary: "collision", Metadata: map[string]any{"action_key": "collision"}, CreatedAt: now,
 	}); err != nil {
 		t.Fatal(err)

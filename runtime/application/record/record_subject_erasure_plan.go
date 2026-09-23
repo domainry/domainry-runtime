@@ -5,16 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
-	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	"io/fs"
 	"reflect"
 	"strings"
 	"time"
 
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
@@ -128,7 +126,7 @@ func (s *RecordSubjectLifecycleApplicationService) PrepareSubjectErasure(ctx con
 			}
 			evidence, err := s.files.ExportSubjectFile(ctx, reference)
 			// Lifecycle may already have reconciled an abandoned upload.
-			if errors.Is(err, fs.ErrNotExist) {
+			if recordSubjectFileNotFound(err) {
 				continue
 			}
 			if err != nil {
@@ -205,7 +203,7 @@ func (s *RecordSubjectLifecycleApplicationService) ErasePreparedSubject(ctx cont
 		}
 		if !file.Retained {
 			current, readErr := s.files.ExportSubjectFile(ctx, file.Reference)
-			if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
+			if readErr != nil && !recordSubjectFileNotFound(readErr) {
 				return nil, readErr
 			}
 			if readErr == nil && (current.SHA256 != file.Evidence.SHA256 || current.Size != file.Evidence.Size) {

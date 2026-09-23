@@ -14,6 +14,7 @@ import (
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/datamigration"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 )
 
 func TestSQLiteDatabaseRetirementExecutorDropsOnlyTypedApprovedObject(t *testing.T) {
@@ -279,6 +280,7 @@ func openDatabaseRetirementExecutorStore(t *testing.T) *database.RuntimeStore {
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	return store
 }
 

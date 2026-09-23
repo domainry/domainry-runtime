@@ -7,6 +7,7 @@ import (
 	agent "github.com/domainry/domainry-agent-sdk"
 	integration "github.com/domainry/domainry-integration-sdk"
 	tools "github.com/domainry/domainry-tools-sdk"
+	toolmodule "github.com/domainry/domainry-tools/module"
 )
 
 type mcpAccountPortsStub struct{}
@@ -53,11 +54,12 @@ func TestRuntimePublishesMCPToolsOnlyWithCompleteIntegrationPorts(t *testing.T) 
 		}
 		return total
 	}
-	if got := count((runtimeAgentApplicationHost{}).ConversationToolDefinitions()); got != 0 {
+	factory := toolmodule.NewConversationToolFactory()
+	if got := count((runtimeAgentApplicationHost{conversationToolsFactory: factory}).ConversationToolDefinitions()); got != 0 {
 		t.Fatalf("MCP tools published without Integration ports: %d", got)
 	}
 	ports := mcpAccountPortsStub{}
-	partial := runtimeAgentApplicationHost{accounts: ports, accountReads: ports, accountWrites: ports}
+	partial := runtimeAgentApplicationHost{accounts: ports, accountReads: ports, accountWrites: ports, conversationToolsFactory: factory}
 	if got := count(partial.ConversationToolDefinitions()); got != 0 {
 		t.Fatalf("MCP tools published without a trusted subject resolver: %d", got)
 	}

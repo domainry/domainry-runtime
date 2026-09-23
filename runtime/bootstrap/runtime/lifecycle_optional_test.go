@@ -5,12 +5,15 @@ import (
 	"strings"
 	"testing"
 
+	auditsdk "github.com/domainry/domainry-audit-sdk"
+	auditmodule "github.com/domainry/domainry-audit/module"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	metadatamodule "github.com/domainry/domainry-metadata/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
+	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -36,12 +39,21 @@ func TestMinimalCRUDCompositionDoesNotInstallUnselectedCapabilityTables(t *testi
 	if err := store.BindMetadata(metadata); err != nil {
 		t.Fatal(err)
 	}
+	audit, err := auditmodule.NewFactory(auditmodule.Options{}).OpenModule(t.Context(), auditsdk.ApplicationRef{InstallationID: "minimal"}, runtimeauditmodule.NewHost(store, nil, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = audit.Close(t.Context()) })
+	if err := store.BindAudit(audit); err != nil {
+		t.Fatal(err)
+	}
 
 	assembly, err := assembleRuntimeServices(
 		t.Context(), cfg,
 		projectmodel.RuntimeModel{ProjectKey: "minimal", ContentHash: "minimal-model"},
 		runtimeext.ProjectDefinitions{}, appschemamodel.IntegrationSchema{}, nil,
 		store, nil, nil, nil, workerplatform.NormalizeDependencies(workerplatform.Dependencies{}),
+		runtimeExtensionRegistries{auditBinding: audit},
 	)
 	if err != nil {
 		t.Fatal(err)

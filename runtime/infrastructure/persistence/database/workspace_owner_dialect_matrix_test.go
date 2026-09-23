@@ -11,6 +11,7 @@ import (
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 )
 
 // TestWorkspaceOwnerPhysicalIsolationAcrossDialects complements every owner's
@@ -46,6 +47,7 @@ func TestWorkspaceOwnerPhysicalIsolationAcrossDialects(t *testing.T) {
 			if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 				t.Fatal(err)
 			}
+			auditmodulefixture.Bind(t, t.Context(), store)
 			prefix := fmt.Sprintf("wsm%d", time.Now().UTC().UnixNano())
 			for _, owner := range owners {
 				t.Run(owner.owner, func(t *testing.T) {

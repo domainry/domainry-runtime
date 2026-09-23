@@ -25,6 +25,7 @@ import (
 	actionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/action"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 )
 
 type concurrentBookClassHandler struct {
@@ -91,6 +92,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	auditmodulefixture.Bind(t, t.Context(), store)
 	if _, err := store.DB().Exec(`CREATE TABLE concurrent_group_class (
 		workspace_id TEXT NOT NULL,
 		id TEXT NOT NULL,

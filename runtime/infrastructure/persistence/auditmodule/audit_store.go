@@ -9,7 +9,6 @@ import (
 	auditsdk "github.com/domainry/domainry-audit-sdk"
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	sdkcontract "github.com/domainry/domainry-audit-sdk/contract"
-	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	auditrepository "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
@@ -25,14 +24,13 @@ type AuditStore struct {
 
 func NewAuditStore(binding auditsdk.Binding) *AuditStore { return &AuditStore{binding: binding} }
 
-// NewAuditStoreFromRuntimeStore opens the source-owned module against a caller-
-// supplied construction context for tests and narrow host integrations.
-func NewAuditStoreFromRuntimeStore(ctx context.Context, store *persistence.RuntimeStore) *AuditStore {
-	binding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: "domainry-runtime"}, NewHost(store, nil, nil))
-	if err != nil {
-		panic(err)
+// NewAuditStoreFromRuntimeStore adapts the Audit Binding selected by the outer
+// project composition root. It never opens or selects an implementation.
+func NewAuditStoreFromRuntimeStore(store *persistence.RuntimeStore) *AuditStore {
+	if store == nil {
+		return NewAuditStore(nil)
 	}
-	return NewAuditStore(binding)
+	return NewAuditStore(store.Audit())
 }
 
 func (r *AuditStore) InsertAuditEvent(ctx context.Context, workspaceID string, event auditmodel.AuditEvent) error {

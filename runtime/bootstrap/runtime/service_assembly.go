@@ -17,7 +17,6 @@ import (
 	agentlifecycle "github.com/domainry/domainry-agent-sdk/lifecycle"
 
 	auditsdk "github.com/domainry/domainry-audit-sdk"
-	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	dataexchangemodulehost "github.com/domainry/domainry-data-exchange-sdk/modulehost"
@@ -28,7 +27,6 @@ import (
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
-	lifecyclemoduleimpl "github.com/domainry/domainry-lifecycle/module"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
@@ -108,6 +106,7 @@ type runtimeExtensionRegistries struct {
 	auditRepository                 auditrepository.AuditRepository
 	auditSubjectLifecycle           lifecyclecontract.SubjectExecutionHandler
 	auditBinding                    auditsdk.Binding
+	lifecycleFactory                lifecyclesdk.Factory
 	dataExchangeFactory             dataexchangesdk.Factory
 	agentBinding                    agentsdk.Binding
 	reportBinding                   reportsdk.Binding
@@ -141,6 +140,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 	var auditRepository auditrepository.AuditRepository
 	var auditSubjectLifecycle lifecyclecontract.SubjectExecutionHandler
 	var auditBinding auditsdk.Binding
+	var lifecycleFactory lifecyclesdk.Factory
 	var dataExchangeFactory dataexchangesdk.Factory
 	var agentBinding agentsdk.Binding
 	var reportBinding reportsdk.Binding
@@ -190,6 +190,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 			auditSubjectLifecycle = extensionRegistries[0].auditSubjectLifecycle
 		}
 		auditBinding = extensionRegistries[0].auditBinding
+		lifecycleFactory = extensionRegistries[0].lifecycleFactory
 		dataExchangeFactory = extensionRegistries[0].dataExchangeFactory
 		agentBinding = extensionRegistries[0].agentBinding
 		reportBinding = extensionRegistries[0].reportBinding
@@ -217,11 +218,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 	}
 	artifactContent := blobstore.LifecycleContentStore{Blobs: blobs}
 	if auditBinding == nil {
-		auditBinding, err = auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx,
-			auditsdk.ApplicationRef{InstallationID: valueOrDefault(projectModel.ProjectKey, "domainry-runtime")}, runtimeauditmodule.NewHost(store, artifactContent, artifactContent))
-		if err != nil {
-			return runtimeServiceAssembly{}, fmt.Errorf("open Audit module: %w", err)
-		}
+		return runtimeServiceAssembly{}, fmt.Errorf("Audit Binding is required from the project composition root")
 	}
 	if auditRepository == nil {
 		auditRepository = runtimeauditmodule.NewAuditStore(auditBinding)
@@ -257,7 +254,10 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 	var lifecycleExecutorPorts []lifecyclecontract.OwnerLifecycleExecutor
 	var agentSubjectHandlers []lifecyclecontract.SubjectExecutionHandler
 	if schemaCapabilities.Lifecycle {
-		lifecycleBinding, err = lifecyclemoduleimpl.NewFactory().OpenModule(ctx,
+		if lifecycleFactory == nil {
+			return runtimeServiceAssembly{}, fmt.Errorf("Lifecycle SDK Factory is required when Lifecycle is enabled")
+		}
+		lifecycleBinding, err = lifecycleFactory.OpenModule(ctx,
 			lifecyclesdk.ApplicationRef{RuntimeID: valueOrDefault(cfg.RuntimeVersion, "domainry-runtime")}, lifecyclemodule.NewHost(store, auditBinding, lifecycleContent))
 		if err != nil {
 			return runtimeServiceAssembly{}, fmt.Errorf("open Lifecycle module: %w", err)

@@ -10,7 +10,6 @@ import (
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 
 	auditsdk "github.com/domainry/domainry-audit-sdk"
-	auditmoduleimpl "github.com/domainry/domainry-audit/module"
 	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	dataexchangemodulehost "github.com/domainry/domainry-data-exchange-sdk/modulehost"
@@ -21,7 +20,6 @@ import (
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
-	metadatamodule "github.com/domainry/domainry-metadata/module"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
@@ -57,7 +55,7 @@ import (
 	schedulersaashost "github.com/domainry/domainry-scheduler-sdk/saashost"
 )
 
-func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, notificationFactory notificationsdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, integrationFactory integrationsdk.Factory, reportFactory reportsdk.Factory, preparedStore *persistence.RuntimeStore, startupOptions ProjectStartupOptions, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
+func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.Config, projectExtensions *runtimeext.ProjectExtensionRegistry, connectorProviders *connector.Registry, releaseIdentity runtimehttp.RuntimeReleaseIdentity, identityBinding identitysdk.Binding, foundationModules FoundationModuleFactories, notificationFactory notificationsdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, integrationFactory integrationsdk.Factory, reportFactory reportsdk.Factory, preparedStore *persistence.RuntimeStore, startupOptions ProjectStartupOptions, artifactEvidence ...deploymentapplication.RuntimeReleaseArtifactEvidence) *Runtime {
 	if ctx == nil {
 		panic("bootstrap.NewWithExtensions requires a non-nil lifecycle context")
 	}
@@ -70,6 +68,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if identityBinding == nil {
 		panic("bootstrap.NewWithExtensions requires an Identity SDK Binding")
 	}
+	mustCompleteRuntimeStartup(foundationModules.Validate())
 	cfg = normalizeRuntimeConfig(cfg)
 	mustCompleteRuntimeStartup(principalmodel.ConfigureInstallationWorkspaceID(cfg.IdentityWorkspaceID))
 	mustCompleteRuntimeStartup(cfg.ValidateSecurity())
@@ -131,7 +130,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 			releaseLease = latestLease
 		}
 	}()
-	metadataBinding, err := metadatamodule.NewFactory().OpenModule(ctx, metadatasdk.ApplicationRef{InstallationID: projectModel.ProjectKey}, runtimeMetadataModuleHost{store: store})
+	metadataBinding, err := foundationModules.Metadata.OpenModule(ctx, metadatasdk.ApplicationRef{InstallationID: projectModel.ProjectKey}, runtimeMetadataModuleHost{store: store})
 	mustCompleteRuntimeStartup(err)
 	mustCompleteRuntimeStartup(metadataBinding.Descriptor().Validate())
 	mustCompleteRuntimeStartup(store.BindMetadata(metadataBinding))
@@ -161,9 +160,10 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(err)
 	mustCompleteRuntimeStartup(generateDevelopmentData(ctx, cfg, store, projectModel, startupOptions.DevelopmentData))
 	artifactContent := blobstore.LifecycleContentStore{Blobs: startupOptions.BlobStore}
-	auditBinding, err := auditmoduleimpl.NewFactory(auditmoduleimpl.Options{}).OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: projectModel.ProjectKey}, runtimeauditmodule.NewHost(store, artifactContent, artifactContent))
+	auditBinding, err := foundationModules.Audit.OpenModule(ctx, auditsdk.ApplicationRef{InstallationID: projectModel.ProjectKey}, runtimeauditmodule.NewHost(store, artifactContent, artifactContent))
 	mustCompleteRuntimeStartup(err)
 	mustCompleteRuntimeStartup(auditBinding.Descriptor().Validate())
+	mustCompleteRuntimeStartup(store.BindAudit(auditBinding))
 	runtimeAuditRepository := runtimeauditmodule.NewAuditStore(auditBinding)
 	runtimeAudit := auditapplication.NewAuditApplicationService(runtimeAuditRepository)
 	identityProjection := identityBinding.Projection()
@@ -353,6 +353,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		auditRepository:                 runtimeAuditRepository,
 		auditSubjectLifecycle:           runtimeauditmodule.NewSubjectLifecycle(auditBinding),
 		auditBinding:                    auditBinding,
+		lifecycleFactory:                foundationModules.Lifecycle,
 		dataExchangeFactory:             dataExchangeFactory,
 		agentBinding:                    agentBinding,
 		reportBinding:                   reportBinding,
@@ -412,6 +413,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		NotificationEvents:        records.NotificationEventPublisher(),
 		ConversationCodeRuntime:   startupOptions.ConversationCodeRuntime,
 		ConversationCodingRuntime: startupOptions.ConversationCodingRuntime,
+		ConversationToolsFactory:  startupOptions.ConversationToolsFactory,
 	}))
 	if agentBinding != nil && agentBinding.Descriptor().HasCapability(agentsdk.CapabilityScheduledConversationTask) {
 		conversations, ok := agentBinding.(agentsdk.ConversationBinding)
@@ -538,48 +540,49 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		mustCompleteRuntimeStartup(err)
 	}
 	runtime := constructRuntime(runtimeConstructionInput{
-		config:               cfg,
-		templateID:           templateID,
-		store:                store,
-		applicationServices:  records,
-		authorizationActions: authorizationRegistrySnapshot.Load,
-		moduleBindings:       moduleBindings,
-		identityBinding:      identityBinding,
-		identityProjection:   identityProjection,
-		identityPrincipals:   identityPrincipals,
-		principalCache:       principalCache,
-		integrationMode:      integrationDeploymentMode(integrationOwner.Binding),
-		integrationBinding:   integrationOwner.Binding,
-		integrationWorkers:   integrationOwner.Workers,
-		dataExchangeBinding:  serviceAssembly.dataExchangeBinding,
-		lifecycleBinding:     serviceAssembly.lifecycleBinding,
-		fileScanProcessor:    serviceAssembly.fileScanProcessor,
-		blobStore:            serviceAssembly.blobStore,
-		publicResources:      serviceAssembly.publicResources,
-		projectModel:         startupOptions.ProjectModel,
-		schemaCapabilities:   schemaCapabilities,
-		workspaceRolePolicy:  workspaceRolePolicy,
-		recordRepository:     recordRepository,
-		rateLimiter:          sharedRateLimiter,
-		notificationHTTP:     notificationHTTP,
-		notificationBinding:  notificationBinding,
-		monitoringBinding:    monitoringBinding,
-		schedulerBinding:     schedulerBinding,
-		agentBinding:         agentBinding,
-		auditBinding:         auditBinding,
-		metadataBinding:      metadataBinding,
-		reportBinding:        reportBinding,
-		notificationWorkers:  notificationWorkers,
-		notificationRelay:    notificationRelay,
-		worker:               serviceAssembly.worker,
-		projectExtensions:    projectExtensions,
-		projectHTTP:          startupOptions.ProjectHTTP,
-		connectorProviders:   connectorProviders,
-		releaseIdentity:      releaseIdentity,
-		releaseCohort:        releaseCohort,
-		releaseLease:         releaseLease,
-		releaseAdmission:     releaseAdmission,
-		releaseIntegrity:     releaseIntegrity,
+		config:                   cfg,
+		templateID:               templateID,
+		store:                    store,
+		applicationServices:      records,
+		authorizationActions:     authorizationRegistrySnapshot.Load,
+		moduleBindings:           moduleBindings,
+		identityBinding:          identityBinding,
+		identityProjection:       identityProjection,
+		identityPrincipals:       identityPrincipals,
+		principalCache:           principalCache,
+		integrationMode:          integrationDeploymentMode(integrationOwner.Binding),
+		integrationBinding:       integrationOwner.Binding,
+		integrationWorkers:       integrationOwner.Workers,
+		dataExchangeBinding:      serviceAssembly.dataExchangeBinding,
+		lifecycleBinding:         serviceAssembly.lifecycleBinding,
+		fileScanProcessor:        serviceAssembly.fileScanProcessor,
+		blobStore:                serviceAssembly.blobStore,
+		publicResources:          serviceAssembly.publicResources,
+		projectModel:             startupOptions.ProjectModel,
+		schemaCapabilities:       schemaCapabilities,
+		workspaceRolePolicy:      workspaceRolePolicy,
+		recordRepository:         recordRepository,
+		rateLimiter:              sharedRateLimiter,
+		notificationHTTP:         notificationHTTP,
+		notificationBinding:      notificationBinding,
+		monitoringBinding:        monitoringBinding,
+		schedulerBinding:         schedulerBinding,
+		agentBinding:             agentBinding,
+		auditBinding:             auditBinding,
+		metadataBinding:          metadataBinding,
+		reportBinding:            reportBinding,
+		notificationWorkers:      notificationWorkers,
+		notificationRelay:        notificationRelay,
+		worker:                   serviceAssembly.worker,
+		projectExtensions:        projectExtensions,
+		projectHTTP:              startupOptions.ProjectHTTP,
+		conversationToolsFactory: startupOptions.ConversationToolsFactory,
+		connectorProviders:       connectorProviders,
+		releaseIdentity:          releaseIdentity,
+		releaseCohort:            releaseCohort,
+		releaseLease:             releaseLease,
+		releaseAdmission:         releaseAdmission,
+		releaseIntegrity:         releaseIntegrity,
 	})
 	runtime.borrowedStore = preparedStore != nil
 	startupOwnsStore = false
