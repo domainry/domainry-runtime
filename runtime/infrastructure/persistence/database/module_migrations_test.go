@@ -10,6 +10,8 @@ import (
 	shareddefinition "github.com/domainry/domainry-foundation/definition"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-foundation/schemaownership"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
+	identitymodule "github.com/domainry/domainry-identity/module"
 	integrationmodule "github.com/domainry/domainry-integration/module"
 	lifecyclemodule "github.com/domainry/domainry-lifecycle/module"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
@@ -74,6 +76,34 @@ func TestIntegrationModuleInstallsItsOwnCanonicalSchema(t *testing.T) {
 	assertSourceOwnedModuleSchema(t, store, "Integration", integrationmodule.MigrationOwner, "_integration_%", migrations, integrationmodule.SchemaOwnership())
 }
 
+func TestIdentityModuleInstallsItsOwnCanonicalSchema(t *testing.T) {
+	store := openModuleMigrationStore(t)
+	handle := identitysdk.DatabaseHandle{
+		Pool: store.DB(), Driver: store.Driver(), Migrations: store, ModuleMigrations: store,
+	}
+	binding, err := identitymodule.NewFactory(identitymodule.Options{DatabaseDriver: store.Driver()}).OpenWithDatabase(
+		t.Context(), identitysdk.ApplicationRef{WorkspaceID: "workspace-primary", ApplicationKey: "runtime"}, handle,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = binding.Close(t.Context()) })
+	assertSourceOwnedPhysicalSchema(t, store, "Identity", identitymodule.MigrationOwner, "_identity_%", identitymodule.SchemaOwnership())
+
+	var retired int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_identity_managed_database'`).Scan(&retired); err != nil {
+		t.Fatal(err)
+	}
+	if retired != 0 {
+		t.Fatal("Identity retained the redundant managed-database marker table")
+	}
+	path := moduleMigrationPath(identitymodule.MigrationOwner, ormmigration.Migration{Version: 1, Name: "create_identity_schema"})
+	var kind string
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT kind FROM _schema_migrations WHERE path = ?`, path).Scan(&kind); err != nil || kind != "module:"+identitymodule.MigrationOwner {
+		t.Fatalf("Identity migration ledger kind=%q err=%v", kind, err)
+	}
+}
+
 func assertSourceOwnedModuleSchema(t *testing.T, store *RuntimeStore, moduleName, owner, tablePattern string, migrations []modulehost.SchemaMigration, ownership []schemaownership.Table) {
 	t.Helper()
 	for _, migration := range migrations {
@@ -84,7 +114,11 @@ func assertSourceOwnedModuleSchema(t *testing.T, store *RuntimeStore, moduleName
 	if err := store.ApplyOwnedMigrations(t.Context(), owner, migrations); err != nil {
 		t.Fatal(err)
 	}
+	assertSourceOwnedPhysicalSchema(t, store, moduleName, owner, tablePattern, ownership)
+}
 
+func assertSourceOwnedPhysicalSchema(t *testing.T, store *RuntimeStore, moduleName, owner, tablePattern string, ownership []schemaownership.Table) {
+	t.Helper()
 	var count int
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name LIKE ?`, tablePattern).Scan(&count); err != nil {
 		t.Fatal(err)
