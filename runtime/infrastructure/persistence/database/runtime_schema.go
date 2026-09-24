@@ -19,8 +19,6 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-const CurrentRuntimeSchemaVersion = "001_runtime_schema"
-
 type RuntimeSchemaCapabilities struct {
 	Workflow            bool
 	Automation          bool
@@ -96,21 +94,25 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 	}
 	defer release()
 	startedAt := time.Now()
-	checksum := currentRuntimeSchemaChecksum(capabilities)
-	pending, err := s.runtimeSchemaMigrationPendingFor(ctx, CurrentRuntimeSchemaVersion, checksum)
+	definition, err := runtimeSchemaDDL(ctx, s, capabilities)
 	if err != nil {
 		return err
 	}
-	// A clean receipt for the current schema version is the authority that the
+	checksum := runtimeSchemaChecksum(definition)
+	pending, err := s.runtimeSchemaMigrationPendingFor(ctx, checksum)
+	if err != nil {
+		return err
+	}
+	// A clean receipt for this exact DDL checksum is the authority that the
 	// Runtime-owned schema was fully materialized. Re-running every table,
 	// column, and index probe on each process start turns remote-database latency
 	// into minutes of serialized startup work and bypasses the migration ledger's
-	// purpose. A new schema contract changes the version/checksum and takes the
-	// full path below.
+	// purpose. Changed canonical DDL produces a new content-addressed receipt and
+	// takes the full path below.
 	if !pending {
 		return nil
 	}
-	if err := s.startRuntimeSchemaMigrationFor(ctx, CurrentRuntimeSchemaVersion, checksum); err != nil {
+	if err := s.startRuntimeSchemaMigration(ctx, checksum); err != nil {
 		return err
 	}
 	if err := s.ensureManagedDatabaseCohortMarker(ctx); err != nil {
@@ -133,7 +135,7 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 	if err := s.EnsureRateLimitSchema(ctx); err != nil {
 		return err
 	}
-	if err := s.recordRuntimeSchemaMigration(ctx, CurrentRuntimeSchemaVersion, time.Since(startedAt)); err != nil {
+	if err := s.recordRuntimeSchemaMigration(ctx, checksum, time.Since(startedAt)); err != nil {
 		return err
 	}
 	return nil
@@ -182,17 +184,17 @@ func (s *RuntimeStore) verifyRuntimeSchema(ctx context.Context) error {
 }
 
 func (s *RuntimeStore) verifyRuntimeSchemaFor(ctx context.Context, capabilities RuntimeSchemaCapabilities) error {
-	var checksum string
-	var dirty bool
-	queryValue := "SELECT " + s.identifier("checksum") + ", " + s.identifier("dirty") + " FROM " + s.tableIdentifier("_schema_migrations") + " WHERE " + s.identifier("path") + " = " + s.placeholder(1)
-	if err := s.db.QueryRowContext(ctx, queryValue, runtimeSchemaMigrationPath(CurrentRuntimeSchemaVersion)).Scan(&checksum, &dirty); err != nil {
+	definition, err := runtimeSchemaDDL(ctx, s, capabilities)
+	if err != nil {
+		return err
+	}
+	expectedChecksum := runtimeSchemaChecksum(definition)
+	pending, err := s.runtimeSchemaReceiptPending(ctx, s.db, expectedChecksum)
+	if err != nil {
 		return fmt.Errorf("verify runtime schema compatibility: %w", err)
 	}
-	if dirty {
-		return fmt.Errorf("migration.dirty: runtime schema %s", CurrentRuntimeSchemaVersion)
-	}
-	if checksum != currentRuntimeSchemaChecksum(capabilities) {
-		return fmt.Errorf("migration.checksum_drift: runtime schema %s", CurrentRuntimeSchemaVersion)
+	if pending {
+		return fmt.Errorf("migration.pending: runtime schema %s", expectedChecksum)
 	}
 	return nil
 }
@@ -340,68 +342,62 @@ func (s *RuntimeStore) runtimeMigrationConfig() config.Config {
 	return cfg
 }
 
-func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, version string) (bool, error) {
-	return s.runtimeSchemaMigrationPendingFor(ctx, version, currentRuntimeSchemaChecksum())
+func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, expectedChecksum string) (bool, error) {
+	return s.runtimeSchemaMigrationPendingFor(ctx, expectedChecksum)
 }
 
-func (s *RuntimeStore) runtimeSchemaMigrationPendingFor(ctx context.Context, version, expectedChecksum string) (bool, error) {
+func (s *RuntimeStore) runtimeSchemaMigrationPendingFor(ctx context.Context, expectedChecksum string) (bool, error) {
 	db := s.schemaDatabase()
 	if err := s.ensureMigrationLedger(ctx); err != nil {
 		return false, fmt.Errorf("prepare runtime schema migration ledger: %w", err)
 	}
-	path := runtimeSchemaMigrationPath(version)
-	var count int
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+s.tableIdentifier("_schema_migrations")+" WHERE "+s.identifier("path")+" = "+s.placeholder(1), path).Scan(&count); err != nil {
+	return s.runtimeSchemaReceiptPending(ctx, db, expectedChecksum)
+}
+
+func (s *RuntimeStore) runtimeSchemaReceiptPending(ctx context.Context, db schemaDatabase, expectedChecksum string) (bool, error) {
+	expectedPath := runtimeSchemaMigrationPath(expectedChecksum)
+	rows, err := db.QueryContext(ctx, "SELECT "+s.identifier("path")+", "+s.identifier("checksum")+", "+s.identifier("dirty")+" FROM "+s.tableIdentifier("_schema_migrations")+" WHERE "+s.identifier("kind")+" = "+s.placeholder(1), "runtime_schema")
+	if err != nil {
 		return false, fmt.Errorf("check runtime schema migration: %w", err)
 	}
-	if count == 0 {
-		return true, nil
+	defer rows.Close()
+	found := false
+	for rows.Next() {
+		var path, checksum string
+		var dirty bool
+		if err := rows.Scan(&path, &checksum, &dirty); err != nil {
+			return false, fmt.Errorf("scan runtime schema migration: %w", err)
+		}
+		if dirty {
+			return false, fmt.Errorf("migration.dirty: runtime schema %s", path)
+		}
+		if path != expectedPath {
+			continue
+		}
+		if checksum != expectedChecksum {
+			return false, fmt.Errorf("migration.checksum_drift: runtime schema %s", path)
+		}
+		found = true
 	}
-	var checksum string
-	var dirty bool
-	if err := db.QueryRowContext(ctx, "SELECT "+s.identifier("checksum")+", "+s.identifier("dirty")+" FROM "+s.tableIdentifier("_schema_migrations")+" WHERE "+s.identifier("path")+" = "+s.placeholder(1), path).Scan(&checksum, &dirty); err != nil {
-		return false, err
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("read runtime schema migration: %w", err)
 	}
-	if dirty {
-		return false, fmt.Errorf("migration.dirty: runtime schema %s", version)
-	}
-	if checksum != expectedChecksum {
-		return false, fmt.Errorf("migration.checksum_drift: runtime schema %s", version)
-	}
-	return false, nil
+	return !found, nil
 }
 
-func (s *RuntimeStore) startRuntimeSchemaMigration(ctx context.Context, version string) error {
-	return s.startRuntimeSchemaMigrationFor(ctx, version, currentRuntimeSchemaChecksum())
-}
-
-func (s *RuntimeStore) startRuntimeSchemaMigrationFor(ctx context.Context, version, checksum string) error {
+func (s *RuntimeStore) startRuntimeSchemaMigration(ctx context.Context, checksum string) error {
 	columns := []string{"path", "version", "name", "kind", "checksum", "dirty", "applied_at", "runtime_version", "duration_ms", "operator", "instance_id", "backup_id"}
 	queryValue := "INSERT INTO " + s.tableIdentifier("_schema_migrations") + " (" + strings.Join(quotedColumns(s, columns), ", ") + ") VALUES (" + strings.Join(placeholders(s, len(columns)), ", ") + ")"
-	_, err := s.schemaDatabase().ExecContext(ctx, queryValue, runtimeSchemaMigrationPath(version), version, "create_runtime_schema", "runtime_schema", checksum, true, time.Now().UTC().Format(time.RFC3339), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
+	_, err := s.schemaDatabase().ExecContext(ctx, queryValue, runtimeSchemaMigrationPath(checksum), "", "runtime_schema", "runtime_schema", checksum, true, time.Now().UTC().Format(time.RFC3339), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
 	return err
 }
 
-func (s *RuntimeStore) recordRuntimeSchemaMigration(ctx context.Context, version string, duration time.Duration) error {
-	_, err := s.schemaDatabase().ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_migrations")+" SET "+s.identifier("dirty")+" = FALSE, "+s.identifier("duration_ms")+" = "+s.placeholder(1)+", "+s.identifier("applied_at")+" = "+s.placeholder(2)+" WHERE "+s.identifier("path")+" = "+s.placeholder(3), duration.Milliseconds(), time.Now().UTC().Format(time.RFC3339), runtimeSchemaMigrationPath(version))
+func (s *RuntimeStore) recordRuntimeSchemaMigration(ctx context.Context, checksum string, duration time.Duration) error {
+	_, err := s.schemaDatabase().ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_migrations")+" SET "+s.identifier("dirty")+" = FALSE, "+s.identifier("duration_ms")+" = "+s.placeholder(1)+", "+s.identifier("applied_at")+" = "+s.placeholder(2)+" WHERE "+s.identifier("path")+" = "+s.placeholder(3)+" AND "+s.identifier("checksum")+" = "+s.placeholder(4), duration.Milliseconds(), time.Now().UTC().Format(time.RFC3339), runtimeSchemaMigrationPath(checksum), checksum)
 	if err != nil {
 		return fmt.Errorf("record runtime schema migration: %w", err)
 	}
 	return nil
-}
-
-func runtimeSchemaMigrationPath(version string) string {
-	return "runtime_schema_" + strings.TrimSpace(version)
-}
-
-func currentRuntimeSchemaChecksum(selected ...RuntimeSchemaCapabilities) string {
-	capabilities := FullRuntimeSchemaCapabilities()
-	if len(selected) != 0 {
-		capabilities = selected[0]
-	}
-	capabilityIdentity := fmt.Sprintf("workflow=%t,automation=%t,uploads=%t,lifecycle=%t,release_coordination=%t", capabilities.Workflow, capabilities.Automation, capabilities.Uploads, capabilities.Lifecycle, capabilities.ReleaseCoordination)
-	sum := sha256.Sum256([]byte(CurrentRuntimeSchemaVersion + ":final_runtime_schema,native_capabilities=" + capabilityIdentity))
-	return hex.EncodeToString(sum[:])
 }
 
 func (s *RuntimeStore) ensureManagedDatabaseCohortMarker(ctx context.Context) error {

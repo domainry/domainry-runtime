@@ -92,7 +92,12 @@ type Options struct {
 	// demo environments and only while every eligible business object is empty.
 	// No sample row is described in model.json or SQL.
 	DevelopmentData *DevelopmentDataOptions
-	Connectors      connector.ProviderSetFactory
+	// DevelopmentIdentity enables explicitly authored evaluation users while
+	// creating the first embedded Workspace. Runtime accepts it only in
+	// development, dev, demo, or test environments and provisions the users in
+	// the same transaction as the Workspace. Production startup rejects it.
+	DevelopmentIdentity *DevelopmentIdentityOptions
+	Connectors          connector.ProviderSetFactory
 	// ConnectorProcesses is an explicit host policy for optional Provider
 	// subprocesses. The zero value denies every executable.
 	ConnectorProcesses ConnectorProcessPolicy
@@ -123,6 +128,30 @@ type Options struct {
 type DevelopmentDataOptions struct {
 	Seed             int64
 	RecordsPerObject int
+}
+
+// DevelopmentIdentityOptions is startup policy for disposable evaluation
+// environments. Passwords remain on the in-process bootstrap boundary and
+// are never serialized through Runtime HTTP or project metadata.
+type DevelopmentIdentityOptions struct {
+	Organizations []DevelopmentIdentityOrganization
+	Actors        []DevelopmentIdentityActor
+}
+
+type DevelopmentIdentityOrganization struct {
+	ID   string
+	Code string
+	Name string
+}
+
+type DevelopmentIdentityActor struct {
+	ID              string
+	LoginID         string
+	Name            string
+	RoleKey         string
+	OrganizationID  string
+	ManagerUserID   string
+	InitialPassword string
 }
 
 type InitialWorkspaceCredential struct {

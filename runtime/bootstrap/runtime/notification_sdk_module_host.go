@@ -18,6 +18,7 @@ import (
 	"github.com/domainry/domainry-notification-sdk/contract"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
+	ormdialect "github.com/domainry/domainry-orm/dialect"
 	hostsurfacemodel "github.com/domainry/domainry-runtime/runtime/domain/hostsurface/model"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
@@ -141,6 +142,7 @@ func (h notificationSDKModuleHost) ProviderTemplateValidator() modulehost.Provid
 
 type notificationSDKDialect struct{ store *persistence.RuntimeStore }
 
+func (d notificationSDKDialect) Name() ormdialect.Name          { return d.store.RuntimeRenderer().Name() }
 func (d notificationSDKDialect) Identifier(value string) string { return d.store.Identifier(value) }
 func (d notificationSDKDialect) Table(value string) string      { return d.store.TableIdentifier(value) }
 func (d notificationSDKDialect) Placeholder(position int) string {

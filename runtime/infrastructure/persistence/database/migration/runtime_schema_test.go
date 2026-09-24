@@ -10,7 +10,7 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-func TestFreshRuntimeSchemaRecordsCurrentVersion(t *testing.T) {
+func TestFreshRuntimeSchemaRecordsContentAddressedReceipt(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(tempDir, "runtime.db"), MigrationDir: filepath.Join(tempDir, "none")}
 	store, err := OpenContext(t.Context(), cfg)
@@ -21,12 +21,13 @@ func TestFreshRuntimeSchemaRecordsCurrentVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	var applied int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _schema_migrations WHERE path = ?", "runtime_schema_"+CurrentRuntimeSchemaVersion).Scan(&applied); err != nil {
+	var applied, checksumLength int
+	var version, path string
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*), MIN(version), MIN(path), MIN(LENGTH(checksum)) FROM _schema_migrations WHERE kind = 'runtime_schema'").Scan(&applied, &version, &path, &checksumLength); err != nil {
 		t.Fatal(err)
 	}
-	if applied != 1 {
-		t.Fatalf("runtime schema version rows=%d", applied)
+	if applied != 1 || version != "" || checksumLength != 64 || len(path) != len("runtime_schema_sha256_")+64 {
+		t.Fatalf("runtime schema receipt rows=%d version=%q path=%q checksum_length=%d", applied, version, path, checksumLength)
 	}
 }
 
@@ -52,7 +53,7 @@ func TestRuntimeSchemaMigrationFailureLeavesDirtyLedger(t *testing.T) {
 	}
 	var applied int
 	var dirty bool
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*), MAX(dirty) FROM _schema_migrations WHERE path = ?", "runtime_schema_"+CurrentRuntimeSchemaVersion).Scan(&applied, &dirty); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*), MAX(dirty) FROM _schema_migrations WHERE kind = 'runtime_schema'").Scan(&applied, &dirty); err != nil {
 		t.Fatal(err)
 	}
 	if applied != 1 || !dirty {

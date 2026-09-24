@@ -23,18 +23,29 @@ func runtimeSchemaStore(t *testing.T, state *databaseSQLState) *RuntimeStore {
 	return &RuntimeStore{db: db, engine: sqlite.NewEngine()}
 }
 
-func runtimeSchemaLedgerQueries(count int64, checksum string, dirty bool) []databaseSQLQueryStep {
+func runtimeSchemaLedgerQueries(entries ...[]driver.Value) []databaseSQLQueryStep {
 	steps := make([]databaseSQLQueryStep, 10) // host ledger column probes
-	return append(steps,
-		databaseSQLQueryStep{columns: []string{"count"}, rows: [][]driver.Value{{count}}},
-		databaseSQLQueryStep{columns: []string{"checksum", "dirty"}, rows: [][]driver.Value{{checksum, dirty}}},
-	)
+	return append(steps, databaseSQLQueryStep{columns: []string{"path", "checksum", "dirty"}, rows: entries})
+}
+
+func runtimeSchemaLedgerEntry(expectedChecksum, storedChecksum string, dirty bool) []driver.Value {
+	return []driver.Value{runtimeSchemaMigrationPath(expectedChecksum), storedChecksum, dirty}
+}
+
+func runtimeSchemaDefinitionChecksum(t *testing.T, store *RuntimeStore, selected ...RuntimeSchemaCapabilities) string {
+	t.Helper()
+	capabilities := FullRuntimeSchemaCapabilities()
+	if len(selected) > 0 {
+		capabilities = selected[0]
+	}
+	statements, err := runtimeSchemaDDL(t.Context(), store, capabilities)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return runtimeSchemaChecksum(statements)
 }
 
 func TestRuntimeSchemaHelpersAndDatabaseSelection(t *testing.T) {
-	if CurrentRuntimeSchemaVersion != "001_runtime_schema" {
-		t.Fatalf("current schema version=%q", CurrentRuntimeSchemaVersion)
-	}
 	store := runtimeSchemaStore(t, &databaseSQLState{})
 	if store.schemaDatabase() != store.db {
 		t.Fatal("primary database not selected")
@@ -78,79 +89,86 @@ func TestRuntimeSchemaHelpersAndDatabaseSelection(t *testing.T) {
 }
 
 func TestVerifyRuntimeSchemaStates(t *testing.T) {
-	checksum := currentRuntimeSchemaChecksum()
 	tests := []struct {
 		name  string
-		step  databaseSQLQueryStep
+		step  func(string) databaseSQLQueryStep
 		match string
 	}{
-		{"query", databaseSQLQueryStep{err: errDatabaseSQL}, "verify runtime schema"},
-		{"dirty", databaseSQLQueryStep{columns: []string{"checksum", "dirty"}, rows: [][]driver.Value{{checksum, true}}}, "migration.dirty"},
-		{"drift", databaseSQLQueryStep{columns: []string{"checksum", "dirty"}, rows: [][]driver.Value{{"drift", false}}}, "checksum_drift"},
+		{"query", func(string) databaseSQLQueryStep { return databaseSQLQueryStep{err: errDatabaseSQL} }, "verify runtime schema"},
+		{"dirty", func(checksum string) databaseSQLQueryStep {
+			return databaseSQLQueryStep{columns: []string{"path", "checksum", "dirty"}, rows: [][]driver.Value{runtimeSchemaLedgerEntry(checksum, checksum, true)}}
+		}, "migration.dirty"},
+		{"drift", func(checksum string) databaseSQLQueryStep {
+			return databaseSQLQueryStep{columns: []string{"path", "checksum", "dirty"}, rows: [][]driver.Value{runtimeSchemaLedgerEntry(checksum, "drift", false)}}
+		}, "checksum_drift"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			store := runtimeSchemaStore(t, &databaseSQLState{querySteps: []databaseSQLQueryStep{test.step}})
+			state := &databaseSQLState{}
+			store := runtimeSchemaStore(t, state)
+			checksum := runtimeSchemaDefinitionChecksum(t, store)
+			state.querySteps = []databaseSQLQueryStep{test.step(checksum)}
 			if err := store.verifyRuntimeSchema(t.Context()); err == nil || !strings.Contains(err.Error(), test.match) {
 				t.Fatalf("error=%v", err)
 			}
 		})
 	}
-	store := runtimeSchemaStore(t, &databaseSQLState{querySteps: []databaseSQLQueryStep{{columns: []string{"checksum", "dirty"}, rows: [][]driver.Value{{checksum, false}}}}})
+	state := &databaseSQLState{}
+	store := runtimeSchemaStore(t, state)
+	checksum := runtimeSchemaDefinitionChecksum(t, store)
+	state.querySteps = []databaseSQLQueryStep{{columns: []string{"path", "checksum", "dirty"}, rows: [][]driver.Value{runtimeSchemaLedgerEntry(checksum, checksum, false)}}}
 	if err := store.verifyRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestRuntimeSchemaMigrationLedgerFailures(t *testing.T) {
+	const expectedChecksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	store := runtimeSchemaStore(t, &databaseSQLState{execSteps: []databaseSQLExecStep{{err: errDatabaseSQL}}})
-	if _, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); !errors.Is(err, errDatabaseSQL) {
+	if _, err := store.runtimeSchemaMigrationPending(t.Context(), expectedChecksum); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("create error=%v", err)
 	}
 	queries := make([]databaseSQLQueryStep, 11)
 	queries[10] = databaseSQLQueryStep{err: errDatabaseSQL}
 	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: queries})
-	if _, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); !errors.Is(err, errDatabaseSQL) {
+	if _, err := store.runtimeSchemaMigrationPending(t.Context(), expectedChecksum); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("count error=%v", err)
 	}
-	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(0, "", false)})
-	if pending, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); err != nil || !pending {
+	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: runtimeSchemaLedgerQueries()})
+	if pending, err := store.runtimeSchemaMigrationPending(t.Context(), expectedChecksum); err != nil || !pending {
 		t.Fatalf("pending=%v err=%v", pending, err)
-	}
-	queries = runtimeSchemaLedgerQueries(0, "", false)[:11]
-	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: queries})
-	if pending, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); err != nil || !pending {
-		t.Fatalf("alter success pending=%v err=%v", pending, err)
 	}
 	for _, test := range []struct {
 		name     string
+		pathHash string
 		checksum string
 		dirty    bool
 		want     string
 	}{
-		{"dirty", currentRuntimeSchemaChecksum(), true, "migration.dirty"},
-		{"drift", "drift", false, "checksum_drift"},
+		{"dirty", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", expectedChecksum, true, "migration.dirty"},
+		{"drift", expectedChecksum, "drift", false, "checksum_drift"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			store := runtimeSchemaStore(t, &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(1, test.checksum, test.dirty)})
-			if _, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); err == nil || !strings.Contains(err.Error(), test.want) {
+			entry := []driver.Value{runtimeSchemaMigrationPath(test.pathHash), test.checksum, test.dirty}
+			store := runtimeSchemaStore(t, &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(entry)})
+			if _, err := store.runtimeSchemaMigrationPending(t.Context(), expectedChecksum); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error=%v", err)
 			}
 		})
 	}
-	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(1, "", false)})
-	if _, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); err == nil || !strings.Contains(err.Error(), "checksum_drift") {
+	store = runtimeSchemaStore(t, &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(runtimeSchemaLedgerEntry(expectedChecksum, "", false))})
+	if _, err := store.runtimeSchemaMigrationPending(t.Context(), expectedChecksum); err == nil || !strings.Contains(err.Error(), "checksum_drift") {
 		t.Fatalf("empty checksum error=%v", err)
 	}
 }
 
 func TestRuntimeSchemaMutationFailuresAndDefinitions(t *testing.T) {
 	store := runtimeSchemaStore(t, &databaseSQLState{execSteps: []databaseSQLExecStep{{err: errDatabaseSQL}}})
-	if err := store.startRuntimeSchemaMigration(t.Context(), "version"); !errors.Is(err, errDatabaseSQL) {
+	if err := store.startRuntimeSchemaMigration(t.Context(), "checksum"); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("start=%v", err)
 	}
 	store = runtimeSchemaStore(t, &databaseSQLState{execSteps: []databaseSQLExecStep{{err: errDatabaseSQL}}})
-	if err := store.recordRuntimeSchemaMigration(t.Context(), "version", time.Second); !errors.Is(err, errDatabaseSQL) {
+	if err := store.recordRuntimeSchemaMigration(t.Context(), "checksum", time.Second); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("record=%v", err)
 	}
 	mysqlStore := &RuntimeStore{engine: mysql.NewEngine()}
@@ -189,8 +207,10 @@ func (stub runtimeSchemaAssemblerStub) EnsureRateLimitSchema(context.Context, ru
 func TestEnsureRuntimeSchemaCurrentReceiptSkipsSchemaReconciliation(t *testing.T) {
 	for _, stage := range []string{"metadata", "evidence", "workflow", "ratelimit"} {
 		t.Run(stage, func(t *testing.T) {
-			state := &databaseSQLState{querySteps: runtimeSchemaLedgerQueries(1, currentRuntimeSchemaChecksum(), false)}
+			state := &databaseSQLState{}
 			store := runtimeSchemaStore(t, state)
+			checksum := runtimeSchemaDefinitionChecksum(t, store)
+			state.querySteps = runtimeSchemaLedgerQueries(runtimeSchemaLedgerEntry(checksum, checksum, false))
 			store.schemaAssembler = runtimeSchemaAssemblerStub{fail: stage}
 			if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 				t.Fatalf("current schema receipt unexpectedly reconciled %s: %v", stage, err)
@@ -226,7 +246,7 @@ func TestEnsureRuntimeSchemaOrchestrationFailures(t *testing.T) {
 		t.Fatalf("pending error=%v", err)
 	}
 
-	pendingLedgerQueries := runtimeSchemaLedgerQueries(0, "", false)[:11]
+	pendingLedgerQueries := runtimeSchemaLedgerQueries()
 	validationQueries := append(append([]databaseSQLQueryStep{}, pendingLedgerQueries...), databaseSQLQueryStep{err: errDatabaseSQL})
 	validation := runtimeSchemaStore(t, &databaseSQLState{querySteps: validationQueries})
 	validation.schemaAssembler = runtimeSchemaAssemblerStub{}
@@ -277,10 +297,11 @@ func TestActionExecutionContextEdges(t *testing.T) {
 }
 
 func TestRuntimeSchemaMigrationChecksumQueryFailure(t *testing.T) {
-	queries := runtimeSchemaLedgerQueries(1, currentRuntimeSchemaChecksum(), false)
-	queries[11] = databaseSQLQueryStep{err: errDatabaseSQL}
+	const checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	queries := runtimeSchemaLedgerQueries()
+	queries[10] = databaseSQLQueryStep{columns: []string{"path", "checksum", "dirty"}, nextErr: errDatabaseSQL}
 	store := runtimeSchemaStore(t, &databaseSQLState{querySteps: queries})
-	if _, err := store.runtimeSchemaMigrationPending(t.Context(), "version"); !errors.Is(err, errDatabaseSQL) {
+	if _, err := store.runtimeSchemaMigrationPending(t.Context(), checksum); !errors.Is(err, errDatabaseSQL) {
 		t.Fatalf("checksum query error=%v", err)
 	}
 }

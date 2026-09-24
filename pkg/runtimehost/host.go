@@ -411,6 +411,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	if err != nil {
 		return err
 	}
+	workspaceManager.developmentIdentity = options.DevelopmentIdentity
 	defer func() {
 		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(lifecycleCtx), cfg.HTTPShutdownTimeout)
 		defer cancel()

@@ -58,11 +58,6 @@ func (ApplicationSchemaStorageProfile) DropIndex(ctx context.Context, executor a
 func (ApplicationSchemaStorageProfile) ConditionalUniquePlan(renderer query.Renderer, table, index string, policy recordvalidation.RecordConditionalUniquePolicy) appschemastorage.ConditionalUniquePlan {
 	return appschemastorage.PartialConditionalUniquePlan(renderer, table, index, policy)
 }
-func (ApplicationSchemaStorageProfile) ConditionalUniqueGuard(string) string { return "" }
-func (ApplicationSchemaStorageProfile) DropColumn(ctx context.Context, executor appschemastorage.Executor, renderer query.Renderer, table, column string) error {
-	_, err := executor.ExecContext(ctx, "ALTER TABLE "+renderer.Table(table)+" DROP COLUMN "+renderer.Identifier(column))
-	return err
-}
 func (ApplicationSchemaStorageProfile) ExactDecimalUpgradeAllowed(current string, field definitionmodel.FieldSchema) bool {
 	if kind := strings.TrimSpace(field.Type); kind != "currency" && kind != "percent" {
 		return false

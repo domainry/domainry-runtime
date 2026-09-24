@@ -2,7 +2,6 @@ package database
 
 import (
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -82,7 +81,7 @@ func TestRuntimeSchemaInstallsOnlySelectedNativeCapabilities(t *testing.T) {
 	}
 }
 
-func TestRuntimeSchemaCapabilitySetIsPartOfMigrationContract(t *testing.T) {
+func TestRuntimeSchemaCapabilityExpansionCreatesContentAddressedReceipt(t *testing.T) {
 	store, err := OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "runtime.db")})
 	if err != nil {
 		t.Fatal(err)
@@ -91,8 +90,20 @@ func TestRuntimeSchemaCapabilitySetIsPartOfMigrationContract(t *testing.T) {
 	if err := store.EnsureRuntimeSchemaFor(t.Context(), RuntimeSchemaCapabilities{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.EnsureRuntimeSchemaFor(t.Context(), FullRuntimeSchemaCapabilities()); err == nil || !strings.Contains(err.Error(), "migration.checksum_drift") {
-		t.Fatalf("changed Runtime capability contract error=%v", err)
+	if err := store.EnsureRuntimeSchemaFor(t.Context(), FullRuntimeSchemaCapabilities()); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"_workflow_executions", "_workflow_process_instances", "_automation_runs", "_release_cohorts"} {
+		if !runtimeSchemaTablePresent(t, store, table) {
+			t.Fatalf("expanded Runtime schema omitted %q", table)
+		}
+	}
+	var receipts int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _schema_migrations WHERE kind = 'runtime_schema'`).Scan(&receipts); err != nil {
+		t.Fatal(err)
+	}
+	if receipts != 2 {
+		t.Fatalf("Runtime schema receipts=%d want=2", receipts)
 	}
 }
 

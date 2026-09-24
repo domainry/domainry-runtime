@@ -36,6 +36,10 @@ type developmentDataStore struct {
 }
 
 func (s developmentDataStore) ListRecords(ctx context.Context, workspaceID string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
+	// This adapter exists only inside the environment-gated startup path. Make
+	// its trusted bootstrap read explicit instead of relying on an empty
+	// authorization mode that ordinary record queries correctly reject.
+	query.AuthorizationMode = recordmodel.RecordQueryAuthorizationUnrestricted
 	return s.records.ListRecords(ctx, workspaceID, object, query)
 }
 

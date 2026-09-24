@@ -35,12 +35,15 @@ const (
 )
 
 type WorkspaceProvisionStore struct {
-	runtime     *database.RuntimeStore
-	bootstrap   identitysdk.WorkspaceIdentityBootstrap
-	model       projectmodel.RuntimeModel
-	rolePolicy  WorkspaceBootstrapRolePolicyEvidence
-	participant runtimeext.WorkspaceBootstrapParticipant
-	failures    FailureInjector
+	runtime                      *database.RuntimeStore
+	bootstrap                    identitysdk.WorkspaceIdentityBootstrap
+	model                        projectmodel.RuntimeModel
+	rolePolicy                   WorkspaceBootstrapRolePolicyEvidence
+	participant                  runtimeext.WorkspaceBootstrapParticipant
+	acceptanceFixtureProvisioner identitysdk.EmbeddedWorkspaceAcceptanceFixtureProvisioner
+	acceptanceFixtureRequest     identitysdk.WorkspaceAcceptanceFixtureRequest
+	acceptanceFixturesConfigured bool
+	failures                     FailureInjector
 }
 
 // WorkspaceBootstrapRolePolicyEvidence is the host-side expectation for the
@@ -87,6 +90,19 @@ func NewWorkspaceInitializationStore(store *database.RuntimeStore, binding ident
 func NewWorkspaceInitializationStoreWithParticipant(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, model projectmodel.RuntimeModel, participant runtimeext.WorkspaceBootstrapParticipant, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
 	result := NewWorkspaceInitializationStore(store, binding, model, rolePolicy...)
 	result.participant = participant
+	return result
+}
+
+// NewWorkspaceInitializationStoreWithParticipantAndAcceptanceFixtures keeps
+// explicitly enabled development identities inside the host-owned first
+// Workspace transaction. Ordinary initialization never reaches this seam.
+func NewWorkspaceInitializationStoreWithParticipantAndAcceptanceFixtures(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, model projectmodel.RuntimeModel, participant runtimeext.WorkspaceBootstrapParticipant, fixtures identitysdk.WorkspaceAcceptanceFixtureRequest, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
+	result := NewWorkspaceInitializationStoreWithParticipant(store, binding, model, participant, rolePolicy...)
+	result.acceptanceFixturesConfigured = true
+	result.acceptanceFixtureRequest = fixtures
+	if provider, ok := binding.(identitysdk.EmbeddedWorkspaceAcceptanceFixtureProvisionerBinding); ok {
+		result.acceptanceFixtureProvisioner = provider.WorkspaceAcceptanceFixtureProvisioner()
+	}
 	return result
 }
 
@@ -233,6 +249,9 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	if err = validateIdentityReceipt(result, request.RequestID, store.rolePolicy, identityReceipt); err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
+	if err = store.provisionAcceptanceFixtures(ctx, tx, result.WorkspaceID); err != nil {
+		return workspaceprovisionmodel.Result{}, err
+	}
 	result.AdminLoginID = identityReceipt.InitialAdminLoginID
 	if err = store.insertApplicationBootstrap(ctx, tx, request.ApplicationBootstrap, result); err != nil {
 		return workspaceprovisionmodel.Result{}, err
@@ -262,6 +281,21 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	result.MustChangePassword = credential.MustChangePassword
 	result.CredentialDelivery = workspaceprovisionmodel.CredentialDelivered
 	return result, nil
+}
+
+func (store *WorkspaceProvisionStore) provisionAcceptanceFixtures(ctx context.Context, tx *sql.Tx, workspaceID string) error {
+	if !store.acceptanceFixturesConfigured {
+		return nil
+	}
+	if store.acceptanceFixtureProvisioner == nil {
+		return fmt.Errorf("embedded Identity does not provide development identity provisioning")
+	}
+	request := store.acceptanceFixtureRequest
+	request.WorkspaceID = workspaceID
+	if err := store.acceptanceFixtureProvisioner.ProvisionWorkspaceAcceptanceFixtures(ctx, request, identitysdk.EmbeddedTransaction{Executor: tx}); err != nil {
+		return fmt.Errorf("provision development identities: %w", err)
+	}
+	return nil
 }
 
 func validateIdentityReceipt(result workspaceprovisionmodel.Result, invocationID string, rolePolicy WorkspaceBootstrapRolePolicyEvidence, receipt identitysdk.WorkspaceIdentityBootstrapReceipt) error {

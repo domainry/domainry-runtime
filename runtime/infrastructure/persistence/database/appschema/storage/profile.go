@@ -120,8 +120,6 @@ type Profile interface {
 	Indexes(context.Context, Queryer, query.Renderer, string, string) (map[string]bool, error)
 	DropIndex(context.Context, Executor, query.Renderer, string, string) error
 	ConditionalUniquePlan(query.Renderer, string, string, recordvalidation.RecordConditionalUniquePolicy) ConditionalUniquePlan
-	ConditionalUniqueGuard(string) string
-	DropColumn(context.Context, Executor, query.Renderer, string, string) error
 	ExactDecimalUpgradeAllowed(string, definitionmodel.FieldSchema) bool
 }
 

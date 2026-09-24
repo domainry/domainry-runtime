@@ -20,17 +20,20 @@ import (
 )
 
 type identityBootstrapProbe struct {
-	db            *sql.DB
-	rolePolicy    WorkspaceBootstrapRolePolicyEvidence
-	request       identitysdk.WorkspaceIdentityBootstrapRequest
-	receipt       identitysdk.WorkspaceIdentityBootstrapReceipt
-	completions   []identitysdk.WorkspaceIdentityBootstrapCompletion
-	credential    identitysdk.WorkspaceIdentityBootstrapOneTimeCredential
-	fixtureCalls  int
-	pending       bool
-	claimed       bool
-	completionErr error
-	claimErr      error
+	db                     *sql.DB
+	rolePolicy             WorkspaceBootstrapRolePolicyEvidence
+	request                identitysdk.WorkspaceIdentityBootstrapRequest
+	receipt                identitysdk.WorkspaceIdentityBootstrapReceipt
+	completions            []identitysdk.WorkspaceIdentityBootstrapCompletion
+	credential             identitysdk.WorkspaceIdentityBootstrapOneTimeCredential
+	fixtureCalls           int
+	fixtureRequest         identitysdk.WorkspaceAcceptanceFixtureRequest
+	fixtureUsesTransaction bool
+	fixtureErr             error
+	pending                bool
+	claimed                bool
+	completionErr          error
+	claimErr               error
 }
 
 func (*identityBootstrapProbe) BindBootstrapProjectRoleCatalog(context.Context, identitysdk.ProjectRoleCatalog) error {
@@ -124,9 +127,11 @@ func (probe *identityBootstrapProbe) WorkspaceAcceptanceFixtureProvisioner() ide
 	return probe
 }
 
-func (probe *identityBootstrapProbe) ProvisionWorkspaceAcceptanceFixtures(context.Context, identitysdk.WorkspaceAcceptanceFixtureRequest, identitysdk.EmbeddedTransaction) error {
+func (probe *identityBootstrapProbe) ProvisionWorkspaceAcceptanceFixtures(_ context.Context, request identitysdk.WorkspaceAcceptanceFixtureRequest, transaction identitysdk.EmbeddedTransaction) error {
 	probe.fixtureCalls++
-	return nil
+	probe.fixtureRequest = request
+	_, probe.fixtureUsesTransaction = transaction.Executor.(*sql.Tx)
+	return probe.fixtureErr
 }
 
 func (*identityBootstrapProbe) Close(context.Context) error { return nil }
@@ -216,6 +221,38 @@ func TestWorkspaceInitializationCompletesThenClaimsOnceAndReplayHasNoSecret(t *t
 	}
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_workspace_commercial_configuration'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
 		t.Fatalf("dedicated Workspace commercial configuration table remains=%d err=%v", legacyTables, err)
+	}
+}
+
+func TestWorkspaceInitializationProvisionsConfiguredAcceptanceFixturesInHostTransaction(t *testing.T) {
+	store, probe := newWorkspaceProvisionTestStore(t)
+	fixtures := identitysdk.WorkspaceAcceptanceFixtureRequest{Actors: []identitysdk.WorkspaceAcceptanceActor{{
+		ID: "evaluator", LoginID: "evaluator@example.test", Name: "Evaluator", RoleKey: "crm_acceptance_admin", InitialPassword: "EvaluationOnly1!",
+	}}}
+	repository := NewWorkspaceInitializationStoreWithParticipantAndAcceptanceFixtures(store, probe, projectmodel.RuntimeModel{}, nil, fixtures, probe.rolePolicy)
+	result, err := repository.Initialize(t.Context(), validWorkspaceRequest("acceptance-fixtures"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if probe.fixtureCalls != 1 || !probe.fixtureUsesTransaction || probe.fixtureRequest.WorkspaceID != result.WorkspaceID || !reflect.DeepEqual(probe.fixtureRequest.Actors, fixtures.Actors) {
+		t.Fatalf("calls=%d transaction=%t request=%+v result=%+v", probe.fixtureCalls, probe.fixtureUsesTransaction, probe.fixtureRequest, result)
+	}
+}
+
+func TestWorkspaceInitializationRollsBackWhenConfiguredAcceptanceFixturesFail(t *testing.T) {
+	store, probe := newWorkspaceProvisionTestStore(t)
+	probe.fixtureErr = errors.New("fixture rejected")
+	repository := NewWorkspaceInitializationStoreWithParticipantAndAcceptanceFixtures(store, probe, projectmodel.RuntimeModel{}, nil, identitysdk.WorkspaceAcceptanceFixtureRequest{
+		Actors: []identitysdk.WorkspaceAcceptanceActor{{ID: "evaluator", LoginID: "evaluator@example.test", Name: "Evaluator", RoleKey: "crm_acceptance_admin", InitialPassword: "EvaluationOnly1!"}},
+	}, probe.rolePolicy)
+	if _, err := repository.Initialize(t.Context(), validWorkspaceRequest("acceptance-fixture-rollback")); err == nil || !strings.Contains(err.Error(), "provision development identities") {
+		t.Fatalf("error=%v", err)
+	}
+	for _, table := range []string{"_workspaces", workspaceProvisioningReceiptTable, "identity_provision_probe"} {
+		assertRowCount(t, store, table, 0)
+	}
+	if len(probe.completions) != 1 || probe.completions[0].Outcome != identitysdk.WorkspaceIdentityBootstrapTransactionRolledBack {
+		t.Fatalf("Identity completions=%+v", probe.completions)
 	}
 }
 

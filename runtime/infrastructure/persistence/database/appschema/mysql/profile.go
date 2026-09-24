@@ -129,13 +129,6 @@ func (ApplicationSchemaStorageProfile) ConditionalUniquePlan(renderer query.Rend
 	statement := "ALTER TABLE " + renderer.Table(table) + " ADD COLUMN " + renderer.Identifier(guard) + " TINYINT GENERATED ALWAYS AS (CASE WHEN " + appschemastorage.ConditionalUniqueCondition(renderer, policy) + " THEN 1 ELSE NULL END) STORED"
 	return appschemastorage.ConditionalUniquePlan{GuardColumn: guard, AddGuardStatement: statement, IndexFields: fields}
 }
-func (ApplicationSchemaStorageProfile) ConditionalUniqueGuard(index string) string {
-	return appschemastorage.GuardColumn(index)
-}
-func (ApplicationSchemaStorageProfile) DropColumn(ctx context.Context, executor appschemastorage.Executor, renderer query.Renderer, table, column string) error {
-	_, err := executor.ExecContext(ctx, "ALTER TABLE "+renderer.Table(table)+" DROP COLUMN "+renderer.Identifier(column))
-	return err
-}
 func (ApplicationSchemaStorageProfile) ExactDecimalUpgradeAllowed(current string, field definitionmodel.FieldSchema) bool {
 	if kind := strings.TrimSpace(field.Type); kind != "currency" && kind != "percent" {
 		return false

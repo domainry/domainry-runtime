@@ -279,12 +279,11 @@ func generatedFieldValue(random *rand.Rand, object definitionmodel.ObjectSchema,
 }
 
 func relationTarget(field definitionmodel.FieldSchema) string {
-	if field.Config == nil {
-		return ""
-	}
-	for _, key := range []string{"target", "target_object_key", "object"} {
-		if value := strings.TrimSpace(fmt.Sprint(field.Config[key])); value != "" && value != "<nil>" {
-			return value
+	if field.Config != nil {
+		for _, key := range []string{"target", "target_object_key", "object"} {
+			if value := strings.TrimSpace(fmt.Sprint(field.Config[key])); value != "" && value != "<nil>" {
+				return value
+			}
 		}
 	}
 	return strings.TrimSpace(field.Validation.Target)

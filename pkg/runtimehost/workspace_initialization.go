@@ -38,6 +38,7 @@ type projectWorkspaceManager struct {
 	bootstrapRoleCatalog      identitysdk.ProjectRoleCatalog
 	credentialDelivery        InitialWorkspaceCredentialDelivery
 	installationAdminDelivery InstallationAdministratorCredentialDelivery
+	developmentIdentity       *DevelopmentIdentityOptions
 }
 
 func newProjectWorkspaceManager(ctx context.Context, cfg config.Config, factory identitysdk.Factory, database *bootstrap.ProjectDatabase, handle identitysdk.DatabaseHandle, delivery InitialWorkspaceCredentialDelivery, installationAdminDelivery ...InstallationAdministratorCredentialDelivery) (*projectWorkspaceManager, error) {
@@ -142,7 +143,14 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, model proj
 	if err != nil {
 		return err
 	}
+	fixtures, hasDevelopmentIdentity, err := developmentIdentityRequest(manager.cfg, manager.developmentIdentity)
+	if err != nil {
+		return err
+	}
 	initialization := workspaceprovision.NewWorkspaceInitializationStoreWithParticipant(manager.database, manager.bootstrap, model, participant, rolePolicy)
+	if hasDevelopmentIdentity {
+		initialization = workspaceprovision.NewWorkspaceInitializationStoreWithParticipantAndAcceptanceFixtures(manager.database, manager.bootstrap, model, participant, fixtures, rolePolicy)
+	}
 	result, err := initialization.Initialize(ctx, request)
 	if err != nil {
 		return fmt.Errorf("initialize first Workspace atomically: %w", err)
@@ -175,6 +183,34 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, model proj
 		return err
 	}
 	return deliveryErr
+}
+
+func developmentIdentityRequest(cfg config.Config, options *DevelopmentIdentityOptions) (identitysdk.WorkspaceAcceptanceFixtureRequest, bool, error) {
+	if options == nil || len(options.Organizations) == 0 && len(options.Actors) == 0 {
+		return identitysdk.WorkspaceAcceptanceFixtureRequest{}, false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.Environment)) {
+	case "development", "dev", "demo", "test":
+	default:
+		return identitysdk.WorkspaceAcceptanceFixtureRequest{}, false, fmt.Errorf("development identities are forbidden in environment %q", cfg.Environment)
+	}
+	request := identitysdk.WorkspaceAcceptanceFixtureRequest{
+		Organizations: make([]identitysdk.WorkspaceAcceptanceOrganization, 0, len(options.Organizations)),
+		Actors:        make([]identitysdk.WorkspaceAcceptanceActor, 0, len(options.Actors)),
+	}
+	for _, organization := range options.Organizations {
+		request.Organizations = append(request.Organizations, identitysdk.WorkspaceAcceptanceOrganization{
+			ID: strings.TrimSpace(organization.ID), Code: strings.TrimSpace(organization.Code), Name: strings.TrimSpace(organization.Name),
+		})
+	}
+	for _, actor := range options.Actors {
+		request.Actors = append(request.Actors, identitysdk.WorkspaceAcceptanceActor{
+			ID: strings.TrimSpace(actor.ID), LoginID: strings.TrimSpace(actor.LoginID), Name: strings.TrimSpace(actor.Name),
+			RoleKey: strings.TrimSpace(actor.RoleKey), OrganizationID: strings.TrimSpace(actor.OrganizationID),
+			ManagerUserID: strings.TrimSpace(actor.ManagerUserID), InitialPassword: actor.InitialPassword,
+		})
+	}
+	return request, true, nil
 }
 
 func (manager *projectWorkspaceManager) bindWorkspaceBootstrapCatalogs(ctx context.Context, target any) error {

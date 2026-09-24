@@ -83,9 +83,6 @@ func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx contex
 			return err
 		}
 	}
-	if err := r.migrateLegacyRecordActorColumns(ctx, object.Key, existing); err != nil {
-		return err
-	}
 	if indexes == nil {
 		var err error
 		indexes, err = r.tableIndexes(ctx, object.Key)
@@ -305,17 +302,6 @@ func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx contex
 		}
 		if err := r.dropManagedIndex(ctx, object.Key, existingIndex); err != nil {
 			return err
-		}
-		if guard := r.storage.ConditionalUniqueGuard(existingIndex); guard != "" {
-			columns, columnErr := r.tableColumns(ctx, object.Key)
-			if columnErr != nil {
-				return columnErr
-			}
-			if columns[guard] {
-				if columnErr := r.storage.DropColumn(ctx, schemaDB, r.store.SQLRenderer, object.Key, guard); columnErr != nil {
-					return fmt.Errorf("drop stale conditional unique guard %s: %w", guard, columnErr)
-				}
-			}
 		}
 		delete(indexes, existingIndex)
 	}
