@@ -11,13 +11,13 @@ require (
 	github.com/domainry/domainry-agent-sdk v0.1.23
 	github.com/domainry/domainry-audit v0.1.18
 	github.com/domainry/domainry-audit-sdk v0.1.8
-	github.com/domainry/domainry-connector-sdk v0.1.2
+	github.com/domainry/domainry-connector-sdk v0.1.3
 	github.com/domainry/domainry-data-exchange v0.3.19
 	github.com/domainry/domainry-data-exchange-sdk v0.3.9
 	github.com/domainry/domainry-foundation v0.1.38
 	github.com/domainry/domainry-identity v0.2.27
 	github.com/domainry/domainry-identity-sdk v0.1.15
-	github.com/domainry/domainry-integration v0.1.26
+	github.com/domainry/domainry-integration v0.1.27
 	github.com/domainry/domainry-integration-sdk v0.1.9
 	github.com/domainry/domainry-knowledge v0.1.16
 	github.com/domainry/domainry-lifecycle v0.1.21
@@ -55,7 +55,7 @@ require (
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/crewjam/saml v0.5.1 // indirect
-	github.com/domainry/domainry-connectors v0.1.4 // indirect
+	github.com/domainry/domainry-connectors v0.1.5 // indirect
 	github.com/domainry/domainry-knowledge-sdk v0.1.2 // indirect
 	github.com/domainry/domainry-todo-sdk v0.1.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.12 // indirect

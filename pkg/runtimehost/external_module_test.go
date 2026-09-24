@@ -19,6 +19,7 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 		repositoryRoot,
 		externalRoot,
 		"example.com/domainry-project",
+		"github.com/domainry/domainry-connectors",
 		"github.com/domainry/domainry-integration",
 		"github.com/domainry/domainry-monitoring",
 		"github.com/domainry/domainry-scheduler",
@@ -33,6 +34,7 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 import (
 	agentmodule "github.com/domainry/domainry-agent/module"
 	"github.com/domainry/domainry-connector-sdk"
+	connectorscatalog "github.com/domainry/domainry-connectors/catalog"
 	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	identitymodule "github.com/domainry/domainry-identity/module"
 	integrationmodule "github.com/domainry/domainry-integration/module"
@@ -54,7 +56,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 			ConnectorContractVersion: connector.ContractVersion,
 		},
 		IdentityFactory: identitymodule.NewFactory(identitymodule.OptionsFromEnvironment()),
-		IntegrationFactory: integrationmodule.NewFactory(integrationmodule.OptionsFromEnvironment()),
+		IntegrationFactory: newIntegrationFactory(),
 		ReportFactory: reportmodule.NewFactory(),
 		NotificationFactory: notificationmodule.NewFactory(notificationmodule.OptionsFromEnvironment()),
 		MonitoringFactory: monitoringmodule.NewFactory(monitoringmodule.OptionsFromEnvironment()),
@@ -62,6 +64,12 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		DataExchangeFactory: dataexchangemodule.NewFactory(dataexchangemodule.Options{}),
 		AgentFactory: newAgentFactory(),
 	}
+}
+
+func newIntegrationFactory() *integrationmodule.Factory {
+	options := integrationmodule.OptionsFromEnvironment()
+	options.ConnectorCatalog = connectorscatalog.Definitions
+	return integrationmodule.NewFactory(options)
 }
 
 func newAgentFactory() *agentmodule.Factory {
