@@ -9,7 +9,9 @@ import (
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentmodulehost "github.com/domainry/domainry-agent-sdk/modulehost"
 	agentmodule "github.com/domainry/domainry-agent/module"
+	knowledgemodule "github.com/domainry/domainry-knowledge/module"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	todomodule "github.com/domainry/domainry-todo/module"
 )
 
 type host struct {
@@ -36,11 +38,14 @@ func Open(ctx context.Context, store *database.RuntimeStore, runtimeID string) (
 	if store == nil {
 		return nil, fmt.Errorf("Agent test store is required")
 	}
-	binding, err := agentmodule.NewFactory(agentmodule.Options{
-		BaseURL: "http://127.0.0.1",
-		APIKey:  "test",
-		AgentID: 1,
-	}).OpenModule(ctx, agentsdk.ApplicationRef{RuntimeID: runtimeID}, host{runtimeID: runtimeID, store: store})
+	options := agentmodule.Options{
+		BaseURL:          "http://127.0.0.1",
+		APIKey:           "test",
+		AgentID:          1,
+		KnowledgeFactory: knowledgemodule.NewFactory(),
+		TodoFactory:      todomodule.NewFactory(),
+	}
+	binding, err := agentmodule.NewFactory(options).OpenModule(ctx, agentsdk.ApplicationRef{RuntimeID: runtimeID}, host{runtimeID: runtimeID, store: store})
 	if err != nil {
 		return nil, err
 	}

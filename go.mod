@@ -7,7 +7,7 @@ toolchain go1.26.6
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/creack/pty v1.1.24
-	github.com/domainry/domainry-agent v0.1.48
+	github.com/domainry/domainry-agent v0.1.49
 	github.com/domainry/domainry-agent-sdk v0.1.20
 	github.com/domainry/domainry-audit v0.1.18
 	github.com/domainry/domainry-audit-sdk v0.1.8
@@ -19,7 +19,7 @@ require (
 	github.com/domainry/domainry-identity-sdk v0.1.15
 	github.com/domainry/domainry-integration v0.1.25
 	github.com/domainry/domainry-integration-sdk v0.1.9
-	github.com/domainry/domainry-knowledge v0.1.10
+	github.com/domainry/domainry-knowledge v0.1.13
 	github.com/domainry/domainry-lifecycle v0.1.21
 	github.com/domainry/domainry-lifecycle-sdk v0.1.17
 	github.com/domainry/domainry-metadata v0.1.16
@@ -31,7 +31,7 @@ require (
 	github.com/domainry/domainry-report-sdk v0.1.13
 	github.com/domainry/domainry-scheduler v0.1.23
 	github.com/domainry/domainry-scheduler-sdk v0.1.12
-	github.com/domainry/domainry-todo v0.1.5
+	github.com/domainry/domainry-todo v0.1.6
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0

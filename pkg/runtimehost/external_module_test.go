@@ -36,10 +36,12 @@ import (
 	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	identitymodule "github.com/domainry/domainry-identity/module"
 	integrationmodule "github.com/domainry/domainry-integration/module"
+	knowledgemodule "github.com/domainry/domainry-knowledge/module"
 	monitoringmodule "github.com/domainry/domainry-monitoring/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	reportmodule "github.com/domainry/domainry-report/module"
 	schedulermodule "github.com/domainry/domainry-scheduler/module"
+	todomodule "github.com/domainry/domainry-todo/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimehost"
 )
@@ -58,8 +60,15 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		MonitoringFactory: monitoringmodule.NewFactory(monitoringmodule.OptionsFromEnvironment()),
 		SchedulerFactory: schedulermodule.NewFactory(schedulermodule.OptionsFromEnvironment()),
 		DataExchangeFactory: dataexchangemodule.NewFactory(dataexchangemodule.Options{}),
-		AgentFactory: agentmodule.NewFactory(agentmodule.OptionsFromEnvironment()),
+		AgentFactory: newAgentFactory(),
 	}
+}
+
+func newAgentFactory() *agentmodule.Factory {
+	options := agentmodule.OptionsFromEnvironment()
+	options.KnowledgeFactory = knowledgemodule.NewFactory()
+	options.TodoFactory = todomodule.NewFactory()
+	return agentmodule.NewFactory(options)
 }
 `)
 	if err := os.WriteFile(filepath.Join(compositionDir, "extensions.gen.go"), compositionSource, 0o600); err != nil {
