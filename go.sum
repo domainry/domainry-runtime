@@ -48,6 +48,8 @@ github.com/dlclark/regexp2 v1.11.0 h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxK
 github.com/dlclark/regexp2 v1.11.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
 github.com/domainry/domainry-agent v0.1.52 h1:o6bQF2kknMG/NOSVNwUVckZ2k6hLJaKtB/5tTSTWQFg=
 github.com/domainry/domainry-agent v0.1.52/go.mod h1:PvWXVwvi0n4+zDSCHCfcyTJOW+DpSBDap2iSuDGqswI=
+github.com/domainry/domainry-agent v0.1.53 h1:cCwiMg6t7XP3EX9YHAeSGuOozHBmlG2nCrOs7Kbh5QY=
+github.com/domainry/domainry-agent v0.1.53/go.mod h1:Ba6WSTn0+HKjIt6eI82conGUdzaB/oKTOBQ8jPe7xHY=
 github.com/domainry/domainry-agent-sdk v0.1.23 h1:o/bp+6OKCUWZM48xSsoZaRoZXmvded11RPLTybkCoME=
 github.com/domainry/domainry-agent-sdk v0.1.23/go.mod h1:oMa4C1+dm5IKlMwDkbQxz+DostkjXVCfWujpP21huXQ=
 github.com/domainry/domainry-audit v0.1.18 h1:YXFUefROcdubr4c4fS7RzW9YmNTpfmFi+aojkaIaWBw=
@@ -80,8 +82,12 @@ github.com/domainry/domainry-integration-sdk v0.1.9 h1:g5+7Aglf2IpwcDjg2znq+Lcgo
 github.com/domainry/domainry-integration-sdk v0.1.9/go.mod h1:bAxENzxiM3DVeyekkQsXaYnkPxBxYzFaRGmt8qNe3bI=
 github.com/domainry/domainry-knowledge v0.1.16 h1:cQs1z5ACXjUJ9dUIZExO4WwC8gwFMN2ovt8WsS1HOL0=
 github.com/domainry/domainry-knowledge v0.1.16/go.mod h1:GdQ9qwDeG7SZcPin7aNSvqJOnxK+B5R/fd1ivd8BAHs=
+github.com/domainry/domainry-knowledge v0.1.17 h1:yjUkRJUpY7LFywffc4zzDTAFGnf4REZlXqYlN3jGVDM=
+github.com/domainry/domainry-knowledge v0.1.17/go.mod h1:RUaHrhQ46BzcHVzjoM8iwmRMtxN/azyexnvUrhovWfs=
 github.com/domainry/domainry-knowledge-sdk v0.1.2 h1:7CckfnIm/v6FQdwjKw+OoBFxOJKTzk1nioW3xi4u8nA=
 github.com/domainry/domainry-knowledge-sdk v0.1.2/go.mod h1:aOAx9bCSylhrdUFGH6p3/R5y7L5t+P6Z8u/A0cO9v/g=
+github.com/domainry/domainry-knowledge-sdk v0.1.3 h1:LyFzdh0UMHD981DYUJ5i+Y19eP37O/EpEom2E3z0KME=
+github.com/domainry/domainry-knowledge-sdk v0.1.3/go.mod h1:aOAx9bCSylhrdUFGH6p3/R5y7L5t+P6Z8u/A0cO9v/g=
 github.com/domainry/domainry-lifecycle v0.1.21 h1:BUBP3dQesrHEhuieNFjvgprxyR1LsGw/RbbSoEnBCMk=
 github.com/domainry/domainry-lifecycle v0.1.21/go.mod h1:jxUlWI8TAwtj0Cz9eXWkrMJA5v3fGARHF/JAsI/RcXk=
 github.com/domainry/domainry-lifecycle-sdk v0.1.17 h1:yIuzPsW2j9lP5AuM+NEp9VP3/n6ihIfWOiEjBCJmqqU=

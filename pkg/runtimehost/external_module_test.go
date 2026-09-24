@@ -35,6 +35,7 @@ import (
 	agentmodule "github.com/domainry/domainry-agent/module"
 	"github.com/domainry/domainry-connector-sdk"
 	connectorscatalog "github.com/domainry/domainry-connectors/catalog"
+	knowledgehttpapi "github.com/domainry/domainry-connectors/providers/knowledge_base/http_api"
 	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	identitymodule "github.com/domainry/domainry-identity/module"
 	integrationmodule "github.com/domainry/domainry-integration/module"
@@ -75,7 +76,7 @@ func newIntegrationFactory() *integrationmodule.Factory {
 func newAgentFactory() *agentmodule.Factory {
 	options := agentmodule.OptionsFromEnvironment()
 	options.KnowledgeFactory = knowledgemodule.NewFactory()
-	options.KnowledgeProviderFactory = knowledgemodule.NewProviderFactory()
+	options.KnowledgeProviderFactory = knowledgemodule.NewProviderFactory(knowledgehttpapi.New)
 	options.TodoFactory = todomodule.NewFactory()
 	return agentmodule.NewFactory(options)
 }

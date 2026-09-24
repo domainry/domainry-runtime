@@ -9,6 +9,7 @@ import (
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentmodulehost "github.com/domainry/domainry-agent-sdk/modulehost"
 	agentmodule "github.com/domainry/domainry-agent/module"
+	knowledgehttpapi "github.com/domainry/domainry-connectors/providers/knowledge_base/http_api"
 	knowledgemodule "github.com/domainry/domainry-knowledge/module"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	todomodule "github.com/domainry/domainry-todo/module"
@@ -43,7 +44,7 @@ func Open(ctx context.Context, store *database.RuntimeStore, runtimeID string) (
 		APIKey:                   "test",
 		AgentID:                  1,
 		KnowledgeFactory:         knowledgemodule.NewFactory(),
-		KnowledgeProviderFactory: knowledgemodule.NewProviderFactory(),
+		KnowledgeProviderFactory: knowledgemodule.NewProviderFactory(knowledgehttpapi.New),
 		TodoFactory:              todomodule.NewFactory(),
 	}
 	binding, err := agentmodule.NewFactory(options).OpenModule(ctx, agentsdk.ApplicationRef{RuntimeID: runtimeID}, host{runtimeID: runtimeID, store: store})
