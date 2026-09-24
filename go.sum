@@ -104,8 +104,8 @@ github.com/domainry/domainry-todo v0.1.7 h1:OUKJlbPHPK5QoO+CfJEtrltjMzBkFb2EDCGC
 github.com/domainry/domainry-todo v0.1.7/go.mod h1:TD1ngV6TTfdIRs3ALOeg25yVl33XAIJVFy7lBcjb8nQ=
 github.com/domainry/domainry-todo-sdk v0.1.0 h1:Kg7juJFXzIxZ9Vx97IWkFSmCzWbcZG8zhRQQRL5DDaQ=
 github.com/domainry/domainry-todo-sdk v0.1.0/go.mod h1:UTFhvMMC2vBYX7P+ArDWYQVPowLvOUxNt/GHEKtQ1aY=
-github.com/domainry/domainry-tools v0.1.6 h1:Z1hNqdlJTAu4CLLntzcEtT0DY0zEuL3X6F6qV03asXI=
-github.com/domainry/domainry-tools v0.1.6/go.mod h1:/0LvsxQR1mhz4dQUpYnmQoYrZ3bVBpVASw6yEfYr9Us=
+github.com/domainry/domainry-tools v0.1.7 h1:icj74wZFqC1HU6D+TTFXtVTPKQlOanrZIsbRpV9cG2c=
+github.com/domainry/domainry-tools v0.1.7/go.mod h1:9IL2dgfEIVA33DIsIMnZuhO7WwsJ5ViGovUcUKSoVys=
 github.com/domainry/domainry-tools-sdk v0.1.6 h1:DvYRQN6GREHpyUbLuibd0aJJMcz6KwMw4A+wvNsi5+Y=
 github.com/domainry/domainry-tools-sdk v0.1.6/go.mod h1:Hc9QDwXnPMeAUJd8C4j/hmIQYFaHsquM/iNIhMXXvp8=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
