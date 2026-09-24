@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	auditmodule "github.com/domainry/domainry-audit/module"
 	shareddefinition "github.com/domainry/domainry-foundation/definition"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-foundation/schemaownership"
@@ -14,6 +15,7 @@ import (
 	identitymodule "github.com/domainry/domainry-identity/module"
 	integrationmodule "github.com/domainry/domainry-integration/module"
 	lifecyclemodule "github.com/domainry/domainry-lifecycle/module"
+	metadatamodule "github.com/domainry/domainry-metadata/module"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	ormmigration "github.com/domainry/domainry-orm/migration"
@@ -81,7 +83,11 @@ func TestIdentityModuleInstallsItsOwnCanonicalSchema(t *testing.T) {
 	handle := identitysdk.DatabaseHandle{
 		Pool: store.DB(), Driver: store.Driver(), Migrations: store, ModuleMigrations: store,
 	}
-	binding, err := identitymodule.NewFactory(identitymodule.Options{DatabaseDriver: store.Driver()}).OpenWithDatabase(
+	binding, err := identitymodule.NewFactory(identitymodule.Options{
+		DatabaseDriver:  store.Driver(),
+		AuditFactory:    auditmodule.NewFactory(auditmodule.Options{}),
+		MetadataFactory: metadatamodule.NewFactory(),
+	}).OpenWithDatabase(
 		t.Context(), identitysdk.ApplicationRef{WorkspaceID: "workspace-primary", ApplicationKey: "runtime"}, handle,
 	)
 	if err != nil {

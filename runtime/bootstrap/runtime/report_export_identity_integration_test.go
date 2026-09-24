@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	auditmodule "github.com/domainry/domainry-audit/module"
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	"github.com/domainry/domainry-foundation/apperror"
@@ -21,6 +22,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalresolver "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	identitymodule "github.com/domainry/domainry-identity/module"
+	metadatamodule "github.com/domainry/domainry-metadata/module"
 	"github.com/domainry/domainry-orm/query"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
@@ -56,7 +58,11 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 		t.Fatal(err)
 	}
 	handle := identitysdk.DatabaseHandle{Pool: store.DB(), Driver: "sqlite", Migrations: store, ModuleMigrations: store}
-	factory := identitymodule.NewFactory(identitymodule.Options{DatabaseDriver: "sqlite"})
+	factory := identitymodule.NewFactory(identitymodule.Options{
+		DatabaseDriver:  "sqlite",
+		AuditFactory:    auditmodule.NewFactory(auditmodule.Options{}),
+		MetadataFactory: metadatamodule.NewFactory(),
+	})
 	bootstrap, err := factory.OpenBootstrapWithDatabase(ctx, "runtime", handle)
 	if err != nil {
 		t.Fatal(err)

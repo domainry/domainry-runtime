@@ -115,7 +115,11 @@ func openCompositionSchemaStore(t *testing.T, composition schemaComposition) *Ru
 
 func openCompositionIdentity(t *testing.T, store *RuntimeStore) {
 	t.Helper()
-	binding, err := identitymodule.NewFactory(identitymodule.Options{DatabaseDriver: store.Driver()}).OpenWithDatabase(
+	binding, err := identitymodule.NewFactory(identitymodule.Options{
+		DatabaseDriver:  store.Driver(),
+		AuditFactory:    auditmodule.NewFactory(auditmodule.Options{}),
+		MetadataFactory: metadatamodule.NewFactory(),
+	}).OpenWithDatabase(
 		t.Context(), identitysdk.ApplicationRef{WorkspaceID: "workspace-primary", ApplicationKey: "runtime"},
 		identitysdk.DatabaseHandle{Pool: store.DB(), Driver: store.Driver(), Schema: store.DatabaseSchema(), Migrations: store, ModuleMigrations: store},
 	)
