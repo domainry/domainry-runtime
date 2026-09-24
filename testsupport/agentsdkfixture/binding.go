@@ -39,11 +39,12 @@ func Open(ctx context.Context, store *database.RuntimeStore, runtimeID string) (
 		return nil, fmt.Errorf("Agent test store is required")
 	}
 	options := agentmodule.Options{
-		BaseURL:          "http://127.0.0.1",
-		APIKey:           "test",
-		AgentID:          1,
-		KnowledgeFactory: knowledgemodule.NewFactory(),
-		TodoFactory:      todomodule.NewFactory(),
+		BaseURL:                  "http://127.0.0.1",
+		APIKey:                   "test",
+		AgentID:                  1,
+		KnowledgeFactory:         knowledgemodule.NewFactory(),
+		KnowledgeProviderFactory: knowledgemodule.NewProviderFactory(),
+		TodoFactory:              todomodule.NewFactory(),
 	}
 	binding, err := agentmodule.NewFactory(options).OpenModule(ctx, agentsdk.ApplicationRef{RuntimeID: runtimeID}, host{runtimeID: runtimeID, store: store})
 	if err != nil {

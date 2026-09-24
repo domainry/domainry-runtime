@@ -67,6 +67,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 func newAgentFactory() *agentmodule.Factory {
 	options := agentmodule.OptionsFromEnvironment()
 	options.KnowledgeFactory = knowledgemodule.NewFactory()
+	options.KnowledgeProviderFactory = knowledgemodule.NewProviderFactory()
 	options.TodoFactory = todomodule.NewFactory()
 	return agentmodule.NewFactory(options)
 }
