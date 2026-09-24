@@ -61,7 +61,6 @@ func EnsureWorkspaceProvisioningSchema(ctx context.Context, store Store) error {
 	}{
 		{table: "_workspaces", name: "uniq_workspace_code", columns: []string{"canonical_code"}},
 		{table: "_workspaces", name: "uniq_initial_workspace_installation", columns: []string{"initial_installation_identity"}},
-		{table: "_workspaces", name: "uniq_workspace_company_organization", columns: []string{"company_organization_id"}},
 	} {
 		if err := store.CreateIndexIfMissing(ctx, index.table, index.name, true, index.columns...); err != nil {
 			return err
