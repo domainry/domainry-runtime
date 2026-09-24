@@ -210,9 +210,9 @@ func TestWorkspaceInitializationCompletesThenClaimsOnceAndReplayHasNoSecret(t *t
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_workspace_provisioning_receipts_v3'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
 		t.Fatalf("legacy Workspace provisioning receipt tables=%d err=%v", legacyTables, err)
 	}
-	var companyID string
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT company_organization_id FROM _workspaces WHERE id = ?`, result.WorkspaceID).Scan(&companyID); err != nil || companyID != result.CompanyID {
-		t.Fatalf("Workspace company authority=%q want=%q err=%v", companyID, result.CompanyID, err)
+	var companyColumns int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM pragma_table_info('_workspaces') WHERE name = 'company_organization_id'`).Scan(&companyColumns); err != nil || companyColumns != 0 {
+		t.Fatalf("Workspace company authority columns=%d err=%v", companyColumns, err)
 	}
 	var plan string
 	var commercialRevision int
@@ -343,7 +343,7 @@ func TestWorkspaceBootstrapParticipantCreatesFirstStoreOwnedAggregateInHostTrans
 	if err != nil {
 		t.Fatal(err)
 	}
-	if participant.context.WorkspaceCode != result.CanonicalCode || participant.context.FirstStoreOrganizationID != result.FirstStoreID || participant.context.CompanyOrganizationID != result.CompanyID || participant.context.InitialAdministratorUserID != result.InitialAdminUserID {
+	if participant.context.WorkspaceCode != result.CanonicalCode || participant.context.FirstStoreOrganizationID != result.FirstStoreID || participant.context.InitialAdministratorUserID != result.InitialAdminUserID {
 		t.Fatalf("participant context=%+v result=%+v", participant.context, result)
 	}
 	var workspaceID, ownerID, currency, label string

@@ -342,7 +342,7 @@ func (store *WorkspaceProvisionStore) insertApplicationBootstrap(ctx context.Con
 		return workspaceprovisionmodel.ErrInvalid
 	}
 	records, err := store.participant.BuildWorkspaceBootstrap(ctx, runtimeext.WorkspaceBootstrapContext{
-		WorkspaceCode: result.CanonicalCode, CompanyOrganizationID: result.CompanyID,
+		WorkspaceCode:            result.CanonicalCode,
 		FirstStoreOrganizationID: result.FirstStoreID, InitialAdministratorUserID: result.InitialAdminUserID,
 	}, normalizedInput)
 	if err != nil {
@@ -482,13 +482,13 @@ func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context
 	}
 	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspaces").
 		Columns(
-			"id", "canonical_code", "name", "status", "initial_installation_identity", "company_organization_id",
+			"id", "canonical_code", "name", "status", "initial_installation_identity",
 			"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit",
 			"included_store_limit", "max_stores", "contract_date", "billing_day", "billing_contact_name", "billing_contact_phone",
 			"billing_contact_email", "billing_contact_address", "billing_contact_notes", "commercial_revision", "revision", "created_at", "updated_at",
 		).
 		Values(
-			result.WorkspaceID, result.CanonicalCode, request.WorkspaceName, "active", initialIdentity, result.CompanyID,
+			result.WorkspaceID, result.CanonicalCode, request.WorkspaceName, "active", initialIdentity,
 			configuration.Plan, configuration.IncludedUserLimit, configuration.MaxUserLimit, configuration.IncludedCustomerLimit, configuration.MaxCustomerLimit,
 			configuration.IncludedStoreLimit, configuration.MaxStores, configuration.ContractDate, configuration.BillingDay, configuration.BillingContactName, configuration.BillingContactPhone,
 			configuration.BillingContactEmail, configuration.BillingContactAddress, configuration.BillingContactNotes, 1, 1, now, now,

@@ -32,9 +32,8 @@ type ActionExecutionResult struct {
 }
 
 type WorkspaceCommercialConfiguration struct {
-	MaxStores             int
-	Revision              int64
-	CompanyOrganizationID string
+	MaxStores int
+	Revision  int64
 }
 
 type WorkspaceCommercialConfigurationLocker interface {

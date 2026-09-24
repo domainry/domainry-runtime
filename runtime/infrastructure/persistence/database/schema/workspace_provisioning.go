@@ -24,7 +24,6 @@ func EnsureWorkspaceProvisioningSchema(ctx context.Context, store Store) error {
 			// Only the initial Workspace carries this stable host identity. A
 			// nullable unique value avoids a second Workspace mapping table.
 			ormschema.Column("initial_installation_identity", ormschema.TextKey(64)),
-			ormschema.Column("company_organization_id", ormschema.TextKey(255)),
 			ormschema.Column("plan", ormschema.TextKey(191)).NotNull().DefaultValue(""),
 			ormschema.Column("included_user_limit", ormschema.Integer()).NotNull().DefaultValue(0),
 			ormschema.Column("max_user_limit", ormschema.Integer()).NotNull().DefaultValue(0),

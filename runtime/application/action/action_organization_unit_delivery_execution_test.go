@@ -44,7 +44,6 @@ func TestOrganizationUnitDeliveryCreatesDepartmentWithoutStoreQuotaAndFixesDeliv
 		ID: wantID, Code: "SALES", Name: "Sales", NodeType: organizationunit.NodeTypeDepartment,
 		Status: "active", ParentOrganizationID: "company-hq", SortOrder: 20, Version: 1,
 	}}
-	lockerCalls := 0
 	bundle := &identitysdk.AccessBundle{ContractVersion: identitysdk.CurrentPolicyBundleVersion}
 	execution := &businessActionExecution{
 		dependencies: BusinessHandlerExecutionDependencies{
@@ -54,17 +53,8 @@ func TestOrganizationUnitDeliveryCreatesDepartmentWithoutStoreQuotaAndFixesDeliv
 				}
 				return delivery, nil
 			},
-			WorkspaceCommercialConfiguration: workspaceCommercialConfigurationLockerFunc(func(_ context.Context, workspaceID string) (WorkspaceCommercialConfiguration, error) {
-				lockerCalls++
-				if workspaceID != "workspace-a" {
-					t.Fatalf("workspace=%q", workspaceID)
-				}
-				// max_stores is intentionally already exhausted. Generic department
-				// delivery reads only the trusted company parent and never store quota.
-				return WorkspaceCommercialConfiguration{MaxStores: 1, CompanyOrganizationID: "company-hq"}, nil
-			}),
 		},
-		identity: runtimeext.ExecutionIdentity{ExecutionID: executionID}, workspace: runtimeext.Workspace{ID: "workspace-a"},
+		identity: runtimeext.ExecutionIdentity{ExecutionID: executionID}, principal: runtimeext.Principal{OrgID: "company-hq"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
 		invocation:  actionmodel.ActionInvocation{Principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "operator", AccessBundle: bundle}}},
 		action:      definitionmodel.ActionSchema{Key: "department.provision", ObjectKey: "department_profile"},
 		unitOfWork:  unitOfWork,
@@ -81,8 +71,8 @@ func TestOrganizationUnitDeliveryCreatesDepartmentWithoutStoreQuotaAndFixesDeliv
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Organization.ID != wantID || result.Organization.NodeType != runtimeext.OrganizationUnitNodeTypeDepartment || result.Version != 1 || lockerCalls != 1 || len(delivery.createRequests) != 1 {
-		t.Fatalf("result=%#v lockerCalls=%d requests=%#v", result, lockerCalls, delivery.createRequests)
+	if result.Organization.ID != wantID || result.Organization.NodeType != runtimeext.OrganizationUnitNodeTypeDepartment || result.Version != 1 || len(delivery.createRequests) != 1 {
+		t.Fatalf("result=%#v requests=%#v", result, delivery.createRequests)
 	}
 	bound := delivery.createRequests[0]
 	if bound.AccessToken != "trusted-token" || bound.Organization.ParentOrganizationID != "company-hq" || bound.Organization.OrganizationID != wantID || bound.Organization.NodeType != organizationunit.NodeTypeDepartment || bound.Organization.SortOrder != 20 || bound.Organization.ExpectedVersion != 0 {
@@ -195,11 +185,8 @@ func TestOrganizationUnitDeliveryRejectsTamperedCreateReceipt(t *testing.T) {
 			execution := &businessActionExecution{
 				dependencies: BusinessHandlerExecutionDependencies{
 					BindOrganizationUnitDelivery: func(context.Context) (organizationunit.Delivery, error) { return delivery, nil },
-					WorkspaceCommercialConfiguration: workspaceCommercialConfigurationLockerFunc(func(context.Context, string) (WorkspaceCommercialConfiguration, error) {
-						return WorkspaceCommercialConfiguration{CompanyOrganizationID: "company-hq"}, nil
-					}),
 				},
-				identity: runtimeext.ExecutionIdentity{ExecutionID: executionID}, workspace: runtimeext.Workspace{ID: "workspace-a"},
+				identity: runtimeext.ExecutionIdentity{ExecutionID: executionID}, principal: runtimeext.Principal{OrgID: "company-hq"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
 				unitOfWork:  newActionTestUnitOfWork(),
 				targetGrant: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit},
 				organizationUnitGrant: &runtimeext.OrganizationUnitDeliveryCapability{
@@ -326,11 +313,8 @@ func TestOrganizationUnitDeliveryPreservesIdentityCreateConflictAndAuthorityErro
 			execution := &businessActionExecution{
 				dependencies: BusinessHandlerExecutionDependencies{
 					BindOrganizationUnitDelivery: func(context.Context) (organizationunit.Delivery, error) { return delivery, nil },
-					WorkspaceCommercialConfiguration: workspaceCommercialConfigurationLockerFunc(func(context.Context, string) (WorkspaceCommercialConfiguration, error) {
-						return WorkspaceCommercialConfiguration{CompanyOrganizationID: "company-hq"}, nil
-					}),
 				},
-				identity: runtimeext.ExecutionIdentity{ExecutionID: "execution-error"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
+				identity: runtimeext.ExecutionIdentity{ExecutionID: "execution-error"}, principal: runtimeext.Principal{OrgID: "company-hq"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
 				unitOfWork: newActionTestUnitOfWork(),
 				organizationUnitGrant: &runtimeext.OrganizationUnitDeliveryCapability{
 					Operations:   []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryCreate},

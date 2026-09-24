@@ -354,7 +354,6 @@ func workspaceBootstrapStringFormatValid(format, value string) bool {
 // canonical Workspace code plus Identity-owned organization/user IDs.
 type WorkspaceBootstrapContext struct {
 	WorkspaceCode              string
-	CompanyOrganizationID      string
 	FirstStoreOrganizationID   string
 	InitialAdministratorUserID string
 }

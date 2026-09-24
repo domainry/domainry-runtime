@@ -103,9 +103,9 @@ func TestProvisionStoreOrganizationUsesRuntimeStableIDAndFixesAllWritesToNewTarg
 			}
 			return delivery, nil
 		}, WorkspaceCommercialConfiguration: workspaceCommercialConfigurationLockerFunc(func(context.Context, string) (WorkspaceCommercialConfiguration, error) {
-			return WorkspaceCommercialConfiguration{MaxStores: 2, Revision: 1, CompanyOrganizationID: "company-hq"}, nil
+			return WorkspaceCommercialConfiguration{MaxStores: 2, Revision: 1}, nil
 		})},
-		identity: runtimeext.ExecutionIdentity{ExecutionID: "execution-store-1"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
+		identity: runtimeext.ExecutionIdentity{ExecutionID: "execution-store-1"}, principal: runtimeext.Principal{OrgID: "company-hq"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
 		invocation: actionmodel.ActionInvocation{Principal: principal}, action: definitionmodel.ActionSchema{Key: "store.create", EffectSet: &definitionmodel.ActionEffectSet{Write: []definitionmodel.ActionObjectEffect{{ObjectKey: "store_profile"}}}},
 		unitOfWork: unitOfWork, targetGrant: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceProvisionedStore},
 		requestIdentity: identitysdk.RequestIdentity{AccessToken: "trusted-token"},
@@ -232,10 +232,10 @@ func TestProvisionStoreOrganizationEnforcesWorkspaceQuotaAndCompanyScope(t *test
 						if workspaceID != "workspace-a" {
 							t.Fatalf("workspace=%q", workspaceID)
 						}
-						return WorkspaceCommercialConfiguration{MaxStores: test.maxStores, Revision: 1, CompanyOrganizationID: "company-hq"}, nil
+						return WorkspaceCommercialConfiguration{MaxStores: test.maxStores, Revision: 1}, nil
 					}),
 				},
-				identity: runtimeext.ExecutionIdentity{ExecutionID: executionID}, workspace: runtimeext.Workspace{ID: "workspace-a"}, unitOfWork: newActionTestUnitOfWork(),
+				identity: runtimeext.ExecutionIdentity{ExecutionID: executionID}, principal: runtimeext.Principal{OrgID: "company-hq"}, workspace: runtimeext.Workspace{ID: "workspace-a"}, unitOfWork: newActionTestUnitOfWork(),
 				targetGrant: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceProvisionedStore}, requestIdentity: identitysdk.RequestIdentity{AccessToken: "trusted-token"},
 			}
 			_, err := execution.ProvisionStoreOrganization(t.Context(), runtimeext.StoreOrganizationProvisionRequest{Code: "next", Name: "Next", SortOrder: 2})

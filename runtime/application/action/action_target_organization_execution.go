@@ -244,9 +244,9 @@ func (e *businessActionExecution) ProvisionStoreOrganization(ctx context.Context
 	if err != nil {
 		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindConflict, "backend.action.store_quota_unavailable", err, nil)
 	}
-	companyOrganizationID := strings.TrimSpace(commercial.CompanyOrganizationID)
+	companyOrganizationID := strings.TrimSpace(e.principal.OrgID)
 	if companyOrganizationID == "" {
-		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindConflict, "backend.action.workspace_company_authority_unavailable", nil, nil)
+		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindForbidden, "backend.action.target_organization_denied", nil, nil)
 	}
 	activeStores, err := countActiveStoreOrganizations(txCtx, delivery, strings.TrimSpace(e.requestIdentity.AccessToken), companyOrganizationID, commercial.MaxStores)
 	if err != nil {

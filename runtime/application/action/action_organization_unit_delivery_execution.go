@@ -138,16 +138,9 @@ func (e *businessActionExecution) organizationUnitParentID(ctx context.Context) 
 	}
 	switch e.organizationUnitGrant.ParentSource {
 	case runtimeext.OrganizationUnitParentSourceWorkspaceCompany:
-		if e.dependencies.WorkspaceCommercialConfiguration == nil {
-			return "", missingExecutorPort("workspace_commercial_configuration")
-		}
-		commercial, err := e.dependencies.WorkspaceCommercialConfiguration.LockWorkspaceCommercialConfiguration(ctx, e.workspace.ID)
-		if err != nil {
-			return "", apperror.New(apperror.KindConflict, "backend.action.workspace_company_authority_unavailable", err, nil)
-		}
-		parentID := strings.TrimSpace(commercial.CompanyOrganizationID)
+		parentID := strings.TrimSpace(e.principal.OrgID)
 		if parentID == "" {
-			return "", apperror.New(apperror.KindConflict, "backend.action.workspace_company_authority_unavailable", nil, nil)
+			return "", apperror.New(apperror.KindForbidden, "backend.action.target_organization_denied", nil, nil)
 		}
 		return parentID, nil
 	case runtimeext.OrganizationUnitParentSourceTargetOrganization:
