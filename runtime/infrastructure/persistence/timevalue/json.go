@@ -2,6 +2,7 @@ package timevalue
 
 import (
 	"bytes"
+	"encoding"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -10,6 +11,8 @@ import (
 )
 
 var jsonTimeType = reflect.TypeOf(time.Time{})
+var jsonMarshalerType = reflect.TypeOf((*json.Marshaler)(nil)).Elem()
+var textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 
 const timestampLayout = "2006-01-02T15:04:05.000000000Z"
 
@@ -22,22 +25,16 @@ func MarshalJSONIndent(value any) ([]byte, error) {
 }
 
 func marshalJSON(value any, indent bool) ([]byte, error) {
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return nil, err
-	}
-	document, err := jsonDocument(raw)
-	if err != nil {
-		return nil, err
-	}
-	document, err = encodeJSONTimes(reflect.ValueOf(value), document, "")
+	// Project declared fields before serialization. Dynamic maps and raw JSON
+	// carry their producer's values unchanged.
+	projected, err := encodeJSONTimes(reflect.ValueOf(value), "")
 	if err != nil {
 		return nil, err
 	}
 	if indent {
-		return json.MarshalIndent(document, "", "  ")
+		return json.MarshalIndent(projected, "", "  ")
 	}
-	return json.Marshal(document)
+	return json.Marshal(projected)
 }
 
 func UnmarshalJSON(raw []byte, destination any) error {
@@ -68,15 +65,19 @@ func jsonDocument(raw []byte) (any, error) {
 	return document, err
 }
 
-func encodeJSONTimes(value reflect.Value, document any, name string) (any, error) {
+func encodeJSONTimes(value reflect.Value, name string) (any, error) {
 	for value.IsValid() && (value.Kind() == reflect.Interface || value.Kind() == reflect.Pointer) {
 		if value.IsNil() {
-			return document, nil
+			return nil, nil
+		}
+		if value.Kind() == reflect.Pointer && value.Type().Elem() != jsonTimeType &&
+			(value.Type().Implements(jsonMarshalerType) || value.Type().Implements(textMarshalerType)) {
+			return value.Interface(), nil
 		}
 		value = value.Elem()
 	}
 	if !value.IsValid() {
-		return document, nil
+		return nil, nil
 	}
 	if value.Type() == jsonTimeType {
 		instant := value.Interface().(time.Time)
@@ -96,31 +97,34 @@ func encodeJSONTimes(value reflect.Value, document any, name string) (any, error
 		}
 		return instant.UTC().UnixMilli(), nil
 	}
+	if value.Type().Implements(jsonMarshalerType) || value.Type().Implements(textMarshalerType) {
+		return value.Interface(), nil
+	}
 	switch value.Kind() {
 	case reflect.Struct:
-		object, ok := document.(map[string]any)
-		if !ok {
-			return document, nil
-		}
+		object := make(map[string]any)
 		for index := 0; index < value.NumField(); index++ {
 			field := value.Type().Field(index)
 			if field.PkgPath != "" {
 				continue
 			}
 			if field.Anonymous && field.Tag.Get("json") == "" {
-				normalized, err := encodeJSONTimes(value.Field(index), object, "")
+				normalized, err := encodeJSONTimes(value.Field(index), "")
 				if err != nil {
 					return nil, err
 				}
-				object, _ = normalized.(map[string]any)
+				if embedded, ok := normalized.(map[string]any); ok {
+					for key, child := range embedded {
+						object[key] = child
+					}
+				}
 				continue
 			}
 			fieldName, included := jsonFieldName(field)
-			child, exists := object[fieldName]
-			if !included || !exists {
+			if !included || jsonOmitEmpty(field, value.Field(index)) {
 				continue
 			}
-			normalized, err := encodeJSONTimes(value.Field(index), child, fieldName)
+			normalized, err := encodeJSONTimes(value.Field(index), fieldName)
 			if err != nil {
 				return nil, err
 			}
@@ -129,42 +133,46 @@ func encodeJSONTimes(value reflect.Value, document any, name string) (any, error
 		return object, nil
 	case reflect.Slice, reflect.Array:
 		if value.Type().Elem().Kind() == reflect.Uint8 {
-			return document, nil
+			return value.Interface(), nil
 		}
-		items, ok := document.([]any)
-		if !ok {
-			return document, nil
+		if value.Kind() == reflect.Slice && value.IsNil() {
+			return nil, nil
 		}
-		for index := 0; index < value.Len() && index < len(items); index++ {
-			normalized, err := encodeJSONTimes(value.Index(index), items[index], "")
+		items := make([]any, value.Len())
+		for index := 0; index < value.Len(); index++ {
+			normalized, err := encodeJSONTimes(value.Index(index), "")
 			if err != nil {
 				return nil, err
 			}
 			items[index] = normalized
 		}
 		return items, nil
-	case reflect.Map:
-		object, ok := document.(map[string]any)
-		if !ok || value.Type().Key().Kind() != reflect.String {
-			return document, nil
-		}
-		iterator := value.MapRange()
-		for iterator.Next() {
-			key := iterator.Key().String()
-			child, exists := object[key]
-			if !exists {
-				continue
-			}
-			normalized, err := encodeJSONTimes(iterator.Value(), child, key)
-			if err != nil {
-				return nil, err
-			}
-			object[key] = normalized
-		}
-		return object, nil
 	default:
-		return document, nil
+		return value.Interface(), nil
 	}
+}
+
+func jsonOmitEmpty(field reflect.StructField, value reflect.Value) bool {
+	for _, option := range strings.Split(field.Tag.Get("json"), ",")[1:] {
+		if option == "omitzero" && value.IsZero() {
+			return true
+		}
+		if option == "omitempty" {
+			switch value.Kind() {
+			case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
+				if value.Len() == 0 {
+					return true
+				}
+			case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+				reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+				reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Interface, reflect.Pointer:
+				if value.IsZero() {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func decodeJSONTimes(target reflect.Type, document any, name string) (any, error) {
@@ -244,31 +252,6 @@ func decodeJSONTimes(target reflect.Type, document any, name string) (any, error
 			items[index] = normalized
 		}
 		return items, nil
-	case reflect.Map:
-		object, ok := document.(map[string]any)
-		if !ok || target.Key().Kind() != reflect.String {
-			return document, nil
-		}
-		for key, child := range object {
-			if instantField(key) {
-				millis, err := jsonMillis(child, key)
-				if err != nil {
-					return nil, err
-				}
-				if millis == 0 {
-					object[key] = ""
-				} else {
-					object[key] = time.UnixMilli(millis).UTC().Format(timestampLayout)
-				}
-				continue
-			}
-			normalized, err := decodeJSONTimes(target.Elem(), child, "")
-			if err != nil {
-				return nil, err
-			}
-			object[key] = normalized
-		}
-		return object, nil
 	default:
 		return document, nil
 	}
