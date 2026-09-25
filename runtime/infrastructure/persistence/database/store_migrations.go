@@ -160,7 +160,7 @@ func (s *RuntimeStore) applyMigrationFile(ctx context.Context, path string) erro
 	checksum := hex.EncodeToString(checksumBytes[:])
 	version, migrationName := migrationIdentity(name)
 	insertDirty := "INSERT INTO " + s.tableIdentifier("_schema_migrations") + " (" + migrationColumns(s) + ") VALUES (" + strings.Join(placeholders(s, 12), ", ") + ")"
-	if _, err := s.schemaDatabase().ExecContext(ctx, insertDirty, name, version, migrationName, migrationKind(migrationName), checksum, true, time.Now().UTC().Format(time.RFC3339), strings.TrimSpace(s.config.RuntimeVersion), 0, migrationOperator(s.config), migrationInstanceID(s.config), strings.TrimSpace(s.migrationBackupID)); err != nil {
+	if _, err := s.schemaDatabase().ExecContext(ctx, insertDirty, name, version, migrationName, migrationKind(migrationName), checksum, true, time.Now().UTC().UnixMilli(), strings.TrimSpace(s.config.RuntimeVersion), 0, migrationOperator(s.config), migrationInstanceID(s.config), strings.TrimSpace(s.migrationBackupID)); err != nil {
 		return fmt.Errorf("record dirty migration: %w", err)
 	}
 	tx, err := s.schemaDatabase().BeginTx(ctx, nil)
@@ -179,7 +179,7 @@ func (s *RuntimeStore) applyMigrationFile(ctx context.Context, path string) erro
 	}
 	duration := time.Since(startedAt)
 	completeMigration := "UPDATE " + s.tableIdentifier("_schema_migrations") + " SET " + s.identifier("dirty") + " = FALSE, " + s.identifier("duration_ms") + " = " + s.placeholder(1) + ", " + s.identifier("applied_at") + " = " + s.placeholder(2) + " WHERE " + s.identifier("path") + " = " + s.placeholder(3) + " AND " + s.identifier("checksum") + " = " + s.placeholder(4)
-	if _, err := tx.ExecContext(ctx, completeMigration, duration.Milliseconds(), time.Now().UTC().Format(time.RFC3339), name, checksum); err != nil {
+	if _, err := tx.ExecContext(ctx, completeMigration, duration.Milliseconds(), time.Now().UTC().UnixMilli(), name, checksum); err != nil {
 		return fmt.Errorf("record migration: %w", err)
 	}
 	if err := tx.Commit(); err != nil {

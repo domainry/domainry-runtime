@@ -44,7 +44,7 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		record := recordmodel.Record{ID: id, CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"sku": sku, "name": base}}
+		record := recordmodel.Record{ID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"sku": sku, "name": base}}
 		if err := repository.CommitRecordMutation(t.Context(), workspace, transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: record, LocalizedValues: values}); err != nil {
 			t.Fatal(err)
 		}
@@ -93,9 +93,9 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 	if err != nil || !found {
 		t.Fatal(err)
 	}
-	base.UpdatedAt = "v2"
+	base.UpdatedAt = "2026-01-02T00:00:00Z"
 	updateValues, _ := recordmodel.RecordNormalizeTranslations(object, recordmodel.RecordTranslations{"zh-CN": {"name": "新苹果手机"}})
-	if err := repository.CommitRecordMutation(t.Context(), "workspace-a", transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: base, ExpectedUpdatedAt: "v1", LocalizedValues: updateValues}); err != nil {
+	if err := repository.CommitRecordMutation(t.Context(), "workspace-a", transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: base, ExpectedUpdatedAt: "2026-01-01T00:00:00Z", LocalizedValues: updateValues}); err != nil {
 		t.Fatal(err)
 	}
 	updated, _, err := repository.GetRecordLocalized(t.Context(), "workspace-a", object, "p1", "zh-CN", "en-US")
@@ -117,7 +117,7 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 		t.Fatalf("localized value did not survive Runtime restart: record=%+v found=%v err=%v", persisted, found, err)
 	}
 
-	if err := repository.CommitRecordMutation(t.Context(), "workspace-a", transactionmodel.RecordMutationCommit{Operation: "delete", Object: object, Record: base, RecordID: "p1", ExpectedUpdatedAt: "v2"}); err != nil {
+	if err := repository.CommitRecordMutation(t.Context(), "workspace-a", transactionmodel.RecordMutationCommit{Operation: "delete", Object: object, Record: base, RecordID: "p1", ExpectedUpdatedAt: "2026-01-02T00:00:00Z"}); err != nil {
 		t.Fatal(err)
 	}
 	values, err := repository.ListRecordLocalizedValues(t.Context(), "workspace-a", object, []string{"p1"}, []string{"name"}, []string{"zh-CN", "en-US"})

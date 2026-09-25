@@ -34,7 +34,7 @@ func (s *RuntimeStore) InsertUploadSubject(ctx context.Context, value uploadappl
 		return err
 	}
 	columns := []string{"id", "artifact_id", "owner", "kind", "resource_type", "resource_id", "field_key", "metadata_json", "created_at"}
-	values := []any{uploadSubjectBindingID(value.WorkspaceID, value.Filename), value.FileID, foundationartifact.OwnerUploads, foundationartifact.BindingSubject, uploadSubjectResourceType, value.UserID, value.FieldKey, string(metadata), time.Now().UTC().Format(time.RFC3339Nano)}
+	values := []any{uploadSubjectBindingID(value.WorkspaceID, value.Filename), value.FileID, foundationartifact.OwnerUploads, foundationartifact.BindingSubject, uploadSubjectResourceType, value.UserID, value.FieldKey, string(metadata), time.Now().UTC().UnixMilli()}
 	builder, err := s.SubjectEvidenceInsertBuilder(value.WorkspaceID, foundationartifact.BindingTableName, columns, values, s.SubjectActorWriteAllowed(value.WorkspaceID, value.UserID))
 	if err != nil {
 		return err

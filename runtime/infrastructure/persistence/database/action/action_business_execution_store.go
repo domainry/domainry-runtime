@@ -186,7 +186,7 @@ func (r ActionBusinessExecutionStore) CompleteExecution(ctx context.Context, com
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	resultJSON, err := json.Marshal(nonNilMap(completion.Result))
+	resultJSON, err := database.MarshalTimeJSON(nonNilMap(completion.Result))
 	if err != nil {
 		return actionmodel.ActionBusinessExecution{}, err
 	}
@@ -265,7 +265,7 @@ func (t *actionExecutionTransaction) Commit(ctx context.Context, commits []trans
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	resultJSON, err := json.Marshal(nonNilMap(completion.Result))
+	resultJSON, err := database.MarshalTimeJSON(nonNilMap(completion.Result))
 	if err != nil {
 		return actionmodel.ActionBusinessExecution{}, err
 	}
@@ -376,7 +376,7 @@ type actionExecutionOperationMetadata struct {
 }
 
 func actionExecutionMetadataJSON(responseStatus int, roleKey string) string {
-	encoded, _ := json.Marshal(actionExecutionOperationMetadata{ResponseStatus: responseStatus, RoleKey: strings.TrimSpace(roleKey)})
+	encoded, _ := database.MarshalTimeJSON(actionExecutionOperationMetadata{ResponseStatus: responseStatus, RoleKey: strings.TrimSpace(roleKey)})
 	return string(encoded)
 }
 
@@ -409,11 +409,11 @@ func actionBusinessExecution(record sharedoperation.Record) (actionmodel.ActionB
 		return actionmodel.ActionBusinessExecution{}, fmt.Errorf("action execution operation identity is invalid")
 	}
 	var metadata actionExecutionOperationMetadata
-	if err := json.Unmarshal(record.MetadataJSON, &metadata); err != nil {
+	if err := database.UnmarshalTimeJSON(record.MetadataJSON, &metadata); err != nil {
 		return actionmodel.ActionBusinessExecution{}, fmt.Errorf("decode action execution metadata: %w", err)
 	}
 	execution.ResponseStatus, execution.RoleKey = metadata.ResponseStatus, metadata.RoleKey
-	_ = json.Unmarshal(record.ResultJSON, &execution.Result)
+	_ = database.UnmarshalTimeJSON(record.ResultJSON, &execution.Result)
 	execution.Result = nonNilMap(execution.Result)
 	return execution, nil
 }

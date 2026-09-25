@@ -66,15 +66,15 @@ type spec struct {
 var specs = []spec{
 	{table: sharedoperation.TableName, status: "status", busy: []string{"running", "executing", "processing"}, fence: true},
 	{table: "_workflow_process_instances", status: "status", set: map[string]any{"workflow_name": "", "definition_json": "{}", "initiator_id": "anonymous", "initiator_role_key": "", "current_node_ids_json": "[]", "variables_json": "{}", "result_json": "{}", "status": "cancelled", "error_code": "runtime.subject_erased"}},
-	{table: "_workflow_executions", status: "status", busy: []string{"running", "processing", "executing"}, fence: true, set: map[string]any{"name": "", "action_json": "{}", "payload_json": "{}", "result_json": "{}", "actor_id": "anonymous", "run_as": "", "idempotency_key": "", "last_error": "", "message": "", "status": "cancelled", "next_run_at": "", "lease_owner": "", "lease_expires_at": ""}},
+	{table: "_workflow_executions", status: "status", busy: []string{"running", "processing", "executing"}, fence: true, set: map[string]any{"name": "", "action_json": "{}", "payload_json": "{}", "result_json": "{}", "actor_id": "anonymous", "run_as": "", "idempotency_key": "", "last_error": "", "message": "", "status": "cancelled", "next_run_at": int64(0), "lease_owner": "", "lease_expires_at": int64(0)}},
 	{table: "_workflow_node_instances", status: "status", busy: []string{"running", "processing"}, set: map[string]any{"input_json": "{}", "output_json": "{}", "status": "cancelled", "error_code": "runtime.subject_erased"}},
 	{table: "_workflow_tasks", status: "status", set: map[string]any{"title": "", "assignee_user_id": "anonymous", "assignee_name": "", "assignee_role_key": "", "assignee_resolver_key": "", "assignee_evidence_json": "{\"matches\":[]}", "resolver_snapshot_json": "[]", "comment": "", "completed_by": "anonymous", "status": "cancelled"}},
 	{table: "_workflow_process_events", set: map[string]any{"actor_id": "anonymous", "summary": "", "metadata_json": "{}"}},
 	{table: "_workflow_route_steps", status: "status", set: map[string]any{"title": "", "assignee_snapshot_json": "[]", "configured_by": "anonymous", "status": "cancelled"}},
-	{table: "_publication_outbox", status: "status", busy: []string{"sending", "processing", "running"}, fence: true, set: map[string]any{"intent_json": "{}", "payload_json": "{}", "created_by": "anonymous", "request_ref": "", "response_ref": "", "request_fingerprint": "", "error": "", "last_error": "", "status": "failed", "last_error_code": "runtime.subject_erased", "next_attempt_at": "", "lease_owner": "", "lease_expires_at": ""}},
+	{table: "_publication_outbox", status: "status", busy: []string{"sending", "processing", "running"}, fence: true, set: map[string]any{"intent_json": "{}", "payload_json": "{}", "created_by": "anonymous", "request_ref": "", "response_ref": "", "request_fingerprint": "", "error": "", "last_error": "", "status": "failed", "last_error_code": "runtime.subject_erased", "next_attempt_at": int64(0), "lease_owner": "", "lease_expires_at": int64(0)}},
 	{table: "_action_assurance_grants"},
 	{table: "_artifact_bindings"},
-	{table: "_automation_runs", status: "status", busy: []string{"processing", "running"}, fence: true, set: map[string]any{"actor_id": "anonymous", "role_key": "", "candidate_json": "{}", "trace_json": "{}", "idempotency_key": "", "result_json": "{}", "status": "failed", "error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": ""}},
+	{table: "_automation_runs", status: "status", busy: []string{"processing", "running"}, fence: true, set: map[string]any{"actor_id": "anonymous", "role_key": "", "candidate_json": "{}", "trace_json": "{}", "idempotency_key": "", "result_json": "{}", "status": "failed", "error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": int64(0)}},
 	{table: sharedoperation.BreakGlassTableName},
 }
 
@@ -232,7 +232,7 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 			return nil, err
 		}
 		var intent notificationmodel.NotificationIntent
-		if json.Unmarshal([]byte(raw), &intent) != nil {
+		if database.UnmarshalTimeJSON([]byte(raw), &intent) != nil {
 			return nil, fmt.Errorf("Runtime notification intent invalid")
 		}
 		covered := slices.Contains(intent.RecipientUserIDs, subject) || intent.SubjectType == "user" && intent.SubjectID == subject
@@ -415,6 +415,15 @@ const (
 	subjectEraseOperation            = "erase"
 )
 
+type persistedSubjectStep struct {
+	WorkspaceID string          `json:"workspace_id"`
+	RequestID   string          `json:"request_id"`
+	Owner       string          `json:"owner"`
+	Operation   string          `json:"operation"`
+	Payload     json.RawMessage `json:"payload"`
+	CompletedAt int64           `json:"completed_at"`
+}
+
 func (h *Handler) sharedStep(ctx context.Context, tx interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, workspace, request, operation string) (json.RawMessage, bool, error) {
@@ -433,7 +442,7 @@ func (h *Handler) sharedStep(ctx context.Context, tx interface {
 	} else if err != nil {
 		return nil, false, err
 	}
-	var step lifecyclemodel.SubjectExecutionStep
+	var step persistedSubjectStep
 	if json.Unmarshal([]byte(raw), &step) != nil || step.WorkspaceID != workspace || step.RequestID != request || step.Owner != runtimeEvidenceOwner || step.Operation != operation || !json.Valid(step.Payload) {
 		return nil, false, fmt.Errorf("Runtime shared subject execution step invalid")
 	}
@@ -456,13 +465,13 @@ func (h *Handler) saveSharedStep(ctx context.Context, tx interface {
 		return nil
 	}
 	completedAt := time.Now().UTC()
-	step := lifecyclemodel.SubjectExecutionStep{
+	step := persistedSubjectStep{
 		WorkspaceID: workspace,
 		RequestID:   request,
 		Owner:       runtimeEvidenceOwner,
 		Operation:   operation,
 		Payload:     append(json.RawMessage(nil), payload...),
-		CompletedAt: completedAt,
+		CompletedAt: completedAt.UnixMilli(),
 	}
 	raw, err := json.Marshal(step)
 	if err != nil {
@@ -470,7 +479,7 @@ func (h *Handler) saveSharedStep(ctx context.Context, tx interface {
 	}
 	statement, args, err := query.NewWorkspaceInsertBuilder(h.store.SQLRenderer, sharedSubjectExecutionStepsTable, workspace).
 		Columns("request_id", "owner", "operation", "payload_json", "completed_at").
-		Values(request, runtimeEvidenceOwner, operation, string(raw), completedAt.Format(time.RFC3339Nano)).Build()
+		Values(request, runtimeEvidenceOwner, operation, string(raw), completedAt.UnixMilli()).Build()
 	if err != nil {
 		return err
 	}
@@ -578,12 +587,12 @@ func (h *Handler) PrepareSubjectErasure(ctx context.Context, request, workspace,
 				}
 				continue
 			}
-			builder := query.NewWorkspaceUpdateBuilder(h.store.SQLRenderer, ref.Table, workspace).Set("status", "failed").Set("lease_owner", "").Set("lease_expires_at", "").SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1)))
+			builder := query.NewWorkspaceUpdateBuilder(h.store.SQLRenderer, ref.Table, workspace).Set("status", "failed").Set("lease_owner", "").Set("lease_expires_at", int64(0)).SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1)))
 			if ref.Table == "_workflow_executions" {
-				builder.Set("status", "cancelled").Set("next_run_at", "")
+				builder.Set("status", "cancelled").Set("next_run_at", int64(0))
 			}
 			if ref.Table == "_publication_outbox" {
-				builder.Set("next_attempt_at", "").Set("last_error_code", "runtime.subject_erased")
+				builder.Set("next_attempt_at", int64(0)).Set("last_error_code", "runtime.subject_erased")
 			}
 			statement, args, err := builder.Where(query.Equal("id", ref.ID)).Build()
 			if err != nil {

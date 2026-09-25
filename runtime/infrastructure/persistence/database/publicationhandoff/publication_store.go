@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
@@ -20,6 +19,7 @@ import (
 	"github.com/domainry/domainry-orm/query"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 type PublicationStore struct {
@@ -119,12 +119,12 @@ func (s PublicationStore) InsertOutbox(ctx context.Context, workspaceID string, 
 	if value.Payload == nil {
 		value.Payload = map[string]any{}
 	}
-	payload, err := json.Marshal(value.Payload)
+	payload, err := database.MarshalTimeJSON(value.Payload)
 	if err != nil {
 		return publicationmodel.Message{}, fmt.Errorf("encode Runtime publication payload: %w", err)
 	}
 	columns := []string{"id", "publication_type", "operation_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at"}
-	values := []any{value.ID, "integration.connector", value.OperationID, value.ConnectorKey, value.ConnectionKey, value.Operation, value.Status, string(payload), value.EventID, value.RequestRef, value.DedupKey, value.RequestFingerprint, value.ResponseRef, value.Error, value.AttemptCount, value.NextAttemptAt, value.LastAttemptAt, value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken, value.CreatedBy, value.CreatedAt, value.UpdatedAt}
+	values := []any{value.ID, "integration.connector", value.OperationID, value.ConnectorKey, value.ConnectionKey, value.Operation, value.Status, string(payload), value.EventID, value.RequestRef, value.DedupKey, value.RequestFingerprint, value.ResponseRef, value.Error, value.AttemptCount, timevalue.Millis(value.NextAttemptAt), timevalue.Millis(value.LastAttemptAt), value.LeaseOwner, timevalue.Millis(value.LeaseExpiresAt), value.FencingToken, value.CreatedBy, timevalue.Millis(value.CreatedAt), timevalue.Millis(value.UpdatedAt)}
 	if err := s.store.GuardSubjectEvidenceWrite(ctx, s.db, workspaceID, "_publication_outbox", columns, values); err != nil {
 		return publicationmodel.Message{}, err
 	}
@@ -167,7 +167,7 @@ func (s PublicationStore) UpdateOutboxStatus(ctx context.Context, workspaceID, i
 		builder.Set("operation_id", operationID)
 	}
 	queryValue, args, err := builder.
-		Set("status", strings.TrimSpace(status)).Set("response_ref", strings.TrimSpace(responseRef)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", "").Set("updated_at", now).
+		Set("status", strings.TrimSpace(status)).Set("response_ref", strings.TrimSpace(responseRef)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", int64(0)).Set("updated_at", timevalue.Millis(now)).
 		Where(publicationPredicate(query.And(query.Equal("id", id), s.store.SubjectEvidenceWriteAllowed(workspaceID, "_publication_outbox", id)))).Build()
 	if err != nil {
 		return publicationmodel.Message{}, fmt.Errorf("build Runtime publication status update: %w", err)
@@ -206,7 +206,7 @@ func (s PublicationStore) ScheduleOutboxRetry(ctx context.Context, workspaceID, 
 	now := time.Now().UTC()
 	nowText, next := now.Format(time.RFC3339), now.Add(time.Duration(delay)*time.Second).Format(time.RFC3339)
 	builder := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
-		Set("status", "queued").SetExpression("attempt_count", query.Add(query.Column("attempt_count"), query.Value(1))).Set("next_attempt_at", next).Set("last_attempt_at", nowText).Set("updated_at", nowText)
+		Set("status", "queued").SetExpression("attempt_count", query.Add(query.Column("attempt_count"), query.Value(1))).Set("next_attempt_at", timevalue.Millis(next)).Set("last_attempt_at", timevalue.Millis(nowText)).Set("updated_at", timevalue.Millis(nowText))
 	if operationID := requestcontext.OwnerExecutionID(ctx); operationID != "" {
 		builder.Set("operation_id", operationID)
 	}
@@ -250,12 +250,15 @@ func scanPublication(row publicationScanner) (publicationmodel.Message, error) {
 	var message publicationmodel.Message
 	var payloadJSON string
 	var connectionKey, eventID, requestRef, responseRef, errorText sql.NullString
-	if err := row.Scan(&message.ID, &message.WorkspaceID, &message.OperationID, &message.ConnectorKey, &connectionKey, &message.Operation, &message.Status, &payloadJSON, &eventID, &requestRef, &message.DedupKey, &message.RequestFingerprint, &responseRef, &errorText, &message.AttemptCount, &message.NextAttemptAt, &message.LastAttemptAt, &message.LeaseOwner, &message.LeaseExpiresAt, &message.FencingToken, &message.CreatedBy, &message.CreatedAt, &message.UpdatedAt); err != nil {
+	var nextAttemptAt, lastAttemptAt, leaseExpiresAt, createdAt, updatedAt int64
+	if err := row.Scan(&message.ID, &message.WorkspaceID, &message.OperationID, &message.ConnectorKey, &connectionKey, &message.Operation, &message.Status, &payloadJSON, &eventID, &requestRef, &message.DedupKey, &message.RequestFingerprint, &responseRef, &errorText, &message.AttemptCount, &nextAttemptAt, &lastAttemptAt, &message.LeaseOwner, &leaseExpiresAt, &message.FencingToken, &message.CreatedBy, &createdAt, &updatedAt); err != nil {
 		return publicationmodel.Message{}, err
 	}
+	message.NextAttemptAt, message.LastAttemptAt, message.LeaseExpiresAt = timevalue.String(nextAttemptAt), timevalue.String(lastAttemptAt), timevalue.String(leaseExpiresAt)
+	message.CreatedAt, message.UpdatedAt = timevalue.String(createdAt), timevalue.String(updatedAt)
 	message.ConnectionKey, message.EventID, message.RequestRef = connectionKey.String, eventID.String, requestRef.String
 	message.ResponseRef, message.Error = responseRef.String, errorText.String
-	_ = json.Unmarshal([]byte(payloadJSON), &message.Payload)
+	_ = database.UnmarshalTimeJSON([]byte(payloadJSON), &message.Payload)
 	if message.Payload == nil {
 		message.Payload = map[string]any{}
 	}

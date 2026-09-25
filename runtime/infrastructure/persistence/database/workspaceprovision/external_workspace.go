@@ -13,6 +13,7 @@ import (
 	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 	workspaceprovisionmodel "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 // InitializeExternalInstallation records technical installation authority without
@@ -40,7 +41,7 @@ func InitializeExternalInstallation(ctx context.Context, store *database.Runtime
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	statement, arguments, err := query.NewInsertBuilder(store.RuntimeRenderer(), "_workspaces").
 		Columns("id", "canonical_code", "name", "status", "initial_installation_identity", "revision", "created_at", "updated_at").
-		Values(id, id, "Installation", "active", installationID, 1, now, now).Build()
+		Values(id, id, "Installation", "active", installationID, 1, timevalue.Millis(now), timevalue.Millis(now)).Build()
 	if err != nil {
 		return Installation{}, err
 	}

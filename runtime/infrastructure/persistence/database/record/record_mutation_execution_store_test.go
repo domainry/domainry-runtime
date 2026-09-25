@@ -193,12 +193,12 @@ func TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit(t
 		t.Fatal(err)
 	}
 	auditmodulefixture.Bind(t, t.Context(), store)
-	if _, err := store.DB().Exec(`CREATE TABLE concurrent_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, name TEXT)`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE concurrent_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, name TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewRecordStore(store)
 	object := definitionmodel.ObjectSchema{Key: "concurrent_record", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	initial := recordmodel.Record{ID: "shared", CreatedAt: "version-0", UpdatedAt: "version-1", Data: map[string]any{"name": "initial"}}
+	initial := recordmodel.Record{ID: "shared", CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00.001Z", Data: map[string]any{"name": "initial"}}
 	if err := repository.CommitRecordMutation(t.Context(), "workspace-primary", transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: initial}); err != nil {
 		t.Fatal(err)
 	}
@@ -215,9 +215,10 @@ func TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit(t
 			defer wait.Done()
 			<-start
 			identity := fmt.Sprintf("worker-%03d", worker)
+			updatedAt := time.Date(2026, 7, 19, 0, 0, 0, 2_000_000+worker*1_000_000, time.UTC).Format(time.RFC3339Nano)
 			commit := transactionmodel.RecordMutationCommit{
 				Operation: "update", Object: object,
-				Record:            recordmodel.Record{ID: initial.ID, CreatedAt: initial.CreatedAt, UpdatedAt: "version-" + identity, Data: map[string]any{"name": identity}},
+				Record:            recordmodel.Record{ID: initial.ID, CreatedAt: initial.CreatedAt, UpdatedAt: updatedAt, Data: map[string]any{"name": identity}},
 				ExpectedUpdatedAt: initial.UpdatedAt,
 				Audit:             &auditmodel.AuditEvent{ID: "update-audit-" + identity, Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", ObjectKey: object.Key, RecordID: initial.ID, CreatedAt: "2026-07-19T00:00:00Z"},
 				Outbox:            []publicationmodel.Message{{ID: "update-outbox-" + identity, WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Operation: "concurrent.record.updated", DedupKey: identity}},

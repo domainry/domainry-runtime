@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -16,6 +15,7 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 type AutomationWorkerStore struct {
@@ -80,12 +80,12 @@ func (r AutomationWorkerStore) claimOnce(ctx context.Context, workspaceID string
 	execution.FencingToken = 1
 	execution.CreatedAt = now
 	execution.UpdatedAt = now
-	resultJSON, err := json.Marshal(execution.Result)
+	resultJSON, err := timevalue.MarshalJSON(execution.Result)
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, fmt.Errorf("encode automation instruction result: %w", err)
 	}
 	insertColumns := []string{"id", "run_kind", "idempotency_key", "rule_key", "object_key", "record_id", "record_version", "operation", "instruction_key", "status", "result_json", "error_code", "lease_owner", "lease_expires_at", "fencing_token", "created_at", "updated_at"}
-	insertValues := []any{execution.ID, automationInstructionKind, execution.IdempotencyKey, execution.RuleKey, execution.ObjectKey, execution.RecordID, execution.RecordVersion, execution.Operation, execution.InstructionKey, execution.Status, string(resultJSON), execution.ErrorCode, execution.LeaseOwner, execution.LeaseExpiresAt, execution.FencingToken, execution.CreatedAt, execution.UpdatedAt}
+	insertValues := []any{execution.ID, automationInstructionKind, execution.IdempotencyKey, execution.RuleKey, execution.ObjectKey, execution.RecordID, execution.RecordVersion, execution.Operation, execution.InstructionKey, execution.Status, string(resultJSON), execution.ErrorCode, execution.LeaseOwner, timevalue.Millis(execution.LeaseExpiresAt), execution.FencingToken, timevalue.Millis(execution.CreatedAt), timevalue.Millis(execution.UpdatedAt)}
 	builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, automationRunsTable, insertColumns, insertValues)
 	if buildErr != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, buildErr
@@ -113,7 +113,7 @@ func (r AutomationWorkerStore) claimOnce(ctx context.Context, workspaceID string
 	if existing.Status == "succeeded" {
 		return existing, false, nil
 	}
-	queryValue, args, err = query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, automationRunsTable, workspaceID).Set("status", string(idempotency.StatusProcessing)).Set("result_json", "{}").Set("error_code", "").Set("lease_owner", execution.LeaseOwner).Set("lease_expires_at", leaseExpiresAt).SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", now).Where(query.And(query.Equal("run_kind", automationInstructionKind), query.Equal("idempotency_key", execution.IdempotencyKey), r.store.SubjectEvidenceWriteAllowed(workspaceID, automationRunsTable, execution.ID), query.Or(query.NotEqual("status", string(idempotency.StatusProcessing)), query.LessThanOrEqual("lease_expires_at", now)))).Build()
+	queryValue, args, err = query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, automationRunsTable, workspaceID).Set("status", string(idempotency.StatusProcessing)).Set("result_json", "{}").Set("error_code", "").Set("lease_owner", execution.LeaseOwner).Set("lease_expires_at", timevalue.Millis(leaseExpiresAt)).SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", timevalue.Millis(now)).Where(query.And(query.Equal("run_kind", automationInstructionKind), query.Equal("idempotency_key", execution.IdempotencyKey), r.store.SubjectEvidenceWriteAllowed(workspaceID, automationRunsTable, execution.ID), query.Or(query.NotEqual("status", string(idempotency.StatusProcessing)), query.LessThanOrEqual("lease_expires_at", timevalue.Millis(now))))).Build()
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, fmt.Errorf("build automation instruction reclaim: %w", err)
 	}
@@ -144,7 +144,7 @@ func (r AutomationWorkerStore) CompleteInstruction(ctx context.Context, workspac
 		return automationmodel.AutomationInstructionExecution{}, err
 	}
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
-	resultJSON, err := json.Marshal(nonNilMap(result))
+	resultJSON, err := timevalue.MarshalJSON(nonNilMap(result))
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("encode automation instruction completion result: %w", err)
 	}
@@ -153,7 +153,7 @@ func (r AutomationWorkerStore) CompleteInstruction(ctx context.Context, workspac
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("automation instruction completion time is required")
 	}
 	executionID := "automation_instruction:" + businessActionShortHash(workspaceID+":"+idempotencyKey)
-	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, automationRunsTable, workspaceID).Set("status", strings.TrimSpace(status)).Set("result_json", string(resultJSON)).Set("error_code", strings.TrimSpace(errorCode)).Set("lease_owner", "").Set("lease_expires_at", "").Set("updated_at", now).Where(query.And(automationInstructionLeasePredicate(idempotencyKey, expectedLeaseOwner, expectedFencingToken), r.store.SubjectEvidenceWriteAllowed(workspaceID, automationRunsTable, executionID))).Build()
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, automationRunsTable, workspaceID).Set("status", strings.TrimSpace(status)).Set("result_json", string(resultJSON)).Set("error_code", strings.TrimSpace(errorCode)).Set("lease_owner", "").Set("lease_expires_at", int64(0)).Set("updated_at", timevalue.Millis(now)).Where(query.And(automationInstructionLeasePredicate(idempotencyKey, expectedLeaseOwner, expectedFencingToken), r.store.SubjectEvidenceWriteAllowed(workspaceID, automationRunsTable, executionID))).Build()
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("build automation instruction completion: %w", err)
 	}
@@ -188,7 +188,7 @@ func (r AutomationWorkerStore) HeartbeatInstruction(ctx context.Context, workspa
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("automation instruction heartbeat time is required")
 	}
 	executionID := "automation_instruction:" + businessActionShortHash(workspaceID+":"+idempotencyKey)
-	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, automationRunsTable, workspaceID).Set("lease_expires_at", strings.TrimSpace(leaseExpiresAt)).Set("updated_at", now).Where(query.And(automationInstructionLeasePredicate(idempotencyKey, expectedLeaseOwner, expectedFencingToken), r.store.SubjectEvidenceWriteAllowed(workspaceID, automationRunsTable, executionID))).Build()
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, automationRunsTable, workspaceID).Set("lease_expires_at", timevalue.Millis(leaseExpiresAt)).Set("updated_at", timevalue.Millis(now)).Where(query.And(automationInstructionLeasePredicate(idempotencyKey, expectedLeaseOwner, expectedFencingToken), r.store.SubjectEvidenceWriteAllowed(workspaceID, automationRunsTable, executionID))).Build()
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("build automation instruction heartbeat: %w", err)
 	}
@@ -238,10 +238,12 @@ func automationInstructionExecutionColumns() []string {
 func scanAutomationInstructionExecution(scanner interface{ Scan(...any) error }) (automationmodel.AutomationInstructionExecution, error) {
 	var execution automationmodel.AutomationInstructionExecution
 	var resultJSON string
-	if err := scanner.Scan(&execution.ID, &execution.WorkspaceID, &execution.IdempotencyKey, &execution.RuleKey, &execution.ObjectKey, &execution.RecordID, &execution.RecordVersion, &execution.Operation, &execution.InstructionKey, &execution.Status, &resultJSON, &execution.ErrorCode, &execution.LeaseOwner, &execution.LeaseExpiresAt, &execution.FencingToken, &execution.CreatedAt, &execution.UpdatedAt); err != nil {
+	var leaseExpiresAt, createdAt, updatedAt int64
+	if err := scanner.Scan(&execution.ID, &execution.WorkspaceID, &execution.IdempotencyKey, &execution.RuleKey, &execution.ObjectKey, &execution.RecordID, &execution.RecordVersion, &execution.Operation, &execution.InstructionKey, &execution.Status, &resultJSON, &execution.ErrorCode, &execution.LeaseOwner, &leaseExpiresAt, &execution.FencingToken, &createdAt, &updatedAt); err != nil {
 		return automationmodel.AutomationInstructionExecution{}, err
 	}
-	if err := json.Unmarshal([]byte(resultJSON), &execution.Result); err != nil {
+	execution.LeaseExpiresAt, execution.CreatedAt, execution.UpdatedAt = timevalue.String(leaseExpiresAt), timevalue.String(createdAt), timevalue.String(updatedAt)
+	if err := timevalue.UnmarshalJSON([]byte(resultJSON), &execution.Result); err != nil {
 		return automationmodel.AutomationInstructionExecution{}, fmt.Errorf("decode automation instruction result: %w", err)
 	}
 	execution.Result = nonNilMap(execution.Result)

@@ -3,7 +3,6 @@ package workflow
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -11,6 +10,7 @@ import (
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 // workflowRouteStepsTable mirrors the host-owned Runtime schema 026 table.
@@ -40,21 +40,23 @@ func workflowRouteStepValues(step workflowmodel.WorkflowRouteStep) ([]any, error
 	if assignees == nil {
 		assignees = []workflowmodel.WorkflowRouteAssignee{}
 	}
-	snapshot, err := json.Marshal(assignees)
+	snapshot, err := database.MarshalTimeJSON(assignees)
 	if err != nil {
 		return nil, fmt.Errorf("encode workflow route assignees: %w", err)
 	}
-	return []any{step.WorkspaceID, step.ID, step.ProcessID, step.NodeID, step.StepNo, step.StepKey, step.Title, step.Mode, step.RequiredApprovals, step.Status, string(snapshot), step.ConfiguredBy, step.ConfiguredAt, step.ConfigureSource, step.NodeInstanceID, step.CreatedAt, step.UpdatedAt}, nil
+	return []any{step.WorkspaceID, step.ID, step.ProcessID, step.NodeID, step.StepNo, step.StepKey, step.Title, step.Mode, step.RequiredApprovals, step.Status, string(snapshot), step.ConfiguredBy, timevalue.Millis(step.ConfiguredAt), step.ConfigureSource, step.NodeInstanceID, timevalue.Millis(step.CreatedAt), timevalue.Millis(step.UpdatedAt)}, nil
 }
 
 func scanWorkflowRouteStep(scanner interface{ Scan(...any) error }) (workflowmodel.WorkflowRouteStep, error) {
 	var step workflowmodel.WorkflowRouteStep
 	var snapshot string
-	if err := scanner.Scan(&step.WorkspaceID, &step.ID, &step.ProcessID, &step.NodeID, &step.StepNo, &step.StepKey, &step.Title, &step.Mode, &step.RequiredApprovals, &step.Status, &snapshot, &step.ConfiguredBy, &step.ConfiguredAt, &step.ConfigureSource, &step.NodeInstanceID, &step.CreatedAt, &step.UpdatedAt); err != nil {
+	var configuredAt, createdAt, updatedAt int64
+	if err := scanner.Scan(&step.WorkspaceID, &step.ID, &step.ProcessID, &step.NodeID, &step.StepNo, &step.StepKey, &step.Title, &step.Mode, &step.RequiredApprovals, &step.Status, &snapshot, &step.ConfiguredBy, &configuredAt, &step.ConfigureSource, &step.NodeInstanceID, &createdAt, &updatedAt); err != nil {
 		return workflowmodel.WorkflowRouteStep{}, err
 	}
+	step.ConfiguredAt, step.CreatedAt, step.UpdatedAt = timevalue.String(configuredAt), timevalue.String(createdAt), timevalue.String(updatedAt)
 	if strings.TrimSpace(snapshot) != "" {
-		if err := json.Unmarshal([]byte(snapshot), &step.AssigneeSnapshot); err != nil {
+		if err := database.UnmarshalTimeJSON([]byte(snapshot), &step.AssigneeSnapshot); err != nil {
 			return workflowmodel.WorkflowRouteStep{}, fmt.Errorf("decode workflow route assignees: %w", err)
 		}
 	}

@@ -123,9 +123,12 @@ func (s OperationsStore) operationsQueueCount(ctx context.Context, spec operatio
 		return 0, "", buildErr
 	}
 	var count int64
-	var oldest sql.NullString
+	var oldest sql.NullInt64
 	err := s.database().QueryRowContext(ctx, queryValue, args...).Scan(&count, &oldest)
-	return count, oldest.String, err
+	if err != nil || !oldest.Valid || oldest.Int64 == 0 {
+		return count, "", err
+	}
+	return count, time.UnixMilli(oldest.Int64).UTC().Format(time.RFC3339Nano), nil
 }
 
 func (s OperationsStore) operationsBackupDiagnostics(now time.Time) operationsmodel.OperationsDiagnosticsSection {

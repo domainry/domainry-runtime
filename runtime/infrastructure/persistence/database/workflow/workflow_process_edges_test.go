@@ -216,10 +216,10 @@ func TestWorkflowExecutionJSONAndConditionHelpers(t *testing.T) {
 			t.Fatal("invalid execution mutable JSON accepted")
 		}
 	}
-	if value := workflowExecutionConditionValue("next_run_at", ""); value != nil {
+	if value := workflowExecutionConditionValue("next_run_at", ""); value != int64(0) {
 		t.Fatalf("empty next run value = %#v", value)
 	}
-	if value := workflowExecutionConditionValue("next_run_at", 3); value != 3 {
+	if value := workflowExecutionConditionValue("next_run_at", 3); value != int64(3) {
 		t.Fatalf("typed next run value = %#v", value)
 	}
 	if value := workflowExecutionConditionValue("status", "running"); value != "running" {

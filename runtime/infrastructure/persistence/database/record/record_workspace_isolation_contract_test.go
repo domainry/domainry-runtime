@@ -37,8 +37,8 @@ func TestRecordStoreWorkspaceIsolationContract(t *testing.T) {
 	repository := NewRecordStore(store)
 	object := definitionmodel.ObjectSchema{Key: "workspace_record", Fields: []definitionmodel.FieldSchema{{Key: "email", Type: "text", Unique: true}}}
 	workspaceA, workspaceB := "workspace-a", "workspace-b"
-	recordA := recordmodel.Record{ID: "shared-id", CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"email": "shared@example.com"}}
-	recordB := recordmodel.Record{ID: "shared-id", CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"email": "shared@example.com"}}
+	recordA := recordmodel.Record{ID: "shared-id", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"email": "shared@example.com"}}
+	recordB := recordmodel.Record{ID: "shared-id", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"email": "shared@example.com"}}
 	if err := repository.InsertRecord(t.Context(), workspaceA, object, recordA); err != nil {
 		t.Fatal(err)
 	}
@@ -61,8 +61,8 @@ func TestRecordStoreWorkspaceIsolationContract(t *testing.T) {
 	}
 
 	recordA.Data["email"] = "workspace-a@example.com"
-	recordA.UpdatedAt = "v2"
-	if err := repository.CommitRecordMutation(t.Context(), workspaceA, transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordA, ExpectedUpdatedAt: "v1"}); err != nil {
+	recordA.UpdatedAt = "2026-01-02T00:00:00Z"
+	if err := repository.CommitRecordMutation(t.Context(), workspaceA, transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordA, ExpectedUpdatedAt: "2026-01-01T00:00:00Z"}); err != nil {
 		t.Fatal(err)
 	}
 	unchangedB, found, err := repository.GetRecord(t.Context(), workspaceB, object, recordB.ID)
@@ -117,7 +117,7 @@ func TestTwoRuntimeStoreInstancesProcessDifferentWorkspacesConcurrently(t *testi
 		workspaceID string
 		value       string
 	}{{firstRepository, "workspace-a", "private-a"}, {secondRepository, "workspace-b", "private-b"}} {
-		if err := seed.repository.InsertRecord(t.Context(), seed.workspaceID, object, recordmodel.Record{ID: "shared-id", CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"value_text": seed.value}}); err != nil {
+		if err := seed.repository.InsertRecord(t.Context(), seed.workspaceID, object, recordmodel.Record{ID: "shared-id", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"value_text": seed.value}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -128,7 +128,7 @@ func TestTwoRuntimeStoreInstancesProcessDifferentWorkspacesConcurrently(t *testi
 	go func() {
 		defer wait.Done()
 		<-start
-		errors <- firstRepository.UpdateRecord(t.Context(), "workspace-a", object, recordmodel.Record{ID: "shared-id", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"value_text": "updated-a"}})
+		errors <- firstRepository.UpdateRecord(t.Context(), "workspace-a", object, recordmodel.Record{ID: "shared-id", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"value_text": "updated-a"}})
 	}()
 	go func() {
 		defer wait.Done()

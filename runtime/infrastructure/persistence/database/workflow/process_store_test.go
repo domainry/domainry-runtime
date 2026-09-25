@@ -19,31 +19,31 @@ func TestWorkflowProcessStoreLifecycleAndCancellation(t *testing.T) {
 	}
 	repository := NewWorkflowProcessStore(store)
 	const workspaceID = "workspace-a"
-	process := workflowmodel.WorkflowProcessInstance{ID: "process-1", OperationID: "operation-1", WorkflowKey: "expense", WorkflowName: "Expense", DefinitionVersionID: "version-1", DefinitionVersion: 1, DefinitionHash: "hash", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "expense", Name: "Expense"}, InitiatorID: "user-1", Status: "running", CurrentNodeIDs: []string{"approve"}, Variables: map[string]any{"amount": 10}, Result: map[string]any{}, CreatedAt: "v1", UpdatedAt: "v1"}
+	process := workflowmodel.WorkflowProcessInstance{ID: "process-1", OperationID: "operation-1", WorkflowKey: "expense", WorkflowName: "Expense", DefinitionVersionID: "version-1", DefinitionVersion: 1, DefinitionHash: "hash", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "expense", Name: "Expense"}, InitiatorID: "user-1", Status: "running", CurrentNodeIDs: []string{"approve"}, Variables: map[string]any{"amount": 10}, Result: map[string]any{}, CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
 	if err := repository.InsertProcess(t.Context(), workspaceID, process); err != nil {
 		t.Fatalf("insert process: %v", err)
 	}
-	node := workflowmodel.WorkflowNodeInstance{ID: "node-1", ProcessID: process.ID, NodeID: "approve", NodeType: "approval", Iteration: 1, Status: "waiting", Input: map[string]any{"amount": 10}, Output: map[string]any{}, StartedAt: "v1"}
+	node := workflowmodel.WorkflowNodeInstance{ID: "node-1", ProcessID: process.ID, NodeID: "approve", NodeType: "approval", Iteration: 1, Status: "waiting", Input: map[string]any{"amount": 10}, Output: map[string]any{}, StartedAt: workflowTestTimeV1}
 	if err := repository.InsertNode(t.Context(), workspaceID, node); err != nil {
 		t.Fatalf("insert node: %v", err)
 	}
-	task := workflowmodel.WorkflowTask{ID: "task-1", ProcessID: process.ID, NodeInstanceID: node.ID, NodeID: node.NodeID, Title: "Approve", AssigneeUserID: "manager", Sequence: 1, Status: "open", CreatedAt: "v1", UpdatedAt: "v1"}
+	task := workflowmodel.WorkflowTask{ID: "task-1", ProcessID: process.ID, NodeInstanceID: node.ID, NodeID: node.NodeID, Title: "Approve", AssigneeUserID: "manager", Sequence: 1, Status: "open", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
 	if err := repository.InsertTask(t.Context(), workspaceID, task); err != nil {
 		t.Fatalf("insert task: %v", err)
 	}
-	event := workflowmodel.WorkflowProcessEvent{ID: "event-1", ProcessID: process.ID, NodeID: node.NodeID, TaskID: task.ID, Event: "task_created", ActorID: "system", Summary: "Created", Metadata: map[string]any{"request_id": "req-1"}, CreatedAt: "v1"}
+	event := workflowmodel.WorkflowProcessEvent{ID: "event-1", ProcessID: process.ID, NodeID: node.NodeID, TaskID: task.ID, Event: "task_created", ActorID: "system", Summary: "Created", Metadata: map[string]any{"request_id": "req-1"}, CreatedAt: workflowTestTimeV1}
 	if err := repository.InsertEvent(t.Context(), workspaceID, event); err != nil {
 		t.Fatalf("insert event: %v", err)
 	}
-	process.Status, process.UpdatedAt = "waiting", "v2"
+	process.Status, process.UpdatedAt = "waiting", workflowTestTimeV2
 	if err := repository.UpdateProcess(t.Context(), workspaceID, process); err != nil {
 		t.Fatalf("update process: %v", err)
 	}
-	node.Status, node.Output, node.CompletedAt = "success", map[string]any{"decision": "approved"}, "v2"
+	node.Status, node.Output, node.CompletedAt = "success", map[string]any{"decision": "approved"}, workflowTestTimeV2
 	if err := repository.UpdateNode(t.Context(), workspaceID, node); err != nil {
 		t.Fatalf("update node: %v", err)
 	}
-	task.Status, task.Decision, task.UpdatedAt = "approved", "approved", "v2"
+	task.Status, task.Decision, task.UpdatedAt = "approved", "approved", workflowTestTimeV2
 	if err := repository.UpdateTask(t.Context(), workspaceID, task); err != nil {
 		t.Fatalf("update task: %v", err)
 	}

@@ -28,11 +28,11 @@ func EnsureWorkflowRouteStepsSchema(ctx context.Context, store Store) error {
 		ormschema.Column("status", ormschema.TextKey(32)).NotNull(),
 		ormschema.Column("assignee_snapshot_json", ormschema.Text()).NotNull(),
 		ormschema.Column("configured_by", ormschema.TextKey(128)).NotNull().DefaultValue(""),
-		ormschema.Column("configured_at", ormschema.TextKey(64)).NotNull().DefaultValue(""),
+		ormschema.Column("configured_at", ormschema.BigInt()).NotNull().DefaultValue(0),
 		ormschema.Column("configure_source", ormschema.TextKey(64)).NotNull().DefaultValue(""),
 		ormschema.Column("node_instance_id", ormschema.TextKey(128)).NotNull().DefaultValue(""),
-		ormschema.Column("created_at", ormschema.TextKey(64)).NotNull(),
-		ormschema.Column("updated_at", ormschema.TextKey(64)).NotNull(),
+		ormschema.Column("created_at", ormschema.BigInt()).NotNull(),
+		ormschema.Column("updated_at", ormschema.BigInt()).NotNull(),
 	).PrimaryKey("workspace_id", "id").Build()
 	if err != nil {
 		return fmt.Errorf("build %s: %w", WorkflowRouteStepsTable, err)

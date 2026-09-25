@@ -87,9 +87,10 @@ func TestStoreReadsOnlyIntegrationConnectorPublications(t *testing.T) {
 		t.Fatal(err)
 	}
 	insert := `INSERT INTO _publication_outbox (id,publication_type,workspace_id,connector_key,operation,status,payload_json,dedup_key,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`
+	createdAt := time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC).UnixMilli()
 	for _, row := range [][]any{
-		{"connector-1", "integration.connector", "workspace-a", "crm", "upsert", "queued", `{"id":"1"}`, "dedup-1", "2026-08-30T00:00:00Z", "2026-08-30T00:00:00Z"},
-		{"notification-1", "notification.saas", "workspace-a", "notification", "publish_intent", "queued", `{}`, "dedup-2", "2026-08-30T00:00:00Z", "2026-08-30T00:00:00Z"},
+		{"connector-1", "integration.connector", "workspace-a", "crm", "upsert", "queued", `{"id":"1"}`, "dedup-1", createdAt, createdAt},
+		{"notification-1", "notification.saas", "workspace-a", "notification", "publish_intent", "queued", `{}`, "dedup-2", createdAt, createdAt},
 	} {
 		if _, err := runtimeStore.DB().ExecContext(t.Context(), insert, row...); err != nil {
 			t.Fatal(err)

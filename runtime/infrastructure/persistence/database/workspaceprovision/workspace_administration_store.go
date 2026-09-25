@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -20,6 +19,7 @@ import (
 	workspaceprovisionvalidation "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/validation"
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 const (
@@ -110,7 +110,7 @@ func (store *WorkspaceAdministrationStore) SetWorkspaceStatus(ctx context.Contex
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	update, arguments, err := query.NewUpdateBuilder(store.runtime.RuntimeRenderer(), "_workspaces").
-		Set("status", status).SetExpression("revision", query.Add(query.Column("revision"), query.Value(1))).Set("updated_at", now).
+		Set("status", status).SetExpression("revision", query.Add(query.Column("revision"), query.Value(1))).Set("updated_at", timevalue.Millis(now)).
 		Where(query.And(query.Equal("id", workspaceID), query.Equal("revision", expectedRevision), query.Equal("status", before.Status))).Build()
 	if err != nil {
 		return workspaceprovisionmodel.LifecycleResult{}, err
@@ -186,7 +186,7 @@ func (store *WorkspaceAdministrationStore) UpdateWorkspaceCommercialConfiguratio
 		Set("billing_contact_email", configuration.BillingContactEmail).Set("billing_contact_address", configuration.BillingContactAddress).
 		Set("billing_contact_notes", configuration.BillingContactNotes).
 		SetExpression("commercial_revision", query.Add(query.Column("commercial_revision"), query.Value(1))).
-		SetExpression("revision", query.Add(query.Column("revision"), query.Value(1))).Set("updated_at", now).
+		SetExpression("revision", query.Add(query.Column("revision"), query.Value(1))).Set("updated_at", timevalue.Millis(now)).
 		Where(query.And(
 			query.Equal("id", workspaceID),
 			query.Equal("revision", request.ExpectedRevision),
@@ -354,7 +354,7 @@ func validateWorkspaceCatalogEntry(entry workspaceprovisionmodel.CatalogEntry) e
 
 func (store *WorkspaceAdministrationStore) revokeWorkspaceSessions(ctx context.Context, tx workspaceAdministrationTx, workspaceID, now string) (int, error) {
 	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_identity_auth_refresh_tokens").Columns("session_id", "expires_at").
-		Where(query.And(query.Equal("workspace_id", workspaceID), query.IsNull("revoked_at"))).Build()
+		Where(query.And(query.Equal("workspace_id", workspaceID), query.Equal("revoked_at", int64(0)))).Build()
 	if err != nil {
 		return 0, err
 	}
@@ -369,16 +369,13 @@ func (store *WorkspaceAdministrationStore) revokeWorkspaceSessions(ctx context.C
 		return 0, err
 	}
 	for rows.Next() {
-		var sessionID, expiresAt string
+		var sessionID string
+		var expiresAt int64
 		if err := rows.Scan(&sessionID, &expiresAt); err != nil {
 			rows.Close()
 			return 0, err
 		}
-		expires, err := time.Parse(time.RFC3339Nano, expiresAt)
-		if err != nil {
-			rows.Close()
-			return 0, fmt.Errorf("parse Workspace session expiry: %w", err)
-		}
+		expires := time.UnixMilli(expiresAt).UTC()
 		if expires.After(revokedAt) {
 			active[strings.TrimSpace(sessionID)] = true
 		}
@@ -387,8 +384,8 @@ func (store *WorkspaceAdministrationStore) revokeWorkspaceSessions(ctx context.C
 		return 0, err
 	}
 	update, arguments, err := query.NewUpdateBuilder(store.runtime.RuntimeRenderer(), "_identity_auth_refresh_tokens").
-		Set("revoked_at", now).Set("last_used_at", now).Set("updated_at", now).
-		Where(query.And(query.Equal("workspace_id", workspaceID), query.IsNull("revoked_at"))).Build()
+		Set("revoked_at", timevalue.Millis(now)).Set("last_used_at", timevalue.Millis(now)).Set("updated_at", timevalue.Millis(now)).
+		Where(query.And(query.Equal("workspace_id", workspaceID), query.Equal("revoked_at", int64(0)))).Build()
 	if err != nil {
 		return 0, err
 	}
@@ -419,7 +416,7 @@ func (store *WorkspaceAdministrationStore) lifecycleReceipt(ctx context.Context,
 		return workspaceprovisionmodel.LifecycleResult{}, found, err
 	}
 	var result workspaceprovisionmodel.LifecycleResult
-	if json.Unmarshal([]byte(raw), &result) != nil {
+	if database.UnmarshalTimeJSON([]byte(raw), &result) != nil {
 		return workspaceprovisionmodel.LifecycleResult{}, true, workspaceprovisionmodel.ErrAdministrationUnavailable
 	}
 	result.Replayed = true
@@ -433,7 +430,7 @@ func (store *WorkspaceAdministrationStore) commercialReceipt(ctx context.Context
 		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, found, err
 	}
 	var result workspaceprovisionmodel.CommercialConfigurationUpdateResult
-	if json.Unmarshal([]byte(raw), &result) != nil {
+	if database.UnmarshalTimeJSON([]byte(raw), &result) != nil {
 		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, true, workspaceprovisionmodel.ErrAdministrationUnavailable
 	}
 	result.Replayed = true
@@ -459,16 +456,16 @@ func (store *WorkspaceAdministrationStore) receiptJSON(ctx context.Context, exec
 }
 
 func (store *WorkspaceAdministrationStore) insertReceipt(ctx context.Context, tx workspaceAdministrationTx, actor workspaceprovisionmodel.AdministrationActor, id, fingerprint, actionKey, workspaceID string, result any, now string) error {
-	payload, err := json.Marshal(result)
+	payload, err := database.MarshalTimeJSON(result)
 	if err != nil {
 		return err
 	}
-	metadata, err := json.Marshal(map[string]string{"role_key": actor.RoleKey, "authorization_revision": actor.AuthorizationRevision})
+	metadata, err := database.MarshalTimeJSON(map[string]string{"role_key": actor.RoleKey, "authorization_revision": actor.AuthorizationRevision})
 	if err != nil {
 		return err
 	}
-	related, _ := json.Marshal([]string{workspaceID})
-	evidence, _ := json.Marshal([]string{id})
+	related, _ := database.MarshalTimeJSON([]string{workspaceID})
+	evidence, _ := database.MarshalTimeJSON([]string{id})
 	inserted, err := sharedoperation.NewSQLStore(store.runtime.DB(), store.runtime.RuntimeRenderer()).InsertRecord(
 		sharedoperation.WithExecutor(ctx, tx),
 		sharedoperation.Record{
@@ -495,7 +492,7 @@ func workspaceAdministrationReceiptID(actor workspaceprovisionmodel.Administrati
 }
 
 func workspaceAdministrationFingerprint(values ...any) string {
-	payload, _ := json.Marshal(values)
+	payload, _ := database.MarshalTimeJSON(values)
 	digest := sha256.Sum256(payload)
 	return hex.EncodeToString(digest[:])
 }

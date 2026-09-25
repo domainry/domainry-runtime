@@ -35,7 +35,7 @@ func (c *UploadArtifactCleaner) ExpireUploadReferences(ctx context.Context, now 
 	if c == nil || !c.enabled {
 		return 0, nil
 	}
-	cutoff := now.Add(-7 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
+	cutoff := now.Add(-7 * 24 * time.Hour).UTC().UnixMilli()
 	queryValue, args, buildErr := query.NewSelectBuilder(c.store.SQLRenderer, "download_task").Columns("workspace_id", "id").
 		Where(query.And(query.Equal("token_status", "active"), query.LessThanOrEqual("updated_at", cutoff))).
 		OrderBy(query.Ascending("updated_at"), query.Ascending("id")).Limit(limit).Build()
@@ -64,7 +64,7 @@ func (c *UploadArtifactCleaner) ExpireUploadReferences(ctx context.Context, now 
 	expired := 0
 	for _, item := range identities {
 		update, updateArgs, buildErr := query.NewWorkspaceUpdateBuilder(c.store.SQLRenderer, "download_task", item.workspaceID).
-			Set("token_status", "expired").Set("status", "expired").Set("file_name", "").Set("updated_at", now.UTC().Format(time.RFC3339Nano)).
+			Set("token_status", "expired").Set("status", "expired").Set("file_name", "").Set("updated_at", now.UTC().UnixMilli()).
 			Where(query.And(query.Equal("id", item.id), query.Equal("token_status", "active"))).Build()
 		if buildErr != nil {
 			return expired, fmt.Errorf("build download task expiration: %w", buildErr)

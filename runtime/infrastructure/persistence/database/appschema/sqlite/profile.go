@@ -19,7 +19,7 @@ func NewApplicationSchemaStorageProfile() ApplicationSchemaStorageProfile {
 func (ApplicationSchemaStorageProfile) IDColumnType() string { return "TEXT" }
 func (ApplicationSchemaStorageProfile) FieldColumnType(field definitionmodel.FieldSchema, _ bool) string {
 	switch strings.TrimSpace(field.Type) {
-	case "integer", "boolean":
+	case "integer", "boolean", "datetime":
 		return "INTEGER"
 	case "number":
 		return "REAL"

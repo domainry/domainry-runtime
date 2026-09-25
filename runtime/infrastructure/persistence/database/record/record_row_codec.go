@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
-	ormdialect "github.com/domainry/domainry-orm/dialect"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 type recordRows interface {
@@ -94,21 +93,11 @@ func recordStringValue(value any) string {
 }
 
 func recordTimestampValue(value any) string {
-	if timestamp, ok := value.(time.Time); ok {
-		return timestamp.UTC().Format(time.RFC3339Nano)
-	}
-	return fmt.Sprint(value)
+	return timevalue.String(value)
 }
 
-func recordTimestampDBValue(profile persistencedriver.EngineProfile, value string) any {
-	if profile == nil || profile.Name() != ormdialect.MySQL {
-		return value
-	}
-	parsed, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(value))
-	if err != nil {
-		return value
-	}
-	return parsed.UTC()
+func recordTimestampDBValue(_ persistencedriver.EngineProfile, value string) any {
+	return timevalue.Millis(value)
 }
 
 func recordDeletedValue(value any) bool {
@@ -161,6 +150,9 @@ func dbValue(value any) any {
 }
 
 func dbFieldValue(profile persistencedriver.EngineProfile, field definitionmodel.FieldSchema, value any) any {
+	if strings.TrimSpace(field.Type) == "datetime" {
+		return timevalue.Millis(value)
+	}
 	if kind := strings.TrimSpace(field.Type); kind == recordmodel.RecordFileFieldType || kind == recordmodel.RecordFileListFieldType {
 		encoded, err := recordmodel.RecordEncodeFileFieldValue(field, value)
 		if err == nil {
@@ -232,6 +224,8 @@ func normalizeDBValue(profile persistencedriver.EngineProfile, field definitionm
 		default:
 			return value
 		}
+	case "datetime":
+		return timevalue.String(value)
 	case "currency", "percent":
 		config, err := recordmodel.RecordNormalizeDecimalConfig(field.Config)
 		if err != nil {

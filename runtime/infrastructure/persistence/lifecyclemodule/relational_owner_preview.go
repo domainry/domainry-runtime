@@ -58,12 +58,8 @@ func lifecycleCandidateTime(value any, unixNano bool) time.Time {
 		return time.Time{}
 	}
 	switch timestamp := value.(type) {
-	case string:
-		parsed, _ := time.Parse(time.RFC3339Nano, timestamp)
-		return parsed
-	case []byte:
-		parsed, _ := time.Parse(time.RFC3339Nano, string(timestamp))
-		return parsed
+	case int64:
+		return time.UnixMilli(timestamp).UTC()
 	default:
 		return time.Time{}
 	}

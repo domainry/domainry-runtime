@@ -15,6 +15,7 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	appschemastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema/storage"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 func (r ApplicationSchemaStore) loadPhysicalSchemaSnapshot(ctx context.Context, objects []definitionmodel.ObjectSchema) (*appschemastorage.PhysicalSchemaSnapshot, error) {
@@ -454,6 +455,9 @@ func metadataDBValue(value any) any {
 }
 
 func (r ApplicationSchemaStore) metadataDBFieldValue(field definitionmodel.FieldSchema, value any) any {
+	if strings.TrimSpace(field.Type) == "datetime" {
+		return timevalue.Millis(value)
+	}
 	if recordmodel.RecordIsStructuredFieldType(field.Type) {
 		if encoded, err := recordmodel.RecordEncodeStructuredFieldValue(field, value); err == nil {
 			return encoded

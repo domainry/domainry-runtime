@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/filelock"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 type FileCopyLease struct {
@@ -106,7 +106,7 @@ func (h *fileCopyLeaseHandle) Check(ctx context.Context) error {
 }
 
 func (h *fileCopyLeaseHandle) persist() error {
-	raw, _ := json.Marshal(h.evidence)
+	raw, _ := timevalue.MarshalJSON(h.evidence)
 	return persistLeaseEvidence(h.file, raw)
 }
 

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 func TestFileCheckpointStoreInputAndDecodeBoundaries(t *testing.T) {
@@ -373,7 +375,7 @@ func TestRetirementAndCutoverEveryValidationOutcome(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "cutover.json")
 	write := func(evidence CutoverEvidence) error {
-		raw, err := json.Marshal(evidence)
+		raw, err := timevalue.MarshalJSON(evidence)
 		if err != nil {
 			return err
 		}

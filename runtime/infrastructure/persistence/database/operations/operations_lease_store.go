@@ -71,7 +71,7 @@ func (s OperationsStore) operationsLeaseCounts(ctx context.Context, table, scope
 		counts, err := sharedworkerscope.NewStore(s.database(), s.store.SQLRenderer).CountLeases(ctx, s.database(), scopeValue, instanceID, now)
 		return counts.Live, counts.Expired, err
 	}
-	nowText := now.Format(time.RFC3339Nano)
+	nowMillis := now.UTC().UnixMilli()
 	predicate := query.Predicate(query.NotEqual("lease_owner", ""))
 	if scopeColumn != "" {
 		predicate = query.And(predicate, query.Equal(scopeColumn, scopeValue))
@@ -79,8 +79,8 @@ func (s OperationsStore) operationsLeaseCounts(ctx context.Context, table, scope
 	if instanceID != "" {
 		predicate = query.And(predicate, query.Or(query.Equal("lease_owner", instanceID), query.Like("lease_owner", instanceID+":%"), query.Like("lease_owner", instanceID+"-%")))
 	}
-	liveCount := query.Coalesce(query.Sum(query.CaseWhen(query.GreaterThan("lease_expires_at", nowText), 1).Else(0)), query.Value(0))
-	expiredCount := query.Coalesce(query.Sum(query.CaseWhen(query.And(query.NotEqual("lease_expires_at", ""), query.LessThanOrEqual("lease_expires_at", nowText)), 1).Else(0)), query.Value(0))
+	liveCount := query.Coalesce(query.Sum(query.CaseWhen(query.GreaterThan("lease_expires_at", nowMillis), 1).Else(0)), query.Value(0))
+	expiredCount := query.Coalesce(query.Sum(query.CaseWhen(query.And(query.NotEqual("lease_expires_at", int64(0)), query.LessThanOrEqual("lease_expires_at", nowMillis)), 1).Else(0)), query.Value(0))
 	queryValue, args, buildErr := query.NewSelectBuilder(s.store.SQLRenderer, table).Projections(query.Project(liveCount), query.Project(expiredCount)).Where(predicate).Build()
 	if buildErr != nil {
 		return 0, 0, buildErr

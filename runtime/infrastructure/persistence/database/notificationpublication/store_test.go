@@ -350,7 +350,7 @@ func TestRelayDeadLettersAfterBoundedUnknownOutcomeRetries(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), "UPDATE _publication_outbox SET attempt_count=?,next_attempt_at='' WHERE id=?", publicationMaxAttempt-1, intent.ID); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), "UPDATE _publication_outbox SET attempt_count=?,next_attempt_at=0 WHERE id=?", publicationMaxAttempt-1, intent.ID); err != nil {
 		t.Fatal(err)
 	}
 	clock := &relayClock{now: time.Date(2026, 8, 28, 1, 0, 0, 0, time.UTC)}
@@ -361,13 +361,14 @@ func TestRelayDeadLettersAfterBoundedUnknownOutcomeRetries(t *testing.T) {
 	if worked, err := relay.Process(t.Context(), workerplatform.DurableTaskLocator{WorkspaceID: intent.WorkspaceID, TaskID: intent.ID}); err != nil || !worked {
 		t.Fatalf("last retry worked=%v err=%v", worked, err)
 	}
-	var status, code, terminal string
+	var status, code string
+	var terminal int64
 	var attempts int
 	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,terminal_at,attempt_count FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &code, &terminal, &attempts); err != nil {
 		t.Fatal(err)
 	}
-	if status != "dead_letter" || code != "notification.remote_outcome_unknown" || terminal == "" || attempts != publicationMaxAttempt {
-		t.Fatalf("bounded retry status=%q code=%q terminal=%q attempts=%d", status, code, terminal, attempts)
+	if status != "dead_letter" || code != "notification.remote_outcome_unknown" || terminal == 0 || attempts != publicationMaxAttempt {
+		t.Fatalf("bounded retry status=%q code=%q terminal=%d attempts=%d", status, code, terminal, attempts)
 	}
 }
 

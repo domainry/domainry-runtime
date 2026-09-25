@@ -9,6 +9,7 @@ import (
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 var _ workflowcontract.WorkflowWithdrawalStore = WorkflowProcessStore{}
@@ -40,7 +41,7 @@ func (r WorkflowProcessStore) ClaimWorkflowTimer(ctx context.Context, workspaceI
 		return false, err
 	}
 	defer tx.Rollback()
-	statement, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Set("status", process.Status).Set("updated_at", process.UpdatedAt).Where(query.And(query.Equal("id", process.ID), query.Equal("status", "waiting"), query.Equal("updated_at", expectedUpdatedAt))).Build()
+	statement, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Set("status", process.Status).Set("updated_at", timevalue.Millis(process.UpdatedAt)).Where(query.And(query.Equal("id", process.ID), query.Equal("status", "waiting"), query.Equal("updated_at", timevalue.Millis(expectedUpdatedAt)))).Build()
 	if err != nil {
 		return false, err
 	}

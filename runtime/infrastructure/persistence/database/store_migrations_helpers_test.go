@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,7 +111,7 @@ func TestValidateExternalMigrationBackupAcceptsMatchingEvidence(t *testing.T) {
 			{Kind: "runtime_artifact", Checksum: "runtime", Size: 1},
 		},
 	}
-	raw, err := json.Marshal(evidence)
+	raw, err := MarshalTimeJSON(evidence)
 	if err != nil {
 		t.Fatal(err)
 	}

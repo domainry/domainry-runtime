@@ -15,8 +15,8 @@ func workflowDecisionEdgeTask(task workflowmodel.WorkflowTask) workflowmodel.Wor
 	task.Status = "approved"
 	task.Decision = "approved"
 	task.CompletedBy = "manager"
-	task.CompletedAt = "v2"
-	task.UpdatedAt = "v2"
+	task.CompletedAt = workflowTestTimeV2
+	task.UpdatedAt = workflowTestTimeV2
 	return task
 }
 
@@ -80,7 +80,7 @@ func TestWorkflowDecisionRollsBackEachTransactionalWriteFailure(t *testing.T) {
 			commit.Process = &process
 		}},
 		{name: "insert event", configure: func(t *testing.T, fixture *workflowDecisionEdgeFixture, commit *transactionmodel.WorkflowDecisionCommit) {
-			event := workflowmodel.WorkflowProcessEvent{ID: "duplicate-event", ProcessID: fixture.process.ID, Event: "decided", CreatedAt: "v2"}
+			event := workflowmodel.WorkflowProcessEvent{ID: "duplicate-event", ProcessID: fixture.process.ID, Event: "decided", CreatedAt: workflowTestTimeV2}
 			if err := NewWorkflowProcessStore(fixture.store).InsertEvent(t.Context(), "workspace-primary", event); err != nil {
 				t.Fatal(err)
 			}
@@ -159,7 +159,7 @@ func TestWorkflowStateRollsBackEachTransactionalWriteFailure(t *testing.T) {
 			commit.Process = &process
 		}},
 		{name: "insert event", configure: func(t *testing.T, fixture *workflowDecisionEdgeFixture, commit *transactionmodel.WorkflowStateCommit) {
-			event := workflowmodel.WorkflowProcessEvent{ID: "duplicate-state-event", ProcessID: fixture.process.ID, Event: "state", CreatedAt: "v2"}
+			event := workflowmodel.WorkflowProcessEvent{ID: "duplicate-state-event", ProcessID: fixture.process.ID, Event: "state", CreatedAt: workflowTestTimeV2}
 			if err := NewWorkflowProcessStore(fixture.store).InsertEvent(t.Context(), "workspace-primary", event); err != nil {
 				t.Fatal(err)
 			}
@@ -220,7 +220,7 @@ func TestWorkflowDecisionCommitsAllOptionalWorkflowWrites(t *testing.T) {
 
 	updatedNode := fixture.node
 	updatedNode.Status = "completed"
-	updatedNode.CompletedAt = "v2"
+	updatedNode.CompletedAt = workflowTestTimeV2
 	insertedNode := fixture.node
 	insertedNode.ID = "node-inserted"
 	insertedNode.NodeID = "archive"
@@ -234,9 +234,9 @@ func TestWorkflowDecisionCommitsAllOptionalWorkflowWrites(t *testing.T) {
 	insertedTask.Sequence = 3
 	updatedProcess := fixture.process
 	updatedProcess.Status = "waiting"
-	updatedProcess.UpdatedAt = "v2"
+	updatedProcess.UpdatedAt = workflowTestTimeV2
 	existingExecution.Status = "succeeded"
-	existingExecution.UpdatedAt = "v2"
+	existingExecution.UpdatedAt = workflowTestTimeV2
 	commit := workflowDecisionEdgeCommit(fixture.task)
 	commit.ExpectedTaskStatus = ""
 	commit.InsertNodes = []workflowmodel.WorkflowNodeInstance{insertedNode}
@@ -244,7 +244,7 @@ func TestWorkflowDecisionCommitsAllOptionalWorkflowWrites(t *testing.T) {
 	commit.InsertTasks = []workflowmodel.WorkflowTask{insertedTask}
 	commit.UpdateTasks = []workflowmodel.WorkflowTask{updatedSecondTask}
 	commit.Process = &updatedProcess
-	commit.Events = []workflowmodel.WorkflowProcessEvent{{ID: "event-optional", ProcessID: fixture.process.ID, Event: "optional", CreatedAt: "v2"}}
+	commit.Events = []workflowmodel.WorkflowProcessEvent{{ID: "event-optional", ProcessID: fixture.process.ID, Event: "optional", CreatedAt: workflowTestTimeV2}}
 	commit.InsertExecutions = []workflowmodel.WorkflowExecution{workflowWorkerEdgeExecution("execution-inserted")}
 	commit.WorkflowExecution = &existingExecution
 	committed, err := newAgentWorkflowDecisionStore(fixture.store).CommitWorkflowDecision(t.Context(), commit)

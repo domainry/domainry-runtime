@@ -388,12 +388,12 @@ func (s *RuntimeStore) runtimeSchemaReceiptPending(ctx context.Context, db schem
 func (s *RuntimeStore) startRuntimeSchemaMigration(ctx context.Context, checksum string) error {
 	columns := []string{"path", "version", "name", "kind", "checksum", "dirty", "applied_at", "runtime_version", "duration_ms", "operator", "instance_id", "backup_id"}
 	queryValue := "INSERT INTO " + s.tableIdentifier("_schema_migrations") + " (" + strings.Join(quotedColumns(s, columns), ", ") + ") VALUES (" + strings.Join(placeholders(s, len(columns)), ", ") + ")"
-	_, err := s.schemaDatabase().ExecContext(ctx, queryValue, runtimeSchemaMigrationPath(checksum), "", "runtime_schema", "runtime_schema", checksum, true, time.Now().UTC().Format(time.RFC3339), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
+	_, err := s.schemaDatabase().ExecContext(ctx, queryValue, runtimeSchemaMigrationPath(checksum), "", "runtime_schema", "runtime_schema", checksum, true, time.Now().UTC().UnixMilli(), s.config.RuntimeVersion, 0, migrationOperator(s.config), migrationInstanceID(s.config), s.migrationBackupID)
 	return err
 }
 
 func (s *RuntimeStore) recordRuntimeSchemaMigration(ctx context.Context, checksum string, duration time.Duration) error {
-	_, err := s.schemaDatabase().ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_migrations")+" SET "+s.identifier("dirty")+" = FALSE, "+s.identifier("duration_ms")+" = "+s.placeholder(1)+", "+s.identifier("applied_at")+" = "+s.placeholder(2)+" WHERE "+s.identifier("path")+" = "+s.placeholder(3)+" AND "+s.identifier("checksum")+" = "+s.placeholder(4), duration.Milliseconds(), time.Now().UTC().Format(time.RFC3339), runtimeSchemaMigrationPath(checksum), checksum)
+	_, err := s.schemaDatabase().ExecContext(ctx, "UPDATE "+s.tableIdentifier("_schema_migrations")+" SET "+s.identifier("dirty")+" = FALSE, "+s.identifier("duration_ms")+" = "+s.placeholder(1)+", "+s.identifier("applied_at")+" = "+s.placeholder(2)+" WHERE "+s.identifier("path")+" = "+s.placeholder(3)+" AND "+s.identifier("checksum")+" = "+s.placeholder(4), duration.Milliseconds(), time.Now().UTC().UnixMilli(), runtimeSchemaMigrationPath(checksum), checksum)
 	if err != nil {
 		return fmt.Errorf("record runtime schema migration: %w", err)
 	}

@@ -3,7 +3,6 @@ package workflow
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"github.com/domainry/domainry-orm/query"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 type WorkflowProcessStore struct {
@@ -34,11 +34,11 @@ var workflowNodeColumns = []string{"workspace_id", "id", "process_id", "node_id"
 var workflowEventColumns = []string{"workspace_id", "id", "process_id", "node_id", "task_id", "event", "actor_id", "summary", "metadata_json", "created_at"}
 
 func workflowProcessValues(process workflowmodel.WorkflowProcessInstance) []any {
-	definition, _ := json.Marshal(process.DefinitionSnapshot)
-	currentNodes, _ := json.Marshal(process.CurrentNodeIDs)
-	variables, _ := json.Marshal(database.NonNilMap(process.Variables))
-	result, _ := json.Marshal(database.NonNilMap(process.Result))
-	return []any{process.WorkspaceID, process.ID, process.OperationID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, process.CreatedAt, process.UpdatedAt, database.NullableText(process.CompletedAt)}
+	definition, _ := database.MarshalTimeJSON(process.DefinitionSnapshot)
+	currentNodes, _ := database.MarshalTimeJSON(process.CurrentNodeIDs)
+	variables, _ := database.MarshalTimeJSON(database.NonNilMap(process.Variables))
+	result, _ := database.MarshalTimeJSON(database.NonNilMap(process.Result))
+	return []any{process.WorkspaceID, process.ID, process.OperationID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, timevalue.Millis(process.CreatedAt), timevalue.Millis(process.UpdatedAt), timevalue.Millis(process.CompletedAt)}
 }
 
 func (r WorkflowProcessStore) InsertProcess(ctx context.Context, workspaceID string, process workflowmodel.WorkflowProcessInstance) error {
@@ -133,13 +133,14 @@ func (r WorkflowProcessStore) ListProcesses(ctx context.Context, workspaceID str
 		predicates = append(predicates, query.Or(query.Equal("initiator_id", visibleToUserID), query.ExistsSubquery(visible)))
 	}
 	if value := strings.TrimSpace(filter.UpdatedFrom); value != "" {
-		predicates = append(predicates, query.GreaterThanOrEqual("updated_at", value))
+		predicates = append(predicates, query.GreaterThanOrEqual("updated_at", timevalue.Millis(value)))
 	}
 	if value := strings.TrimSpace(filter.UpdatedTo); value != "" {
-		predicates = append(predicates, query.LessThanOrEqual("updated_at", value))
+		predicates = append(predicates, query.LessThanOrEqual("updated_at", timevalue.Millis(value)))
 	}
 	if filter.AfterCreatedAt != "" && filter.AfterID != "" {
-		predicates = append(predicates, query.Or(query.LessThan("created_at", filter.AfterCreatedAt), query.And(query.Equal("created_at", filter.AfterCreatedAt), query.LessThan("id", filter.AfterID))))
+		createdAt := timevalue.Millis(filter.AfterCreatedAt)
+		predicates = append(predicates, query.Or(query.LessThan("created_at", createdAt), query.And(query.Equal("created_at", createdAt), query.LessThan("id", filter.AfterID))))
 	}
 	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(workflowProcessColumns...).OrderBy(query.Descending("created_at"), query.Descending("id")).Limit(limit)
 	if len(predicates) > 0 {
@@ -166,9 +167,9 @@ func (r WorkflowProcessStore) ListProcesses(ctx context.Context, workspaceID str
 }
 
 func workflowNodeValues(node workflowmodel.WorkflowNodeInstance) []any {
-	input, _ := json.Marshal(database.NonNilMap(node.Input))
-	output, _ := json.Marshal(database.NonNilMap(node.Output))
-	return []any{node.WorkspaceID, node.ID, node.ProcessID, node.NodeID, node.NodeType, node.Iteration, node.Status, string(input), string(output), node.ErrorCode, node.StartedAt, database.NullableText(node.CompletedAt)}
+	input, _ := database.MarshalTimeJSON(database.NonNilMap(node.Input))
+	output, _ := database.MarshalTimeJSON(database.NonNilMap(node.Output))
+	return []any{node.WorkspaceID, node.ID, node.ProcessID, node.NodeID, node.NodeType, node.Iteration, node.Status, string(input), string(output), node.ErrorCode, timevalue.Millis(node.StartedAt), timevalue.Millis(node.CompletedAt)}
 }
 func (r WorkflowProcessStore) InsertNode(ctx context.Context, workspaceID string, node workflowmodel.WorkflowNodeInstance) error {
 	var err error
@@ -213,13 +214,14 @@ func (r WorkflowProcessStore) ListNodes(ctx context.Context, workspaceID, proces
 	for rows.Next() {
 		var node workflowmodel.WorkflowNodeInstance
 		var input, output string
-		var errorCode, completedAt sql.NullString
-		if err := rows.Scan(&node.WorkspaceID, &node.ID, &node.ProcessID, &node.NodeID, &node.NodeType, &node.Iteration, &node.Status, &input, &output, &errorCode, &node.StartedAt, &completedAt); err != nil {
+		var errorCode sql.NullString
+		var startedAt, completedAt int64
+		if err := rows.Scan(&node.WorkspaceID, &node.ID, &node.ProcessID, &node.NodeID, &node.NodeType, &node.Iteration, &node.Status, &input, &output, &errorCode, &startedAt, &completedAt); err != nil {
 			return nil, err
 		}
-		node.ErrorCode, node.CompletedAt = errorCode.String, completedAt.String
-		_ = json.Unmarshal([]byte(input), &node.Input)
-		_ = json.Unmarshal([]byte(output), &node.Output)
+		node.ErrorCode, node.StartedAt, node.CompletedAt = errorCode.String, timevalue.String(startedAt), timevalue.String(completedAt)
+		_ = database.UnmarshalTimeJSON([]byte(input), &node.Input)
+		_ = database.UnmarshalTimeJSON([]byte(output), &node.Output)
 		out = append(out, node)
 	}
 	return out, rows.Err()
@@ -264,18 +266,19 @@ func (r WorkflowProcessStore) ListNodesForProcesses(ctx context.Context, workspa
 func scanWorkflowNode(scanner interface{ Scan(...any) error }) (workflowmodel.WorkflowNodeInstance, error) {
 	var node workflowmodel.WorkflowNodeInstance
 	var input, output string
-	var errorCode, completedAt sql.NullString
-	err := scanner.Scan(&node.WorkspaceID, &node.ID, &node.ProcessID, &node.NodeID, &node.NodeType, &node.Iteration, &node.Status, &input, &output, &errorCode, &node.StartedAt, &completedAt)
-	node.ErrorCode, node.CompletedAt = errorCode.String, completedAt.String
-	_ = json.Unmarshal([]byte(input), &node.Input)
-	_ = json.Unmarshal([]byte(output), &node.Output)
+	var errorCode sql.NullString
+	var startedAt, completedAt int64
+	err := scanner.Scan(&node.WorkspaceID, &node.ID, &node.ProcessID, &node.NodeID, &node.NodeType, &node.Iteration, &node.Status, &input, &output, &errorCode, &startedAt, &completedAt)
+	node.ErrorCode, node.StartedAt, node.CompletedAt = errorCode.String, timevalue.String(startedAt), timevalue.String(completedAt)
+	_ = database.UnmarshalTimeJSON([]byte(input), &node.Input)
+	_ = database.UnmarshalTimeJSON([]byte(output), &node.Output)
 	return node, err
 }
 
 func workflowTaskValues(task workflowmodel.WorkflowTask) []any {
-	evidence, _ := json.Marshal(task.AssigneeEvidence)
-	resolver, _ := json.Marshal(task.ResolverSnapshot)
-	return []any{task.WorkspaceID, task.ID, task.ProcessID, task.NodeInstanceID, task.NodeID, task.Title, task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), string(resolver), task.CandidateSource, task.NodeDefinitionVersion, task.Sequence, task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.CreatedAt, task.UpdatedAt}
+	evidence, _ := database.MarshalTimeJSON(task.AssigneeEvidence)
+	resolver, _ := database.MarshalTimeJSON(task.ResolverSnapshot)
+	return []any{task.WorkspaceID, task.ID, task.ProcessID, task.NodeInstanceID, task.NodeID, task.Title, task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), string(resolver), task.CandidateSource, task.NodeDefinitionVersion, task.Sequence, task.Status, task.Decision, task.Comment, timevalue.Millis(task.DueAt), task.CompletedBy, timevalue.Millis(task.CompletedAt), timevalue.Millis(task.CreatedAt), timevalue.Millis(task.UpdatedAt)}
 }
 func (r WorkflowProcessStore) InsertTask(ctx context.Context, workspaceID string, task workflowmodel.WorkflowTask) error {
 	var err error
@@ -413,7 +416,8 @@ func (r WorkflowProcessStore) DecideTask(ctx context.Context, workspaceID, taskI
 	if err != nil {
 		return workflowmodel.WorkflowTask{}, false, err
 	}
-	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Set("status", decision).Set("decision", decision).Set("comment", comment).Set("completed_by", assigneeUserID).Set("completed_at", completedAt).Set("updated_at", completedAt).Where(query.And(query.Equal("id", taskID), query.Equal("assignee_user_id", assigneeUserID), query.Equal("status", "open"))).Build()
+	completedAtMillis := timevalue.Millis(completedAt)
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Set("status", decision).Set("decision", decision).Set("comment", comment).Set("completed_by", assigneeUserID).Set("completed_at", completedAtMillis).Set("updated_at", completedAtMillis).Where(query.And(query.Equal("id", taskID), query.Equal("assignee_user_id", assigneeUserID), query.Equal("status", "open"))).Build()
 	if err != nil {
 		return workflowmodel.WorkflowTask{}, false, err
 	}
@@ -437,8 +441,8 @@ func (r WorkflowProcessStore) InsertEvent(ctx context.Context, workspaceID strin
 		return err
 	}
 	event.WorkspaceID = workspaceID
-	metadata, _ := json.Marshal(database.NonNilMap(event.Metadata))
-	values := []any{event.ID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), event.CreatedAt}
+	metadata, _ := database.MarshalTimeJSON(database.NonNilMap(event.Metadata))
+	values := []any{event.ID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), timevalue.Millis(event.CreatedAt)}
 	if err := r.store.GuardSubjectEvidenceWrite(ctx, r.database(), workspaceID, "_workflow_process_events", workflowEventColumns[1:], values); err != nil {
 		return err
 	}
@@ -471,11 +475,13 @@ func (r WorkflowProcessStore) ListEvents(ctx context.Context, workspaceID, proce
 		var event workflowmodel.WorkflowProcessEvent
 		var metadata string
 		var nodeID, taskID sql.NullString
-		if err := rows.Scan(&event.WorkspaceID, &event.ID, &event.ProcessID, &nodeID, &taskID, &event.Event, &event.ActorID, &event.Summary, &metadata, &event.CreatedAt); err != nil {
+		var createdAt int64
+		if err := rows.Scan(&event.WorkspaceID, &event.ID, &event.ProcessID, &nodeID, &taskID, &event.Event, &event.ActorID, &event.Summary, &metadata, &createdAt); err != nil {
 			return nil, err
 		}
 		event.NodeID, event.TaskID = nodeID.String, taskID.String
-		_ = json.Unmarshal([]byte(metadata), &event.Metadata)
+		event.CreatedAt = timevalue.String(createdAt)
+		_ = database.UnmarshalTimeJSON([]byte(metadata), &event.Metadata)
 		out = append(out, event)
 	}
 	return out, rows.Err()

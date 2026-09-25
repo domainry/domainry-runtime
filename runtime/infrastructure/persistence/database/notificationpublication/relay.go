@@ -2,7 +2,6 @@ package notificationpublication
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -13,6 +12,7 @@ import (
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	sdkcontract "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 const (
@@ -87,7 +87,7 @@ func (r *Relay) Process(ctx context.Context, locator workerplatform.DurableTaskL
 		return false, err
 	}
 	var intent sdkcontract.NotificationIntent
-	if err := json.Unmarshal([]byte(claimed.IntentJSON), &intent); err != nil {
+	if err := timevalue.UnmarshalJSON([]byte(claimed.IntentJSON), &intent); err != nil {
 		return true, r.fail(ctx, claimed, "notification.publication_payload_invalid", err, false)
 	}
 	event, _, publishErr := r.publisher.PublishIntent(ctx, intent)
@@ -102,7 +102,7 @@ func (r *Relay) claim(ctx context.Context, locator workerplatform.DurableTaskLoc
 	s := r.store.runtime
 	now := r.clock.Now().UTC()
 	nowText, expires := now.Format(time.RFC3339Nano), now.Add(publicationLeaseTTL).Format(time.RFC3339Nano)
-	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, "_publication_outbox", locator.WorkspaceID).Set("status", "sending").Set("last_attempt_at", nowText).Set("lease_owner", r.workerID).Set("lease_expires_at", expires).SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", nowText).Where(query.And(query.Equal("publication_type", "notification.saas"), query.Equal("id", locator.TaskID), publicationDuePredicate(nowText))).Build()
+	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, "_publication_outbox", locator.WorkspaceID).Set("status", "sending").Set("last_attempt_at", timevalue.Millis(nowText)).Set("lease_owner", r.workerID).Set("lease_expires_at", timevalue.Millis(expires)).SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", timevalue.Millis(nowText)).Where(query.And(query.Equal("publication_type", "notification.saas"), query.Equal("id", locator.TaskID), publicationDuePredicate(nowText))).Build()
 	if buildErr != nil {
 		return publication{}, false, fmt.Errorf("build Notification SaaS publication claim: %w", buildErr)
 	}
@@ -119,7 +119,9 @@ func (r *Relay) claim(ctx context.Context, locator workerplatform.DurableTaskLoc
 	if buildErr != nil {
 		return publication{}, false, buildErr
 	}
-	err = s.DB().QueryRowContext(ctx, lookup, lookupArgs...).Scan(&value.ID, &value.WorkspaceID, &value.IntentJSON, &value.Status, &value.AttemptCount, &value.LeaseOwner, &value.LeaseExpiresAt, &value.FencingToken)
+	var leaseExpiresAt int64
+	err = s.DB().QueryRowContext(ctx, lookup, lookupArgs...).Scan(&value.ID, &value.WorkspaceID, &value.IntentJSON, &value.Status, &value.AttemptCount, &value.LeaseOwner, &leaseExpiresAt, &value.FencingToken)
+	value.LeaseExpiresAt = timevalue.String(leaseExpiresAt)
 	return value, err == nil, err
 }
 
@@ -143,7 +145,7 @@ func (r *Relay) transition(ctx context.Context, value publication, status, next,
 	if terminal {
 		terminalAt = now
 	}
-	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, "_publication_outbox", value.WorkspaceID).Set("status", status).SetExpression("attempt_count", query.Add(query.Column("attempt_count"), query.Value(1))).Set("next_attempt_at", next).Set("lease_owner", "").Set("lease_expires_at", "").Set("remote_event_id", remoteEventID).Set("last_error_code", code).Set("last_error", message).Set("terminal_at", terminalAt).Set("updated_at", now).Where(query.And(query.Equal("publication_type", "notification.saas"), query.Equal("id", value.ID), query.Equal("status", "sending"), query.Equal("lease_owner", value.LeaseOwner), query.Equal("fencing_token", value.FencingToken))).Build()
+	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, "_publication_outbox", value.WorkspaceID).Set("status", status).SetExpression("attempt_count", query.Add(query.Column("attempt_count"), query.Value(1))).Set("next_attempt_at", timevalue.Millis(next)).Set("lease_owner", "").Set("lease_expires_at", int64(0)).Set("remote_event_id", remoteEventID).Set("last_error_code", code).Set("last_error", message).Set("terminal_at", timevalue.Millis(terminalAt)).Set("updated_at", timevalue.Millis(now)).Where(query.And(query.Equal("publication_type", "notification.saas"), query.Equal("id", value.ID), query.Equal("status", "sending"), query.Equal("lease_owner", value.LeaseOwner), query.Equal("fencing_token", value.FencingToken))).Build()
 	if buildErr != nil {
 		return buildErr
 	}
@@ -162,9 +164,10 @@ func (r *Relay) transition(ctx context.Context, value publication, status, next,
 }
 
 func publicationDuePredicate(now string) query.Predicate {
+	nowMillis := timevalue.Millis(now)
 	return query.Or(
-		query.And(query.Equal("status", "queued"), query.Or(query.Equal("next_attempt_at", ""), query.LessThanOrEqual("next_attempt_at", now))),
-		query.And(query.Equal("status", "sending"), query.LessThanOrEqual("lease_expires_at", now)),
+		query.And(query.Equal("status", "queued"), query.Or(query.Equal("next_attempt_at", int64(0)), query.LessThanOrEqual("next_attempt_at", nowMillis))),
+		query.And(query.Equal("status", "sending"), query.LessThanOrEqual("lease_expires_at", nowMillis)),
 	)
 }
 

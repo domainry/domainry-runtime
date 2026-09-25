@@ -11,6 +11,7 @@ import (
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 func (r WorkflowProcessStore) ListApprovalTasks(ctx context.Context, workspaceID, processID, nodeInstanceID string) ([]workflowmodel.WorkflowTask, error) {
@@ -54,8 +55,8 @@ func (r WorkflowDecisionStore) guardApprovalSnapshotTx(ctx context.Context, tx *
 		return fmt.Errorf("workflow decision requires an advanced process snapshot")
 	}
 	statement, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_process_instances", commit.WorkspaceID).
-		Set("updated_at", process.UpdatedAt).
-		Where(query.And(query.Equal("id", process.ID), query.Equal("updated_at", commit.ExpectedProcessUpdatedAt), query.Equal("status", "waiting"))).Build()
+		Set("updated_at", timevalue.Millis(process.UpdatedAt)).
+		Where(query.And(query.Equal("id", process.ID), query.Equal("updated_at", timevalue.Millis(commit.ExpectedProcessUpdatedAt)), query.Equal("status", "waiting"))).Build()
 	if err != nil {
 		return err
 	}

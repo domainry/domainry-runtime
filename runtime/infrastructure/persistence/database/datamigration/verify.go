@@ -3,11 +3,12 @@ package datamigration
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 type VerificationReport struct {
@@ -205,7 +206,7 @@ func ValidateCutoverEvidence(path string, now time.Time) (CutoverEvidence, error
 		return CutoverEvidence{}, fmt.Errorf("read cutover evidence: %w", err)
 	}
 	var evidence CutoverEvidence
-	if err := json.Unmarshal(raw, &evidence); err != nil {
+	if err := timevalue.UnmarshalJSON(raw, &evidence); err != nil {
 		return CutoverEvidence{}, fmt.Errorf("parse cutover evidence: %w", err)
 	}
 	if now.IsZero() {

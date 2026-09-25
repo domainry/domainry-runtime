@@ -2,12 +2,13 @@ package datamigration
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 type checkpointTemporaryFile interface {
@@ -36,7 +37,7 @@ func (s FileCheckpointStore) Load(ctx context.Context) (Checkpoint, error) {
 		return Checkpoint{}, fmt.Errorf("read data migration checkpoint: %w", err)
 	}
 	var checkpoint Checkpoint
-	if err := json.Unmarshal(raw, &checkpoint); err != nil {
+	if err := timevalue.UnmarshalJSON(raw, &checkpoint); err != nil {
 		return Checkpoint{}, fmt.Errorf("parse data migration checkpoint: %w", err)
 	}
 	if checkpoint.Version != 1 {
@@ -60,7 +61,7 @@ func (s FileCheckpointStore) Save(ctx context.Context, checkpoint Checkpoint) er
 		return fmt.Errorf("create data migration checkpoint directory: %w", err)
 	}
 	checkpoint.Version, checkpoint.UpdatedAt = 1, time.Now().UTC()
-	raw, err := json.MarshalIndent(checkpoint, "", "  ")
+	raw, err := timevalue.MarshalJSONIndent(checkpoint)
 	if err != nil {
 		return err
 	}

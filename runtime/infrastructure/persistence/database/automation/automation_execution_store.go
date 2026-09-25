@@ -3,7 +3,6 @@ package automation
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 type AutomationExecutionStore struct {
@@ -32,16 +32,18 @@ func NewAutomationExecutionStore(store *database.RuntimeStore) AutomationExecuti
 func scanAutomationRuleExecution(scanner interface{ Scan(...any) error }) (automationmodel.AutomationRuleExecution, error) {
 	var execution automationmodel.AutomationRuleExecution
 	var candidateJSON, traceJSON string
-	if err := scanner.Scan(&execution.ID, &execution.WorkspaceID, &execution.RuleKey, &execution.ObjectKey, &execution.RecordID, &execution.Phase, &execution.Operation, &execution.Status, &execution.ActorID, &execution.RoleKey, &execution.RequestID, &execution.CorrelationID, &execution.EventID, &execution.DurationMS, &execution.ErrorCode, &candidateJSON, &traceJSON, &execution.CreatedAt, &execution.UpdatedAt); err != nil {
+	var createdAt, updatedAt int64
+	if err := scanner.Scan(&execution.ID, &execution.WorkspaceID, &execution.RuleKey, &execution.ObjectKey, &execution.RecordID, &execution.Phase, &execution.Operation, &execution.Status, &execution.ActorID, &execution.RoleKey, &execution.RequestID, &execution.CorrelationID, &execution.EventID, &execution.DurationMS, &execution.ErrorCode, &candidateJSON, &traceJSON, &createdAt, &updatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return automationmodel.AutomationRuleExecution{}, err
 		}
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("scan automation rule execution: %w", err)
 	}
-	if err := json.Unmarshal([]byte(candidateJSON), &execution.Candidate); err != nil {
+	execution.CreatedAt, execution.UpdatedAt = timevalue.String(createdAt), timevalue.String(updatedAt)
+	if err := timevalue.UnmarshalJSON([]byte(candidateJSON), &execution.Candidate); err != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("decode automation execution candidate: %w", err)
 	}
-	if err := json.Unmarshal([]byte(traceJSON), &execution.Trace); err != nil {
+	if err := timevalue.UnmarshalJSON([]byte(traceJSON), &execution.Trace); err != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("decode automation execution trace: %w", err)
 	}
 	return execution, nil
@@ -61,16 +63,16 @@ func (r AutomationExecutionStore) InsertExecution(ctx context.Context, workspace
 		value.CreatedAt = now
 	}
 	value.UpdatedAt = now
-	candidateJSON, err := json.Marshal(nonNilMap(value.Candidate))
+	candidateJSON, err := timevalue.MarshalJSON(nonNilMap(value.Candidate))
 	if err != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("encode automation execution candidate: %w", err)
 	}
-	traceJSON, err := json.Marshal(nonNilMap(value.Trace))
+	traceJSON, err := timevalue.MarshalJSON(nonNilMap(value.Trace))
 	if err != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("encode automation execution trace: %w", err)
 	}
 	columns := []string{"id", "run_kind", "idempotency_key", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at"}
-	values := []any{value.ID, automationRuleRunKind, value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), value.CreatedAt, value.UpdatedAt}
+	values := []any{value.ID, automationRuleRunKind, value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), timevalue.Millis(value.CreatedAt), timevalue.Millis(value.UpdatedAt)}
 	builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, automationRunsTable, columns, values)
 	if buildErr != nil {
 		return automationmodel.AutomationRuleExecution{}, buildErr
@@ -122,10 +124,10 @@ func (r AutomationExecutionStore) ListExecutions(ctx context.Context, workspaceI
 		predicates = append(predicates, query.Like("trace_json", "%\"connector_key\":\""+value+"\"%"))
 	}
 	if value := strings.TrimSpace(filter.From); value != "" {
-		predicates = append(predicates, query.GreaterThanOrEqual("created_at", value))
+		predicates = append(predicates, query.GreaterThanOrEqual("created_at", timevalue.Millis(value)))
 	}
 	if value := strings.TrimSpace(filter.To); value != "" {
-		predicates = append(predicates, query.LessThanOrEqual("created_at", value))
+		predicates = append(predicates, query.LessThanOrEqual("created_at", timevalue.Millis(value)))
 	}
 	limit := filter.Limit
 	if limit <= 0 || limit > 500 {

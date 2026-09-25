@@ -116,7 +116,7 @@ func (s *RuntimeStore) ApplyOwnedMigration(ctx context.Context, owner string, ve
 		return fmt.Errorf("migration.failed: execute %s: %w", path, err)
 	}
 	complete := "UPDATE " + s.tableIdentifier("_schema_migrations") + " SET " + s.identifier("dirty") + "=FALSE," + s.identifier("duration_ms") + "=" + s.placeholder(1) + "," + s.identifier("applied_at") + "=" + s.placeholder(2) + " WHERE " + s.identifier("path") + "=" + s.placeholder(3) + " AND " + s.identifier("checksum") + "=" + s.placeholder(4)
-	if _, err := s.schemaDatabase().ExecContext(ctx, complete, time.Since(started).Milliseconds(), time.Now().UTC().Format(time.RFC3339), path, ledgerChecksum); err != nil {
+	if _, err := s.schemaDatabase().ExecContext(ctx, complete, time.Since(started).Milliseconds(), time.Now().UTC().UnixMilli(), path, ledgerChecksum); err != nil {
 		return fmt.Errorf("record module migration %s: %w", path, err)
 	}
 	return nil
@@ -233,7 +233,7 @@ func (s *RuntimeStore) applyOwnedMigration(ctx context.Context, owner string, mi
 		}
 	}
 	complete := "UPDATE " + s.tableIdentifier("_schema_migrations") + " SET " + s.identifier("dirty") + "=FALSE," + s.identifier("duration_ms") + "=" + s.placeholder(1) + "," + s.identifier("applied_at") + "=" + s.placeholder(2) + " WHERE " + s.identifier("path") + "=" + s.placeholder(3) + " AND " + s.identifier("checksum") + "=" + s.placeholder(4)
-	if _, err := tx.ExecContext(ctx, complete, time.Since(started).Milliseconds(), time.Now().UTC().Format(time.RFC3339), path, checksum); err != nil {
+	if _, err := tx.ExecContext(ctx, complete, time.Since(started).Milliseconds(), time.Now().UTC().UnixMilli(), path, checksum); err != nil {
 		return fmt.Errorf("record module migration %s: %w", path, err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -245,7 +245,7 @@ func (s *RuntimeStore) applyOwnedMigration(ctx context.Context, owner string, mi
 func (s *RuntimeStore) insertOwnedMigration(ctx context.Context, path, owner string, migration ormmigration.Migration, checksum string, complete bool) error {
 	dirty := !complete
 	query := "INSERT INTO " + s.tableIdentifier("_schema_migrations") + " (" + migrationColumns(s) + ") VALUES (" + strings.Join(placeholders(s, 12), ", ") + ")"
-	if _, err := s.schemaDatabase().ExecContext(ctx, query, path, strconv.FormatUint(uint64(migration.Version), 10), migration.Name, "module:"+owner, checksum, dirty, time.Now().UTC().Format(time.RFC3339), strings.TrimSpace(s.config.RuntimeVersion), 0, migrationOperator(s.config), migrationInstanceID(s.config), strings.TrimSpace(s.migrationBackupID)); err != nil {
+	if _, err := s.schemaDatabase().ExecContext(ctx, query, path, strconv.FormatUint(uint64(migration.Version), 10), migration.Name, "module:"+owner, checksum, dirty, time.Now().UTC().UnixMilli(), strings.TrimSpace(s.config.RuntimeVersion), 0, migrationOperator(s.config), migrationInstanceID(s.config), strings.TrimSpace(s.migrationBackupID)); err != nil {
 		return fmt.Errorf("record module migration %s: %w", path, err)
 	}
 	return nil

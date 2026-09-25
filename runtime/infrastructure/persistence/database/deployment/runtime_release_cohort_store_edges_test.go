@@ -125,13 +125,13 @@ func TestRuntimeReleaseLiveInstancesStages(t *testing.T) {
 		{"expiry", &releaseSQLState{querySteps: []releaseSQLQueryStep{{columns: releaseColumns(4), rows: [][]driver.Value{{"id", "hash", int64(1), "bad"}}}}}, true, 0},
 		{"iterate", &releaseSQLState{querySteps: []releaseSQLQueryStep{{columns: releaseColumns(4), nextErr: errReleaseSQL}}}, true, 0},
 		{"delete", &releaseSQLState{
-			querySteps: []releaseSQLQueryStep{{columns: releaseColumns(4), rows: [][]driver.Value{{"expired", "hash", int64(1), now.Add(-time.Minute).Format(time.RFC3339Nano)}}}},
+			querySteps: []releaseSQLQueryStep{{columns: releaseColumns(4), rows: [][]driver.Value{{"expired", "hash", int64(1), now.Add(-time.Minute).UnixMilli()}}}},
 			execSteps:  []releaseSQLExecStep{{err: errReleaseSQL}},
 		}, true, 0},
 		{"mixed", &releaseSQLState{
 			querySteps: []releaseSQLQueryStep{{columns: releaseColumns(4), rows: [][]driver.Value{
-				{"expired", "hash", int64(1), now.Add(-time.Minute).Format(time.RFC3339Nano)},
-				{"live", "hash", int64(1), now.Add(time.Minute).Format(time.RFC3339Nano)},
+				{"expired", "hash", int64(1), now.Add(-time.Minute).UnixMilli()},
+				{"live", "hash", int64(1), now.Add(time.Minute).UnixMilli()},
 			}}},
 			execSteps: []releaseSQLExecStep{{rows: 1}},
 		}, false, 1},
@@ -253,15 +253,15 @@ func TestRuntimeReleaseClaimBranchStages(t *testing.T) {
 		}},
 		{execSteps: []releaseSQLExecStep{{rows: 1}}, querySteps: []releaseSQLQueryStep{
 			{columns: releaseColumns(3), rows: [][]driver.Value{{"", "", int64(1)}}},
-			{columns: releaseColumns(4), rows: [][]driver.Value{{"live", "hash", int64(1), now.Add(time.Minute).Format(time.RFC3339Nano)}}},
+			{columns: releaseColumns(4), rows: [][]driver.Value{{"live", "hash", int64(1), now.Add(time.Minute).UnixMilli()}}},
 		}},
 		{execSteps: []releaseSQLExecStep{{rows: 1}}, querySteps: []releaseSQLQueryStep{
 			{columns: releaseColumns(3), rows: [][]driver.Value{{"hash", "{", int64(1)}}},
-			{columns: releaseColumns(4), rows: [][]driver.Value{{"live", "hash", int64(1), now.Add(time.Minute).Format(time.RFC3339Nano)}}},
+			{columns: releaseColumns(4), rows: [][]driver.Value{{"live", "hash", int64(1), now.Add(time.Minute).UnixMilli()}}},
 		}},
 		{execSteps: []releaseSQLExecStep{{rows: 1}}, querySteps: []releaseSQLQueryStep{
 			{columns: releaseColumns(3), rows: [][]driver.Value{{"hash", `{"contract_version":"v1","combination_sha256":"hash"}`, int64(1)}}},
-			{columns: releaseColumns(4), rows: [][]driver.Value{{"live", "other", int64(2), now.Add(time.Minute).Format(time.RFC3339Nano)}}},
+			{columns: releaseColumns(4), rows: [][]driver.Value{{"live", "other", int64(2), now.Add(time.Minute).UnixMilli()}}},
 		}},
 	} {
 		store, closeDB = scriptedReleaseStore(state)
@@ -272,7 +272,7 @@ func TestRuntimeReleaseClaimBranchStages(t *testing.T) {
 	}
 	identityJSON, _ := json.Marshal(claim.Identity)
 	live := func(hash string, generation int64) releaseSQLQueryStep {
-		return releaseSQLQueryStep{columns: releaseColumns(4), rows: [][]driver.Value{{"live", hash, generation, now.Add(time.Minute).Format(time.RFC3339Nano)}}}
+		return releaseSQLQueryStep{columns: releaseColumns(4), rows: [][]driver.Value{{"live", hash, generation, now.Add(time.Minute).UnixMilli()}}}
 	}
 	for _, state := range []*releaseSQLState{
 		{execSteps: []releaseSQLExecStep{{rows: 1}}, querySteps: []releaseSQLQueryStep{{columns: releaseColumns(3)}, live("hash", 1)}},
@@ -293,7 +293,7 @@ func TestRuntimeReleaseHeartbeatStages(t *testing.T) {
 	now := time.Now().UTC()
 	lease := deploymentmodel.RuntimeReleaseCohortLease{InstanceID: "instance", CombinationSHA256: "hash", Generation: 1}
 	cohortRow := releaseSQLQueryStep{columns: releaseColumns(3), rows: [][]driver.Value{{"hash", "{}", int64(1)}}}
-	futureRow := releaseSQLQueryStep{columns: []string{"expiry"}, rows: [][]driver.Value{{now.Add(time.Minute).Format(time.RFC3339Nano)}}}
+	futureRow := releaseSQLQueryStep{columns: []string{"expiry"}, rows: [][]driver.Value{{now.Add(time.Minute).UnixMilli()}}}
 	tests := []struct {
 		name  string
 		state *releaseSQLState
@@ -307,7 +307,7 @@ func TestRuntimeReleaseHeartbeatStages(t *testing.T) {
 		{"missing", &releaseSQLState{execSteps: []releaseSQLExecStep{{rows: 1}}, querySteps: []releaseSQLQueryStep{cohortRow, {columns: []string{"expiry"}}}}},
 		{"select", &releaseSQLState{execSteps: []releaseSQLExecStep{{rows: 1}}, querySteps: []releaseSQLQueryStep{cohortRow, {err: errReleaseSQL}}}},
 		{"malformed", &releaseSQLState{execSteps: []releaseSQLExecStep{{rows: 1}}, querySteps: []releaseSQLQueryStep{cohortRow, {columns: []string{"expiry"}, rows: [][]driver.Value{{"bad"}}}}}},
-		{"expired", &releaseSQLState{execSteps: []releaseSQLExecStep{{rows: 1}}, querySteps: []releaseSQLQueryStep{cohortRow, {columns: []string{"expiry"}, rows: [][]driver.Value{{now.Format(time.RFC3339Nano)}}}}}},
+		{"expired", &releaseSQLState{execSteps: []releaseSQLExecStep{{rows: 1}}, querySteps: []releaseSQLQueryStep{cohortRow, {columns: []string{"expiry"}, rows: [][]driver.Value{{now.UnixMilli()}}}}}},
 		{"update", &releaseSQLState{execSteps: []releaseSQLExecStep{{rows: 1}, {err: errReleaseSQL}}, querySteps: []releaseSQLQueryStep{cohortRow, futureRow}}},
 		{"rows", &releaseSQLState{execSteps: []releaseSQLExecStep{{rows: 1}, {rowsErr: errReleaseSQL}}, querySteps: []releaseSQLQueryStep{cohortRow, futureRow}}},
 		{"lost", &releaseSQLState{execSteps: []releaseSQLExecStep{{rows: 1}, {rows: 0}}, querySteps: []releaseSQLQueryStep{cohortRow, futureRow}}},

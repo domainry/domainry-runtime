@@ -40,8 +40,8 @@ func EnsureWorkspaceProvisioningSchema(ctx context.Context, store Store) error {
 			ormschema.Column("billing_contact_notes", ormschema.LongText()).NotNull().DefaultValue(""),
 			ormschema.Column("commercial_revision", ormschema.Integer()).NotNull().DefaultValue(0),
 			ormschema.Column("revision", ormschema.Integer()).NotNull().DefaultValue(1),
-			ormschema.Column("created_at", ormschema.TextKey(64)).NotNull(),
-			ormschema.Column("updated_at", ormschema.TextKey(64)).NotNull(),
+			ormschema.Column("created_at", ormschema.BigInt()).NotNull(),
+			ormschema.Column("updated_at", ormschema.BigInt()).NotNull(),
 		}, primary: []string{"id"}},
 	}
 	for _, table := range tables {

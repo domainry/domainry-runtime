@@ -133,7 +133,7 @@ func (r RecordStore) CommitRecordMutationExecution(ctx context.Context, commit t
 	if err := r.applyRecordMutationTx(ctx, tx, workspaceID, commit); err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
-	resultJSON, err := json.Marshal(completion.Result)
+	resultJSON, err := database.MarshalTimeJSON(completion.Result)
 	if err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
@@ -174,7 +174,7 @@ func (r RecordStore) CommitRecordMutationBatchExecution(ctx context.Context, com
 			return recordmodel.RecordMutationExecution{}, err
 		}
 	}
-	resultJSON, err := json.Marshal(completion.Result)
+	resultJSON, err := database.MarshalTimeJSON(completion.Result)
 	if err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
@@ -202,7 +202,7 @@ func (r RecordStore) CompleteRecordMutationExecution(ctx context.Context, comple
 	if err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
-	resultJSON, err := json.Marshal(completion.Result)
+	resultJSON, err := database.MarshalTimeJSON(completion.Result)
 	if err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
@@ -315,7 +315,7 @@ type recordMutationOperationMetadata struct {
 }
 
 func recordMutationMetadataJSON(responseStatus int) string {
-	encoded, _ := json.Marshal(recordMutationOperationMetadata{ResponseStatus: responseStatus})
+	encoded, _ := database.MarshalTimeJSON(recordMutationOperationMetadata{ResponseStatus: responseStatus})
 	return string(encoded)
 }
 
@@ -330,14 +330,14 @@ func recordMutationExecution(record sharedoperation.Record) (recordmodel.RecordM
 		return recordmodel.RecordMutationExecution{}, fmt.Errorf("record mutation operation identity is invalid")
 	}
 	var metadata recordMutationOperationMetadata
-	if err := json.Unmarshal(record.MetadataJSON, &metadata); err != nil {
+	if err := database.UnmarshalTimeJSON(record.MetadataJSON, &metadata); err != nil {
 		return recordmodel.RecordMutationExecution{}, fmt.Errorf("decode record mutation metadata: %w", err)
 	}
 	value.ResponseStatus = metadata.ResponseStatus
-	if err := json.Unmarshal(record.ResultJSON, &value.Result); err != nil {
+	if err := database.UnmarshalTimeJSON(record.ResultJSON, &value.Result); err != nil {
 		return recordmodel.RecordMutationExecution{}, fmt.Errorf("decode record mutation result: %w", err)
 	}
-	_ = json.Unmarshal(record.ResultJSON, &value.OperationResult)
+	_ = database.UnmarshalTimeJSON(record.ResultJSON, &value.OperationResult)
 	return value, nil
 }
 

@@ -32,7 +32,7 @@ func TestRecordStorePreservesEmptyTextOnRead(t *testing.T) {
 	}
 	repository := NewRecordStore(store)
 	want := map[string]any{"bank_name": "", "account_number": "", "code": "  vendor code  ", "note": " \n "}
-	row := recordmodel.Record{ID: "row-1", CreatedAt: "v1", UpdatedAt: "v1", Data: want}
+	row := recordmodel.Record{ID: "row-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: want}
 	if err := repository.InsertRecord(t.Context(), "workspace", object, row); err != nil {
 		t.Fatal(err)
 	}

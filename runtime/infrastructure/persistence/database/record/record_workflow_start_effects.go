@@ -2,7 +2,6 @@ package record
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -11,6 +10,7 @@ import (
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 // insertWorkflowStartTx writes one Action-staged Workflow start: the starting
@@ -23,15 +23,15 @@ func (r RecordStore) insertWorkflowStartTx(ctx context.Context, tx TransactionEx
 	if strings.TrimSpace(process.ID) == "" || strings.TrimSpace(process.WorkflowKey) == "" {
 		return fmt.Errorf("staged workflow start requires a process identity")
 	}
-	definition, err := json.Marshal(process.DefinitionSnapshot)
+	definition, err := database.MarshalTimeJSON(process.DefinitionSnapshot)
 	if err != nil {
 		return fmt.Errorf("encode staged workflow definition snapshot: %w", err)
 	}
-	currentNodes, _ := json.Marshal(process.CurrentNodeIDs)
-	variables, _ := json.Marshal(database.NonNilMap(process.Variables))
-	result, _ := json.Marshal(database.NonNilMap(process.Result))
+	currentNodes, _ := database.MarshalTimeJSON(process.CurrentNodeIDs)
+	variables, _ := database.MarshalTimeJSON(database.NonNilMap(process.Variables))
+	result, _ := database.MarshalTimeJSON(database.NonNilMap(process.Result))
 	columns := []string{"id", "workflow_key", "workflow_name", "workflow_definition_version_id", "definition_version", "definition_hash", "definition_json", "object_key", "record_id", "initiator_id", "initiator_role_key", "status", "current_node_ids_json", "variables_json", "result_json", "error_code", "created_at", "updated_at", "completed_at"}
-	values := []any{process.ID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, process.CreatedAt, process.UpdatedAt, database.NullableText(process.CompletedAt)}
+	values := []any{process.ID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, timevalue.Millis(process.CreatedAt), timevalue.Millis(process.UpdatedAt), timevalue.Millis(process.CompletedAt)}
 	statement, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(columns...).Values(values...).Build()
 	if err != nil {
 		return fmt.Errorf("build staged workflow process insert: %w", err)
@@ -60,12 +60,12 @@ func (r RecordStore) insertWorkflowRouteStepTx(ctx context.Context, tx Transacti
 	if assignees == nil {
 		assignees = []workflowmodel.WorkflowRouteAssignee{}
 	}
-	snapshot, err := json.Marshal(assignees)
+	snapshot, err := database.MarshalTimeJSON(assignees)
 	if err != nil {
 		return fmt.Errorf("encode staged workflow route assignees: %w", err)
 	}
 	columns := []string{"id", "process_id", "node_id", "step_no", "step_key", "title", "mode", "required_approvals", "status", "assignee_snapshot_json", "configured_by", "configured_at", "configure_source", "node_instance_id", "created_at", "updated_at"}
-	values := []any{step.ID, step.ProcessID, step.NodeID, step.StepNo, step.StepKey, step.Title, step.Mode, step.RequiredApprovals, step.Status, string(snapshot), step.ConfiguredBy, step.ConfiguredAt, step.ConfigureSource, step.NodeInstanceID, step.CreatedAt, step.UpdatedAt}
+	values := []any{step.ID, step.ProcessID, step.NodeID, step.StepNo, step.StepKey, step.Title, step.Mode, step.RequiredApprovals, step.Status, string(snapshot), step.ConfiguredBy, timevalue.Millis(step.ConfiguredAt), step.ConfigureSource, step.NodeInstanceID, timevalue.Millis(step.CreatedAt), timevalue.Millis(step.UpdatedAt)}
 	statement, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_route_steps", step.WorkspaceID).Columns(columns...).Values(values...).Build()
 	if err != nil {
 		return fmt.Errorf("build staged workflow route step insert: %w", err)

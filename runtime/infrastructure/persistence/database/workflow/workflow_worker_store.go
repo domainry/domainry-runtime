@@ -3,7 +3,6 @@ package workflow
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 type WorkflowWorkerStore struct {
@@ -272,12 +272,14 @@ func (r WorkflowWorkerStore) ListProcessEvents(ctx context.Context, workspaceID,
 		var event workflowmodel.WorkflowProcessEvent
 		var metadata string
 		var nodeID, taskID sql.NullString
-		if err := rows.Scan(&event.WorkspaceID, &event.ID, &event.ProcessID, &nodeID, &taskID, &event.Event, &event.ActorID, &event.Summary, &metadata, &event.CreatedAt); err != nil {
+		var createdAt int64
+		if err := rows.Scan(&event.WorkspaceID, &event.ID, &event.ProcessID, &nodeID, &taskID, &event.Event, &event.ActorID, &event.Summary, &metadata, &createdAt); err != nil {
 			return nil, err
 		}
 		event.NodeID = nodeID.String
 		event.TaskID = taskID.String
-		_ = json.Unmarshal([]byte(metadata), &event.Metadata)
+		event.CreatedAt = timevalue.String(createdAt)
+		_ = database.UnmarshalTimeJSON([]byte(metadata), &event.Metadata)
 		out = append(out, event)
 	}
 	return out, rows.Err()
@@ -288,9 +290,9 @@ func (r WorkflowWorkerStore) UpdateTask(ctx context.Context, workspaceID string,
 	if err != nil {
 		return err
 	}
-	evidence, _ := json.Marshal(task.AssigneeEvidence)
+	evidence, _ := database.MarshalTimeJSON(task.AssigneeEvidence)
 	columns := []string{"assignee_user_id", "assignee_name", "assignee_role_key", "assignee_resolver_key", "assignee_evidence_json", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}
-	values := []any{task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.UpdatedAt}
+	values := []any{task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), task.Status, task.Decision, task.Comment, timevalue.Millis(task.DueAt), task.CompletedBy, timevalue.Millis(task.CompletedAt), timevalue.Millis(task.UpdatedAt)}
 	return r.updateRow(ctx, "_workflow_tasks", workspaceID, task.ID, columns, values)
 }
 
@@ -300,9 +302,9 @@ func (r WorkflowWorkerStore) InsertProcessEvent(ctx context.Context, workspaceID
 		return err
 	}
 	event.WorkspaceID = workspaceID
-	metadata, _ := json.Marshal(database.NonNilMap(event.Metadata))
+	metadata, _ := database.MarshalTimeJSON(database.NonNilMap(event.Metadata))
 	columns := workflowEventColumns
-	values := []any{event.WorkspaceID, event.ID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), event.CreatedAt}
+	values := []any{event.WorkspaceID, event.ID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), timevalue.Millis(event.CreatedAt)}
 	_, scopedColumns, scopedValues, err := workflowScopedInsert(columns, values)
 	if err != nil {
 		return err

@@ -140,7 +140,7 @@ func (p *DataExchangeProvider) CompleteExport(ctx context.Context, completion da
 	parametersHash, _ := reportcontract.CanonicalJSONSHA256(prepared.normalizedScope.Parameters)
 	return p.audit(ctx, "report-export-download-prepared:"+completion.Artifact.ID, "report_export_download_prepared", payload.ObjectKey, principal, payload.AuditID, map[string]any{
 		"report_key": payload.ReportKey, "download_id": downloadRecord.ID, "artifact_id": completion.Artifact.ID,
-		"expires_at": completion.Artifact.ExpiresAt.UTC().Format(time.RFC3339Nano), "watermarked": prepared.control.Watermark,
+		"expires_at": completion.Artifact.ExpiresAt.UTC().UnixMilli(), "watermarked": prepared.control.Watermark,
 		"content_sha256": completion.Artifact.SHA256, "row_count": completion.Rows, "scope_sha256": scopeHash, "parameters_sha256": parametersHash,
 	}, true)
 }

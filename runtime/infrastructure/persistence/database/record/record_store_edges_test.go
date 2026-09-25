@@ -245,25 +245,20 @@ func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
 		t.Fatalf("text=%v", got)
 	}
 	timestamp := time.Date(2026, 8, 29, 8, 30, 0, 123456000, time.FixedZone("UTC+8", 8*60*60))
-	if got, want := recordTimestampValue(timestamp), timestamp.UTC().Format(time.RFC3339Nano); got != want {
+	if got, want := recordTimestampValue(timestamp), timestamp.UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano); got != want {
 		t.Fatalf("timestamp=%q want=%q", got, want)
 	}
-	if got := recordTimestampValue("version-1"); got != "version-1" {
-		t.Fatalf("text timestamp=%q", got)
+	if got := recordTimestampValue("version-1"); got != "" {
+		t.Fatalf("invalid timestamp=%q", got)
 	}
 	stamp := "2026-09-24T01:02:03.123456Z"
-	mysqlValue, ok := recordTimestampDBValue(testEngineProfile("mysql"), stamp).(time.Time)
-	if !ok || mysqlValue.UTC().Format(time.RFC3339Nano) != stamp {
-		t.Fatalf("mysql timestamp=%#v", mysqlValue)
+	for _, dialect := range []string{"mysql", "postgres", "sqlite"} {
+		if got := recordTimestampDBValue(testEngineProfile(dialect), stamp); got != int64(1790211723123) {
+			t.Fatalf("%s timestamp=%#v", dialect, got)
+		}
 	}
-	if got := recordTimestampDBValue(testEngineProfile("postgres"), stamp); got != stamp {
-		t.Fatalf("postgres timestamp=%#v", got)
-	}
-	if got := recordTimestampDBValue(testEngineProfile("sqlite"), stamp); got != stamp {
-		t.Fatalf("sqlite timestamp=%#v", got)
-	}
-	if got := recordTimestampDBValue(testEngineProfile("mysql"), "version-1"); got != "version-1" {
-		t.Fatalf("invalid mysql timestamp=%#v", got)
+	if got := recordTimestampDBValue(testEngineProfile("mysql"), "version-1"); got != int64(0) {
+		t.Fatalf("invalid timestamp=%#v", got)
 	}
 	for name, rows := range map[string]recordRows{
 		"columns":  fakeRecordRows{columnsErr: errRecordSQL},
@@ -276,7 +271,7 @@ func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
 	}
 }
 
-func TestRecordStoreBindsMySQLSystemTimestampsAsNativeTimes(t *testing.T) {
+func TestRecordStoreBindsMySQLSystemTimestampsAsUnixMillis(t *testing.T) {
 	state := &recordSQLState{}
 	store := scriptedRecordStore(t, state)
 	store.store.RuntimeEngine = testEngineProfile("mysql")
@@ -288,17 +283,17 @@ func TestRecordStoreBindsMySQLSystemTimestampsAsNativeTimes(t *testing.T) {
 	if len(state.execArguments) != 1 {
 		t.Fatalf("exec argument batches=%d", len(state.execArguments))
 	}
-	nativeTimestamps := 0
+	numericTimestamps := 0
 	for _, argument := range state.execArguments[0] {
-		if timestamp, ok := argument.Value.(time.Time); ok {
-			nativeTimestamps++
-			if got := timestamp.UTC().Format(time.RFC3339Nano); got != stamp {
-				t.Fatalf("timestamp=%s want=%s", got, stamp)
+		if timestamp, ok := argument.Value.(int64); ok {
+			numericTimestamps++
+			if timestamp != 1790211723123 {
+				t.Fatalf("timestamp=%d want=%d", timestamp, int64(1790211723123))
 			}
 		}
 	}
-	if nativeTimestamps != 2 {
-		t.Fatalf("native timestamp arguments=%d values=%#v", nativeTimestamps, state.execArguments[0])
+	if numericTimestamps != 2 {
+		t.Fatalf("numeric timestamp arguments=%d values=%#v", numericTimestamps, state.execArguments[0])
 	}
 }
 

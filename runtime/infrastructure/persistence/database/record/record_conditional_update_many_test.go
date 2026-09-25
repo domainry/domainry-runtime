@@ -17,8 +17,8 @@ func TestConditionalUpdateManyUsesOneLockedSelectAndOneUpdate(t *testing.T) {
 		querySteps: []recordSQLQueryStep{{
 			columns: []string{"id", "created_at", "updated_at", "owner_org_id", "staff_id", "status", "clock_out"},
 			rows: [][]driver.Value{
-				{"shift-1", "v1", "v1", "store-a", "staff-1", "working", nil},
-				{"shift-2", "v1", "v1", "store-a", "staff-2", "working", nil},
+				{"shift-1", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "store-a", "staff-1", "working", nil},
+				{"shift-2", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "store-a", "staff-2", "working", nil},
 			},
 		}},
 		execSteps: []recordSQLExecStep{{rows: 2}},
@@ -46,7 +46,7 @@ func TestConditionalUpdateManyUsesOneLockedSelectAndOneUpdate(t *testing.T) {
 	}
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "conditional_update_many", Object: object,
-		Record:       recordmodel.Record{ID: "shift-1", OwnerOrgID: "store-a", UpdatedAt: "v2", UpdateBy: "manager", Data: map[string]any{"status": "finished", "clock_out": "2026-09-06T23:00:00Z"}},
+		Record:       recordmodel.Record{ID: "shift-1", OwnerOrgID: "store-a", UpdatedAt: "2026-01-02T00:00:00Z", UpdateBy: "manager", Data: map[string]any{"status": "finished", "clock_out": "2026-09-06T23:00:00Z"}},
 		SetRecordIDs: []string{"shift-1", "shift-2"}, SetFilterExpression: filter,
 		SetExpectedAffected: 2, SetOwnerOrganizationScope: "store-a",
 		SetExactCoverageField: "staff_id", SetExactCoverageValues: []any{"staff-1", "staff-2"},
@@ -70,7 +70,7 @@ func TestConditionalUpdateManyAffectedMismatchFailsClosed(t *testing.T) {
 	filter := &recordmodel.RecordFilterExpression{Field: "status", Operator: "eq", Value: "working"}
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "conditional_update_many", Object: object,
-		Record:       recordmodel.Record{ID: "shift-1", UpdatedAt: "v2", Data: map[string]any{"status": "finished"}},
+		Record:       recordmodel.Record{ID: "shift-1", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "finished"}},
 		SetRecordIDs: []string{"shift-1", "shift-2"}, SetFilterExpression: filter, SetExpectedAffected: 2,
 		SetExactCoverageField: "id", SetExactCoverageValues: []any{"shift-1", "shift-2"},
 	}
@@ -91,7 +91,7 @@ func TestConditionalUpdateManyPersistenceRejectsNonDistinctExactCoverageWithoutW
 	filter := &recordmodel.RecordFilterExpression{Field: "status", Operator: "eq", Value: "working"}
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "conditional_update_many", Object: object,
-		Record:       recordmodel.Record{ID: "shift-1", UpdatedAt: "v2", Data: map[string]any{"status": "finished"}},
+		Record:       recordmodel.Record{ID: "shift-1", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "finished"}},
 		SetRecordIDs: []string{"shift-1", "shift-2"}, SetFilterExpression: filter, SetExpectedAffected: 2,
 		SetExactCoverageField: "staff_id", SetExactCoverageValues: []any{"staff-1", "staff-1"},
 	}
@@ -108,18 +108,18 @@ func TestConditionalUpdateManyAffectedMismatchRollsBackTransaction(t *testing.T)
 	if err := runtimeStore.EnsureEvidenceSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtimeStore.DB().Exec(`CREATE TABLE shift (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := runtimeStore.DB().Exec(`CREATE TABLE shift (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
 	store := NewRecordStore(runtimeStore)
 	object := definitionmodel.ObjectSchema{Key: "shift", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
-	if err := store.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{ID: "shift-1", CreatedAt: "v1", UpdatedAt: "v1", Data: map[string]any{"status": "working"}}); err != nil {
+	if err := store.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{ID: "shift-1", CreatedAt: "2026-09-06T22:00:00Z", UpdatedAt: "2026-09-06T22:00:00Z", Data: map[string]any{"status": "working"}}); err != nil {
 		t.Fatal(err)
 	}
 	filter := &recordmodel.RecordFilterExpression{Field: "status", Operator: "eq", Value: "working"}
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "conditional_update_many", Object: object,
-		Record:       recordmodel.Record{ID: "shift-1", UpdatedAt: "v2", Data: map[string]any{"status": "finished"}},
+		Record:       recordmodel.Record{ID: "shift-1", UpdatedAt: "2026-09-06T23:00:00Z", Data: map[string]any{"status": "finished"}},
 		SetRecordIDs: []string{"shift-1", "missing-shift"}, SetFilterExpression: filter, SetExpectedAffected: 2,
 		SetExactCoverageField: "id", SetExactCoverageValues: []any{"shift-1", "missing-shift"},
 	}
@@ -129,7 +129,7 @@ func TestConditionalUpdateManyAffectedMismatchRollsBackTransaction(t *testing.T)
 		t.Fatalf("affected mismatch error=%v", err)
 	}
 	record, found, err := store.GetRecord(t.Context(), "workspace-a", object, "shift-1")
-	if err != nil || !found || record.Data["status"] != "working" || record.UpdatedAt != "v1" {
+	if err != nil || !found || record.Data["status"] != "working" || record.UpdatedAt != "2026-09-06T22:00:00Z" {
 		t.Fatalf("rolled-back record=%+v found=%v error=%v", record, found, err)
 	}
 }

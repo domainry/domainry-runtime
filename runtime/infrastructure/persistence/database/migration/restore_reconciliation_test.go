@@ -16,15 +16,15 @@ func TestRestoreReconciliationReleasesOnlyExpiredInFlightLeases(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = database.Close() })
 	for _, statement := range []string{
-		`CREATE TABLE _automation_runs (id TEXT PRIMARY KEY, run_kind TEXT NOT NULL, status TEXT NOT NULL, lease_owner TEXT NOT NULL, lease_expires_at TEXT NOT NULL, fencing_token BIGINT NOT NULL, updated_at TEXT NOT NULL)`,
-		`CREATE TABLE _operations (id TEXT PRIMARY KEY, owner TEXT NOT NULL, status TEXT NOT NULL, lease_owner TEXT NOT NULL, lease_expires_at TEXT NOT NULL, fencing_token BIGINT NOT NULL, updated_at TEXT NOT NULL)`,
-		`CREATE TABLE _publication_outbox (id TEXT PRIMARY KEY, status TEXT NOT NULL, lease_owner TEXT NOT NULL, lease_expires_at TEXT NOT NULL, fencing_token BIGINT NOT NULL, updated_at TEXT NOT NULL)`,
-		`INSERT INTO _automation_runs VALUES ('expired','instruction','processing','old-worker','2026-09-23T00:00:00Z',1,'old')`,
-		`INSERT INTO _automation_runs VALUES ('terminal','instruction','succeeded','old-worker','2026-09-23T00:00:00Z',7,'old')`,
-		`INSERT INTO _operations VALUES ('expired','workflow','started','old-worker','2026-09-23T00:00:00Z',2,'old')`,
-		`INSERT INTO _operations VALUES ('terminal','workflow','succeeded','old-worker','2026-09-23T00:00:00Z',8,'old')`,
-		`INSERT INTO _publication_outbox VALUES ('expired','sending','old-worker','2026-09-23T00:00:00Z',3,'old')`,
-		`INSERT INTO _publication_outbox VALUES ('terminal','sent','old-worker','2026-09-23T00:00:00Z',9,'old')`,
+		`CREATE TABLE _automation_runs (id TEXT PRIMARY KEY, run_kind TEXT NOT NULL, status TEXT NOT NULL, lease_owner TEXT NOT NULL, lease_expires_at BIGINT NOT NULL, fencing_token BIGINT NOT NULL, updated_at BIGINT NOT NULL)`,
+		`CREATE TABLE _operations (id TEXT PRIMARY KEY, owner TEXT NOT NULL, status TEXT NOT NULL, lease_owner TEXT NOT NULL, lease_expires_at BIGINT NOT NULL, fencing_token BIGINT NOT NULL, updated_at BIGINT NOT NULL)`,
+		`CREATE TABLE _publication_outbox (id TEXT PRIMARY KEY, status TEXT NOT NULL, lease_owner TEXT NOT NULL, lease_expires_at BIGINT NOT NULL, fencing_token BIGINT NOT NULL, updated_at BIGINT NOT NULL)`,
+		`INSERT INTO _automation_runs VALUES ('expired','instruction','processing','old-worker',1790121600000,1,1790121600000)`,
+		`INSERT INTO _automation_runs VALUES ('terminal','instruction','succeeded','old-worker',1790121600000,7,1790121600000)`,
+		`INSERT INTO _operations VALUES ('expired','workflow','started','old-worker',1790121600000,2,1790121600000)`,
+		`INSERT INTO _operations VALUES ('terminal','workflow','succeeded','old-worker',1790121600000,8,1790121600000)`,
+		`INSERT INTO _publication_outbox VALUES ('expired','sending','old-worker',1790121600000,3,1790121600000)`,
+		`INSERT INTO _publication_outbox VALUES ('terminal','sent','old-worker',1790121600000,9,1790121600000)`,
 	} {
 		if _, err := database.ExecContext(t.Context(), statement); err != nil {
 			t.Fatal(err)
@@ -55,19 +55,19 @@ func assertReconciledLease(t *testing.T, database *sql.DB, table, id, owner stri
 	if id == "terminal" {
 		baseToken = map[string]int64{"_automation_runs": 7, "_operations": 8, "_publication_outbox": 9}[table]
 	}
-	var gotOwner, expiresAt, updatedAt string
-	var token int64
+	var gotOwner string
+	var expiresAt, token, updatedAt int64
 	if err := database.QueryRowContext(t.Context(), "SELECT lease_owner, lease_expires_at, fencing_token, updated_at FROM "+table+" WHERE id=?", id).Scan(&gotOwner, &expiresAt, &token, &updatedAt); err != nil {
 		t.Fatal(err)
 	}
 	if gotOwner != owner || token != baseToken+tokenDelta {
 		t.Fatalf("%s/%s lease owner=%q token=%d", table, id, gotOwner, token)
 	}
-	if id == "expired" && (expiresAt != "" || updatedAt != "2026-09-24T00:00:00Z") {
-		t.Fatalf("%s/%s expiry=%q updated_at=%q", table, id, expiresAt, updatedAt)
+	if id == "expired" && (expiresAt != 0 || updatedAt != 1790208000000) {
+		t.Fatalf("%s/%s expiry=%d updated_at=%d", table, id, expiresAt, updatedAt)
 	}
-	if id == "terminal" && (expiresAt != "2026-09-23T00:00:00Z" || updatedAt != "old") {
-		t.Fatalf("terminal %s changed: expiry=%q updated_at=%q", table, expiresAt, updatedAt)
+	if id == "terminal" && (expiresAt != 1790121600000 || updatedAt != 1790121600000) {
+		t.Fatalf("terminal %s changed: expiry=%d updated_at=%d", table, expiresAt, updatedAt)
 	}
 }
 
@@ -77,7 +77,7 @@ func TestRestoreReconciliationSkipsUnselectedCapabilityTables(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = database.Close() })
-	if _, err := database.ExecContext(t.Context(), `CREATE TABLE _operations (id TEXT PRIMARY KEY, owner TEXT NOT NULL, status TEXT NOT NULL, lease_owner TEXT NOT NULL, lease_expires_at TEXT NOT NULL, fencing_token BIGINT NOT NULL, updated_at TEXT NOT NULL)`); err != nil {
+	if _, err := database.ExecContext(t.Context(), `CREATE TABLE _operations (id TEXT PRIMARY KEY, owner TEXT NOT NULL, status TEXT NOT NULL, lease_owner TEXT NOT NULL, lease_expires_at BIGINT NOT NULL, fencing_token BIGINT NOT NULL, updated_at BIGINT NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
 	results, err := ReconcileRestoredDatabase(t.Context(), database, "sqlite", "", time.Now().UTC())

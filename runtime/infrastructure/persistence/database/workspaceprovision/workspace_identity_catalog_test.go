@@ -4,7 +4,6 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -24,7 +23,7 @@ func TestIdentityCatalogResolvesOnlyActiveLocalWorkspaces(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := int64(1790294400000)
 	insertWorkspaceAdministrationFixture(t, store.DB(), "physical-a", "public-a", "A", installation, now)
 	insertWorkspaceAdministrationFixture(t, store.DB(), "physical-b", "public-b", "B", "", now)
 	insertWorkspaceAdministrationFixture(t, store.DB(), "foreign-id", "foreign-code", "Foreign", "another-installation", now)

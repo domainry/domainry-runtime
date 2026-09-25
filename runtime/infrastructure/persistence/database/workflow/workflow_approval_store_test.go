@@ -26,8 +26,8 @@ func TestWorkflowQuorumSnapshotRejectsStaleDistinctTaskDecision(t *testing.T) {
 		task.Status, task.Decision, task.CompletedBy, task.UpdatedAt = "approved", "approved", task.AssigneeUserID, after
 		return transactionmodel.WorkflowDecisionCommit{WorkspaceID: process.WorkspaceID, DecidedTask: task, ExpectedTaskStatus: "open", ExpectedAssigneeID: task.AssigneeUserID, Process: &updated, ExpectedProcessUpdatedAt: before}
 	}
-	first := makeCommit(task, "v1", "v2")
-	stale := makeCommit(other, "v1", "v3")
+	first := makeCommit(task, workflowTestTimeV1, workflowTestTimeV2)
+	stale := makeCommit(other, workflowTestTimeV1, workflowTestTimeV3)
 	if won, err := decisions.CommitWorkflowDecision(t.Context(), first); err != nil || !won {
 		t.Fatalf("first won=%v err=%v", won, err)
 	}
@@ -38,7 +38,7 @@ func TestWorkflowQuorumSnapshotRejectsStaleDistinctTaskDecision(t *testing.T) {
 	if err != nil || unchanged.Status != "open" {
 		t.Fatalf("stale commit changed task=%+v err=%v", unchanged, err)
 	}
-	stale.ExpectedProcessUpdatedAt = "v2"
+	stale.ExpectedProcessUpdatedAt = workflowTestTimeV2
 	if won, err := decisions.CommitWorkflowDecision(t.Context(), stale); err != nil || !won {
 		t.Fatalf("fresh won=%v err=%v", won, err)
 	}
@@ -48,19 +48,19 @@ func TestWorkflowQuorumSnapshotRollsBackWithFailedCommit(t *testing.T) {
 	store, _, process, _, task := workflowDecisionStoreFixture(t)
 	t.Cleanup(func() { _ = store.Close() })
 	processes := NewWorkflowProcessStore(store)
-	event := workflowmodel.WorkflowProcessEvent{ID: "duplicate", ProcessID: process.ID, Event: "task_approved", ActorID: task.AssigneeUserID, CreatedAt: "v1"}
+	event := workflowmodel.WorkflowProcessEvent{ID: "duplicate", ProcessID: process.ID, Event: "task_approved", ActorID: task.AssigneeUserID, CreatedAt: workflowTestTimeV1}
 	if err := processes.InsertEvent(t.Context(), process.WorkspaceID, event); err != nil {
 		t.Fatal(err)
 	}
 	updated := process
-	updated.UpdatedAt = "v2"
+	updated.UpdatedAt = workflowTestTimeV2
 	commit := workflowDecisionEdgeCommit(task)
-	commit.Process, commit.ExpectedProcessUpdatedAt, commit.Events = &updated, "v1", []workflowmodel.WorkflowProcessEvent{event}
+	commit.Process, commit.ExpectedProcessUpdatedAt, commit.Events = &updated, workflowTestTimeV1, []workflowmodel.WorkflowProcessEvent{event}
 	if won, err := NewWorkflowDecisionStore(store).CommitWorkflowDecision(t.Context(), commit); err == nil || won {
 		t.Fatalf("failed commit won=%v err=%v", won, err)
 	}
 	actual, _, err := processes.GetProcess(t.Context(), process.WorkspaceID, process.ID)
-	if err != nil || actual.UpdatedAt != "v1" {
+	if err != nil || actual.UpdatedAt != workflowTestTimeV1 {
 		t.Fatalf("process snapshot did not roll back=%+v err=%v", actual, err)
 	}
 	actualTask, _, err := processes.GetTask(t.Context(), process.WorkspaceID, task.ID)

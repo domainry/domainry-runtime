@@ -2,10 +2,11 @@ package datamigration
 
 import (
 	"database/sql"
-	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 
 	_ "modernc.org/sqlite"
 )
@@ -160,12 +161,12 @@ func TestSequenceInventoryAndPlanRequireExplicitTargetMapping(t *testing.T) {
 
 func cloneInventory(t *testing.T, source Inventory) Inventory {
 	t.Helper()
-	raw, err := json.Marshal(source)
+	raw, err := timevalue.MarshalJSON(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var target Inventory
-	if err := json.Unmarshal(raw, &target); err != nil {
+	if err := timevalue.UnmarshalJSON(raw, &target); err != nil {
 		t.Fatal(err)
 	}
 	return target

@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -13,6 +12,7 @@ import (
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
+	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 )
 
 var _ operationsrepository.DatabaseRetirementRepository = OperationsStore{}
@@ -32,8 +32,8 @@ func (s OperationsStore) RegisterDatabaseRetirement(ctx context.Context, retirem
 }
 
 func databaseRetirementReceipt(retirement operationsmodel.DatabaseRetirement) operationsmodel.OperationsReceipt {
-	payload, _ := json.Marshal(retirement)
-	metadata, _ := json.Marshal(retirement.Object)
+	payload, _ := database.MarshalTimeJSON(retirement)
+	metadata, _ := database.MarshalTimeJSON(retirement.Object)
 	identity := databaseRetirementIdentity(retirement.Object)
 	evidence := databaseRetirementEvidenceReferences(retirement)
 	receipt := operationsmodel.OperationsReceipt{
@@ -60,7 +60,7 @@ func (s OperationsStore) GetDatabaseRetirement(ctx context.Context, id string) (
 		return operationsmodel.DatabaseRetirement{}, found, err
 	}
 	var retirement operationsmodel.DatabaseRetirement
-	if err := json.Unmarshal(record.ResultJSON, &retirement); err != nil {
+	if err := database.UnmarshalTimeJSON(record.ResultJSON, &retirement); err != nil {
 		return operationsmodel.DatabaseRetirement{}, false, err
 	}
 	return retirement, true, nil
@@ -84,7 +84,7 @@ func (s OperationsStore) ListDatabaseRetirements(ctx context.Context, state oper
 	result := make([]operationsmodel.DatabaseRetirement, 0, len(records))
 	for _, record := range records {
 		var retirement operationsmodel.DatabaseRetirement
-		if err := json.Unmarshal(record.ResultJSON, &retirement); err != nil {
+		if err := database.UnmarshalTimeJSON(record.ResultJSON, &retirement); err != nil {
 			return nil, err
 		}
 		result = append(result, retirement)
@@ -103,8 +103,8 @@ func (s OperationsStore) TransitionDatabaseRetirement(ctx context.Context, retir
 	}
 	record.Status = string(retirement.State)
 	record.Reason = retirement.BlockedReason
-	record.ResultJSON, _ = json.Marshal(retirement)
-	record.EvidenceJSON, _ = json.Marshal(databaseRetirementEvidenceReferences(retirement))
+	record.ResultJSON, _ = database.MarshalTimeJSON(retirement)
+	record.EvidenceJSON, _ = database.MarshalTimeJSON(databaseRetirementEvidenceReferences(retirement))
 	record.UpdatedAt = retirement.UpdatedAt.UTC().Format(time.RFC3339Nano)
 	record.ErrorCode, record.FailureClass = "", ""
 	if retirement.State == operationsmodel.DatabaseRetirementBlocked {
@@ -143,7 +143,7 @@ func (s OperationsStore) RecordDatabaseRetirementAccess(ctx context.Context, id,
 		return sql.ErrNoRows
 	}
 	var retirement operationsmodel.DatabaseRetirement
-	if err := json.Unmarshal(record.ResultJSON, &retirement); err != nil {
+	if err := database.UnmarshalTimeJSON(record.ResultJSON, &retirement); err != nil {
 		return err
 	}
 	observation := &retirement.Evidence.Observation
@@ -160,7 +160,7 @@ func (s OperationsStore) RecordDatabaseRetirementAccess(ctx context.Context, id,
 		observation.LastWriteAt = &accessedAt
 	}
 	retirement.UpdatedAt = accessedAt
-	record.ResultJSON, _ = json.Marshal(retirement)
+	record.ResultJSON, _ = database.MarshalTimeJSON(retirement)
 	record.UpdatedAt = accessedAt.Format(time.RFC3339Nano)
 	changed, err := ledger.UpdateRecord(txContext, record, record.Status)
 	if err != nil {
@@ -196,7 +196,7 @@ func databaseRetirementAccessSourceAllowed(source string) bool {
 }
 
 func databaseRetirementIdentity(object operationsmodel.DatabaseObjectIdentity) string {
-	payload, _ := json.Marshal(object)
+	payload, _ := database.MarshalTimeJSON(object)
 	digest := sha256.Sum256(payload)
 	return hex.EncodeToString(digest[:])
 }

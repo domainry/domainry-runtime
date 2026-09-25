@@ -52,15 +52,16 @@ func sqliteDateBucket(_ *modernsqlite.FunctionContext, args []sqldriver.Value) (
 	if len(args) != 3 || args[0] == nil {
 		return nil, nil
 	}
-	value, grain, zone := strings.TrimSpace(fmt.Sprint(args[0])), strings.TrimSpace(fmt.Sprint(args[1])), strings.TrimSpace(fmt.Sprint(args[2]))
+	millis, ok := args[0].(int64)
+	if !ok {
+		return nil, fmt.Errorf("invalid report datetime %q: expected Unix-millisecond integer", args[0])
+	}
+	grain, zone := strings.TrimSpace(fmt.Sprint(args[1])), strings.TrimSpace(fmt.Sprint(args[2]))
 	location, err := time.LoadLocation(zone)
 	if err != nil {
 		return nil, fmt.Errorf("invalid report timezone %q: %w", zone, err)
 	}
-	parsed, err := time.Parse(time.RFC3339Nano, value)
-	if err != nil {
-		return nil, fmt.Errorf("invalid report datetime %q: %w", value, err)
-	}
+	parsed := time.UnixMilli(millis).UTC()
 	local := parsed.In(location)
 	year, month, day := local.Date()
 	switch grain {
@@ -275,5 +276,5 @@ func (Dialect) SQLDialect() ormdialect.Dialect {
 }
 
 func (Dialect) SchemaMigrationSQL() string {
-	return `CREATE TABLE IF NOT EXISTS "_schema_migrations" ("path" TEXT PRIMARY KEY, "applied_at" TEXT NOT NULL)`
+	return `CREATE TABLE IF NOT EXISTS "_schema_migrations" ("path" TEXT PRIMARY KEY, "applied_at" INTEGER NOT NULL)`
 }

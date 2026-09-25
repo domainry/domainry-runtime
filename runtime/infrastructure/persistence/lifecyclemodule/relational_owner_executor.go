@@ -190,7 +190,7 @@ func cleanupPredicate(spec cleanupSpec, cutoff time.Time, outerAlias string) que
 	if spec.unixNanoTime {
 		cutoffValue = cutoff.UTC().UnixNano()
 	} else {
-		predicates = append(predicates, query.NotEqual(spec.timeColumn, ""))
+		predicates = append(predicates, query.NotEqual(spec.timeColumn, int64(0)))
 	}
 	predicates = append(predicates, query.LessThanOrEqual(spec.timeColumn, cutoffValue))
 	if spec.statusColumn != "" && len(spec.ineligibleStatuses) > 0 {
@@ -213,8 +213,8 @@ func cleanupPredicate(spec cleanupSpec, cutoff time.Time, outerAlias string) que
 	return query.And(predicates...)
 }
 
-func lifecycleTime(value time.Time) string {
-	return value.UTC().Format(time.RFC3339Nano)
+func lifecycleTime(value time.Time) int64 {
+	return value.UTC().UnixMilli()
 }
 
 func lifecycleSpecRetention(policy lifecyclemodel.RetentionPolicy, spec cleanupSpec) time.Duration {

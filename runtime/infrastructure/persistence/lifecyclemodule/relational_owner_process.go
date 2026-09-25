@@ -61,10 +61,8 @@ func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.Clean
 			case int64:
 				eligibleAt = time.Unix(0, value).UTC()
 			}
-		} else if value, ok := candidate.timestamp.(string); ok {
-			eligibleAt, _ = time.Parse(time.RFC3339Nano, value)
-		} else if value, ok := candidate.timestamp.([]byte); ok {
-			eligibleAt, _ = time.Parse(time.RFC3339Nano, string(value))
+		} else if value, ok := candidate.timestamp.(int64); ok {
+			eligibleAt = time.UnixMilli(value).UTC()
 		}
 		if result.OldestEligible.IsZero() || eligibleAt.Before(result.OldestEligible) {
 			result.OldestEligible = eligibleAt

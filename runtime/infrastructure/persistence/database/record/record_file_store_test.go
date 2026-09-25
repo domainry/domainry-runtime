@@ -38,7 +38,7 @@ func TestRecordStoreRoundTripsCanonicalFileAndFileListValues(t *testing.T) {
 	}
 	want := map[string]any{"attachment": reference("file-1"), "attachments": []any{reference("file-2"), reference("file-3")}}
 	repository := NewRecordStore(store)
-	if err := repository.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{ID: "record-1", CreatedAt: "v1", UpdatedAt: "v1", Data: want}); err != nil {
+	if err := repository.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{ID: "record-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: want}); err != nil {
 		t.Fatal(err)
 	}
 	got, found, err := repository.GetRecord(t.Context(), "workspace-a", object, "record-1")

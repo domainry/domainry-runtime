@@ -37,6 +37,22 @@ func TestDecodeAcceptsOnlyMinimalClosedModel(t *testing.T) {
 	}
 }
 
+func TestDecodeAcceptsIdentityOnlyModelWithoutBusinessObjects(t *testing.T) {
+	model, err := Decode([]byte(`{
+  "schema_version":"1",
+  "project":{"key":"identity_shell","name":"Identity Shell","time_zone":"UTC","initial_workspace_administrator_role":"administrator"},
+  "objects":{},
+  "roles":{"administrator":{"name":"Administrator","permissions":[]}},
+  "identity_profiles":{}
+}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(model.Objects) != 0 || model.Project.InitialWorkspaceAdministratorRole != "administrator" {
+		t.Fatalf("model = %#v", model)
+	}
+}
+
 func TestDecodeRejectsDuplicateUnknownBehaviorAndPresentationFields(t *testing.T) {
 	tests := []struct {
 		name string

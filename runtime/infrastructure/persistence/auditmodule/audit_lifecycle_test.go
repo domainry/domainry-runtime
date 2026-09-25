@@ -34,13 +34,16 @@ func TestAuditLifecyclePreservesHeldEvidenceAndPurgesOnlyArchivedExpiredRows(t *
 		t.Fatal(err)
 	}
 	defer store.Close()
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE _audit_events (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (workspace_id,id))`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE _audit_events (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (workspace_id,id))`); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
-	old := now.Add(-8 * 365 * 24 * time.Hour).Format(time.RFC3339Nano)
-	fresh := now.Add(-24 * time.Hour).Format(time.RFC3339Nano)
-	for _, row := range []struct{ id, createdAt string }{{"held", old}, {"expired", old}, {"fresh", fresh}} {
+	old := now.Add(-8 * 365 * 24 * time.Hour).UnixMilli()
+	fresh := now.Add(-24 * time.Hour).UnixMilli()
+	for _, row := range []struct {
+		id        string
+		createdAt int64
+	}{{"held", old}, {"expired", old}, {"fresh", fresh}} {
 		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _audit_events (workspace_id,id,created_at) VALUES (?,?,?)`, "workspace-a", row.id, row.createdAt); err != nil {
 			t.Fatal(err)
 		}

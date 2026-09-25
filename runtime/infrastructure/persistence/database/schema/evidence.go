@@ -20,7 +20,7 @@ func EnsureEvidenceSchema(ctx context.Context, s Store) error {
 func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities EvidenceSchemaCapabilities) error {
 	text := s.ApplicationSchemaIDColumnType()
 	indexText := s.RuntimeProfile().TextKeyColumnType(191)
-	timestampText := s.RuntimeProfile().TextKeyColumnType(40)
+	timestampNumber := "BIGINT"
 	automationWorkspaceText := s.RuntimeProfile().TextKeyColumnType(128)
 	automationKindText := s.RuntimeProfile().TextKeyColumnType(32)
 	automationDefinitionText := s.RuntimeProfile().TextKeyColumnType(128)
@@ -34,15 +34,15 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 			"identity_json TEXT NOT NULL DEFAULT ''",
 			"generation BIGINT NOT NULL DEFAULT 0",
 			"revision BIGINT NOT NULL DEFAULT 0",
-			"updated_at " + text + " NOT NULL DEFAULT ''",
+			"updated_at BIGINT NOT NULL DEFAULT 0",
 		},
 		"_release_instances": {
 			"instance_id " + text + " PRIMARY KEY",
 			"combination_sha256 " + indexText + " NOT NULL",
 			"generation BIGINT NOT NULL",
-			"lease_expires_at " + timestampText + " NOT NULL",
-			"joined_at " + text + " NOT NULL",
-			"heartbeat_at " + text + " NOT NULL",
+			"lease_expires_at " + timestampNumber + " NOT NULL",
+			"joined_at BIGINT NOT NULL",
+			"heartbeat_at BIGINT NOT NULL",
 		},
 		WorkflowExecutionsTable: {
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
@@ -65,14 +65,14 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 			"idempotency_key " + text,
 			"attempt INTEGER NOT NULL DEFAULT 0",
 			"max_attempts INTEGER NOT NULL DEFAULT 0",
-			"next_run_at " + text,
+			"next_run_at BIGINT NOT NULL DEFAULT 0",
 			"last_error TEXT",
 			"lease_owner " + text + " NOT NULL DEFAULT ''",
-			"lease_expires_at " + text + " NOT NULL DEFAULT ''",
+			"lease_expires_at BIGINT NOT NULL DEFAULT 0",
 			"fencing_token BIGINT NOT NULL DEFAULT 0",
 			"message TEXT",
-			"created_at " + text + " NOT NULL",
-			"updated_at " + text + " NOT NULL",
+			"created_at BIGINT NOT NULL",
+			"updated_at BIGINT NOT NULL",
 		},
 		"_action_assurance_grants": {
 			"id " + text + " PRIMARY KEY",
@@ -86,9 +86,9 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 			"methods_json TEXT NOT NULL",
 			"approval_version " + text + " NOT NULL DEFAULT ''",
 			"approval_hash " + text + " NOT NULL DEFAULT ''",
-			"issued_at " + text + " NOT NULL",
-			"expires_at " + timestampText + " NOT NULL",
-			"consumed_at " + timestampText + " NOT NULL DEFAULT ''",
+			"issued_at BIGINT NOT NULL",
+			"expires_at BIGINT NOT NULL",
+			"consumed_at BIGINT NOT NULL DEFAULT 0",
 		},
 		"_automation_runs": {
 			"id " + text + " PRIMARY KEY",
@@ -114,10 +114,10 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 			"trace_json TEXT NOT NULL DEFAULT '{}'",
 			"result_json TEXT NOT NULL DEFAULT '{}'",
 			"lease_owner " + text + " NOT NULL DEFAULT ''",
-			"lease_expires_at " + timestampText + " NOT NULL DEFAULT ''",
+			"lease_expires_at BIGINT NOT NULL DEFAULT 0",
 			"fencing_token BIGINT NOT NULL DEFAULT 1",
-			"created_at " + timestampText + " NOT NULL",
-			"updated_at " + text + " NOT NULL",
+			"created_at BIGINT NOT NULL",
+			"updated_at BIGINT NOT NULL",
 		},
 		"_publication_outbox": {
 			"id " + text + " PRIMARY KEY",
@@ -140,18 +140,18 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 			"response_ref TEXT",
 			"error TEXT",
 			"attempt_count INTEGER NOT NULL DEFAULT 0",
-			"next_attempt_at " + timestampText + " NOT NULL DEFAULT ''",
-			"last_attempt_at " + text + " NOT NULL DEFAULT ''",
+			"next_attempt_at BIGINT NOT NULL DEFAULT 0",
+			"last_attempt_at BIGINT NOT NULL DEFAULT 0",
 			"lease_owner " + text + " NOT NULL DEFAULT ''",
-			"lease_expires_at " + timestampText + " NOT NULL DEFAULT ''",
+			"lease_expires_at BIGINT NOT NULL DEFAULT 0",
 			"fencing_token BIGINT NOT NULL DEFAULT 0",
 			"remote_event_id " + text + " NOT NULL DEFAULT ''",
 			"last_error_code " + text + " NOT NULL DEFAULT ''",
 			"last_error TEXT NOT NULL DEFAULT ''",
-			"terminal_at " + text + " NOT NULL DEFAULT ''",
+			"terminal_at BIGINT NOT NULL DEFAULT 0",
 			"created_by " + text + " NOT NULL DEFAULT ''",
-			"created_at " + timestampText + " NOT NULL",
-			"updated_at " + text + " NOT NULL",
+			"created_at BIGINT NOT NULL",
+			"updated_at BIGINT NOT NULL",
 		},
 	}
 	if !capabilities.Workflow {

@@ -33,7 +33,7 @@ func TestAutomationEvidenceUsesBoundedMySQLCompositeIndexColumns(t *testing.T) {
 		"`object_key` VARCHAR(128) NOT NULL",
 		"`record_id` VARCHAR(191) NOT NULL",
 		"`status` VARCHAR(64) NOT NULL",
-		"`created_at` VARCHAR(40) NOT NULL",
+		"`created_at` BIGINT NOT NULL",
 	} {
 		if !strings.Contains(automationDDL, fragment) {
 			t.Fatalf("automation MySQL DDL omitted bounded index column %q: %s", fragment, automationDDL)

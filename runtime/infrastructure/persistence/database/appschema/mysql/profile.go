@@ -20,7 +20,7 @@ func NewApplicationSchemaStorageProfile() ApplicationSchemaStorageProfile {
 func (ApplicationSchemaStorageProfile) IDColumnType() string { return "VARCHAR(191)" }
 func (ApplicationSchemaStorageProfile) FieldColumnType(field definitionmodel.FieldSchema, indexed bool) string {
 	switch strings.TrimSpace(field.Type) {
-	case "integer":
+	case "integer", "datetime":
 		return "BIGINT"
 	case "currency", "percent":
 		config := appschemastorage.DecimalConfig(field)

@@ -13,7 +13,6 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
 	"context"
-	"encoding/json"
 	"fmt"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
@@ -23,6 +22,7 @@ import (
 
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
@@ -49,20 +49,20 @@ func (r RecordStore) insertWorkflowIntentTx(ctx context.Context, tx TransactionE
 }
 
 func workflowExecutionInsertValues(execution workflowmodel.WorkflowExecution) ([]string, []any, error) {
-	action, err := json.Marshal(execution.Action)
+	action, err := database.MarshalTimeJSON(execution.Action)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encode Workflow graph descriptor: %w", err)
 	}
-	payload, err := json.Marshal(execution.Payload)
+	payload, err := database.MarshalTimeJSON(execution.Payload)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encode workflow payload: %w", err)
 	}
-	result, err := json.Marshal(execution.Result)
+	result, err := database.MarshalTimeJSON(execution.Result)
 	if err != nil {
 		return nil, nil, fmt.Errorf("encode workflow result: %w", err)
 	}
 	columns := []string{"workspace_id", "id", "workflow_key", "name", "trigger", "status", "action_type", "action_json", "payload_json", "result_json", "process_id", "node_id", "object_key", "record_id", "actor_id", "run_as", "idempotency_key", "attempt", "max_attempts", "next_run_at", "last_error", "message", "created_at", "updated_at"}
-	values := []any{execution.WorkspaceID, execution.ID, execution.WorkflowKey, execution.Name, execution.Trigger, execution.Status, execution.ActionType, string(action), string(payload), string(result), execution.ProcessID, execution.NodeID, execution.ObjectKey, execution.RecordID, execution.ActorID, execution.RunAs, execution.IdempotencyKey, execution.Attempt, execution.MaxAttempts, database.NullableText(execution.NextRunAt), execution.LastError, execution.Message, execution.CreatedAt, execution.UpdatedAt}
+	values := []any{execution.WorkspaceID, execution.ID, execution.WorkflowKey, execution.Name, execution.Trigger, execution.Status, execution.ActionType, string(action), string(payload), string(result), execution.ProcessID, execution.NodeID, execution.ObjectKey, execution.RecordID, execution.ActorID, execution.RunAs, execution.IdempotencyKey, execution.Attempt, execution.MaxAttempts, timevalue.Millis(execution.NextRunAt), execution.LastError, execution.Message, timevalue.Millis(execution.CreatedAt), timevalue.Millis(execution.UpdatedAt)}
 	return columns, values, nil
 }
 
@@ -94,11 +94,11 @@ func (r RecordStore) insertPublicationHandoffTx(ctx context.Context, tx Transact
 	}
 	message.CreatedAt = now
 	message.UpdatedAt = now
-	payload, err := json.Marshal(database.NonNilMap(message.Payload))
+	payload, err := database.MarshalTimeJSON(database.NonNilMap(message.Payload))
 	if err != nil {
 		return fmt.Errorf("encode mutation outbox payload: %w", err)
 	}
-	queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(s.SQLRenderer, "_publication_outbox", message.WorkspaceID).Columns("id", "publication_type", "operation_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at").Values(message.ID, "integration.connector", message.OperationID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.Status, string(payload), message.EventID, message.RequestRef, message.DedupKey, message.RequestFingerprint, message.ResponseRef, message.Error, message.AttemptCount, message.NextAttemptAt, message.LastAttemptAt, message.LeaseOwner, message.LeaseExpiresAt, message.FencingToken, message.CreatedBy, message.CreatedAt, message.UpdatedAt).Build()
+	queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(s.SQLRenderer, "_publication_outbox", message.WorkspaceID).Columns("id", "publication_type", "operation_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at").Values(message.ID, "integration.connector", message.OperationID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.Status, string(payload), message.EventID, message.RequestRef, message.DedupKey, message.RequestFingerprint, message.ResponseRef, message.Error, message.AttemptCount, timevalue.Millis(message.NextAttemptAt), timevalue.Millis(message.LastAttemptAt), message.LeaseOwner, timevalue.Millis(message.LeaseExpiresAt), message.FencingToken, message.CreatedBy, timevalue.Millis(message.CreatedAt), timevalue.Millis(message.UpdatedAt)).Build()
 	if buildErr != nil {
 		return buildErr
 	}

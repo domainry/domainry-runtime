@@ -24,6 +24,7 @@ import (
 	workspaceprovisionvalidation "github.com/domainry/domainry-runtime/runtime/domain/workspaceprovision/validation"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 const (
@@ -138,11 +139,11 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	if err := store.validateApplicationBootstrapRequest(request.ApplicationBootstrap); err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
-	configuration, err := json.Marshal(request.CommercialConfiguration)
+	configuration, err := database.MarshalTimeJSON(request.CommercialConfiguration)
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInvalid
 	}
-	applicationInput, err := json.Marshal(request.ApplicationBootstrap)
+	applicationInput, err := database.MarshalTimeJSON(request.ApplicationBootstrap)
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInvalid
 	}
@@ -361,6 +362,7 @@ func (store *WorkspaceProvisionStore) insertApplicationBootstrap(ctx context.Con
 	}
 	seen := map[string]bool{}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	nowMillis := timevalue.Millis(now)
 	for _, record := range records {
 		capabilityKey := strings.TrimSpace(record.CapabilityKey)
 		capability, found := capabilities[capabilityKey]
@@ -381,7 +383,7 @@ func (store *WorkspaceProvisionStore) insertApplicationBootstrap(ctx context.Con
 			fields[field.Key] = field
 		}
 		columns := []string{"workspace_id", "id", "owner_org_id", "created_at", "updated_at"}
-		values := []any{result.WorkspaceID, stableApplicationBootstrapRecordID(result.WorkspaceID, capabilityKey, object.Key), result.FirstStoreID, now, now}
+		values := []any{result.WorkspaceID, stableApplicationBootstrapRecordID(result.WorkspaceID, capabilityKey, object.Key), result.FirstStoreID, nowMillis, nowMillis}
 		if result.FirstStoreID == "" && result.InitialAdminUserID != "" {
 			columns = append(columns, "owner_user_id")
 			values = append(values, result.InitialAdminUserID)
@@ -475,6 +477,7 @@ func stableApplicationBootstrapRecordID(workspaceID, capabilityKey, objectKey st
 
 func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, installationIdentity string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	nowMillis := timevalue.Millis(now)
 	configuration := request.CommercialConfiguration
 	var initialIdentity any
 	if installationIdentity != "" {
@@ -491,7 +494,7 @@ func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context
 			result.WorkspaceID, result.CanonicalCode, request.WorkspaceName, "active", initialIdentity,
 			configuration.Plan, configuration.IncludedUserLimit, configuration.MaxUserLimit, configuration.IncludedCustomerLimit, configuration.MaxCustomerLimit,
 			configuration.IncludedStoreLimit, configuration.MaxStores, configuration.ContractDate, configuration.BillingDay, configuration.BillingContactName, configuration.BillingContactPhone,
-			configuration.BillingContactEmail, configuration.BillingContactAddress, configuration.BillingContactNotes, 1, 1, now, now,
+			configuration.BillingContactEmail, configuration.BillingContactAddress, configuration.BillingContactNotes, 1, 1, nowMillis, nowMillis,
 		)); err != nil {
 		return err
 	}
@@ -550,7 +553,7 @@ func (store *WorkspaceProvisionStore) receipt(ctx context.Context, requestID, fi
 		return workspaceprovisionmodel.Result{}, true, workspaceprovisionmodel.ErrIdempotencyConflict
 	}
 	var storedResult workspaceProvisioningOperationResult
-	if err := json.Unmarshal(record.ResultJSON, &storedResult); err != nil {
+	if err := database.UnmarshalTimeJSON(record.ResultJSON, &storedResult); err != nil {
 		return workspaceprovisionmodel.Result{}, true, workspaceprovisionmodel.ErrIdentityUnavailable
 	}
 	result = workspaceprovisionmodel.Result{
@@ -587,16 +590,16 @@ func workspaceProvisioningOperationJSON(result workspaceprovisionmodel.Result, r
 		IdentityContractVersion string `json:"identity_contract_version"`
 		IdentityContractHash    string `json:"identity_contract_hash"`
 	}{receipt.ReceiptID, receipt.ContractVersion, receipt.ContractHash}
-	resultJSON, err := json.Marshal(resultValue)
+	resultJSON, err := database.MarshalTimeJSON(resultValue)
 	if err != nil {
 		return "", "", "", "", err
 	}
-	metadataJSON, err := json.Marshal(metadataValue)
+	metadataJSON, err := database.MarshalTimeJSON(metadataValue)
 	if err != nil {
 		return "", "", "", "", err
 	}
-	relatedIDs, _ := json.Marshal([]string{result.WorkspaceID, result.CompanyID, result.FirstStoreID, result.InitialAdminUserID})
-	evidence, _ := json.Marshal([]string{receipt.ReceiptID})
+	relatedIDs, _ := database.MarshalTimeJSON([]string{result.WorkspaceID, result.CompanyID, result.FirstStoreID, result.InitialAdminUserID})
+	evidence, _ := database.MarshalTimeJSON([]string{receipt.ReceiptID})
 	return string(resultJSON), string(metadataJSON), string(relatedIDs), string(evidence), nil
 }
 

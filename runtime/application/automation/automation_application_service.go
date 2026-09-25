@@ -233,7 +233,7 @@ func (s *AutomationApplicationService) executeRuleWithPersistence(execCtx contex
 					"phase":      phase,
 					"operation":  rule.Trigger.Operation,
 					"object_key": rule.ObjectKey,
-					"timestamp":  time.Now().UTC().Format(time.RFC3339),
+					"timestamp":  time.Now().UTC().UnixMilli(),
 				},
 				Results: map[string]automationmodel.AutomationInstructionResult{},
 			}

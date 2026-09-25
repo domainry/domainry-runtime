@@ -154,7 +154,7 @@ func (p *DataExchangeProvider) openDataExchangeArtifact(ctx context.Context, job
 	}
 	parametersHash, _ := reportcontract.CanonicalJSONSHA256(prepared.normalizedScope.Parameters)
 	if err = p.audit(ctx, "", "report_export_downloaded", payload.ObjectKey, principal, payload.AuditID, map[string]any{
-		"report_key": payload.ReportKey, "artifact_id": artifact.ID, "expires_at": artifact.ExpiresAt.UTC().Format(time.RFC3339Nano),
+		"report_key": payload.ReportKey, "artifact_id": artifact.ID, "expires_at": artifact.ExpiresAt.UTC().UnixMilli(),
 		"watermarked": prepared.control.Watermark, "content_sha256": artifact.SHA256, "row_count": job.Checkpoint,
 		"scope_sha256": scopeHash, "parameters_sha256": parametersHash,
 	}, true); err != nil {

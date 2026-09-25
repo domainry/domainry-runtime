@@ -80,7 +80,7 @@ func recordFilterDBValues(profile persistencedriver.EngineProfile, fields map[st
 }
 
 func recordFieldQueryValueNeedsEncoding(profile persistencedriver.EngineProfile, field definitionmodel.FieldSchema) bool {
-	return recordmodel.RecordIsStructuredFieldType(field.Type) || profile.OrderedDecimalTextStorage() && (field.Type == "currency" || field.Type == "percent")
+	return strings.TrimSpace(field.Type) == "datetime" || recordmodel.RecordIsStructuredFieldType(field.Type) || profile.OrderedDecimalTextStorage() && (field.Type == "currency" || field.Type == "percent")
 }
 
 func recordListProjections(selectFields []string) []query.Projection {

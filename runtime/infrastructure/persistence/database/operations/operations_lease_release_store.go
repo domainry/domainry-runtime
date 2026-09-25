@@ -69,7 +69,8 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 	if buildErr != nil {
 		return operationsmodel.OperationsLeaseReleaseResult{}, false, buildErr
 	}
-	var currentOwner, expiresAt string
+	var currentOwner string
+	var expiresAt int64
 	var currentToken int64
 	if err := tx.QueryRowContext(ctx, queryValue, args...).Scan(&currentOwner, &expiresAt, &currentToken); err != nil {
 		if err == sql.ErrNoRows {
@@ -77,10 +78,7 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 		}
 		return operationsmodel.OperationsLeaseReleaseResult{}, false, err
 	}
-	expires, err := time.Parse(time.RFC3339Nano, expiresAt)
-	if err != nil {
-		return operationsmodel.OperationsLeaseReleaseResult{}, false, fmt.Errorf("backend.operations.lease_expiry_invalid: %w", err)
-	}
+	expires := time.UnixMilli(expiresAt).UTC()
 	if currentOwner != request.ExpectedLeaseOwner || currentToken != request.ExpectedFencingToken {
 		return operationsmodel.OperationsLeaseReleaseResult{}, false, nil
 	}
@@ -96,7 +94,7 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 	if spec.workspaceColumn != "" {
 		updateBuilder = query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, spec.table, request.WorkspaceID)
 	}
-	update, updateArgs, buildErr := updateBuilder.Set("lease_owner", "").Set("lease_expires_at", "").SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", request.Now.UTC().Format(time.RFC3339Nano)).Where(updatePredicate).Build()
+	update, updateArgs, buildErr := updateBuilder.Set("lease_owner", "").Set("lease_expires_at", int64(0)).SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", request.Now.UTC().UnixMilli()).Where(updatePredicate).Build()
 	if buildErr != nil {
 		return operationsmodel.OperationsLeaseReleaseResult{}, false, buildErr
 	}

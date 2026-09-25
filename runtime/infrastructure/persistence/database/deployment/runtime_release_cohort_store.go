@@ -138,7 +138,7 @@ func (s RuntimeReleaseCohortStore) lockCohort(ctx context.Context, tx *sql.Tx) (
 		return runtimeReleaseCohortRow{}, false, err
 	}
 	if rows == 0 {
-		queryValue, args, buildErr := query.NewInsertBuilder(s.renderer(), "_release_cohorts").Columns("cohort_key", "combination_sha256", "identity_json", "generation", "revision", "updated_at").Values(activeRuntimeReleaseCohort, "", "", int64(0), int64(1), "").Build()
+		queryValue, args, buildErr := query.NewInsertBuilder(s.renderer(), "_release_cohorts").Columns("cohort_key", "combination_sha256", "identity_json", "generation", "revision", "updated_at").Values(activeRuntimeReleaseCohort, "", "", int64(0), int64(1), int64(0)).Build()
 		if buildErr != nil {
 			return runtimeReleaseCohortRow{}, false, buildErr
 		}
@@ -178,14 +178,11 @@ func (s RuntimeReleaseCohortStore) liveInstances(ctx context.Context, tx *sql.Tx
 	var expired []string
 	for rows.Next() {
 		var row runtimeReleaseInstanceRow
-		var expiresAt string
+		var expiresAt int64
 		if err := rows.Scan(&row.instanceID, &row.combinationSHA256, &row.generation, &expiresAt); err != nil {
 			return nil, err
 		}
-		row.expiresAt, err = time.Parse(time.RFC3339Nano, expiresAt)
-		if err != nil {
-			return nil, fmt.Errorf("%w: malformed release lease expiry for %s", deploymentmodel.ErrRuntimeReleaseAdmission, row.instanceID)
-		}
+		row.expiresAt = time.UnixMilli(expiresAt).UTC()
 		if !row.expiresAt.After(now) {
 			expired = append(expired, row.instanceID)
 			continue
@@ -208,7 +205,7 @@ func (s RuntimeReleaseCohortStore) liveInstances(ctx context.Context, tx *sql.Tx
 }
 
 func (s RuntimeReleaseCohortStore) replaceCohort(ctx context.Context, tx *sql.Tx, generation int64, combination, identityJSON string, now time.Time) error {
-	queryValue, args, err := query.NewUpdateBuilder(s.renderer(), "_release_cohorts").Set("combination_sha256", combination).Set("identity_json", identityJSON).Set("generation", generation).Set("updated_at", now.UTC().Format(time.RFC3339Nano)).Where(query.Equal("cohort_key", activeRuntimeReleaseCohort)).Build()
+	queryValue, args, err := query.NewUpdateBuilder(s.renderer(), "_release_cohorts").Set("combination_sha256", combination).Set("identity_json", identityJSON).Set("generation", generation).Set("updated_at", now.UTC().UnixMilli()).Where(query.Equal("cohort_key", activeRuntimeReleaseCohort)).Build()
 	if err != nil {
 		return err
 	}
@@ -224,7 +221,7 @@ func (s RuntimeReleaseCohortStore) replaceCohort(ctx context.Context, tx *sql.Tx
 }
 
 func (s RuntimeReleaseCohortStore) writeInstanceLease(ctx context.Context, tx *sql.Tx, lease deploymentmodel.RuntimeReleaseCohortLease, now time.Time) error {
-	queryValue, args, err := query.NewUpdateBuilder(s.renderer(), "_release_instances").Set("combination_sha256", lease.CombinationSHA256).Set("generation", lease.Generation).Set("lease_expires_at", lease.ExpiresAt.Format(time.RFC3339Nano)).Set("heartbeat_at", now.UTC().Format(time.RFC3339Nano)).Where(query.Equal("instance_id", lease.InstanceID)).Build()
+	queryValue, args, err := query.NewUpdateBuilder(s.renderer(), "_release_instances").Set("combination_sha256", lease.CombinationSHA256).Set("generation", lease.Generation).Set("lease_expires_at", lease.ExpiresAt.UTC().UnixMilli()).Set("heartbeat_at", now.UTC().UnixMilli()).Where(query.Equal("instance_id", lease.InstanceID)).Build()
 	if err != nil {
 		return err
 	}
@@ -239,7 +236,7 @@ func (s RuntimeReleaseCohortStore) writeInstanceLease(ctx context.Context, tx *s
 	if rows == 1 {
 		return nil
 	}
-	insert, insertArgs, err := query.NewInsertBuilder(s.renderer(), "_release_instances").Columns("instance_id", "combination_sha256", "generation", "lease_expires_at", "joined_at", "heartbeat_at").Values(lease.InstanceID, lease.CombinationSHA256, lease.Generation, lease.ExpiresAt.Format(time.RFC3339Nano), now.UTC().Format(time.RFC3339Nano), now.UTC().Format(time.RFC3339Nano)).Build()
+	insert, insertArgs, err := query.NewInsertBuilder(s.renderer(), "_release_instances").Columns("instance_id", "combination_sha256", "generation", "lease_expires_at", "joined_at", "heartbeat_at").Values(lease.InstanceID, lease.CombinationSHA256, lease.Generation, lease.ExpiresAt.UTC().UnixMilli(), now.UTC().UnixMilli(), now.UTC().UnixMilli()).Build()
 	if err != nil {
 		return err
 	}
@@ -265,19 +262,19 @@ func (s RuntimeReleaseCohortStore) HeartbeatRuntimeRelease(ctx context.Context, 
 	if buildErr != nil {
 		return lease, buildErr
 	}
-	var expiresAt string
+	var expiresAt int64
 	if err := tx.QueryRowContext(ctx, selectQuery, selectArgs...).Scan(&expiresAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return lease, fmt.Errorf("%w: instance=%s generation=%d", deploymentmodel.ErrRuntimeReleaseLeaseLost, lease.InstanceID, lease.Generation)
 		}
 		return lease, err
 	}
-	currentExpiry, err := time.Parse(time.RFC3339Nano, expiresAt)
-	if err != nil || !currentExpiry.After(now) {
+	currentExpiry := time.UnixMilli(expiresAt).UTC()
+	if !currentExpiry.After(now) {
 		return lease, fmt.Errorf("%w: instance=%s lease expired", deploymentmodel.ErrRuntimeReleaseLeaseLost, lease.InstanceID)
 	}
 	next := now.Add(duration).UTC()
-	queryValue, args, buildErr := query.NewUpdateBuilder(s.renderer(), "_release_instances").Set("lease_expires_at", next.Format(time.RFC3339Nano)).Set("heartbeat_at", now.UTC().Format(time.RFC3339Nano)).Where(leasePredicate).Build()
+	queryValue, args, buildErr := query.NewUpdateBuilder(s.renderer(), "_release_instances").Set("lease_expires_at", next.UnixMilli()).Set("heartbeat_at", now.UTC().UnixMilli()).Where(leasePredicate).Build()
 	if buildErr != nil {
 		return lease, buildErr
 	}

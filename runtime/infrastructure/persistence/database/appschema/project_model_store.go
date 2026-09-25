@@ -14,6 +14,7 @@ import (
 	"github.com/domainry/domainry-orm/query"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 // ProjectModelMatches is the restart fast path for the single model.json
@@ -27,7 +28,8 @@ func (s ApplicationSchemaStore) ProjectModelMatches(ctx context.Context, scope p
 	if err != nil {
 		return false, fmt.Errorf("build project model lookup: %w", err)
 	}
-	var installedHash, initializedAt string
+	var installedHash string
+	var initializedAt int64
 	err = s.database().QueryRowContext(ctx, statement, args...).Scan(&installedHash, &initializedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
@@ -48,7 +50,7 @@ func (s ApplicationSchemaStore) ProjectModelMatches(ctx context.Context, scope p
 			},
 		}
 	}
-	return strings.TrimSpace(initializedAt) != "", nil
+	return initializedAt != 0, nil
 }
 
 // InitializeProjectModel materializes storage and Metadata exactly once. A
@@ -164,7 +166,7 @@ func (s ApplicationSchemaStore) syncProjectModelDefinitions(ctx context.Context,
 func (s ApplicationSchemaStore) recordProjectModelProjection(ctx context.Context, model projectmodel.RuntimeModel) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	columns := []string{"id", "schema_version", "model_hash", "catalog_hash", "project_key", "default_locale", "time_zone", "name", "initialized_at", "catalog_updated_at"}
-	values := []any{"current", model.SchemaVersion, model.ContentHash, model.ContentHash, model.ProjectKey, projectModelDefaultLocale(model), model.EffectiveTimeZone(), model.ProjectName, now, now}
+	values := []any{"current", model.SchemaVersion, model.ContentHash, model.ContentHash, model.ProjectKey, projectModelDefaultLocale(model), model.EffectiveTimeZone(), model.ProjectName, timevalue.Millis(now), timevalue.Millis(now)}
 	insert := query.NewInsertBuilder(s.store.SQLRenderer, "_project_model_state").Columns(columns...).Values(values...)
 	assignments := make([]query.Assignment, 0, len(columns)-1)
 	for _, column := range columns[1:] {

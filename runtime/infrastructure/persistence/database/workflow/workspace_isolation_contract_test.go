@@ -22,7 +22,7 @@ func TestWorkflowStoreWorkspaceIsolationContract(t *testing.T) {
 	sharedProcess := workflowmodel.WorkflowProcessInstance{
 		ID: "shared-process", WorkflowKey: "approval", WorkflowName: "Approval", DefinitionVersion: 1,
 		DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "approval"}, InitiatorID: "requester", Status: "waiting",
-		CurrentNodeIDs: []string{"approve"}, Variables: map[string]any{}, Result: map[string]any{}, CreatedAt: "v1", UpdatedAt: "v1",
+		CurrentNodeIDs: []string{"approve"}, Variables: map[string]any{}, Result: map[string]any{}, CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1,
 	}
 	for _, workspaceID := range []string{workspaceA, workspaceB} {
 		if err := processes.InsertProcess(t.Context(), workspaceID, sharedProcess); err != nil {
@@ -38,7 +38,7 @@ func TestWorkflowStoreWorkspaceIsolationContract(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("get workspace A process: found=%v err=%v", found, err)
 	}
-	processA.Status, processA.UpdatedAt = "completed", "v2"
+	processA.Status, processA.UpdatedAt = "completed", workflowTestTimeV2
 	if err := processes.UpdateProcess(t.Context(), workspaceA, processA); err != nil {
 		t.Fatal(err)
 	}

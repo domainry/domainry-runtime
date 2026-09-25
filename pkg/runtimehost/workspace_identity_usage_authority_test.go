@@ -132,7 +132,7 @@ func seedWorkspaceIdentityUsageAuthorityWorkspace(t *testing.T, store *bootstrap
 			"contract_date", "billing_day", "billing_contact_name", "billing_contact_phone", "billing_contact_email", "billing_contact_address", "billing_contact_notes",
 			"commercial_revision", "revision", "created_at", "updated_at",
 		).
-		Values(workspaceID, canonicalCode, canonicalCode, "active", installationIdentity, "standard", 5, 25, 100, 1000, 1, 5, "2026-09-01", 25, "", "", "", "", "", 1, 1, "2026-09-06T00:00:00Z", "2026-09-06T00:00:00Z").Build()
+		Values(workspaceID, canonicalCode, canonicalCode, "active", installationIdentity, "standard", 5, 25, 100, 1000, 1, 5, "2026-09-01", 25, "", "", "", "", "", 1, 1, int64(1788652800000), int64(1788652800000)).Build()
 	if err != nil {
 		t.Fatal(err)
 	}

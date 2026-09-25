@@ -9,6 +9,7 @@ import (
 
 	"github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 type Installation struct {
@@ -31,7 +32,8 @@ func LoadInstallation(ctx context.Context, store *database.RuntimeStore) (Instal
 		return Installation{}, false, err
 	}
 	var result Installation
-	err = store.DB().QueryRowContext(ctx, statement, arguments...).Scan(&result.WorkspaceID, &result.InitializedAt)
+	var initializedAt int64
+	err = store.DB().QueryRowContext(ctx, statement, arguments...).Scan(&result.WorkspaceID, &initializedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		workspaceStatement, workspaceArguments, buildErr := query.NewSelectBuilder(store.RuntimeRenderer(), "_workspaces").
 			Columns("id").Build()
@@ -51,6 +53,7 @@ func LoadInstallation(ctx context.Context, store *database.RuntimeStore) (Instal
 	if err != nil {
 		return Installation{}, false, fmt.Errorf("load Runtime initial Workspace: %w", err)
 	}
+	result.InitializedAt = timevalue.String(initializedAt)
 	if strings.TrimSpace(result.WorkspaceID) == "" || strings.EqualFold(strings.TrimSpace(result.WorkspaceID), "default") {
 		return Installation{}, false, fmt.Errorf("Runtime initial Workspace authority is corrupt")
 	}

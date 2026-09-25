@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,10 +43,52 @@ return #entries
 `)
 
 type cacheEnvelope struct {
-	ContractVersion string                 `json:"contract_version"`
-	ExpiresAt       time.Time              `json:"expires_at"`
-	Principal       identity.Principal     `json:"principal"`
-	AccessBundle    *identity.AccessBundle `json:"access_bundle"`
+	ContractVersion string             `json:"contract_version"`
+	ExpiresAt       int64              `json:"expires_at"`
+	Principal       identity.Principal `json:"principal"`
+	AccessBundle    *cacheAccessBundle `json:"access_bundle"`
+}
+
+type cacheAccessBundle identity.AccessBundle
+
+func (value cacheAccessBundle) MarshalJSON() ([]byte, error) {
+	type bundleAlias cacheAccessBundle
+	raw, err := json.Marshal(bundleAlias(value))
+	if err != nil {
+		return nil, err
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return nil, err
+	}
+	document["expires_at"], err = json.Marshal(value.ExpiresAt.UTC().UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(document)
+}
+
+func (value *cacheAccessBundle) UnmarshalJSON(raw []byte) error {
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return err
+	}
+	var expiresAt int64
+	if err := json.Unmarshal(document["expires_at"], &expiresAt); err != nil {
+		return fmt.Errorf("decode principal-cache access bundle expiry: %w", err)
+	}
+	document["expires_at"] = json.RawMessage(strconv.Quote(time.UnixMilli(expiresAt).UTC().Format(time.RFC3339Nano)))
+	normalized, err := json.Marshal(document)
+	if err != nil {
+		return err
+	}
+	type bundleAlias cacheAccessBundle
+	var decoded bundleAlias
+	if err := json.Unmarshal(normalized, &decoded); err != nil {
+		return err
+	}
+	*value = cacheAccessBundle(decoded)
+	return nil
 }
 
 type credentialLookup struct {
@@ -127,12 +170,13 @@ func (cache *Cache) readEntry(ctx context.Context, redisKey string, now time.Tim
 		_ = cache.client.Del(ctx, redisKey).Err()
 		return identityprincipal.CacheEntry{}, false, fmt.Errorf("decode Redis principal cache: %w", err)
 	}
-	if envelope.ContractVersion != cacheContractVersion || envelope.AccessBundle == nil || !now.Before(envelope.ExpiresAt) {
+	if envelope.ContractVersion != cacheContractVersion || envelope.AccessBundle == nil || now.UTC().UnixMilli() >= envelope.ExpiresAt {
 		_ = cache.client.Del(ctx, redisKey).Err()
 		return identityprincipal.CacheEntry{}, false, nil
 	}
-	envelope.Principal.AccessBundle = envelope.AccessBundle
-	return identityprincipal.CacheEntry{Principal: envelope.Principal, ExpiresAt: envelope.ExpiresAt}, true, nil
+	bundle := identity.AccessBundle(*envelope.AccessBundle)
+	envelope.Principal.AccessBundle = &bundle
+	return identityprincipal.CacheEntry{Principal: envelope.Principal, ExpiresAt: time.UnixMilli(envelope.ExpiresAt).UTC()}, true, nil
 }
 
 func (cache *Cache) Set(ctx context.Context, key identityprincipal.CacheKey, entry identityprincipal.CacheEntry, now time.Time) error {
@@ -149,11 +193,12 @@ func (cache *Cache) Set(ctx context.Context, key identityprincipal.CacheKey, ent
 	if ttl <= 0 {
 		return cache.Delete(ctx, key)
 	}
+	bundle := cacheAccessBundle(*entry.Principal.AccessBundle)
 	envelope := cacheEnvelope{
 		ContractVersion: cacheContractVersion,
-		ExpiresAt:       entry.ExpiresAt,
+		ExpiresAt:       entry.ExpiresAt.UTC().UnixMilli(),
 		Principal:       entry.Principal,
-		AccessBundle:    entry.Principal.AccessBundle,
+		AccessBundle:    &bundle,
 	}
 	encoded, err := json.Marshal(envelope)
 	if err != nil {
@@ -251,7 +296,8 @@ func (cache *Cache) SetCredential(ctx context.Context, key identityprincipal.Cre
 	if ttl <= 0 {
 		return cache.DeleteCredential(ctx, key)
 	}
-	envelope := cacheEnvelope{ContractVersion: cacheContractVersion, ExpiresAt: entry.ExpiresAt, Principal: entry.Principal, AccessBundle: entry.Principal.AccessBundle}
+	bundle := cacheAccessBundle(*entry.Principal.AccessBundle)
+	envelope := cacheEnvelope{ContractVersion: cacheContractVersion, ExpiresAt: entry.ExpiresAt.UTC().UnixMilli(), Principal: entry.Principal, AccessBundle: &bundle}
 	encoded, err := json.Marshal(envelope)
 	if err != nil {
 		return fmt.Errorf("encode Redis credential cache: %w", err)

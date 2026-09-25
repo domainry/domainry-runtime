@@ -28,16 +28,17 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 	}
 	auditmodulefixture.Bind(t, t.Context(), runtimeStore)
 	if _, err := runtimeStore.DB().ExecContext(t.Context(), `CREATE TABLE _identity_auth_refresh_tokens (
-		workspace_id TEXT NOT NULL, user_id TEXT NOT NULL, session_id TEXT NOT NULL, expires_at TEXT NOT NULL,
-		revoked_at TEXT, last_used_at TEXT, updated_at TEXT NOT NULL
+		workspace_id TEXT NOT NULL, user_id TEXT NOT NULL, session_id TEXT NOT NULL, expires_at INTEGER NOT NULL,
+		revoked_at INTEGER, last_used_at INTEGER, updated_at INTEGER NOT NULL
 	)`); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	nowInstant := time.Now().UTC()
+	now, nowText := nowInstant.UnixMilli(), nowInstant.Format(time.RFC3339Nano)
 	insertWorkspaceAdministrationFixture(t, runtimeStore.DB(), "workspace-initial", "omega", "Initial", "installation-a", now)
 	insertWorkspaceAdministrationFixture(t, runtimeStore.DB(), "workspace-target", "alpha", "Target", "", now)
-	expires := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
-	if _, err := runtimeStore.DB().ExecContext(t.Context(), `INSERT INTO _identity_auth_refresh_tokens(workspace_id,user_id,session_id,expires_at,updated_at) VALUES(?,?,?,?,?)`, "workspace-target", "staff-a", "session-a", expires, now); err != nil {
+	expires := nowInstant.Add(time.Hour).UnixMilli()
+	if _, err := runtimeStore.DB().ExecContext(t.Context(), `INSERT INTO _identity_auth_refresh_tokens(workspace_id,user_id,session_id,expires_at,revoked_at,last_used_at,updated_at) VALUES(?,?,?,?,?,?,?)`, "workspace-target", "staff-a", "session-a", expires, int64(0), int64(0), now); err != nil {
 		t.Fatal(err)
 	}
 	store := NewWorkspaceAdministrationStore(runtimeStore)
@@ -89,7 +90,7 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 	}
 	commercialFailureKey := "commercial-audit-failure"
 	commercialAuditID := workspaceAdministrationReceiptID(actor, workspaceprovisionapplication.UpdateWorkspaceCommercialConfigurationActionKey, commercialFailureKey)
-	insertWorkspaceAdministrationAuditCollision(t, runtimeStore, commercialAuditID, now)
+	insertWorkspaceAdministrationAuditCollision(t, runtimeStore, commercialAuditID, nowText)
 	failingCommercialRequest := workspaceprovisionmodel.CommercialConfigurationUpdateRequest{
 		ExpectedRevision: 4,
 		Configuration: workspaceprovisionmodel.CommercialConfiguration{
@@ -106,12 +107,12 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 	}
 	assertWorkspaceAdministrationState(t, runtimeStore.DB(), "workspace-target", "active", 4, "session-a", true)
 
-	if _, err := runtimeStore.DB().ExecContext(t.Context(), `INSERT INTO _identity_auth_refresh_tokens(workspace_id,user_id,session_id,expires_at,updated_at) VALUES(?,?,?,?,?)`, "workspace-target", "staff-b", "session-b", expires, now); err != nil {
+	if _, err := runtimeStore.DB().ExecContext(t.Context(), `INSERT INTO _identity_auth_refresh_tokens(workspace_id,user_id,session_id,expires_at,revoked_at,last_used_at,updated_at) VALUES(?,?,?,?,?,?,?)`, "workspace-target", "staff-b", "session-b", expires, int64(0), int64(0), now); err != nil {
 		t.Fatal(err)
 	}
 	failingKey := "suspend-audit-failure"
 	auditID := workspaceAdministrationReceiptID(actor, workspaceprovisionapplication.SuspendWorkspaceActionKey, failingKey)
-	insertWorkspaceAdministrationAuditCollision(t, runtimeStore, auditID, now)
+	insertWorkspaceAdministrationAuditCollision(t, runtimeStore, auditID, nowText)
 	if _, err := store.SetWorkspaceStatus(t.Context(), actor, "alpha", 4, workspaceprovisionmodel.WorkspaceStatusSuspended, failingKey); err == nil {
 		t.Fatal("audit failure committed Workspace lifecycle mutation")
 	}
@@ -130,7 +131,7 @@ func insertWorkspaceAdministrationAuditCollision(t *testing.T, store *database.R
 	}
 }
 
-func insertWorkspaceAdministrationFixture(t *testing.T, db *sql.DB, id, code, name, installationIdentity, now string) {
+func insertWorkspaceAdministrationFixture(t *testing.T, db *sql.DB, id, code, name, installationIdentity string, now int64) {
 	t.Helper()
 	var installation any
 	if installationIdentity != "" {
@@ -153,8 +154,8 @@ func assertWorkspaceAdministrationState(t *testing.T, db *sql.DB, workspaceID, s
 	if err := db.QueryRowContext(t.Context(), `SELECT status,revision FROM _workspaces WHERE id=?`, workspaceID).Scan(&gotStatus, &gotRevision); err != nil || gotStatus != status || gotRevision != revision {
 		t.Fatalf("workspace status=%q revision=%d err=%v", gotStatus, gotRevision, err)
 	}
-	var revokedAt sql.NullString
-	if err := db.QueryRowContext(t.Context(), `SELECT revoked_at FROM _identity_auth_refresh_tokens WHERE session_id=?`, sessionID).Scan(&revokedAt); err != nil || (revokedAt.Valid && revokedAt.String != "") != revoked {
+	var revokedAt sql.NullInt64
+	if err := db.QueryRowContext(t.Context(), `SELECT revoked_at FROM _identity_auth_refresh_tokens WHERE session_id=?`, sessionID).Scan(&revokedAt); err != nil || (revokedAt.Valid && revokedAt.Int64 != 0) != revoked {
 		t.Fatalf("session=%q revoked=%v value=%+v err=%v", sessionID, revoked, revokedAt, err)
 	}
 }

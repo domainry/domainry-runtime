@@ -28,8 +28,6 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/codingruntime"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
-	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
-	projectvalidation "github.com/domainry/domainry-runtime/runtime/domain/project/validation"
 	recordtimerprojection "github.com/domainry/domainry-runtime/runtime/domain/recordtimer/projection"
 	principalcache "github.com/domainry/domainry-runtime/runtime/infrastructure/principalcache"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -262,10 +260,13 @@ func prepareConnectorProviders(options Options) (*connector.Registry, error) {
 }
 
 func runWithDependencies(options Options, dependencies serverRunDependencies) error {
-	projectExtensions, connectorGateway, err := prepareProjectExtensions(options)
+	checkedProject, err := prepareCheckedProject(options, dependencies.readFile)
 	if err != nil {
-		return fmt.Errorf("validate project Runtime composition: %w", err)
+		return fmt.Errorf("check project model and code definitions: %w", err)
 	}
+	projectExtensions := checkedProject.extensions
+	runtimeModel := checkedProject.runtimeModel
+	connectorGateway := checkedProject.connectorGateway
 	connectorProviders, err := prepareConnectorProviders(options)
 	if err != nil {
 		return fmt.Errorf("validate project Runtime composition: %w", err)
@@ -305,28 +306,6 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	}
 	if err != nil {
 		return fmt.Errorf("load Runtime configuration: %w", err)
-	}
-	modelFile := strings.TrimSpace(options.ModelFile)
-	if modelFile == "" {
-		return fmt.Errorf("load project model: ModelFile is required")
-	}
-	rawModel, err := dependencies.readFile(modelFile)
-	if err != nil {
-		return fmt.Errorf("read project model %s: %w", modelFile, err)
-	}
-	projectModel, err := projectmodel.Decode(rawModel)
-	if err != nil {
-		return fmt.Errorf("decode project model %s: %w", modelFile, err)
-	}
-	if err := projectvalidation.ValidateComposition(projectModel, projectExtensions, nil); err != nil {
-		return fmt.Errorf("validate project model and code definitions: %w", err)
-	}
-	runtimeModel, err := projectmodel.Compile(projectModel)
-	if err != nil {
-		return fmt.Errorf("compile project storage and authorization model: %w", err)
-	}
-	if err := attachPublicResources(&runtimeModel, projectExtensions.ProjectDefinitions().PublicResources); err != nil {
-		return fmt.Errorf("attach code-owned public resources: %w", err)
 	}
 	// Runtime-owned record timer storage is code-owned infrastructure. It is
 	// always materialized with the project model, but never authored in

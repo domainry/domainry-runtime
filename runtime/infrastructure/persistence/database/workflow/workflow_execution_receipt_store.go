@@ -126,7 +126,7 @@ func (r WorkflowWorkerStore) CompleteExecutionReceipt(ctx context.Context, compl
 	resultJSON := json.RawMessage(workflowReceiptResultJSON(strings.TrimSpace(completion.ExecutionID)))
 	relatedIDs := json.RawMessage(`[]`)
 	if strings.TrimSpace(completion.ExecutionID) != "" {
-		related, _ := json.Marshal([]string{strings.TrimSpace(completion.ExecutionID)})
+		related, _ := database.MarshalTimeJSON([]string{strings.TrimSpace(completion.ExecutionID)})
 		relatedIDs = related
 	}
 	status := string(idempotency.StatusSucceeded)
@@ -175,7 +175,7 @@ func (r WorkflowWorkerStore) FindExecutionReceipt(ctx context.Context, workspace
 func workflowReceiptRecord(value workflowmodel.WorkflowExecutionReceipt) sharedoperation.Record {
 	relatedIDs := json.RawMessage(`[]`)
 	if strings.TrimSpace(value.ExecutionID) != "" {
-		related, _ := json.Marshal([]string{strings.TrimSpace(value.ExecutionID)})
+		related, _ := database.MarshalTimeJSON([]string{strings.TrimSpace(value.ExecutionID)})
 		relatedIDs = related
 	}
 	return sharedoperation.Record{
@@ -194,7 +194,7 @@ type workflowReceiptOperationResult struct {
 }
 
 func workflowReceiptResultJSON(executionID string) string {
-	encoded, _ := json.Marshal(workflowReceiptOperationResult{ExecutionID: strings.TrimSpace(executionID)})
+	encoded, _ := database.MarshalTimeJSON(workflowReceiptOperationResult{ExecutionID: strings.TrimSpace(executionID)})
 	return string(encoded)
 }
 
@@ -209,7 +209,7 @@ func workflowReceipt(record sharedoperation.Record) (workflowmodel.WorkflowExecu
 		return workflowmodel.WorkflowExecutionReceipt{}, fmt.Errorf("workflow receipt operation identity is invalid")
 	}
 	var result workflowReceiptOperationResult
-	if err := json.Unmarshal(record.ResultJSON, &result); err != nil {
+	if err := database.UnmarshalTimeJSON(record.ResultJSON, &result); err != nil {
 		return workflowmodel.WorkflowExecutionReceipt{}, fmt.Errorf("decode workflow receipt result: %w", err)
 	}
 	value.ExecutionID = result.ExecutionID

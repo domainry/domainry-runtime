@@ -10,6 +10,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 const recordLocalizedValueTable = "_record_localized_values"
@@ -127,7 +128,7 @@ func (r RecordStore) applyRecordLocalizedMutationsTx(ctx context.Context, tx Tra
 		}
 		builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, recordLocalizedValueTable,
 			[]string{"object_key", "record_id", "field_key", "locale", "text_value", "created_at", "updated_at"},
-			[]any{commitObject.Key, recordID, value.FieldKey, value.Locale, value.TextValue, changedAt, changedAt})
+			[]any{commitObject.Key, recordID, value.FieldKey, value.Locale, value.TextValue, timevalue.Millis(changedAt), timevalue.Millis(changedAt)})
 		if buildErr != nil {
 			return buildErr
 		}

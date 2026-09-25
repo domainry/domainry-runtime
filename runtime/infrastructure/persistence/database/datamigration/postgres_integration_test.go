@@ -2,12 +2,13 @@ package datamigration
 
 import (
 	"database/sql"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
@@ -100,7 +101,7 @@ func TestSQLiteToPostgresCopyResumeVerifyAndFinalDelta(t *testing.T) {
 	}
 	cutoverPath := filepath.Join(t.TempDir(), "cutover.json")
 	cutover := CutoverEvidence{Owner: "database-platform", RecordedAt: time.Now().UTC(), SourceStopWrite: true, WorkersDrained: true, SourceSnapshotID: "sqlite-snapshot-1", FinalDeltaID: "final-delta-1", RollbackTarget: "sqlite-source", SourceInventorySHA: strings.Repeat("d", 64)}
-	raw, _ := json.Marshal(cutover)
+	raw, _ := timevalue.MarshalJSON(cutover)
 	if err := os.WriteFile(cutoverPath, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -59,9 +59,6 @@ func Validate(model Model, knownPermissions map[string]bool) error {
 	} else if _, err := time.LoadLocation(zone); err != nil {
 		add("project_model.time_zone_invalid", "/project/time_zone", err.Error())
 	}
-	if len(model.Objects) == 0 {
-		add("project_model.objects_required", "/objects", "at least one business object is required")
-	}
 	for key, object := range model.Objects {
 		path := "/objects/" + pointerToken(key)
 		if !stableKeyPattern.MatchString(key) || object.Key != key {

@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -175,7 +177,7 @@ func openCopySQLite(t *testing.T, path string) *sql.DB {
 
 func writeCutoverEvidence(t *testing.T, path string, evidence CutoverEvidence) {
 	t.Helper()
-	raw, err := json.Marshal(evidence)
+	raw, err := timevalue.MarshalJSON(evidence)
 	if err != nil {
 		t.Fatal(err)
 	}

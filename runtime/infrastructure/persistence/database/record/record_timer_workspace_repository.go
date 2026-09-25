@@ -21,7 +21,7 @@ func (r RecordStore) ListDueRecordTimerWorkspaces(ctx context.Context, object de
 		return nil, fmt.Errorf("record workspace object key is required")
 	}
 	s := r.store
-	nowValue := now.UTC().Format(time.RFC3339Nano)
+	nowValue := now.UTC().UnixMilli()
 	predicate := query.Or(
 		query.And(query.Equal("status", "scheduled"), query.LessThanOrEqual("due_at", nowValue)),
 		query.And(query.Equal("status", "leased"), query.LessThanOrEqual("due_at", nowValue), query.LessThanOrEqual("lease_expires_at", nowValue)),

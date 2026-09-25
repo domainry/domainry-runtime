@@ -1,11 +1,12 @@
 # Domainry Runtime
 
 Domainry Runtime is the independently versioned Go runtime consumed by
-Domainry-generated business projects.
+source-owned Domainry Go projects.
 
-The Control Plane and Builder live in the sibling `domainry-plane` repository.
-This repository contains only Runtime implementation and its public host and
-business-extension APIs.
+Plane publishes a signed Source Foundation once for a new Product; normal
+Feature development then runs against the checked-in Model, Go source and
+`go.mod/go.sum` without a Builder or Plane call. This repository contains only
+Runtime implementation and its public host and business-extension APIs.
 
 Agent-facing capability questions and scenario guides are indexed by the
 source-owned [`capability/agent/index.json`](capability/agent/index.json). Each
@@ -19,8 +20,6 @@ sorted and protected by `RuntimeAuthoringContractHash`, while tests verify that
 Runtime-owned keys referenced by the guide index still exist. The guide index
 is a scenario router, not a second authoring schema.
 
-Runtime architecture and contribution rules are defined in
-[`docs/architecture/backend-development-guide.md`](docs/architecture/backend-development-guide.md).
 The Runtime capability inventory, conventional-development cost comparison,
 user-facing examples, and scenario-selection guide are documented in
 [`docs/architecture/runtime-capability-and-development-guide.md`](docs/architecture/runtime-capability-and-development-guide.md).
@@ -28,7 +27,7 @@ External capability extraction and Module/SaaS dual-topology rules are defined
 in [`docs/architecture/module-saas-development-standard.md`](docs/architecture/module-saas-development-standard.md),
 with the current capability inventory under [`docs/modules`](docs/modules/README.md).
 
-Generated project composition may explicitly set
+Project composition may explicitly set
 `runtimehost.Options.AgentCodingWorkspace` to a `codingruntime.Options` value.
 This enables Agent's restricted coding workspace for one existing directory,
 with a fixed shell and optional extension-to-language-server mappings. The zero

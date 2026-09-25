@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -437,7 +436,7 @@ func (r WorkflowDefinitionStore) listStoredVersions(ctx context.Context) ([]stor
 
 func decodeWorkflowDefinition(metadata metadatasdk.Definition) (workflowDefinitionState, error) {
 	var state workflowDefinitionState
-	if err := json.Unmarshal(metadata.Payload, &state); err != nil {
+	if err := database.UnmarshalTimeJSON(metadata.Payload, &state); err != nil {
 		return workflowDefinitionState{}, fmt.Errorf("decode shared Workflow definition: %w", err)
 	}
 	if state.ContractVersion != workflowDefinitionContractVersion || strings.TrimSpace(state.Definition.ID) == "" || strings.TrimSpace(state.Definition.Key) == "" || workflowDefinitionResourceKey(state.Definition.Key) != metadata.ResourceKey || strings.TrimSpace(metadata.ObjectKey) != strings.TrimSpace(state.Definition.ID) {
@@ -448,7 +447,7 @@ func decodeWorkflowDefinition(metadata metadatasdk.Definition) (workflowDefiniti
 
 func decodeWorkflowVersion(metadata metadatasdk.Definition) (workflowVersionState, error) {
 	var state workflowVersionState
-	if err := json.Unmarshal(metadata.Payload, &state); err != nil {
+	if err := database.UnmarshalTimeJSON(metadata.Payload, &state); err != nil {
 		return workflowVersionState{}, fmt.Errorf("decode shared Workflow definition version: %w", err)
 	}
 	if state.ContractVersion != workflowVersionContractVersion || strings.TrimSpace(state.Version.ID) == "" || strings.TrimSpace(state.Version.DefinitionID) == "" || workflowVersionResourceKey(state.Version.ID) != metadata.ResourceKey || strings.TrimSpace(metadata.ObjectKey) != strings.TrimSpace(state.Version.ID) {
@@ -490,7 +489,7 @@ func (r WorkflowDefinitionStore) publishVersion(ctx context.Context, expectedVer
 }
 
 func workflowDefinitionPayload(value any) ([]byte, string, error) {
-	payload, err := json.Marshal(value)
+	payload, err := database.MarshalTimeJSON(value)
 	if err != nil {
 		return nil, "", err
 	}
@@ -519,8 +518,8 @@ func workflowDefinitionPublishedBy(definition workflowmodel.WorkflowDefinition, 
 }
 
 func workflowSchemasEqual(left, right any) bool {
-	leftJSON, leftErr := json.Marshal(left)
-	rightJSON, rightErr := json.Marshal(right)
+	leftJSON, leftErr := database.MarshalTimeJSON(left)
+	rightJSON, rightErr := database.MarshalTimeJSON(right)
 	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
 }
 

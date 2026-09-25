@@ -3,7 +3,6 @@ package workflow
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -14,6 +13,7 @@ import (
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 
 	"github.com/domainry/domainry-orm/query"
 	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
@@ -247,7 +247,7 @@ func (r WorkflowDecisionStore) decideTaskTx(ctx context.Context, tx *sql.Tx, com
 	}
 	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_tasks", commit.WorkspaceID).
 		Set("status", task.Status).Set("decision", task.Decision).Set("comment", task.Comment).Set("completed_by", task.CompletedBy).
-		Set("completed_at", database.NullableText(task.CompletedAt)).Set("updated_at", task.UpdatedAt).
+		Set("completed_at", timevalue.Millis(task.CompletedAt)).Set("updated_at", timevalue.Millis(task.UpdatedAt)).
 		Where(query.And(query.Equal("id", task.ID), query.Equal("assignee_user_id", commit.ExpectedAssigneeID), query.Equal("status", status))).Build()
 	if err != nil {
 		return false, fmt.Errorf("build workflow task decision: %w", err)
@@ -261,47 +261,47 @@ func (r WorkflowDecisionStore) decideTaskTx(ctx context.Context, tx *sql.Tx, com
 }
 
 func (r WorkflowDecisionStore) insertNodeTx(ctx context.Context, tx *sql.Tx, node workflowmodel.WorkflowNodeInstance) error {
-	input, _ := json.Marshal(database.NonNilMap(node.Input))
-	output, _ := json.Marshal(database.NonNilMap(node.Output))
+	input, _ := database.MarshalTimeJSON(database.NonNilMap(node.Input))
+	output, _ := database.MarshalTimeJSON(database.NonNilMap(node.Output))
 	columns := workflowNodeColumns
-	values := []any{node.WorkspaceID, node.ID, node.ProcessID, node.NodeID, node.NodeType, node.Iteration, node.Status, string(input), string(output), node.ErrorCode, node.StartedAt, database.NullableText(node.CompletedAt)}
+	values := []any{node.WorkspaceID, node.ID, node.ProcessID, node.NodeID, node.NodeType, node.Iteration, node.Status, string(input), string(output), node.ErrorCode, timevalue.Millis(node.StartedAt), timevalue.Millis(node.CompletedAt)}
 	return r.insertTx(ctx, tx, "_workflow_node_instances", columns, values)
 }
 
 func (r WorkflowDecisionStore) updateNodeTx(ctx context.Context, tx *sql.Tx, node workflowmodel.WorkflowNodeInstance) error {
-	input, _ := json.Marshal(database.NonNilMap(node.Input))
-	output, _ := json.Marshal(database.NonNilMap(node.Output))
-	return r.updateTx(ctx, tx, "_workflow_node_instances", node.WorkspaceID, node.ID, []string{"status", "input_json", "output_json", "error_code", "completed_at"}, []any{node.Status, string(input), string(output), node.ErrorCode, database.NullableText(node.CompletedAt)})
+	input, _ := database.MarshalTimeJSON(database.NonNilMap(node.Input))
+	output, _ := database.MarshalTimeJSON(database.NonNilMap(node.Output))
+	return r.updateTx(ctx, tx, "_workflow_node_instances", node.WorkspaceID, node.ID, []string{"status", "input_json", "output_json", "error_code", "completed_at"}, []any{node.Status, string(input), string(output), node.ErrorCode, timevalue.Millis(node.CompletedAt)})
 }
 
 func (r WorkflowDecisionStore) insertTaskTx(ctx context.Context, tx *sql.Tx, task workflowmodel.WorkflowTask) error {
-	evidence, _ := json.Marshal(task.AssigneeEvidence)
-	resolver, _ := json.Marshal(task.ResolverSnapshot)
+	evidence, _ := database.MarshalTimeJSON(task.AssigneeEvidence)
+	resolver, _ := database.MarshalTimeJSON(task.ResolverSnapshot)
 	columns := workflowTaskColumns()
-	values := []any{task.WorkspaceID, task.ID, task.ProcessID, task.NodeInstanceID, task.NodeID, task.Title, task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), string(resolver), task.CandidateSource, task.NodeDefinitionVersion, task.Sequence, task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.CreatedAt, task.UpdatedAt}
+	values := []any{task.WorkspaceID, task.ID, task.ProcessID, task.NodeInstanceID, task.NodeID, task.Title, task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), string(resolver), task.CandidateSource, task.NodeDefinitionVersion, task.Sequence, task.Status, task.Decision, task.Comment, timevalue.Millis(task.DueAt), task.CompletedBy, timevalue.Millis(task.CompletedAt), timevalue.Millis(task.CreatedAt), timevalue.Millis(task.UpdatedAt)}
 	return r.insertTx(ctx, tx, "_workflow_tasks", columns, values)
 }
 
 func (r WorkflowDecisionStore) updateTaskTx(ctx context.Context, tx *sql.Tx, task workflowmodel.WorkflowTask) error {
-	evidence, _ := json.Marshal(task.AssigneeEvidence)
+	evidence, _ := database.MarshalTimeJSON(task.AssigneeEvidence)
 	columns := []string{"assignee_user_id", "assignee_name", "assignee_role_key", "assignee_resolver_key", "assignee_evidence_json", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}
-	values := []any{task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), task.Status, task.Decision, task.Comment, database.NullableText(task.DueAt), task.CompletedBy, database.NullableText(task.CompletedAt), task.UpdatedAt}
+	values := []any{task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), task.Status, task.Decision, task.Comment, timevalue.Millis(task.DueAt), task.CompletedBy, timevalue.Millis(task.CompletedAt), timevalue.Millis(task.UpdatedAt)}
 	return r.updateTx(ctx, tx, "_workflow_tasks", task.WorkspaceID, task.ID, columns, values)
 }
 
 func (r WorkflowDecisionStore) updateProcessTx(ctx context.Context, tx *sql.Tx, process workflowmodel.WorkflowProcessInstance) error {
-	definition, _ := json.Marshal(process.DefinitionSnapshot)
-	currentNodes, _ := json.Marshal(process.CurrentNodeIDs)
-	variables, _ := json.Marshal(database.NonNilMap(process.Variables))
-	result, _ := json.Marshal(database.NonNilMap(process.Result))
+	definition, _ := database.MarshalTimeJSON(process.DefinitionSnapshot)
+	currentNodes, _ := database.MarshalTimeJSON(process.CurrentNodeIDs)
+	variables, _ := database.MarshalTimeJSON(database.NonNilMap(process.Variables))
+	result, _ := database.MarshalTimeJSON(database.NonNilMap(process.Result))
 	columns := []string{"operation_id", "workflow_key", "workflow_name", "workflow_definition_version_id", "definition_version", "definition_hash", "definition_json", "object_key", "record_id", "initiator_id", "initiator_role_key", "status", "current_node_ids_json", "variables_json", "result_json", "error_code", "created_at", "updated_at", "completed_at"}
-	values := []any{process.OperationID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, process.CreatedAt, process.UpdatedAt, database.NullableText(process.CompletedAt)}
+	values := []any{process.OperationID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, timevalue.Millis(process.CreatedAt), timevalue.Millis(process.UpdatedAt), timevalue.Millis(process.CompletedAt)}
 	return r.updateTx(ctx, tx, "_workflow_process_instances", process.WorkspaceID, process.ID, columns, values)
 }
 
 func (r WorkflowDecisionStore) insertEventTx(ctx context.Context, tx *sql.Tx, event workflowmodel.WorkflowProcessEvent) error {
-	metadata, _ := json.Marshal(database.NonNilMap(event.Metadata))
-	return r.insertTx(ctx, tx, "_workflow_process_events", workflowEventColumns, []any{event.WorkspaceID, event.ID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), event.CreatedAt})
+	metadata, _ := database.MarshalTimeJSON(database.NonNilMap(event.Metadata))
+	return r.insertTx(ctx, tx, "_workflow_process_events", workflowEventColumns, []any{event.WorkspaceID, event.ID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), timevalue.Millis(event.CreatedAt)})
 }
 
 func (r WorkflowDecisionStore) updateExecutionTx(ctx context.Context, tx *sql.Tx, execution workflowmodel.WorkflowExecution) error {

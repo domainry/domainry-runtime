@@ -17,10 +17,10 @@ func workflowDefinitionEdgeFixture(t *testing.T) (*database.RuntimeStore, Workfl
 		t.Fatal(err)
 	}
 	repository := NewWorkflowDefinitionStore(store)
-	definition := workflowmodel.WorkflowDefinition{ID: "definition-edge", Key: "edge", Name: "Edge", Enabled: true, CurrentDraftVersionID: "version-edge", CreatedAt: "v1", UpdatedAt: "v1"}
+	definition := workflowmodel.WorkflowDefinition{ID: "definition-edge", Key: "edge", Name: "Edge", Enabled: true, CurrentDraftVersionID: "version-edge", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
 	draft := workflowmodel.WorkflowDefinitionVersion{
 		ID: "version-edge", DefinitionID: definition.ID, Version: 1, Status: workflowmodel.WorkflowVersionDraft, Revision: 1,
-		Workflow: workflowDefinitionTestSchema(), ValidationReport: workflowmodel.WorkflowValidation{Valid: true}, CreatedBy: "admin", CreatedAt: "v1", UpdatedAt: "v1",
+		Workflow: workflowDefinitionTestSchema(), ValidationReport: workflowmodel.WorkflowValidation{Valid: true}, CreatedBy: "admin", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1,
 	}
 	if err := repository.InsertDefinition(t.Context(), definition, draft); err != nil {
 		t.Fatal(err)
@@ -36,10 +36,10 @@ func TestWorkflowDefinitionMissingRowsCorruptScansAndWriteFailures(t *testing.T)
 	if created, err := repository.InsertDraftVersion(t.Context(), "missing-definition", workflowmodel.WorkflowDefinitionVersion{ID: "missing-draft"}); err != nil || created {
 		t.Fatalf("missing definition draft created=%v error=%v", created, err)
 	}
-	if enabled, err := repository.SetDefinitionEnabled(t.Context(), "missing", false, "v2"); err != nil || enabled {
+	if enabled, err := repository.SetDefinitionEnabled(t.Context(), "missing", false, workflowTestTimeV2); err != nil || enabled {
 		t.Fatalf("missing definition enabled=%v error=%v", enabled, err)
 	}
-	if archived, err := repository.ArchiveVersion(t.Context(), definition.ID, "missing", "v2"); err != nil || archived {
+	if archived, err := repository.ArchiveVersion(t.Context(), definition.ID, "missing", workflowTestTimeV2); err != nil || archived {
 		t.Fatalf("missing version archived=%v error=%v", archived, err)
 	}
 	if err := repository.InsertDefinition(t.Context(), definition, draft); err == nil {
@@ -86,11 +86,11 @@ func TestWorkflowDefinitionCancelledOperationsPropagate(t *testing.T) {
 		"delete draft":  func() error { _, err := repository.DeleteDraft(cancelled, definition.ID, draft.ID); return err },
 		"publish draft": func() error { _, err := repository.PublishDraft(cancelled, definition, draft, "key"); return err },
 		"archive version": func() error {
-			_, err := repository.ArchiveVersion(cancelled, definition.ID, draft.ID, "v2")
+			_, err := repository.ArchiveVersion(cancelled, definition.ID, draft.ID, workflowTestTimeV2)
 			return err
 		},
 		"set enabled": func() error {
-			_, err := repository.SetDefinitionEnabled(cancelled, definition.ID, false, "v2")
+			_, err := repository.SetDefinitionEnabled(cancelled, definition.ID, false, workflowTestTimeV2)
 			return err
 		},
 	}
@@ -141,7 +141,7 @@ func TestWorkflowDefinitionDraftAndPublishSecondWriteFailuresRollback(t *testing
 	})
 	t.Run("publish identity update", func(t *testing.T) {
 		store, repository, definition, draft := workflowDefinitionEdgeFixture(t)
-		draft.ContentHash, draft.PublishedBy, draft.PublishedAt = "hash", "admin", "v2"
+		draft.ContentHash, draft.PublishedBy, draft.PublishedAt = "hash", "admin", workflowTestTimeV2
 		if _, err := store.DB().ExecContext(t.Context(), `CREATE TRIGGER fail_workflow_definition_update BEFORE UPDATE ON _definitions WHEN OLD.owner = 'workflow' AND OLD.kind = 'workflow' AND OLD.definition_key = 'edge' BEGIN SELECT RAISE(ABORT, 'forced definition update failure'); END`); err != nil {
 			t.Fatal(err)
 		}

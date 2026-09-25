@@ -520,8 +520,8 @@ func (s *ReportExportPrepareReceiptStore) patchRecordWithSubjectGuard(ctx contex
 }
 
 func reportExportPrepareRecord(value reportmodel.ReportExportPrepareReceipt) sharedoperation.Record {
-	relatedIDs, _ := json.Marshal(reportExportPrepareRelatedIDs(value))
-	evidence, _ := json.Marshal([]string{value.AuditID})
+	relatedIDs, _ := database.MarshalTimeJSON(reportExportPrepareRelatedIDs(value))
+	evidence, _ := database.MarshalTimeJSON([]string{value.AuditID})
 	failureClass := ""
 	if value.Status == string(idempotency.StatusFailedRetryable) {
 		failureClass = "retryable"
@@ -554,12 +554,12 @@ type reportExportPrepareResult struct {
 }
 
 func reportExportPrepareMetadataJSON(value reportmodel.ReportExportPrepareReceipt) string {
-	encoded, _ := json.Marshal(reportExportPrepareMetadata{CallerKey: value.CallerKey, RetryOfJobID: value.RetryOfJobID})
+	encoded, _ := database.MarshalTimeJSON(reportExportPrepareMetadata{CallerKey: value.CallerKey, RetryOfJobID: value.RetryOfJobID})
 	return string(encoded)
 }
 
 func reportExportPrepareResultJSON(value reportmodel.ReportExportPrepareReceipt) string {
-	encoded, _ := json.Marshal(reportExportPrepareResult{
+	encoded, _ := database.MarshalTimeJSON(reportExportPrepareResult{
 		PayloadJSON: value.PayloadJSON, BusinessJobKey: value.BusinessJobKey, JobID: value.JobID,
 		CompletionArtifactID: value.CompletionArtifactID, CompletionFingerprint: value.CompletionFingerprint,
 	})
@@ -577,7 +577,7 @@ func reportExportPrepareRelatedIDs(value reportmodel.ReportExportPrepareReceipt)
 }
 
 func reportExportPrepareRelatedIDsJSON(value reportmodel.ReportExportPrepareReceipt) string {
-	encoded, _ := json.Marshal(reportExportPrepareRelatedIDs(value))
+	encoded, _ := database.MarshalTimeJSON(reportExportPrepareRelatedIDs(value))
 	return string(encoded)
 }
 
@@ -593,11 +593,11 @@ func reportExportPrepareReceipt(record sharedoperation.Record) (reportmodel.Repo
 		return value, fmt.Errorf("report export prepare operation identity is invalid")
 	}
 	var metadata reportExportPrepareMetadata
-	if err := json.Unmarshal(record.MetadataJSON, &metadata); err != nil {
+	if err := database.UnmarshalTimeJSON(record.MetadataJSON, &metadata); err != nil {
 		return value, fmt.Errorf("decode report export prepare operation metadata: %w", err)
 	}
 	var result reportExportPrepareResult
-	if err := json.Unmarshal(record.ResultJSON, &result); err != nil {
+	if err := database.UnmarshalTimeJSON(record.ResultJSON, &result); err != nil {
 		return value, fmt.Errorf("decode report export prepare operation result: %w", err)
 	}
 	value.CallerKey, value.RetryOfJobID = metadata.CallerKey, metadata.RetryOfJobID

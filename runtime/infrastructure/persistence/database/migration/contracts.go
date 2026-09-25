@@ -3,7 +3,6 @@ package migration
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 type artifactFile interface {
@@ -166,7 +166,7 @@ func ReadBackupEvidence(path string) (BackupEvidence, error) {
 		return BackupEvidence{}, fmt.Errorf("read backup evidence: %w", err)
 	}
 	var evidence BackupEvidence
-	if err := json.Unmarshal(raw, &evidence); err != nil {
+	if err := timevalue.UnmarshalJSON(raw, &evidence); err != nil {
 		return BackupEvidence{}, fmt.Errorf("parse backup evidence: %w", err)
 	}
 	if err := evidence.Validate(time.Now().UTC()); err != nil {
@@ -280,7 +280,7 @@ func (e DrillEvidence) Validate() error {
 }
 
 func WriteJSONEvidence(path string, value any) error {
-	raw, err := json.MarshalIndent(value, "", "  ")
+	raw, err := timevalue.MarshalJSONIndent(value)
 	if err != nil {
 		return err
 	}

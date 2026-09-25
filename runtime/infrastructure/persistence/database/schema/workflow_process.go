@@ -15,25 +15,25 @@ func EnsureWorkflowProcessSchema(ctx context.Context, s Store) error {
 			"definition_version INTEGER NOT NULL", "definition_hash " + text + " NOT NULL", "definition_json TEXT NOT NULL",
 			"object_key " + text, "record_id " + text, "initiator_id " + text + " NOT NULL", "initiator_role_key " + text,
 			"status " + text + " NOT NULL", "current_node_ids_json TEXT NOT NULL", "variables_json TEXT NOT NULL",
-			"result_json TEXT NOT NULL", "error_code " + text, "created_at " + text + " NOT NULL", "updated_at " + text + " NOT NULL", "completed_at " + text,
+			"result_json TEXT NOT NULL", "error_code " + text, "created_at BIGINT NOT NULL", "updated_at BIGINT NOT NULL", "completed_at BIGINT NOT NULL DEFAULT 0",
 		},
 		WorkflowNodeInstancesTable: {
 			"workspace_id " + text + " NOT NULL", "id " + text + " PRIMARY KEY", "process_id " + text + " NOT NULL", "node_id " + text + " NOT NULL",
 			"node_type " + text + " NOT NULL", "iteration INTEGER NOT NULL", "status " + text + " NOT NULL",
 			"input_json TEXT NOT NULL", "output_json TEXT NOT NULL", "error_code " + text,
-			"started_at " + text + " NOT NULL", "completed_at " + text,
+			"started_at BIGINT NOT NULL", "completed_at BIGINT NOT NULL DEFAULT 0",
 		},
 		WorkflowTasksTable: {
 			"workspace_id " + text + " NOT NULL", "id " + text + " PRIMARY KEY", "process_id " + text + " NOT NULL", "node_instance_id " + text + " NOT NULL", "node_id " + text + " NOT NULL",
 			"title TEXT NOT NULL", "assignee_user_id " + text, "assignee_name TEXT", "assignee_role_key " + text,
 			"assignee_resolver_key " + text, "assignee_evidence_json TEXT NOT NULL DEFAULT '{\"matches\":[]}'",
 			"resolver_snapshot_json TEXT NOT NULL DEFAULT '[]'", "candidate_source " + text, "node_definition_version INTEGER NOT NULL DEFAULT 0", "sequence_no INTEGER NOT NULL",
-			"status " + text + " NOT NULL", "decision " + text, "comment TEXT", "due_at " + text,
-			"completed_by " + text, "completed_at " + text, "created_at " + text + " NOT NULL", "updated_at " + text + " NOT NULL",
+			"status " + text + " NOT NULL", "decision " + text, "comment TEXT", "due_at BIGINT NOT NULL DEFAULT 0",
+			"completed_by " + text, "completed_at BIGINT NOT NULL DEFAULT 0", "created_at BIGINT NOT NULL", "updated_at BIGINT NOT NULL",
 		},
 		WorkflowProcessEventsTable: {
 			"workspace_id " + text + " NOT NULL", "id " + text + " PRIMARY KEY", "process_id " + text + " NOT NULL", "node_id " + text, "task_id " + text,
-			"event " + text + " NOT NULL", "actor_id " + text + " NOT NULL", "summary TEXT NOT NULL", "metadata_json TEXT NOT NULL", "created_at " + text + " NOT NULL",
+			"event " + text + " NOT NULL", "actor_id " + text + " NOT NULL", "summary TEXT NOT NULL", "metadata_json TEXT NOT NULL", "created_at BIGINT NOT NULL",
 		},
 	}
 	prepareWorkspaceScopedIdentities(tables)

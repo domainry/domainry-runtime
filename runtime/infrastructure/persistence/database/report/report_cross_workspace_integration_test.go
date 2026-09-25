@@ -3,6 +3,7 @@ package report
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -18,13 +19,17 @@ func TestCrossWorkspaceAggregateIsExplicitAndTenantReportsRemainIsolated(t *test
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE sale (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, sold_at TEXT, amount INTEGER, UNIQUE(workspace_id,id))`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE sale (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, sold_at INTEGER, amount INTEGER, UNIQUE(workspace_id,id))`); err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range []struct {
-		workspace, id, soldAt string
-		amount                int
-	}{{"a", "1", "2026-08-01T14:30:00Z", 10}, {"b", "2", "2026-08-01T15:15:00Z", 20}} {
+		workspace, id string
+		soldAt        int64
+		amount        int
+	}{
+		{"a", "1", time.Date(2026, 8, 1, 14, 30, 0, 0, time.UTC).UnixMilli(), 10},
+		{"b", "2", time.Date(2026, 8, 1, 15, 15, 0, 0, time.UTC).UnixMilli(), 20},
+	} {
 		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO sale VALUES (?,?,?,?,?,?)`, row.workspace, row.id, row.soldAt, row.soldAt, row.soldAt, row.amount); err != nil {
 			t.Fatal(err)
 		}

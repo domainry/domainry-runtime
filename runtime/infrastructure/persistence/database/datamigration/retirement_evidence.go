@@ -1,11 +1,12 @@
 package datamigration
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 type RetirementBusinessCheck struct {
@@ -50,7 +51,7 @@ func LoadRetirementEvidenceInput(path string) (RetirementEvidenceInput, error) {
 		return RetirementEvidenceInput{}, fmt.Errorf("read retirement business evidence: %w", err)
 	}
 	var input RetirementEvidenceInput
-	if err := json.Unmarshal(raw, &input); err != nil {
+	if err := timevalue.UnmarshalJSON(raw, &input); err != nil {
 		return RetirementEvidenceInput{}, fmt.Errorf("parse retirement business evidence: %w", err)
 	}
 	return input, nil

@@ -36,7 +36,7 @@ func ReconcileRestoredDatabase(ctx context.Context, database *sql.DB, driver, sc
 		return nil, err
 	}
 	renderer := dialect.WithSchema(schema)
-	restoredAtText := restoredAt.UTC().Format(time.RFC3339Nano)
+	restoredAtMillis := restoredAt.UTC().UnixMilli()
 	plans := RestoreReconciliationPlan()
 	results := make([]ReconciliationResult, 0, len(plans))
 	tx, err := database.BeginTx(ctx, nil)
@@ -54,8 +54,8 @@ func ReconcileRestoredDatabase(ctx context.Context, database *sql.DB, driver, sc
 			continue
 		}
 		predicate := query.And(
-			query.NotEqual("lease_expires_at", ""),
-			query.LessThanOrEqual("lease_expires_at", restoredAtText),
+			query.NotEqual("lease_expires_at", int64(0)),
+			query.LessThanOrEqual("lease_expires_at", restoredAtMillis),
 		)
 		switch plan.Table {
 		case "_automation_runs":
@@ -68,9 +68,9 @@ func ReconcileRestoredDatabase(ctx context.Context, database *sql.DB, driver, sc
 			return nil, fmt.Errorf("restore reconciliation table %s has no executable contract", plan.Table)
 		}
 		statement, arguments, err := query.NewUpdateBuilder(renderer, plan.Table).
-			Set("lease_owner", "").Set("lease_expires_at", "").
+			Set("lease_owner", "").Set("lease_expires_at", int64(0)).
 			SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).
-			Set("updated_at", restoredAtText).Where(predicate).Build()
+			Set("updated_at", restoredAtMillis).Where(predicate).Build()
 		if err != nil {
 			return nil, fmt.Errorf("build restore reconciliation for %s: %w", plan.Table, err)
 		}

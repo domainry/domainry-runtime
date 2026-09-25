@@ -91,7 +91,11 @@ func (r RuntimeStatusStore) deleteExpiredReceiptBatch(ctx context.Context, spec 
 	if err != nil {
 		return 0, err
 	}
-	eligibility := query.And(idempotencyReceiptOwnerPredicate(spec), expiredReceiptEligibility(now))
+	expiry, err := expiredReceiptEligibility(now)
+	if err != nil {
+		return 0, err
+	}
+	eligibility := query.And(idempotencyReceiptOwnerPredicate(spec), expiry)
 	selectQuery, selectArgs, err := query.NewSelectBuilder(r.store.SQLRenderer, spec.table).Columns("id", "workspace_id").Where(query.And(query.ExistsSubquery(lease), eligibility)).OrderBy(query.Ascending("expires_at"), query.Ascending("id")).Limit(limit).Build()
 	if err != nil {
 		return 0, err
@@ -196,12 +200,16 @@ func (r RuntimeStatusStore) deleteExpiredOperationBatch(ctx context.Context, spe
 	return int(deleted), nil
 }
 
-func expiredReceiptEligibility(now string) query.Predicate {
+func expiredReceiptEligibility(now string) (query.Predicate, error) {
+	value, err := time.Parse(time.RFC3339Nano, now)
+	if err != nil {
+		return nil, err
+	}
 	return query.And(
-		query.NotEqual("expires_at", ""),
-		query.LessThanOrEqual("expires_at", now),
+		query.NotEqual("expires_at", int64(0)),
+		query.LessThanOrEqual("expires_at", value.UTC().UnixMilli()),
 		query.NotEqual("status", string(idempotency.StatusProcessing)),
-	)
+	), nil
 }
 
 func (r RuntimeStatusStore) failIdempotencyCleanup(ctx context.Context, owner string, fencingToken int64, now string, cause error) {
