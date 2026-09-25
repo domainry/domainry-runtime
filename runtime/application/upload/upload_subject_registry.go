@@ -2,10 +2,13 @@ package upload
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"strings"
+
 	"github.com/domainry/domainry-foundation/apperror"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-	"strings"
 )
 
 // UploadSubjectBinding is a host fact recorded from the authenticated upload,
@@ -26,13 +29,38 @@ func NewUploadSubjectRegistry(store UploadSubjectStore) *UploadSubjectRegistry {
 }
 
 func (s *UploadSubjectRegistry) Register(ctx context.Context, artifact lifecyclecontract.UploadArtifact, principal principalmodel.Principal) error {
+	if err := s.validateBindingPrincipal(artifact, principal); err != nil {
+		return err
+	}
+	return s.store.InsertUploadSubject(ctx, UploadSubjectBinding{WorkspaceID: artifact.WorkspaceID, FileID: artifact.ID, Filename: artifact.Filename, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, UserID: principal.UserID, SHA256: artifact.SHA256})
+}
+
+func (s *UploadSubjectRegistry) Ensure(ctx context.Context, artifact lifecyclecontract.UploadArtifact, principal principalmodel.Principal) error {
+	if err := s.validateBindingPrincipal(artifact, principal); err != nil {
+		return err
+	}
+	expected := UploadSubjectBinding{WorkspaceID: artifact.WorkspaceID, FileID: artifact.ID, Filename: artifact.Filename, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, UserID: principal.UserID, SHA256: artifact.SHA256}
+	existing, err := s.store.FindUploadSubject(ctx, artifact.WorkspaceID, artifact.ID)
+	if err == nil {
+		if existing != expected {
+			return uploadAccessError(apperror.KindForbidden, "backend.upload.subject_binding_denied")
+		}
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	return s.store.InsertUploadSubject(ctx, expected)
+}
+
+func (s *UploadSubjectRegistry) validateBindingPrincipal(artifact lifecyclecontract.UploadArtifact, principal principalmodel.Principal) error {
 	if err := uploadAuthorizePrincipal(principal); err != nil {
 		return err
 	}
 	if s == nil || s.store == nil || principal.UserID == "" || artifact.WorkspaceID != principal.WorkspaceID {
 		return uploadAccessError(apperror.KindForbidden, "backend.upload.subject_binding_denied")
 	}
-	return s.store.InsertUploadSubject(ctx, UploadSubjectBinding{WorkspaceID: artifact.WorkspaceID, FileID: artifact.ID, Filename: artifact.Filename, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, UserID: principal.UserID, SHA256: artifact.SHA256})
+	return nil
 }
 
 func (s *UploadSubjectRegistry) Authorize(ctx context.Context, workspace, user, identifier string) error {

@@ -122,7 +122,7 @@ func (e *businessActionExecution) CreateDerivedFile(ctx context.Context, request
 	if e.dependencies.CreateDerivedFile == nil {
 		return runtimeext.DerivedFileEvidence{}, missingExecutorPort("create_derived_file")
 	}
-	return e.dependencies.CreateDerivedFile(e.unitOfWork.executionContext(ctx), e.workspace.ID, request)
+	return e.dependencies.CreateDerivedFile(e.unitOfWork.executionContext(ctx), e.workspace.ID, e.invocation.Principal, request)
 }
 
 func (e *businessActionExecution) RunBusinessJob(ctx context.Context, request runtimeext.BusinessJobRequest) (runtimeext.BusinessJobReceipt, error) {

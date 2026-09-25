@@ -61,7 +61,7 @@ type BusinessHandlerExecutionDependencies struct {
 	VerifyFileClean                   func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 	OpenVerifiedFile                  func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
 	IssueFileDownload                 func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)
-	CreateDerivedFile                 func(context.Context, string, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
+	CreateDerivedFile                 func(context.Context, string, principalmodel.Principal, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
 	StageBusinessJob                  func(context.Context, string, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error)
 	ObjectForKey                      func(string) (definitionmodel.ObjectSchema, bool)
 	NormalizeAggregateQuery           func(definitionmodel.ObjectSchema, recordmodel.RecordListQuery, principalmodel.Principal) recordmodel.RecordListQuery

@@ -3,6 +3,7 @@ package action
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -76,6 +77,29 @@ func TestIssueFileDownloadRequiresGrantAndExactReadableRecordBinding(t *testing.
 	request.FileID = "other-file"
 	if _, err := execution.IssueFileDownload(t.Context(), request); apperror.CodeOf(err) != "backend.upload.file_record_binding_denied" || issueCalls != 1 {
 		t.Fatalf("mismatch code=%q issue calls=%d err=%v", apperror.CodeOf(err), issueCalls, err)
+	}
+}
+
+func TestCreateDerivedFilePassesTheInvocationPrincipal(t *testing.T) {
+	expected := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-a", WorkspaceID: "workspace-a"}}
+	var received principalmodel.Principal
+	execution := &businessActionExecution{
+		dependencies: BusinessHandlerExecutionDependencies{CreateDerivedFile: func(_ context.Context, workspaceID string, principal principalmodel.Principal, request runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error) {
+			if workspaceID != expected.WorkspaceID || request.IdempotencyKey != "attachment-1" {
+				t.Fatalf("unexpected derived file request: workspace=%q request=%+v", workspaceID, request)
+			}
+			received = principal
+			return runtimeext.DerivedFileEvidence{FileVerificationEvidence: runtimeext.FileVerificationEvidence{FileID: "derived-1"}}, nil
+		}},
+		invocation: actionmodel.ActionInvocation{Principal: expected},
+		workspace:  runtimeext.Workspace{ID: expected.WorkspaceID}, unitOfWork: newActionTestUnitOfWork(), fileGrants: []string{runtimeext.FileOperationCreateDerived},
+	}
+	created, err := execution.CreateDerivedFile(t.Context(), runtimeext.DerivedFileRequest{IdempotencyKey: "attachment-1", ObjectKey: "attachment", FieldKey: "file_id", Filename: "source.txt", ContentType: "text/plain", Content: strings.NewReader("source")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.FileID != "derived-1" || !reflect.DeepEqual(received, expected) {
+		t.Fatalf("created=%+v principal=%+v", created, received)
 	}
 }
 

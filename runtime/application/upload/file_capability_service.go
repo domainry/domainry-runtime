@@ -173,7 +173,7 @@ func (s *FileCapabilityService) IssueDownload(ctx context.Context, workspaceID s
 	return s.tickets.Issue(ctx, workspaceID, principal.UserID, principal.AuthorizationRevision, request)
 }
 
-func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID string, request runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error) {
+func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID string, principal principalmodel.Principal, request runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error) {
 	if err := ctx.Err(); err != nil {
 		return runtimeext.DerivedFileEvidence{}, err
 	}
@@ -181,6 +181,15 @@ func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID s
 	filename, contentType := strings.TrimSpace(request.Filename), strings.ToLower(strings.TrimSpace(request.ContentType))
 	if workspaceID == "" || idempotencyKey == "" || strings.TrimSpace(request.ObjectKey) == "" || strings.TrimSpace(request.FieldKey) == "" || filename == "" || filepath.Base(filename) != filename || !derivedContentTypePattern.MatchString(contentType) || request.Content == nil {
 		return runtimeext.DerivedFileEvidence{}, errors.New("backend.upload.derived_file_request_invalid")
+	}
+	bindSubject := !principal.SystemScope.Valid()
+	if bindSubject {
+		if err := uploadAuthorizePrincipal(principal); err != nil {
+			return runtimeext.DerivedFileEvidence{}, err
+		}
+		if s.subjects == nil || principal.WorkspaceID != workspaceID {
+			return runtimeext.DerivedFileEvidence{}, uploadAccessError(apperror.KindForbidden, "backend.upload.subject_binding_denied")
+		}
 	}
 	identity := sha256.Sum256([]byte(strings.Join([]string{workspaceID, idempotencyKey, strings.TrimSpace(request.ObjectKey), strings.TrimSpace(request.FieldKey)}, "\x00")))
 	fileID := "derived_" + hex.EncodeToString(identity[:16])
@@ -213,6 +222,12 @@ func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID s
 			return runtimeext.DerivedFileEvidence{}, errors.New("backend.upload.derived_file_identity_mismatch")
 		}
 		if existing.Status == lifecyclecontract.FileScanClean {
+			if bindSubject {
+				artifact := lifecyclecontract.UploadArtifact{ID: existing.FileID, WorkspaceID: existing.WorkspaceID, ObjectKey: existing.ObjectKey, FieldKey: existing.FieldKey, Filename: existing.Filename, ContentType: existing.ContentType, SHA256: existing.SHA256, Size: existing.Size}
+				if err := s.subjects.Ensure(ctx, artifact, principal); err != nil {
+					return runtimeext.DerivedFileEvidence{}, err
+				}
+			}
 			return s.derivedFileResult(ctx, workspaceID, filename, contentType, existing)
 		}
 	} else if !errors.Is(lookupErr, sql.ErrNoRows) {
@@ -236,6 +251,11 @@ func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID s
 	scan := lifecyclecontract.FileScanEvidence{FileID: fileID, WorkspaceID: workspaceID, Filename: storageName, ContentType: contentType, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, SHA256: digest, Size: size, Status: lifecyclecontract.FileScanClean, Provider: "domainry-derived-file-v1", EvidenceRef: "derived:sha256:" + digest, ScannedAt: now}
 	if err := s.store.RecordFileScan(ctx, scan); err != nil {
 		return runtimeext.DerivedFileEvidence{}, err
+	}
+	if bindSubject {
+		if err := s.subjects.Ensure(ctx, artifact, principal); err != nil {
+			return runtimeext.DerivedFileEvidence{}, err
+		}
 	}
 	return s.derivedFileResult(ctx, workspaceID, filename, contentType, scan)
 }

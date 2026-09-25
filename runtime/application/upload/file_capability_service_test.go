@@ -20,6 +20,7 @@ import (
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
 )
@@ -28,6 +29,10 @@ type fileCapabilityStoreStub struct {
 	mu            sync.Mutex
 	evidence      map[string]lifecyclecontract.FileScanEvidence
 	registerCalls int
+}
+
+func derivedFileSystemPrincipal() principalmodel.Principal {
+	return principalmodel.NewSystemPrincipal("derived-file-test", principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "test derived files"))
 }
 
 func TestFileCapabilityValidatesRecordReferenceAgainstUploadSubjectAndCleanEvidence(t *testing.T) {
@@ -155,7 +160,7 @@ func TestFileCapabilityCreateDerivedIsImmutableAndIdempotent(t *testing.T) {
 		IdempotencyKey: "import-1/page-1", ObjectKey: "document_version", FieldKey: "file_id",
 		Filename: "請求書-1.pdf", ContentType: "application/pdf", Content: bytes.NewReader([]byte("derived-pdf")),
 	}
-	first, err := service.CreateDerived(t.Context(), "workspace-a", request)
+	first, err := service.CreateDerived(t.Context(), "workspace-a", derivedFileSystemPrincipal(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +168,7 @@ func TestFileCapabilityCreateDerivedIsImmutableAndIdempotent(t *testing.T) {
 		t.Fatalf("first=%+v register calls=%d", first, store.registerCalls)
 	}
 	request.Content = bytes.NewReader([]byte("derived-pdf"))
-	second, err := service.CreateDerived(t.Context(), "workspace-a", request)
+	second, err := service.CreateDerived(t.Context(), "workspace-a", derivedFileSystemPrincipal(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,8 +176,48 @@ func TestFileCapabilityCreateDerivedIsImmutableAndIdempotent(t *testing.T) {
 		t.Fatalf("first=%+v second=%+v register calls=%d", first, second, store.registerCalls)
 	}
 	request.Content = bytes.NewReader([]byte("different"))
-	if _, err := service.CreateDerived(t.Context(), "workspace-a", request); err == nil || err.Error() != "backend.upload.derived_file_idempotency_conflict" {
+	if _, err := service.CreateDerived(t.Context(), "workspace-a", derivedFileSystemPrincipal(), request); err == nil || err.Error() != "backend.upload.derived_file_idempotency_conflict" {
 		t.Fatalf("expected idempotency conflict, got %v", err)
+	}
+}
+
+func TestFileCapabilityCreateDerivedRegistersTheActionPrincipal(t *testing.T) {
+	store := &fileCapabilityStoreStub{evidence: map[string]lifecyclecontract.FileScanEvidence{}}
+	blobs, err := blobstore.NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewFileCapabilityService(store, NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32)), blobs, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subjects := uploadSubjectMemory{}
+	service.BindUploadSubjects(NewUploadSubjectRegistry(subjects))
+	owner := uploadAccessPrincipal("asset.create")
+	request := runtimeext.DerivedFileRequest{
+		IdempotencyKey: "attachment-1", ObjectKey: "asset", FieldKey: "file_url",
+		Filename: "source.txt", ContentType: "text/plain", Content: strings.NewReader("source"),
+	}
+	created, err := service.CreateDerived(t.Context(), owner.WorkspaceID, owner, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Content = strings.NewReader("source")
+	if _, err := service.CreateDerived(t.Context(), owner.WorkspaceID, owner, request); err != nil {
+		t.Fatalf("idempotent replay lost the subject binding: %v", err)
+	}
+	object := definitionmodel.ObjectSchema{Key: "asset", Fields: []definitionmodel.FieldSchema{{Key: "file_url", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"scan_required": true}}}}
+	values := map[string]any{"file_url": map[string]any{
+		"file_id": created.FileID, "filename": created.FileVerificationEvidence.Filename, "content_type": created.FileVerificationEvidence.ContentType,
+		"size": created.Size, "content_sha256": created.ContentSHA256, "scan_receipt": created.ScanReceipt,
+	}}
+	if err := service.ValidateRecordReferences(t.Context(), object, values, owner); err != nil {
+		t.Fatal(err)
+	}
+	peer := owner
+	peer.UserID = "peer"
+	if err := service.ValidateRecordReferences(t.Context(), object, values, peer); apperror.CodeOf(err) != "backend.upload.subject_binding_denied" {
+		t.Fatalf("foreign principal validation error=%v", err)
 	}
 }
 
@@ -196,7 +241,7 @@ func TestFileCapabilityCreateDerivedSupportsConcurrentIdempotentReplay(t *testin
 		go func() {
 			defer workers.Done()
 			<-start
-			result, createErr := service.CreateDerived(t.Context(), "workspace-a", runtimeext.DerivedFileRequest{
+			result, createErr := service.CreateDerived(t.Context(), "workspace-a", derivedFileSystemPrincipal(), runtimeext.DerivedFileRequest{
 				IdempotencyKey: "import-1/page-1", ObjectKey: "document_version", FieldKey: "file_id",
 				Filename: "page.pdf", ContentType: "application/pdf", Content: bytes.NewReader([]byte("same-content")),
 			})
@@ -236,7 +281,7 @@ func TestFileCapabilityOpenVerifiedRehashesStoredBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := service.CreateDerived(t.Context(), "workspace-a", runtimeext.DerivedFileRequest{
+	created, err := service.CreateDerived(t.Context(), "workspace-a", derivedFileSystemPrincipal(), runtimeext.DerivedFileRequest{
 		IdempotencyKey: "preview-1", ObjectKey: "document_upload", FieldKey: "file_url", Filename: "preview.png", ContentType: "image/png", Content: bytes.NewReader([]byte("png-content")),
 	})
 	if err != nil {
@@ -280,7 +325,7 @@ func TestFileCapabilityIssuesTicketForActionAuthorizedRecordBinding(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := service.CreateDerived(t.Context(), "workspace-a", runtimeext.DerivedFileRequest{
+	created, err := service.CreateDerived(t.Context(), "workspace-a", derivedFileSystemPrincipal(), runtimeext.DerivedFileRequest{
 		IdempotencyKey: "file-1", ObjectKey: "document_upload", FieldKey: "file_url", Filename: "file.pdf", ContentType: "application/pdf", Content: bytes.NewReader([]byte("pdf")),
 	})
 	if err != nil {

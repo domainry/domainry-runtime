@@ -495,7 +495,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 	var verifyFileClean func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 	var openVerifiedFile func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
 	var issueFileDownload func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)
-	var createDerivedFile func(context.Context, string, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
+	var createDerivedFile func(context.Context, string, principalmodel.Principal, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
 	var validateFileReferences func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
 	if fileCapabilities != nil {
 		verifyFileClean = fileCapabilities.VerifyClean
