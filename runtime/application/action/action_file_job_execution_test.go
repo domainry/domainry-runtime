@@ -19,15 +19,17 @@ import (
 
 func TestOpenVerifiedFileRequiresExactReadableRecordBinding(t *testing.T) {
 	openCalls := 0
+	object := definitionmodel.ObjectSchema{Key: "document_source", Fields: []definitionmodel.FieldSchema{{Key: "file_id", Type: recordmodel.RecordFileFieldType}}}
 	execution := &businessActionExecution{
 		dependencies: BusinessHandlerExecutionDependencies{
 			GetRecord: func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
-				return recordmodel.Record{ID: "source-1", Data: map[string]any{"file_id": "file-other"}}, nil
+				return recordmodel.Record{ID: "source-1", Data: map[string]any{"file_id": verifiedFileReference("file-other")}}, nil
 			},
 			OpenVerifiedFile: func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error) {
 				openCalls++
 				return runtimeext.VerifiedFile{}, nil
 			},
+			ObjectForKey: func(key string) (definitionmodel.ObjectSchema, bool) { return object, key == object.Key },
 		},
 		invocation: actionmodel.ActionInvocation{Principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}},
 		action:     definitionmodel.ActionSchema{Key: "document.process", EffectSet: &definitionmodel.ActionEffectSet{Read: []definitionmodel.ActionObjectEffect{{ObjectKey: "document_source"}}}},
@@ -44,10 +46,11 @@ func TestOpenVerifiedFileRequiresExactReadableRecordBinding(t *testing.T) {
 
 func TestIssueFileDownloadRequiresGrantAndExactReadableRecordBinding(t *testing.T) {
 	issueCalls := 0
+	object := definitionmodel.ObjectSchema{Key: "document_source", Fields: []definitionmodel.FieldSchema{{Key: "file_id", Type: recordmodel.RecordFileFieldType}}}
 	execution := &businessActionExecution{
 		dependencies: BusinessHandlerExecutionDependencies{
 			GetRecord: func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
-				return recordmodel.Record{ID: "source-1", Data: map[string]any{"file_id": "file-1"}}, nil
+				return recordmodel.Record{ID: "source-1", Data: map[string]any{"file_id": verifiedFileReference("file-1")}}, nil
 			},
 			IssueFileDownload: func(_ context.Context, workspaceID string, principal runtimeext.Principal, request runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error) {
 				issueCalls++
@@ -56,6 +59,7 @@ func TestIssueFileDownloadRequiresGrantAndExactReadableRecordBinding(t *testing.
 				}
 				return runtimeext.FileDownloadTicket{ProtectedDownload: "/uploads/file-1?download_ticket=token"}, nil
 			},
+			ObjectForKey: func(key string) (definitionmodel.ObjectSchema, bool) { return object, key == object.Key },
 		},
 		principal:  runtimeext.Principal{Known: true, UserID: "user-a", AuthorizationRevision: "auth-1"},
 		invocation: actionmodel.ActionInvocation{Principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-a", WorkspaceID: "workspace-a"}}},
@@ -77,6 +81,13 @@ func TestIssueFileDownloadRequiresGrantAndExactReadableRecordBinding(t *testing.
 	request.FileID = "other-file"
 	if _, err := execution.IssueFileDownload(t.Context(), request); apperror.CodeOf(err) != "backend.upload.file_record_binding_denied" || issueCalls != 1 {
 		t.Fatalf("mismatch code=%q issue calls=%d err=%v", apperror.CodeOf(err), issueCalls, err)
+	}
+}
+
+func verifiedFileReference(fileID string) map[string]any {
+	return map[string]any{
+		"file_id": fileID, "filename": "source.txt", "content_type": "text/plain", "size": int64(3),
+		"content_sha256": strings.Repeat("a", 64), "scan_receipt": "receipt",
 	}
 }
 

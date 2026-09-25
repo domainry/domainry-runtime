@@ -11,6 +11,7 @@ import (
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 func (e *BusinessHandlerExecutor) ValidationErrors() []error {
@@ -81,7 +82,7 @@ func (e *businessActionExecution) OpenVerifiedFile(ctx context.Context, request 
 	if err != nil {
 		return runtimeext.VerifiedFile{}, err
 	}
-	if len(result.Records) != 1 || strings.TrimSpace(fmt.Sprint(result.Records[0].Fields[fieldKey])) != strings.TrimSpace(request.FileID) {
+	if !e.fileBindingMatches(result, objectKey, fieldKey, request.FileID) {
 		return runtimeext.VerifiedFile{}, apperror.New(apperror.KindForbidden, "backend.upload.file_record_binding_denied", nil, map[string]string{"object": objectKey, "record_id": recordID, "field": fieldKey})
 	}
 	if e.dependencies.OpenVerifiedFile == nil {
@@ -103,13 +104,38 @@ func (e *businessActionExecution) IssueFileDownload(ctx context.Context, request
 	if err != nil {
 		return runtimeext.FileDownloadTicket{}, err
 	}
-	if len(result.Records) != 1 || strings.TrimSpace(fmt.Sprint(result.Records[0].Fields[fieldKey])) != strings.TrimSpace(request.FileID) {
+	if !e.fileBindingMatches(result, objectKey, fieldKey, request.FileID) {
 		return runtimeext.FileDownloadTicket{}, apperror.New(apperror.KindForbidden, "backend.upload.file_record_binding_denied", nil, map[string]string{"object": objectKey, "record_id": recordID, "field": fieldKey})
 	}
 	if e.dependencies.IssueFileDownload == nil {
 		return runtimeext.FileDownloadTicket{}, missingExecutorPort("issue_file_download")
 	}
 	return e.dependencies.IssueFileDownload(e.unitOfWork.executionContext(ctx), e.workspace.ID, e.principal, request)
+}
+
+func (e *businessActionExecution) fileBindingMatches(result runtimeext.RecordQueryResult, objectKey, fieldKey, fileID string) bool {
+	if len(result.Records) != 1 || e.dependencies.ObjectForKey == nil {
+		return false
+	}
+	object, found := e.dependencies.ObjectForKey(objectKey)
+	if !found {
+		return false
+	}
+	field, found := actionOutputObjectField(object, fieldKey)
+	if !found {
+		return false
+	}
+	references, err := recordmodel.RecordFileReferences(field, result.Records[0].Fields[fieldKey])
+	if err != nil {
+		return false
+	}
+	fileID = strings.TrimSpace(fileID)
+	for _, reference := range references {
+		if reference.FileID == fileID {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *businessActionExecution) CreateDerivedFile(ctx context.Context, request runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error) {
