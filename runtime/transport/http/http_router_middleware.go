@@ -378,6 +378,7 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 				writeError(w, authenticatedRequest, http.StatusForbidden, "backend.workspace_scope_mismatch")
 				return
 			}
+			principal = s.principalWithBusinessProfile(principal, authenticatedRequest)
 			next.ServeHTTP(w, requestWithResolvedIdentity(authenticatedRequest, principal))
 		}))
 		s.identityAuthentication.Authenticate(authenticatedBusinessRequest).ServeHTTP(w, r)

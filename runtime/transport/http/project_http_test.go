@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -50,6 +51,10 @@ func TestProjectHTTPReceivesResolvedSessionIdentityAndAccessToken(t *testing.T) 
 	}
 	principal := identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "seller", AccessBundle: bundle}
 	project := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		resolved, ok := (&HTTPRouter{}).PrincipalFromContext(request.Context())
+		if !ok || resolved.EffectiveAuthorizationRevision() != "business-auth" {
+			t.Fatalf("resolved principal=%+v ok=%v", resolved, ok)
+		}
 		identity, ok := identitysdk.RequestIdentityFromContext(request.Context())
 		if !ok || identity.AccessToken != "session-token" || !identity.Principal.HasPermission("opportunity.win") {
 			t.Fatalf("request identity=%+v ok=%v", identity, ok)
@@ -57,6 +62,7 @@ func TestProjectHTTPReceivesResolvedSessionIdentityAndAccessToken(t *testing.T) 
 		response.WriteHeader(http.StatusNoContent)
 	})
 	router := routerWithIdentitySDK(principal)
+	router.businessPrincipal = projectBusinessPrincipalResolver{authorizationRevision: "business-auth"}
 	router.projectHTTP = project
 	mux := http.NewServeMux()
 	mux.Handle("/api/", project)
@@ -69,6 +75,15 @@ func TestProjectHTTPReceivesResolvedSessionIdentityAndAccessToken(t *testing.T) 
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
+}
+
+type projectBusinessPrincipalResolver struct {
+	authorizationRevision string
+}
+
+func (resolver projectBusinessPrincipalResolver) ResolveBusinessPrincipal(_ context.Context, principal principalmodel.Principal, _, _ string) (principalmodel.Principal, error) {
+	principal.BusinessAuthorizationRevision = resolver.authorizationRevision
+	return principal, nil
 }
 
 func TestUseProjectHTTPStoresOnlyExplicitHandler(t *testing.T) {
