@@ -24,10 +24,10 @@ func TestOperationsLeaseSnapshotReportsOnlyTargetInstance(t *testing.T) {
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
 	insert := store.InsertStatement("_worker_scopes", []string{"id", "owner", "scope_key", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "checkpoint", "last_error", "updated_at"})
 	for _, row := range [][]any{
-		{"live", "idempotency_cleanup", "live", "instance-a", now.Add(time.Minute).Format(time.RFC3339Nano), 1, "", "", 0, "", now.Format(time.RFC3339Nano)},
-		{"expired", "idempotency_cleanup", "expired", "instance-a:cleanup", now.Add(-time.Minute).Format(time.RFC3339Nano), 2, "", "", 0, "", now.Format(time.RFC3339Nano)},
-		{"other", "idempotency_cleanup", "other", "instance-b", now.Add(time.Minute).Format(time.RFC3339Nano), 1, "", "", 0, "", now.Format(time.RFC3339Nano)},
-		{"notification", "notification_inbox", "workspace-a", "instance-a", now.Add(time.Minute).Format(time.RFC3339Nano), 1, "", "", 0, "", now.Format(time.RFC3339Nano)},
+		{"live", "idempotency_cleanup", "live", "instance-a", now.Add(time.Minute).UnixMilli(), 1, int64(0), int64(0), 0, "", now.UnixMilli()},
+		{"expired", "idempotency_cleanup", "expired", "instance-a:cleanup", now.Add(-time.Minute).UnixMilli(), 2, int64(0), int64(0), 0, "", now.UnixMilli()},
+		{"other", "idempotency_cleanup", "other", "instance-b", now.Add(time.Minute).UnixMilli(), 1, int64(0), int64(0), 0, "", now.UnixMilli()},
+		{"notification", "notification_inbox", "workspace-a", "instance-a", now.Add(time.Minute).UnixMilli(), 1, int64(0), int64(0), 0, "", now.UnixMilli()},
 	} {
 		if _, err := store.DB().ExecContext(t.Context(), insert, row...); err != nil {
 			t.Fatal(err)

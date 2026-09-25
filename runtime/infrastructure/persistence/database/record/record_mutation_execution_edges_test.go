@@ -11,6 +11,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 func recordMutationExecutionFixture(now time.Time) recordmodel.RecordMutationExecution {
@@ -37,8 +38,8 @@ func recordMutationExecutionValues(value recordmodel.RecordMutationExecution, re
 		record.ResourceType, record.ResourceID, record.IdempotencyKey, record.RequestFingerprint, record.RequestedBy,
 		record.Reason, record.Reference, record.Status, record.StatusURL, string(record.ResultJSON), string(record.MetadataJSON),
 		record.ErrorCode, record.FailureClass, record.NextAction, string(record.RelatedIDsJSON), record.Correlation,
-		string(record.EvidenceJSON), record.LeaseOwner, record.LeaseExpiresAt, record.FencingToken, record.ExpiresAt,
-		record.CreatedAt, record.StartedAt, record.FinishedAt, record.UpdatedAt,
+		string(record.EvidenceJSON), record.LeaseOwner, timevalue.Millis(record.LeaseExpiresAt), record.FencingToken, timevalue.Millis(record.ExpiresAt),
+		timevalue.Millis(record.CreatedAt), timevalue.Millis(record.StartedAt), timevalue.Millis(record.FinishedAt), timevalue.Millis(record.UpdatedAt),
 	}
 }
 

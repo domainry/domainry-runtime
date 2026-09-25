@@ -11,6 +11,7 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 func workflowWorkerFailureStore(t *testing.T, state *workflowSQLState) WorkflowWorkerStore {
@@ -45,8 +46,8 @@ func workflowReceiptRow(now time.Time) workflowSQLQueryStep {
 		record.ResourceType, record.ResourceID, record.IdempotencyKey, record.RequestFingerprint, record.RequestedBy,
 		record.Reason, record.Reference, record.Status, record.StatusURL, string(record.ResultJSON), string(record.MetadataJSON),
 		record.ErrorCode, record.FailureClass, record.NextAction, string(record.RelatedIDsJSON), record.Correlation,
-		string(record.EvidenceJSON), record.LeaseOwner, record.LeaseExpiresAt, record.FencingToken, record.ExpiresAt,
-		record.CreatedAt, record.StartedAt, record.FinishedAt, record.UpdatedAt,
+		string(record.EvidenceJSON), record.LeaseOwner, timevalue.Millis(record.LeaseExpiresAt), record.FencingToken, timevalue.Millis(record.ExpiresAt),
+		timevalue.Millis(record.CreatedAt), timevalue.Millis(record.StartedAt), timevalue.Millis(record.FinishedAt), timevalue.Millis(record.UpdatedAt),
 	}
 	row := make([]driver.Value, len(values))
 	for index, item := range values {

@@ -127,7 +127,7 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 	if roleID == "" || memberRoleID == "" {
 		t.Fatal("member or onboarding role missing")
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := time.Now().UTC().UnixMilli()
 	statement, args, err := query.NewWorkspaceInsertBuilder(store.RuntimeRenderer(), "_identity_user_role_assignments", request.WorkspaceID).Columns("id", "user_id", "role_id", "source", "status", "created_at", "updated_at").Values("onboarding-assignment", request.InitialAdminUserID, roleID, "manual", "active", now, now).Build()
 	if err != nil {
 		t.Fatal(err)

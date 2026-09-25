@@ -14,6 +14,7 @@ import (
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 func TestIdempotencyReceiptScopeAndStatusInputBoundaries(t *testing.T) {
@@ -119,11 +120,11 @@ func TestRuntimeStatusCleanupStatesAndReceiptLimit(t *testing.T) {
 		row  []driver.Value
 		want string
 	}{
-		{name: "running", row: []driver.Value{"worker", now.Add(time.Minute).Format(time.RFC3339Nano), int64(3), "started", "", int64(0), ""}, want: "running"},
-		{name: "expired", row: []driver.Value{"worker", now.Add(-time.Minute).Format(time.RFC3339Nano), int64(3), "started", "", int64(0), "boom"}, want: "failed"},
-		{name: "failed", row: []driver.Value{"", "", int64(3), "started", "", int64(0), "boom"}, want: "failed"},
-		{name: "completed", row: []driver.Value{"", "", int64(3), "started", "completed", int64(2), ""}, want: "completed"},
-		{name: "idle", row: []driver.Value{"", "", int64(0), "", "", int64(0), ""}, want: "idle"},
+		{name: "running", row: []driver.Value{"worker", now.Add(time.Minute).UnixMilli(), int64(3), timevalue.Millis("2026-07-20T11:59:00Z"), int64(0), int64(0), ""}, want: "running"},
+		{name: "expired", row: []driver.Value{"worker", now.Add(-time.Minute).UnixMilli(), int64(3), timevalue.Millis("2026-07-20T11:59:00Z"), int64(0), int64(0), "boom"}, want: "failed"},
+		{name: "failed", row: []driver.Value{"", int64(0), int64(3), timevalue.Millis("2026-07-20T11:59:00Z"), int64(0), int64(0), "boom"}, want: "failed"},
+		{name: "completed", row: []driver.Value{"", int64(0), int64(3), timevalue.Millis("2026-07-20T11:59:00Z"), timevalue.Millis("2026-07-20T12:00:00Z"), int64(2), ""}, want: "completed"},
+		{name: "idle", row: []driver.Value{"", int64(0), int64(0), int64(0), int64(0), int64(0), ""}, want: "idle"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			steps := deploymentOperationalStatusSteps(test.row)
@@ -153,10 +154,10 @@ func deploymentOperationColumns() []string {
 }
 
 func deploymentOperationRow(spec idempotencyReceiptTable, index int) []driver.Value {
-	updatedAt := fmt.Sprintf("2026-07-20T12:00:0%dZ", index)
+	updatedAt := timevalue.Millis(fmt.Sprintf("2026-07-20T12:00:0%dZ", index))
 	return []driver.Value{
 		"id", "workspace-primary", "", spec.rowOwner, "scope", "scope", "", "resource", "target", "key", "fingerprint", "actor", "", "key",
-		"processing", "/operations/id", "{}", "{}", "", "", "", "[]", "", "[]", "", "", int64(index), "expires", updatedAt, updatedAt, "", updatedAt,
+		"processing", "/operations/id", "{}", "{}", "", "", "", "[]", "", "[]", "", int64(0), int64(index), int64(0), updatedAt, updatedAt, int64(0), updatedAt,
 	}
 }
 

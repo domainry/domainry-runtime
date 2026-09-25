@@ -17,6 +17,7 @@ import (
 	ormpostgres "github.com/domainry/domainry-orm/postgres"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
 func TestActionExecutionClaimRetryWaitAndDatabaseStages(t *testing.T) {
@@ -455,8 +456,8 @@ func actionExecutionValues(value actionmodel.ActionBusinessExecution, resultJSON
 		record.ResourceType, record.ResourceID, record.IdempotencyKey, record.RequestFingerprint, record.RequestedBy,
 		record.Reason, record.Reference, record.Status, record.StatusURL, string(record.ResultJSON), string(record.MetadataJSON),
 		record.ErrorCode, record.FailureClass, record.NextAction, string(record.RelatedIDsJSON), record.Correlation,
-		string(record.EvidenceJSON), record.LeaseOwner, record.LeaseExpiresAt, record.FencingToken, record.ExpiresAt,
-		record.CreatedAt, record.StartedAt, record.FinishedAt, record.UpdatedAt,
+		string(record.EvidenceJSON), record.LeaseOwner, timevalue.Millis(record.LeaseExpiresAt), record.FencingToken, timevalue.Millis(record.ExpiresAt),
+		timevalue.Millis(record.CreatedAt), timevalue.Millis(record.StartedAt), timevalue.Millis(record.FinishedAt), timevalue.Millis(record.UpdatedAt),
 	}
 }
 

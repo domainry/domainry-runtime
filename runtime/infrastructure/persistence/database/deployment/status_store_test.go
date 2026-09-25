@@ -16,6 +16,7 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	reportpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/report"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -50,7 +51,7 @@ func insertRecordOperationFixture(t *testing.T, store *database.RuntimeStore, va
 	if _, err := store.DB().ExecContext(t.Context(), statement,
 		value.id, value.workspace, "record", "record.mutation", "create", "customer", "", value.id, value.fingerprint, "admin", "", value.key,
 		value.status, "/operations/"+value.id, "{}", `{"response_status":409}`, value.errorCode, "", "", "[]", value.id, "[]",
-		value.leaseOwner, value.leaseExpires, value.fencingToken, value.expiresAt, value.createdAt, value.createdAt, "", value.updatedAt,
+		value.leaseOwner, timevalue.Millis(value.leaseExpires), value.fencingToken, timevalue.Millis(value.expiresAt), timevalue.Millis(value.createdAt), timevalue.Millis(value.createdAt), int64(0), timevalue.Millis(value.updatedAt),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +135,7 @@ func TestIdempotencyOperationalStatusAggregatesWorkspaceBacklogConflictsAndClean
 		store.ObserveIdempotency(t.Context(), "workspace-a", "record.create", idempotency.OutcomeReplayed)
 	}
 	leaseInsert := store.InsertStatement("_worker_scopes", []string{"id", "owner", "scope_key", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "checkpoint", "last_error", "updated_at"})
-	if _, err := store.DB().ExecContext(t.Context(), leaseInsert, idempotencyCleanupLeaseID, "idempotency_cleanup", "receipts", "runtime-a", now.Add(time.Minute).Format(time.RFC3339Nano), 9, now.Format(time.RFC3339Nano), "", 3, "", now.Format(time.RFC3339Nano)); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), leaseInsert, idempotencyCleanupLeaseID, "idempotency_cleanup", "receipts", "runtime-a", now.Add(time.Minute).UnixMilli(), 9, now.UnixMilli(), int64(0), 3, "", now.UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -177,7 +178,7 @@ func TestIdempotencyCleanupLeasePreventsConcurrentDeletionAndFencesReclaim(t *te
 	insertReceipt("expired-processing", "processing", now.Add(-time.Minute))
 	insertReceipt("future-success", "succeeded", now.Add(time.Hour))
 	leaseInsert := store.InsertStatement("_worker_scopes", []string{"id", "owner", "scope_key", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "checkpoint", "last_error", "updated_at"})
-	if _, err := store.DB().ExecContext(t.Context(), leaseInsert, idempotencyCleanupLeaseID, "idempotency_cleanup", "receipts", "runtime-a", now.Add(time.Minute).Format(time.RFC3339Nano), 7, now.Format(time.RFC3339Nano), "", 0, "", now.Format(time.RFC3339Nano)); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), leaseInsert, idempotencyCleanupLeaseID, "idempotency_cleanup", "receipts", "runtime-a", now.Add(time.Minute).UnixMilli(), 7, now.UnixMilli(), int64(0), 0, "", now.UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewRuntimeStatusStore(store)
@@ -185,7 +186,7 @@ func TestIdempotencyCleanupLeasePreventsConcurrentDeletionAndFencesReclaim(t *te
 	if err != nil || blocked.Acquired || blocked.Deleted != 0 {
 		t.Fatalf("live lease cleanup=%#v err=%v", blocked, err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `UPDATE _worker_scopes SET lease_expires_at = ? WHERE id = ?`, now.Add(-time.Second).Format(time.RFC3339Nano), idempotencyCleanupLeaseID); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `UPDATE _worker_scopes SET lease_expires_at = ? WHERE id = ?`, now.Add(-time.Second).UnixMilli(), idempotencyCleanupLeaseID); err != nil {
 		t.Fatal(err)
 	}
 	cleaned, err := repository.RunIdempotencyCleanup(t.Context(), deploymentmodel.IdempotencyCleanupRequest{LeaseOwner: "runtime-b", LeaseTTL: time.Minute, BatchSize: 10, Now: now})
@@ -215,7 +216,7 @@ func TestIdempotencyCleanupRevalidatesEligibilityAfterSelection(t *testing.T) {
 	repository := NewRuntimeStatusStore(store)
 	repository.beforeDeleteExpiredReceipts = func() {
 		statement := `UPDATE _operations SET status = ?, expires_at = ?, lease_owner = ?, lease_expires_at = ?, fencing_token = fencing_token + 1 WHERE workspace_id = ? AND owner = 'record' AND id = ?`
-		if _, err := store.DB().ExecContext(t.Context(), statement, string(idempotency.StatusProcessing), "", "runtime-submit", now.Add(time.Minute).Format(time.RFC3339Nano), "workspace-a", "selected-then-reclaimed"); err != nil {
+		if _, err := store.DB().ExecContext(t.Context(), statement, string(idempotency.StatusProcessing), int64(0), "runtime-submit", now.Add(time.Minute).UnixMilli(), "workspace-a", "selected-then-reclaimed"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -223,9 +224,10 @@ func TestIdempotencyCleanupRevalidatesEligibilityAfterSelection(t *testing.T) {
 	if err != nil || cleaned.Deleted != 1 {
 		t.Fatalf("cleanup=%+v err=%v", cleaned, err)
 	}
-	var status, expiresAt string
-	if err = store.DB().QueryRowContext(t.Context(), `SELECT status, expires_at FROM _operations WHERE workspace_id = ? AND owner = 'record' AND id = ?`, "workspace-a", "selected-then-reclaimed").Scan(&status, &expiresAt); err != nil || status != string(idempotency.StatusProcessing) || expiresAt != "" {
-		t.Fatalf("reclaimed receipt status=%q expires_at=%q err=%v", status, expiresAt, err)
+	var status string
+	var expiresAt int64
+	if err = store.DB().QueryRowContext(t.Context(), `SELECT status, expires_at FROM _operations WHERE workspace_id = ? AND owner = 'record' AND id = ?`, "workspace-a", "selected-then-reclaimed").Scan(&status, &expiresAt); err != nil || status != string(idempotency.StatusProcessing) || expiresAt != 0 {
+		t.Fatalf("reclaimed receipt status=%q expires_at=%d err=%v", status, expiresAt, err)
 	}
 	var terminalCount int
 	if err = store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE workspace_id = ? AND owner = 'record' AND id = ?`, "workspace-a", "expired-terminal").Scan(&terminalCount); err != nil || terminalCount != 0 {

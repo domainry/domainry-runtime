@@ -88,7 +88,7 @@ func TestOperationsLeaseReleaseSQLStages(t *testing.T) {
 		t.Fatal("workspace-scoped release without workspace accepted")
 	}
 
-	expired := now.Add(-time.Minute).Format(time.RFC3339Nano)
+	expired := now.Add(-time.Minute).UnixMilli()
 	validQuery := operationsSQLQueryStep{columns: []string{"lease_owner", "lease_expires_at", "fencing_token"}, rows: [][]driver.Value{{"instance", expired, int64(2)}}}
 	for _, test := range []struct {
 		name      string
