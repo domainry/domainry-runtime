@@ -190,7 +190,7 @@ func LoadWithProjectFile(projectFile string) (Config, Snapshot, error) {
 	for _, item := range os.Environ() {
 		name, _, _ := strings.Cut(item, "=")
 		base := strings.TrimSuffix(name, "_FILE")
-		if managedConfigName(name) && !known[base] {
+		if managedConfigName(name) && !known[base] && !identityModuleConfigName(base) {
 			unknown = append(unknown, name)
 		}
 	}
@@ -439,7 +439,7 @@ func setConfigField(cfg *Config, definition Definition, raw string) error {
 }
 
 func configEnvName(field string) string {
-	overrides := map[string]string{"RuntimeVersion": "DOMAINRY_RUNTIME_VERSION", "Environment": "APP_ENV", "AppLocale": "APP_LOCALE", "DatabaseDSN": "DATABASE_DSN", "DBPath": "APP_DB_PATH", "MigrationSQL": "MIGRATION_SQL", "MigrationRestoreDrillSuccessAt": "MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT", "Port": "PORT"}
+	overrides := map[string]string{"RuntimeVersion": "DOMAINRY_RUNTIME_VERSION", "Environment": "APP_ENV", "AppLocale": "APP_LOCALE", "DatabaseDSN": "DATABASE_DSN", "DBPath": "APP_DB_PATH", "IdentityRedirectURLs": "IDENTITY_REDIRECT_URLS", "MigrationSQL": "MIGRATION_SQL", "MigrationRestoreDrillSuccessAt": "MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT", "Port": "PORT"}
 	if value := overrides[field]; value != "" {
 		return value
 	}
@@ -529,6 +529,17 @@ func managedConfigName(name string) bool {
 		}
 	}
 	return false
+}
+
+func identityModuleConfigName(name string) bool {
+	switch name {
+	case "AUTH_JWT_SECRET", "AUTH_JWT_ACTIVE_KID", "AUTH_DEFAULT_PASSWORD",
+		"IDENTITY_DATA_SECRET_KEY", "IDENTITY_DATA_ACTIVE_KEY_ID",
+		"IDENTITY_OPERATIONS_ACCESS_TOKEN", "IDENTITY_BROWSER_RETURN_URLS":
+		return true
+	default:
+		return false
+	}
 }
 
 var configSourceStat = os.Stat

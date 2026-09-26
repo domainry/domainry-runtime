@@ -64,8 +64,8 @@ github.com/domainry/domainry-data-exchange-sdk v0.3.11 h1:MS3HH2jItBPow8XiJmEFiw
 github.com/domainry/domainry-data-exchange-sdk v0.3.11/go.mod h1:DJgtEedt0J+8ejZhQ+goqLSK43UA3lzQhX/PMEgSWJE=
 github.com/domainry/domainry-foundation v0.1.42 h1:PmgIWWOFGcszwVRy+LfddWpzX1/Ll+RrEVeTEqFDN+4=
 github.com/domainry/domainry-foundation v0.1.42/go.mod h1:swF/3qEtTH4V94N68yxBroYDOQ/ybycO5fC6UZvE9Ks=
-github.com/domainry/domainry-identity v0.2.33 h1:rEYnVuqyQXW5zoF8tq12LJmUSYzMDahnNxp46gdX0t0=
-github.com/domainry/domainry-identity v0.2.33/go.mod h1:D/9V1VG1TBz1aXjykb9kZLGyNyFmaWowtx3H+JE8+C4=
+github.com/domainry/domainry-identity v0.2.34 h1:W1Aupe9mlloZ4oeFl/IgYu2oCQTQZmd9w/NeHAOiTCM=
+github.com/domainry/domainry-identity v0.2.34/go.mod h1:D/9V1VG1TBz1aXjykb9kZLGyNyFmaWowtx3H+JE8+C4=
 github.com/domainry/domainry-identity-sdk v0.1.18 h1:hJFKRCXhXJgjKQgsi5Q/buZAbHkrkCkwvy3xPiqrLIQ=
 github.com/domainry/domainry-identity-sdk v0.1.18/go.mod h1:PoVPl9OVibzabl1QB0+G3S2PgiBNGpkPmTgGzzyFY7Q=
 github.com/domainry/domainry-integration v0.1.30 h1:kbyTjJ/0lpeymFF0k+W74FoD6K+txX0md1xxyFMwgKk=
