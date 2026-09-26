@@ -91,6 +91,7 @@ type Config struct {
 	TelemetryExportTimeout                  time.Duration
 	HealthCheckTimeout                      time.Duration
 	DatabaseDriver                          string
+	DatabaseURL                             string
 	DatabaseDSN                             string
 	DatabaseMigrationDSN                    string
 	DatabaseMigrationMode                   string
@@ -257,6 +258,7 @@ func FromEnv() Config {
 		TelemetryExportTimeout:                      durationEnv("TELEMETRY_EXPORT_TIMEOUT", 5*time.Second),
 		HealthCheckTimeout:                          durationEnv("HEALTH_CHECK_TIMEOUT", 2*time.Second),
 		DatabaseDriver:                              env("DATABASE_DRIVER", "sqlite"),
+		DatabaseURL:                                 strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		DatabaseDSN:                                 env("DATABASE_DSN", ""),
 		DatabaseMigrationDSN:                        strings.TrimSpace(os.Getenv("DATABASE_MIGRATION_DSN")),
 		DatabaseMigrationMode:                       databaseMigrationModeEnv(environment),

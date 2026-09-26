@@ -68,7 +68,7 @@ func Definitions() []Definition {
 	for i := 0; i < typeOfConfig.NumField(); i++ {
 		field := typeOfConfig.Field(i)
 		name := configEnvName(field.Name)
-		secret := strings.Contains(name, "SECRET") || strings.Contains(name, "PASSWORD") || strings.Contains(name, "TOKEN") || strings.Contains(name, "DSN") || strings.Contains(name, "API_KEY") || strings.Contains(name, "ACCESS_TOKEN") || field.Name == "IntegrationDecryptOnlyKeys" || field.Name == "TelemetryHeaders" || field.Name == "RateLimitRedisURL" || field.Name == "PrincipalCacheRedisURL"
+		secret := strings.Contains(name, "SECRET") || strings.Contains(name, "PASSWORD") || strings.Contains(name, "TOKEN") || strings.Contains(name, "DSN") || name == "DATABASE_URL" || strings.Contains(name, "API_KEY") || strings.Contains(name, "ACCESS_TOKEN") || field.Name == "IntegrationDecryptOnlyKeys" || field.Name == "TelemetryHeaders" || field.Name == "RateLimitRedisURL" || field.Name == "PrincipalCacheRedisURL"
 		defaultValue := valueOfDefaults.Field(i).Interface()
 		if secret {
 			defaultValue = "[REDACTED]"
@@ -117,6 +117,9 @@ func LoadContract(sources ...Source) (Config, Snapshot, error) {
 			}
 			entries[name] = Provenance{Name: name, Source: source.Name, Version: version, Redacted: definition.Secret}
 		}
+	}
+	if err := cfg.resolveDatabaseURL(); err != nil {
+		return Config{}, Snapshot{}, err
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, Snapshot{}, err
