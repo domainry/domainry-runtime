@@ -217,6 +217,27 @@ func TestEnsureRuntimeSchemaCurrentReceiptSkipsSchemaReconciliation(t *testing.T
 	}
 }
 
+func TestEnsureRuntimeSchemaCurrentReceiptRepairsManagedDatabaseMarker(t *testing.T) {
+	state := &databaseSQLState{}
+	store := runtimeSchemaStore(t, state)
+	store.engine = mysql.NewEngine()
+	store.schemaAssembler = runtimeSchemaAssemblerStub{}
+	checksum := runtimeSchemaDefinitionChecksum(t, store)
+	state.querySteps = append([]databaseSQLQueryStep{{columns: []string{"locked"}, rows: [][]driver.Value{{int64(1)}}}}, runtimeSchemaLedgerQueries(runtimeSchemaLedgerEntry(checksum, checksum, false))...)
+	state.querySteps = append(state.querySteps, databaseSQLQueryStep{
+		columns: []string{"contract_version", "database_identity_sha256"},
+		rows:    [][]driver.Value{{managedDatabaseCohortContractVersion, strings.Repeat("a", 64)}},
+	})
+	state.execSteps = []databaseSQLExecStep{{rows: 1}, {rows: 1}, {rows: 1}, {rows: 1}}
+
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.execSteps) != 0 {
+		t.Fatalf("managed database marker exec steps remaining=%d", len(state.execSteps))
+	}
+}
+
 func TestEnsureRuntimeSchemaOrchestrationFailures(t *testing.T) {
 	verify := runtimeSchemaStore(t, &databaseSQLState{querySteps: []databaseSQLQueryStep{{err: errDatabaseSQL}}})
 	verify.config.DatabaseMigrationMode = "verify"

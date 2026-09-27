@@ -110,7 +110,10 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 	// purpose. Changed canonical DDL produces a new content-addressed receipt and
 	// takes the full path below.
 	if !pending {
-		return nil
+		// The installation marker is data, not DDL covered by the schema receipt.
+		// A process can stop after creating the schema but before seeding this
+		// single row, so always repair it before trusting the receipt.
+		return s.ensureManagedDatabaseCohortMarker(ctx)
 	}
 	if err := s.startRuntimeSchemaMigration(ctx, checksum); err != nil {
 		return err
