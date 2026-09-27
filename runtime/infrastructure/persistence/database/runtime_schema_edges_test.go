@@ -174,10 +174,8 @@ func TestRuntimeSchemaMutationFailuresAndDefinitions(t *testing.T) {
 	mysqlStore := &RuntimeStore{engine: mysql.NewEngine()}
 	definition := "TEXT NOT NULL DEFAULT '[]', TEXT NOT NULL DEFAULT '{}', TEXT NOT NULL DEFAULT ''"
 	got := mysqlStore.runtimeColumnDefinition(definition)
-	for _, expected := range []string{"DEFAULT ('[]')", "DEFAULT ('{}')", "DEFAULT ('')"} {
-		if !strings.Contains(got, expected) {
-			t.Fatalf("definition=%q", got)
-		}
+	if got != "TEXT NOT NULL, TEXT NOT NULL, TEXT NOT NULL" {
+		t.Fatalf("definition=%q", got)
 	}
 	if got := (&RuntimeStore{engine: sqlite.NewEngine()}).runtimeColumnDefinition(definition); got != definition {
 		t.Fatalf("sqlite definition=%q", got)

@@ -11,14 +11,14 @@ import (
 
 type Profile struct{}
 
-var textDefaultLiteral = regexp.MustCompile(`TEXT NOT NULL DEFAULT ('(?:''|[^'])*')`)
+var textDefaultLiteral = regexp.MustCompile(`((?:LONG)?TEXT NOT NULL) DEFAULT (?:\('(?:''|[^'])*'\)|'(?:''|[^'])*')`)
 
 func NewProfile() Profile { return Profile{} }
 
 func (Profile) ManagedDatabaseMarkerEnabled() bool { return true }
 func (Profile) ColumnDefinition(definition string) string {
 	definition = strings.TrimSpace(definition)
-	return textDefaultLiteral.ReplaceAllString(definition, "TEXT NOT NULL DEFAULT ($1)")
+	return textDefaultLiteral.ReplaceAllString(definition, "$1")
 }
 func (Profile) ApplicationTablesQuery(ormdialect.Renderer, string) persistencedriver.SchemaQuery {
 	return persistencedriver.SchemaQuery{Statement: "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()"}

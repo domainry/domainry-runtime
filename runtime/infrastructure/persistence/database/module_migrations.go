@@ -228,6 +228,7 @@ func (s *RuntimeStore) applyOwnedMigration(ctx context.Context, owner string, mi
 	}
 	defer tx.Rollback()
 	for _, statement := range migration.Statements {
+		statement = s.runtimeColumnDefinition(statement)
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("migration.failed: execute %s: %w", path, err)
 		}
