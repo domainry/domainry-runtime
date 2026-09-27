@@ -87,7 +87,11 @@ func (r bootstrapRuntimeProcess) connectorGateway() runtimeConnectorGateway {
 	if r.Runtime == nil {
 		return unavailableRuntimeConnectorGateway{}
 	}
-	return integrationRuntimeConnectorGateway{operations: r.Runtime.IntegrationOwnerOperations()}
+	return integrationRuntimeConnectorGateway{
+		operations: r.Runtime.IntegrationOwnerOperations(), accountReads: r.Runtime.IntegrationOwnerAccountReads(),
+		accountWrites: r.Runtime.IntegrationOwnerAccountWrites(),
+		runtimeID:     r.Runtime.RuntimeInstanceID(), knowledgeDocuments: r.Runtime.AgentKnowledgeDocuments(), knowledgeLibraries: r.Runtime.AgentKnowledgeLibraries(),
+	}
 }
 
 type serverRunDependencies struct {

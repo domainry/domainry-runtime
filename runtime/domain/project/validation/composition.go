@@ -253,6 +253,19 @@ func ValidateComposition(model projectmodel.Model, registry *runtimeext.ProjectE
 		switch mapping.TargetType {
 		case "action":
 			validateOperationReference(mapping.ActionKey, mapping.ObjectKey, handlers, model, path, add)
+			if handler, found := handlers[strings.TrimSpace(mapping.ActionKey)]; found {
+				hasRecordID := strings.TrimSpace(mapping.RecordID) != "" || strings.TrimSpace(mapping.RecordIDPath) != ""
+				switch handler.Kind {
+				case runtimeext.HandlerKindObjectCreate, runtimeext.HandlerKindObjectOperation, runtimeext.HandlerKindBulkOperation:
+					if hasRecordID {
+						add("project_definition.integration_action_scope_invalid", path+"/record_id", fmt.Sprintf("object-level handler %q cannot receive record_id", mapping.ActionKey))
+					}
+				case runtimeext.HandlerKindRecordUpdate, runtimeext.HandlerKindRecordDelete, runtimeext.HandlerKindRecordRestore, runtimeext.HandlerKindTransitionState, runtimeext.HandlerKindConditionalUpdate, runtimeext.HandlerKindRecordOperation:
+					if !hasRecordID {
+						add("project_definition.integration_action_scope_invalid", path+"/record_id", fmt.Sprintf("record-level handler %q requires record_id or record_id_path", mapping.ActionKey))
+					}
+				}
+			}
 		case "workflow":
 			if !workflows[mapping.WorkflowKey] {
 				add("project_definition.integration_workflow_unknown", path+"/workflow_key", fmt.Sprintf("integration mapping references unknown workflow %q", mapping.WorkflowKey))

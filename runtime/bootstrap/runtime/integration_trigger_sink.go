@@ -150,8 +150,12 @@ func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request inte
 func (s runtimeIntegrationTriggerSink) principal(ctx context.Context, request integrationsdk.TriggerRequest) (principalmodel.Principal, error) {
 	actorID := strings.TrimSpace(request.Principal.ActorID)
 	if actorID == "" {
+		ownerUserID := strings.TrimSpace(request.Principal.OwnerUserID)
+		if ownerUserID == "" {
+			ownerUserID = "integration:worker"
+		}
 		principal := principalmodel.NewSystemPrincipal(
-			"integration:worker",
+			ownerUserID,
 			principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "execute verified Integration event mapping"),
 		)
 		principal.WorkspaceID = strings.TrimSpace(request.WorkspaceID)
@@ -183,6 +187,9 @@ func validateRuntimeIntegrationTrigger(request integrationsdk.TriggerRequest) er
 		if strings.TrimSpace(value) == "" {
 			return fmt.Errorf("Runtime Integration trigger %s is required", name)
 		}
+	}
+	if strings.TrimSpace(request.Principal.ActorID) != "" && strings.TrimSpace(request.Principal.OwnerUserID) != "" {
+		return fmt.Errorf("Runtime Integration trigger cannot combine actor_id with owner_user_id")
 	}
 	switch strings.TrimSpace(request.Target.Type) {
 	case "action":

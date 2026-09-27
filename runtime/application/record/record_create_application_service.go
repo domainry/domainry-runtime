@@ -289,7 +289,7 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 			return recordCreatePlannedMutation{}, err
 		}
 	}
-	now := s.now().UTC().Format(time.RFC3339Nano)
+	now := recordCanonicalMutationTimestamp(s.now(), "")
 	record := recordmodel.Record{
 		WorkspaceID: principal.WorkspaceID,
 		ID:          recordID,

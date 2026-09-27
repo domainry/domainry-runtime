@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	auth "github.com/domainry/domainry-identity-sdk/authorization"
 	evaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
@@ -14,7 +15,45 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
+	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
+
+func TestRelationReadOnlyActionReferenceUsesCallerScope(t *testing.T) {
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "seller"}}, accessfixture.Bundle{
+		Permissions: []string{"opportunity.move_stage", "pipeline_stage.read"},
+		DataPolicies: append(
+			accessfixture.DataPoliciesForPermissions([]string{"opportunity.move_stage"}, auth.DataScopeOwner),
+			accessfixture.DataPoliciesForPermissions([]string{"pipeline_stage.read"}, auth.DataScopeAll)...,
+		),
+	})
+	invocation := recordmutation.MutationInvocation{
+		Source: transactionmodel.MutationSourceAction, ActionResource: "opportunity", ActionOperation: "move_stage",
+		ReadEffectAuthority: map[string]bool{"pipeline_stage": true},
+		EffectAuthority:     map[string][]string{"opportunity": {"*"}},
+	}
+	ctx := recordmutation.WithMutationInvocation(context.Background(), invocation)
+	object := definitionmodel.ObjectSchema{Key: "pipeline_stage"}
+	adapter := recordQueryPolicyAdapter{service: recordservice.NewRecordQueryPolicyDomainService(recordservice.RecordQueryPolicyDependencies{
+		Objects: func() []definitionmodel.ObjectSchema { return []definitionmodel.ObjectSchema{object} },
+	})}
+	stage := recordmodel.Record{ID: "shared-stage", OwnerUserID: "administrator"}
+	if allowed, err := adapter.canAccessPersistedRecord(ctx, principal, object, stage); err != nil || !allowed {
+		t.Fatalf("caller-readable Action stage was rejected: allowed=%v err=%v", allowed, err)
+	}
+	withoutRead := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "seller"}}, accessfixture.Bundle{
+		Permissions:  []string{"opportunity.move_stage"},
+		DataPolicies: accessfixture.DataPoliciesForPermissions([]string{"opportunity.move_stage"}, auth.DataScopeOwner),
+	})
+	if allowed, err := adapter.canAccessPersistedRecord(ctx, withoutRead, object, stage); err != nil || allowed {
+		t.Fatalf("Action reference without independent read escaped owner scope: allowed=%v err=%v", allowed, err)
+	}
+	writeTarget := invocation
+	writeTarget.EffectAuthority = map[string][]string{"pipeline_stage": {"*"}}
+	writeCtx := recordmutation.WithMutationInvocation(context.Background(), writeTarget)
+	if allowed, err := adapter.canAccessPersistedRecord(writeCtx, principal, object, stage); err != nil || allowed {
+		t.Fatalf("Action-writable stage borrowed broad caller read: allowed=%v err=%v", allowed, err)
+	}
+}
 
 func TestRelationReadEffectScope(t *testing.T) {
 	own := auth.Predicate{Fact: "id", Operator: auth.OperatorEqual, Value: "private-booking"}
@@ -39,7 +78,7 @@ func TestRelationReadEffectScope(t *testing.T) {
 		return principal
 	}
 	invocation := recordmutation.MutationInvocation{
-		Source: transactionmodel.MutationSourceAction, ActionResource: "booking", ActionOperation: "manage_booking_lifecycle", ReadEffectAuthority: map[string]bool{"booking": true},
+		Source: transactionmodel.MutationSourceAction, ActionResource: "booking", ActionOperation: "manage_booking_lifecycle", ReadEffectAuthority: map[string]bool{"booking": true}, EffectAuthority: map[string][]string{"booking": {"*"}},
 	}
 	actionContext := recordmutation.WithMutationInvocation(context.Background(), invocation)
 	filter := func(principal principalmodel.Principal) []auth.Predicate {

@@ -205,7 +205,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	)
 	if integrationOwner.Requirements != nil {
 		mustCompleteRuntimeStartup(integrationOwner.Requirements.SynchronizeConnections(ctx, nil))
-		mustCompleteRuntimeStartup(integrationOwner.Requirements.SynchronizeEventMappings(ctx, projectDefinitions.IntegrationMappings))
+		mustCompleteRuntimeStartup(integrationOwner.Requirements.SynchronizeEventMappings(ctx, composition.IntegrationEventMappingRequirements(projectIntegrations.EventMappings)))
 	}
 	templateID := projectModel.ProjectKey
 	reportNotificationActions := &runtimeNotificationActionAuthorizerBinding{}
@@ -339,6 +339,8 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		integrationOwnerCatalog:         integrationOwner.Catalog,
 		integrationOwnerManagement:      integrationOwner.Management,
 		integrationOwnerOperations:      integrationOwner.Operations,
+		integrationOwnerAccountReads:    integrationOwner.AccountReads,
+		integrationOwnerAccountWrites:   integrationOwner.AccountWrites,
 		integrationOwnerSubjects:        integrationOwner.Subjects,
 		integrationSubjectPersistence:   integrationOwner.SubjectPersistence,
 		dataExchangeProviderKey:         identityDataExchangeKey,
@@ -367,6 +369,9 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	})
 	mustCompleteRuntimeStartup(err)
 	records, recordRepository := serviceAssembly.services, serviceAssembly.records
+	if monitor, ok := integrationOwner.Management.(integrationsdk.ProviderRunMonitoring); ok {
+		records.Applications().RuntimeStatus.ConfigureIntegrationProviderRuns(monitor)
+	}
 	mustCompleteRuntimeStartup(records.Applications().Workflows.ConfigureWorkflowWorkloadIdentity(identityBinding, identitysdk.ApplicationScope{
 		WorkspaceID: identitysdk.WorkspaceID(strings.TrimSpace(cfg.IdentityWorkspaceID)), ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(cfg.IdentityAudience)),
 	}))

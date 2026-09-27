@@ -1,12 +1,25 @@
 package transport
 
 import (
+	"context"
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
+	identityscope "github.com/domainry/domainry-identity-sdk/application"
 	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
+
+func TestAgentTaskHostCarriesApplicationScopeIntoBackgroundWorker(t *testing.T) {
+	host := runtimeAgentTaskHost{application: identitysdk.ApplicationScope{WorkspaceID: "identity-workspace", ApplicationKey: "aurora"}}
+	ctx := host.scopedContext(context.Background(), "business-workspace")
+	scope, ok := identityscope.ScopeFromContext(ctx)
+	if !ok || scope != host.application || requestcontext.WorkspaceID(ctx) != "business-workspace" {
+		t.Fatalf("background task host lost Identity or business Workspace scope: scope=%+v found=%t workspace=%s", scope, ok, requestcontext.WorkspaceID(ctx))
+	}
+}
 
 func TestDecodeAgentRecordQueryBoundsSortAndRelations(t *testing.T) {
 	scope := agentapplication.AgentToolFieldScope{VisibleFields: map[string][]string{"customer": {"name"}, "order": {"number"}}}

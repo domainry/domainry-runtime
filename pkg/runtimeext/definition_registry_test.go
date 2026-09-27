@@ -4,9 +4,29 @@ import (
 	"errors"
 	"testing"
 
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
+
+func TestProjectDefinitionRegistryBindsIntegrationWorkspaceAtRuntime(t *testing.T) {
+	mapping := integrationsdk.EventMappingRequirement{
+		Key: "calendar-event", Provider: "calendar", EventType: "calendar.changed", TargetType: "action",
+		ObjectKey: "meeting", ActionKey: "meeting.ingest", RecordID: "meeting-a", Enabled: true,
+	}
+	registry := NewProjectExtensionRegistry()
+	if err := registry.RegisterProjectExtensions(ProjectExtensions{Definitions: ProjectDefinitions{IntegrationMappings: []integrationsdk.EventMappingRequirement{mapping}}}); err != nil {
+		t.Fatalf("deployment-neutral mapping rejected: %v", err)
+	}
+	stored := registry.ProjectDefinitions().IntegrationMappings
+	if len(stored) != 1 || stored[0].WorkspaceID != "" {
+		t.Fatalf("stored mappings=%#v", stored)
+	}
+	mapping.WorkspaceID = "workspace-baked-into-source"
+	if err := NewProjectExtensionRegistry().RegisterProjectExtensions(ProjectExtensions{Definitions: ProjectDefinitions{IntegrationMappings: []integrationsdk.EventMappingRequirement{mapping}}}); !errors.Is(err, ErrProjectDefinitionInvalid) {
+		t.Fatalf("source-owned workspace error=%v", err)
+	}
+}
 
 func testReportDefinition(key string) ReportDefinition {
 	return ReportDefinition{Report: reportmodel.ReportSchema{

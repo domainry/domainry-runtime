@@ -234,7 +234,19 @@ func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Co
 		}
 		payload := s.workflowRetryPayload(ctx, principal.WorkspaceID, previous, principal)
 		workCtx, stopHeartbeat := s.workflowExecutionHeartbeat(ctx, claimed)
-		execution, err := s.executeWorkflowAttempt(workCtx, workflow, payload, principal, "worker:"+previous.ID, nextAttempt, true)
+		executionPrincipal, principalErr := s.workflowTriggerInitiatorPrincipal(workCtx, previous, principal)
+		if principalErr != nil {
+			_ = stopHeartbeat()
+			claimed.Attempt = nextAttempt
+			claimed.UpdatedAt = s.worker.Clock.Now().Format(time.RFC3339)
+			workflowpolicy.WorkflowMarkFailed(&claimed, workflow, principalErr, s.worker.Clock.Now())
+			if err := s.commitClaimedWorkflowExecution(ctx, claimed); err != nil {
+				return workflowmodel.WorkflowProcessResult{}, internalError("persist workflow initiator reauthorization failure", err)
+			}
+			processed = append(processed, claimed)
+			continue
+		}
+		execution, err := s.executeWorkflowAttempt(workCtx, workflow, payload, executionPrincipal, "worker:"+previous.ID, nextAttempt, true)
 		if heartbeatErr := stopHeartbeat(); err == nil && heartbeatErr != nil {
 			return workflowmodel.WorkflowProcessResult{}, internalError("workflow execution lease lost", heartbeatErr)
 		}
@@ -252,6 +264,35 @@ func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Co
 		processed = append(processed, execution)
 	}
 	return workflowmodel.WorkflowProcessResult{Processed: len(processed), Executions: processed}, nil
+}
+
+// A durable record intent is replayed by a global worker. When it carries an
+// initiating subject, resolve that subject again before an inherited Agent task
+// can run. Verified Integration owners have no selected role, so Identity
+// selects their current default role instead.
+func (s *WorkflowApplicationService) workflowTriggerInitiatorPrincipal(ctx context.Context, intent workflowmodel.WorkflowExecution, worker principalmodel.Principal) (principalmodel.Principal, error) {
+	userID := strings.TrimSpace(workflowpolicy.WorkflowPayloadString(intent.Payload, "initiating_user_id"))
+	roleKey := strings.TrimSpace(workflowpolicy.WorkflowPayloadString(intent.Payload, "initiating_role_key"))
+	if userID == "" && roleKey == "" {
+		return worker, nil
+	}
+	if userID == "" || userID != strings.TrimSpace(intent.ActorID) || s.principals == nil {
+		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workflow.initiator_identity_invalid", nil, nil)
+	}
+	resolution, err := s.principals.Resolve(requestcontext.WithWorkspaceID(ctx, worker.WorkspaceID), identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(userID), RoleKey: roleKey})
+	if err != nil {
+		return principalmodel.Principal{}, err
+	}
+	resolution.Principal.AccessBundle = &resolution.AccessBundle
+	principal := principalmodel.NewPrincipalFromIdentity(resolution.Principal, "")
+	if !principal.Known || principal.WorkspaceID != worker.WorkspaceID || principal.UserID != userID || principal.RoleKey == "" || (roleKey != "" && principal.RoleKey != roleKey) {
+		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workflow.initiator_identity_revoked", nil, nil)
+	}
+	principal.RequestID = strings.TrimSpace(workflowpolicy.WorkflowPayloadString(intent.Payload, "request_id"))
+	if principal.RequestID == "" {
+		principal.RequestID = intent.ID
+	}
+	return principal, nil
 }
 
 func (s *WorkflowApplicationService) agentTaskContinuationPrincipal(ctx context.Context, execution workflowmodel.WorkflowExecution, process workflowmodel.WorkflowProcessInstance, worker principalmodel.Principal) (principalmodel.Principal, error) {

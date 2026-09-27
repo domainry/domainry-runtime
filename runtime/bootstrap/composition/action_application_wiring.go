@@ -108,10 +108,16 @@ func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolic
 				return records.publicationHandoffService.ValidateActionDurableIntent(ctx, intent, principal)
 			},
 			CompileNotification: compileActionNotification(records),
-			VerifyFileClean:     records.verifyFileClean,
-			OpenVerifiedFile:    records.openVerifiedFile,
-			IssueFileDownload:   records.issueFileDownload,
-			CreateDerivedFile:   records.createDerivedFile,
+			FindIdentityUser: func(ctx context.Context, userID string) (identitysdk.User, bool, error) {
+				if records.identityProjection == nil {
+					return identitysdk.User{}, false, apperror.New(apperror.KindUnavailable, "backend.identity.projection_unavailable", nil, nil)
+				}
+				return records.identityProjection.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(userID)})
+			},
+			VerifyFileClean:   records.verifyFileClean,
+			OpenVerifiedFile:  records.openVerifiedFile,
+			IssueFileDownload: records.issueFileDownload,
+			CreateDerivedFile: records.createDerivedFile,
 			StageBusinessJob: func(ctx context.Context, workspaceID string, request runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
 				if records.recordTimerService == nil {
 					return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, apperror.New(apperror.KindInternal, "backend.business_job.unavailable", nil, nil)

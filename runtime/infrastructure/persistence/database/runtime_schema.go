@@ -98,11 +98,19 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 	if err != nil {
 		return err
 	}
+	var mysqlContract mysqlMigrationContract
+	if s.Driver() == "mysql" {
+		mysqlContract, err = buildMySQLMigrationContract(definition)
+		if err != nil {
+			return fmt.Errorf("runtime schema is not safely recoverable: %w", err)
+		}
+	}
 	checksum := runtimeSchemaChecksum(definition)
-	pending, err := s.runtimeSchemaMigrationPendingFor(ctx, checksum)
+	state, err := s.runtimeSchemaMigrationStateFor(ctx, checksum)
 	if err != nil {
 		return err
 	}
+	pending := state != runtimeSchemaCurrent
 	// A clean receipt for this exact DDL checksum is the authority that the
 	// Runtime-owned schema was fully materialized. Re-running every table,
 	// column, and index probe on each process start turns remote-database latency
@@ -115,8 +123,10 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 		// single row, so always repair it before trusting the receipt.
 		return s.ensureManagedDatabaseCohortMarker(ctx)
 	}
-	if err := s.startRuntimeSchemaMigration(ctx, checksum); err != nil {
-		return err
+	if state == runtimeSchemaPending {
+		if err := s.startRuntimeSchemaMigration(ctx, checksum); err != nil {
+			return err
+		}
 	}
 	if err := s.ensureManagedDatabaseCohortMarker(ctx); err != nil {
 		return err
@@ -137,6 +147,15 @@ func (s *RuntimeStore) EnsureRuntimeSchemaFor(ctx context.Context, capabilities 
 	}
 	if err := s.EnsureRateLimitSchema(ctx); err != nil {
 		return err
+	}
+	if s.Driver() == "mysql" {
+		complete, err := s.proveMySQLMigrationContract(ctx, mysqlContract)
+		if err != nil {
+			return fmt.Errorf("runtime schema recovery mismatch: %w", err)
+		}
+		if !complete {
+			return fmt.Errorf("runtime schema recovery is incomplete")
+		}
 	}
 	if err := s.recordRuntimeSchemaMigration(ctx, checksum, time.Since(startedAt)); err != nil {
 		return err
@@ -350,42 +369,71 @@ func (s *RuntimeStore) runtimeSchemaMigrationPending(ctx context.Context, expect
 }
 
 func (s *RuntimeStore) runtimeSchemaMigrationPendingFor(ctx context.Context, expectedChecksum string) (bool, error) {
-	db := s.schemaDatabase()
 	if err := s.ensureMigrationLedger(ctx); err != nil {
 		return false, fmt.Errorf("prepare runtime schema migration ledger: %w", err)
 	}
-	return s.runtimeSchemaReceiptPending(ctx, db, expectedChecksum)
+	return s.runtimeSchemaReceiptPending(ctx, s.schemaDatabase(), expectedChecksum)
+}
+
+type runtimeSchemaMigrationState uint8
+
+const (
+	runtimeSchemaPending runtimeSchemaMigrationState = iota
+	runtimeSchemaRecovering
+	runtimeSchemaCurrent
+)
+
+func (s *RuntimeStore) runtimeSchemaMigrationStateFor(ctx context.Context, expectedChecksum string) (runtimeSchemaMigrationState, error) {
+	if err := s.ensureMigrationLedger(ctx); err != nil {
+		return runtimeSchemaPending, fmt.Errorf("prepare runtime schema migration ledger: %w", err)
+	}
+	return s.runtimeSchemaReceiptState(ctx, s.schemaDatabase(), expectedChecksum)
 }
 
 func (s *RuntimeStore) runtimeSchemaReceiptPending(ctx context.Context, db schemaDatabase, expectedChecksum string) (bool, error) {
+	state, err := s.runtimeSchemaReceiptState(ctx, db, expectedChecksum)
+	if err != nil {
+		return false, err
+	}
+	if state == runtimeSchemaRecovering {
+		return false, fmt.Errorf("migration.dirty: runtime schema %s", runtimeSchemaMigrationPath(expectedChecksum))
+	}
+	return state == runtimeSchemaPending, nil
+}
+
+func (s *RuntimeStore) runtimeSchemaReceiptState(ctx context.Context, db schemaDatabase, expectedChecksum string) (runtimeSchemaMigrationState, error) {
 	expectedPath := runtimeSchemaMigrationPath(expectedChecksum)
 	rows, err := db.QueryContext(ctx, "SELECT "+s.identifier("path")+", "+s.identifier("checksum")+", "+s.identifier("dirty")+" FROM "+s.tableIdentifier("_schema_migrations")+" WHERE "+s.identifier("kind")+" = "+s.placeholder(1), "runtime_schema")
 	if err != nil {
-		return false, fmt.Errorf("check runtime schema migration: %w", err)
+		return runtimeSchemaPending, fmt.Errorf("check runtime schema migration: %w", err)
 	}
 	defer rows.Close()
-	found := false
+	state := runtimeSchemaPending
 	for rows.Next() {
 		var path, checksum string
 		var dirty bool
 		if err := rows.Scan(&path, &checksum, &dirty); err != nil {
-			return false, fmt.Errorf("scan runtime schema migration: %w", err)
+			return runtimeSchemaPending, fmt.Errorf("scan runtime schema migration: %w", err)
 		}
 		if dirty {
-			return false, fmt.Errorf("migration.dirty: runtime schema %s", path)
+			if path == expectedPath && checksum == expectedChecksum {
+				state = runtimeSchemaRecovering
+				continue
+			}
+			return runtimeSchemaPending, fmt.Errorf("migration.dirty: runtime schema %s", path)
 		}
 		if path != expectedPath {
 			continue
 		}
 		if checksum != expectedChecksum {
-			return false, fmt.Errorf("migration.checksum_drift: runtime schema %s", path)
+			return runtimeSchemaPending, fmt.Errorf("migration.checksum_drift: runtime schema %s", path)
 		}
-		found = true
+		state = runtimeSchemaCurrent
 	}
 	if err := rows.Err(); err != nil {
-		return false, fmt.Errorf("read runtime schema migration: %w", err)
+		return runtimeSchemaPending, fmt.Errorf("read runtime schema migration: %w", err)
 	}
-	return !found, nil
+	return state, nil
 }
 
 func (s *RuntimeStore) startRuntimeSchemaMigration(ctx context.Context, checksum string) error {

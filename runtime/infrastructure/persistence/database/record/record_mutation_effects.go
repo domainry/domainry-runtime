@@ -45,6 +45,9 @@ func (r RecordStore) insertWorkflowIntentTx(ctx context.Context, tx TransactionE
 	if _, err := tx.ExecContext(ctx, queryValue, args...); err != nil {
 		return fmt.Errorf("insert mutation workflow intent: %w", database.MutationConstraintError(err, "workflow_execution", intent.ID, mutation.MutationConflictIdempotency))
 	}
+	if err := r.store.RegisterWorkerQueueScope(ctx, tx, database.WorkerScopeOwnerWorkflowContinuation, intent.WorkspaceID, intent.UpdatedAt); err != nil {
+		return fmt.Errorf("register mutation workflow continuation scope: %w", err)
+	}
 	return nil
 }
 

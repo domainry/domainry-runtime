@@ -24,6 +24,15 @@ import (
 
 var errDeploymentStatus = errors.New("deployment status failed")
 
+type providerRunMonitorFixture struct {
+	snapshot integrationsdk.ProviderRunSnapshot
+	err      error
+}
+
+func (m providerRunMonitorFixture) ProviderRunSnapshot(context.Context) (integrationsdk.ProviderRunSnapshot, error) {
+	return m.snapshot, m.err
+}
+
 type deploymentStatusFixture struct {
 	snapshot          appschemamodel.ApplicationSchemaSnapshot
 	schedulerStatus   map[string]any
@@ -336,6 +345,22 @@ func TestDeploymentMonitoringMetricSectionsCollectOwnerObservationsAndErrors(t *
 	payload, _ = withoutIdempotencyMetrics.MonitoringMetricSections(t.Context())
 	if _, exists := payload["idempotency"]; exists {
 		t.Fatalf("unexpected idempotency metrics=%#v", payload)
+	}
+}
+
+func TestDeploymentMonitoringIncludesIntegrationOwnerObservationAndFailure(t *testing.T) {
+	fixture := &deploymentStatusFixture{recordTotals: map[string]int{}, recordErrors: map[string]error{}, migration: deploymentmodel.MigrationStatus{Current: true}}
+	service := deploymentStatusService(fixture)
+	service.ConfigureIntegrationProviderRuns(providerRunMonitorFixture{snapshot: integrationsdk.ProviderRunSnapshot{ReadyDue: 12, ExpiredProcessing: 2}})
+	payload, errorsPayload := service.MonitoringMetricSections(t.Context())
+	section, ok := payload["integration"].(map[string]any)
+	if !ok || section["provider_runs"].(integrationsdk.ProviderRunSnapshot).ReadyDue != 12 || errorsPayload["integration"] != "" {
+		t.Fatalf("integration metrics=%#v errors=%#v", payload["integration"], errorsPayload)
+	}
+	service.ConfigureIntegrationProviderRuns(providerRunMonitorFixture{err: errDeploymentStatus})
+	payload, errorsPayload = service.MonitoringMetricSections(t.Context())
+	if _, ok := payload["integration"]; ok || errorsPayload["integration"] != errDeploymentStatus.Error() {
+		t.Fatalf("failed integration metrics=%#v errors=%#v", payload["integration"], errorsPayload)
 	}
 }
 

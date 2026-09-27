@@ -135,6 +135,9 @@ func validateObjectFields(model Model, object Object, path string, add func(stri
 		if len(field.Default) != 0 && !json.Valid(field.Default) {
 			add("project_model.field_default_invalid", fieldPath+"/default", "field default must be valid JSON")
 		}
+		if field.JSONShape != "" && (field.Type != "json" || (field.JSONShape != "object" && field.JSONShape != "array")) {
+			add("project_model.field_json_shape_invalid", fieldPath+"/json_shape", "json shape requires a json field and object or array")
+		}
 		if strings.TrimSpace(field.Type) == "relation" {
 			target := ""
 			if field.Relation != nil {
@@ -278,10 +281,14 @@ func RuntimeObjects(model Model) ([]definitionmodel.ObjectSchema, error) {
 					return nil, fmt.Errorf("decode default for %s.%s: %w", objectKey, fieldKey, err)
 				}
 			}
+			var config map[string]any
+			if field.JSONShape != "" {
+				config = map[string]any{"json_shape": field.JSONShape}
+			}
 			fields = append(fields, definitionmodel.FieldSchema{
 				Key: fieldKey, Name: field.Name, Description: field.Description, Type: field.Type, I18n: field.I18n,
 				Validation: definitionmodel.FieldValidation{MinLength: field.Validation.MinLength, MaxLength: field.Validation.MaxLength, Min: field.Validation.Min, Max: field.Validation.Max, Pattern: field.Validation.Pattern, Options: append([]string(nil), field.Validation.Options...), Target: relationFieldTarget(field)},
-				Required:   field.Required, Unique: field.Unique, Default: defaultValue, Sensitive: field.Sensitive,
+				Required:   field.Required, Unique: field.Unique, Default: defaultValue, Sensitive: field.Sensitive, Config: config,
 			})
 		}
 		constraintKeys := make([]string, 0, len(object.UniqueConstraints))

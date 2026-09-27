@@ -103,6 +103,12 @@ func relationReadEffectPrincipal(ctx context.Context, principal principalmodel.P
 	if !invocation.ReadEffectAuthority[objectKey] {
 		return principal, nil
 	}
+	if len(invocation.EffectAuthority[objectKey]) == 0 && principal.HasPermission(objectKey+".read") {
+		// A read-only Action reference may use the caller's independent read
+		// scope. Projecting the source Action's write predicate onto a public
+		// reference would reject records the caller already reads legitimately.
+		return principal, nil
+	}
 	if principal.AccessBundle == nil {
 		permission := strings.TrimSpace(invocation.ActionResource) + "." + strings.TrimSpace(invocation.ActionOperation)
 		if !principal.SystemScope.Valid() || !principal.HasExactPermission(permission) {

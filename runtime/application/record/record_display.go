@@ -257,7 +257,13 @@ func (s *RecordApplicationService) GetRecord(ctx context.Context, objectKey, rec
 	if err := recordAuthorizeQuery(principal); err != nil {
 		return recordmodel.Record{}, err
 	}
-	return s.RecordDomainService.GetRecord(ctx, objectKey, recordID, principal)
+	record, err := s.RecordDomainService.GetRecord(ctx, objectKey, recordID, principal)
+	if err != nil {
+		return recordmodel.Record{}, err
+	}
+	items := []recordmodel.Record{record}
+	s.resolveRecordSystemDisplayNames(ctx, items)
+	return items[0], nil
 }
 
 func (s *RecordApplicationService) GetRecordForUpdate(ctx context.Context, objectKey, recordID string, principal principalmodel.Principal) (recordmodel.Record, error) {

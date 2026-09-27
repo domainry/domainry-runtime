@@ -40,19 +40,19 @@ func (Profile) InspectModuleSchemaTable(ctx context.Context, database persistenc
 			return persistencedriver.ModuleSchemaTable{}, false, err
 		}
 	}
-	rows, err := database.QueryContext(ctx, `SELECT column_name, column_type, is_nullable, column_key FROM information_schema.columns WHERE table_schema = ? AND table_name = ? ORDER BY ordinal_position`, schema, table)
+	rows, err := database.QueryContext(ctx, `SELECT column_name, column_type, is_nullable FROM information_schema.columns WHERE table_schema = ? AND table_name = ? ORDER BY ordinal_position`, schema, table)
 	if err != nil {
 		return persistencedriver.ModuleSchemaTable{}, false, err
 	}
 	result := persistencedriver.ModuleSchemaTable{}
 	for rows.Next() {
 		var column persistencedriver.ModuleSchemaColumn
-		var nullable, key string
-		if err := rows.Scan(&column.Name, &column.Physical, &nullable, &key); err != nil {
+		var nullable string
+		if err := rows.Scan(&column.Name, &column.Physical, &nullable); err != nil {
 			_ = rows.Close()
 			return persistencedriver.ModuleSchemaTable{}, false, err
 		}
-		column.Nullable, column.PrimaryKey = nullable == "YES", key == "PRI"
+		column.Nullable = nullable == "YES"
 		result.Columns = append(result.Columns, column)
 	}
 	if err := rows.Err(); err != nil {
@@ -63,18 +63,23 @@ func (Profile) InspectModuleSchemaTable(ctx context.Context, database persistenc
 	if len(result.Columns) == 0 {
 		return persistencedriver.ModuleSchemaTable{}, false, nil
 	}
-	indexRows, err := database.QueryContext(ctx, `SELECT index_name, non_unique, column_name FROM information_schema.statistics WHERE table_schema = ? AND table_name = ? AND index_name <> 'PRIMARY' ORDER BY index_name, seq_in_index`, schema, table)
+	indexRows, err := database.QueryContext(ctx, `SELECT index_name, non_unique, column_name FROM information_schema.statistics WHERE table_schema = ? AND table_name = ? ORDER BY index_name, seq_in_index`, schema, table)
 	if err != nil {
 		return persistencedriver.ModuleSchemaTable{}, false, err
 	}
 	defer indexRows.Close()
 	byName := map[string]*persistencedriver.ModuleSchemaIndex{}
 	order := []string{}
+	primary := map[string]bool{}
 	for indexRows.Next() {
 		var name, column string
 		var nonUnique int
 		if err := indexRows.Scan(&name, &nonUnique, &column); err != nil {
 			return persistencedriver.ModuleSchemaTable{}, false, err
+		}
+		if name == "PRIMARY" {
+			primary[column] = true
+			continue
 		}
 		index := byName[name]
 		if index == nil {
@@ -89,6 +94,9 @@ func (Profile) InspectModuleSchemaTable(ctx context.Context, database persistenc
 	}
 	for _, name := range order {
 		result.Indexes = append(result.Indexes, *byName[name])
+	}
+	for index := range result.Columns {
+		result.Columns[index].PrimaryKey = primary[result.Columns[index].Name]
 	}
 	return result, true, nil
 }

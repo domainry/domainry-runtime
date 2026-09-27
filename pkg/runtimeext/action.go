@@ -147,6 +147,7 @@ func (d HandlerDescriptor) Validate() error {
 		ObjectCapabilityCreate: true, ObjectCapabilityUpdate: true, ObjectCapabilityConditionalUpdate: true,
 		ObjectCapabilityDelete: true, ObjectCapabilityRestore: true, ObjectCapabilityConditionalUpdateMany: true,
 		RecordNotificationRecipientOperation: true,
+		RecordManagerRecipientOperation: true,
 	}
 	for _, capability := range d.ObjectCapabilities {
 		objectKey := strings.TrimSpace(capability.ObjectKey)

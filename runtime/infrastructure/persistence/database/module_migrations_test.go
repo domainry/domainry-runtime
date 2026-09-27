@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -51,25 +52,26 @@ func TestOwnedModuleMigrationAppliesAndRejectsChecksumDrift(t *testing.T) {
 	}
 }
 
-func TestMySQLOwnedModuleMigrationCompletesOutsideDDLTransaction(t *testing.T) {
-	store := openModuleMigrationStore(t)
-	if err := store.SetEngineForTesting("mysql"); err != nil {
-		t.Fatal(err)
-	}
+func TestMySQLOwnedModuleMigrationHasARecoverablePhysicalContract(t *testing.T) {
 	migration := ormmigration.Migration{
-		Version:    1,
-		Name:       "mysql_owned_schema",
-		Statements: []string{"CREATE TABLE mysql_owned_test (id VARCHAR(191) NOT NULL PRIMARY KEY)"},
+		Version: 1,
+		Name:    "mysql_owned_schema",
+		Statements: []string{
+			"CREATE TABLE mysql_owned_test (id VARCHAR(191) NOT NULL PRIMARY KEY)",
+			"CREATE UNIQUE INDEX uniq_mysql_owned_test ON mysql_owned_test (id)",
+		},
 	}
-	if err := store.applyOwnedMigration(t.Context(), "notification", migration); err != nil {
+	contract, err := buildMySQLMigrationContract(migration.Statements)
+	if err != nil {
 		t.Fatal(err)
 	}
-	var dirty bool
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT dirty FROM _schema_migrations WHERE path = ?", moduleMigrationPath("notification", migration)).Scan(&dirty); err != nil {
-		t.Fatal(err)
+	want := ormmigration.Table{
+		Name:    "mysql_owned_test",
+		Columns: []ormmigration.Column{{Name: "id", Type: "VARCHAR(191)", PrimaryKey: true}},
+		Indexes: []ormmigration.Index{{Name: "uniq_mysql_owned_test", Unique: true, Columns: []string{"id"}}},
 	}
-	if dirty {
-		t.Fatal("MySQL module migration receipt remained dirty after DDL completed")
+	if got := contract.createdTables[want.Name]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("contract=%#v want=%#v", got, want)
 	}
 }
 

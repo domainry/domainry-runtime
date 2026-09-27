@@ -52,13 +52,14 @@ func TestRuntimeIntegrationTriggerSinkExecutesOnlyRuntimeOwnedTargets(t *testing
 	sink := runtimeIntegrationTriggerSink{actions: actions, workflows: workflows}
 	actionRequest := integrationsdk.TriggerRequest{
 		EventID: "event-1", WorkspaceID: "workspace-a", MappingKey: "mapping-a", IdempotencyKey: "event-1:mapping-a",
-		Target: integrationsdk.TriggerTarget{Type: "action", ObjectKey: "contact", RecordID: "contact-1", ActionKey: "sync", Input: map[string]any{"name": "Ada"}},
+		Principal: integrationsdk.TriggerPrincipal{OwnerUserID: "connection-owner"},
+		Target:    integrationsdk.TriggerTarget{Type: "action", ObjectKey: "contact", RecordID: "contact-1", ActionKey: "sync", Input: map[string]any{"name": "Ada"}},
 	}
 	receipt, err := sink.Trigger(t.Context(), actionRequest)
 	if err != nil || receipt.ExecutionID != "action-1" || actions.source != actionmodel.ActionSourceIntegration {
 		t.Fatalf("receipt=%#v source=%q err=%v", receipt, actions.source, err)
 	}
-	if actions.invocation.IdempotencyKey != actionRequest.IdempotencyKey || actions.invocation.Principal.WorkspaceID != "workspace-a" || !actions.invocation.Principal.SystemScope.Valid() ||
+	if actions.invocation.IdempotencyKey != actionRequest.IdempotencyKey || actions.invocation.Principal.WorkspaceID != "workspace-a" || actions.invocation.Principal.UserID != "connection-owner" || !actions.invocation.Principal.SystemScope.Valid() ||
 		!actions.invocation.Principal.HasExactPermission("sync") || actions.invocation.Principal.HasPermission("anything.execute") || len(actions.invocation.Actor.SystemCapabilities) != 0 {
 		t.Fatalf("action invocation=%#v", actions.invocation)
 	}

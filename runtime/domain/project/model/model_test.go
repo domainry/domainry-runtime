@@ -53,6 +53,26 @@ func TestDecodeAcceptsIdentityOnlyModelWithoutBusinessObjects(t *testing.T) {
 	}
 }
 
+func TestRuntimeObjectsPreserveCompactJSONArrayShape(t *testing.T) {
+	model, err := Decode([]byte(strings.Replace(validModelJSON(), `"name":"text!"`, `"name":"text!","recipients":"json!;shape=array;sensitive"`, 1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects, err := RuntimeObjects(model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range objects[0].Fields {
+		if field.Key == "recipients" {
+			if field.Type != "json" || field.Config["json_shape"] != "array" || !field.Sensitive {
+				t.Fatalf("array field was not projected to Runtime: %#v", field)
+			}
+			return
+		}
+	}
+	t.Fatal("recipients field was not projected")
+}
+
 func TestDecodeRejectsDuplicateUnknownBehaviorAndPresentationFields(t *testing.T) {
 	tests := []struct {
 		name string

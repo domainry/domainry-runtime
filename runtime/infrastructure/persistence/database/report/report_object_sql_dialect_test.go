@@ -61,10 +61,31 @@ func TestReportObjectSQLDialectGoldens(t *testing.T) {
 					t.Fatalf("%s SQL missing %q:\n%s", driver, fragment, statement)
 				}
 			}
-			if len(args) != 1 || args[0] != "2026-01-01T00:00:00Z" {
+			if len(args) != 1 || args[0] != int64(1767225600000) {
 				t.Fatalf("unexpected bound arguments: %#v", args)
 			}
 		})
+	}
+}
+
+func TestReportObjectSQLDatetimeParameterUsesRecordStoragePrecision(t *testing.T) {
+	for _, test := range []struct {
+		value string
+		want  int64
+	}{
+		{value: "2026-09-27T08:30:00.123456+08:00", want: 1790469000123},
+		{value: "2026-09-27T00:30:00.123Z", want: 1790469000123},
+	} {
+		args := []any{}
+		emitter := reportObjectSQLEmitter{dialect: objectSQLGoldenDialect{driver: "sqlite"}, profile: reportTestEngineProfile("sqlite"), parameters: map[string]any{"since": test.value}, args: &args}
+		if _, err := emitter.expression(reportmodel.ReportObjectSQLExpression{Kind: "parameter", Name: "since", Type: "datetime"}); err != nil || len(args) != 1 || args[0] != test.want {
+			t.Fatalf("value=%q args=%#v err=%v", test.value, args, err)
+		}
+	}
+	args := []any{}
+	emitter := reportObjectSQLEmitter{dialect: objectSQLGoldenDialect{driver: "sqlite"}, profile: reportTestEngineProfile("sqlite"), parameters: map[string]any{"since": "not-a-time"}, args: &args}
+	if _, err := emitter.expression(reportmodel.ReportObjectSQLExpression{Kind: "parameter", Name: "since", Type: "datetime"}); err == nil || len(args) != 0 {
+		t.Fatalf("invalid datetime bound: args=%#v err=%v", args, err)
 	}
 }
 

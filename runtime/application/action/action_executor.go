@@ -58,6 +58,7 @@ type BusinessHandlerExecutionDependencies struct {
 	PlanRestoreMutation               func(context.Context, string, string, string, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error)
 	ValidateDurableIntent             func(context.Context, runtimeext.DurableIntent, principalmodel.Principal) error
 	CompileNotification               func(context.Context, string, runtimeext.NotificationIntent, principalmodel.Principal) (notificationmodel.NotificationEvent, error)
+	FindIdentityUser                  func(context.Context, string) (identitysdk.User, bool, error)
 	VerifyFileClean                   func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 	OpenVerifiedFile                  func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
 	IssueFileDownload                 func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)

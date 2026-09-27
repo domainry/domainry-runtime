@@ -196,7 +196,11 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		ModuleHTTPAdapters:      dependencies.ModuleHTTPAdapters,
 	})
 	if dependencies.ProjectHTTP != nil {
-		engine := newProjectEngine(recordApplication, records.Applications().Actions, server.PrincipalFromContext)
+		var accountWrites integrationsdk.ConnectionAccountWrites
+		if binding, ok := dependencies.IntegrationBinding.(integrationsdk.ConnectionAccountWritesBinding); ok {
+			accountWrites = binding.ConnectionAccountWrites()
+		}
+		engine := newProjectEngine(recordApplication, records.Applications().Actions, accountWrites, identityProjection, server.PrincipalFromContext)
 		projectHandler := dependencies.ProjectHTTP(engine)
 		if projectHandler == nil {
 			panic("project HTTP factory returned a nil handler")

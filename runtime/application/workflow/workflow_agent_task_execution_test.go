@@ -174,6 +174,32 @@ func TestAgentTaskContinuationReauthorizesDurableExecutionIdentity(t *testing.T)
 	}
 }
 
+func TestWorkflowRecoveryReauthorizesTriggerInitiatorBeforeInheritedTask(t *testing.T) {
+	worker := workflowExecutionPrincipal()
+	worker.UserID, worker.RoleKey = "system-worker", "system"
+	actor := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: worker.WorkspaceID, UserID: "sales-user"}}, accessfixture.Bundle{Key: "sales"})
+	resolver := &workflowPrincipalResolverTestStub{resolution: workflowPrincipalResolution(actor)}
+	service := NewWorkflowApplicationService(WorkflowDependencies{Principals: resolver})
+	intent := workflowmodel.WorkflowExecution{ID: "intent-1", ActorID: "sales-user", Payload: map[string]any{"initiating_user_id": "sales-user", "initiating_role_key": "sales"}}
+	principal, err := service.workflowTriggerInitiatorPrincipal(t.Context(), intent, worker)
+	if err != nil || principal.UserID != "sales-user" || principal.RoleKey != "sales" || principal.RequestID != "intent-1" || resolver.request.SubjectID != "sales-user" || resolver.request.RoleKey != "sales" {
+		t.Fatalf("recovered trigger principal=%+v request=%+v err=%v", principal, resolver.request, err)
+	}
+	delete(intent.Payload, "initiating_role_key")
+	principal, err = service.workflowTriggerInitiatorPrincipal(t.Context(), intent, worker)
+	if err != nil || principal.UserID != "sales-user" || principal.RoleKey != "sales" || resolver.request.SubjectID != "sales-user" || resolver.request.RoleKey != "" {
+		t.Fatalf("connection-owner default role resolution=%+v request=%+v err=%v", principal, resolver.request, err)
+	}
+	resolver.resolution = identitysdk.PrincipalResolution{}
+	if _, err := service.workflowTriggerInitiatorPrincipal(t.Context(), intent, worker); apperror.CodeOf(err) != "backend.workflow.initiator_identity_revoked" {
+		t.Fatalf("revoked connection owner accepted: %v", err)
+	}
+	intent.ActorID = "other-user"
+	if _, err := service.workflowTriggerInitiatorPrincipal(t.Context(), intent, worker); apperror.CodeOf(err) != "backend.workflow.initiator_identity_invalid" {
+		t.Fatalf("mismatched durable actor accepted: %v", err)
+	}
+}
+
 func TestAgentTaskContinuationPrincipalFailsClosed(t *testing.T) {
 	worker := workflowExecutionPrincipal()
 	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-1"}

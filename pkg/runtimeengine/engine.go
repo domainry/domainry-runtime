@@ -10,11 +10,15 @@ import (
 )
 
 type Record struct {
-	ID        string         `json:"id"`
-	ObjectKey string         `json:"object_key"`
-	Fields    map[string]any `json:"fields"`
-	CreatedAt string         `json:"created_at"`
-	UpdatedAt string         `json:"updated_at"`
+	ID          string         `json:"id"`
+	ObjectKey   string         `json:"object_key"`
+	Fields      map[string]any `json:"fields"`
+	CreatedAt   string         `json:"created_at"`
+	UpdatedAt   string         `json:"updated_at"`
+	OwnerUserID string         `json:"owner_user_id,omitempty"`
+	// OwnerUserName is a current, read-only Identity display projection. It is
+	// never accepted as a record mutation or used for authorization.
+	OwnerUserName string `json:"owner_user_name,omitempty"`
 }
 
 type Sort struct {
@@ -69,6 +73,45 @@ type Engine interface {
 	Update(context.Context, string, string, any) (Record, error)
 	Delete(context.Context, string, string) error
 	InvokeAction(context.Context, ActionRequest) (ActionResult, error)
+}
+
+// ConnectionAccountWriteAuthorizer is an optional, current-user capability for
+// project HTTP flows that prepare an external write without executing it.
+// Integration rechecks ownership, active credentials, granted scopes and the
+// exact provider operation; the eventual action must authorize again.
+type ConnectionAccountWriteAuthorizer interface {
+	AuthorizeConnectionAccountWrite(context.Context, string, string, string) (ConnectionAccountWriteAccess, error)
+}
+
+type ConnectionAccountWriteAccess struct {
+	ConnectionKey string
+	ProviderKey   string
+}
+
+// TaskAssigneeDirectory is a narrow, authenticated Identity projection for
+// project task assignment. Callers must validate again when a task is written;
+// a previously displayed option is not an authorization grant.
+type TaskAssigneeDirectory interface {
+	ListTaskAssignees(context.Context, TaskAssigneeQuery) (TaskAssigneePage, error)
+	ValidateTaskAssignee(context.Context, string) (TaskAssignee, error)
+	ResolveTaskAssigneeNames(context.Context, []string) (map[string]string, error)
+}
+
+type TaskAssignee struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type TaskAssigneeQuery struct {
+	Search  string
+	AfterID string
+	Limit   int
+}
+
+type TaskAssigneePage struct {
+	Items       []TaskAssignee `json:"items"`
+	Total       int            `json:"total"`
+	NextAfterID string         `json:"next_cursor,omitempty"`
 }
 
 // HTTPFactory receives the authenticated Runtime Engine and returns the

@@ -53,6 +53,7 @@ type Field struct {
 	Unique      bool                               `json:"unique,omitempty"`
 	Default     json.RawMessage                    `json:"default,omitempty"`
 	Sensitive   bool                               `json:"sensitive,omitempty"`
+	JSONShape   string                             `json:"json_shape,omitempty"`
 }
 
 type FieldValidation struct {

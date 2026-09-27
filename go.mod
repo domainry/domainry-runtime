@@ -46,6 +46,7 @@ require (
 	go.uber.org/zap v1.27.1
 	golang.org/x/mod v0.40.0
 	modernc.org/sqlite v1.57.0
+	vitess.io/vitess v0.23.3
 )
 
 require (
@@ -85,7 +86,6 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	vitess.io/vitess v0.23.3 // indirect
 )
 
 require (

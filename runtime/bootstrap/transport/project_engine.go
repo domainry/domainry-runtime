@@ -2,9 +2,13 @@ package transport
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
@@ -16,17 +20,141 @@ import (
 )
 
 type projectEngine struct {
-	records   *recordapplication.RecordApplicationService
-	actions   *actionapplication.ActionApplicationService
-	principal func(context.Context) (principalmodel.Principal, bool)
+	records       *recordapplication.RecordApplicationService
+	actions       *actionapplication.ActionApplicationService
+	accountWrites integrationsdk.ConnectionAccountWrites
+	identityUsers identitysdk.Projection
+	principal     func(context.Context) (principalmodel.Principal, bool)
 }
 
 func newProjectEngine(
 	records *recordapplication.RecordApplicationService,
 	actions *actionapplication.ActionApplicationService,
+	accountWrites integrationsdk.ConnectionAccountWrites,
+	identityUsers identitysdk.Projection,
 	principal func(context.Context) (principalmodel.Principal, bool),
 ) runtimeengine.Engine {
-	return &projectEngine{records: records, actions: actions, principal: principal}
+	return &projectEngine{records: records, actions: actions, accountWrites: accountWrites, identityUsers: identityUsers, principal: principal}
+}
+
+func (e *projectEngine) ValidateTaskAssignee(ctx context.Context, userID string) (runtimeengine.TaskAssignee, error) {
+	principal, err := e.requestPrincipal(ctx)
+	if err != nil {
+		return runtimeengine.TaskAssignee{}, err
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" || !taskAssigneeAllowed(principal, userID) {
+		return runtimeengine.TaskAssignee{}, runtimeengine.NewError(runtimeengine.ErrorForbidden, "backend.task.assignee_out_of_scope", nil, nil)
+	}
+	if e.identityUsers == nil {
+		return runtimeengine.TaskAssignee{}, runtimeengine.NewError(runtimeengine.ErrorUnavailable, "backend.task.assignee_directory_unavailable", nil, nil)
+	}
+	user, found, err := e.identityUsers.FindUser(requestcontext.WithWorkspaceID(ctx, principal.WorkspaceID), identitysdk.UserLookup{UserID: identitysdk.SubjectID(userID)})
+	if err != nil {
+		return runtimeengine.TaskAssignee{}, runtimeengine.NewError(runtimeengine.ErrorUnavailable, "backend.task.assignee_lookup_failed", nil, err)
+	}
+	if !found || user.Status != identitysdk.UserStatusActive || user.AccountType != "human" {
+		return runtimeengine.TaskAssignee{}, runtimeengine.NewError(runtimeengine.ErrorBadRequest, "backend.task.assignee_inactive", nil, nil)
+	}
+	return runtimeengine.TaskAssignee{ID: user.ID, Name: user.Name}, nil
+}
+
+func (e *projectEngine) ResolveTaskAssigneeNames(ctx context.Context, userIDs []string) (map[string]string, error) {
+	principal, err := e.requestPrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	resolver, ok := e.identityUsers.(identitysdk.DisplayNameProjection)
+	if !ok {
+		return nil, runtimeengine.NewError(runtimeengine.ErrorUnavailable, "backend.task.assignee_names_unavailable", nil, nil)
+	}
+	result, err := resolver.ResolveDisplayNames(requestcontext.WithWorkspaceID(ctx, principal.WorkspaceID), identitysdk.DisplayNameQuery{UserIDs: userIDs})
+	if err != nil {
+		return nil, runtimeengine.NewError(runtimeengine.ErrorUnavailable, "backend.task.assignee_names_failed", nil, err)
+	}
+	names := make(map[string]string, len(result.Users))
+	for _, user := range result.Users {
+		names[user.ID] = user.Name
+	}
+	return names, nil
+}
+
+func (e *projectEngine) ListTaskAssignees(ctx context.Context, query runtimeengine.TaskAssigneeQuery) (runtimeengine.TaskAssigneePage, error) {
+	principal, err := e.requestPrincipal(ctx)
+	if err != nil {
+		return runtimeengine.TaskAssigneePage{}, err
+	}
+	if e.identityUsers == nil {
+		return runtimeengine.TaskAssigneePage{}, runtimeengine.NewError(runtimeengine.ErrorUnavailable, "backend.task.assignee_directory_unavailable", nil, nil)
+	}
+	users, err := e.identityUsers.ListUsers(requestcontext.WithWorkspaceID(ctx, principal.WorkspaceID), identitysdk.ProjectionQuery{})
+	if err != nil {
+		return runtimeengine.TaskAssigneePage{}, runtimeengine.NewError(runtimeengine.ErrorUnavailable, "backend.task.assignee_lookup_failed", nil, err)
+	}
+	search := strings.ToLower(strings.TrimSpace(query.Search))
+	items := make([]runtimeengine.TaskAssignee, 0)
+	for _, user := range users {
+		if user.Status != identitysdk.UserStatusActive || user.AccountType != "human" || !taskAssigneeAllowed(principal, user.ID) {
+			continue
+		}
+		if search != "" && !strings.Contains(strings.ToLower(user.Name), search) && !strings.Contains(strings.ToLower(user.Email), search) {
+			continue
+		}
+		items = append(items, runtimeengine.TaskAssignee{ID: user.ID, Name: user.Name})
+	}
+	sort.Slice(items, func(left, right int) bool { return items[left].ID < items[right].ID })
+	start := sort.Search(len(items), func(index int) bool { return items[index].ID > strings.TrimSpace(query.AfterID) })
+	limit := query.Limit
+	if limit <= 0 || limit > 50 {
+		limit = 25
+	}
+	end := start + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	page := runtimeengine.TaskAssigneePage{Items: items[start:end], Total: len(items)}
+	if end < len(items) {
+		page.NextAfterID = items[end-1].ID
+	}
+	return page, nil
+}
+
+func taskAssigneeAllowed(principal principalmodel.Principal, userID string) bool {
+	if userID == principal.UserID {
+		return true
+	}
+	if principal.RoleKey == "workspace_admin" {
+		return true
+	}
+	if principal.RoleKey != "sales_manager" {
+		return false
+	}
+	for _, reportingID := range principal.ReportingScopeUserIDs {
+		if reportingID == userID {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *projectEngine) AuthorizeConnectionAccountWrite(ctx context.Context, connectionKey, operationKey, contractSHA256 string) (runtimeengine.ConnectionAccountWriteAccess, error) {
+	principal, err := e.requestPrincipal(ctx)
+	if err != nil {
+		return runtimeengine.ConnectionAccountWriteAccess{}, err
+	}
+	if e.accountWrites == nil {
+		return runtimeengine.ConnectionAccountWriteAccess{}, runtimeengine.NewError(runtimeengine.ErrorUnavailable, "backend.connector.account_write_unavailable", nil, nil)
+	}
+	access, err := e.accountWrites.AuthorizeConnectionAccountWrite(ctx, integrationsdk.ConnectionAccountSubject{
+		WorkspaceID: principal.WorkspaceID, UserID: principal.UserID,
+		Access: integrationsdk.ConnectionAccountAccess{Personal: true},
+	}, strings.TrimSpace(connectionKey), integrationsdk.ConnectionAccountWriteOperation{
+		Operation: strings.TrimSpace(operationKey), ContractSHA256: strings.TrimSpace(contractSHA256),
+	})
+	if err != nil {
+		return runtimeengine.ConnectionAccountWriteAccess{}, runtimeengine.NewError(runtimeengine.ErrorForbidden, "backend.connector.account_write_denied", nil, err)
+	}
+	return runtimeengine.ConnectionAccountWriteAccess{ConnectionKey: access.Source.ConnectionKey, ProviderKey: access.Source.ProviderKey}, nil
 }
 
 func (e *projectEngine) List(ctx context.Context, objectKey string, query runtimeengine.Query) (runtimeengine.Page, error) {
@@ -182,6 +310,7 @@ func (e *projectEngine) requestPrincipal(ctx context.Context) (principalmodel.Pr
 func projectEngineRecord(objectKey string, record recordmodel.Record) runtimeengine.Record {
 	return runtimeengine.Record{
 		ID: record.ID, ObjectKey: strings.TrimSpace(objectKey), Fields: cloneAnyMap(record.Data), CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
+		OwnerUserID: record.OwnerUserID, OwnerUserName: record.OwnerUserName,
 	}
 }
 

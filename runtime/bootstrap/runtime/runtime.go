@@ -114,6 +114,60 @@ func (r *Runtime) IntegrationOwnerOperations() integrationsdk.Operations {
 	return r.records.IntegrationOwnerOperations()
 }
 
+// IntegrationOwnerAccountReads returns the owner-controlled personal account
+// read port used by runtimehost's account-read gateway.
+func (r *Runtime) IntegrationOwnerAccountReads() integrationsdk.ConnectionAccountReads {
+	if r == nil || r.records == nil {
+		return nil
+	}
+	return r.records.IntegrationOwnerAccountReads()
+}
+
+// IntegrationOwnerAccountWrites returns the owner-controlled personal account
+// mutation port used by runtimehost's account-write gateway.
+func (r *Runtime) IntegrationOwnerAccountWrites() integrationsdk.ConnectionAccountWrites {
+	if r == nil || r.records == nil {
+		return nil
+	}
+	return r.records.IntegrationOwnerAccountWrites()
+}
+
+// AgentKnowledgeDocuments returns the Agent-owned document service used by the
+// runtimehost project gateway. The service performs current Identity and
+// library membership authorization for every call.
+func (r *Runtime) AgentKnowledgeDocuments() agentsdk.KnowledgeDocumentService {
+	if r == nil || r.agentBinding == nil {
+		return nil
+	}
+	conversations, ok := r.agentBinding.(agentsdk.ConversationBinding)
+	if !ok || conversations.Conversations() == nil {
+		return nil
+	}
+	documents, _ := conversations.Conversations().(agentsdk.KnowledgeDocumentService)
+	return documents
+}
+
+// AgentKnowledgeLibraries returns the Agent-owned library service for live
+// project Action checks before publishing source-backed documents.
+func (r *Runtime) AgentKnowledgeLibraries() agentsdk.KnowledgeLibraryService {
+	if r == nil || r.agentBinding == nil {
+		return nil
+	}
+	conversations, ok := r.agentBinding.(agentsdk.ConversationBinding)
+	if !ok || conversations.Conversations() == nil {
+		return nil
+	}
+	libraries, _ := conversations.Conversations().(agentsdk.KnowledgeLibraryService)
+	return libraries
+}
+
+func (r *Runtime) RuntimeInstanceID() string {
+	if r == nil {
+		return ""
+	}
+	return r.cfg.RuntimeInstanceID
+}
+
 func (a *Runtime) runtimeReleaseLease() deploymentmodel.RuntimeReleaseCohortLease {
 	a.releaseMu.Lock()
 	defer a.releaseMu.Unlock()

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/shopspring/decimal"
 
@@ -106,6 +107,15 @@ func (e *reportObjectSQLEmitter) expression(expression reportmodel.ReportObjectS
 		value, exists := e.parameters[expression.Name]
 		if !exists {
 			return "", fmt.Errorf("missing bound report parameter %s", expression.Name)
+		}
+		if expression.Type == "datetime" && value != nil {
+			instant, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(fmt.Sprint(value)))
+			if err != nil {
+				return "", fmt.Errorf("invalid datetime report parameter %s: %w", expression.Name, err)
+			}
+			// Runtime persists both record metadata and datetime fields as Unix
+			// milliseconds. Comparing them with RFC3339 text excludes valid rows.
+			value = instant.UTC().UnixMilli()
 		}
 		if e.profile.OrderedDecimalTextStorage() && expression.Type == "currency" && value != nil {
 			parsed, err := decimal.NewFromString(strings.TrimSpace(fmt.Sprint(value)))

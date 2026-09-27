@@ -32,6 +32,26 @@ func (s *RuntimeServices) IntegrationOwnerOperations() integrationsdk.Operations
 	return s.assembly.integrationOwnerOperations
 }
 
+// IntegrationOwnerAccountReads exposes the owner-controlled, per-user OAuth
+// read boundary to the process host. Project code reaches it only through the
+// trusted Runtime account-read gateway.
+func (s *RuntimeServices) IntegrationOwnerAccountReads() integrationsdk.ConnectionAccountReads {
+	if s == nil || s.assembly == nil {
+		return nil
+	}
+	return s.assembly.integrationOwnerAccountReads
+}
+
+// IntegrationOwnerAccountWrites exposes the owner-controlled, per-user OAuth
+// write boundary to the process host. Project code reaches it only through the
+// trusted Runtime account-write gateway.
+func (s *RuntimeServices) IntegrationOwnerAccountWrites() integrationsdk.ConnectionAccountWrites {
+	if s == nil || s.assembly == nil {
+		return nil
+	}
+	return s.assembly.integrationOwnerAccountWrites
+}
+
 type RuntimeApplications struct {
 	AgentAuthorization *agentapplication.AgentAuthorizationApplicationService
 	AgentTaskDispatch  *agentapplication.AgentTaskDispatchApplicationService

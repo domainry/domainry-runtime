@@ -19,6 +19,7 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/logging"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	"go.uber.org/zap"
@@ -115,10 +116,15 @@ type DeploymentRuntimeStatusApplicationService struct {
 	delivery        deploymentcontract.DeploymentDeliveryReader
 	worker          workerplatform.Dependencies
 	lifecycleHealth LifecycleHealthProvider
+	integrationRuns integrationsdk.ProviderRunMonitoring
 }
 
 func (s *DeploymentRuntimeStatusApplicationService) ConfigureLifecycleHealth(_ context.Context, provider LifecycleHealthProvider) {
 	s.lifecycleHealth = provider
+}
+
+func (s *DeploymentRuntimeStatusApplicationService) ConfigureIntegrationProviderRuns(provider integrationsdk.ProviderRunMonitoring) {
+	s.integrationRuns = provider
 }
 
 func (s *DeploymentRuntimeStatusApplicationService) IdempotencyReceipts(ctx context.Context, principal principalmodel.Principal, status string, limit int) ([]idempotency.ReceiptSummary, error) {

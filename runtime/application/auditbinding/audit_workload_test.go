@@ -36,3 +36,26 @@ func TestAuditBuildEventPreservesWorkflowWorkloadLineage(t *testing.T) {
 		}
 	}
 }
+
+func TestAuditBuildEventUsesTrustedActorOrganization(t *testing.T) {
+	principal := principalmodel.NewPrincipalFromIdentity(identitysdk.Principal{
+		Known: true, WorkspaceID: "workspace", UserID: "member-1", OrgID: "team-1",
+	}, "request-1")
+	metadata := map[string]any{"actor_org_id": "other-team", "source": "crm"}
+	event := AuditBuildEvent(t.Context(), "record_created", "crm_note", "note-1", principal, "Created note", nil, nil, metadata)
+	if got := event.Metadata["actor_org_id"]; got != "team-1" {
+		t.Fatalf("audit actor organization = %#v, want team-1", got)
+	}
+	if got := metadata["actor_org_id"]; got != "other-team" {
+		t.Fatalf("caller metadata was mutated: %#v", got)
+	}
+	if got := event.Metadata["source"]; got != "crm" {
+		t.Fatalf("unrelated metadata = %#v, want crm", got)
+	}
+
+	principal.OrgID = ""
+	event = AuditBuildEvent(t.Context(), "action_created", "crm_note", "note-1", principal, "Created action", nil, nil, metadata)
+	if _, ok := event.Metadata["actor_org_id"]; ok {
+		t.Fatalf("unscoped actor retained caller-supplied organization: %#v", event.Metadata)
+	}
+}

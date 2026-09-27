@@ -92,6 +92,8 @@ type runtimeExtensionRegistries struct {
 	integrationOwnerCatalog         integrationsdk.Catalog
 	integrationOwnerManagement      integrationsdk.Management
 	integrationOwnerOperations      integrationsdk.Operations
+	integrationOwnerAccountReads    integrationsdk.ConnectionAccountReads
+	integrationOwnerAccountWrites   integrationsdk.ConnectionAccountWrites
 	integrationOwnerSubjects        integrationsdk.SubjectLifecycle
 	integrationSubjectPersistence   integrationsdk.SubjectLifecyclePersistenceBinding
 	dataExchangeProviderKey         string
@@ -130,6 +132,8 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 	var integrationOwnerCatalog integrationsdk.Catalog
 	var integrationOwnerManagement integrationsdk.Management
 	var integrationOwnerOperations integrationsdk.Operations
+	var integrationOwnerAccountReads integrationsdk.ConnectionAccountReads
+	var integrationOwnerAccountWrites integrationsdk.ConnectionAccountWrites
 	var integrationOwnerSubjects integrationsdk.SubjectLifecycle
 	var integrationSubjectPersistence integrationsdk.SubjectLifecyclePersistenceBinding
 	var notificationSubjectLifecycle lifecyclecontract.SubjectExecutionHandler
@@ -176,6 +180,8 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 		integrationOwnerCatalog = extensionRegistries[0].integrationOwnerCatalog
 		integrationOwnerManagement = extensionRegistries[0].integrationOwnerManagement
 		integrationOwnerOperations = extensionRegistries[0].integrationOwnerOperations
+		integrationOwnerAccountReads = extensionRegistries[0].integrationOwnerAccountReads
+		integrationOwnerAccountWrites = extensionRegistries[0].integrationOwnerAccountWrites
 		integrationOwnerSubjects = extensionRegistries[0].integrationOwnerSubjects
 		integrationSubjectPersistence = extensionRegistries[0].integrationSubjectPersistence
 		notificationSubjectLifecycle = extensionRegistries[0].notificationSubjectLifecycle
@@ -614,6 +620,8 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 			IntegrationOwnerCatalog:         integrationOwnerCatalog,
 			IntegrationOwnerManagement:      integrationOwnerManagement,
 			IntegrationOwnerOperations:      integrationOwnerOperations,
+			IntegrationOwnerAccountReads:    integrationOwnerAccountReads,
+			IntegrationOwnerAccountWrites:   integrationOwnerAccountWrites,
 			Worker:                          workerDependencies,
 		},
 	})

@@ -17,6 +17,7 @@ func TestCompactFieldSyntax(t *testing.T) {
 		target      string
 		options     int
 		defaultJSON string
+		jsonShape   string
 	}{
 		{declaration: "text!;max_length=120", typeName: "text", required: true},
 		{declaration: "email!;unique;max_length=254", typeName: "email", required: true, unique: true},
@@ -24,6 +25,7 @@ func TestCompactFieldSyntax(t *testing.T) {
 		{declaration: "select![lead|won]=lead", typeName: "select", required: true, options: 2, defaultJSON: `"lead"`},
 		{declaration: "integer!;min=1", typeName: "integer", required: true},
 		{declaration: "boolean!=true;sensitive", typeName: "boolean", required: true, defaultJSON: "true"},
+		{declaration: "json!;shape=array;sensitive", typeName: "json", required: true, jsonShape: "array"},
 	}
 	for _, check := range checks {
 		t.Run(check.declaration, func(t *testing.T) {
@@ -32,7 +34,7 @@ func TestCompactFieldSyntax(t *testing.T) {
 			if err := json.Unmarshal(encoded, &field); err != nil {
 				t.Fatal(err)
 			}
-			if field.Type != check.typeName || field.Required != check.required || field.Unique != check.unique || len(field.Validation.Options) != check.options || string(field.Default) != check.defaultJSON {
+			if field.Type != check.typeName || field.Required != check.required || field.Unique != check.unique || len(field.Validation.Options) != check.options || string(field.Default) != check.defaultJSON || field.JSONShape != check.jsonShape {
 				t.Fatalf("field=%#v", field)
 			}
 			if check.target != "" && (field.Relation == nil || field.Relation.TargetObjectKey != check.target) {
@@ -51,6 +53,8 @@ func TestCompactFieldRejectsAmbiguousOrVerboseDeclarations(t *testing.T) {
 		`"select![lead|won]=lost"`,
 		`"integer!=true"`,
 		`"text!;unknown=value"`,
+		`"text;shape=array"`,
+		`"json;shape=scalar"`,
 	} {
 		var field Field
 		if err := json.Unmarshal([]byte(source), &field); err == nil {

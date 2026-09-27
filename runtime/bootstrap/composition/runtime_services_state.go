@@ -111,6 +111,8 @@ type runtimeAssembly struct {
 	integrationOwnerCatalog             integrationsdk.Catalog
 	integrationOwnerManagement          integrationsdk.Management
 	integrationOwnerOperations          integrationsdk.Operations
+	integrationOwnerAccountReads        integrationsdk.ConnectionAccountReads
+	integrationOwnerAccountWrites       integrationsdk.ConnectionAccountWrites
 	workflowWorkerRepo                  workflowcontract.WorkflowWorkerStore
 	workflowApplicationService          *workflowapplication.WorkflowApplicationService
 	applicationSchemaService            *appschemaapplication.ApplicationSchemaApplicationService

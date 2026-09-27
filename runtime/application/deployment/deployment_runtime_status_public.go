@@ -53,6 +53,14 @@ func (s *DeploymentRuntimeStatusApplicationService) MonitoringMetricSections(ctx
 	}
 	payload["idempotency_status"] = idempotencyStatus
 	errors := map[string]string{}
+	if s.integrationRuns != nil {
+		integration, err := s.integrationRuns.ProviderRunSnapshot(ctx)
+		if err != nil {
+			errors["integration"] = err.Error()
+		} else {
+			payload["integration"] = map[string]any{"provider_runs": integration}
+		}
+	}
 	if workflowErr != nil {
 		errors["workflow"] = workflowErr.Error()
 	}

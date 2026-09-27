@@ -81,6 +81,10 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 			t.Fatalf("atomic fact %s/%s count=%d err=%v", table, id, count, err)
 		}
 	}
+	workspaces, err := store.WorkerQueueScopePage(t.Context(), store.DB(), database.WorkerScopeOwnerWorkflowContinuation, 10)
+	if err != nil || len(workspaces) != 1 || workspaces[0] != "workspace-a" {
+		t.Fatalf("committed Workflow intent was not discoverable by recovery worker: workspaces=%v err=%v", workspaces, err)
+	}
 	var legacyTables int
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_record_mutation_executions'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
 		t.Fatalf("legacy record mutation table count=%d err=%v", legacyTables, err)

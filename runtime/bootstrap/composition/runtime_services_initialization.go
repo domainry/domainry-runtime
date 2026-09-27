@@ -48,6 +48,8 @@ func newRuntimeServicesState(ctx context.Context, definitions runtimeext.Project
 		integrationOwnerCatalog:             deps.IntegrationOwnerCatalog,
 		integrationOwnerManagement:          deps.IntegrationOwnerManagement,
 		integrationOwnerOperations:          deps.IntegrationOwnerOperations,
+		integrationOwnerAccountReads:        deps.IntegrationOwnerAccountReads,
+		integrationOwnerAccountWrites:       deps.IntegrationOwnerAccountWrites,
 		workflowWorkerRepo:                  deps.WorkflowWorker,
 		workflowDefinitionRepo:              deps.WorkflowDefinitions,
 		workflowProcessRepo:                 deps.WorkflowProcesses,

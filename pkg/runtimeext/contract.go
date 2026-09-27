@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v48"
-	ContractSHA256  = "4b7a30ed89ae72274d48d41809a7d8cd764ba64058b3c56e51a704b3630568db"
+	ContractVersion = "runtimeext-v49"
+	ContractSHA256  = "21bce5a97583120dc8ec2a447f698343f433572402ec939af36ab7a063153bfa"
 )
 
-const contractDefinitionV48 = `runtimeext-v48
+const contractDefinitionV49 = `runtimeext-v49
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
@@ -35,6 +35,8 @@ ApplyConditionalUpdateMany(context.Context,ActionExecution,ConditionalUpdateMany
 ConditionalUpdateManySemantics=one_scoped_select_for_update|explicit_exact_distinct_coverage_field_and_values|every_expected_value_exactly_one_locked_row|no_in_filter_inference|one_conditional_update|expected_affected_exact|same_action_transaction|no_owner_input|max_200
 ResolveRecordNotificationRecipient(context.Context,ActionExecution,RecordNotificationRecipientRequest)(string,error)
 RecordNotificationRecipientOperation=notification_recipient
+ResolveRecordManagerRecipient(context.Context,ActionExecution,RecordManagerRecipientRequest)(string,error)
+RecordManagerRecipientOperation=manager_recipient|caller_readable_user_field|workspace_identity_manager|active_manager_only
 VerifyFileClean(context.Context,ActionExecution,FileVerificationRequest)(FileVerificationEvidence,error)
 FileOperationVerifyClean=verify_clean
 OpenVerifiedFile(context.Context,ActionExecution,VerifiedFileRequest)(VerifiedFile,error)
@@ -147,7 +149,7 @@ AcceptanceFixtureContract=runtime-acceptance-fixture-v2|workspace_code
 // by source-owned project composition and Runtime readiness checks.
 func ComputedContractSHA256() string {
 	structs := []any{
-		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, FileDownloadRequest{}, FileDownloadTicket{}, DerivedFileRequest{}, DerivedFileEvidence{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{},
+		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, FileDownloadRequest{}, FileDownloadTicket{}, DerivedFileRequest{}, DerivedFileEvidence{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{}, RecordManagerRecipientRequest{},
 		CrossWorkspaceAggregateDimension{}, CrossWorkspaceAggregateDimensionTransform{}, CrossWorkspaceAggregateDateBucketTransform{}, CrossWorkspaceAggregateMeasure{}, CrossWorkspaceAggregateFilterCapability{}, CrossWorkspaceAggregateCapability{}, CrossWorkspaceAggregateFilter{}, CrossWorkspaceAggregateRequest{}, CrossWorkspaceAggregateRow{}, CrossWorkspaceAggregateResult{},
 		ActionTargetOrganizationCapability{}, TargetOrganization{}, OrganizationUnitDeliveryCapability{}, OrganizationUnitDeliveryRequest{}, OrganizationUnitResolveRequest{}, OrganizationUnit{}, OrganizationUnitDeliveryResult{}, StoreOrganizationProvisionRequest{}, StoreOrganizationProvisionResult{}, StoreOrganizationRenameRequest{}, StoreOrganizationDisableRequest{}, StoreOrganizationMutationResult{}, ActionStoreOrganizationMutationCapability{},
 		AccountErasureCapability{}, AccountErasureStageRequest{}, AccountErasureGetRequest{}, AccountErasureReceipt{},
@@ -164,7 +166,7 @@ func ComputedContractSHA256() string {
 		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV48)
+	definition.WriteString(contractDefinitionV49)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

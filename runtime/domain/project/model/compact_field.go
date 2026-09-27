@@ -135,6 +135,11 @@ func parseFieldDeclaration(declaration string) (Field, error) {
 				return Field{}, fmt.Errorf("pattern requires a value")
 			}
 			result.Validation.Pattern = value
+		case "shape":
+			if result.Type != "json" || !hasValue || (value != "object" && value != "array") {
+				return Field{}, fmt.Errorf("shape requires a json field and object or array")
+			}
+			result.JSONShape = value
 		default:
 			return Field{}, fmt.Errorf("unsupported field attribute %q", key)
 		}

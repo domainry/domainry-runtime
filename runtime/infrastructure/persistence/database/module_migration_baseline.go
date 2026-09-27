@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	ormmigration "github.com/domainry/domainry-orm/migration"
@@ -58,6 +57,14 @@ func (s *RuntimeStore) proveModuleMigrationBaseline(ctx context.Context, baselin
 }
 
 func compareModuleSchemaTable(expected ormmigration.Table, actual moduleSchemaTable) error {
+	return compareModuleSchemaTableIndexes(expected, actual, true)
+}
+
+func compareModuleSchemaTableSubset(expected ormmigration.Table, actual moduleSchemaTable) error {
+	return compareModuleSchemaTableIndexes(expected, actual, false)
+}
+
+func compareModuleSchemaTableIndexes(expected ormmigration.Table, actual moduleSchemaTable, exactIndexes bool) error {
 	if len(actual.columns) != len(expected.Columns) {
 		return fmt.Errorf("columns=%d want=%d", len(actual.columns), len(expected.Columns))
 	}
@@ -77,16 +84,20 @@ func compareModuleSchemaTable(expected ormmigration.Table, actual moduleSchemaTa
 			return fmt.Errorf("column %s=%s nullable=%t primary=%t, want %s nullable=%t primary=%t", got.name, got.physical, got.nullable, got.primaryKey, want.Type, want.Nullable, want.PrimaryKey)
 		}
 	}
-	if len(actual.indexes) != len(expected.Indexes) {
+	if exactIndexes && len(actual.indexes) != len(expected.Indexes) {
 		return fmt.Errorf("explicit indexes=%d want=%d", len(actual.indexes), len(expected.Indexes))
 	}
-	sort.Slice(actual.indexes, func(i, j int) bool { return actual.indexes[i].name < actual.indexes[j].name })
-	wanted := append([]ormmigration.Index(nil), expected.Indexes...)
-	sort.Slice(wanted, func(i, j int) bool { return wanted[i].Name < wanted[j].Name })
-	for position, want := range wanted {
-		got := actual.indexes[position]
-		if got.name != want.Name || got.unique != want.Unique || !equalModuleColumns(got.columns, want.Columns) {
-			return fmt.Errorf("index[%d]=%s unique=%t columns=%v, want %s unique=%t columns=%v", position, got.name, got.unique, got.columns, want.Name, want.Unique, want.Columns)
+	indexes := make(map[string]moduleSchemaIndex, len(actual.indexes))
+	for _, index := range actual.indexes {
+		indexes[index.name] = index
+	}
+	for _, want := range expected.Indexes {
+		got, exists := indexes[want.Name]
+		if !exists {
+			return fmt.Errorf("index %s is missing", want.Name)
+		}
+		if got.unique != want.Unique || !equalModuleColumns(got.columns, want.Columns) {
+			return fmt.Errorf("index %s unique=%t columns=%v, want unique=%t columns=%v", got.name, got.unique, got.columns, want.Unique, want.Columns)
 		}
 	}
 	return nil

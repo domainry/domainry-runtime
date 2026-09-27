@@ -24,6 +24,8 @@ type openedRuntimeIntegration struct {
 	Requirements       integrationsdk.Requirements
 	Management         integrationsdk.Management
 	Operations         integrationsdk.Operations
+	AccountReads       integrationsdk.ConnectionAccountReads
+	AccountWrites      integrationsdk.ConnectionAccountWrites
 	Workers            integrationsdk.LocalWorkers
 	Subjects           integrationsdk.SubjectLifecycle
 	SubjectPersistence integrationsdk.SubjectLifecyclePersistenceBinding
@@ -70,6 +72,12 @@ func openRuntimeIntegration(ctx context.Context, application integrationsdk.Appl
 		return openedRuntimeIntegration{}, fmt.Errorf("Integration Binding returned no Operations port")
 	}
 	result.Operations = operations.Operations()
+	if accountReads, ok := binding.(integrationsdk.ConnectionAccountReadsBinding); ok {
+		result.AccountReads = accountReads.ConnectionAccountReads()
+	}
+	if accountWrites, ok := binding.(integrationsdk.ConnectionAccountWritesBinding); ok {
+		result.AccountWrites = accountWrites.ConnectionAccountWrites()
+	}
 	if port, ok := binding.(integrationsdk.SubjectLifecycleBinding); ok {
 		result.Subjects = port.SubjectLifecycle()
 	}

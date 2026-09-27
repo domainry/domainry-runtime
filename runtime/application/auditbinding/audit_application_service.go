@@ -64,16 +64,24 @@ func AuditBuildEvent(ctx context.Context, event, objectKey, recordID string, pri
 	if strings.HasPrefix(strings.TrimSpace(event), "record_") {
 		family = auditcontract.EventFamilyBusinessRecord
 	}
-	return auditapplication.NewService[principalmodel.Principal, principalmodel.SystemScope](nil, runtimePolicy()).NewAuditEvent(ctx, AuditAppendRequest{Family: family, Event: event, ObjectKey: objectKey, RecordID: recordID, Principal: principal, Summary: summary, Before: before, After: after, Metadata: workloadAuditMetadata(principal, metadata)})
+	return auditapplication.NewService[principalmodel.Principal, principalmodel.SystemScope](nil, runtimePolicy()).NewAuditEvent(ctx, AuditAppendRequest{Family: family, Event: event, ObjectKey: objectKey, RecordID: recordID, Principal: principal, Summary: summary, Before: before, After: after, Metadata: auditEventMetadata(principal, metadata)})
 }
 
-func workloadAuditMetadata(principal principalmodel.Principal, metadata map[string]any) map[string]any {
-	if principal.Workload == nil {
-		return metadata
-	}
-	result := make(map[string]any, len(metadata)+9)
+func auditEventMetadata(principal principalmodel.Principal, metadata map[string]any) map[string]any {
+	result := make(map[string]any, len(metadata)+10)
 	for key, value := range metadata {
+		if key == "actor_org_id" {
+			continue
+		}
 		result[key] = value
+	}
+	// Audit organization scope is based on the actor's organization at write
+	// time, never on event metadata supplied by an action or record handler.
+	if orgID := strings.TrimSpace(principal.OrgID); orgID != "" {
+		result["actor_org_id"] = orgID
+	}
+	if principal.Workload == nil {
+		return result
 	}
 	workload := principal.Workload
 	result["actor_kind"] = "workload"

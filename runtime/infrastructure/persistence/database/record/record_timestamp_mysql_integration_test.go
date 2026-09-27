@@ -28,7 +28,7 @@ func TestRecordSystemTimestampValuePersistsInRealMySQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer database.ExecContext(t.Context(), "DROP TABLE IF EXISTS "+table)
-	if _, err := database.ExecContext(t.Context(), "CREATE TABLE "+table+" (id VARCHAR(64) PRIMARY KEY, created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL)"); err != nil {
+	if _, err := database.ExecContext(t.Context(), "CREATE TABLE "+table+" (id VARCHAR(64) PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL)"); err != nil {
 		t.Fatal(err)
 	}
 	stamp := time.Date(2026, 9, 24, 1, 2, 3, 0, time.UTC)
@@ -36,12 +36,12 @@ func TestRecordSystemTimestampValuePersistsInRealMySQL(t *testing.T) {
 	if _, err := database.ExecContext(t.Context(), "INSERT INTO "+table+" (id, created_at, updated_at) VALUES (?, ?, ?)", "record-1", recordTimestampDBValue(testEngineProfile("mysql"), value), recordTimestampDBValue(testEngineProfile("mysql"), value)); err != nil {
 		t.Fatal(err)
 	}
-	var createdAt, updatedAt time.Time
+	var createdAt, updatedAt int64
 	if err := database.QueryRowContext(t.Context(), "SELECT created_at, updated_at FROM "+table+" WHERE id = ?", "record-1").Scan(&createdAt, &updatedAt); err != nil {
 		t.Fatal(err)
 	}
-	if !createdAt.UTC().Equal(stamp) || !updatedAt.UTC().Equal(stamp) {
-		t.Fatalf("timestamps created=%s updated=%s want=%s", createdAt.UTC(), updatedAt.UTC(), stamp)
+	if createdAt != stamp.UnixMilli() || updatedAt != stamp.UnixMilli() {
+		t.Fatalf("timestamps created=%d updated=%d want=%d", createdAt, updatedAt, stamp.UnixMilli())
 	}
 	updated := stamp.Add(time.Minute)
 	if _, err := database.ExecContext(t.Context(), "UPDATE "+table+" SET updated_at = ? WHERE id = ? AND updated_at = ?", recordTimestampDBValue(testEngineProfile("mysql"), updated.Format(time.RFC3339Nano)), "record-1", recordTimestampDBValue(testEngineProfile("mysql"), value)); err != nil {
@@ -50,7 +50,7 @@ func TestRecordSystemTimestampValuePersistsInRealMySQL(t *testing.T) {
 	if err := database.QueryRowContext(t.Context(), "SELECT updated_at FROM "+table+" WHERE id = ?", "record-1").Scan(&updatedAt); err != nil {
 		t.Fatal(err)
 	}
-	if !updatedAt.UTC().Equal(updated) {
-		t.Fatalf("updated timestamp=%s want=%s", updatedAt.UTC(), updated)
+	if updatedAt != updated.UnixMilli() {
+		t.Fatalf("updated timestamp=%d want=%d", updatedAt, updated.UnixMilli())
 	}
 }

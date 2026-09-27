@@ -26,6 +26,7 @@ const (
 	ConnectorActionSideEffectOutboxErrorCode  = "backend.connector.action_side_effect_requires_outbox"
 	FileActionGrantDeniedErrorCode            = "backend.upload.action_grant_denied"
 	RecordNotificationRecipientOperation      = "notification_recipient"
+	RecordManagerRecipientOperation           = "manager_recipient"
 	MaximumBusinessJobPayloadBytes            = 64 << 10
 )
 
@@ -99,6 +100,26 @@ type BusinessJobExecution interface {
 type RecordNotificationRecipientRequest struct {
 	ObjectKey string
 	RecordID  string
+}
+
+// RecordManagerRecipientRequest resolves the current manager of a user-valued
+// field on one caller-readable record. It never exposes an Identity directory.
+type RecordManagerRecipientRequest struct {
+	ObjectKey    string
+	RecordID     string
+	UserFieldKey string
+}
+
+type RecordManagerRecipientExecution interface {
+	ResolveRecordManagerRecipient(context.Context, RecordManagerRecipientRequest) (string, error)
+}
+
+func ResolveRecordManagerRecipient(ctx context.Context, execution ActionExecution, request RecordManagerRecipientRequest) (string, error) {
+	resolver, ok := execution.(RecordManagerRecipientExecution)
+	if !ok {
+		return "", &BusinessError{Code: "backend.notification.manager_recipient_unavailable", Message: "Runtime manager recipient resolution is unavailable"}
+	}
+	return resolver.ResolveRecordManagerRecipient(ctx, request)
 }
 
 type RecordNotificationRecipientExecution interface {

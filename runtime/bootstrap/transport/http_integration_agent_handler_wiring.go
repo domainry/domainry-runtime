@@ -15,7 +15,9 @@ import (
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/ratelimit"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	identityscope "github.com/domainry/domainry-identity-sdk/application"
 	identityevaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
@@ -97,7 +99,7 @@ func BindAgentApplicationHost(dependencies AgentApplicationHostDependencies) err
 		authorization: applications.AgentAuthorization, tools: tools, workflows: applications.Workflows,
 		records: applications.Records, attachmentFiles: dependencies.Records.AgentTaskAttachmentFiles(),
 	}
-	task := runtimeAgentTaskHost{authorization: applications.AgentAuthorization, credentials: credentials, tools: tools, workflows: applications.Workflows}
+	task := runtimeAgentTaskHost{application: dependencies.Application, authorization: applications.AgentAuthorization, credentials: credentials, tools: tools, workflows: applications.Workflows}
 	proposal := runtimeAgentProposalHost{records: dependencies.Records, principals: dependencies.Principals}
 	audit := runtimeAgentAuditHost{audit: applications.Audit}
 	analysis := runtimeAgentAnalysisHost{catalog: applications.Schema, records: applications.Records}
@@ -273,13 +275,19 @@ func (h runtimeAgentApplicationHost) AnalysisAgent() agentmodulehost.AnalysisHos
 }
 
 type runtimeAgentTaskHost struct {
+	application   identitysdk.ApplicationScope
 	authorization *agentapplication.AgentAuthorizationApplicationService
 	credentials   *agentapplication.AgentTaskCredentialApplicationService
 	tools         *agentapplication.AgentToolGateway
 	workflows     *workflowapplication.WorkflowApplicationService
 }
 
+func (h runtimeAgentTaskHost) scopedContext(ctx context.Context, workspaceID string) context.Context {
+	return identityscope.WithScope(requestcontext.WithWorkspaceID(ctx, workspaceID), h.application)
+}
+
 func (h runtimeAgentTaskHost) AuthorizeTask(ctx context.Context, request agentmodulehost.TaskAuthorizationRequest) (agentmodulehost.TaskAuthorization, error) {
+	ctx = h.scopedContext(ctx, request.WorkspaceID)
 	initiator := principalmodel.Principal{Principal: identitysdk.Principal{
 		Known: true, WorkspaceID: request.Identity.Initiator.WorkspaceID, UserID: request.Identity.Initiator.UserID,
 		RoleKey: request.Identity.Initiator.RoleKey, AuthorizationRevision: request.Identity.Initiator.AuthorizationRevision,
@@ -314,6 +322,7 @@ func (h runtimeAgentTaskHost) IssueTaskCredential(ctx context.Context, request a
 }
 
 func (h runtimeAgentTaskHost) InvokeTaskTool(ctx context.Context, request agentmodulehost.TaskToolRequest) (agentmodulehost.TaskToolResult, error) {
+	ctx = h.scopedContext(ctx, request.WorkspaceID)
 	if h.tools == nil {
 		return agentmodulehost.TaskToolResult{}, apperror.New(apperror.KindUnavailable, "agent.tool.gateway_unavailable", nil, nil)
 	}
@@ -339,6 +348,7 @@ func (h runtimeAgentTaskHost) InvokeTaskTool(ctx context.Context, request agentm
 }
 
 func (h runtimeAgentTaskHost) CompleteWorkflowTask(ctx context.Context, request agentmodulehost.WorkflowTaskCompletion) error {
+	ctx = h.scopedContext(ctx, request.WorkspaceID)
 	if h.workflows == nil {
 		return apperror.New(apperror.KindUnavailable, "agent.task.workflow_unavailable", nil, nil)
 	}

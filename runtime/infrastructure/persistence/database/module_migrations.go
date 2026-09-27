@@ -60,6 +60,11 @@ func (s *RuntimeStore) ApplyORMOwnedMigrations(ctx context.Context, owner string
 		if index > 0 && migrations[index-1].Version >= migration.Version {
 			return fmt.Errorf("module migrations for %s are not strictly ordered", owner)
 		}
+		if s.Driver() == "mysql" {
+			if _, err := buildMySQLMigrationContract(migration.Statements); err != nil {
+				return fmt.Errorf("module migration %s[%d] is not safely recoverable: %w", owner, index, err)
+			}
+		}
 	}
 	release, err := s.acquireMigrationLock(ctx, s.config)
 	if err != nil {
@@ -70,9 +75,10 @@ func (s *RuntimeStore) ApplyORMOwnedMigrations(ctx context.Context, owner string
 }
 
 // ApplyOwnedMigration runs source-owned schema assembly under Runtime's lock
-// and sole migration ledger. It exists for mature embedded modules whose DDL
-// assembler predates the declarative statement contract; new modules should
-// prefer ApplyOwnedMigrations.
+// and sole migration ledger. The callback must be idempotent and must reject an
+// existing physical schema that does not match its canonical contract because
+// Runtime invokes it again to recover a matching dirty MySQL/TiDB receipt. New
+// modules should prefer the declarative ApplyOwnedMigrations contract.
 func (s *RuntimeStore) ApplyOwnedMigration(ctx context.Context, owner string, version uint, name, checksum string, apply func(context.Context) error) error {
 	owner, name, checksum = strings.TrimSpace(owner), strings.TrimSpace(name), strings.TrimSpace(checksum)
 	if s == nil || !moduleMigrationIdentityPattern.MatchString(owner) || version == 0 || !moduleMigrationIdentityPattern.MatchString(name) || checksum == "" || apply == nil {
@@ -94,11 +100,18 @@ func (s *RuntimeStore) ApplyOwnedMigration(ctx context.Context, owner string, ve
 	query := "SELECT " + s.identifier("checksum") + "," + s.identifier("dirty") + " FROM " + s.tableIdentifier("_schema_migrations") + " WHERE " + s.identifier("path") + "=" + s.placeholder(1)
 	err = s.schemaDatabase().QueryRowContext(ctx, query, path).Scan(&appliedChecksum, &dirty)
 	if err == nil {
-		if dirty {
-			return fmt.Errorf("migration.dirty: %s", path)
-		}
 		if appliedChecksum != ledgerChecksum {
 			return fmt.Errorf("migration.checksum_drift: %s", path)
+		}
+		if dirty {
+			if s.config.EffectiveDatabaseMigrationMode() == "verify" || s.Driver() != "mysql" {
+				return fmt.Errorf("migration.dirty: %s", path)
+			}
+			started := time.Now()
+			if err := apply(ctx); err != nil {
+				return fmt.Errorf("migration.recovery_failed: execute %s: %w", path, err)
+			}
+			return s.completeOwnedMigration(ctx, path, ledgerChecksum, started)
 		}
 		return nil
 	}
@@ -115,11 +128,7 @@ func (s *RuntimeStore) ApplyOwnedMigration(ctx context.Context, owner string, ve
 	if err := apply(ctx); err != nil {
 		return fmt.Errorf("migration.failed: execute %s: %w", path, err)
 	}
-	complete := "UPDATE " + s.tableIdentifier("_schema_migrations") + " SET " + s.identifier("dirty") + "=FALSE," + s.identifier("duration_ms") + "=" + s.placeholder(1) + "," + s.identifier("applied_at") + "=" + s.placeholder(2) + " WHERE " + s.identifier("path") + "=" + s.placeholder(3) + " AND " + s.identifier("checksum") + "=" + s.placeholder(4)
-	if _, err := s.schemaDatabase().ExecContext(ctx, complete, time.Since(started).Milliseconds(), time.Now().UTC().UnixMilli(), path, ledgerChecksum); err != nil {
-		return fmt.Errorf("record module migration %s: %w", path, err)
-	}
-	return nil
+	return s.completeOwnedMigration(ctx, path, ledgerChecksum, started)
 }
 
 // applyOwnedMigrationsLocked is used by the Runtime schema coordinator while
@@ -179,11 +188,11 @@ func (s *RuntimeStore) ownedMigrationsApplied(ctx context.Context, owner string,
 			allApplied = false
 			continue
 		}
-		if entry.dirty {
-			return false, fmt.Errorf("migration.dirty: %s", path)
-		}
 		if entry.checksum != moduleMigrationChecksum(migration) {
 			return false, fmt.Errorf("migration.checksum_drift: %s", path)
+		}
+		if entry.dirty {
+			allApplied = false
 		}
 	}
 	return allApplied, nil
@@ -197,11 +206,22 @@ func (s *RuntimeStore) applyOwnedMigration(ctx context.Context, owner string, mi
 	query := "SELECT " + s.identifier("checksum") + "," + s.identifier("dirty") + " FROM " + s.tableIdentifier("_schema_migrations") + " WHERE " + s.identifier("path") + "=" + s.placeholder(1)
 	err := s.schemaDatabase().QueryRowContext(ctx, query, path).Scan(&applied, &dirty)
 	if err == nil {
-		if dirty {
-			return fmt.Errorf("migration.dirty: %s", path)
-		}
 		if applied != checksum {
 			return fmt.Errorf("migration.checksum_drift: %s", path)
+		}
+		if dirty {
+			if s.config.EffectiveDatabaseMigrationMode() == "verify" || s.Driver() != "mysql" {
+				return fmt.Errorf("migration.dirty: %s", path)
+			}
+			contract, err := buildMySQLMigrationContract(migration.Statements)
+			if err != nil {
+				return fmt.Errorf("migration.recovery_unsupported: %s: %w", path, err)
+			}
+			started := time.Now()
+			if err := s.reconcileMySQLMigration(ctx, contract); err != nil {
+				return fmt.Errorf("migration.recovery_mismatch: %s: %w", path, err)
+			}
+			return s.completeOwnedMigration(ctx, path, checksum, started)
 		}
 		return nil
 	}
@@ -215,6 +235,19 @@ func (s *RuntimeStore) applyOwnedMigration(ctx context.Context, owner string, mi
 	if err != nil {
 		return fmt.Errorf("migration.baseline_mismatch: %s: %w", path, err)
 	}
+	var mysqlContract mysqlMigrationContract
+	if s.Driver() == "mysql" {
+		mysqlContract, err = buildMySQLMigrationContract(migration.Statements)
+		if err != nil {
+			return fmt.Errorf("migration.recovery_unsupported: %s: %w", path, err)
+		}
+		if migration.Baseline == nil {
+			baseline, err = s.proveMySQLMigrationContract(ctx, mysqlContract)
+			if err != nil {
+				return fmt.Errorf("migration.baseline_mismatch: %s: %w", path, err)
+			}
+		}
+	}
 	started := time.Now()
 	if err := s.insertOwnedMigration(ctx, path, owner, migration, checksum, baseline); err != nil {
 		return err
@@ -222,22 +255,16 @@ func (s *RuntimeStore) applyOwnedMigration(ctx context.Context, owner string, mi
 	if baseline {
 		return nil
 	}
-	complete := "UPDATE " + s.tableIdentifier("_schema_migrations") + " SET " + s.identifier("dirty") + "=FALSE," + s.identifier("duration_ms") + "=" + s.placeholder(1) + "," + s.identifier("applied_at") + "=" + s.placeholder(2) + " WHERE " + s.identifier("path") + "=" + s.placeholder(3) + " AND " + s.identifier("checksum") + "=" + s.placeholder(4)
 	if s.Driver() == "mysql" {
-		// MySQL and TiDB implicitly commit DDL, so a database/sql transaction
-		// cannot also mark the migration ledger clean after the statements run.
-		// The dirty receipt remains the crash/failure boundary for this path.
-		for _, statement := range migration.Statements {
-			statement = s.runtimeColumnDefinition(statement)
-			if _, err := s.schemaDatabase().ExecContext(ctx, statement); err != nil {
-				return fmt.Errorf("migration.failed: execute %s: %w", path, err)
-			}
+		// MySQL and TiDB implicitly commit each DDL statement. Reconcile every
+		// declared physical effect so a crash between DDL and receipt completion
+		// can safely resume without accepting a different table or index shape.
+		if err := s.reconcileMySQLMigration(ctx, mysqlContract); err != nil {
+			return fmt.Errorf("migration.failed: execute %s: %w", path, err)
 		}
-		if _, err := s.schemaDatabase().ExecContext(ctx, complete, time.Since(started).Milliseconds(), time.Now().UTC().UnixMilli(), path, checksum); err != nil {
-			return fmt.Errorf("record module migration %s: %w", path, err)
-		}
-		return nil
+		return s.completeOwnedMigration(ctx, path, checksum, started)
 	}
+	complete := "UPDATE " + s.tableIdentifier("_schema_migrations") + " SET " + s.identifier("dirty") + "=FALSE," + s.identifier("duration_ms") + "=" + s.placeholder(1) + "," + s.identifier("applied_at") + "=" + s.placeholder(2) + " WHERE " + s.identifier("path") + "=" + s.placeholder(3) + " AND " + s.identifier("checksum") + "=" + s.placeholder(4)
 	tx, err := s.schemaDatabase().BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin module migration %s: %w", path, err)
@@ -254,6 +281,22 @@ func (s *RuntimeStore) applyOwnedMigration(ctx context.Context, owner string, mi
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit module migration %s: %w", path, err)
+	}
+	return nil
+}
+
+func (s *RuntimeStore) completeOwnedMigration(ctx context.Context, path, checksum string, started time.Time) error {
+	complete := "UPDATE " + s.tableIdentifier("_schema_migrations") + " SET " + s.identifier("dirty") + "=FALSE," + s.identifier("duration_ms") + "=" + s.placeholder(1) + "," + s.identifier("applied_at") + "=" + s.placeholder(2) + " WHERE " + s.identifier("path") + "=" + s.placeholder(3) + " AND " + s.identifier("checksum") + "=" + s.placeholder(4)
+	result, err := s.schemaDatabase().ExecContext(ctx, complete, time.Since(started).Milliseconds(), time.Now().UTC().UnixMilli(), path, checksum)
+	if err != nil {
+		return fmt.Errorf("record module migration %s: %w", path, err)
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("confirm module migration %s: %w", path, err)
+	}
+	if updated != 1 {
+		return fmt.Errorf("record module migration %s: updated %d receipts", path, updated)
 	}
 	return nil
 }

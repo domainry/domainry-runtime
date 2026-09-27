@@ -115,6 +115,8 @@ type RuntimeServicesDependencies struct {
 	IntegrationOwnerCatalog             integrationsdk.Catalog
 	IntegrationOwnerManagement          integrationsdk.Management
 	IntegrationOwnerOperations          integrationsdk.Operations
+	IntegrationOwnerAccountReads        integrationsdk.ConnectionAccountReads
+	IntegrationOwnerAccountWrites       integrationsdk.ConnectionAccountWrites
 	WorkerWakeups                       *workerplatform.WakeupBroker
 	WorkflowWorker                      workflowcontract.WorkflowWorkerStore
 	WorkflowDefinitions                 workflowcontract.WorkflowDefinitionStore
