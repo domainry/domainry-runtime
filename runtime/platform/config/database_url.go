@@ -71,6 +71,10 @@ func (c *Config) resolveDatabaseURL() error {
 	dsnConfig.DBName = database
 	dsnConfig.ParseTime = true
 	dsnConfig.TLSConfig = "true"
+	// Verdent provisions TiDB for platform DATABASE_URL connections. TiDB maps
+	// Runtime's serializable transactions to repeatable-read only when this
+	// session variable is initialized on every pooled physical connection.
+	dsnConfig.Params = map[string]string{"tidb_skip_isolation_level_check": "1"}
 	dsn := dsnConfig.FormatDSN()
 	c.DatabaseDriver = "mysql"
 	c.DatabaseDSN = dsn
