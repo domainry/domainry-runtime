@@ -63,10 +63,15 @@ func (c *Config) resolveDatabaseURL() error {
 		}
 	}
 	address := net.JoinHostPort(host, port)
-	dsn := (&mysqldriver.Config{
-		User: user, Passwd: password, Net: "tcp", Addr: address, DBName: database,
-		ParseTime: true, TLSConfig: "true",
-	}).FormatDSN()
+	dsnConfig := mysqldriver.NewConfig()
+	dsnConfig.User = user
+	dsnConfig.Passwd = password
+	dsnConfig.Net = "tcp"
+	dsnConfig.Addr = address
+	dsnConfig.DBName = database
+	dsnConfig.ParseTime = true
+	dsnConfig.TLSConfig = "true"
+	dsn := dsnConfig.FormatDSN()
 	c.DatabaseDriver = "mysql"
 	c.DatabaseDSN = dsn
 	c.DatabaseURL = ""

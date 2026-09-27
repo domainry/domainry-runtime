@@ -17,7 +17,7 @@ func TestLoadContractUsesPlatformDatabaseURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.DatabaseDriver != "mysql" || cfg.DatabaseURL != "" || dsn.User != "app-user" || dsn.Passwd != "p@ssword" || dsn.Addr != "gateway.example.test:4000" || dsn.DBName != "product_db" || dsn.TLSConfig != "true" || !dsn.ParseTime {
+	if cfg.DatabaseDriver != "mysql" || cfg.DatabaseURL != "" || dsn.User != "app-user" || dsn.Passwd != "p@ssword" || dsn.Addr != "gateway.example.test:4000" || dsn.DBName != "product_db" || dsn.TLSConfig != "true" || !dsn.ParseTime || !dsn.AllowNativePasswords {
 		t.Fatal("platform URL did not produce a verified MySQL Runtime configuration")
 	}
 	if entry := snapshot.Entries["DATABASE_URL"]; !entry.Redacted || entry.Version != "unversioned" {
