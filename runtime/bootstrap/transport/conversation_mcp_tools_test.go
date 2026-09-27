@@ -24,6 +24,9 @@ func (mcpAccountPortsStub) TestConnectionAccount(context.Context, integration.Co
 func (mcpAccountPortsStub) RevokeConnectionAccount(context.Context, integration.ConnectionAccountSubject, string, string) (integration.ConnectionAccount, error) {
 	return integration.ConnectionAccount{}, nil
 }
+func (mcpAccountPortsStub) RetryConnectionAccountBackgroundTask(context.Context, integration.ConnectionAccountSubject, string, string, integration.ConnectionAccountBackgroundRetryRequest) (integration.ConnectionAccountBackgroundTask, error) {
+	return integration.ConnectionAccountBackgroundTask{}, nil
+}
 func (mcpAccountPortsStub) AuthorizeConnectionAccountRead(context.Context, integration.ConnectionAccountSubject, string, integration.ConnectionAccountReadOperation) (integration.ConnectionAccountReadAccess, error) {
 	return integration.ConnectionAccountReadAccess{}, nil
 }

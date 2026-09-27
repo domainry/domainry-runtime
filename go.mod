@@ -18,8 +18,8 @@ require (
 	github.com/domainry/domainry-foundation v0.1.42
 	github.com/domainry/domainry-identity v0.2.34
 	github.com/domainry/domainry-identity-sdk v0.1.18
-	github.com/domainry/domainry-integration v0.1.30
-	github.com/domainry/domainry-integration-sdk v0.1.12
+	github.com/domainry/domainry-integration v0.1.31
+	github.com/domainry/domainry-integration-sdk v0.1.13
 	github.com/domainry/domainry-knowledge v0.1.26
 	github.com/domainry/domainry-lifecycle v0.1.23
 	github.com/domainry/domainry-lifecycle-sdk v0.1.20
