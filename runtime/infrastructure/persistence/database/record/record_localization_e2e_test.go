@@ -25,8 +25,8 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 	if _, err := store.DB().Exec(`CREATE TABLE product (
 		workspace_id TEXT NOT NULL,
 		id TEXT NOT NULL,
-		created_at TEXT NOT NULL,
-		updated_at TEXT NOT NULL,
+		created_at BIGINT NOT NULL,
+		updated_at BIGINT NOT NULL,
 		sku TEXT NOT NULL,
 		name TEXT NOT NULL,
 		PRIMARY KEY (workspace_id, id)

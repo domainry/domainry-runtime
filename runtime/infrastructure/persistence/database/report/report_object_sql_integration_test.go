@@ -24,8 +24,8 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 		t.Fatal(err)
 	}
 	for _, statement := range []string{
-		`CREATE TABLE sale (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, employee_id TEXT, team_id TEXT, organization_path TEXT, status TEXT, net_total TEXT, discount_total TEXT, refund_total TEXT, units INTEGER, UNIQUE (workspace_id, id))`,
-		`CREATE TABLE payment (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, sale_id TEXT, owner_id TEXT, kind TEXT, amount TEXT, UNIQUE (workspace_id, id))`,
+		`CREATE TABLE sale (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, employee_id TEXT, team_id TEXT, organization_path TEXT, status TEXT, net_total TEXT, discount_total TEXT, refund_total TEXT, units INTEGER, UNIQUE (workspace_id, id))`,
+		`CREATE TABLE payment (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, sale_id TEXT, owner_id TEXT, kind TEXT, amount TEXT, UNIQUE (workspace_id, id))`,
 	} {
 		if _, err := store.DB().ExecContext(t.Context(), statement); err != nil {
 			t.Fatal(err)
@@ -159,7 +159,7 @@ func TestReportObjectSQLExecutesInexactNumberAndExactPercentAggregatesWithRows(t
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE back_ledger (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, quantity REAL, rate_snapshot TEXT, UNIQUE(workspace_id,id))`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE back_ledger (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, quantity REAL, rate_snapshot TEXT, UNIQUE(workspace_id,id))`); err != nil {
 		t.Fatal(err)
 	}
 	percentConfig := map[string]any{"precision": 8, "scale": 2}
@@ -171,7 +171,7 @@ func TestReportObjectSQLExecutesInexactNumberAndExactPercentAggregatesWithRows(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO back_ledger VALUES ('workspace-a','back-1','now','now','posted',1.25,?)`, encodedRate); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO back_ledger VALUES ('workspace-a','back-1',0,0,'posted',1.25,?)`, encodedRate); err != nil {
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "back_ledger", Fields: []definitionmodel.FieldSchema{

@@ -22,7 +22,7 @@ func TestRecordCompatibilityAPIsRejectCancelledContext(t *testing.T) {
 	defer store.Close()
 	repository := NewRecordStore(store)
 	object := definitionmodel.ObjectSchema{Key: "record_cancel", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE record_cancel (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, name TEXT)`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE record_cancel (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, name TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())

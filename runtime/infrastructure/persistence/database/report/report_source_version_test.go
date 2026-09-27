@@ -24,7 +24,7 @@ func TestReportSnapshotSourceVersionHashesEffectiveScopedProjection(t *testing.T
 	if err := store.EnsureApplicationSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE ticket (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, note TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE ticket (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, note TEXT, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
 

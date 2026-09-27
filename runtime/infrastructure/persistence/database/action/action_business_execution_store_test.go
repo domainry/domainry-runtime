@@ -238,7 +238,7 @@ func TestBusinessActionExecutionStoreCommitsFactsAndReceiptInOneTransaction(t *t
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_atomic_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_atomic_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewActionBusinessExecutionStore(store)
@@ -300,8 +300,8 @@ func TestBookClassPersistsClassBookingAuditsOutboxAndReceiptInOneTransaction(t *
 	if _, err := store.DB().Exec(`CREATE TABLE p8_group_class (
 		workspace_id TEXT NOT NULL,
 		id TEXT NOT NULL,
-		created_at TEXT NOT NULL,
-		updated_at TEXT NOT NULL,
+		created_at BIGINT NOT NULL,
+		updated_at BIGINT NOT NULL,
 		remaining_capacity INTEGER NOT NULL,
 		remaining_waitlist_capacity INTEGER NOT NULL,
 		UNIQUE (workspace_id, id)
@@ -311,8 +311,8 @@ func TestBookClassPersistsClassBookingAuditsOutboxAndReceiptInOneTransaction(t *
 	if _, err := store.DB().Exec(`CREATE TABLE p8_class_booking (
 		workspace_id TEXT NOT NULL,
 		id TEXT NOT NULL,
-		created_at TEXT NOT NULL,
-		updated_at TEXT NOT NULL,
+		created_at BIGINT NOT NULL,
+		updated_at BIGINT NOT NULL,
 		class_id TEXT NOT NULL,
 		member_id TEXT NOT NULL,
 		status TEXT NOT NULL,
@@ -458,7 +458,7 @@ func TestBusinessActionExecutionTransactionOwnsLockingReadAndFinalCommit(t *test
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_lazy_uow_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_lazy_uow_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
@@ -510,10 +510,10 @@ func TestBusinessActionExecutionTransactionReservesSQLiteWriterAtBegin(t *testin
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_sqlite_lock_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_sqlite_lock_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, updated_at BIGINT NOT NULL, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`INSERT INTO action_sqlite_lock_record (workspace_id, id, updated_at) VALUES ('workspace-a', 'record-1', 'before')`); err != nil {
+	if _, err := store.DB().Exec(`INSERT INTO action_sqlite_lock_record (workspace_id, id, updated_at) VALUES ('workspace-a', 'record-1', 1)`); err != nil {
 		t.Fatal(err)
 	}
 	var sequence int
@@ -534,14 +534,14 @@ func TestBusinessActionExecutionTransactionReservesSQLiteWriterAtBegin(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := competing.Exec(`UPDATE action_sqlite_lock_record SET updated_at = 'competing' WHERE workspace_id = 'workspace-a' AND id = 'record-1'`); err == nil {
+	if _, err := competing.Exec(`UPDATE action_sqlite_lock_record SET updated_at = 2 WHERE workspace_id = 'workspace-a' AND id = 'record-1'`); err == nil {
 		_ = transaction.RollBack(t.Context())
 		t.Fatal("competing SQLite writer was not blocked by Action BEGIN IMMEDIATE")
 	}
 	if err := transaction.RollBack(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := competing.Exec(`UPDATE action_sqlite_lock_record SET updated_at = 'after' WHERE workspace_id = 'workspace-a' AND id = 'record-1'`); err != nil {
+	if _, err := competing.Exec(`UPDATE action_sqlite_lock_record SET updated_at = 3 WHERE workspace_id = 'workspace-a' AND id = 'record-1'`); err != nil {
 		t.Fatalf("competing writer remained blocked after rollback: %v", err)
 	}
 }
@@ -604,7 +604,7 @@ func TestBusinessActionExecutionStoreRollsBackFactsWhenAtomicCommitFails(t *test
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_atomic_rollback (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_atomic_rollback (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewActionBusinessExecutionStore(store)
@@ -637,10 +637,10 @@ func TestBusinessActionConditionalMutationCommitsPredicateFactsAndReceiptInOneUo
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_capacity (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, reserved REAL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_capacity (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, reserved REAL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`INSERT INTO action_capacity (workspace_id, id, created_at, updated_at, reserved, status) VALUES (?, ?, ?, ?, ?, ?)`, "workspace-a", "class-1", "v1", "v1", 19, "open"); err != nil {
+	if _, err := store.DB().Exec(`INSERT INTO action_capacity (workspace_id, id, created_at, updated_at, reserved, status) VALUES (?, ?, ?, ?, ?, ?)`, "workspace-a", "class-1", int64(1), int64(1), 19, "open"); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewActionBusinessExecutionStore(store)
@@ -698,7 +698,7 @@ func TestBusinessActionExecutionStoreRollsBackAuditIntentOutboxAndReceiptOnCompl
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_completion_rollback (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_completion_rollback (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewActionBusinessExecutionStore(store)
@@ -748,7 +748,7 @@ func TestBusinessActionExecutionStoreRollsBackMutationAndDurableIntentWhenAction
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_audit_rollback (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_audit_rollback (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewActionBusinessExecutionStore(store)

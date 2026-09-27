@@ -126,7 +126,7 @@ func TestRecordIdempotencyProcessRestartReplaysSuccessAndReclaimsExpiredProcessi
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE restart_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, name TEXT)`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE restart_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, name TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewRecordStore(store)
@@ -187,7 +187,7 @@ func TestRecordIdempotencyCrashWindowRollsBackBusinessWriteBeforeReceiptCompleti
 		t.Fatal(err)
 	}
 	auditmodulefixture.Bind(t, t.Context(), store)
-	if _, err := store.DB().Exec(`CREATE TABLE crash_window_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, name TEXT)`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE crash_window_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, name TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewRecordStore(store)

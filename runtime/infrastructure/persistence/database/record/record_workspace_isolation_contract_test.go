@@ -22,8 +22,8 @@ func TestRecordStoreWorkspaceIsolationContract(t *testing.T) {
 	if _, err := store.DB().Exec(`CREATE TABLE workspace_record (
 		workspace_id TEXT NOT NULL,
 		id TEXT NOT NULL,
-		created_at TEXT NOT NULL,
-		updated_at TEXT NOT NULL,
+		created_at BIGINT NOT NULL,
+		updated_at BIGINT NOT NULL,
 		email TEXT,
 		UNIQUE (workspace_id, id),
 		UNIQUE (workspace_id, email)
@@ -103,8 +103,8 @@ func TestTwoRuntimeStoreInstancesProcessDifferentWorkspacesConcurrently(t *testi
 	if _, err := first.DB().Exec(`CREATE TABLE two_runtime_workspace_record (
 		workspace_id TEXT NOT NULL,
 		id TEXT NOT NULL,
-		created_at TEXT NOT NULL,
-		updated_at TEXT NOT NULL,
+		created_at BIGINT NOT NULL,
+		updated_at BIGINT NOT NULL,
 		value_text TEXT,
 		UNIQUE (workspace_id, id)
 	)`); err != nil {

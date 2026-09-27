@@ -47,8 +47,12 @@ func insertMigrationEdgeLedger(t *testing.T, store *RuntimeStore, path, checksum
 	if _, err := store.db.ExecContext(t.Context(), `DELETE FROM _schema_migrations`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.db.ExecContext(t.Context(), `INSERT INTO _schema_migrations(path, checksum, dirty, applied_at) VALUES (?, ?, ?, ?)`, filepath.Base(path), checksum, dirty, time.Now().UTC().Format(time.RFC3339)); err != nil {
+	if _, err := store.db.ExecContext(t.Context(), `INSERT INTO _schema_migrations(path, checksum, dirty, applied_at) VALUES (?, ?, ?, ?)`, filepath.Base(path), checksum, dirty, time.Now().UTC().UnixMilli()); err != nil {
 		t.Fatal(err)
+	}
+	var storageClass string
+	if err := store.db.QueryRowContext(t.Context(), `SELECT typeof(applied_at) FROM _schema_migrations WHERE path = ?`, filepath.Base(path)).Scan(&storageClass); err != nil || storageClass != "integer" {
+		t.Fatalf("applied_at storage class=%q error=%v", storageClass, err)
 	}
 }
 
@@ -386,7 +390,7 @@ func TestApplyMigrationsOrchestrationErrorEdges(t *testing.T) {
 	})
 	t.Run("non-current status", func(t *testing.T) {
 		store := openMigrationEdgeStore(t)
-		if _, err := store.db.ExecContext(t.Context(), `INSERT INTO _schema_migrations(path, checksum, dirty, applied_at) VALUES ('999_unknown.sql', 'unknown', FALSE, 'now')`); err != nil {
+		if _, err := store.db.ExecContext(t.Context(), `INSERT INTO _schema_migrations(path, checksum, dirty, applied_at) VALUES ('999_unknown.sql', 'unknown', FALSE, ?)`, time.Now().UTC().UnixMilli()); err != nil {
 			t.Fatal(err)
 		}
 		path := writeMigrationEdgeFile(t, "005_current.sql", "CREATE TABLE current_edge(id TEXT);")
@@ -417,7 +421,7 @@ func TestVerifyMigrationsOrchestrationEdges(t *testing.T) {
 	if err := store.verifyMigrations(t.Context(), config.Config{MigrationSQL: path}); err != nil {
 		t.Fatalf("current verification=%v", err)
 	}
-	if _, err := store.db.ExecContext(t.Context(), `INSERT INTO _schema_migrations(path, checksum, dirty, applied_at) VALUES ('999_unknown.sql', 'unknown', FALSE, 'now')`); err != nil {
+	if _, err := store.db.ExecContext(t.Context(), `INSERT INTO _schema_migrations(path, checksum, dirty, applied_at) VALUES ('999_unknown.sql', 'unknown', FALSE, ?)`, time.Now().UTC().UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.verifyMigrations(t.Context(), config.Config{MigrationSQL: path}); err == nil || !strings.Contains(err.Error(), "migration.schema_newer") {

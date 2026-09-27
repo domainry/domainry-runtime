@@ -12,7 +12,7 @@ func TestRecordQueryFilterProjectionAndLockOwnerContract(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 	object := definitionmodel.ObjectSchema{Key: "work_item", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "select"}, {Key: "priority", Type: "integer"}, {Key: "secret", Type: "text"}}}
-	if _, err := store.DB().Exec(`CREATE TABLE "work_item" ("workspace_id" TEXT NOT NULL, "id" TEXT NOT NULL, "created_at" TEXT NOT NULL, "updated_at" TEXT NOT NULL, "status" TEXT, "priority" INTEGER, "secret" TEXT, PRIMARY KEY ("workspace_id", "id"))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE "work_item" ("workspace_id" TEXT NOT NULL, "id" TEXT NOT NULL, "created_at" BIGINT NOT NULL, "updated_at" BIGINT NOT NULL, "status" TEXT, "priority" INTEGER, "secret" TEXT, PRIMARY KEY ("workspace_id", "id"))`); err != nil {
 		t.Fatal(err)
 	}
 	repository := recordStore(store)

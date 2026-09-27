@@ -10,7 +10,7 @@ import (
 func TestSQLiteCurrencyPersistsSortsAndFiltersWithoutBinaryFloat(t *testing.T) {
 	store := openRuntimeStore(t)
 	t.Cleanup(func() { _ = store.Close() })
-	if _, err := store.DB().Exec(`CREATE TABLE exact_amount_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, amount TEXT NOT NULL, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE exact_amount_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, amount TEXT NOT NULL, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "exact_amount_record", Fields: []definitionmodel.FieldSchema{{Key: "amount", Type: "currency", Config: map[string]any{"precision": 8, "scale": 2, "currency_code": "USD"}}}}

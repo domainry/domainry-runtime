@@ -196,7 +196,7 @@ func TestMigrationStatusRejectsUnknownAndNewerAppliedVersions(t *testing.T) {
 	}
 	defer store.Close()
 	for _, row := range []struct{ path, checksum string }{{"003_unpublished.sql", strings.Repeat("3", 64)}, {"005_future.sql", strings.Repeat("5", 64)}} {
-		if _, err := store.DB().Exec(`INSERT INTO _schema_migrations (path,version,name,kind,checksum,dirty,applied_at,runtime_version,duration_ms,operator,instance_id,backup_id) VALUES (?,?,?,?,?,FALSE,?,?,?,?,?,?)`, row.path, strings.SplitN(row.path, "_", 2)[0], row.path, "schema", row.checksum, time.Now().UTC().Format(time.RFC3339), "future", 1, "test", "test", "backup"); err != nil {
+		if _, err := store.DB().Exec(`INSERT INTO _schema_migrations (path,version,name,kind,checksum,dirty,applied_at,runtime_version,duration_ms,operator,instance_id,backup_id) VALUES (?,?,?,?,?,FALSE,?,?,?,?,?,?)`, row.path, strings.SplitN(row.path, "_", 2)[0], row.path, "schema", row.checksum, time.Now().UTC().UnixMilli(), "future", 1, "test", "test", "backup"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -258,7 +258,7 @@ func TestApplyModeUpgradesLegacyLedgerWithChecksum(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _schema_migrations (path, checksum, applied_at) VALUES (?, ?, ?)`, filepath.Base(migrationPath), "", "2026-07-19T00:00:00Z"); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _schema_migrations (path, checksum, applied_at) VALUES (?, ?, ?)`, filepath.Base(migrationPath), "", time.Date(2026, 7, 19, 0, 0, 0, 0, time.UTC).UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Close(); err != nil {

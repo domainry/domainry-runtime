@@ -43,8 +43,8 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 		`CREATE TABLE p8_fault_group_class (
 			workspace_id TEXT NOT NULL,
 			id TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
+			created_at BIGINT NOT NULL,
+			updated_at BIGINT NOT NULL,
 			remaining_capacity INTEGER NOT NULL,
 			remaining_waitlist_capacity INTEGER NOT NULL,
 			UNIQUE (workspace_id, id)
@@ -52,8 +52,8 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 		`CREATE TABLE p8_fault_class_booking (
 			workspace_id TEXT NOT NULL,
 			id TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
+			created_at BIGINT NOT NULL,
+			updated_at BIGINT NOT NULL,
 			class_id TEXT NOT NULL,
 			member_id TEXT NOT NULL,
 			status TEXT NOT NULL,

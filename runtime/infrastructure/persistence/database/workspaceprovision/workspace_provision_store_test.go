@@ -332,7 +332,7 @@ func TestWorkspaceProvisionValidationRejectsUntypedOrInvalidCommercialLimits(t *
 
 func TestWorkspaceBootstrapParticipantCreatesFirstStoreOwnedAggregateInHostTransaction(t *testing.T) {
 	store, probe := newWorkspaceProvisionTestStore(t)
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE "store_configuration" ("workspace_id" TEXT NOT NULL,"id" TEXT NOT NULL,"owner_org_id" TEXT NOT NULL,"created_at" TEXT NOT NULL,"updated_at" TEXT NOT NULL,"currency" TEXT NOT NULL,"label" TEXT NOT NULL,PRIMARY KEY("workspace_id","id"))`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE "store_configuration" ("workspace_id" TEXT NOT NULL,"id" TEXT NOT NULL,"owner_org_id" TEXT NOT NULL,"created_at" BIGINT NOT NULL,"updated_at" BIGINT NOT NULL,"currency" TEXT NOT NULL,"label" TEXT NOT NULL,PRIMARY KEY("workspace_id","id"))`); err != nil {
 		t.Fatal(err)
 	}
 	participant := &workspaceBootstrapParticipantProbe{}
@@ -368,7 +368,7 @@ func TestWorkspaceBootstrapInputRequiresParticipantAndPerRecordFailureRollsBackE
 	if _, err := NewWorkspaceInitializationStore(store, probe, projectmodel.RuntimeModel{}, probe.rolePolicy).Initialize(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrInvalid) {
 		t.Fatalf("missing participant error=%v", err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE "store_configuration" ("workspace_id" TEXT NOT NULL,"id" TEXT NOT NULL,"owner_org_id" TEXT NOT NULL,"created_at" TEXT NOT NULL,"updated_at" TEXT NOT NULL,"currency" TEXT NOT NULL,PRIMARY KEY("workspace_id","id"))`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE "store_configuration" ("workspace_id" TEXT NOT NULL,"id" TEXT NOT NULL,"owner_org_id" TEXT NOT NULL,"created_at" BIGINT NOT NULL,"updated_at" BIGINT NOT NULL,"currency" TEXT NOT NULL,PRIMARY KEY("workspace_id","id"))`); err != nil {
 		t.Fatal(err)
 	}
 	participant := &workspaceBootstrapParticipantProbe{}

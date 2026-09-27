@@ -26,7 +26,7 @@ func TestRecordStoreImplementsContractAndCancelsSQL(t *testing.T) {
 	repository := NewRecordStore(store)
 	var _ recordrepository.RecordRepository = repository
 	object := definitionmodel.ObjectSchema{Key: "context_record", Name: "Context Record", Fields: []definitionmodel.FieldSchema{{Key: "status", Name: "Status", Type: "text"}}}
-	if _, err := store.DB().Exec(`CREATE TABLE context_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE context_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
 	if err := repository.InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: "record_1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"status": "pending"}}); err != nil {

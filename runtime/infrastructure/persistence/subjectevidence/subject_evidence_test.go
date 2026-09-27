@@ -36,7 +36,7 @@ func fixture(t *testing.T) (*database.RuntimeStore, *Handler, context.Context) {
 	}
 	for _, statement := range []string{
 		`CREATE TABLE _subject_requests (id TEXT NOT NULL, workspace_id TEXT NOT NULL, request_type TEXT NOT NULL, kind TEXT NOT NULL, resolved_identity TEXT NOT NULL, PRIMARY KEY(workspace_id,id))`,
-		`CREATE TABLE _subject_steps (workspace_id TEXT NOT NULL, request_id TEXT NOT NULL, owner TEXT NOT NULL, operation TEXT NOT NULL, payload_json TEXT NOT NULL, completed_at TEXT NOT NULL, PRIMARY KEY(workspace_id,request_id,owner,operation))`,
+		`CREATE TABLE _subject_steps (workspace_id TEXT NOT NULL, request_id TEXT NOT NULL, owner TEXT NOT NULL, operation TEXT NOT NULL, payload_json TEXT NOT NULL, completed_at BIGINT NOT NULL, PRIMARY KEY(workspace_id,request_id,owner,operation))`,
 	} {
 		if _, err = store.DB().ExecContext(t.Context(), statement); err != nil {
 			t.Fatal(err)
@@ -54,7 +54,7 @@ func beginSubjectErasure(t *testing.T, store *database.RuntimeStore, request, su
 	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_requests(id,workspace_id,request_type,kind,resolved_identity) VALUES(?,'workspace-a','subject_request','erase',?)`, request, subject); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_steps(workspace_id,request_id,owner,operation,payload_json,completed_at) VALUES('workspace-a',?,'lifecycle','erase_fence','{}',?)`, request, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_steps(workspace_id,request_id,owner,operation,payload_json,completed_at) VALUES('workspace-a',?,'lifecycle','erase_fence','{}',?)`, request, time.Now().UTC().UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -39,8 +39,13 @@
 # 2026-09-24 review: retired migration/store fallbacks were removed. Current
 # Operations result evidence, Artifact content, and Runtime status candidates
 # all reject an empty workspace and never substitute a tenant.
+# 2026-09-28 review: manager-recipient execution rejects incomplete record and
+# workspace identity before opening its unit of work. Workflow record workers
+# reject any resolved principal whose workspace differs from the durable worker
+# scope. Both checks fail closed and never select a fallback workspace.
 runtime/application/action/action_invocation_receipt_read.go|887c5c451c24ca0c
 runtime/application/action/action_invocation_receipt_read.go|f7281c25559cf6ce
+runtime/application/action/action_manager_recipient_execution.go|430babc60fdd1a19
 runtime/application/action/action_workspace_aggregate_execution.go|5bb28c1937a21188
 runtime/application/action/action_workspace_identity_usage_execution.go|33146e63c53c252b
 runtime/application/action/action_workspace_identity_usage_execution.go|4555daacc7fce16c
@@ -75,6 +80,7 @@ runtime/application/workflow/workflow_agent_receipt_read.go|f7281c25559cf6ce
 runtime/application/workflow/workflow_principal_resolver_application_service.go|a7621539cdd54a6e
 runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
 runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
+runtime/application/workflow/workflow_record_worker_application_service.go|8cbd407e209a3f70
 runtime/application/workspaceprovision/workspace_administration_application_service.go|0e4286d03e5f3289
 runtime/application/workspaceprovision/workspace_administration_application_service.go|6a0413e7fa385b92
 runtime/application/workspaceprovision/workspace_administration_application_service.go|b7fd3431341b3beb

@@ -233,11 +233,11 @@ func TestPendingMigrationCreatesSQLiteBackupWhenDataExists(t *testing.T) {
 	if err := os.WriteFile(firstMigration, []byte(`
 CREATE TABLE IF NOT EXISTS "customer" (
   "id" TEXT PRIMARY KEY,
-  "created_at" TEXT NOT NULL,
-  "updated_at" TEXT NOT NULL,
+  "created_at" BIGINT NOT NULL,
+  "updated_at" BIGINT NOT NULL,
   "name" TEXT NOT NULL
 );
-INSERT INTO "customer" ("id", "created_at", "updated_at", "name") VALUES ('c1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 'Ada');
+INSERT INTO "customer" ("id", "created_at", "updated_at", "name") VALUES ('c1', 1767225600000, 1767225600000, 'Ada');
 `), 0644); err != nil {
 		t.Fatalf("write first migration: %v", err)
 	}

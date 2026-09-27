@@ -248,7 +248,7 @@ func workflowDecisionStoreFixture(t *testing.T) (*database.RuntimeStore, definit
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "decision_business", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
-	if _, err := store.DB().Exec(`CREATE TABLE decision_business (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE decision_business (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
 		store.Close()
 		t.Fatal(err)
 	}

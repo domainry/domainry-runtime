@@ -68,7 +68,7 @@ func TestAuditCursorSchemaAndPaginationOnRealMySQL(t *testing.T) {
 		t.Fatalf("audit cursor indexes=%v want=%v", gotIndexes, wantIndexes)
 	}
 
-	columnRows, err := store.DB().QueryContext(t.Context(), `SELECT COLUMN_NAME, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '_audit_events' AND COLUMN_NAME IN ('id', 'created_at', 'record_id', 'actor_id')`)
+	columnRows, err := store.DB().QueryContext(t.Context(), `SELECT COLUMN_NAME, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '_audit_events' AND COLUMN_NAME IN ('id', 'record_id', 'actor_id')`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestAuditCursorSchemaAndPaginationOnRealMySQL(t *testing.T) {
 	if err := columnRows.Close(); err != nil {
 		t.Fatal(err)
 	}
-	for _, column := range []string{"id", "created_at"} {
+	for _, column := range []string{"id"} {
 		if state := charsets[column]; state.charset != "ascii" || state.collation != "ascii_bin" {
 			t.Fatalf("cursor column %s charset=%+v", column, state)
 		}
@@ -99,6 +99,10 @@ func TestAuditCursorSchemaAndPaginationOnRealMySQL(t *testing.T) {
 		if state := charsets[column]; state.charset != "utf8mb4" {
 			t.Fatalf("filter column %s did not retain utf8mb4: %+v", column, state)
 		}
+	}
+	var createdAtType string
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '_audit_events' AND COLUMN_NAME = 'created_at'`).Scan(&createdAtType); err != nil || createdAtType != "bigint" {
+		t.Fatalf("created_at type=%q err=%v", createdAtType, err)
 	}
 
 	repository := auditpersistence.NewAuditStoreFromRuntimeStore(store)
@@ -221,7 +225,7 @@ func TestAuditCursorPartialBootstrapRepairsOnRealMySQL(t *testing.T) {
 		metadata_json TEXT NOT NULL,
 		before_json TEXT NOT NULL,
 		after_json TEXT NOT NULL,
-		created_at VARCHAR(191) NOT NULL,
+		created_at BIGINT NOT NULL,
 		INDEX idx_audit_event_actor_cursor (workspace_id, actor_id, created_at, id)
 	)`); err != nil {
 		t.Fatal(err)
@@ -237,7 +241,7 @@ func TestAuditCursorPartialBootstrapRepairsOnRealMySQL(t *testing.T) {
 	if recordIndexColumns != 5 || prefixedColumns != 0 {
 		t.Fatalf("repaired record cursor columns=%d prefixed=%d", recordIndexColumns, prefixedColumns)
 	}
-	for _, column := range []string{"id", "created_at"} {
+	for _, column := range []string{"id"} {
 		var charset, collation string
 		if err := store.DB().QueryRowContext(t.Context(), `SELECT CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '_audit_events' AND COLUMN_NAME = ?`, column).Scan(&charset, &collation); err != nil {
 			t.Fatal(err)

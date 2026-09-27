@@ -19,8 +19,8 @@ func TestRecordStoreRoundTripsCanonicalFileAndFileListValues(t *testing.T) {
 	statement, args, err := ormschema.NewTable(store.RuntimeRenderer(), object.Key).Columns(
 		ormschema.Column("workspace_id", ormschema.Text()).NotNull(),
 		ormschema.Column("id", ormschema.Text()).NotNull(),
-		ormschema.Column("created_at", ormschema.Text()).NotNull(),
-		ormschema.Column("updated_at", ormschema.Text()).NotNull(),
+		ormschema.Column("created_at", ormschema.BigInt()).NotNull(),
+		ormschema.Column("updated_at", ormschema.BigInt()).NotNull(),
 		ormschema.Column("attachment", ormschema.Text()),
 		ormschema.Column("attachments", ormschema.Text()),
 	).PrimaryKey("workspace_id", "id").Build()

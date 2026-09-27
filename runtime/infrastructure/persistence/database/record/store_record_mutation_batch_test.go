@@ -41,7 +41,7 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 				t.Fatalf("unexpected record UoW transaction options: %#v", options)
 			}
 			object := definitionmodel.ObjectSchema{Key: "dialect_record", Name: "Dialect Record", Fields: []definitionmodel.FieldSchema{{Key: "status", Name: "Status", Type: "text"}}}
-			if _, err := store.DB().Exec(`CREATE TABLE dialect_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+			if _, err := store.DB().Exec(`CREATE TABLE dialect_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
 				t.Fatalf("create table: %v", err)
 			}
 			repository := store
@@ -159,7 +159,7 @@ func TestCommitRecordMutationBatchRollsBackEveryRecordOnConflict(t *testing.T) {
 	}
 	auditmodulefixture.Bind(t, t.Context(), store)
 	object := definitionmodel.ObjectSchema{Key: "atomic_record", Name: "Atomic Record", Fields: []definitionmodel.FieldSchema{{Key: "status", Name: "Status", Type: "text"}}}
-	if _, err := store.DB().Exec(`CREATE TABLE atomic_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT)`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE atomic_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT)`); err != nil {
 		t.Fatalf("create table: %v", err)
 	}
 	for _, id := range []string{"first", "second"} {
@@ -196,7 +196,7 @@ func TestRecordMutationAuthorizationScopeGuardsUpdateDeleteAndWholeBatch(t *test
 		{Key: "owner_user_id", Type: "text"},
 		{Key: "status", Type: "text"},
 	}}
-	if _, err := store.DB().Exec(`CREATE TABLE scoped_mutation (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, owner_user_id TEXT, status TEXT, PRIMARY KEY (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE scoped_mutation (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, owner_user_id TEXT, status TEXT, PRIMARY KEY (workspace_id, id))`); err != nil {
 		t.Fatal(err)
 	}
 	repository := recordStore(store)
@@ -261,7 +261,7 @@ func TestConditionalMutationPredicateIsAtomicAcrossDialects(t *testing.T) {
 				t.Fatal(err)
 			}
 			object := definitionmodel.ObjectSchema{Key: "capacity", Fields: []definitionmodel.FieldSchema{{Key: "reserved", Type: "number"}, {Key: "status", Type: "text"}}}
-			if _, err := store.DB().Exec(`CREATE TABLE capacity (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, reserved REAL, status TEXT)`); err != nil {
+			if _, err := store.DB().Exec(`CREATE TABLE capacity (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, reserved REAL, status TEXT)`); err != nil {
 				t.Fatal(err)
 			}
 			initial := recordmodel.Record{ID: "class-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"reserved": 19.0, "status": "open"}}
@@ -307,7 +307,7 @@ func TestMutationSideFactFailureWindowsRollbackRecordAuditOutboxAndWorkflowInten
 			}
 			auditmodulefixture.Bind(t, t.Context(), store)
 			object := definitionmodel.ObjectSchema{Key: "failure_window_record", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
-			if _, err := store.DB().Exec(`CREATE TABLE failure_window_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT)`); err != nil {
+			if _, err := store.DB().Exec(`CREATE TABLE failure_window_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT)`); err != nil {
 				t.Fatal(err)
 			}
 			if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: "record-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"status": "pending"}}); err != nil {
@@ -344,7 +344,7 @@ func TestTemporalExclusionIsEnforcedInsideMutationTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	auditmodulefixture.Bind(t, t.Context(), store)
-	if _, err := store.DB().Exec(`CREATE TABLE booking_slot (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, owner TEXT, starts_at TEXT, ends_at TEXT, status TEXT)`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE booking_slot (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, owner TEXT, starts_at BIGINT, ends_at BIGINT, status TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "booking_slot", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "relation"}, {Key: "starts_at", Type: "datetime"}, {Key: "ends_at", Type: "datetime"}, {Key: "status", Type: "select"}}, Validations: []definitionmodel.ValidationSchema{{
@@ -393,10 +393,10 @@ func TestRelatedAggregateInvariantLocksParentAndUsesExactCandidateAggregate(t *t
 	}
 	auditmodulefixture.Bind(t, t.Context(), store)
 	for _, ddl := range []string{
-		`CREATE TABLE payment_limit (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, paid_amount TEXT)`,
-		`CREATE TABLE refund_fact (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, payment_id TEXT, amount TEXT, status TEXT)`,
-		`CREATE TABLE class_limit (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, capacity REAL)`,
-		`CREATE TABLE class_booking (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, class_id TEXT, status TEXT)`,
+		`CREATE TABLE payment_limit (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, paid_amount TEXT)`,
+		`CREATE TABLE refund_fact (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, payment_id TEXT, amount TEXT, status TEXT)`,
+		`CREATE TABLE class_limit (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, capacity REAL)`,
+		`CREATE TABLE class_booking (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, class_id TEXT, status TEXT)`,
 	} {
 		if _, err := store.DB().Exec(ddl); err != nil {
 			t.Fatal(err)

@@ -59,7 +59,9 @@ func TestAuditExportUsesRuntimeSharedArtifactMetadataAndBlobContent(t *testing.T
 		t.Fatal(err)
 	}
 
-	binding.Exporter().ConfigureExport([]byte("0123456789abcdef0123456789abcdef"), nil)
+	binding.Exporter().ConfigureExport([]byte("0123456789abcdef0123456789abcdef"), func(context.Context, contract.ExportFilter, contract.ExportPrincipal) error {
+		return nil
+	})
 	principal := contract.ExportPrincipal{
 		WorkspaceID: "workspace-a", UserID: "user-a", RoleKey: "member",
 		AuthorizationRevision: "revision-1", RequestID: "prepare-request",

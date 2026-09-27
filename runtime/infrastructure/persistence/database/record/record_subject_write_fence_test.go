@@ -2,6 +2,7 @@ package record
 
 import (
 	"testing"
+	"time"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -10,12 +11,12 @@ import (
 
 func TestErasedRecordCannotBeRecreatedByRawCommitOrLocalizedWriters(t *testing.T) {
 	store := openRuntimeStore(t)
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE member_profile(workspace_id TEXT NOT NULL,id TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,name TEXT,create_by TEXT,update_by TEXT,owner_user_id TEXT,PRIMARY KEY(workspace_id,id))`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE member_profile(workspace_id TEXT NOT NULL,id TEXT NOT NULL,created_at BIGINT NOT NULL,updated_at BIGINT NOT NULL,name TEXT,create_by TEXT,update_by TEXT,owner_user_id TEXT,PRIMARY KEY(workspace_id,id))`); err != nil {
 		t.Fatal(err)
 	}
 	for _, statement := range []string{
 		`CREATE TABLE _subject_requests (id TEXT NOT NULL, workspace_id TEXT NOT NULL, request_type TEXT NOT NULL, kind TEXT NOT NULL, resolved_identity TEXT NOT NULL, PRIMARY KEY(workspace_id,id))`,
-		`CREATE TABLE _subject_steps (workspace_id TEXT NOT NULL, request_id TEXT NOT NULL, owner TEXT NOT NULL, operation TEXT NOT NULL, payload_json TEXT NOT NULL, completed_at TEXT NOT NULL, PRIMARY KEY(workspace_id,request_id,owner,operation))`,
+		`CREATE TABLE _subject_steps (workspace_id TEXT NOT NULL, request_id TEXT NOT NULL, owner TEXT NOT NULL, operation TEXT NOT NULL, payload_json TEXT NOT NULL, completed_at BIGINT NOT NULL, PRIMARY KEY(workspace_id,request_id,owner,operation))`,
 	} {
 		if _, err := store.DB().ExecContext(t.Context(), statement); err != nil {
 			t.Fatal(err)
@@ -31,11 +32,11 @@ func TestErasedRecordCannotBeRecreatedByRawCommitOrLocalizedWriters(t *testing.T
 	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_requests(id,workspace_id,request_type,kind,resolved_identity) VALUES('erase-alice','workspace-a','subject_request','erase','alice')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_steps(workspace_id,request_id,owner,operation,payload_json,completed_at) VALUES('workspace-a','erase-alice','lifecycle','erase_fence','{}','2026-01-01T00:00:00Z')`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_steps(workspace_id,request_id,owner,operation,payload_json,completed_at) VALUES('workspace-a','erase-alice','lifecycle','erase_fence','{}',?)`, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 	planStep := `{"workspace_id":"workspace-a","request_id":"erase-alice","owner":"runtime_evidence","operation":"erase_plan","payload":{"request_id":"erase-alice","workspace_id":"workspace-a","subject_id":"alice","resources":[{"object_key":"member_profile","record_id":"alice"}],"event_ids":[],"rows":[]},"completed_at":"2026-01-01T00:00:00Z"}`
-	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_steps(workspace_id,request_id,owner,operation,payload_json,completed_at) VALUES(?,?,?,?,?,?)`, "workspace-a", "erase-alice", "runtime_evidence", "erase_plan", planStep, "2026-01-01T00:00:00Z"); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_steps(workspace_id,request_id,owner,operation,payload_json,completed_at) VALUES(?,?,?,?,?,?)`, "workspace-a", "erase-alice", "runtime_evidence", "erase_plan", planStep, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 	store.BindSubjectLifecyclePersistence()

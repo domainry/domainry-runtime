@@ -57,9 +57,9 @@ func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) 
 		id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, report_key TEXT NOT NULL,
 		access_scope_hash TEXT NOT NULL, idempotency_key TEXT NOT NULL, status TEXT NOT NULL,
 		summary_json TEXT NOT NULL, watermark TEXT NOT NULL, source_versions_json TEXT NOT NULL,
-		row_count BIGINT NOT NULL, source_row_count BIGINT NOT NULL, started_at TEXT NOT NULL,
-		refreshed_at TEXT NOT NULL, error_code TEXT NOT NULL, lease_owner TEXT NOT NULL,
-		lease_expires_at TEXT NOT NULL, fencing_token BIGINT NOT NULL,
+		row_count BIGINT NOT NULL, source_row_count BIGINT NOT NULL, started_at BIGINT NOT NULL,
+		refreshed_at BIGINT NOT NULL, error_code TEXT NOT NULL, lease_owner TEXT NOT NULL,
+		lease_expires_at BIGINT NOT NULL, fencing_token BIGINT NOT NULL,
 		UNIQUE (workspace_id, id), UNIQUE (workspace_id, report_key, access_scope_hash, idempotency_key)
 	)`)
 	if err != nil {
@@ -68,7 +68,7 @@ func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) 
 	if _, err := store.DB().ExecContext(t.Context(), `CREATE INDEX idx_report_snapshot_latest ON _report_snapshots (workspace_id, report_key, access_scope_hash, status, refreshed_at)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _report_snapshots VALUES ('snapshot-1','workspace-primary','summary','scope','request','succeeded','{}','','{}',1,1,'now','now','','','',0)`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _report_snapshots VALUES ('snapshot-1','workspace-primary','summary','scope','request','succeeded','{}','','{}',1,1,0,0,'','',0,0)`); err != nil {
 		t.Fatal(err)
 	}
 	binding, err := reportmodule.NewFactory().Open(t.Context(), reportsdk.ApplicationRef{RuntimeID: "runtime-a"}, runtimeReportModuleHost{store: store})

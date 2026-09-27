@@ -36,7 +36,7 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE idempotent_create_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, name TEXT)`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE idempotent_create_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, name TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewRecordStore(store)
