@@ -51,6 +51,28 @@ func TestOwnedModuleMigrationAppliesAndRejectsChecksumDrift(t *testing.T) {
 	}
 }
 
+func TestMySQLOwnedModuleMigrationCompletesOutsideDDLTransaction(t *testing.T) {
+	store := openModuleMigrationStore(t)
+	if err := store.SetEngineForTesting("mysql"); err != nil {
+		t.Fatal(err)
+	}
+	migration := ormmigration.Migration{
+		Version:    1,
+		Name:       "mysql_owned_schema",
+		Statements: []string{"CREATE TABLE mysql_owned_test (id VARCHAR(191) NOT NULL PRIMARY KEY)"},
+	}
+	if err := store.applyOwnedMigration(t.Context(), "notification", migration); err != nil {
+		t.Fatal(err)
+	}
+	var dirty bool
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT dirty FROM _schema_migrations WHERE path = ?", moduleMigrationPath("notification", migration)).Scan(&dirty); err != nil {
+		t.Fatal(err)
+	}
+	if dirty {
+		t.Fatal("MySQL module migration receipt remained dirty after DDL completed")
+	}
+}
+
 func TestNotificationModuleInstallsItsOwnCanonicalSchema(t *testing.T) {
 	store := openModuleMigrationStore(t)
 	migrations, err := notificationmodule.SchemaMigrations(store.Driver(), store.DatabaseSchema(), "")

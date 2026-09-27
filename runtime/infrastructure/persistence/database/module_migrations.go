@@ -222,6 +222,22 @@ func (s *RuntimeStore) applyOwnedMigration(ctx context.Context, owner string, mi
 	if baseline {
 		return nil
 	}
+	complete := "UPDATE " + s.tableIdentifier("_schema_migrations") + " SET " + s.identifier("dirty") + "=FALSE," + s.identifier("duration_ms") + "=" + s.placeholder(1) + "," + s.identifier("applied_at") + "=" + s.placeholder(2) + " WHERE " + s.identifier("path") + "=" + s.placeholder(3) + " AND " + s.identifier("checksum") + "=" + s.placeholder(4)
+	if s.Driver() == "mysql" {
+		// MySQL and TiDB implicitly commit DDL, so a database/sql transaction
+		// cannot also mark the migration ledger clean after the statements run.
+		// The dirty receipt remains the crash/failure boundary for this path.
+		for _, statement := range migration.Statements {
+			statement = s.runtimeColumnDefinition(statement)
+			if _, err := s.schemaDatabase().ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("migration.failed: execute %s: %w", path, err)
+			}
+		}
+		if _, err := s.schemaDatabase().ExecContext(ctx, complete, time.Since(started).Milliseconds(), time.Now().UTC().UnixMilli(), path, checksum); err != nil {
+			return fmt.Errorf("record module migration %s: %w", path, err)
+		}
+		return nil
+	}
 	tx, err := s.schemaDatabase().BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin module migration %s: %w", path, err)
@@ -233,7 +249,6 @@ func (s *RuntimeStore) applyOwnedMigration(ctx context.Context, owner string, mi
 			return fmt.Errorf("migration.failed: execute %s: %w", path, err)
 		}
 	}
-	complete := "UPDATE " + s.tableIdentifier("_schema_migrations") + " SET " + s.identifier("dirty") + "=FALSE," + s.identifier("duration_ms") + "=" + s.placeholder(1) + "," + s.identifier("applied_at") + "=" + s.placeholder(2) + " WHERE " + s.identifier("path") + "=" + s.placeholder(3) + " AND " + s.identifier("checksum") + "=" + s.placeholder(4)
 	if _, err := tx.ExecContext(ctx, complete, time.Since(started).Milliseconds(), time.Now().UTC().UnixMilli(), path, checksum); err != nil {
 		return fmt.Errorf("record module migration %s: %w", path, err)
 	}
