@@ -92,6 +92,8 @@ github.com/domainry/domainry-notification-sdk v0.1.9 h1:Ty5m8jRyHh7P0CTA7pqPIgSf
 github.com/domainry/domainry-notification-sdk v0.1.9/go.mod h1:oc0PXzWYE6+UUhpaF5YXA36xo6UcPlenh2NU1+F3PaE=
 github.com/domainry/domainry-orm v0.1.32 h1:rDLD7P5FidqXtmNefruEMiI5VMvFK/Lkhy9jwSGswjk=
 github.com/domainry/domainry-orm v0.1.32/go.mod h1:gB/ooN737tsBYHbeHqCpngEprvdvZKp0Zygtzv+IPJY=
+github.com/domainry/domainry-orm v0.1.33 h1:gpCXkwDvJhJkiLMkA9awJ44KaFVtpBC6fh9v/EywT24=
+github.com/domainry/domainry-orm v0.1.33/go.mod h1:gB/ooN737tsBYHbeHqCpngEprvdvZKp0Zygtzv+IPJY=
 github.com/domainry/domainry-report v0.1.25 h1:/LnVhsGy5pnv+XB4886+llEYTbWNQW0p7NkqLw7pFlA=
 github.com/domainry/domainry-report v0.1.25/go.mod h1:sKNJBad2HNujtVd3EXBNTjQEYm3mclRFc97/+cZKHcI=
 github.com/domainry/domainry-report-sdk v0.1.16 h1:p0h+FTvm9K/DwEg0BpOnTpAFnKIE8INJZ/wG6eDjnWU=
