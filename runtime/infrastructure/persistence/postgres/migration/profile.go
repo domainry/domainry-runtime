@@ -17,7 +17,7 @@ type Profile struct{}
 func NewProfile() Profile { return Profile{} }
 
 func (Profile) MigrationLedgerTypes() persistencedriver.MigrationLedgerTypes {
-	return persistencedriver.MigrationLedgerTypes{Key: "TEXT", Timestamp: "TEXT"}
+	return persistencedriver.MigrationLedgerTypes{Key: "TEXT", Timestamp: "BIGINT"}
 }
 func (Profile) MigrationBackupPolicy() persistencedriver.MigrationBackupPolicy {
 	return persistencedriver.MigrationBackupPolicy{EvidenceEngine: "postgres"}

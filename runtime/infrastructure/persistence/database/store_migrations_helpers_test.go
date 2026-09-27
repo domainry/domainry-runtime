@@ -29,11 +29,11 @@ func TestMigrationHelpersCoverDialectAndFilesystemEdges(t *testing.T) {
 	}
 
 	mysqlStore := &RuntimeStore{engine: mysql.NewEngine()}
-	if sql := mysqlStore.schemaMigrationSQL(); !strings.Contains(sql, "VARCHAR(255)") || !strings.Contains(sql, "VARCHAR(64)") {
+	if sql := mysqlStore.schemaMigrationSQL(); !strings.Contains(sql, "VARCHAR(255)") || !strings.Contains(sql, "`applied_at` BIGINT") {
 		t.Fatalf("mysql ledger SQL=%q", sql)
 	}
 	postgresStore := &RuntimeStore{engine: postgres.NewEngine(), databaseSchema: "runtime"}
-	if sql := postgresStore.schemaMigrationSQL(); strings.Contains(sql, "VARCHAR(255)") || !strings.Contains(sql, `"_schema_migrations"`) {
+	if sql := postgresStore.schemaMigrationSQL(); strings.Contains(sql, "VARCHAR(255)") || !strings.Contains(sql, `"_schema_migrations"`) || !strings.Contains(sql, `"applied_at" BIGINT`) {
 		t.Fatalf("postgres ledger SQL=%q", sql)
 	}
 
