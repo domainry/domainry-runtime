@@ -19,6 +19,31 @@ import (
 
 type moduleRouteGuard func(modulehttp.Route, http.Handler, modulehttp.AuditRecorder) (http.Handler, error)
 
+type authenticatedModuleRouteGuard interface {
+	GuardAuthenticatedModuleHTTPRoute(modulehttp.Route, http.Handler) (http.Handler, error)
+}
+
+func runtimeModuleHTTPRouteGuard(fallback moduleRouteGuard, runtime authenticatedModuleRouteGuard, adapters []modulehttp.Adapter) moduleRouteGuard {
+	runtimeActions := map[string]bool{}
+	for _, adapter := range adapters {
+		if adapter == nil {
+			continue
+		}
+		for _, route := range adapter.Routes() {
+			runtimeActions[strings.TrimSpace(route.Action.Key)] = true
+		}
+	}
+	return func(route modulehttp.Route, next http.Handler, audit modulehttp.AuditRecorder) (http.Handler, error) {
+		if runtime != nil && route.Action.Authorization.Strategy == actioncontract.AuthorizationAuthenticated && runtimeActions[strings.TrimSpace(route.Action.Key)] {
+			return runtime.GuardAuthenticatedModuleHTTPRoute(route, next)
+		}
+		if fallback == nil {
+			return nil, fmt.Errorf("module HTTP route %q requires a host authorization guard", route.Pattern())
+		}
+		return fallback(route, next, audit)
+	}
+}
+
 func newModuleHTTPRouteGuard(binding identitysdk.Binding, resolverOptions ...identityprincipal.Options) (moduleRouteGuard, error) {
 	options := identityprincipal.Options{}
 	if len(resolverOptions) > 0 {

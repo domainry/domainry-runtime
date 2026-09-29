@@ -54,7 +54,7 @@ func (d *AutomationInstructionDispatchApplicationService) Execute(ctx context.Co
 			input[key] = value
 		}
 		recordID := render.RenderString(instruction.Config["record_id"])
-		if recordID == "" && record != nil && rule.Trigger.Phase != "before" {
+		if recordID == "" && record != nil && rule.Trigger.Phase == "after" {
 			recordID = record.ID
 		}
 		invocation, err := d.dependencies.InvokeAction(ctx, actionmodel.ActionInvocation{
@@ -74,7 +74,7 @@ func (d *AutomationInstructionDispatchApplicationService) Execute(ctx context.Co
 			}
 		}
 		return result, nil
-	case "start_workflow":
+	case "start_workflow", "request_human_review":
 		workflowKey := render.RenderString(instruction.Config["workflow_key"])
 		if workflowKey == "" {
 			return failedInstruction(result, automationError(apperror.KindBadRequest, "backend.automation.workflow_key_required", nil, "instruction", instruction.Key))

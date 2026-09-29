@@ -9,7 +9,9 @@ import (
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -231,6 +233,10 @@ func (e *WorkflowProcessEngine) ResumeTimerNode(ctx context.Context, workspaceID
 	if waiting == nil {
 		return process, conflict("backend.workflow.timer_node_not_waiting")
 	}
+	continuationPrincipal, err := e.timerContinuationPrincipal(ctx, process, principal)
+	if err != nil {
+		return process, err
+	}
 
 	waiting.Status = "success"
 	waiting.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -253,10 +259,45 @@ func (e *WorkflowProcessEngine) ResumeTimerNode(ctx context.Context, workspaceID
 	if !claimed {
 		return process, conflict("backend.workflow.timer_node_not_waiting")
 	}
-	e.appendEvent(ctx, workspaceID, process.ID, nodeID, "", "timer_fired", principal.UserID, "workflow.event.timer.fired", nil)
+	e.appendEvent(ctx, workspaceID, process.ID, nodeID, "", "timer_fired", continuationPrincipal.UserID, "workflow.event.timer.fired", nil)
 	waitingNodes := workflowpolicy.WorkflowRemoveString(process.CurrentNodeIDs, nodeID)
 	next := e.nextNodeIDs(process.DefinitionSnapshot.Graph, nodeID, "success")
-	return e.runWithContext(ctx, process, next, waitingNodes, principal)
+	return e.runWithContext(ctx, process, next, waitingNodes, continuationPrincipal)
+}
+
+// timerContinuationPrincipal reauthorizes an inherited Workflow's original
+// human initiator before a durable timer resumes it. The Record Timer worker is
+// only the clock/lease owner; it must never become the actor for a later
+// personal-account write. Workflows with an explicit run_as still resolve their
+// managed workload principal at the Action node boundary.
+func (e *WorkflowProcessEngine) timerContinuationPrincipal(ctx context.Context, process workflowmodel.WorkflowProcessInstance, worker principalmodel.Principal) (principalmodel.Principal, error) {
+	if workflowpolicy.WorkflowRunAs(process.DefinitionSnapshot) != "" {
+		return worker, nil
+	}
+	userID, roleKey := strings.TrimSpace(process.InitiatorID), strings.TrimSpace(process.InitiatorRoleKey)
+	if userID == "" || userID == strings.TrimSpace(worker.UserID) {
+		return worker, nil
+	}
+	if roleKey == "" {
+		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workflow.initiator_identity_invalid", nil, nil)
+	}
+	if e == nil || e.runtime == nil || e.runtime.dependencies.Principals == nil {
+		return principalmodel.Principal{}, apperror.New(apperror.KindUnavailable, "backend.workflow.execution_principal_unavailable", nil, nil)
+	}
+	resolution, err := e.runtime.dependencies.Principals.Resolve(requestcontext.WithWorkspaceID(ctx, process.WorkspaceID), identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(userID), RoleKey: roleKey})
+	if err != nil {
+		return principalmodel.Principal{}, err
+	}
+	resolution.Principal.AccessBundle = &resolution.AccessBundle
+	principal := principalmodel.NewPrincipalFromIdentity(resolution.Principal, "")
+	if !principal.Known || principal.AccessBundle == nil || strings.TrimSpace(principal.WorkspaceID) != strings.TrimSpace(process.WorkspaceID) || strings.TrimSpace(principal.UserID) != userID || strings.TrimSpace(principal.RoleKey) != roleKey {
+		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workflow.initiator_identity_revoked", nil, nil)
+	}
+	principal.RequestID, principal.CorrelationID, principal.CausationID = worker.RequestID, worker.CorrelationID, worker.CausationID
+	if strings.TrimSpace(principal.RequestID) == "" {
+		principal.RequestID = process.ID + ":timer"
+	}
+	return principal, nil
 }
 
 func containsWorkflowString(values []string, expected string) bool {

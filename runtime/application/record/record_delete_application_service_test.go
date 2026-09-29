@@ -160,8 +160,8 @@ func TestDeleteServiceOwnsSoftDeleteTransaction(t *testing.T) {
 			policyCalled = operation == "delete"
 			return nil
 		},
-		AfterOutbox: func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message {
-			return []publicationmodel.Message{{ID: "outbox-1"}}
+		AfterOutbox: func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error) {
+			return []publicationmodel.Message{{ID: "outbox-1"}}, nil
 		},
 		UpdatedTriggers: func(string, map[string]any, map[string]any) []string {
 			return []string{"record_updated:customer.status"}

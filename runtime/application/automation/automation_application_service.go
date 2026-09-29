@@ -49,6 +49,7 @@ type AutomationWorkflowRunner interface {
 
 type AutomationApplicationDependencies struct {
 	Rules                 automationcontract.AutomationRuleRegistry
+	Definitions           automationcontract.AutomationRuleDefinitionStore
 	Connectors            AutomationConnectorCatalog
 	RecordRepository      recordrepository.RecordRepository
 	WorkerStore           automationcontract.AutomationWorkerStore
@@ -111,7 +112,7 @@ func NewAutomationApplicationService(dependencies AutomationApplicationDependenc
 		worker: dependencies.Worker, compileNotification: dependencies.NotificationCompiler, commitNotification: dependencies.NotificationCommitter,
 	}
 	service.management = NewAutomationManagementApplicationService(AutomationManagementDependencies{
-		Rules: service.rules, Executions: service.executionRepo,
+		Rules: service.rules, Definitions: dependencies.Definitions, Executions: service.executionRepo,
 		ListInvocations: func(ctx context.Context, workspaceID string, filter automationmodel.AutomationExecutionFilter) ([]integrationsdk.Invocation, error) {
 			// Provider invocation evidence is owned by Integration and is not
 			// mirrored into Runtime automation state.
@@ -140,6 +141,7 @@ func NewAutomationApplicationService(dependencies AutomationApplicationDependenc
 		},
 		ValidateDefinition: service.validateRule,
 		ExecuteRule:        service.executeRule,
+		Audit:              service.audit,
 	})
 	return service
 }
@@ -152,8 +154,12 @@ func (s *AutomationApplicationService) RunBefore(ctx context.Context, objectKey,
 	if err := automationAuthorizeCommand(principal); err != nil {
 		return nil, err
 	}
+	rules, err := s.management.EffectiveRules(ctx, automationWorkspaceID(principal))
+	if err != nil {
+		return nil, managementError(apperror.KindInternal, "backend.automation.definition_read_failed", err)
+	}
 	traces, err := NewAutomationBeforeApplicationService(BeforeServiceDependencies{
-		Rules: s.rules,
+		Rules: automationRuleSliceRegistry{rules: rules},
 		ExecuteRule: func(execCtx context.Context, rule automationmodel.AutomationRuleSchema, input, before, candidate map[string]any, recordID string, principal principalmodel.Principal) (automationprojection.AutomationRuleTrace, error) {
 			started := time.Now()
 			trace, executeErr := executeBeforeRule(execCtx, rule, input, before, candidate, principal)
@@ -193,14 +199,56 @@ func (s *AutomationApplicationService) FindBeforeCreateReplay(ctx context.Contex
 	if err := automationAuthorizeQuery(principal); err != nil {
 		return recordmodel.Record{}, false, err
 	}
-	return AutomationFindBeforeCreateReplay(ctx, s.rules.List(), s.recordRepo, object, input, principal, s.mutationScope, s.canAccess)
+	rules, err := s.management.EffectiveRules(ctx, automationWorkspaceID(principal))
+	if err != nil {
+		return recordmodel.Record{}, false, managementError(apperror.KindInternal, "backend.automation.definition_read_failed", err)
+	}
+	return AutomationFindBeforeCreateReplay(ctx, rules, s.recordRepo, object, input, principal, s.mutationScope, s.canAccess)
 }
 
-func (s *AutomationApplicationService) AfterOutbox(objectKey, operation string, before map[string]any, record recordmodel.Record, principal principalmodel.Principal) []publicationmodel.Message {
+func (s *AutomationApplicationService) AfterOutbox(ctx context.Context, objectKey, operation string, before map[string]any, record recordmodel.Record, principal principalmodel.Principal) ([]publicationmodel.Message, error) {
 	if automationAuthorizeCommand(principal) != nil {
-		return nil
+		return nil, nil
 	}
-	return AutomationAfterOutbox(s.rules.List(), objectKey, operation, before, record, principal, automationWorkspaceID(principal))
+	rules, err := s.management.EffectiveRules(ctx, automationWorkspaceID(principal))
+	if err != nil {
+		return nil, managementError(apperror.KindInternal, "backend.automation.definition_read_failed", err)
+	}
+	return AutomationAfterOutbox(rules, objectKey, operation, before, record, principal, automationWorkspaceID(principal)), nil
+}
+
+// RunWebhookAutomation executes one Integration-verified event against the
+// current Workspace publication of a finite rule. Integration owns webhook
+// verification, raw payload durability and mapping; Automation receives only
+// mapped input plus immutable source identities.
+func (s *AutomationApplicationService) RunWebhookAutomation(ctx context.Context, request automationmodel.AutomationWebhookTriggerRequest, principal principalmodel.Principal) (automationprojection.AutomationRuleTrace, error) {
+	if err := automationAuthorizeCommand(principal); err != nil {
+		return automationprojection.AutomationRuleTrace{}, err
+	}
+	request.RuleKey = strings.TrimSpace(request.RuleKey)
+	request.EventID = strings.TrimSpace(request.EventID)
+	request.MappingKey = strings.TrimSpace(request.MappingKey)
+	request.MappingRevision = strings.TrimSpace(request.MappingRevision)
+	request.Provider = strings.TrimSpace(request.Provider)
+	request.EventType = strings.TrimSpace(request.EventType)
+	request.ExternalID = strings.TrimSpace(request.ExternalID)
+	if request.RuleKey == "" || request.EventID == "" || request.MappingKey == "" || request.MappingRevision == "" || request.Provider == "" || request.EventType == "" || request.ExternalID == "" {
+		return automationprojection.AutomationRuleTrace{}, automationError(apperror.KindBadRequest, "backend.automation.webhook_trigger_invalid", nil)
+	}
+	rule, found, err := s.management.EffectiveRule(ctx, automationWorkspaceID(principal), request.RuleKey)
+	if err != nil {
+		return automationprojection.AutomationRuleTrace{}, managementError(apperror.KindInternal, "backend.automation.definition_read_failed", err)
+	}
+	if !found || !rule.Enabled || rule.Trigger.Phase != "webhook" || strings.TrimSpace(rule.Trigger.Source) != request.Provider || strings.TrimSpace(rule.Trigger.Operation) != request.EventType {
+		return automationprojection.AutomationRuleTrace{}, automationError(apperror.KindBadRequest, "backend.automation.webhook_rule_not_found", nil, "rule", request.RuleKey)
+	}
+	principal.RequestID = request.EventID
+	principal.CorrelationID = valueOrDefault(principal.CorrelationID, request.EventID)
+	principal.CausationID = request.EventID
+	input := recordvalidation.RecordCloneData(request.Input)
+	record := recordmodel.Record{ID: request.EventID, Data: recordvalidation.RecordCloneData(input)}
+	automationruntime.AutomationBindRecordVersion(&record, request.EventID+":"+request.MappingRevision)
+	return s.executeRule(ctx, rule, "webhook", input, nil, recordvalidation.RecordCloneData(input), &record, principal)
 }
 
 func (s *AutomationApplicationService) ExecuteBeforeRule(execCtx context.Context, rule automationmodel.AutomationRuleSchema, input, before, candidate map[string]any, principal principalmodel.Principal) (automationprojection.AutomationRuleTrace, error) {
@@ -240,6 +288,8 @@ func (s *AutomationApplicationService) executeRuleWithPersistence(execCtx contex
 			if record != nil {
 				actionContext.Record = recordvalidation.RecordCloneData(record.Data)
 				actionContext.Record["id"] = record.ID
+				actionContext.Record["created_at"] = record.CreatedAt
+				actionContext.Record["updated_at"] = record.UpdatedAt
 			}
 		},
 		MatchCondition: func(clause automationmodel.AutomationConditionClause) bool {
@@ -276,11 +326,51 @@ func (s *AutomationApplicationService) SimulateAutomationRule(ctx context.Contex
 	if err := automationAuthorizeEndpoint(principal, "POST /automation/rules/{ruleKey}/simulate"); err != nil {
 		return automationprojection.AutomationSimulationResult{}, err
 	}
-	rule, found := s.rules.Get(strings.TrimSpace(ruleKey))
+	rule, found, resolveErr := s.management.EffectiveRule(ctx, automationWorkspaceID(principal), strings.TrimSpace(ruleKey))
+	if resolveErr != nil {
+		return automationprojection.AutomationSimulationResult{}, managementError(apperror.KindInternal, "backend.automation.definition_read_failed", resolveErr)
+	}
 	if !found {
 		return automationprojection.AutomationSimulationResult{}, managementError(apperror.KindNotFound, "backend.automation.not_found", nil)
 	}
 	return s.management.SimulateRule(ctx, rule, request, principal)
+}
+
+func (s *AutomationApplicationService) AutomationManagedRules(ctx context.Context, principal principalmodel.Principal) ([]automationmodel.AutomationManagedRule, error) {
+	return s.management.ManagedRules(ctx, principal)
+}
+
+func (s *AutomationApplicationService) SaveAutomationRuleDraft(ctx context.Context, ruleKey string, request automationmodel.AutomationSaveDraftRequest, principal principalmodel.Principal) (automationmodel.AutomationRuleDefinition, error) {
+	return s.management.SaveDraft(ctx, ruleKey, request, principal)
+}
+
+func (s *AutomationApplicationService) PublishAutomationRuleDraft(ctx context.Context, ruleKey string, request automationmodel.AutomationPublishDraftRequest, principal principalmodel.Principal) (automationmodel.AutomationRuleDefinition, error) {
+	return s.management.PublishDraft(ctx, ruleKey, request, principal)
+}
+
+func (s *AutomationApplicationService) SetAutomationRuleEnabled(ctx context.Context, ruleKey string, request automationmodel.AutomationSetEnabledRequest, principal principalmodel.Principal) (automationmodel.AutomationRuleDefinition, error) {
+	return s.management.SetEnabled(ctx, ruleKey, request, principal)
+}
+
+func (s *AutomationApplicationService) DiscardAutomationRuleDraft(ctx context.Context, ruleKey string, request automationmodel.AutomationDiscardDraftRequest, principal principalmodel.Principal) (automationmodel.AutomationRuleDefinition, error) {
+	return s.management.DiscardDraft(ctx, ruleKey, request, principal)
+}
+
+type automationRuleSliceRegistry struct {
+	rules []automationmodel.AutomationRuleSchema
+}
+
+func (r automationRuleSliceRegistry) List() []automationmodel.AutomationRuleSchema {
+	return append([]automationmodel.AutomationRuleSchema(nil), r.rules...)
+}
+
+func (r automationRuleSliceRegistry) Get(key string) (automationmodel.AutomationRuleSchema, bool) {
+	for _, rule := range r.rules {
+		if rule.Key == strings.TrimSpace(key) {
+			return rule, true
+		}
+	}
+	return automationmodel.AutomationRuleSchema{}, false
 }
 
 func (s *AutomationApplicationService) executeInstruction(execCtx context.Context, rule automationmodel.AutomationRuleSchema, instruction automationmodel.AutomationInstructionSchema, actionContext *automationmodel.AutomationRenderContext, record *recordmodel.Record, principal principalmodel.Principal) (automationmodel.AutomationInstructionResult, error) {

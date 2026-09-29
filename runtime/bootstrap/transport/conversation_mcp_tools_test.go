@@ -6,11 +6,25 @@ import (
 
 	agent "github.com/domainry/domainry-agent-sdk"
 	integration "github.com/domainry/domainry-integration-sdk"
+	agentapplication "github.com/domainry/domainry-runtime/runtime/application/agenthost"
 	tools "github.com/domainry/domainry-tools-sdk"
 	toolmodule "github.com/domainry/domainry-tools/module"
 )
 
 type mcpAccountPortsStub struct{}
+
+type conversationCapabilityFactoryProbe struct {
+	capabilities tools.ConversationToolCapabilities
+}
+
+func (p *conversationCapabilityFactoryProbe) ConversationToolDefinitions(capabilities tools.ConversationToolCapabilities) []tools.Definition {
+	p.capabilities = capabilities
+	return nil
+}
+
+func (*conversationCapabilityFactoryProbe) AssembleConversationTools(input tools.ConversationToolAssembly) (tools.Host, error) {
+	return input.Base, nil
+}
 
 func (mcpAccountPortsStub) ListConnectionAccounts(context.Context, integration.ConnectionAccountSubject) ([]integration.ConnectionAccount, error) {
 	return nil, nil
@@ -73,4 +87,41 @@ func TestRuntimePublishesMCPToolsOnlyWithCompleteIntegrationPorts(t *testing.T) 
 	if got, want := count(complete.ConversationToolDefinitions()), len(tools.MCPDefinitions()); got != want {
 		t.Fatalf("MCP tool count=%d want=%d", got, want)
 	}
+}
+
+func TestRuntimePublishesBusinessSourceCapabilityOnlyWhenAssembled(t *testing.T) {
+	probe := &conversationCapabilityFactoryProbe{}
+	(runtimeAgentApplicationHost{conversationToolsFactory: probe}).ConversationToolDefinitions()
+	if probe.capabilities.Business {
+		t.Fatal("business source capability published without a ConversationBusinessHost")
+	}
+	(runtimeAgentApplicationHost{conversationToolsFactory: probe, conversations: &agentapplication.ConversationBusinessHost{}}).ConversationToolDefinitions()
+	if !probe.capabilities.Business {
+		t.Fatal("assembled ConversationBusinessHost was not published to the product tool factory")
+	}
+}
+
+func TestRuntimeConversationAuthorizerCarriesProductToolDefinitions(t *testing.T) {
+	definition := tools.Definition{Key: "crm_search_accounts", Version: "1", ActionKey: "agent.conversation_tools.crm_search_accounts"}
+	factory := &conversationDefinitionFactoryProbe{definitions: []tools.Definition{definition}}
+	host := runtimeAgentApplicationHost{conversationToolsFactory: factory, conversations: &agentapplication.ConversationBusinessHost{}}
+	authorizer, ok := host.ConversationAuthorizer().(runtimeConversationToolAuthorizer)
+	if !ok || authorizer.ConversationBusinessHost != host.conversations || len(authorizer.definitions) != 1 || authorizer.definitions[0].Key != definition.Key {
+		t.Fatalf("product authorizer=%#v", authorizer)
+	}
+	if _, ok := any(authorizer).(agent.ConversationExecutionAuthorizer); !ok {
+		t.Fatal("product authorizer dropped current execution authorization")
+	}
+}
+
+type conversationDefinitionFactoryProbe struct {
+	definitions []tools.Definition
+}
+
+func (p *conversationDefinitionFactoryProbe) ConversationToolDefinitions(tools.ConversationToolCapabilities) []tools.Definition {
+	return append([]tools.Definition(nil), p.definitions...)
+}
+
+func (*conversationDefinitionFactoryProbe) AssembleConversationTools(input tools.ConversationToolAssembly) (tools.Host, error) {
+	return input.Base, nil
 }

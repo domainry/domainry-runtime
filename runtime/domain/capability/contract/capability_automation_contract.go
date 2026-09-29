@@ -28,17 +28,17 @@ type CapabilityAutomationInstruction struct {
 
 func RuntimeAutomationExecutionCatalog() CapabilityAutomationCatalog {
 	return CapabilityAutomationCatalog{
-		Phases: []string{"after", "before"}, Operations: []string{"create", "delete", "transition", "update"}, ExecutionModes: []string{"async", "sync"}, RunAsModes: []string{"initiator"}, ResultNotificationModes: []string{"none", "failures", "all"},
-		InstructionTypes: []string{"assert", "derive_fields", "emit_event", "invoke_business_action", "start_workflow"}, BeforeInstructionTypes: []string{"assert", "derive_fields"}, AfterInstructionTypes: []string{"emit_event", "invoke_business_action", "start_workflow"},
+		Phases: []string{"after", "before", "webhook"}, Operations: []string{"create", "delete", "transition", "update"}, ExecutionModes: []string{"async", "sync"}, RunAsModes: []string{"initiator"}, ResultNotificationModes: []string{"none", "failures", "all"},
+		InstructionTypes: []string{"assert", "derive_fields", "emit_event", "invoke_business_action", "request_human_review", "start_workflow"}, BeforeInstructionTypes: []string{"assert", "derive_fields"}, AfterInstructionTypes: []string{"emit_event", "invoke_business_action", "request_human_review", "start_workflow"},
 		Capabilities: automationInstructionCapabilities(),
 	}
 }
 
 func automationInstructionCapabilities() []CapabilityAutomationInstruction {
-	active := []string{"assert", "derive_fields", "invoke_business_action", "start_workflow", "emit_event"}
+	active := []string{"assert", "derive_fields", "invoke_business_action", "request_human_review", "start_workflow", "emit_event"}
 	capabilities := make([]CapabilityAutomationInstruction, 0, len(active))
 	for _, actionType := range active {
-		contexts := []string{"after"}
+		contexts := []string{"after", "webhook"}
 		if actionType == "assert" || actionType == "derive_fields" {
 			contexts = []string{"before"}
 		}

@@ -85,7 +85,7 @@ func (s *AutomationRuleApplicationService) Execute(ctx context.Context, request 
 	}
 	started := time.Now()
 	executionID := fmt.Sprintf("automation_execution_%d", time.Now().UnixNano())
-	if request.Phase == "after" && request.Record != nil {
+	if automationDurableEffectPhase(request.Phase) && request.Record != nil {
 		executionID = "automation_rule:" + automationruntime.AutomationRuleIdempotencyKey(request.Rule, request.Record)
 	}
 	trace = automationprojection.AutomationRuleTrace{ExecutionID: executionID, RuleKey: request.Rule.Key, Status: "succeeded", Matched: true, InstructionTraces: []automationprojection.AutomationInstructionTrace{}, NodeTraces: []automationprojection.AutomationNodeTrace{}}
@@ -100,7 +100,7 @@ func (s *AutomationRuleApplicationService) Execute(ctx context.Context, request 
 			return
 		}
 		eventID := ""
-		if request.Record != nil && request.Phase == "after" {
+		if request.Record != nil && automationDurableEffectPhase(request.Phase) {
 			eventID = automationruntime.AutomationRuleIdempotencyKey(request.Rule, request.Record)
 		}
 		execution := automationmodel.AutomationRuleExecution{
@@ -203,6 +203,8 @@ func (s *AutomationRuleApplicationService) Execute(ctx context.Context, request 
 	terminalID, terminalKind := "save", "save"
 	if request.Phase == "after" {
 		terminalID, terminalKind = "outbox", "outbox"
+	} else if request.Phase == "webhook" {
+		terminalID, terminalKind = "webhook", "webhook"
 	}
 	trace.NodeTraces = append(trace.NodeTraces, automationprojection.AutomationNodeTrace{NodeID: terminalID, Kind: terminalKind, Status: "succeeded", Output: map[string]any{"ready": true}})
 	trace.DurationMS = time.Since(started).Milliseconds()

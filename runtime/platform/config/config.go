@@ -44,6 +44,7 @@ type Config struct {
 	HTTPPublicRateLimitPerMinute            int
 	HTTPManagementRateLimitPerMinute        int
 	HTTPOpsRateLimitPerMinute               int
+	HTTPAPIKeyRateLimitPerMinute            int
 	RateLimitBackend                        string
 	RateLimitRedisURL                       string
 	RateLimitRedisPrefix                    string
@@ -137,38 +138,52 @@ type Config struct {
 	// InstallationAdministratorBootstrapEnabled is an explicit process-start
 	// control. It is off by default and is never accepted from project, file,
 	// or remote configuration sources.
-	InstallationAdministratorBootstrapEnabled bool
-	InstallationAdministratorRequestID        string
-	InstallationAdministratorLoginID          string
-	InstallationAdministratorName             string
-	InstallationAdministratorCredentialFile   string
-	UploadDir                                 string
-	CORSAllowedOrigins                        []string
-	HTTPPublicOrigins                         []string
-	HTTPManagementOrigins                     []string
-	HTTPOpsOrigins                            []string
-	RuntimeAllowDevIdentityHeaders            bool
-	AuditExportTokenKey                       string
-	IdentityRedirectURLs                      []string
-	IdentityWorkspaceID                       string
-	IdentityAudience                          string
-	NotificationWorkspaceID                   string
-	NotificationApplicationKey                string
-	IntegrationSecretKey                      string
-	IntegrationActiveKeyID                    string
-	IntegrationDecryptOnlyKeys                map[string]string
-	WorkerPollInterval                        time.Duration
-	WorkerBatchSize                           int
-	WorkerLeaseTTL                            time.Duration
-	SchedulerEnabled                          bool
-	SchedulerPollInterval                     time.Duration
-	SchedulerBatchSize                        int
-	SchedulerLeaseTTL                         time.Duration
-	SchedulerMaxCatchupWindows                int
-	RecordTimerEnabled                        bool
-	RecordTimerPollInterval                   time.Duration
-	RecordTimerBatchSize                      int
-	RecordTimerLeaseTTL                       time.Duration
+	InstallationAdministratorBootstrapEnabled       bool
+	InstallationAdministratorRequestID              string
+	InstallationAdministratorLoginID                string
+	InstallationAdministratorName                   string
+	InstallationAdministratorCredentialFile         string
+	UploadDir                                       string
+	CORSAllowedOrigins                              []string
+	HTTPPublicOrigins                               []string
+	HTTPManagementOrigins                           []string
+	HTTPOpsOrigins                                  []string
+	RuntimeAllowDevIdentityHeaders                  bool
+	AuditExportTokenKey                             string
+	IdentityRedirectURLs                            []string
+	IdentityWorkspaceID                             string
+	IdentityAudience                                string
+	NotificationWorkspaceID                         string
+	NotificationApplicationKey                      string
+	IntegrationSecretKey                            string
+	IntegrationActiveKeyID                          string
+	IntegrationDecryptOnlyKeys                      map[string]string
+	IntegrationHealthAlertsEnabled                  bool
+	IntegrationHealthAlertPollInterval              time.Duration
+	IntegrationHealthReadyDueLimit                  int
+	IntegrationHealthFailedDueLimit                 int
+	IntegrationHealthExpiredLeaseLimit              int
+	IntegrationHealthDeadLetterLimit                int
+	IntegrationHealthGoogleHTTP429HourLimit         int
+	IntegrationHealthGoogleGmailRateLimitHourLimit  int
+	IntegrationHealthFeishuRateLimitHourLimit       int
+	IntegrationHealthGoogleGmailHistoryGapHourLimit int
+	IntegrationHealthGoogleQuotaUsedPercentLimit    int
+	IntegrationHealthQueueOldestAgeLimit            time.Duration
+	IntegrationHealthGooglePushDelayLimit           time.Duration
+	IntegrationHealthGoogleSyncDelayLimit           time.Duration
+	WorkerPollInterval                              time.Duration
+	WorkerBatchSize                                 int
+	WorkerLeaseTTL                                  time.Duration
+	SchedulerEnabled                                bool
+	SchedulerPollInterval                           time.Duration
+	SchedulerBatchSize                              int
+	SchedulerLeaseTTL                               time.Duration
+	SchedulerMaxCatchupWindows                      int
+	RecordTimerEnabled                              bool
+	RecordTimerPollInterval                         time.Duration
+	RecordTimerBatchSize                            int
+	RecordTimerLeaseTTL                             time.Duration
 }
 
 func FromEnv() Config {
@@ -183,154 +198,169 @@ func FromEnv() Config {
 		recordTimerPollDefault = 30 * time.Second
 	}
 	return Config{
-		RuntimeVersion:                              env("DOMAINRY_RUNTIME_VERSION", "dev"),
-		RuntimeInstanceID:                           strings.TrimSpace(os.Getenv("RUNTIME_INSTANCE_ID")),
-		ProductBrandName:                            productbrand.NameFromEnvironment(),
-		Environment:                                 environment,
-		AppLocale:                                   env("APP_LOCALE", "en-US"),
-		HTTPBindHost:                                strings.TrimSpace(os.Getenv("HTTP_BIND_HOST")),
-		Port:                                        env("PORT", "8081"),
-		HTTPPublicAddr:                              strings.TrimSpace(os.Getenv("HTTP_PUBLIC_ADDR")),
-		HTTPManagementAddr:                          strings.TrimSpace(os.Getenv("HTTP_MANAGEMENT_ADDR")),
-		HTTPOpsAddr:                                 strings.TrimSpace(os.Getenv("HTTP_OPS_ADDR")),
-		HTTPOpsAllowPublicBindBreakGlass:            boolEnv("HTTP_OPS_ALLOW_PUBLIC_BIND_BREAK_GLASS", false),
-		HTTPOpsPublicBindBreakGlassReason:           strings.TrimSpace(os.Getenv("HTTP_OPS_PUBLIC_BIND_BREAK_GLASS_REASON")),
-		HTTPReadHeaderTimeout:                       durationEnv("HTTP_READ_HEADER_TIMEOUT", 5*time.Second),
-		HTTPReadTimeout:                             durationEnv("HTTP_READ_TIMEOUT", 30*time.Second),
-		HTTPWriteTimeout:                            durationEnv("HTTP_WRITE_TIMEOUT", 2*time.Minute),
-		HTTPIdleTimeout:                             durationEnv("HTTP_IDLE_TIMEOUT", time.Minute),
-		HTTPShutdownTimeout:                         durationEnv("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
-		HTTPMaxJSONBodyBytes:                        intEnv("HTTP_MAX_JSON_BODY_BYTES", 2<<20),
-		HTTPMaxHeaderBytes:                          intEnv("HTTP_MAX_HEADER_BYTES", 1<<20),
-		HTTPPublicMaxJSONBodyBytes:                  intEnv("HTTP_PUBLIC_MAX_JSON_BODY_BYTES", 2<<20),
-		HTTPManagementMaxJSONBodyBytes:              intEnv("HTTP_MANAGEMENT_MAX_JSON_BODY_BYTES", 2<<20),
-		HTTPOpsMaxJSONBodyBytes:                     intEnv("HTTP_OPS_MAX_JSON_BODY_BYTES", 1<<20),
-		HTTPPublicRequestTimeout:                    durationEnv("HTTP_PUBLIC_REQUEST_TIMEOUT", 30*time.Second),
-		HTTPManagementRequestTimeout:                durationEnv("HTTP_MANAGEMENT_REQUEST_TIMEOUT", 30*time.Second),
-		HTTPOpsRequestTimeout:                       durationEnv("HTTP_OPS_REQUEST_TIMEOUT", 15*time.Second),
-		HTTPPublicRateLimitPerMinute:                intEnv("HTTP_PUBLIC_RATE_LIMIT_PER_MINUTE", 6000),
-		HTTPManagementRateLimitPerMinute:            intEnv("HTTP_MANAGEMENT_RATE_LIMIT_PER_MINUTE", 3000),
-		HTTPOpsRateLimitPerMinute:                   intEnv("HTTP_OPS_RATE_LIMIT_PER_MINUTE", 1200),
-		RateLimitBackend:                            env("RATE_LIMIT_BACKEND", "database"),
-		RateLimitRedisURL:                           strings.TrimSpace(os.Getenv("RATE_LIMIT_REDIS_URL")),
-		RateLimitRedisPrefix:                        env("RATE_LIMIT_REDIS_PREFIX", "domainry:ratelimit:v1:"),
-		RateLimitRedisConnectTimeout:                durationEnv("RATE_LIMIT_REDIS_CONNECT_TIMEOUT", 2*time.Second),
-		PrincipalCacheBackend:                       env("PRINCIPAL_CACHE_BACKEND", "local"),
-		PrincipalCacheTTL:                           durationEnv("PRINCIPAL_CACHE_TTL", identityprincipal.DefaultMaxCacheTTL),
-		PrincipalCacheRedisURL:                      strings.TrimSpace(os.Getenv("PRINCIPAL_CACHE_REDIS_URL")),
-		PrincipalCacheRedisPrefix:                   env("PRINCIPAL_CACHE_REDIS_PREFIX", "domainry:identity:principal:v1:"),
-		PrincipalCacheRedisConnectTimeout:           durationEnv("PRINCIPAL_CACHE_REDIS_CONNECT_TIMEOUT", 2*time.Second),
-		PrincipalCacheRedisCluster:                  boolEnv("PRINCIPAL_CACHE_REDIS_CLUSTER", false),
-		CapacityGlobalInFlight:                      intEnv("CAPACITY_GLOBAL_IN_FLIGHT", 256),
-		CapacityWorkspaceInFlight:                   intEnv("CAPACITY_WORKSPACE_IN_FLIGHT", 32),
-		CapacityUseCaseInFlight:                     intEnv("CAPACITY_USE_CASE_IN_FLIGHT", 64),
-		CapacityRetryInFlight:                       intEnv("CAPACITY_RETRY_IN_FLIGHT", 16),
-		CapacityGlobalRatePerMinute:                 intEnv("CAPACITY_GLOBAL_RATE_PER_MINUTE", 6000),
-		CapacityWorkspaceRatePerMinute:              intEnv("CAPACITY_WORKSPACE_RATE_PER_MINUTE", 600),
-		CapacityUseCaseRatePerMinute:                intEnv("CAPACITY_USE_CASE_RATE_PER_MINUTE", 1200),
-		CapacityMaxWorkspaceStates:                  intEnv("CAPACITY_MAX_WORKSPACE_STATES", 10_000),
-		CapacityMaxUseCaseStates:                    intEnv("CAPACITY_MAX_USE_CASE_STATES", 1024),
-		CapacityWorkspaceStateTTL:                   durationEnv("CAPACITY_WORKSPACE_STATE_TTL", 30*time.Minute),
-		CapacityRequestTimeout:                      durationEnv("CAPACITY_REQUEST_TIMEOUT", 30*time.Second),
-		CapacityDegradedRatio:                       floatEnv("CAPACITY_DEGRADED_RATIO", .8),
-		CapacityRecoveryRatio:                       floatEnv("CAPACITY_RECOVERY_RATIO", .6),
-		CapacityRetryAfter:                          durationEnv("CAPACITY_RETRY_AFTER", 2*time.Second),
-		CapacityConnectorGlobalInFlight:             intEnv("CAPACITY_CONNECTOR_GLOBAL_IN_FLIGHT", 64),
-		CapacityConnectorWorkspaceInFlight:          intEnv("CAPACITY_CONNECTOR_WORKSPACE_IN_FLIGHT", 16),
-		CapacityConnectorProviderInFlight:           intEnv("CAPACITY_CONNECTOR_PROVIDER_IN_FLIGHT", 8),
-		CapacityConnectorGlobalRatePerMinute:        intEnv("CAPACITY_CONNECTOR_GLOBAL_RATE_PER_MINUTE", 1200),
-		CapacityConnectorWorkspaceRatePerMinute:     intEnv("CAPACITY_CONNECTOR_WORKSPACE_RATE_PER_MINUTE", 300),
-		CapacityConnectorProviderRatePerMinute:      intEnv("CAPACITY_CONNECTOR_PROVIDER_RATE_PER_MINUTE", 600),
-		CapacityQueueDepthThreshold:                 intEnv("CAPACITY_QUEUE_DEPTH_THRESHOLD", 200),
-		CapacityQueueOldestAgeThreshold:             durationEnv("CAPACITY_QUEUE_OLDEST_AGE_THRESHOLD", 5*time.Minute),
-		BusinessEventReplayLimit:                    intEnv("BUSINESS_EVENT_REPLAY_LIMIT", 256),
-		BusinessEventSubscriberBuffer:               intEnv("BUSINESS_EVENT_SUBSCRIBER_BUFFER", 32),
-		BusinessEventGlobalConnections:              intEnv("BUSINESS_EVENT_GLOBAL_CONNECTIONS", 512),
-		BusinessEventWorkspaceConnections:           intEnv("BUSINESS_EVENT_WORKSPACE_CONNECTIONS", 64),
-		BusinessEventPrincipalConnections:           intEnv("BUSINESS_EVENT_PRINCIPAL_CONNECTIONS", 8),
-		BusinessEventHeartbeatInterval:              durationEnv("BUSINESS_EVENT_HEARTBEAT_INTERVAL", 15*time.Second),
-		BusinessEventRetryInterval:                  durationEnv("BUSINESS_EVENT_RETRY_INTERVAL", 3*time.Second),
-		TelemetryExporter:                           env("TELEMETRY_EXPORTER", env("OTEL_TRACES_EXPORTER", "none")),
-		TelemetryEndpoint:                           strings.TrimSpace(env("TELEMETRY_ENDPOINT", os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"))),
-		TelemetryHeaders:                            keyValueEnv("TELEMETRY_HEADERS", os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")),
-		TelemetryInsecure:                           boolEnv("TELEMETRY_INSECURE", false),
-		TelemetrySampleRatio:                        floatEnv("TELEMETRY_SAMPLE_RATIO", 1),
-		TelemetryExportTimeout:                      durationEnv("TELEMETRY_EXPORT_TIMEOUT", 5*time.Second),
-		HealthCheckTimeout:                          durationEnv("HEALTH_CHECK_TIMEOUT", 2*time.Second),
-		DatabaseDriver:                              env("DATABASE_DRIVER", "sqlite"),
-		DatabaseURL:                                 strings.TrimSpace(os.Getenv("DATABASE_URL")),
-		DatabaseDSN:                                 env("DATABASE_DSN", ""),
-		DatabaseMigrationDSN:                        strings.TrimSpace(os.Getenv("DATABASE_MIGRATION_DSN")),
-		DatabaseMigrationMode:                       databaseMigrationModeEnv(environment),
-		DatabaseMinSchemaVersion:                    strings.TrimSpace(os.Getenv("DATABASE_MIN_SCHEMA_VERSION")),
-		DatabaseMaxSchemaVersion:                    strings.TrimSpace(os.Getenv("DATABASE_MAX_SCHEMA_VERSION")),
-		DatabaseConnectionMode:                      strings.TrimSpace(os.Getenv("DATABASE_CONNECTION_MODE")),
-		DatabaseSchema:                              strings.TrimSpace(os.Getenv("DATABASE_SCHEMA")),
-		DatabaseMaxOpenConns:                        intEnv("DATABASE_MAX_OPEN_CONNS", 10),
-		DatabaseMaxIdleConns:                        intEnv("DATABASE_MAX_IDLE_CONNS", 5),
-		DatabaseMaxConnections:                      intEnv("DATABASE_MAX_CONNECTIONS", 0),
-		DatabaseReservedConnections:                 intEnv("DATABASE_RESERVED_CONNECTIONS", 0),
-		RuntimeReplicaCount:                         intEnv("RUNTIME_REPLICA_COUNT", 1),
-		DatabaseConnMaxLifetime:                     durationEnv("DATABASE_CONN_MAX_LIFETIME", 30*time.Minute),
-		DatabaseConnMaxIdleTime:                     durationEnv("DATABASE_CONN_MAX_IDLE_TIME", 5*time.Minute),
-		DatabaseConnectTimeout:                      durationEnv("DATABASE_CONNECT_TIMEOUT", 10*time.Second),
-		DatabaseStatementTimeout:                    durationEnv("DATABASE_STATEMENT_TIMEOUT", 30*time.Second),
-		DatabaseLockTimeout:                         durationEnv("DATABASE_LOCK_TIMEOUT", 5*time.Second),
-		DatabaseSSLRootCert:                         strings.TrimSpace(os.Getenv("DATABASE_SSL_ROOT_CERT")),
-		DBPath:                                      env("APP_DB_PATH", "../data/runtime.db"),
-		MigrationDir:                                env("MIGRATION_DIR", "../migrations"),
-		MigrationSQL:                                strings.TrimSpace(os.Getenv("MIGRATION_SQL")),
-		MigrationBackupDir:                          env("MIGRATION_BACKUP_DIR", "../data/migration-backups"),
-		MigrationBackupEvidencePath:                 strings.TrimSpace(os.Getenv("MIGRATION_BACKUP_EVIDENCE_PATH")),
-		MigrationBackupLastSuccessAt:                strings.TrimSpace(os.Getenv("MIGRATION_BACKUP_LAST_SUCCESS_AT")),
-		MigrationRestoreDrillSuccessAt:              strings.TrimSpace(os.Getenv("MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT")),
-		MigrationOperator:                           env("MIGRATION_OPERATOR", "runtime"),
-		MigrationInstanceID:                         strings.TrimSpace(os.Getenv("MIGRATION_INSTANCE_ID")),
-		WorkspaceProvisionFailurePoint:              strings.TrimSpace(os.Getenv("WORKSPACE_PROVISION_FAILURE_POINT")),
-		RuntimeWorkspaceProvisionClientID:           strings.TrimSpace(os.Getenv("RUNTIME_WORKSPACE_PROVISION_CLIENT_ID")),
-		RuntimeWorkspaceProvisionSigningSecret:      os.Getenv("RUNTIME_WORKSPACE_PROVISION_SIGNING_SECRET"),
-		InitialWorkspaceRequestID:                   env("INITIAL_WORKSPACE_REQUEST_ID", "initial-workspace"),
-		InitialWorkspaceCode:                        strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_CODE")),
-		InitialWorkspaceName:                        strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_NAME")),
-		InitialWorkspaceFirstStoreCode:              strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_FIRST_STORE_CODE")),
-		InitialWorkspaceFirstStoreName:              strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_FIRST_STORE_NAME")),
-		InitialWorkspaceAdminLoginID:                strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_ADMIN_LOGIN_ID")),
-		InitialWorkspaceAdminName:                   strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_ADMIN_NAME")),
-		InitialWorkspaceCommercialConfigurationJSON: env("INITIAL_WORKSPACE_COMMERCIAL_CONFIGURATION_JSON", `{"plan":"standard","included_user_limit":1,"max_user_limit":100,"included_customer_limit":0,"max_customer_limit":10000,"included_store_limit":1,"max_stores":1,"contract_date":"1970-01-01","billing_day":1,"billing_contact_name":"","billing_contact_phone":"","billing_contact_email":"","billing_contact_address":"","billing_contact_notes":""}`),
-		InitialWorkspaceApplicationBootstrapJSON:    env("INITIAL_WORKSPACE_APPLICATION_BOOTSTRAP_JSON", `{}`),
-		InitialWorkspaceCredentialFile:              strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_CREDENTIAL_FILE")),
-		InstallationAdministratorBootstrapEnabled:   boolEnv("INSTALLATION_ADMINISTRATOR_BOOTSTRAP_ENABLED", false),
-		InstallationAdministratorRequestID:          strings.TrimSpace(os.Getenv("INSTALLATION_ADMINISTRATOR_REQUEST_ID")),
-		InstallationAdministratorLoginID:            strings.TrimSpace(os.Getenv("INSTALLATION_ADMINISTRATOR_LOGIN_ID")),
-		InstallationAdministratorName:               strings.TrimSpace(os.Getenv("INSTALLATION_ADMINISTRATOR_NAME")),
-		InstallationAdministratorCredentialFile:     strings.TrimSpace(os.Getenv("INSTALLATION_ADMINISTRATOR_CREDENTIAL_FILE")),
-		UploadDir:                                   env("UPLOAD_DIR", "../data/uploads"),
-		CORSAllowedOrigins:                          csvEnv("CORS_ALLOWED_ORIGINS", []string{"*"}),
-		HTTPPublicOrigins:                           csvEnv("HTTP_PUBLIC_ORIGINS", nil),
-		HTTPManagementOrigins:                       csvEnv("HTTP_MANAGEMENT_ORIGINS", nil),
-		HTTPOpsOrigins:                              csvEnv("HTTP_OPS_ORIGINS", nil),
-		RuntimeAllowDevIdentityHeaders:              boolEnv("RUNTIME_ALLOW_DEV_IDENTITY_HEADERS", false),
-		AuditExportTokenKey:                         env("AUDIT_EXPORT_TOKEN_KEY", DevAuditExportTokenKey),
-		IdentityRedirectURLs:                        csvEnv("IDENTITY_REDIRECT_URLS", []string{"http://localhost:3100/auth/callback"}),
-		IdentityWorkspaceID:                         strings.TrimSpace(os.Getenv("IDENTITY_WORKSPACE_ID")),
-		IdentityAudience:                            env("IDENTITY_AUDIENCE", "domainry-runtime"),
-		NotificationWorkspaceID:                     strings.TrimSpace(os.Getenv("NOTIFICATION_WORKSPACE_ID")),
-		NotificationApplicationKey:                  env("NOTIFICATION_APPLICATION_KEY", "domainry-runtime"),
-		IntegrationSecretKey:                        env("INTEGRATION_SECRET_KEY", DevIntegrationSecret),
-		IntegrationActiveKeyID:                      env("INTEGRATION_ACTIVE_KEY_ID", "dev-v1"),
-		IntegrationDecryptOnlyKeys:                  keyMapEnv("INTEGRATION_DECRYPT_ONLY_KEYS"),
-		WorkerPollInterval:                          durationEnv("WORKER_POLL_INTERVAL", workerPollDefault),
-		WorkerBatchSize:                             intEnv("WORKER_BATCH_SIZE", 25),
-		WorkerLeaseTTL:                              durationEnv("WORKER_LEASE_TTL", 5*time.Minute),
-		SchedulerEnabled:                            boolEnv("SCHEDULER_ENABLED", true),
-		SchedulerPollInterval:                       durationEnv("SCHEDULER_POLL_INTERVAL", schedulerPollDefault),
-		SchedulerBatchSize:                          intEnv("SCHEDULER_BATCH_SIZE", 25),
-		SchedulerLeaseTTL:                           durationEnv("SCHEDULER_LEASE_TTL", 5*time.Minute),
-		SchedulerMaxCatchupWindows:                  intEnv("SCHEDULER_MAX_CATCHUP_WINDOWS", 1),
-		RecordTimerEnabled:                          boolEnv("RECORD_TIMER_ENABLED", true),
-		RecordTimerPollInterval:                     durationEnv("RECORD_TIMER_POLL_INTERVAL", recordTimerPollDefault),
-		RecordTimerBatchSize:                        intEnv("RECORD_TIMER_BATCH_SIZE", 25),
-		RecordTimerLeaseTTL:                         durationEnv("RECORD_TIMER_LEASE_TTL", 5*time.Minute),
+		RuntimeVersion:                                  env("DOMAINRY_RUNTIME_VERSION", "dev"),
+		RuntimeInstanceID:                               strings.TrimSpace(os.Getenv("RUNTIME_INSTANCE_ID")),
+		ProductBrandName:                                productbrand.NameFromEnvironment(),
+		Environment:                                     environment,
+		AppLocale:                                       env("APP_LOCALE", "en-US"),
+		HTTPBindHost:                                    strings.TrimSpace(os.Getenv("HTTP_BIND_HOST")),
+		Port:                                            env("PORT", "8081"),
+		HTTPPublicAddr:                                  strings.TrimSpace(os.Getenv("HTTP_PUBLIC_ADDR")),
+		HTTPManagementAddr:                              strings.TrimSpace(os.Getenv("HTTP_MANAGEMENT_ADDR")),
+		HTTPOpsAddr:                                     strings.TrimSpace(os.Getenv("HTTP_OPS_ADDR")),
+		HTTPOpsAllowPublicBindBreakGlass:                boolEnv("HTTP_OPS_ALLOW_PUBLIC_BIND_BREAK_GLASS", false),
+		HTTPOpsPublicBindBreakGlassReason:               strings.TrimSpace(os.Getenv("HTTP_OPS_PUBLIC_BIND_BREAK_GLASS_REASON")),
+		HTTPReadHeaderTimeout:                           durationEnv("HTTP_READ_HEADER_TIMEOUT", 5*time.Second),
+		HTTPReadTimeout:                                 durationEnv("HTTP_READ_TIMEOUT", 30*time.Second),
+		HTTPWriteTimeout:                                durationEnv("HTTP_WRITE_TIMEOUT", 2*time.Minute),
+		HTTPIdleTimeout:                                 durationEnv("HTTP_IDLE_TIMEOUT", time.Minute),
+		HTTPShutdownTimeout:                             durationEnv("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
+		HTTPMaxJSONBodyBytes:                            intEnv("HTTP_MAX_JSON_BODY_BYTES", 2<<20),
+		HTTPMaxHeaderBytes:                              intEnv("HTTP_MAX_HEADER_BYTES", 1<<20),
+		HTTPPublicMaxJSONBodyBytes:                      intEnv("HTTP_PUBLIC_MAX_JSON_BODY_BYTES", 2<<20),
+		HTTPManagementMaxJSONBodyBytes:                  intEnv("HTTP_MANAGEMENT_MAX_JSON_BODY_BYTES", 2<<20),
+		HTTPOpsMaxJSONBodyBytes:                         intEnv("HTTP_OPS_MAX_JSON_BODY_BYTES", 1<<20),
+		HTTPPublicRequestTimeout:                        durationEnv("HTTP_PUBLIC_REQUEST_TIMEOUT", 30*time.Second),
+		HTTPManagementRequestTimeout:                    durationEnv("HTTP_MANAGEMENT_REQUEST_TIMEOUT", 30*time.Second),
+		HTTPOpsRequestTimeout:                           durationEnv("HTTP_OPS_REQUEST_TIMEOUT", 15*time.Second),
+		HTTPPublicRateLimitPerMinute:                    intEnv("HTTP_PUBLIC_RATE_LIMIT_PER_MINUTE", 6000),
+		HTTPManagementRateLimitPerMinute:                intEnv("HTTP_MANAGEMENT_RATE_LIMIT_PER_MINUTE", 3000),
+		HTTPOpsRateLimitPerMinute:                       intEnv("HTTP_OPS_RATE_LIMIT_PER_MINUTE", 1200),
+		HTTPAPIKeyRateLimitPerMinute:                    intEnv("HTTP_API_KEY_RATE_LIMIT_PER_MINUTE", 600),
+		RateLimitBackend:                                env("RATE_LIMIT_BACKEND", "database"),
+		RateLimitRedisURL:                               strings.TrimSpace(os.Getenv("RATE_LIMIT_REDIS_URL")),
+		RateLimitRedisPrefix:                            env("RATE_LIMIT_REDIS_PREFIX", "domainry:ratelimit:v1:"),
+		RateLimitRedisConnectTimeout:                    durationEnv("RATE_LIMIT_REDIS_CONNECT_TIMEOUT", 2*time.Second),
+		PrincipalCacheBackend:                           env("PRINCIPAL_CACHE_BACKEND", "local"),
+		PrincipalCacheTTL:                               durationEnv("PRINCIPAL_CACHE_TTL", identityprincipal.DefaultMaxCacheTTL),
+		PrincipalCacheRedisURL:                          strings.TrimSpace(os.Getenv("PRINCIPAL_CACHE_REDIS_URL")),
+		PrincipalCacheRedisPrefix:                       env("PRINCIPAL_CACHE_REDIS_PREFIX", "domainry:identity:principal:v1:"),
+		PrincipalCacheRedisConnectTimeout:               durationEnv("PRINCIPAL_CACHE_REDIS_CONNECT_TIMEOUT", 2*time.Second),
+		PrincipalCacheRedisCluster:                      boolEnv("PRINCIPAL_CACHE_REDIS_CLUSTER", false),
+		CapacityGlobalInFlight:                          intEnv("CAPACITY_GLOBAL_IN_FLIGHT", 256),
+		CapacityWorkspaceInFlight:                       intEnv("CAPACITY_WORKSPACE_IN_FLIGHT", 32),
+		CapacityUseCaseInFlight:                         intEnv("CAPACITY_USE_CASE_IN_FLIGHT", 64),
+		CapacityRetryInFlight:                           intEnv("CAPACITY_RETRY_IN_FLIGHT", 16),
+		CapacityGlobalRatePerMinute:                     intEnv("CAPACITY_GLOBAL_RATE_PER_MINUTE", 6000),
+		CapacityWorkspaceRatePerMinute:                  intEnv("CAPACITY_WORKSPACE_RATE_PER_MINUTE", 600),
+		CapacityUseCaseRatePerMinute:                    intEnv("CAPACITY_USE_CASE_RATE_PER_MINUTE", 1200),
+		CapacityMaxWorkspaceStates:                      intEnv("CAPACITY_MAX_WORKSPACE_STATES", 10_000),
+		CapacityMaxUseCaseStates:                        intEnv("CAPACITY_MAX_USE_CASE_STATES", 1024),
+		CapacityWorkspaceStateTTL:                       durationEnv("CAPACITY_WORKSPACE_STATE_TTL", 30*time.Minute),
+		CapacityRequestTimeout:                          durationEnv("CAPACITY_REQUEST_TIMEOUT", 30*time.Second),
+		CapacityDegradedRatio:                           floatEnv("CAPACITY_DEGRADED_RATIO", .8),
+		CapacityRecoveryRatio:                           floatEnv("CAPACITY_RECOVERY_RATIO", .6),
+		CapacityRetryAfter:                              durationEnv("CAPACITY_RETRY_AFTER", 2*time.Second),
+		CapacityConnectorGlobalInFlight:                 intEnv("CAPACITY_CONNECTOR_GLOBAL_IN_FLIGHT", 64),
+		CapacityConnectorWorkspaceInFlight:              intEnv("CAPACITY_CONNECTOR_WORKSPACE_IN_FLIGHT", 16),
+		CapacityConnectorProviderInFlight:               intEnv("CAPACITY_CONNECTOR_PROVIDER_IN_FLIGHT", 8),
+		CapacityConnectorGlobalRatePerMinute:            intEnv("CAPACITY_CONNECTOR_GLOBAL_RATE_PER_MINUTE", 1200),
+		CapacityConnectorWorkspaceRatePerMinute:         intEnv("CAPACITY_CONNECTOR_WORKSPACE_RATE_PER_MINUTE", 300),
+		CapacityConnectorProviderRatePerMinute:          intEnv("CAPACITY_CONNECTOR_PROVIDER_RATE_PER_MINUTE", 600),
+		CapacityQueueDepthThreshold:                     intEnv("CAPACITY_QUEUE_DEPTH_THRESHOLD", 200),
+		CapacityQueueOldestAgeThreshold:                 durationEnv("CAPACITY_QUEUE_OLDEST_AGE_THRESHOLD", 5*time.Minute),
+		BusinessEventReplayLimit:                        intEnv("BUSINESS_EVENT_REPLAY_LIMIT", 256),
+		BusinessEventSubscriberBuffer:                   intEnv("BUSINESS_EVENT_SUBSCRIBER_BUFFER", 32),
+		BusinessEventGlobalConnections:                  intEnv("BUSINESS_EVENT_GLOBAL_CONNECTIONS", 512),
+		BusinessEventWorkspaceConnections:               intEnv("BUSINESS_EVENT_WORKSPACE_CONNECTIONS", 64),
+		BusinessEventPrincipalConnections:               intEnv("BUSINESS_EVENT_PRINCIPAL_CONNECTIONS", 8),
+		BusinessEventHeartbeatInterval:                  durationEnv("BUSINESS_EVENT_HEARTBEAT_INTERVAL", 15*time.Second),
+		BusinessEventRetryInterval:                      durationEnv("BUSINESS_EVENT_RETRY_INTERVAL", 3*time.Second),
+		TelemetryExporter:                               env("TELEMETRY_EXPORTER", env("OTEL_TRACES_EXPORTER", "none")),
+		TelemetryEndpoint:                               strings.TrimSpace(env("TELEMETRY_ENDPOINT", os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"))),
+		TelemetryHeaders:                                keyValueEnv("TELEMETRY_HEADERS", os.Getenv("OTEL_EXPORTER_OTLP_HEADERS")),
+		TelemetryInsecure:                               boolEnv("TELEMETRY_INSECURE", false),
+		TelemetrySampleRatio:                            floatEnv("TELEMETRY_SAMPLE_RATIO", 1),
+		TelemetryExportTimeout:                          durationEnv("TELEMETRY_EXPORT_TIMEOUT", 5*time.Second),
+		HealthCheckTimeout:                              durationEnv("HEALTH_CHECK_TIMEOUT", 2*time.Second),
+		DatabaseDriver:                                  env("DATABASE_DRIVER", "sqlite"),
+		DatabaseURL:                                     strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		DatabaseDSN:                                     env("DATABASE_DSN", ""),
+		DatabaseMigrationDSN:                            strings.TrimSpace(os.Getenv("DATABASE_MIGRATION_DSN")),
+		DatabaseMigrationMode:                           databaseMigrationModeEnv(environment),
+		DatabaseMinSchemaVersion:                        strings.TrimSpace(os.Getenv("DATABASE_MIN_SCHEMA_VERSION")),
+		DatabaseMaxSchemaVersion:                        strings.TrimSpace(os.Getenv("DATABASE_MAX_SCHEMA_VERSION")),
+		DatabaseConnectionMode:                          strings.TrimSpace(os.Getenv("DATABASE_CONNECTION_MODE")),
+		DatabaseSchema:                                  strings.TrimSpace(os.Getenv("DATABASE_SCHEMA")),
+		DatabaseMaxOpenConns:                            intEnv("DATABASE_MAX_OPEN_CONNS", 10),
+		DatabaseMaxIdleConns:                            intEnv("DATABASE_MAX_IDLE_CONNS", 5),
+		DatabaseMaxConnections:                          intEnv("DATABASE_MAX_CONNECTIONS", 0),
+		DatabaseReservedConnections:                     intEnv("DATABASE_RESERVED_CONNECTIONS", 0),
+		RuntimeReplicaCount:                             intEnv("RUNTIME_REPLICA_COUNT", 1),
+		DatabaseConnMaxLifetime:                         durationEnv("DATABASE_CONN_MAX_LIFETIME", 30*time.Minute),
+		DatabaseConnMaxIdleTime:                         durationEnv("DATABASE_CONN_MAX_IDLE_TIME", 5*time.Minute),
+		DatabaseConnectTimeout:                          durationEnv("DATABASE_CONNECT_TIMEOUT", 10*time.Second),
+		DatabaseStatementTimeout:                        durationEnv("DATABASE_STATEMENT_TIMEOUT", 30*time.Second),
+		DatabaseLockTimeout:                             durationEnv("DATABASE_LOCK_TIMEOUT", 5*time.Second),
+		DatabaseSSLRootCert:                             strings.TrimSpace(os.Getenv("DATABASE_SSL_ROOT_CERT")),
+		DBPath:                                          env("APP_DB_PATH", "../data/runtime.db"),
+		MigrationDir:                                    env("MIGRATION_DIR", "../migrations"),
+		MigrationSQL:                                    strings.TrimSpace(os.Getenv("MIGRATION_SQL")),
+		MigrationBackupDir:                              env("MIGRATION_BACKUP_DIR", "../data/migration-backups"),
+		MigrationBackupEvidencePath:                     strings.TrimSpace(os.Getenv("MIGRATION_BACKUP_EVIDENCE_PATH")),
+		MigrationBackupLastSuccessAt:                    strings.TrimSpace(os.Getenv("MIGRATION_BACKUP_LAST_SUCCESS_AT")),
+		MigrationRestoreDrillSuccessAt:                  strings.TrimSpace(os.Getenv("MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT")),
+		MigrationOperator:                               env("MIGRATION_OPERATOR", "runtime"),
+		MigrationInstanceID:                             strings.TrimSpace(os.Getenv("MIGRATION_INSTANCE_ID")),
+		WorkspaceProvisionFailurePoint:                  strings.TrimSpace(os.Getenv("WORKSPACE_PROVISION_FAILURE_POINT")),
+		RuntimeWorkspaceProvisionClientID:               strings.TrimSpace(os.Getenv("RUNTIME_WORKSPACE_PROVISION_CLIENT_ID")),
+		RuntimeWorkspaceProvisionSigningSecret:          os.Getenv("RUNTIME_WORKSPACE_PROVISION_SIGNING_SECRET"),
+		InitialWorkspaceRequestID:                       env("INITIAL_WORKSPACE_REQUEST_ID", "initial-workspace"),
+		InitialWorkspaceCode:                            strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_CODE")),
+		InitialWorkspaceName:                            strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_NAME")),
+		InitialWorkspaceFirstStoreCode:                  strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_FIRST_STORE_CODE")),
+		InitialWorkspaceFirstStoreName:                  strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_FIRST_STORE_NAME")),
+		InitialWorkspaceAdminLoginID:                    strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_ADMIN_LOGIN_ID")),
+		InitialWorkspaceAdminName:                       strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_ADMIN_NAME")),
+		InitialWorkspaceCommercialConfigurationJSON:     env("INITIAL_WORKSPACE_COMMERCIAL_CONFIGURATION_JSON", `{"plan":"standard","included_user_limit":1,"max_user_limit":100,"included_customer_limit":0,"max_customer_limit":10000,"included_store_limit":1,"max_stores":1,"contract_date":"1970-01-01","billing_day":1,"billing_contact_name":"","billing_contact_phone":"","billing_contact_email":"","billing_contact_address":"","billing_contact_notes":""}`),
+		InitialWorkspaceApplicationBootstrapJSON:        env("INITIAL_WORKSPACE_APPLICATION_BOOTSTRAP_JSON", `{}`),
+		InitialWorkspaceCredentialFile:                  strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_CREDENTIAL_FILE")),
+		InstallationAdministratorBootstrapEnabled:       boolEnv("INSTALLATION_ADMINISTRATOR_BOOTSTRAP_ENABLED", false),
+		InstallationAdministratorRequestID:              strings.TrimSpace(os.Getenv("INSTALLATION_ADMINISTRATOR_REQUEST_ID")),
+		InstallationAdministratorLoginID:                strings.TrimSpace(os.Getenv("INSTALLATION_ADMINISTRATOR_LOGIN_ID")),
+		InstallationAdministratorName:                   strings.TrimSpace(os.Getenv("INSTALLATION_ADMINISTRATOR_NAME")),
+		InstallationAdministratorCredentialFile:         strings.TrimSpace(os.Getenv("INSTALLATION_ADMINISTRATOR_CREDENTIAL_FILE")),
+		UploadDir:                                       env("UPLOAD_DIR", "../data/uploads"),
+		CORSAllowedOrigins:                              csvEnv("CORS_ALLOWED_ORIGINS", []string{"*"}),
+		HTTPPublicOrigins:                               csvEnv("HTTP_PUBLIC_ORIGINS", nil),
+		HTTPManagementOrigins:                           csvEnv("HTTP_MANAGEMENT_ORIGINS", nil),
+		HTTPOpsOrigins:                                  csvEnv("HTTP_OPS_ORIGINS", nil),
+		RuntimeAllowDevIdentityHeaders:                  boolEnv("RUNTIME_ALLOW_DEV_IDENTITY_HEADERS", false),
+		AuditExportTokenKey:                             env("AUDIT_EXPORT_TOKEN_KEY", DevAuditExportTokenKey),
+		IdentityRedirectURLs:                            csvEnv("IDENTITY_REDIRECT_URLS", []string{"http://localhost:3100/auth/callback"}),
+		IdentityWorkspaceID:                             strings.TrimSpace(os.Getenv("IDENTITY_WORKSPACE_ID")),
+		IdentityAudience:                                env("IDENTITY_AUDIENCE", "domainry-runtime"),
+		NotificationWorkspaceID:                         strings.TrimSpace(os.Getenv("NOTIFICATION_WORKSPACE_ID")),
+		NotificationApplicationKey:                      env("NOTIFICATION_APPLICATION_KEY", "domainry-runtime"),
+		IntegrationSecretKey:                            env("INTEGRATION_SECRET_KEY", DevIntegrationSecret),
+		IntegrationActiveKeyID:                          env("INTEGRATION_ACTIVE_KEY_ID", "dev-v1"),
+		IntegrationDecryptOnlyKeys:                      keyMapEnv("INTEGRATION_DECRYPT_ONLY_KEYS"),
+		IntegrationHealthAlertsEnabled:                  boolEnv("INTEGRATION_HEALTH_ALERTS_ENABLED", true),
+		IntegrationHealthAlertPollInterval:              durationEnv("INTEGRATION_HEALTH_ALERT_POLL_INTERVAL", time.Minute),
+		IntegrationHealthReadyDueLimit:                  intEnv("INTEGRATION_HEALTH_READY_DUE_LIMIT", 100),
+		IntegrationHealthFailedDueLimit:                 intEnv("INTEGRATION_HEALTH_FAILED_DUE_LIMIT", 10),
+		IntegrationHealthExpiredLeaseLimit:              intEnv("INTEGRATION_HEALTH_EXPIRED_LEASE_LIMIT", 0),
+		IntegrationHealthDeadLetterLimit:                intEnv("INTEGRATION_HEALTH_DEAD_LETTER_LIMIT", 0),
+		IntegrationHealthGoogleHTTP429HourLimit:         intEnv("INTEGRATION_HEALTH_GOOGLE_HTTP_429_HOUR_LIMIT", 20),
+		IntegrationHealthGoogleGmailRateLimitHourLimit:  intEnv("INTEGRATION_HEALTH_GOOGLE_GMAIL_RATE_LIMIT_HOUR_LIMIT", 20),
+		IntegrationHealthFeishuRateLimitHourLimit:       intEnv("INTEGRATION_HEALTH_FEISHU_RATE_LIMIT_HOUR_LIMIT", 20),
+		IntegrationHealthGoogleGmailHistoryGapHourLimit: intEnv("INTEGRATION_HEALTH_GOOGLE_GMAIL_HISTORY_GAP_HOUR_LIMIT", 0),
+		IntegrationHealthGoogleQuotaUsedPercentLimit:    intEnv("INTEGRATION_HEALTH_GOOGLE_QUOTA_USED_PERCENT_LIMIT", 80),
+		IntegrationHealthQueueOldestAgeLimit:            durationEnv("INTEGRATION_HEALTH_QUEUE_OLDEST_AGE_LIMIT", 5*time.Minute),
+		IntegrationHealthGooglePushDelayLimit:           durationEnv("INTEGRATION_HEALTH_GOOGLE_PUSH_DELAY_LIMIT", 5*time.Minute),
+		IntegrationHealthGoogleSyncDelayLimit:           durationEnv("INTEGRATION_HEALTH_GOOGLE_SYNC_DELAY_LIMIT", 5*time.Minute),
+		WorkerPollInterval:                              durationEnv("WORKER_POLL_INTERVAL", workerPollDefault),
+		WorkerBatchSize:                                 intEnv("WORKER_BATCH_SIZE", 25),
+		WorkerLeaseTTL:                                  durationEnv("WORKER_LEASE_TTL", 5*time.Minute),
+		SchedulerEnabled:                                boolEnv("SCHEDULER_ENABLED", true),
+		SchedulerPollInterval:                           durationEnv("SCHEDULER_POLL_INTERVAL", schedulerPollDefault),
+		SchedulerBatchSize:                              intEnv("SCHEDULER_BATCH_SIZE", 25),
+		SchedulerLeaseTTL:                               durationEnv("SCHEDULER_LEASE_TTL", 5*time.Minute),
+		SchedulerMaxCatchupWindows:                      intEnv("SCHEDULER_MAX_CATCHUP_WINDOWS", 1),
+		RecordTimerEnabled:                              boolEnv("RECORD_TIMER_ENABLED", true),
+		RecordTimerPollInterval:                         durationEnv("RECORD_TIMER_POLL_INTERVAL", recordTimerPollDefault),
+		RecordTimerBatchSize:                            intEnv("RECORD_TIMER_BATCH_SIZE", 25),
+		RecordTimerLeaseTTL:                             durationEnv("RECORD_TIMER_LEASE_TTL", 5*time.Minute),
 	}
 }
 

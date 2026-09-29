@@ -85,8 +85,8 @@ func TestRecordHardDeleteOutboxAndCanonicalPlanRejection(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Acme"}}}
 	dependencies := recordDeleteEdgeDependencies(repository, object)
-	dependencies.AfterOutbox = func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message {
-		return []publicationmodel.Message{{ID: "outbox"}}
+	dependencies.AfterOutbox = func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error) {
+		return []publicationmodel.Message{{ID: "outbox"}}, nil
 	}
 	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), object.Key, "customer-1", principal); err != nil || len(repository.commits) != 1 || len(repository.commits[0].Outbox) != 1 {
 		t.Fatalf("commits=%+v err=%v", repository.commits, err)

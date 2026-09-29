@@ -43,25 +43,32 @@ type ConnectionAccountReadResult struct {
 	Payload          json.RawMessage
 }
 
-// ConnectionAccountWriteRequest is an exact, user-owned external account
-// mutation. Unlike a static Connector capability, ConnectionKey is resolved at
-// execution time because personal OAuth connections are created per user.
+// ConnectionAccountWriteRequest is an exact external account mutation. It
+// defaults to the current user's personal account; product code may explicitly
+// select one configured Workspace account for a source-owned Action.
 type ConnectionAccountWriteRequest struct {
 	// RequestID is an optional stable, code-owned effect identity. It lets a
 	// record action recover the same Integration receipt after its local
 	// transaction was interrupted. Browsers never call this gateway directly.
-	RequestID      string
-	ConnectionKey  string
+	RequestID     string
+	ConnectionKey string
+	// Workspace selects a server-configured Workspace account. The default is
+	// the current user's personal account. Product handlers set this in code;
+	// it is never copied from model or browser input.
+	Workspace      bool
 	OperationKey   string
 	ContractSHA256 string
 	Payload        json.RawMessage
 }
 
 type ConnectionAccountWriteResult struct {
-	InvocationID string
-	Status       string
-	RecordedAt   string
-	Receipt      json.RawMessage
+	InvocationID  string
+	Status        string
+	RecordedAt    string
+	ConnectionKey string
+	ConnectorKey  string
+	ProviderKey   string
+	Receipt       json.RawMessage
 }
 
 // KnowledgeDocumentUploadRequest publishes one immutable project-owned source

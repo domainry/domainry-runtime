@@ -221,7 +221,7 @@ func TestAutomationInstructionDispatchWorkflowEventAndFailureEdges(t *testing.T)
 		}, RenderOptionalData: func(any) (map[string]any, error) { return nil, errAutomationFacadeProbe }}
 	}
 	dispatcher := NewAutomationInstructionDispatchApplicationService(AutomationInstructionDispatchDependencies{})
-	for _, instruction := range []automationmodel.AutomationInstructionSchema{{Key: "workflow", Type: "start_workflow", Config: map[string]any{}}, {Key: "unknown", Type: "unknown"}} {
+	for _, instruction := range []automationmodel.AutomationInstructionSchema{{Key: "workflow", Type: "start_workflow", Config: map[string]any{}}, {Key: "review", Type: "request_human_review", Config: map[string]any{}}, {Key: "unknown", Type: "unknown"}} {
 		if result, err := dispatcher.Execute(t.Context(), automationmodel.AutomationRuleSchema{}, instruction, renderErr(nil), nil, automationFacadePrincipal()); err == nil || result.Status != "failed" || result.ErrorCode == "" {
 			t.Fatalf("instruction=%#v result=%#v err=%v", instruction, result, err)
 		}
@@ -244,6 +244,11 @@ func TestAutomationInstructionDispatchWorkflowEventAndFailureEdges(t *testing.T)
 	}})
 	if result, err := dispatcher.Execute(t.Context(), automationmodel.AutomationRuleSchema{}, workflowInstruction, render, nil, automationFacadePrincipal()); err != nil || result.Data["key"] != "flow" {
 		t.Fatalf("workflow result=%#v err=%v", result, err)
+	}
+	reviewInstruction := workflowInstruction
+	reviewInstruction.Key, reviewInstruction.Type = "review", "request_human_review"
+	if result, err := dispatcher.Execute(t.Context(), automationmodel.AutomationRuleSchema{}, reviewInstruction, render, nil, automationFacadePrincipal()); err != nil || result.Data["key"] != "flow" {
+		t.Fatalf("human review result=%#v err=%v", result, err)
 	}
 	if result, err := dispatcher.Execute(t.Context(), automationmodel.AutomationRuleSchema{}, automationmodel.AutomationInstructionSchema{Key: "event", Type: "emit_event"}, render, nil, automationFacadePrincipal()); err != nil || result.Data["event"] != true {
 		t.Fatalf("event result=%#v err=%v", result, err)

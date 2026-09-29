@@ -377,9 +377,9 @@ func TestCreateServiceOwnsCompleteCreateTransaction(t *testing.T) {
 			calls = append(calls, "duplicate")
 			return nil
 		},
-		AfterOutbox: func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message {
+		AfterOutbox: func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error) {
 			calls = append(calls, "outbox")
-			return []publicationmodel.Message{{ID: "outbox-1"}}
+			return []publicationmodel.Message{{ID: "outbox-1"}}, nil
 		},
 		PrepareWorkflow: func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error) {
 			calls = append(calls, "workflow_prepare")

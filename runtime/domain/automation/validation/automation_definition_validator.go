@@ -105,15 +105,29 @@ func (v AutomationDefinitionValidator) Validate(ctx context.Context, rule automa
 			if issues := invocationcontract.ValidateAction(target, objectKey, input, automationBindingEnvironment(object, availableOutputs)); len(issues) > 0 {
 				return automationInvocationError("business_action", action.Key, issues[0])
 			}
-		case "start_workflow":
+		case "start_workflow", "request_human_review":
 			workflowKey := strings.TrimSpace(fmt.Sprint(action.Config["workflow_key"]))
 			target, found := findWorkflow(catalog.Workflows, workflowKey)
 			if !found {
 				return definitionError(apperror.KindBadRequest, "backend.automation.target_workflow_not_found", nil, "workflow", workflowKey)
 			}
+			if action.Type == "request_human_review" && !automationWorkflowHasApproval(target) {
+				return definitionError(apperror.KindBadRequest, "backend.automation.human_review_workflow_required", nil, "workflow", workflowKey)
+			}
 			payload, _ := action.Config["payload"].(map[string]any)
 			if payload == nil {
 				payload, _ = action.Config["input"].(map[string]any)
+			}
+			if action.Type == "request_human_review" {
+				if len(target.IdempotencyKeys) == 0 {
+					return definitionError(apperror.KindBadRequest, "backend.automation.human_review_idempotency_required", nil, "workflow", workflowKey)
+				}
+				for _, key := range target.IdempotencyKeys {
+					key = strings.TrimSpace(key)
+					if _, present := payload[key]; key == "" || !present {
+						return definitionError(apperror.KindBadRequest, "backend.automation.human_review_idempotency_input_required", nil, "workflow", workflowKey, "field", key)
+					}
+				}
 			}
 			if issues := invocationcontract.ValidateWorkflow(target, invocationcontract.WorkflowEntryAutomation, payload, automationBindingEnvironment(object, availableOutputs)); len(issues) > 0 {
 				return automationInvocationError("workflow", action.Key, issues[0])
@@ -122,7 +136,7 @@ func (v AutomationDefinitionValidator) Validate(ctx context.Context, rule automa
 		if err := AutomationValidateInstructionReferences(action, availableOutputs); err != nil {
 			return err
 		}
-		if rule.Trigger.Phase == "after" {
+		if rule.Trigger.Phase != "before" {
 			aliases[alias] = true
 			availableOutputs[alias] = automationInstructionOutputTypes(action, catalog.Actions)
 		}
@@ -267,6 +281,9 @@ func AutomationMappingValueType(value any, object definitionmodel.ObjectSchema, 
 			if parts[0] == "record" && parts[1] == "id" {
 				return "relation", true
 			}
+			if parts[0] == "record" && (parts[1] == "created_at" || parts[1] == "updated_at") {
+				return "datetime", true
+			}
 			for _, field := range object.Fields {
 				if strings.TrimSpace(field.Key) == parts[1] {
 					return strings.TrimSpace(field.Type), true
@@ -381,6 +398,8 @@ func automationBindingEnvironment(object definitionmodel.ObjectSchema, outputs m
 		bindingcontract.Fact{Reference: "$actor.user_id", Type: bindingcontract.TypeUser, Producer: "automation.actor"},
 		bindingcontract.Fact{Reference: "$actor.role", Type: bindingcontract.TypeText, Producer: "automation.actor"},
 		bindingcontract.Fact{Reference: "$record.id", Type: bindingcontract.TypeRelation, Producer: "automation.record"},
+		bindingcontract.Fact{Reference: "$record.created_at", Type: bindingcontract.TypeDateTime, Producer: "automation.record"},
+		bindingcontract.Fact{Reference: "$record.updated_at", Type: bindingcontract.TypeDateTime, Producer: "automation.record"},
 	)
 	for _, field := range object.Fields {
 		for _, prefix := range []string{"$input.", "$payload.", "$candidate.", "$record.", "$before."} {
@@ -407,7 +426,7 @@ func automationInstructionOutputTypes(instruction automationmodel.AutomationInst
 				result["data."+field.Key] = field.Type
 			}
 		}
-	case "start_workflow":
+	case "start_workflow", "request_human_review":
 		result["workflow_key"], result["execution_id"], result["status"] = "text", "text", "text"
 	case "emit_event":
 		result["event_type"], result["object_key"], result["record_id"], result["metadata"] = "text", "text", "relation", "json"
@@ -445,6 +464,18 @@ func findWorkflow(workflows []definitionmodel.WorkflowSchema, key string) (defin
 		}
 	}
 	return definitionmodel.WorkflowSchema{}, false
+}
+
+func automationWorkflowHasApproval(workflow definitionmodel.WorkflowSchema) bool {
+	if workflow.Graph == nil {
+		return false
+	}
+	for _, node := range workflow.Graph.Nodes {
+		if strings.TrimSpace(node.Type) == "approval" {
+			return true
+		}
+	}
+	return false
 }
 
 func objectMapFromAny(value any) map[string]any {

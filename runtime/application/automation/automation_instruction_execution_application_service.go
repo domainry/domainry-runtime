@@ -65,7 +65,7 @@ func (s *AutomationInstructionExecutionApplicationService) Execute(ctx context.C
 	var result automationmodel.AutomationInstructionResult
 	var resultErr error
 
-	if request.Phase == "after" && !request.Simulation {
+	if automationDurableEffectPhase(request.Phase) && !request.Simulation {
 		idempotencyKey = automationruntime.AutomationInstructionIdempotencyKey(request.Rule, instruction, request.Record)
 		recordID := "unknown"
 		if request.Record != nil {
@@ -122,7 +122,7 @@ func (s *AutomationInstructionExecutionApplicationService) Execute(ctx context.C
 			"rule", request.Rule.Key, "instruction", instruction.Key)
 		result.Status, result.ErrorCode = "failed", errorCode(resultErr)
 	}
-	if request.Phase == "after" && claimed {
+	if automationDurableEffectPhase(request.Phase) && claimed {
 		status := "succeeded"
 		errorCodeValue := ""
 		if resultErr != nil {
@@ -144,4 +144,8 @@ func (s *AutomationInstructionExecutionApplicationService) Execute(ctx context.C
 		}
 	}
 	return result, resultErr
+}
+
+func automationDurableEffectPhase(phase string) bool {
+	return phase == "after" || phase == "webhook"
 }

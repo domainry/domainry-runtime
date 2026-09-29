@@ -20,7 +20,7 @@ type CapabilityExecutionCatalog struct {
 func RuntimeExecutionCapabilities() CapabilityExecutionCatalog {
 	return CapabilityExecutionCatalog{
 		RuntimeVersion:         RuntimeCapabilityContractVersion,
-		AutomationInstructions: executionCapabilities("automation_rule", "record_lifecycle", []string{"assert", "derive_fields", "invoke_business_action", "start_workflow", "emit_event"}, []string{"before", "after"}),
+		AutomationInstructions: executionCapabilities("automation_rule", "record_lifecycle", []string{"assert", "derive_fields", "invoke_business_action", "request_human_review", "start_workflow", "emit_event"}, []string{"before", "after", "webhook"}),
 		WorkflowNodes:          executionCapabilities("workflow", "stateful_process", []string{"trigger", "condition", "approval", "action", "agent_task", "cc", "wait_until", "wait_duration", "timer"}, []string{"graph_v2"}),
 	}
 }

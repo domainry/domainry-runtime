@@ -5,7 +5,9 @@ package runtimeengine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 )
 
@@ -34,15 +36,20 @@ type Query struct {
 	Filters      map[string]any
 	Sorts        []Sort
 	SelectFields []string
-	AfterID      string
+	// AfterID is the continuation returned in Page.NextAfterID. The historical
+	// name describes the id-only fast path; for any other stable sort Runtime
+	// returns an opaque, query- and principal-bound keyset cursor here.
+	AfterID string
 }
 
 type Page struct {
-	Items       []Record
-	Page        int
-	PageSize    int
-	Total       int
-	HasNext     bool
+	Items    []Record
+	Page     int
+	PageSize int
+	Total    int
+	HasNext  bool
+	// NextAfterID is an opaque continuation unless the effective order is only
+	// id ascending. Callers must echo it unchanged as Query.AfterID.
 	NextAfterID string
 }
 
@@ -63,6 +70,39 @@ type ActionResult struct {
 	Record       *Record
 }
 
+type ActionAssuranceChallengeRequest struct {
+	ActionKey   string
+	ObjectKey   string
+	RecordID    string
+	Payload     map[string]any
+	AccessToken string
+}
+
+type ActionAssuranceVerificationRequest struct {
+	ActionAssuranceChallengeRequest
+	Provider string
+	State    string
+	Code     string
+}
+
+type ActionAssuranceChallenge struct {
+	Provider          string `json:"provider"`
+	State             string `json:"state"`
+	Type              string `json:"type,omitempty"`
+	Purpose           string `json:"purpose,omitempty"`
+	Status            string `json:"status,omitempty"`
+	MaskedDestination string `json:"masked_destination,omitempty"`
+	RetryAt           string `json:"retry_at,omitempty"`
+	ExpiresAt         string `json:"expires_at"`
+}
+
+type ActionAssuranceGrant struct {
+	AssuranceToken string   `json:"assurance_token"`
+	GrantID        string   `json:"grant_id"`
+	Methods        []string `json:"methods"`
+	ExpiresAt      string   `json:"expires_at"`
+}
+
 // Engine is safe for project-owned HTTP handlers. Ordinary endpoints call the
 // record methods. A real business operation calls InvokeAction, which retains
 // Runtime's existing governed BusinessHandler transaction and capability model.
@@ -73,6 +113,136 @@ type Engine interface {
 	Update(context.Context, string, string, any) (Record, error)
 	Delete(context.Context, string, string) error
 	InvokeAction(context.Context, ActionRequest) (ActionResult, error)
+}
+
+// KnowledgeSearchEngine is the optional current-principal boundary used by
+// project-owned pages that render source-backed semantic search results. It
+// intentionally exposes normalized citations only: provider payloads and
+// library credentials never cross into project HTTP code.
+type KnowledgeSearchEngine interface {
+	SearchKnowledgeLibrary(context.Context, string, string) (KnowledgeSearchResult, error)
+}
+
+type KnowledgeSearchResult struct {
+	LibraryID string                    `json:"library_id"`
+	Query     string                    `json:"query"`
+	Citations []KnowledgeSearchCitation `json:"citations"`
+}
+
+type KnowledgeSearchCitation struct {
+	ID         string `json:"id"`
+	DocumentID string `json:"document_id"`
+	Title      string `json:"title,omitempty"`
+}
+
+// IdempotentRecordEngine is the project HTTP boundary for externally retried
+// record mutations. Interactive product handlers may keep using Engine CRUD;
+// API-key handlers require this interface and a caller-owned idempotency key.
+type IdempotentRecordEngine interface {
+	CreateRecordIdempotent(context.Context, string, any, string) (Record, bool, error)
+	UpdateRecordIdempotent(context.Context, string, string, any, string) (Record, error)
+	DeleteRecordIdempotent(context.Context, string, string, string, string) (bool, error)
+}
+
+// RecordDataExchangeEngine exposes Runtime's governed record import/export
+// application services to project-owned HTTP. Project handlers keep ownership
+// of their public routes while Runtime remains responsible for authorization,
+// row/field policy, validation, idempotency, audit and Data Exchange jobs.
+type RecordDataExchangeEngine interface {
+	PreviewRecordImport(context.Context, string, []byte) (RecordImportPreview, error)
+	ApplyRecordImportIdempotent(context.Context, string, []byte, string) (RecordImportApplyResult, bool, error)
+	EnqueueRecordImport(context.Context, string, []byte, string) (RecordBatchJob, bool, error)
+	DispatchRecordExportIdempotent(context.Context, string, string, RecordExportOptions) (RecordExportDispatch, error)
+	DownloadRecordExport(context.Context, string) (RecordExportArtifact, error)
+}
+
+type RecordImportRowIssue struct {
+	Field    string            `json:"field,omitempty"`
+	Message  string            `json:"message"`
+	Code     string            `json:"code,omitempty"`
+	Params   map[string]string `json:"params,omitempty"`
+	Severity string            `json:"severity"`
+}
+
+type RecordImportPreviewRow struct {
+	Row          int                    `json:"row"`
+	Data         map[string]any         `json:"data"`
+	RawValues    map[string]string      `json:"raw_values,omitempty"`
+	Issues       []RecordImportRowIssue `json:"issues"`
+	ErrorSummary string                 `json:"error_summary,omitempty"`
+	Valid        bool                   `json:"valid"`
+	Duplicate    bool                   `json:"duplicate"`
+}
+
+type RecordImportPreview struct {
+	ObjectKey     string                   `json:"object_key"`
+	Rows          []RecordImportPreviewRow `json:"rows"`
+	ErrorRows     []RecordImportPreviewRow `json:"error_rows,omitempty"`
+	ValidRows     int                      `json:"valid_rows"`
+	InvalidRows   int                      `json:"invalid_rows"`
+	DuplicateRows int                      `json:"duplicate_rows"`
+	CanApply      bool                     `json:"can_apply"`
+}
+
+type RecordImportApplyResult struct {
+	ObjectKey string              `json:"object_key"`
+	Created   int                 `json:"created"`
+	Skipped   int                 `json:"skipped"`
+	Preview   RecordImportPreview `json:"preview"`
+}
+
+type RecordBatchJob struct {
+	ID               string `json:"id"`
+	WorkspaceID      string `json:"workspace_id"`
+	Kind             string `json:"kind"`
+	ObjectKey        string `json:"object_key"`
+	Status           string `json:"status"`
+	Checkpoint       int    `json:"checkpoint"`
+	Total            int    `json:"total"`
+	ResultFilename   string `json:"result_filename,omitempty"`
+	ResultType       string `json:"result_content_type,omitempty"`
+	ResultArtifactID string `json:"result_artifact_id,omitempty"`
+	ErrorCode        string `json:"error_code,omitempty"`
+	ActorID          string `json:"actor_id"`
+	RoleKey          string `json:"role_key"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+}
+
+type RecordExportOptions struct {
+	Fields         []string `json:"fields,omitempty"`
+	Reason         string   `json:"reason,omitempty"`
+	MaskingPolicy  string   `json:"masking_policy,omitempty"`
+	FilterSummary  string   `json:"filter_summary,omitempty"`
+	Query          Query    `json:"query,omitempty"`
+	AssuranceToken string   `json:"-"`
+}
+
+type RecordExportDispatch struct {
+	Delivery string         `json:"delivery"`
+	Content  []byte         `json:"-"`
+	Filename string         `json:"filename,omitempty"`
+	Job      RecordBatchJob `json:"job,omitempty"`
+	Replayed bool           `json:"replayed,omitempty"`
+}
+
+type RecordExportArtifact struct {
+	ID          string
+	Filename    string
+	ContentType string
+	SHA256      string
+	Size        int64
+	ExpiresAt   string
+	Content     io.ReadCloser
+}
+
+// ActionAssuranceEngine is the optional project-owned HTTP boundary for
+// obtaining a short-lived, payload-bound grant before a protected Action.
+// The access token comes from the authenticated request header and is never
+// accepted from a JSON body.
+type ActionAssuranceEngine interface {
+	BeginActionAssurance(context.Context, ActionAssuranceChallengeRequest) (ActionAssuranceChallenge, error)
+	VerifyActionAssurance(context.Context, ActionAssuranceVerificationRequest) (ActionAssuranceGrant, error)
 }
 
 // ConnectionAccountWriteAuthorizer is an optional, current-user capability for
@@ -86,6 +256,21 @@ type ConnectionAccountWriteAuthorizer interface {
 type ConnectionAccountWriteAccess struct {
 	ConnectionKey string
 	ProviderKey   string
+}
+
+// ConnectionAccountReader is an optional current-user boundary for project
+// handlers that need one registered, read-only Provider operation. Runtime
+// derives identity and request identity from the authenticated request;
+// Integration rechecks account ownership, state, scopes and contract before and
+// after the call. Payload is never supplied with credentials or account scope.
+type ConnectionAccountReader interface {
+	ReadConnectionAccount(context.Context, string, string, string, any) (ConnectionAccountReadResult, error)
+}
+
+type ConnectionAccountReadResult struct {
+	ConnectionKey string
+	ProviderKey   string
+	Payload       json.RawMessage
 }
 
 // TaskAssigneeDirectory is a narrow, authenticated Identity projection for

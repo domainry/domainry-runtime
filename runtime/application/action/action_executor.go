@@ -278,6 +278,7 @@ type businessActionExecution struct {
 }
 
 var _ runtimeext.ActionExecution = (*businessActionExecution)(nil)
+var _ runtimeext.ConnectionAccountWriteExecution = (*businessActionExecution)(nil)
 var _ runtimeext.FileDownloadExecution = (*businessActionExecution)(nil)
 var _ runtimeext.RecordNotificationRecipientExecution = (*businessActionExecution)(nil)
 var _ runtimeext.CrossWorkspaceAggregateExecution = (*businessActionExecution)(nil)

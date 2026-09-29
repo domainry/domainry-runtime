@@ -61,6 +61,21 @@ func TestRecordAuthorizationDelegatesHumanDecisionsToSDKBundle(t *testing.T) {
 	}
 }
 
+func TestRecordWriteActionScopeUsesTheExactAuthorizedAction(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "case"}
+	principal := accessfixture.Attach(
+		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "service-1", WorkspaceID: "workspace-a"}},
+		accessfixture.Bundle{Permissions: []string{"case.import"}},
+	)
+	data := map[string]any{RecordOwnerUserIDSystemField: "service-1"}
+	if !RecordCanWriteActionScope(principal, object, data, "import") {
+		t.Fatal("exact import scope was denied")
+	}
+	if RecordCanWriteScope(principal, object, data) {
+		t.Fatal("import-only principal inherited update scope")
+	}
+}
+
 func TestRecordAuthorizationSuppliesCanonicalBusinessFactsToSDK(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "case", Fields: []definitionmodel.FieldSchema{{Key: "submitted_by", Type: "user"}}}
 	principal := accessfixture.Attach(

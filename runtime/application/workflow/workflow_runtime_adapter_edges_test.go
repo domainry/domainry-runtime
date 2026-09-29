@@ -190,3 +190,39 @@ func TestWorkflowProcessRuntimeResumeTimerNodeEdges(t *testing.T) {
 		t.Fatal("unexpected timer match")
 	}
 }
+
+func TestWorkflowTimerContinuationReauthorizesInheritedInitiator(t *testing.T) {
+	worker := workflowProcessQueryPrincipal()
+	resolved := workflowPrincipalWithPermissions(principalmodel.Principal{Principal: identitysdk.Principal{
+		Known: true, WorkspaceID: worker.WorkspaceID, UserID: "sales-1", RoleKey: "sales_rep",
+	}}, "email_sequence_delivery.send")
+	resolver := &workflowPrincipalResolverTestStub{resolution: workflowPrincipalResolution(resolved)}
+	engine := NewWorkflowProcessRuntime(WorkflowDependencies{Principals: resolver}).ProcessEngine()
+	process := workflowmodel.WorkflowProcessInstance{
+		ID: "process", WorkspaceID: worker.WorkspaceID, InitiatorID: "sales-1", InitiatorRoleKey: "sales_rep",
+		DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "scheduled-send"},
+	}
+	actual, err := engine.timerContinuationPrincipal(t.Context(), process, worker)
+	if err != nil || actual.UserID != "sales-1" || actual.RoleKey != "sales_rep" || actual.RequestID != "process:timer" {
+		t.Fatalf("continuation principal=%+v err=%v", actual, err)
+	}
+	if resolver.request.SubjectID != identitysdk.SubjectID("sales-1") || resolver.request.RoleKey != "sales_rep" {
+		t.Fatalf("resolution request=%+v", resolver.request)
+	}
+
+	managed := process
+	managed.DefinitionSnapshot.RunAs = "crm_service"
+	resolver.request = identitysdk.PrincipalResolutionRequest{}
+	actual, err = engine.timerContinuationPrincipal(t.Context(), managed, worker)
+	if err != nil || actual.UserID != worker.UserID || resolver.request.SubjectID != "" {
+		t.Fatalf("managed continuation principal=%+v request=%+v err=%v", actual, resolver.request, err)
+	}
+
+	revoked := &workflowPrincipalResolverTestStub{resolution: workflowPrincipalResolution(workflowPrincipalWithPermissions(principalmodel.Principal{Principal: identitysdk.Principal{
+		Known: true, WorkspaceID: worker.WorkspaceID, UserID: "other", RoleKey: "sales_rep",
+	}}, "email_sequence_delivery.send"))}
+	engine = NewWorkflowProcessRuntime(WorkflowDependencies{Principals: revoked}).ProcessEngine()
+	if _, err = engine.timerContinuationPrincipal(t.Context(), process, worker); apperror.CodeOf(err) != "backend.workflow.initiator_identity_revoked" {
+		t.Fatalf("revoked initiator error=%v", err)
+	}
+}

@@ -29,7 +29,7 @@ import (
 
 const (
 	defaultConnectorHTTPResponseBytes = int64(1 << 20)
-	maxConnectorHTTPResponseBytes     = int64(8 << 20)
+	maxConnectorHTTPResponseBytes     = int64(40 << 20)
 	defaultConnectorSQLRows           = 100
 	maxConnectorSQLRows               = 1000
 )

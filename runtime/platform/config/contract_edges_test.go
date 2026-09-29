@@ -11,9 +11,13 @@ import (
 func TestConfigContractTypedSettersAndCollectionParsers(t *testing.T) {
 	for field, want := range map[string]string{
 		"AuditExportTokenKey": "AUDIT_EXPORT_TOKEN_KEY", "HTTPReadTimeout": "HTTP_READ_TIMEOUT", "WorkerPollInterval": "WORKER_POLL_INTERVAL",
-		"CORSAllowedOrigins":             "CORS_ALLOWED_ORIGINS",
-		"IdentityRedirectURLs":           "IDENTITY_REDIRECT_URLS",
-		"MigrationRestoreDrillSuccessAt": "MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT",
+		"CORSAllowedOrigins":                             "CORS_ALLOWED_ORIGINS",
+		"HTTPAPIKeyRateLimitPerMinute":                   "HTTP_API_KEY_RATE_LIMIT_PER_MINUTE",
+		"IntegrationHealthGoogleHTTP429HourLimit":        "INTEGRATION_HEALTH_GOOGLE_HTTP_429_HOUR_LIMIT",
+		"IntegrationHealthGoogleGmailRateLimitHourLimit": "INTEGRATION_HEALTH_GOOGLE_GMAIL_RATE_LIMIT_HOUR_LIMIT",
+		"IntegrationHealthFeishuRateLimitHourLimit":      "INTEGRATION_HEALTH_FEISHU_RATE_LIMIT_HOUR_LIMIT",
+		"IdentityRedirectURLs":                           "IDENTITY_REDIRECT_URLS",
+		"MigrationRestoreDrillSuccessAt":                 "MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT",
 	} {
 		if got := configEnvName(field); got != want {
 			t.Fatalf("configEnvName(%q)=%q want=%q", field, got, want)
@@ -132,6 +136,12 @@ func TestConfigValidationRejectsEachRuntimeBoundary(t *testing.T) {
 	}{
 		{"HTTP timeout", func(cfg *Config) { cfg.HTTPReadTimeout = 0 }, "HTTP timeouts"},
 		{"scheduler batch", func(cfg *Config) { cfg.SchedulerBatchSize = 0 }, "SCHEDULER_BATCH_SIZE"},
+		{"integration health poll", func(cfg *Config) { cfg.IntegrationHealthAlertPollInterval = 0 }, "INTEGRATION_HEALTH_ALERT_POLL_INTERVAL"},
+		{"integration health count", func(cfg *Config) { cfg.IntegrationHealthGoogleHTTP429HourLimit = -1 }, "count limits"},
+		{"integration Gmail rate-limit count", func(cfg *Config) { cfg.IntegrationHealthGoogleGmailRateLimitHourLimit = -1 }, "count limits"},
+		{"integration Feishu rate-limit count", func(cfg *Config) { cfg.IntegrationHealthFeishuRateLimitHourLimit = -1 }, "count limits"},
+		{"integration Gmail history count", func(cfg *Config) { cfg.IntegrationHealthGoogleGmailHistoryGapHourLimit = -1 }, "count limits"},
+		{"integration health duration", func(cfg *Config) { cfg.IntegrationHealthGoogleSyncDelayLimit = 0 }, "duration limits"},
 		{"scheduler lease", func(cfg *Config) { cfg.SchedulerLeaseTTL = cfg.SchedulerPollInterval }, "SCHEDULER_LEASE_TTL"},
 		{"empty port", func(cfg *Config) { cfg.Port = " " }, "PORT is required"},
 		{"invalid port", func(cfg *Config) { cfg.Port = ":70000" }, "PORT must be"},
@@ -163,6 +173,24 @@ func TestConfigValidationRejectsEachRuntimeBoundary(t *testing.T) {
 				t.Fatalf("Validate() error=%v want substring %q", err, test.want)
 			}
 		})
+	}
+}
+
+func TestIntegrationHealthAlertSLAIsLoadedFromTypedConfiguration(t *testing.T) {
+	cfg, _, err := LoadContract(Source{Name: "operator", Priority: 10, Values: map[string]string{
+		"INTEGRATION_HEALTH_ALERT_POLL_INTERVAL":                 "45s",
+		"INTEGRATION_HEALTH_READY_DUE_LIMIT":                     "17",
+		"INTEGRATION_HEALTH_GOOGLE_GMAIL_RATE_LIMIT_HOUR_LIMIT":  "6",
+		"INTEGRATION_HEALTH_FEISHU_RATE_LIMIT_HOUR_LIMIT":        "7",
+		"INTEGRATION_HEALTH_GOOGLE_GMAIL_HISTORY_GAP_HOUR_LIMIT": "3",
+		"INTEGRATION_HEALTH_GOOGLE_QUOTA_USED_PERCENT_LIMIT":     "75",
+		"INTEGRATION_HEALTH_GOOGLE_SYNC_DELAY_LIMIT":             "90s",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.IntegrationHealthAlertPollInterval != 45*time.Second || cfg.IntegrationHealthReadyDueLimit != 17 || cfg.IntegrationHealthGoogleGmailRateLimitHourLimit != 6 || cfg.IntegrationHealthFeishuRateLimitHourLimit != 7 || cfg.IntegrationHealthGoogleGmailHistoryGapHourLimit != 3 || cfg.IntegrationHealthGoogleQuotaUsedPercentLimit != 75 || cfg.IntegrationHealthGoogleSyncDelayLimit != 90*time.Second {
+		t.Fatalf("integration health alert config=%+v", cfg)
 	}
 }
 
@@ -201,6 +229,33 @@ func TestConfigSourceFilesAndUnknownWarning(t *testing.T) {
 	}
 	if len(snapshot.Warnings) == 0 || !strings.Contains(snapshot.Warnings[0], "RUNTIME_UNKNOWN_EDGE") {
 		t.Fatalf("warnings=%#v", snapshot.Warnings)
+	}
+}
+
+func TestConfigLoadAcceptsSourceOwnedIntegrationQuotaEnvironment(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("CONFIG_UNKNOWN_POLICY", "error")
+	t.Setenv("INTEGRATION_GOOGLE_QUOTA_PROJECT_ID", "project-a")
+	t.Setenv("INTEGRATION_GOOGLE_QUOTA_SERVICES", "gmail.googleapis.com")
+	t.Setenv("INTEGRATION_GOOGLE_QUOTA_CREDENTIALS_FILE", "/run/secrets/google-quota.json")
+	t.Setenv("INTEGRATION_GOOGLE_QUOTA_TIMEOUT", "15s")
+
+	_, snapshot, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Warnings) != 0 {
+		t.Fatalf("source-owned Integration configuration warnings=%#v", snapshot.Warnings)
+	}
+}
+
+func TestConfigLoadStillRejectsMisspelledIntegrationQuotaEnvironment(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("CONFIG_UNKNOWN_POLICY", "error")
+	t.Setenv("INTEGRATION_GOOGLE_QUOTA_PROJET_ID", "project-a")
+
+	if _, _, err := Load(); err == nil || !strings.Contains(err.Error(), "INTEGRATION_GOOGLE_QUOTA_PROJET_ID") {
+		t.Fatalf("misspelled source-owned Integration configuration error=%v", err)
 	}
 }
 

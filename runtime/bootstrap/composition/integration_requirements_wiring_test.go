@@ -12,10 +12,10 @@ func TestIntegrationEventMappingRequirementsBindsInstallationWorkspace(t *testin
 	principalmodel.InstallationWorkspaceID = "workspace-installation"
 	t.Cleanup(func() { principalmodel.InstallationWorkspaceID = previous })
 	result := IntegrationEventMappingRequirements([]appschemamodel.IntegrationEventMappingSchema{{
-		Key: "calendar-event", Provider: "calendar", EventType: "calendar.changed", TargetType: "action",
-		ObjectKey: "meeting", ActionKey: "meeting.ingest", Enabled: true,
+		Key: "calendar-event", Provider: "calendar", EventType: "calendar.changed", TargetType: "automation",
+		AutomationRuleKey: "meeting.webhook", AutomationInput: map[string]string{"title": "meeting.title"}, Enabled: true,
 	}})
-	if len(result) != 1 || result[0].WorkspaceID != "workspace-installation" {
+	if len(result) != 1 || result[0].WorkspaceID != "workspace-installation" || result[0].AutomationRuleKey != "meeting.webhook" || result[0].AutomationInput["title"] != "meeting.title" {
 		t.Fatalf("requirements=%#v", result)
 	}
 }

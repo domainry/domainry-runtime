@@ -16,6 +16,7 @@ func assembleAutomationApplication(records *runtimeAssembly) *automationapplicat
 	metadata := records.applicationSchemaService
 	return automationapplication.NewAutomationApplicationService(automationapplication.AutomationApplicationDependencies{
 		Rules:                 runtimeAutomationRuleRegistry{records: records},
+		Definitions:           records.automationDefinitionRepo,
 		Connectors:            records.connectorRegistry,
 		RecordRepository:      records.recordRepo,
 		WorkerStore:           records.automationWorkerRepo,

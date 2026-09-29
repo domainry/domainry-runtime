@@ -39,6 +39,9 @@ func TestAutomationAfterOutboxPersistsIdentityAndCausationChain(t *testing.T) {
 		t.Fatalf("messages=%#v", messages)
 	}
 	event := automationdomain.LifecycleEventFromPayload(messages[0].Payload)
+	if event.Rule.Key != "after" || !event.Rule.Enabled || event.Rule.Trigger.Phase != "after" {
+		t.Fatalf("rule snapshot=%#v", event.Rule)
+	}
 	if event.IdentityPolicy != "revalidate_initiator" || event.CorrelationID != "root" || event.CausationID != "action" || event.AutomationDepth != 2 || len(event.VisitedRuleKeys) != 1 || event.VisitedRuleKeys[0] != "first" {
 		t.Fatalf("event=%#v", event)
 	}

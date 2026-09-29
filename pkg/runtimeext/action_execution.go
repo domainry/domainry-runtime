@@ -36,6 +36,25 @@ type SynchronousConnectorCallLease interface {
 	Release()
 }
 
+// ConnectionAccountWriteExecution is the Runtime-owned lease boundary for an
+// Integration account write. Account identity and operation authorization are
+// resolved dynamically by Integration, so this lease deliberately does not
+// reuse a source-authored static Connector grant.
+type ConnectionAccountWriteExecution interface {
+	AcquireConnectionAccountWrite() (SynchronousConnectorCallLease, error)
+}
+
+// AcquireConnectionAccountWrite keeps a durable account write in the Action
+// prewrite phase. This prevents an Action database transaction from being held
+// while Integration durably claims the external effect on its own connection.
+func AcquireConnectionAccountWrite(execution ActionExecution) (SynchronousConnectorCallLease, error) {
+	accountWrite, ok := execution.(ConnectionAccountWriteExecution)
+	if !ok {
+		return nil, &BusinessError{Code: ConnectorActionExecutionRequiredErrorCode, Message: "Connection account write execution is unavailable"}
+	}
+	return accountWrite.AcquireConnectionAccountWrite()
+}
+
 func (p ExecutionPhase) Valid() bool {
 	switch p {
 	case ExecutionPhasePrewrite, ExecutionPhaseWriting, ExecutionPhaseCommitted, ExecutionPhaseRolledBack:

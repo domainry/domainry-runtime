@@ -21,6 +21,7 @@ func MutationVersion(before map[string]any, record recordmodel.Record) string {
 func LifecycleEventPayload(event automationmodel.AutomationLifecycleEvent) map[string]any {
 	return map[string]any{
 		"id": event.ID, "rule_key": event.RuleKey, "object_key": event.ObjectKey, "operation": event.Operation,
+		"rule":      event.Rule,
 		"record_id": event.RecordID, "record_version": event.RecordVersion, "before": recordcontract.RecordCloneData(event.Before),
 		"record":        map[string]any{"id": event.Record.ID, "data": recordcontract.RecordCloneData(event.Record.Data), "created_at": event.Record.CreatedAt, "updated_at": event.Record.UpdatedAt},
 		"actor_user_id": event.ActorUserID, "actor_role_key": event.ActorRoleKey, "request_id": event.RequestID,
@@ -33,6 +34,7 @@ func LifecycleEventFromPayload(payload map[string]any) automationmodel.Automatio
 	recordMap := mapFromAny(payload["record"])
 	return automationmodel.AutomationLifecycleEvent{
 		ID: strings.TrimSpace(fmt.Sprint(payload["id"])), RuleKey: strings.TrimSpace(fmt.Sprint(payload["rule_key"])),
+		Rule:      automationRuleFromAny(payload["rule"]),
 		ObjectKey: strings.TrimSpace(fmt.Sprint(payload["object_key"])), Operation: strings.TrimSpace(fmt.Sprint(payload["operation"])),
 		RecordID: strings.TrimSpace(fmt.Sprint(payload["record_id"])), RecordVersion: strings.TrimSpace(fmt.Sprint(payload["record_version"])),
 		Before: mapFromAny(payload["before"]), Record: recordmodel.Record{ID: strings.TrimSpace(fmt.Sprint(recordMap["id"])), Data: mapFromAny(recordMap["data"]), CreatedAt: strings.TrimSpace(fmt.Sprint(recordMap["created_at"])), UpdatedAt: strings.TrimSpace(fmt.Sprint(recordMap["updated_at"]))},
@@ -42,6 +44,18 @@ func LifecycleEventFromPayload(payload map[string]any) automationmodel.Automatio
 		AutomationDepth: intFromAny(payload["automation_depth"]), VisitedRuleKeys: stringSliceFromAny(payload["visited_rule_keys"]),
 		OccurredAt: strings.TrimSpace(fmt.Sprint(payload["occurred_at"])),
 	}
+}
+
+func automationRuleFromAny(value any) automationmodel.AutomationRuleSchema {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return automationmodel.AutomationRuleSchema{}
+	}
+	var rule automationmodel.AutomationRuleSchema
+	if json.Unmarshal(payload, &rule) != nil {
+		return automationmodel.AutomationRuleSchema{}
+	}
+	return rule
 }
 
 func intFromAny(value any) int {

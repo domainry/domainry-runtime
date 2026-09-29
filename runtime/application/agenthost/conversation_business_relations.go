@@ -109,7 +109,7 @@ func (h *ConversationBusinessHost) QueryRelatedBusinessRecords(ctx context.Conte
 			required = recordmodel.RecordFilterExpression{Field: "id", Operator: "is_null"}
 		}
 	}
-	query := agentsdk.ConversationBusinessQuery{ObjectKey: selected.ObjectKey, Fields: q.Fields, Filters: q.Filters, Sort: q.Sort, PageSize: q.PageSize, Cursor: q.Cursor}
+	query := agentsdk.ConversationBusinessQuery{ObjectKey: selected.ObjectKey, Fields: q.Fields, OptionalFields: q.OptionalFields, Filters: q.Filters, Sort: q.Sort, PageSize: q.PageSize, Cursor: q.Cursor}
 	// Bind continuation to the relationship as well as the target query. This
 	// is a position check, never a grant; current permissions apply every page.
 	scope := conversationBusinessDigest([]any{q.ObjectKey, q.RecordID, q.RelationKey, selected.ConversationBusinessRelation, required})

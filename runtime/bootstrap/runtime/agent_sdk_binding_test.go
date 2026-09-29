@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-agent-sdk/modulehost"
+	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -50,6 +52,31 @@ func (b *agentSDKBindingStub) Descriptor() agentsdk.Descriptor               { r
 func (b *agentSDKBindingStub) TaskRunner() agentsdk.TaskRunner               { return b.runner }
 func (b *agentSDKBindingStub) InteractiveRunner() agentsdk.InteractiveRunner { return b.runner }
 func (b *agentSDKBindingStub) Close(context.Context) error                   { b.closed = true; return nil }
+
+type agentDefinitionRepositoryStub struct {
+	snapshots []agentpersistence.DefinitionSnapshot
+}
+
+func (r *agentDefinitionRepositoryStub) SyncDefinitions(_ context.Context, snapshot agentpersistence.DefinitionSnapshot) error {
+	r.snapshots = append(r.snapshots, snapshot)
+	return nil
+}
+
+func (r *agentDefinitionRepositoryStub) DefinitionSnapshot(context.Context) (agentpersistence.DefinitionSnapshot, error) {
+	if len(r.snapshots) == 0 {
+		return agentpersistence.DefinitionSnapshot{}, nil
+	}
+	return r.snapshots[len(r.snapshots)-1], nil
+}
+
+type agentDefinitionBindingStub struct {
+	*agentSDKBindingStub
+	repository *agentDefinitionRepositoryStub
+}
+
+func (b *agentDefinitionBindingStub) DefinitionRepository() agentpersistence.DefinitionRepository {
+	return b.repository
+}
 
 type agentSDKModuleFactoryStub struct {
 	binding   agentsdk.Binding
@@ -140,5 +167,36 @@ func TestProjectDefinitionsUseAgentForEveryOwnedDefinitionCollection(t *testing.
 				t.Fatal("Agent-owned project definition did not require Agent Binding")
 			}
 		})
+	}
+}
+
+func TestSynchronizeAgentDefinitionsUsesDefinitionContentForImmutableVersion(t *testing.T) {
+	repository := &agentDefinitionRepositoryStub{}
+	binding := &agentDefinitionBindingStub{agentSDKBindingStub: &agentSDKBindingStub{}, repository: repository}
+	definitions := runtimeext.ProjectDefinitions{Agents: []agentsdk.AgentSchema{{Key: "assistant", Version: "1", Name: "Assistant"}}}
+	if err := synchronizeAgentDefinitions(t.Context(), binding, "crm", definitions); err != nil {
+		t.Fatal(err)
+	}
+	if err := synchronizeAgentDefinitions(t.Context(), binding, "crm", definitions); err != nil {
+		t.Fatal(err)
+	}
+	changed := definitions
+	changed.Agents = append([]agentsdk.AgentSchema(nil), definitions.Agents...)
+	changed.Agents[0].Name = "Changed assistant"
+	if err := synchronizeAgentDefinitions(t.Context(), binding, "crm", changed); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.snapshots) != 3 {
+		t.Fatalf("snapshots=%d", len(repository.snapshots))
+	}
+	first, replay, updated := repository.snapshots[0], repository.snapshots[1], repository.snapshots[2]
+	if first.SchemaVersion != replay.SchemaVersion || first.SchemaHash != replay.SchemaHash {
+		t.Fatalf("identical definitions changed identity: first=%q/%q replay=%q/%q", first.SchemaVersion, first.SchemaHash, replay.SchemaVersion, replay.SchemaHash)
+	}
+	if first.SchemaVersion == updated.SchemaVersion || first.SchemaHash == updated.SchemaHash {
+		t.Fatalf("changed definitions reused immutable identity: first=%q/%q updated=%q/%q", first.SchemaVersion, first.SchemaHash, updated.SchemaVersion, updated.SchemaHash)
+	}
+	if !strings.HasPrefix(first.SchemaVersion, agentDefinitionContractVersion+":") || first.SchemaVersion != agentDefinitionContractVersion+":"+first.SchemaHash {
+		t.Fatalf("schema version=%q hash=%q", first.SchemaVersion, first.SchemaHash)
 	}
 }

@@ -21,6 +21,7 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 		"example.com/domainry-project",
 		"github.com/domainry/domainry-connectors",
 		"github.com/domainry/domainry-integration",
+		"github.com/domainry/domainry-knowledge-sdk",
 		"github.com/domainry/domainry-monitoring",
 		"github.com/domainry/domainry-scheduler",
 	)
@@ -97,6 +98,7 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 		externalRoot,
 		"example.com/domainry-saas-project",
 		"github.com/domainry/domainry-integration",
+		"github.com/domainry/domainry-knowledge-sdk",
 		"github.com/domainry/domainry-scheduler",
 	)
 

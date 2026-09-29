@@ -56,9 +56,10 @@ func integrationMappingProjections(values []integrationsdk.EventMappingRequireme
 		}
 		result = append(result, appschemamodel.IntegrationEventMappingSchema{
 			Key: value.Key, Provider: value.Provider, EventType: value.EventType, CommandPrefix: value.CommandPrefix, TargetType: value.TargetType,
-			WorkflowKey: value.WorkflowKey, ObjectKey: value.ObjectKey, ObjectKeyPath: value.ObjectKeyPath, RecordID: value.RecordID, RecordIDPath: value.RecordIDPath,
+			WorkflowKey: value.WorkflowKey, AutomationRuleKey: value.AutomationRuleKey, ObjectKey: value.ObjectKey, ObjectKeyPath: value.ObjectKeyPath, RecordID: value.RecordID, RecordIDPath: value.RecordIDPath,
 			ActionKey: value.ActionKey, ActionKeyPath: value.ActionKeyPath, ActionInput: value.ActionInput, WorkflowInput: value.WorkflowInput,
-			AgentID: value.AgentID, ConversationID: value.ConversationID, AgentTaskMode: value.AgentTaskMode, RelatedTaskID: value.RelatedTaskID,
+			AutomationInput: value.AutomationInput,
+			AgentID:         value.AgentID, ConversationID: value.ConversationID, AgentTaskMode: value.AgentTaskMode, RelatedTaskID: value.RelatedTaskID,
 			RelatedTaskIDPath: value.RelatedTaskIDPath, AgentInput: value.AgentInput, EventFields: value.EventFields,
 			ExternalIdentity: value.ExternalIdentity, Payload: payload, Enabled: value.Enabled,
 		})

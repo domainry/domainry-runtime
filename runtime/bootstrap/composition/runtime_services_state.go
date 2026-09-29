@@ -135,6 +135,7 @@ type runtimeAssembly struct {
 	metadataLocalization                metadatasdk.Localization
 	automationWorkerRepo                automationcontract.AutomationWorkerStore
 	automationExecutionRepo             automationrepository.AutomationExecutionRepository
+	automationDefinitionRepo            automationcontract.AutomationRuleDefinitionStore
 	runtimeStatusRepo                   deploymentrepository.DeploymentRuntimeStatusRepository
 	identityProjection                  identitysdk.Projection
 	identityHandlerDeliveryBinder       identitysdk.HandlerDeliveryUnitOfWorkBinder

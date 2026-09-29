@@ -34,25 +34,26 @@ func TestAutomationOutputsAreOrderedTypedAndAliasScoped(t *testing.T) {
 func TestAutomationConditionsAndWorkflowInvocationsShareRuntimeContracts(t *testing.T) {
 	catalog := automationValidatorCatalog()
 	catalog.Workflows = []definitionmodel.WorkflowSchema{{
-		Key: "order.review", Enabled: true, TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "manual"},
-		InputFields: []definitionmodel.WorkflowInputField{{Key: "reason", Type: "text", Required: true}},
+		Key: "order.review", Enabled: true, TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "manual"}, IdempotencyKeys: []string{"request_key"},
+		InputFields: []definitionmodel.WorkflowInputField{{Key: "request_key", Type: "text", Required: true}, {Key: "reason", Type: "text", Required: true}},
+		Graph:       &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "review", Type: "approval"}}},
 	}}
 	validator := AutomationDefinitionValidator{Catalog: catalog}
 	rule := automationValidatorRule()
 	rule.Trigger.Phase = "after"
 	rule.Conditions = automationmodel.AutomationConditionGroup{Clauses: []automationmodel.AutomationConditionClause{{Reference: "$payload.amount", Operator: "gt", Value: true}}}
-	rule.Instructions = []automationmodel.AutomationInstructionSchema{{Key: "review", Type: "start_workflow", Config: map[string]any{"workflow_key": "order.review", "payload": map[string]any{"reason": "check"}}}}
+	rule.Instructions = []automationmodel.AutomationInstructionSchema{{Key: "review", Type: "request_human_review", Config: map[string]any{"workflow_key": "order.review", "payload": map[string]any{"request_key": "review-1", "reason": "check"}}}}
 	assertAutomationErrorCode(t, validator.Validate(t.Context(), rule), "backend.automation.condition_type_mismatch")
 
 	rule.Conditions = automationmodel.AutomationConditionGroup{Clauses: []automationmodel.AutomationConditionClause{{Reference: "$payload.unknown", Operator: "eq", Value: "x"}}}
 	assertAutomationErrorCode(t, validator.Validate(t.Context(), rule), "backend.automation.condition_reference_unknown")
 
 	rule.Conditions = automationmodel.AutomationConditionGroup{}
-	rule.Instructions[0].Config["payload"] = map[string]any{}
+	rule.Instructions[0].Config["payload"] = map[string]any{"request_key": "review-1"}
 	assertAutomationErrorCode(t, validator.Validate(t.Context(), rule), "backend.automation.workflow_input_required")
 
 	catalog.Workflows[0].Enabled = false
 	validator.Catalog = catalog
-	rule.Instructions[0].Config["payload"] = map[string]any{"reason": "check"}
+	rule.Instructions[0].Config["payload"] = map[string]any{"request_key": "review-1", "reason": "check"}
 	assertAutomationErrorCode(t, validator.Validate(t.Context(), rule), "backend.automation.workflow_workflow_disabled")
 }

@@ -190,7 +190,7 @@ func LoadWithProjectFile(projectFile string) (Config, Snapshot, error) {
 	for _, item := range os.Environ() {
 		name, _, _ := strings.Cut(item, "=")
 		base := strings.TrimSuffix(name, "_FILE")
-		if managedConfigName(name) && !known[base] && !identityModuleConfigName(base) {
+		if managedConfigName(name) && !known[base] && !sourceOwnedModuleConfigName(name, base) {
 			unknown = append(unknown, name)
 		}
 	}
@@ -311,6 +311,17 @@ func (c Config) Validate() error {
 	}
 	if c.RecordTimerBatchSize < 1 || c.RecordTimerBatchSize > 1000 {
 		return fmt.Errorf("RECORD_TIMER_BATCH_SIZE must be between 1 and 1000")
+	}
+	if c.IntegrationHealthAlertsEnabled {
+		if c.IntegrationHealthAlertPollInterval <= 0 || c.IntegrationHealthAlertPollInterval > time.Hour {
+			return fmt.Errorf("INTEGRATION_HEALTH_ALERT_POLL_INTERVAL must be positive and at most 1h")
+		}
+		if c.IntegrationHealthReadyDueLimit < 0 || c.IntegrationHealthFailedDueLimit < 0 || c.IntegrationHealthExpiredLeaseLimit < 0 || c.IntegrationHealthDeadLetterLimit < 0 || c.IntegrationHealthGoogleHTTP429HourLimit < 0 || c.IntegrationHealthGoogleGmailRateLimitHourLimit < 0 || c.IntegrationHealthFeishuRateLimitHourLimit < 0 || c.IntegrationHealthGoogleGmailHistoryGapHourLimit < 0 || c.IntegrationHealthGoogleQuotaUsedPercentLimit < 0 || c.IntegrationHealthGoogleQuotaUsedPercentLimit > 100 {
+			return fmt.Errorf("Integration health alert count limits cannot be negative and quota percent cannot exceed 100")
+		}
+		if c.IntegrationHealthQueueOldestAgeLimit <= 0 || c.IntegrationHealthGooglePushDelayLimit <= 0 || c.IntegrationHealthGoogleSyncDelayLimit <= 0 {
+			return fmt.Errorf("Integration health alert duration limits must be positive")
+		}
 	}
 	if c.EffectiveWorkerBatchSize() < 1 || c.EffectiveWorkerBatchSize() > 1000 {
 		return fmt.Errorf("WORKER_BATCH_SIZE must be between 1 and 1000")
@@ -439,7 +450,7 @@ func setConfigField(cfg *Config, definition Definition, raw string) error {
 }
 
 func configEnvName(field string) string {
-	overrides := map[string]string{"RuntimeVersion": "DOMAINRY_RUNTIME_VERSION", "Environment": "APP_ENV", "AppLocale": "APP_LOCALE", "DatabaseDSN": "DATABASE_DSN", "DBPath": "APP_DB_PATH", "IdentityRedirectURLs": "IDENTITY_REDIRECT_URLS", "MigrationSQL": "MIGRATION_SQL", "MigrationRestoreDrillSuccessAt": "MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT", "Port": "PORT"}
+	overrides := map[string]string{"RuntimeVersion": "DOMAINRY_RUNTIME_VERSION", "Environment": "APP_ENV", "AppLocale": "APP_LOCALE", "DatabaseDSN": "DATABASE_DSN", "DBPath": "APP_DB_PATH", "HTTPAPIKeyRateLimitPerMinute": "HTTP_API_KEY_RATE_LIMIT_PER_MINUTE", "IntegrationHealthGoogleHTTP429HourLimit": "INTEGRATION_HEALTH_GOOGLE_HTTP_429_HOUR_LIMIT", "IdentityRedirectURLs": "IDENTITY_REDIRECT_URLS", "MigrationSQL": "MIGRATION_SQL", "MigrationRestoreDrillSuccessAt": "MIGRATION_RESTORE_DRILL_LAST_SUCCESS_AT", "Port": "PORT"}
 	if value := overrides[field]; value != "" {
 		return value
 	}
@@ -536,6 +547,26 @@ func identityModuleConfigName(name string) bool {
 	case "AUTH_JWT_SECRET", "AUTH_JWT_ACTIVE_KID", "AUTH_DEFAULT_PASSWORD",
 		"IDENTITY_DATA_SECRET_KEY", "IDENTITY_DATA_ACTIVE_KEY_ID",
 		"IDENTITY_OPERATIONS_ACCESS_TOKEN", "IDENTITY_BROWSER_RETURN_URLS":
+		return true
+	default:
+		return false
+	}
+}
+
+// sourceOwnedModuleConfigName recognizes exact process-environment inputs that
+// are consumed by source-owned Modules before they are passed to Runtime. They
+// are intentionally not part of Runtime's Config: Runtime neither parses nor
+// owns their values. Keep this list exact so misspelled managed variables still
+// fail the unknown-configuration policy.
+func sourceOwnedModuleConfigName(name, base string) bool {
+	if identityModuleConfigName(base) {
+		return true
+	}
+	switch name {
+	case "INTEGRATION_GOOGLE_QUOTA_PROJECT_ID",
+		"INTEGRATION_GOOGLE_QUOTA_SERVICES",
+		"INTEGRATION_GOOGLE_QUOTA_CREDENTIALS_FILE",
+		"INTEGRATION_GOOGLE_QUOTA_TIMEOUT":
 		return true
 	default:
 		return false

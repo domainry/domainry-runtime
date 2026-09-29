@@ -5,6 +5,7 @@ import (
 	"errors"
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
+	"strings"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -150,10 +151,10 @@ func TestAutomationFacadeBeforeOutboxSimulationAndWorkflowProjection(t *testing.
 	if _, found, err := service.FindBeforeCreateReplay(t.Context(), definitionmodel.ObjectSchema{Key: "other"}, nil, principal); err != nil || found {
 		t.Fatalf("authorized replay found=%v err=%v", found, err)
 	}
-	if messages := service.AfterOutbox("order", "update", nil, recordmodel.Record{ID: "record-1"}, principalmodel.Principal{}); messages != nil {
+	if messages, err := service.AfterOutbox(t.Context(), "order", "update", nil, recordmodel.Record{ID: "record-1"}, principalmodel.Principal{}); messages != nil || err != nil {
 		t.Fatalf("unauthorized outbox=%#v", messages)
 	}
-	if messages := service.AfterOutbox("order", "update", nil, recordmodel.Record{ID: "record-1", Data: map[string]any{"status": "ready"}}, principal); len(messages) != 1 || messages[0].DedupKey == "" {
+	if messages, err := service.AfterOutbox(t.Context(), "order", "update", nil, recordmodel.Record{ID: "record-1", Data: map[string]any{"status": "ready"}}, principal); err != nil || len(messages) != 1 || messages[0].DedupKey == "" {
 		t.Fatalf("outbox=%#v", messages)
 	}
 
@@ -176,6 +177,37 @@ func TestAutomationFacadeBeforeOutboxSimulationAndWorkflowProjection(t *testing.
 	}
 	if _, err := AutomationWorkflowInstructionResult("workflow-a", run, errAutomationFacadeProbe); !errors.Is(err, errAutomationFacadeProbe) {
 		t.Fatalf("workflow err=%v", err)
+	}
+}
+
+func TestAutomationFacadeRunsOnlyMatchingEnabledWebhookRule(t *testing.T) {
+	rule := automationmodel.AutomationRuleSchema{
+		Key: "contact.webhook", ObjectKey: "order", Enabled: true,
+		Trigger: automationmodel.AutomationTriggerSchema{Phase: "webhook", Source: "crm", Operation: "contact.changed"},
+	}
+	registry := &automationFacadeRegistry{rules: map[string]automationmodel.AutomationRuleSchema{rule.Key: rule}}
+	service := newAutomationFacade(registry, &automationFacadeMetadataProbe{})
+	request := automationmodel.AutomationWebhookTriggerRequest{
+		RuleKey: rule.Key, EventID: "event-1", MappingKey: "contact-change", MappingRevision: strings.Repeat("a", 64),
+		Provider: "crm", EventType: "contact.changed", ExternalID: "provider-event-1", Input: map[string]any{"number": "C-1"},
+	}
+	trace, err := service.RunWebhookAutomation(t.Context(), request, automationFacadePrincipal())
+	if err != nil || trace.Status != "succeeded" || trace.RuleKey != rule.Key || trace.ExecutionID == "" || trace.NodeTraces[len(trace.NodeTraces)-1].NodeID != "webhook" {
+		t.Fatalf("trace=%#v err=%v", trace, err)
+	}
+	replay, err := service.RunWebhookAutomation(t.Context(), request, automationFacadePrincipal())
+	if err != nil || replay.ExecutionID != trace.ExecutionID {
+		t.Fatalf("webhook execution identity changed: first=%#v replay=%#v err=%v", trace, replay, err)
+	}
+	request.Provider = "other"
+	if _, err = service.RunWebhookAutomation(t.Context(), request, automationFacadePrincipal()); apperror.CodeOf(err) != "backend.automation.webhook_rule_not_found" {
+		t.Fatalf("mismatched provider error=%v", err)
+	}
+	rule.Enabled = false
+	registry.rules[rule.Key] = rule
+	request.Provider = "crm"
+	if _, err = service.RunWebhookAutomation(t.Context(), request, automationFacadePrincipal()); apperror.CodeOf(err) != "backend.automation.webhook_rule_not_found" {
+		t.Fatalf("paused rule error=%v", err)
 	}
 }
 
@@ -203,7 +235,7 @@ func TestAutomationFacadeExecuteOutboxValidatesScopeRuleAndExecutes(t *testing.T
 		return notificationmodel.NotificationEvent{EventType: intent.EventType}, nil
 	}
 	service.commitNotification = automationNotificationCommitterStub{}
-	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{RuleKey: "after", RecordVersion: "v2", Record: recordmodel.Record{ID: "record-1", Data: map[string]any{"status": "ready"}}, ActorUserID: "user", ActorRoleKey: "role", RequestID: "request"})}
+	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{RuleKey: "after", Rule: afterRule, RecordVersion: "v2", Record: recordmodel.Record{ID: "record-1", Data: map[string]any{"status": "ready"}}, ActorUserID: "user", ActorRoleKey: "role", RequestID: "request"})}
 	if err := service.ExecuteOutboxMessage(t.Context(), message); err != nil {
 		t.Fatal(err)
 	}
@@ -215,10 +247,10 @@ func TestAutomationFacadeExecuteOutboxValidatesScopeRuleAndExecutes(t *testing.T
 		t.Fatalf("scope err=%v", err)
 	}
 	message.WorkspaceID = "workspace-1"
-	for _, key := range []string{"missing", "disabled", "before"} {
-		message.Payload = automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{RuleKey: key})
+	for _, invalidRule := range []automationmodel.AutomationRuleSchema{{Key: "missing"}, registry.rules["disabled"], registry.rules["before"]} {
+		message.Payload = automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{RuleKey: invalidRule.Key, Rule: invalidRule})
 		if err := service.ExecuteOutboxMessage(t.Context(), message); apperror.CodeOf(err) != "backend.automation.after_rule_not_found" {
-			t.Fatalf("key=%s err=%v", key, err)
+			t.Fatalf("key=%s err=%v", invalidRule.Key, err)
 		}
 	}
 }
@@ -230,12 +262,12 @@ func TestAutomationAfterInstructionCanRenderStableEventID(t *testing.T) {
 		Instructions: []automationmodel.AutomationInstructionSchema{{
 			Key: "invoke", Type: "invoke_business_action", Config: map[string]any{
 				"action_key": "order.complete",
-				"input":      map[string]any{"idempotency_key": "$event.id"},
+				"input":      map[string]any{"idempotency_key": "$event.id", "expected_updated_at": "$record.updated_at"},
 			},
 		}},
 	}
 	registry := &automationFacadeRegistry{rules: map[string]automationmodel.AutomationRuleSchema{rule.Key: rule}}
-	var got string
+	var gotEventID, gotRevision string
 	service := NewAutomationApplicationService(AutomationApplicationDependencies{
 		Rules: registry,
 		WorkerStore: instructionRepositoryStub{
@@ -252,20 +284,22 @@ func TestAutomationAfterInstructionCanRenderStableEventID(t *testing.T) {
 			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: userID}}, accessfixture.Bundle{Key: roleKey, Permissions: []string{"order.complete"}})
 		},
 		InvokeAction: func(_ context.Context, invocation actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
-			got, _ = invocation.Input["idempotency_key"].(string)
+			gotEventID, _ = invocation.Input["idempotency_key"].(string)
+			gotRevision, _ = invocation.Input["expected_updated_at"].(string)
 			return actionmodel.ActionInvocationResult{InvocationID: "completed"}, nil
 		},
 	})
 	eventID := "automation:after:order:order-1:update:v1"
+	revision := "2026-09-29T08:00:00Z"
 	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
-		ID: eventID, RuleKey: rule.Key, RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "ready"}, UpdatedAt: "v1"},
+		ID: eventID, RuleKey: rule.Key, Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "ready"}, UpdatedAt: revision},
 		ActorUserID: "user", ActorRoleKey: "role", RequestID: "request", IdentityPolicy: "revalidate_initiator",
 	})}
 	if err := service.ExecuteOutboxMessage(t.Context(), message); err != nil {
 		t.Fatal(err)
 	}
-	if got != eventID {
-		t.Fatalf("rendered event id=%q want=%q", got, eventID)
+	if gotEventID != eventID || gotRevision != revision {
+		t.Fatalf("rendered event id=%q revision=%q, want %q %q", gotEventID, gotRevision, eventID, revision)
 	}
 }
 
@@ -281,6 +315,7 @@ func TestAutomationAfterOutboxRevalidatesIdentityAndRejectsLoopsAndDepth(t *test
 	})
 	message := func(event automationmodel.AutomationLifecycleEvent) publicationmodel.Message {
 		event.RuleKey, event.RecordVersion = "after", "v1"
+		event.Rule = rule
 		event.Record = recordmodel.Record{ID: "record", Data: map[string]any{}}
 		event.ActorUserID, event.ActorRoleKey = "user", "operator"
 		if event.IdentityPolicy == "" {
@@ -339,7 +374,7 @@ func TestQueuedAutomationRevalidatesCurrentActionPermissionInsteadOfFreezingRole
 		},
 	})
 	event := automationmodel.AutomationLifecycleEvent{
-		RuleKey: rule.Key, RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "ready"}},
+		RuleKey: rule.Key, Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "ready"}},
 		ActorUserID: "operator-a", ActorRoleKey: "operator", IdentityPolicy: "revalidate_initiator",
 	}
 	message := publicationmodel.Message{WorkspaceID: "workspace-a", Payload: automationbusiness.LifecycleEventPayload(event)}
@@ -388,7 +423,7 @@ func TestAutomationFacadeExecutesPureBeforeConditionAndDerivationWithoutIO(t *te
 	if _, err := service.RunBefore(t.Context(), "order", "create", "record-1", nil, nil, map[string]any{}, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization err=%v", err)
 	}
-	service.workflows = automationFacadeWorkflowProbe{run: workflowmodel.WorkflowRunResult{Execution: workflowmodel.WorkflowExecution{ID: "workflow-execution", Status: "completed"}}}
+	service.workflows = automationFacadeWorkflowProbe{run: workflowmodel.WorkflowRunResult{Execution: workflowmodel.WorkflowExecution{ID: "workflow-execution", Status: "waiting"}, Status: "waiting"}}
 	service.invokeAction = func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
 		return actionmodel.ActionInvocationResult{InvocationID: "action-invocation", Output: map[string]any{"ok": true}}, nil
 	}
@@ -396,6 +431,7 @@ func TestAutomationFacadeExecutesPureBeforeConditionAndDerivationWithoutIO(t *te
 	for _, instruction := range []automationmodel.AutomationInstructionSchema{
 		{Key: "action", Type: "invoke_business_action", Config: map[string]any{"action_key": "order.normalize"}},
 		{Key: "workflow", Type: "start_workflow", Config: map[string]any{"workflow_key": "flow", "payload": map[string]any{"id": "${payload.id}"}}},
+		{Key: "review", Type: "request_human_review", Config: map[string]any{"workflow_key": "flow", "payload": map[string]any{"id": "${payload.id}"}}},
 		{Key: "event", Type: "emit_event", Config: map[string]any{"event": "done"}},
 	} {
 		if result, err := service.executeInstruction(t.Context(), rule, instruction, actionContext, nil, principal); err != nil || result.Status != "success" {

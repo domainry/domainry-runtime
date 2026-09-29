@@ -29,6 +29,7 @@ type AutomationRuleExecutor func(context.Context, automationmodel.AutomationRule
 
 type AutomationManagementDependencies struct {
 	Rules              automationcontract.AutomationRuleRegistry
+	Definitions        automationcontract.AutomationRuleDefinitionStore
 	Executions         automationrepository.AutomationExecutionRepository
 	ListInvocations    func(context.Context, string, automationmodel.AutomationExecutionFilter) ([]integrationsdk.Invocation, error)
 	ListOutbox         func(context.Context, string) ([]publicationmodel.Message, error)
@@ -36,6 +37,7 @@ type AutomationManagementDependencies struct {
 	Connectors         func(context.Context, principalmodel.Principal) []connectormodel.ConnectorSchema
 	ValidateDefinition func(context.Context, automationmodel.AutomationRuleSchema) error
 	ExecuteRule        AutomationRuleExecutor
+	Audit              AutomationAuditAppender
 }
 
 // AutomationManagementApplicationService coordinates automation administration across Automation, Integration and Capability owners.
@@ -75,7 +77,14 @@ func (s *AutomationManagementApplicationService) Rules(ctx context.Context, prin
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	rules := s.dependencies.Rules.List()
+	managed, err := s.ManagedRules(ctx, principal)
+	if err != nil {
+		return nil, err
+	}
+	rules := make([]automationmodel.AutomationRuleSchema, 0, len(managed))
+	for _, item := range managed {
+		rules = append(rules, item.AutomationRuleSchema)
+	}
 	sort.Slice(rules, func(i, j int) bool { return rules[i].Key < rules[j].Key })
 	return rules, nil
 }
@@ -87,11 +96,14 @@ func (s *AutomationManagementApplicationService) Rule(ctx context.Context, ruleK
 	if err := ctx.Err(); err != nil {
 		return automationmodel.AutomationRuleSchema{}, err
 	}
-	rule, ok := s.dependencies.Rules.Get(strings.TrimSpace(ruleKey))
-	if !ok {
+	rule, found, err := s.ManagedRule(ctx, strings.TrimSpace(ruleKey), principal)
+	if err != nil {
+		return automationmodel.AutomationRuleSchema{}, err
+	}
+	if !found {
 		return automationmodel.AutomationRuleSchema{}, managementError(apperror.KindNotFound, "backend.automation.not_found", nil)
 	}
-	return rule, nil
+	return rule.AutomationRuleSchema, nil
 }
 
 func (s *AutomationManagementApplicationService) ExecutionHistory(ctx context.Context, filter automationmodel.AutomationExecutionFilter, principal principalmodel.Principal) (automationprojection.AutomationExecutionHistory, error) {

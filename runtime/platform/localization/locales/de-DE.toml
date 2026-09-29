@@ -134,6 +134,10 @@
 "notification.integration.credential.refreshFailed.body" = "Die Provider-Anmeldedaten konnten nicht aktualisiert werden. Prüfen Sie den sicheren Fehlercode."
 "notification.integration.credential.recovered.title" = "Anmeldedaten wiederhergestellt: {{credential_name}}"
 "notification.integration.credential.recovered.body" = "Die Anmeldedaten sind wieder gültig und der vorherige Alarm ist behoben."
+"notification.integration.health.degraded.title" = "Integrations-SLA verletzt: {{metric_name}}"
+"notification.integration.health.degraded.body" = "Der Messwert {{observed_value}} {{unit}} überschreitet am {{observed_at}} den Grenzwert von {{threshold}} {{unit}}."
+"notification.integration.health.recovered.title" = "Integrationsstatus wiederhergestellt: {{metric_name}}"
+"notification.integration.health.recovered.body" = "Der Messwert {{observed_value}} {{unit}} liegt am {{observed_at}} wieder innerhalb des Grenzwerts von {{threshold}} {{unit}}."
 
 # Frontend runtime flat resources
 "connector.blockedBeforeActivation" = "Vor Aktivierung blockiert"

@@ -9,6 +9,7 @@ import (
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
@@ -67,6 +68,48 @@ func TestModuleHTTPRouteAuthorizationUsesDeclaredPermissionPolicy(t *testing.T) 
 				t.Fatalf("status=%d executed=%t want status=%d executed=%t", status, executed, test.want, test.executed)
 			}
 		})
+	}
+}
+
+func TestGuardAuthenticatedModuleHTTPRouteUsesRuntimeAPIKeyPrincipal(t *testing.T) {
+	route := modulehttp.Route{Action: moduleHTTPTestAction("module.resource.read", actioncontract.AuthorizationAuthenticated, true)}
+	registry := actioncontract.NewRegistry()
+	if err := registry.Register(route.Action); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Freeze(); err != nil {
+		t.Fatal(err)
+	}
+	principal := moduleHTTPAuthorizationPrincipal("module.resource.read")
+	principal.WorkspaceID = "workspace-a"
+	principal.UserID = "service-a"
+	principal.Known = true
+	calls := 0
+	router := NewHTTPRouter(HTTPRouterConfig{}, HTTPRouterDependencies{
+		AuthorizationActions: func() *actioncontract.Registry { return registry },
+		IntegrationAuthentication: integrationAuthenticationStub{
+			principal: principal,
+			key:       integrationsdk.APIKey{Key: "module-reader", Scopes: []string{"module.resource.read"}},
+			calls:     &calls,
+		},
+	})
+	guarded, err := router.GuardAuthenticatedModuleHTTPRoute(route, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		resolved, ok := identitysdk.PrincipalFromContext(request.Context())
+		if !ok || resolved.UserID != "service-a" || !resolved.HasPermission("module.resource.read") {
+			t.Fatalf("module route did not receive the API-key principal: %#v", resolved)
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/module-resource", nil)
+	request.Header.Set("X-API-Key", "itg_private")
+	request.Header.Set("X-Workspace-ID", "workspace-a")
+	response := httptest.NewRecorder()
+	guarded.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || calls != 1 {
+		t.Fatalf("status=%d calls=%d body=%s", response.Code, calls, response.Body.String())
 	}
 }
 

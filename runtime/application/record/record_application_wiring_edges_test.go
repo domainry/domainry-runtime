@@ -53,9 +53,9 @@ func TestNewRecordApplicationServiceWiresOptionalCallbacks(t *testing.T) {
 			counts["before"]++
 			return nil
 		},
-		AfterOutbox: func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message {
+		AfterOutbox: func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error) {
 			counts["outbox"]++
-			return []publicationmodel.Message{{ID: "outbox-1"}}
+			return []publicationmodel.Message{{ID: "outbox-1"}}, nil
 		},
 		BuildAudit: func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) auditmodel.AuditEvent {
 			counts["build_audit"]++
@@ -78,7 +78,7 @@ func TestNewRecordApplicationServiceWiresOptionalCallbacks(t *testing.T) {
 	if err := service.create.dependencies.RunBefore(t.Context(), object.Key, "create", record.ID, nil, nil, record.Data, principal); err != nil {
 		t.Fatal(err)
 	}
-	if outbox := service.create.dependencies.AfterOutbox(object.Key, "create", nil, record, principal); len(outbox) != 1 {
+	if outbox, err := service.create.dependencies.AfterOutbox(t.Context(), object.Key, "create", nil, record, principal); err != nil || len(outbox) != 1 {
 		t.Fatalf("outbox=%#v", outbox)
 	}
 	if _, err := service.create.dependencies.PrepareWorkflow(t.Context(), object.Key, record, nil, principal, "trigger"); err != nil {

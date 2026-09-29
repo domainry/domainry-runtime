@@ -50,4 +50,26 @@ func (h *ConversationBusinessHost) ValidateKnowledgeLibraryMember(ctx context.Co
 	return nil
 }
 
+// AuthorizeKnowledgeDocumentSource keeps source-backed library documents under
+// the current Runtime record policy. Shared-library membership is necessary but
+// never sufficient to read a meeting transcript or another CRM-derived file.
+func (h *ConversationBusinessHost) AuthorizeKnowledgeDocumentSource(ctx context.Context, source agentsdk.KnowledgeDocumentSourceAccess, authority agentsdk.ConversationAuthority) error {
+	if source.Namespace != agentsdk.KnowledgeDocumentSourceNamespaceRuntimeRecord || source.ResourceType == "" || source.ResourceID == "" {
+		return &agentsdk.Error{Class: "forbidden", Code: "agent.conversation.document_source_access_denied"}
+	}
+	principal, err := h.principal(ctx, authority)
+	if err != nil {
+		return err
+	}
+	record, err := h.records.GetRecord(ctx, source.ResourceType, source.ResourceID, principal)
+	if err != nil {
+		return conversationBusinessReadError(err)
+	}
+	if record.ID != source.ResourceID {
+		return &agentsdk.Error{Class: "forbidden", Code: "agent.conversation.document_source_access_denied"}
+	}
+	return nil
+}
+
 var _ agentsdk.KnowledgeLibraryAuthorizer = (*ConversationBusinessHost)(nil)
+var _ agentsdk.KnowledgeDocumentSourceAuthorizer = (*ConversationBusinessHost)(nil)

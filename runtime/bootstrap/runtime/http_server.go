@@ -2,9 +2,11 @@ package runtime
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
+	"github.com/domainry/domainry-foundation/modulehttp"
 	transportbootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/transport"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
@@ -54,6 +56,15 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 
 func (a *Runtime) Routes() http.Handler {
 	return a.api.Routes()
+}
+
+// GuardAuthenticatedModuleHTTPRoute lets runtimehost mount an in-process
+// module ahead of Routes() without replacing Runtime authentication semantics.
+func (a *Runtime) GuardAuthenticatedModuleHTTPRoute(route modulehttp.Route, next http.Handler) (http.Handler, error) {
+	if a == nil || a.api == nil {
+		return nil, fmt.Errorf("Runtime HTTP router is unavailable")
+	}
+	return a.api.GuardAuthenticatedModuleHTTPRoute(route, next)
 }
 
 // RoutesForListenerGroup is a transport attachment helper. It remains a

@@ -47,7 +47,7 @@ type RecordCreateDependencies struct {
 	ValidatePolicies      func(context.Context, definitionmodel.ObjectSchema, map[string]any, map[string]any, string, string, principalmodel.Principal) error
 	ValidateUnique        func(context.Context, string, string, definitionmodel.ObjectSchema, string, map[string]any) error
 	ValidateDuplicate     func(context.Context, string, definitionmodel.ObjectSchema, string, map[string]any) error
-	AfterOutbox           func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message
+	AfterOutbox           func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error)
 	PrepareWorkflow       func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error)
 	ExecuteWorkflow       func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
 	Audit                 func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
@@ -316,7 +316,10 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 		commit.Audit = &audit
 	}
 	if s.dependencies.AfterOutbox != nil {
-		commit.Outbox = s.dependencies.AfterOutbox(objectKey, "create", nil, record, principal)
+		commit.Outbox, err = s.dependencies.AfterOutbox(ctx, objectKey, "create", nil, record, principal)
+		if err != nil {
+			return recordCreatePlannedMutation{}, err
+		}
 	}
 	if s.dependencies.PrepareWorkflow != nil {
 		intents, err := s.dependencies.PrepareWorkflow(ctx, objectKey, record, nil, principal, "record_created:"+objectKey)

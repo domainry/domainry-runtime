@@ -72,8 +72,8 @@ func TestRecordUpdatePipelineStageAndOptionalShortCircuitEdges(t *testing.T) {
 	regularRepository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "before", "status": "open", "version": float64(1)}}}
 	regular := recordUpdateEdgeDependencies(regularRepository)
 	regular.RunBefore = nil
-	regular.AfterOutbox = func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message {
-		return nil
+	regular.AfterOutbox = func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error) {
+		return nil, nil
 	}
 	regular.UpdatedTriggers = func(string, map[string]any, map[string]any) []string {
 		return []string{"record_updated:customer.status"}

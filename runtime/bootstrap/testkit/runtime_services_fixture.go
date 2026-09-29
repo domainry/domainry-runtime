@@ -142,6 +142,7 @@ func focusedPersistenceDependencies(ctx context.Context, config RuntimeServicesC
 		ApplicationSchema:                   appschemapersistence.NewApplicationSchemaStore(config.Store),
 		AutomationWorker:                    automationpersistence.NewAutomationWorkerStore(config.Store),
 		AutomationExecutions:                automationpersistence.NewAutomationExecutionStore(config.Store),
+		AutomationDefinitions:               automationpersistence.NewAutomationRuleDefinitionStore(config.Store),
 		ActionExecutions:                    actionpersistence.NewActionBusinessExecutionStore(config.Store),
 		ActionAssurance:                     actionpersistence.NewActionAssuranceStore(config.Store),
 		RuntimeStatus:                       deploymentpersistence.NewRuntimeStatusStore(config.Store),

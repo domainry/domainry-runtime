@@ -283,6 +283,7 @@ func (s *RecordImportApplicationService) appendPreviewRow(ctx context.Context, o
 		}
 		row.Data[fieldKey] = coerced
 	}
+	recordpolicy.RecordApplyFieldDefaults(object, row.Data)
 	normalized, err := recordvalidation.RecordNormalizeData(object, row.Data, false)
 	if err != nil {
 		row.Issues = append(row.Issues, importRowIssueFromError("", err))

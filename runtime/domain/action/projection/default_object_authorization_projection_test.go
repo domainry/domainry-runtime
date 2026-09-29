@@ -13,7 +13,7 @@ func TestDefaultObjectAuthorizationActionsOwnExactPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(definitions) != 5 {
+	if len(definitions) != 6 {
 		t.Fatalf("definitions=%d", len(definitions))
 	}
 	registry := actioncontract.NewRegistry()

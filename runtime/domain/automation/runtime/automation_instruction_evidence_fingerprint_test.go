@@ -23,3 +23,14 @@ func TestAutomationFingerprintsAreStableForEquivalentUnicode(t *testing.T) {
 		t.Fatal("nil/zero record fingerprint fallback failed")
 	}
 }
+
+func TestAutomationRecordVersionKeepsMutationFingerprintSeparateFromRevision(t *testing.T) {
+	record := recordmodel.Record{ID: "record-1", UpdatedAt: "2026-09-29T08:00:00Z"}
+	AutomationBindRecordVersion(&record, "mutation-fingerprint")
+	if got := AutomationRecordVersion(&record); got != "mutation-fingerprint" {
+		t.Fatalf("record version=%q", got)
+	}
+	if record.UpdatedAt != "2026-09-29T08:00:00Z" {
+		t.Fatalf("record revision was overwritten: %q", record.UpdatedAt)
+	}
+}

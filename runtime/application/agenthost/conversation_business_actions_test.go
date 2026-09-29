@@ -63,7 +63,7 @@ func TestConversationBusinessActionValidatesContractConfirmationAndReconciliatio
 	q := agentsdk.ConversationBusinessAction{ObjectKey: "customer", ActionKey: action.Key, Version: page.Actions[0].ExecutionVersion, RecordID: "own-1", Data: json.RawMessage(`{"name":"New Name","expected_updated_at":"2026-09-10T01:00:00Z"}`)}
 	confirmed := func(q agentsdk.ConversationBusinessAction) agentsdk.ConversationBusinessActionRequest {
 		raw, _ := json.Marshal(q)
-		return agentsdk.ConversationBusinessActionRequest{Authority: a, Action: q, Arguments: string(raw), ConversationID: "conversation", RunID: "run", CallID: "call", IdempotencyKey: "stable-call-key", Confirmation: &agentsdk.ConversationConfirmation{ID: "actual-confirmation", UserID: a.UserID, ActionKey: agentsdk.ConversationToolActionPrefix + "invoke_action", ToolVersion: "1", ArgumentsHash: conversationBusinessDigest(string(raw)), ApprovedAt: time.Now().UTC()}}
+		return agentsdk.ConversationBusinessActionRequest{Authority: a, Action: q, ToolActionKey: agentsdk.ConversationToolActionPrefix + "invoke_action", ToolVersion: "1", Arguments: string(raw), ConversationID: "conversation", RunID: "run", CallID: "call", IdempotencyKey: "stable-call-key", Confirmation: &agentsdk.ConversationConfirmation{ID: "actual-confirmation", UserID: a.UserID, ActionKey: agentsdk.ConversationToolActionPrefix + "invoke_action", ToolVersion: "1", ArgumentsHash: conversationBusinessDigest(string(raw)), ApprovedAt: time.Now().UTC()}}
 	}
 	for _, field := range []string{"version", "target", "confirmation", "actor", "arguments", "payload", "concurrency", "metadata", "empty-contract"} {
 		t.Run(field, func(t *testing.T) {
@@ -132,5 +132,60 @@ func TestConversationBusinessActionValidatesContractConfirmationAndReconciliatio
 	port.inspection = actionapplication.ActionInvocationInspection{}
 	if result, err := host.ReconcileBusinessAction(t.Context(), request); err != nil || result.Status != "completed" || port.invokes != 2 {
 		t.Fatal("conclusively absent action did not use guarded invocation", result, err)
+	}
+}
+
+func TestConversationResolvedBusinessActionBindsSpecializedToolConfirmation(t *testing.T) {
+	host, resolver, reads, authority := newConversationBusinessFixture(t)
+	permissions := []string{"customer.read", "customer.rename"}
+	resolver.principal = accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: authority.UserID, WorkspaceID: authority.WorkspaceID}}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeOwner), FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "customer", FieldKey: "name", Read: true}}})
+	definition := definitionmodel.ActionSchema{Key: "customer.rename", ObjectKey: "customer", Kind: "record_update", PayloadFields: []definitionmodel.ActionPayloadField{{Key: "name", Type: "text", Required: true}}}
+	port := &businessActionPortProbe{definitions: []definitionmodel.ActionSchema{definition}}
+	if err := WithConversationBusinessActions(port)(host); err != nil {
+		t.Fatal(err)
+	}
+	if err := WithConversationBusinessEvidenceKey([]byte(strings.Repeat("r", 32)))(host); err != nil {
+		t.Fatal(err)
+	}
+	host.schema = appschemaapplication.NewApplicationSchemaQueryApplicationService(businessSchemaSnapshot{appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{reads.object}, Actions: port.definitions}}, nil)
+	resolved, auth, err := host.ResolveBusinessAction(t.Context(), agentsdk.ConversationBusinessActionIntent{
+		ObjectKey: "customer", ActionKey: definition.Key, RecordID: "own-1", Data: json.RawMessage(`{"name":"Specialized Name"}`),
+	}, authority)
+	if err != nil || !auth.Granted || resolved.Version == "" {
+		t.Fatalf("resolved=%+v auth=%+v err=%v", resolved, auth, err)
+	}
+	arguments := `{"customer_id":"own-1","name":"Specialized Name"}`
+	request := agentsdk.ConversationBusinessActionRequest{
+		Authority: authority, Action: resolved, ToolActionKey: agentsdk.ConversationToolActionPrefix + "crm_update_customer", ToolVersion: "3",
+		Arguments: arguments, ConversationID: "conversation", RunID: "run", CallID: "call", IdempotencyKey: "specialized-key",
+		Confirmation: &agentsdk.ConversationConfirmation{
+			ID: "confirmation", UserID: authority.UserID, ActionKey: agentsdk.ConversationToolActionPrefix + "crm_update_customer",
+			ToolVersion: "3", ArgumentsHash: conversationBusinessDigest(arguments), ApprovedAt: time.Now().UTC(),
+		},
+	}
+	if _, err = host.InvokeBusinessAction(t.Context(), request); err == nil || port.invokes != 0 {
+		t.Fatal("RPC-exposed generic Action accepted specialized arguments")
+	}
+	result, err := host.InvokeResolvedBusinessAction(t.Context(), request)
+	if err != nil || result.Status != "completed" || port.invokes != 1 || port.last.Input["name"] != "Specialized Name" {
+		t.Fatalf("result=%+v invocation=%+v err=%v", result, port.last, err)
+	}
+	for _, mutate := range []func(*agentsdk.ConversationBusinessActionRequest){
+		func(r *agentsdk.ConversationBusinessActionRequest) {
+			r.Confirmation.ActionKey = agentsdk.ConversationToolActionPrefix + "another_tool"
+		},
+		func(r *agentsdk.ConversationBusinessActionRequest) { r.Arguments += " " },
+		func(r *agentsdk.ConversationBusinessActionRequest) {
+			r.ToolActionKey = agentsdk.ConversationToolActionPrefix + "invoke_action"
+			r.Confirmation.ActionKey = r.ToolActionKey
+		},
+	} {
+		bad := request
+		confirmation := *request.Confirmation
+		bad.Confirmation = &confirmation
+		mutate(&bad)
+		if _, err = host.InvokeResolvedBusinessAction(t.Context(), bad); err == nil || port.invokes != 1 {
+			t.Fatal("invalid specialized confirmation reached Action execution")
+		}
 	}
 }

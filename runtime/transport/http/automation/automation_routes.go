@@ -8,4 +8,8 @@ func (h *AutomationHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /automation/executions", h.listAutomationExecutions)
 	mux.HandleFunc("GET /automation/rules/{ruleKey}", h.getAutomationRule)
 	mux.HandleFunc("POST /automation/rules/{ruleKey}/simulate", h.simulateAutomationRule)
+	mux.HandleFunc("PUT /automation/rules/{ruleKey}/draft", h.saveAutomationRuleDraft)
+	mux.HandleFunc("POST /automation/rules/{ruleKey}/draft/discard", h.discardAutomationRuleDraft)
+	mux.HandleFunc("POST /automation/rules/{ruleKey}/publish", h.publishAutomationRuleDraft)
+	mux.HandleFunc("POST /automation/rules/{ruleKey}/state", h.setAutomationRuleState)
 }

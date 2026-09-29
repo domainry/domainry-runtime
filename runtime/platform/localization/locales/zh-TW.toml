@@ -134,6 +134,10 @@
 "notification.integration.credential.refreshFailed.body" = "無法重新整理供應商憑據，請檢查安全錯誤碼，並在需要時重新連線。"
 "notification.integration.credential.recovered.title" = "憑據已恢復：{{credential_name}}"
 "notification.integration.credential.recovered.body" = "憑據已重新有效，先前的告警已關閉。"
+"notification.integration.health.degraded.title" = "整合健康 SLA 已超限：{{metric_name}}"
+"notification.integration.health.degraded.body" = "{{observed_at}} 觀測到 {{observed_value}} {{unit}}，超過上限 {{threshold}} {{unit}}。"
+"notification.integration.health.recovered.title" = "整合健康已恢復：{{metric_name}}"
+"notification.integration.health.recovered.body" = "{{observed_at}} 觀測到 {{observed_value}} {{unit}}，已回到上限 {{threshold}} {{unit}}以內。"
 
 # Frontend runtime flat resources
 "connector.blockedBeforeActivation" = "啟用前阻擋"

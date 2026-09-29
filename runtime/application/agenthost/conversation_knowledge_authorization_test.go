@@ -59,3 +59,22 @@ func TestConversationKnowledgeCurrentVersionedToolDefinitionsAreAuthorized(t *te
 		}
 	}
 }
+
+func TestConversationKnowledgeDocumentSourceUsesCurrentRecordReadPolicy(t *testing.T) {
+	host, _, _, actor := newConversationBusinessFixture(t)
+	source := agent.KnowledgeDocumentSourceAccess{
+		Namespace: agent.KnowledgeDocumentSourceNamespaceRuntimeRecord, ResourceType: "customer", ResourceID: "own-1",
+	}
+	if err := host.AuthorizeKnowledgeDocumentSource(t.Context(), source, actor); err != nil {
+		t.Fatal("owned source record rejected", err)
+	}
+	source.ResourceID = "other-owner"
+	if err := host.AuthorizeKnowledgeDocumentSource(t.Context(), source, actor); err == nil {
+		t.Fatal("foreign source record authorized")
+	}
+	source.ResourceID = "own-1"
+	source.Namespace = "untrusted"
+	if err := host.AuthorizeKnowledgeDocumentSource(t.Context(), source, actor); err == nil {
+		t.Fatal("unknown source namespace authorized")
+	}
+}

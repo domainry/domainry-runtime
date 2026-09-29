@@ -134,6 +134,10 @@
 "notification.integration.credential.refreshFailed.body" = "无法刷新供应商凭据，请检查安全错误码，并在需要时重新连接。"
 "notification.integration.credential.recovered.title" = "凭据已恢复：{{credential_name}}"
 "notification.integration.credential.recovered.body" = "凭据已重新有效，之前的告警已关闭。"
+"notification.integration.health.degraded.title" = "集成健康 SLA 已超限：{{metric_name}}"
+"notification.integration.health.degraded.body" = "{{observed_at}} 观测到 {{observed_value}} {{unit}}，超过上限 {{threshold}} {{unit}}。"
+"notification.integration.health.recovered.title" = "集成健康已恢复：{{metric_name}}"
+"notification.integration.health.recovered.body" = "{{observed_at}} 观测到 {{observed_value}} {{unit}}，已回到上限 {{threshold}} {{unit}}以内。"
 
 # Frontend runtime flat resources
 "connector.blockedBeforeActivation" = "启用前阻断"

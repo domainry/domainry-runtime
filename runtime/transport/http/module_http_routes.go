@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -38,6 +39,28 @@ func (s *HTTPRouter) registerModuleHTTPRoutes(mux *http.ServeMux) {
 		}
 		mux.Handle(identity, s.moduleHTTPRouteHandler(binding))
 	}
+}
+
+// GuardAuthenticatedModuleHTTPRoute applies the Runtime's canonical business
+// authentication and Action authorization to a module route mounted by the
+// process host. The process host sits in front of Routes(), so authenticated
+// module routes mounted there must use this bridge or they would only see the
+// Identity session middleware and could never receive an Integration API-key
+// principal.
+func (s *HTTPRouter) GuardAuthenticatedModuleHTTPRoute(route modulehttp.Route, next http.Handler) (http.Handler, error) {
+	if s == nil || next == nil {
+		return nil, fmt.Errorf("authenticated module HTTP route guard is incomplete")
+	}
+	if err := modulehttp.ValidateRoute(route); err != nil {
+		return nil, err
+	}
+	if route.Action.Authorization.Strategy != actioncontract.AuthorizationAuthenticated {
+		return nil, fmt.Errorf("module HTTP route %q is not authenticated", route.Action.Key)
+	}
+	mux := http.NewServeMux()
+	binding := moduleHTTPRoute{route: route, handler: next, owner: strings.TrimSpace(route.Action.Owner)}
+	mux.Handle(route.Pattern(), s.moduleHTTPRouteHandler(binding))
+	return s.withAuth(mux, s.withActionAuthorization(mux, mux)), nil
 }
 
 func (s *HTTPRouter) moduleHTTPRouteHandler(binding moduleHTTPRoute) http.Handler {

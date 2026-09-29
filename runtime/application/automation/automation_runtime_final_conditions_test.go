@@ -112,9 +112,11 @@ func TestAutomationFailingNotificationCommitterImplementsBothPaths(t *testing.T)
 func TestAutomationOutboxCoversTerminalCommitMatrix(t *testing.T) {
 	rule := automationmodel.AutomationRuleSchema{Key: "after", ObjectKey: "order", Enabled: true, Trigger: automationmodel.AutomationTriggerSchema{Phase: "after"}}
 	registry := &automationFacadeRegistry{rules: map[string]automationmodel.AutomationRuleSchema{"after": rule}}
-	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
-		RuleKey: "after", RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1"}, ActorUserID: "operator", ActorRoleKey: "admin",
-	})}
+	message := func() publicationmodel.Message {
+		return publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
+			RuleKey: "after", Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1"}, ActorUserID: "operator", ActorRoleKey: "admin",
+		})}
+	}
 
 	service := newAutomationFacade(registry, &automationFacadeMetadataProbe{})
 	service.compileNotification = func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error) {
@@ -122,14 +124,14 @@ func TestAutomationOutboxCoversTerminalCommitMatrix(t *testing.T) {
 	}
 	rule.Execution.ResultNotification = "all"
 	registry.rules["after"] = rule
-	if err := service.ExecuteOutboxMessage(t.Context(), message); apperror.CodeOf(err) != "backend.automation.notification_compile_failed" {
+	if err := service.ExecuteOutboxMessage(t.Context(), message()); apperror.CodeOf(err) != "backend.automation.notification_compile_failed" {
 		t.Fatalf("compile error=%v", err)
 	}
 
 	service.compileNotification = func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error) {
 		return notificationmodel.NotificationEvent{}, nil
 	}
-	if err := service.ExecuteOutboxMessage(t.Context(), message); apperror.CodeOf(err) != "backend.automation.notification_committer_unavailable" {
+	if err := service.ExecuteOutboxMessage(t.Context(), message()); apperror.CodeOf(err) != "backend.automation.notification_committer_unavailable" {
 		t.Fatalf("missing committer error=%v", err)
 	}
 
@@ -137,13 +139,13 @@ func TestAutomationOutboxCoversTerminalCommitMatrix(t *testing.T) {
 	registry.rules["after"] = rule
 	service.compileNotification = nil
 	service.commitNotification = automationFailingNotificationCommitter{err: errors.New("commit")}
-	if err := service.ExecuteOutboxMessage(t.Context(), message); apperror.CodeOf(err) != "backend.automation.execution_commit_failed" {
+	if err := service.ExecuteOutboxMessage(t.Context(), message()); apperror.CodeOf(err) != "backend.automation.execution_commit_failed" {
 		t.Fatalf("execution commit error=%v", err)
 	}
 
 	service.commitNotification = nil
 	service.executionRepo = nil
-	if err := service.ExecuteOutboxMessage(t.Context(), message); err != nil {
+	if err := service.ExecuteOutboxMessage(t.Context(), message()); err != nil {
 		t.Fatalf("optional persistence error=%v", err)
 	}
 
@@ -153,7 +155,7 @@ func TestAutomationOutboxCoversTerminalCommitMatrix(t *testing.T) {
 		return notificationmodel.NotificationEvent{}, nil
 	}
 	service.commitNotification = automationFailingNotificationCommitter{err: errors.New("commit notification")}
-	if err := service.ExecuteOutboxMessage(t.Context(), message); apperror.CodeOf(err) != "backend.automation.execution_commit_failed" {
+	if err := service.ExecuteOutboxMessage(t.Context(), message()); apperror.CodeOf(err) != "backend.automation.execution_commit_failed" {
 		t.Fatalf("notification commit error=%v", err)
 	}
 }

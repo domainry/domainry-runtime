@@ -69,6 +69,10 @@ type runtimeModuleAdapterProcess interface {
 	ModuleHTTPAdapters() []modulehttp.Adapter
 }
 
+type runtimeModuleRouteGuardProcess interface {
+	GuardAuthenticatedModuleHTTPRoute(modulehttp.Route, http.Handler) (http.Handler, error)
+}
+
 type bootstrapRuntimeProcess struct{ *bootstrap.Runtime }
 
 func (r bootstrapRuntimeProcess) StartWorkers(ctx context.Context) {
@@ -81,6 +85,10 @@ func (r bootstrapRuntimeProcess) RoutesForListenerGroup(group runtimehttp.Listen
 
 func (r bootstrapRuntimeProcess) ModuleHTTPAdapters() []modulehttp.Adapter {
 	return r.Runtime.ModuleHTTPAdapters()
+}
+
+func (r bootstrapRuntimeProcess) GuardAuthenticatedModuleHTTPRoute(route modulehttp.Route, next http.Handler) (http.Handler, error) {
+	return r.Runtime.GuardAuthenticatedModuleHTTPRoute(route, next)
 }
 
 func (r bootstrapRuntimeProcess) connectorGateway() runtimeConnectorGateway {
@@ -493,11 +501,17 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 				return nil, errors.New("Runtime bootstrap returned no process")
 			}
 			moduleAdapters := append([]modulehttp.Adapter(nil), workspaceManager.Adapters()...)
+			runtimeModuleAdapters := []modulehttp.Adapter{}
 			if provider, ok := runtime.(runtimeModuleAdapterProcess); ok {
-				moduleAdapters = append(moduleAdapters, provider.ModuleHTTPAdapters()...)
+				runtimeModuleAdapters = provider.ModuleHTTPAdapters()
+				moduleAdapters = append(moduleAdapters, runtimeModuleAdapters...)
+			}
+			hostGuard := moduleGuard
+			if provider, ok := runtime.(runtimeModuleRouteGuardProcess); ok {
+				hostGuard = runtimeModuleHTTPRouteGuard(moduleGuard, provider, runtimeModuleAdapters)
 			}
 			for group, router := range identityRouters {
-				if err := router.Bind(moduleAdapters); err != nil {
+				if err := router.Bind(moduleAdapters, hostGuard); err != nil {
 					return nil, fmt.Errorf("mount module HTTP adapters on %s listener: %w", group, err)
 				}
 			}

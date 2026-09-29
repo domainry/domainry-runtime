@@ -43,6 +43,10 @@
 # workspace identity before opening its unit of work. Workflow record workers
 # reject any resolved principal whose workspace differs from the durable worker
 # scope. Both checks fail closed and never select a fallback workspace.
+# 2026-09-29 review: Automation rule definition persistence rejects empty
+# workspace/rule identities and verifies decoded Metadata identities against the
+# requested workspace and rule. These four checks fail closed and never select
+# or substitute a workspace.
 runtime/application/action/action_invocation_receipt_read.go|887c5c451c24ca0c
 runtime/application/action/action_invocation_receipt_read.go|f7281c25559cf6ce
 runtime/application/action/action_manager_recipient_execution.go|430babc60fdd1a19
@@ -92,6 +96,10 @@ runtime/infrastructure/blobstore/local_store.go|9eacf70f950bff5a
 runtime/infrastructure/blobstore/local_store.go|f8a2fa401c03632f
 runtime/infrastructure/persistence/auditmodule/audit_store.go|2eb97668367dd897
 runtime/infrastructure/persistence/database/action/action_business_execution_store.go|8a6b0a15d07ee4c7
+runtime/infrastructure/persistence/database/automation/automation_rule_definition_store.go|b1d3fea76ec5f0d9
+runtime/infrastructure/persistence/database/automation/automation_rule_definition_store.go|b2e5ab60c1900c7a
+runtime/infrastructure/persistence/database/automation/automation_rule_definition_store.go|b966e11b7a81ff26
+runtime/infrastructure/persistence/database/automation/automation_rule_definition_store.go|fac9500998ebcb70
 runtime/infrastructure/persistence/database/automation/sql_values.go|e3a854a480b5fcda
 runtime/infrastructure/persistence/database/datamigration/copy.go|50c2e571441e2111
 runtime/infrastructure/persistence/database/datamigration/verify.go|d6e7f1f7aec0d805

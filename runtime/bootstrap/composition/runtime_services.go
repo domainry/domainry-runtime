@@ -137,6 +137,7 @@ type RuntimeServicesDependencies struct {
 	MetadataLocalization                metadatasdk.Localization
 	AutomationWorker                    automationcontract.AutomationWorkerStore
 	AutomationExecutions                automationrepository.AutomationExecutionRepository
+	AutomationDefinitions               automationcontract.AutomationRuleDefinitionStore
 	ActionExecutions                    actioncontract.ActionExecutionStore
 	ActionAssurance                     actioncontract.ActionAssuranceStore
 	IdentityPrincipals                  identitysdk.PrincipalResolver

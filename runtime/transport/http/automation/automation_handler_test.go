@@ -15,6 +15,7 @@ import (
 
 	automationapplication "github.com/domainry/domainry-runtime/runtime/application/automation"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationrepository "github.com/domainry/domainry-runtime/runtime/domain/automation/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -60,6 +61,37 @@ func (r *automationExecutionRepositoryStub) InsertExecution(_ context.Context, _
 
 type automationMetadataStub struct{ err error }
 
+type automationDefinitionStoreStub struct {
+	automationcontract.AutomationRuleDefinitionStore
+	definitions map[string]automationmodel.AutomationRuleDefinition
+}
+
+func (s *automationDefinitionStoreStub) Get(_ context.Context, workspaceID, ruleKey string) (automationmodel.AutomationRuleDefinition, bool, error) {
+	definition, found := s.definitions[workspaceID+"/"+ruleKey]
+	return definition, found, nil
+}
+
+func (s *automationDefinitionStoreStub) List(_ context.Context, workspaceID string) ([]automationmodel.AutomationRuleDefinition, error) {
+	result := []automationmodel.AutomationRuleDefinition{}
+	for _, definition := range s.definitions {
+		if definition.WorkspaceID == workspaceID {
+			result = append(result, definition)
+		}
+	}
+	return result, nil
+}
+
+func (s *automationDefinitionStoreStub) Put(_ context.Context, definition automationmodel.AutomationRuleDefinition, expectedRevision int) (automationmodel.AutomationRuleDefinition, bool, error) {
+	key := definition.WorkspaceID + "/" + definition.RuleKey
+	current, found := s.definitions[key]
+	if found && current.Revision != expectedRevision || !found && expectedRevision != 0 {
+		return current, false, nil
+	}
+	definition.Revision = expectedRevision + 1
+	s.definitions[key] = definition
+	return definition, true, nil
+}
+
 type automationHandlerCapture struct {
 	serviceErr error
 }
@@ -69,6 +101,7 @@ type automationHandlerFixture struct {
 	registry    *automationRuleRegistryStub
 	executions  *automationExecutionRepositoryStub
 	metadata    *automationMetadataStub
+	definitions *automationDefinitionStoreStub
 	capture     *automationHandlerCapture
 	principal   *principalmodel.Principal
 	validateErr error
@@ -80,6 +113,10 @@ var automationHTTPPermissions = []string{
 	"runtime.automation.get_automation_rule",
 	"runtime.automation.list_automation_executions",
 	"runtime.automation.simulate_rule",
+	"runtime.automation.save_rule_draft",
+	"runtime.automation.discard_rule_draft",
+	"runtime.automation.publish_rule",
+	"runtime.automation.enable_rule",
 }
 
 func automationTestRule(key string) automationmodel.AutomationRuleSchema {
@@ -90,11 +127,12 @@ func newAutomationHandlerFixture() *automationHandlerFixture {
 	registry := &automationRuleRegistryStub{rules: map[string]automationmodel.AutomationRuleSchema{"welcome": automationTestRule("welcome")}}
 	executions := &automationExecutionRepositoryStub{items: []automationmodel.AutomationRuleExecution{{ID: "execution-1", RuleKey: "welcome", Status: "succeeded"}}}
 	metadata := &automationMetadataStub{}
+	definitions := &automationDefinitionStoreStub{definitions: map[string]automationmodel.AutomationRuleDefinition{}}
 	principal := accessfixture.AttachPointer(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Key: "automation-manager", Permissions: append([]string(nil), automationHTTPPermissions...)})
 	capture := &automationHandlerCapture{}
-	fixture := &automationHandlerFixture{registry: registry, executions: executions, metadata: metadata, capture: capture, principal: principal}
+	fixture := &automationHandlerFixture{registry: registry, executions: executions, metadata: metadata, definitions: definitions, capture: capture, principal: principal}
 	service := automationapplication.NewAutomationApplicationService(automationapplication.AutomationApplicationDependencies{
-		Rules: registry, ExecutionRepository: executions,
+		Rules: registry, Definitions: definitions, ExecutionRepository: executions,
 		Schema: func(context.Context, principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
 			return appschemamodel.ApplicationSchemaSnapshot{}
 		},
@@ -120,6 +158,44 @@ func newAutomationHandlerFixture() *automationHandlerFixture {
 		},
 	})
 	return fixture
+}
+
+func TestAutomationRuleDraftPublishStateAndDiscardHandlers(t *testing.T) {
+	fixture := newAutomationHandlerFixture()
+	ruleJSON, err := json.Marshal(automationTestRule("welcome"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	save := httptest.NewRecorder()
+	fixture.handler.saveAutomationRuleDraft(save, automationRequest(http.MethodPut, "/", `{"rule":`+string(ruleJSON)+`,"expected_revision":0}`, " welcome "))
+	if save.Code != http.StatusOK || !strings.Contains(save.Body.String(), `"revision":1`) || !strings.Contains(save.Body.String(), `"draft"`) {
+		t.Fatalf("save status=%d body=%s error=%v", save.Code, save.Body.String(), fixture.capture.serviceErr)
+	}
+
+	publish := httptest.NewRecorder()
+	fixture.handler.publishAutomationRuleDraft(publish, automationRequest(http.MethodPost, "/", `{"expected_revision":1}`, "welcome"))
+	if publish.Code != http.StatusOK || !strings.Contains(publish.Body.String(), `"revision":2`) || !strings.Contains(publish.Body.String(), `"published"`) {
+		t.Fatalf("publish status=%d body=%s error=%v", publish.Code, publish.Body.String(), fixture.capture.serviceErr)
+	}
+
+	pause := httptest.NewRecorder()
+	fixture.handler.setAutomationRuleState(pause, automationRequest(http.MethodPost, "/", `{"enabled":false,"expected_revision":2}`, "welcome"))
+	if pause.Code != http.StatusOK || !strings.Contains(pause.Body.String(), `"revision":3`) || !strings.Contains(pause.Body.String(), `"enabled":false`) {
+		t.Fatalf("pause status=%d body=%s error=%v", pause.Code, pause.Body.String(), fixture.capture.serviceErr)
+	}
+
+	saveAgain := httptest.NewRecorder()
+	fixture.handler.saveAutomationRuleDraft(saveAgain, automationRequest(http.MethodPut, "/", `{"rule":`+string(ruleJSON)+`,"expected_revision":3}`, "welcome"))
+	if saveAgain.Code != http.StatusOK || !strings.Contains(saveAgain.Body.String(), `"revision":4`) {
+		t.Fatalf("save again status=%d body=%s error=%v", saveAgain.Code, saveAgain.Body.String(), fixture.capture.serviceErr)
+	}
+
+	discard := httptest.NewRecorder()
+	fixture.handler.discardAutomationRuleDraft(discard, automationRequest(http.MethodPost, "/", `{"expected_revision":4}`, "welcome"))
+	if discard.Code != http.StatusOK || !strings.Contains(discard.Body.String(), `"revision":5`) || strings.Contains(discard.Body.String(), `"draft"`) {
+		t.Fatalf("discard status=%d body=%s error=%v", discard.Code, discard.Body.String(), fixture.capture.serviceErr)
+	}
 }
 
 func automationRequest(method, target, body, ruleKey string) *http.Request {

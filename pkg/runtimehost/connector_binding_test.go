@@ -157,12 +157,13 @@ func (lease *integrationConnectorLease) ConnectorRequestID() string { return lea
 func (lease *integrationConnectorLease) Release()                   { lease.released = true }
 
 type integrationConnectorExecution struct {
-	identity   runtimeext.ExecutionIdentity
-	principal  runtimeext.Principal
-	workspace  runtimeext.Workspace
-	lease      *integrationConnectorLease
-	capability runtimeext.ActionConnectorCapability
-	acquireErr error
+	identity           runtimeext.ExecutionIdentity
+	principal          runtimeext.Principal
+	workspace          runtimeext.Workspace
+	lease              *integrationConnectorLease
+	capability         runtimeext.ActionConnectorCapability
+	acquireErr         error
+	accountWriteLeased bool
 }
 
 func (execution *integrationConnectorExecution) Identity() runtimeext.ExecutionIdentity {
@@ -188,6 +189,14 @@ func (*integrationConnectorExecution) StageDurableIntent(context.Context, runtim
 }
 func (execution *integrationConnectorExecution) AcquireSynchronousConnectorCall(capability runtimeext.ActionConnectorCapability) (runtimeext.SynchronousConnectorCallLease, error) {
 	execution.capability = capability
+	if execution.acquireErr != nil {
+		return nil, execution.acquireErr
+	}
+	return execution.lease, nil
+}
+
+func (execution *integrationConnectorExecution) AcquireConnectionAccountWrite() (runtimeext.SynchronousConnectorCallLease, error) {
+	execution.accountWriteLeased = true
 	if execution.acquireErr != nil {
 		return nil, execution.acquireErr
 	}
@@ -226,6 +235,7 @@ type knowledgeDocumentServiceProbe struct {
 	agentsdk.KnowledgeDocumentService
 	uploadLibrary string
 	upload        agentsdk.KnowledgeDocumentUpload
+	uploadSource  agentsdk.KnowledgeDocumentSourceAccess
 	readLibrary   string
 	readDocument  string
 	authority     agentsdk.ConversationAuthority
@@ -246,6 +256,11 @@ func (probe *knowledgeLibraryServiceProbe) KnowledgeLibrary(_ context.Context, i
 
 func (probe *knowledgeDocumentServiceProbe) UploadKnowledgeDocument(_ context.Context, library string, upload agentsdk.KnowledgeDocumentUpload, authority agentsdk.ConversationAuthority) (agentsdk.KnowledgeDocument, error) {
 	probe.uploadLibrary, probe.upload, probe.authority = library, upload, authority
+	return probe.result, nil
+}
+
+func (probe *knowledgeDocumentServiceProbe) UploadKnowledgeDocumentForSource(_ context.Context, library string, upload agentsdk.KnowledgeDocumentUpload, source agentsdk.KnowledgeDocumentSourceAccess, authority agentsdk.ConversationAuthority) (agentsdk.KnowledgeDocument, error) {
+	probe.uploadLibrary, probe.upload, probe.uploadSource, probe.authority = library, upload, source, authority
 	return probe.result, nil
 }
 
@@ -276,7 +291,11 @@ func (probe *integrationAccountWritesProbe) AuthorizeConnectionAccountWrite(_ co
 func (probe *integrationAccountWritesProbe) WriteConnectionAccount(_ context.Context, _ integrationsdk.ConnectionAccountSubject, _ string, request integrationsdk.ConnectionAccountWriteRequest) (integrationsdk.ConnectionAccountWriteResult, error) {
 	probe.calls++
 	probe.request = request
-	return probe.result, nil
+	result := probe.result
+	if result.Source.ConnectionKey == "" {
+		result.Source = request.ExpectedSource
+	}
+	return result, nil
 }
 
 func (probe *integrationOperationsProbe) Call(_ context.Context, request integrationsdk.ProviderCallRequest) (integrationsdk.ProviderCallResult, error) {
@@ -363,11 +382,11 @@ func TestIntegrationRuntimeConnectorGatewayUsesOwnedPersonalAccountWrite(t *test
 	}}
 	execution := &integrationConnectorExecution{
 		identity:  runtimeext.ExecutionIdentity{ExecutionID: "send-1", ActionKey: "email_draft.send", ObjectKey: "email_draft", RecordID: "draft-a"},
-		principal: runtimeext.Principal{UserID: "user-a", RoleKey: "sales_rep"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
+		principal: runtimeext.Principal{UserID: "user-a", RoleKey: "sales_rep"}, workspace: runtimeext.Workspace{ID: "workspace-a"}, lease: &integrationConnectorLease{},
 	}
 	request := ConnectionAccountWriteRequest{RequestID: "email-draft:draft-a:revision-1", ConnectionKey: "gmail-a", OperationKey: "mail_send", ContractSHA256: hash, Payload: json.RawMessage(`{"message":{"to":[]}}`)}
 	result, err := (integrationRuntimeConnectorGateway{accountWrites: probe}).WriteConnectionAccount(t.Context(), execution, request)
-	if err != nil || result.Status != integrationsdk.AccountWriteSucceeded || result.InvocationID != "account-write:1" || string(result.Receipt) != `{"status":"accepted"}` {
+	if err != nil || result.Status != integrationsdk.AccountWriteSucceeded || result.InvocationID != "account-write:1" || result.ConnectionKey != "gmail-a" || result.ConnectorKey != "google_workspace" || result.ProviderKey != "google" || string(result.Receipt) != `{"status":"accepted"}` {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 	if probe.calls != 1 || probe.subject.WorkspaceID != "workspace-a" || probe.subject.UserID != "user-a" || !probe.subject.Access.Personal || probe.subject.Access.Workspace || probe.key != "gmail-a" || probe.op.Operation != "mail_send" || probe.op.ContractSHA256 != hash {
@@ -376,13 +395,33 @@ func TestIntegrationRuntimeConnectorGatewayUsesOwnedPersonalAccountWrite(t *test
 	if probe.request.RequestID != request.RequestID || probe.request.ExpectedSource.ConnectionKey != "gmail-a" || string(probe.request.Payload) != string(request.Payload) {
 		t.Fatalf("write request=%+v", probe.request)
 	}
+	if !execution.accountWriteLeased || !execution.lease.released {
+		t.Fatalf("account write lease was not acquired and released: execution=%+v", execution)
+	}
+}
+
+func TestIntegrationRuntimeConnectorGatewayUsesExplicitWorkspaceAccountWrite(t *testing.T) {
+	hash := strings.Repeat("f", 64)
+	probe := &integrationAccountWritesProbe{result: integrationsdk.ConnectionAccountWriteResult{Status: integrationsdk.AccountWriteSucceeded}}
+	execution := &integrationConnectorExecution{
+		identity:  runtimeext.ExecutionIdentity{ExecutionID: "feishu-send-1", ActionKey: "activity.send_feishu_message", ObjectKey: "activity"},
+		principal: runtimeext.Principal{UserID: "user-a", RoleKey: "sales_rep"}, workspace: runtimeext.Workspace{ID: "workspace-a"}, lease: &integrationConnectorLease{},
+	}
+	request := ConnectionAccountWriteRequest{RequestID: "feishu-message:1", ConnectionKey: "feishu-agent", Workspace: true, OperationKey: "collaboration_message_send", ContractSHA256: hash, Payload: json.RawMessage(`{"recipient":"buyer@example.test","text":"hello"}`)}
+	result, err := (integrationRuntimeConnectorGateway{accountWrites: probe}).WriteConnectionAccount(t.Context(), execution, request)
+	if err != nil || result.ConnectionKey != request.ConnectionKey {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	if probe.calls != 1 || probe.subject.WorkspaceID != "workspace-a" || probe.subject.UserID != "user-a" || probe.subject.Access.Personal || !probe.subject.Access.Workspace || probe.key != request.ConnectionKey {
+		t.Fatalf("probe=%+v subject=%+v", probe, probe.subject)
+	}
 }
 
 func TestIntegrationRuntimeConnectorGatewayDefaultsAccountWriteRequestIDToExecution(t *testing.T) {
 	probe := &integrationAccountWritesProbe{result: integrationsdk.ConnectionAccountWriteResult{Status: integrationsdk.AccountWriteFailed}}
 	execution := &integrationConnectorExecution{
 		identity:  runtimeext.ExecutionIdentity{ExecutionID: "send-default", ActionKey: "email_draft.send", ObjectKey: "email_draft", RecordID: "draft-a"},
-		principal: runtimeext.Principal{UserID: "user-a", RoleKey: "sales_rep"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
+		principal: runtimeext.Principal{UserID: "user-a", RoleKey: "sales_rep"}, workspace: runtimeext.Workspace{ID: "workspace-a"}, lease: &integrationConnectorLease{},
 	}
 	_, err := (integrationRuntimeConnectorGateway{accountWrites: probe}).WriteConnectionAccount(t.Context(), execution, ConnectionAccountWriteRequest{
 		ConnectionKey: "gmail-a", OperationKey: "mail_send", ContractSHA256: strings.Repeat("d", 64), Payload: json.RawMessage(`{"message":{"to":[]}}`),
@@ -414,6 +453,9 @@ func TestIntegrationRuntimeConnectorGatewayUsesAuthorizedKnowledgeDocumentServic
 	if probe.uploadLibrary != "library-a" || probe.upload.ClientID != "meeting:meeting-a:hash" || string(probe.upload.Data) != "transcript" {
 		t.Fatalf("upload library=%q upload=%+v", probe.uploadLibrary, probe.upload)
 	}
+	if probe.uploadSource != (agentsdk.KnowledgeDocumentSourceAccess{Namespace: agentsdk.KnowledgeDocumentSourceNamespaceRuntimeRecord, ResourceType: "meeting", ResourceID: "meeting-a"}) {
+		t.Fatalf("source=%+v", probe.uploadSource)
+	}
 	wantAuthority := agentsdk.ConversationAuthority{Known: true, RuntimeID: "aurora-runtime", WorkspaceID: "workspace-a", UserID: "user-a", RoleKey: "sales_rep"}
 	if probe.authority != wantAuthority {
 		t.Fatalf("authority=%+v", probe.authority)
@@ -421,6 +463,22 @@ func TestIntegrationRuntimeConnectorGatewayUsesAuthorizedKnowledgeDocumentServic
 	result, err = gateway.ReadKnowledgeDocument(t.Context(), execution, KnowledgeDocumentReadRequest{LibraryID: "library-a", DocumentID: "document-a"})
 	if err != nil || result.ID != "document-a" || probe.readLibrary != "library-a" || probe.readDocument != "document-a" || probe.authority != wantAuthority {
 		t.Fatalf("result=%+v read=%q/%q authority=%+v err=%v", result, probe.readLibrary, probe.readDocument, probe.authority, err)
+	}
+}
+
+func TestIntegrationRuntimeConnectorGatewayRequiresSourceAwareKnowledgeService(t *testing.T) {
+	execution := &integrationConnectorExecution{
+		identity:  runtimeext.ExecutionIdentity{ExecutionID: "publish-1", ActionKey: "meeting.publish_transcript", ObjectKey: "meeting", RecordID: "meeting-a"},
+		principal: runtimeext.Principal{UserID: "user-a", RoleKey: "sales_rep"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
+	}
+	service := struct {
+		agentsdk.KnowledgeDocumentService
+	}{}
+	_, err := (integrationRuntimeConnectorGateway{runtimeID: "aurora-runtime", knowledgeDocuments: service}).UploadKnowledgeDocument(t.Context(), execution, KnowledgeDocumentUploadRequest{
+		LibraryID: "library-a", ClientID: "meeting:meeting-a:hash", Filename: "meeting-a.txt", Data: []byte("transcript"),
+	})
+	if runtimeextErrorCode(err) != "backend.knowledge.source_acl_unavailable" {
+		t.Fatalf("error=%v", err)
 	}
 }
 

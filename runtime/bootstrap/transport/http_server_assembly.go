@@ -135,7 +135,12 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		panic("transport.AssembleRuntimeHTTPServer requires a complete Identity SDK Binding")
 	}
 	workspaceAdministrationStore := workspaceprovisionpersistence.NewWorkspaceAdministrationStore(dependencies.Store)
-	var integrationAuthentication runtimehttp.IntegrationAuthenticationPrincipalProvider
+	integrationAuthentication := newIntegrationAPIKeyPrincipalProvider(
+		dependencies.IntegrationBinding,
+		identityPrincipals,
+		dependencies.RateLimiter,
+		dependencies.Config.HTTPAPIKeyRateLimitPerMinute,
+	)
 	server := runtimehttp.NewHTTPRouter(runtimehttp.HTTPRouterConfig{
 		WorkspaceProvisionClientID:      dependencies.Config.RuntimeWorkspaceProvisionClientID,
 		WorkspaceProvisionSigningSecret: dependencies.Config.RuntimeWorkspaceProvisionSigningSecret,
@@ -196,11 +201,29 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		ModuleHTTPAdapters:      dependencies.ModuleHTTPAdapters,
 	})
 	if dependencies.ProjectHTTP != nil {
+		var accountReads integrationsdk.ConnectionAccountReads
 		var accountWrites integrationsdk.ConnectionAccountWrites
+		if binding, ok := dependencies.IntegrationBinding.(integrationsdk.ConnectionAccountReadsBinding); ok {
+			accountReads = binding.ConnectionAccountReads()
+		}
 		if binding, ok := dependencies.IntegrationBinding.(integrationsdk.ConnectionAccountWritesBinding); ok {
 			accountWrites = binding.ConnectionAccountWrites()
 		}
-		engine := newProjectEngine(recordApplication, records.Applications().Actions, accountWrites, identityProjection, server.PrincipalFromContext)
+		var knowledgeSearch agentsdk.ConversationLibraryKnowledgeSource
+		if binding, ok := dependencies.AgentBinding.(agentsdk.ConversationBinding); ok && binding.Conversations() != nil {
+			knowledgeSearch, _ = binding.Conversations().(agentsdk.ConversationLibraryKnowledgeSource)
+		}
+		engine := newProjectEngine(
+			recordApplication,
+			records.Applications().Actions,
+			projectActionAssuranceApplication(dependencies, records.Applications().Actions),
+			accountReads,
+			accountWrites,
+			identityProjection,
+			knowledgeSearch,
+			dependencies.RuntimeInstanceID,
+			server.PrincipalFromContext,
+		)
 		projectHandler := dependencies.ProjectHTTP(engine)
 		if projectHandler == nil {
 			panic("project HTTP factory returned a nil handler")

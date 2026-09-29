@@ -62,6 +62,8 @@ func notificationBuiltInEventTypes(locales []string, defaultLocale string, looku
 		integrationResourceHealthEventType("integration.quota.recovered", "integration.quota.recovered.in_app", "info", false),
 		integrationResourceHealthEventType("integration.billing.payment_required", "integration.billing.payment_required.in_app", "critical", true),
 		integrationResourceHealthEventType("integration.billing.recovered", "integration.billing.recovered.in_app", "info", false),
+		integrationInstallationHealthEventType("integration.health.degraded", "integration.health.degraded.in_app", "critical"),
+		integrationInstallationHealthEventType("integration.health.recovered", "integration.health.recovered.in_app", "info"),
 		reportSnapshotEventType("report.snapshot.completed", "report.snapshot.completed.in_app", "info"),
 		reportSnapshotEventType("report.snapshot.failed", "report.snapshot.failed.in_app", "critical"),
 		recordExportCompletedEventType(),
@@ -194,6 +196,17 @@ func integrationResourceHealthEventType(key, templateKey, severity string, actio
 		value.Actions = []notificationmodel.NotificationInboxActionDescriptor{{Key: "integration.connection.open", Kind: "route", ResourceType: "integration_connection", RouteKey: "integration.connection.detail"}}
 	}
 	return value
+}
+
+func integrationInstallationHealthEventType(key, templateKey, severity string) notificationmodel.NotificationEventType {
+	return notificationmodel.NotificationEventType{
+		Key: key, Source: "integration", Category: "integration", DefaultSeverity: severity, MandatoryInApp: true,
+		TemplateKey: templateKey, Variables: []notificationmodel.NotificationTemplateVariable{
+			{Key: "metric_name", Type: "string", Required: true}, {Key: "observed_value", Type: "number", Required: true},
+			{Key: "threshold", Type: "number", Required: true}, {Key: "unit", Type: "string", Required: true},
+			{Key: "observed_at", Type: "string", Required: true},
+		},
+	}
 }
 
 func notificationBuiltInPrefix(eventType string) string {

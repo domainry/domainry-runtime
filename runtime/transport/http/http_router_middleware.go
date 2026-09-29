@@ -312,11 +312,21 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 			return
 		}
 		if token := apiKeyTokenFromRequest(r); token != "" {
-			principal, _, err := s.integrationAuth.PrincipalFromIntegrationAPIKey(r.Context(), token, workspaceIDFromRequest(r), requestIDFromRequest(r))
+			if s.integrationAuth == nil {
+				s.appendSecurityAudit(r, "auth_api_denied", "Business API key authentication is unavailable", map[string]any{"path": r.URL.Path, "method": r.Method, "reason": "api_key_authentication_unavailable"})
+				writeError(w, r, http.StatusServiceUnavailable, "backend.integration.api_key_authentication_unavailable")
+				return
+			}
+			principal, apiKey, err := s.integrationAuth.PrincipalFromIntegrationAPIKey(r.Context(), token, workspaceIDFromRequest(r), requestIDFromRequest(r))
 			if err != nil {
 				if apperror.CodeOf(err) == "backend.integration.api_key.rate_limited" {
 					s.appendSecurityAudit(r, "auth_api_rate_limited", "Business API key rate limited", map[string]any{"path": r.URL.Path, "method": r.Method, "reason": "rate_limited"})
 					writeError(w, r, http.StatusTooManyRequests, "backend.integration.api_key.rate_limited")
+					return
+				}
+				if apperror.KindOf(err) == apperror.KindUnavailable {
+					s.appendSecurityAudit(r, "auth_api_denied", "Business API key authentication is unavailable", map[string]any{"path": r.URL.Path, "method": r.Method, "reason": "api_key_authentication_unavailable"})
+					writeError(w, r, http.StatusServiceUnavailable, valueOrDefault(apperror.CodeOf(err), "backend.integration.api_key_authentication_unavailable"))
 					return
 				}
 				s.appendSecurityAudit(r, "auth_api_denied", "Business API key rejected", map[string]any{"path": r.URL.Path, "method": r.Method, "reason": "invalid_api_key"})
@@ -336,6 +346,10 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 				writeError(w, r, http.StatusForbidden, "backend.workspace_scope_mismatch")
 				return
 			}
+			principal = s.principalWithBusinessProfile(principal, r)
+			s.appendSecurityAuditForPrincipal(r, principal, "auth_api_authenticated", "Business API key authenticated", map[string]any{
+				"api_key": apiKey.Key, "scope_count": len(apiKey.Scopes), "permission_count": len(principal.PermissionKeys()),
+			})
 			authenticatedRequest := requestWithResolvedIdentity(r, principal)
 			next.ServeHTTP(w, authenticatedRequest)
 			return

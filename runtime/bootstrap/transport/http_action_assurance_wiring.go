@@ -8,13 +8,20 @@ import (
 )
 
 func (a *httpServerAssembly) actionAssuranceApplication(actions *actionapplication.ActionApplicationService) *actionapplication.ActionAssuranceApplicationService {
-	if a == nil || a.dependencies.Store == nil || a.dependencies.IdentityBinding == nil {
+	if a == nil {
 		return nil
 	}
-	binding, ok := a.dependencies.IdentityBinding.(identitysdk.ActionAssuranceBinding)
+	return projectActionAssuranceApplication(a.dependencies, actions)
+}
+
+func projectActionAssuranceApplication(dependencies HTTPServerDependencies, actions *actionapplication.ActionApplicationService) *actionapplication.ActionAssuranceApplicationService {
+	if dependencies.Store == nil || dependencies.IdentityBinding == nil {
+		return nil
+	}
+	binding, ok := dependencies.IdentityBinding.(identitysdk.ActionAssuranceBinding)
 	if !ok || binding.ActionAssurance() == nil {
 		return nil
 	}
-	grants := actionservice.NewActionAssuranceDomainService(actionpersistence.NewActionAssuranceStore(a.dependencies.Store), nil)
+	grants := actionservice.NewActionAssuranceDomainService(actionpersistence.NewActionAssuranceStore(dependencies.Store), nil)
 	return actionapplication.NewActionAssuranceApplicationService(actions, grants, binding.ActionAssurance())
 }

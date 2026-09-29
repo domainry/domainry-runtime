@@ -495,8 +495,8 @@ func runtimeWorkspaceRoleCatalogRoles(roles []projectmodel.Role) ([]projectmodel
 		default:
 			return nil, nil, fmt.Errorf("Runtime Workspace role %q has unsupported assignment_mode %q", key, assignmentMode)
 		}
-		if audience == "service" && assignmentMode != "system_managed" {
-			return nil, nil, fmt.Errorf("Runtime Workspace service role %q must use assignment_mode system_managed", key)
+		if audience == "service" && assignmentMode == "request_only" {
+			return nil, nil, fmt.Errorf("Runtime Workspace service role %q cannot use assignment_mode request_only", key)
 		}
 		if role.ProvisionToWorkspaces {
 			if audience == "service" {

@@ -329,7 +329,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	var agentBinding agentsdk.Binding
 	agentBinding, err = openProjectAgentBinding(ctx, cfg.RuntimeInstanceID, store, artifactContent, artifactContent, agentFactory, projectDefinitions)
 	mustCompleteRuntimeStartup(err)
-	mustCompleteRuntimeStartup(synchronizeAgentDefinitions(ctx, agentBinding, startupOptions.ProjectModel.ProjectKey, startupOptions.ProjectModel.ContentHash, projectDefinitions))
+	mustCompleteRuntimeStartup(synchronizeAgentDefinitions(ctx, agentBinding, startupOptions.ProjectModel.ProjectKey, projectDefinitions))
 	serviceAssembly, err := assembleRuntimeServices(ctx, cfg, projectModel, projectDefinitions, projectIntegrations, templateRenderer, store, identityProjection, identityPrincipals, runtimeAudit, workerDependencies, runtimeExtensionRegistries{
 		projectExtensions: projectExtensions, connectorProviders: connectorProviders,
 		notificationCompiler:            compileNotification,

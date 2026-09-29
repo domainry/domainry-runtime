@@ -106,6 +106,38 @@ func TestImportPreviewScopeAndRelationFailuresBecomeRowIssues(t *testing.T) {
 	}
 }
 
+func TestImportPreviewAppliesDeclaredFieldDefaultsBeforeRequiredValidation(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{
+		{Key: "name", Type: "text", Required: true},
+		{Key: "status", Type: "text", Required: true, Default: "prospect"},
+	}}
+	service := NewRecordImportApplicationService(RecordImportDependencies{
+		Repository: &importRepositoryProbe{existing: map[string]bool{}},
+		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
+			return object, nil
+		},
+		CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
+	})
+	preview, err := service.Preview(t.Context(), "customer", []byte("name\nAcme\n"), recordImportEdgePrincipal())
+	if err != nil || !preview.CanApply || preview.ValidRows != 1 || preview.Rows[0].Data["status"] != "prospect" {
+		t.Fatalf("preview=%#v err=%v", preview, err)
+	}
+}
+
+func TestImportCreateAuthorizationDerivesOnlyTheRequiredCreateEffect(t *testing.T) {
+	principal := accessfixture.Attach(
+		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "service-1", WorkspaceID: "workspace-a"}},
+		accessfixture.Bundle{Permissions: []string{"customer.import"}},
+	)
+	authorized, err := recordImportCreateAuthorizationPrincipal(principal, "customer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !authorized.HasExactPermission("customer.import") || !authorized.HasExactPermission("customer.create") || authorized.HasExactPermission("customer.update") {
+		t.Fatalf("derived permissions=%v", authorized.PermissionKeys())
+	}
+}
+
 func TestImportApplyRejectsInvalidRowsAndStopsOnCreateFailure(t *testing.T) {
 	service := recordImportEdgeService(&importRepositoryProbe{existing: map[string]bool{}})
 	service.dependencies.CreateRecord = func(context.Context, string, map[string]any, principalmodel.Principal) (recordmodel.Record, error) {

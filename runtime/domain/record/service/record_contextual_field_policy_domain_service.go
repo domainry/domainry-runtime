@@ -43,6 +43,9 @@ func NewRecordContextualFieldPolicyDomainService(dependencies RecordContextualFi
 }
 
 func (s *RecordContextualFieldPolicyDomainService) Decide(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, record recordmodel.Record, fieldKey, action string) (RecordFieldPolicyDecision, error) {
+	if decision, closed := sensitiveFieldPolicyDecision(principal, object, fieldKey); closed {
+		return decision, nil
+	}
 	if principal.AccessBundle != nil {
 		decision, err := identityevaluator.EvaluateField(*principal.AccessBundle, identityevaluator.FieldRequest{
 			Resource: identitysdk.ResourceType(object.Key), Field: fieldKey, Action: identitysdk.Action(action),
@@ -129,6 +132,9 @@ func (s *RecordContextualFieldPolicyDomainService) applyResolvedRead(ctx context
 }
 
 func (s *RecordContextualFieldPolicyDomainService) decideResolved(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, record recordmodel.Record, fieldKey, action string, predicateMatches map[string]map[string]bool) (RecordFieldPolicyDecision, error) {
+	if decision, closed := sensitiveFieldPolicyDecision(principal, object, fieldKey); closed {
+		return decision, nil
+	}
 	if principal.AccessBundle == nil {
 		return s.Decide(ctx, principal, object, record, fieldKey, action)
 	}
@@ -141,6 +147,17 @@ func (s *RecordContextualFieldPolicyDomainService) decideResolved(ctx context.Co
 		return RecordFieldPolicyDecision{}, fieldPolicyExpressionError(err)
 	}
 	return runtimeFieldDecision(fieldKey, decision), nil
+}
+
+func sensitiveFieldPolicyDecision(principal principalmodel.Principal, object definitionmodel.ObjectSchema, fieldKey string) (RecordFieldPolicyDecision, bool) {
+	fieldKey = strings.TrimSpace(fieldKey)
+	for _, field := range object.Fields {
+		if strings.TrimSpace(field.Key) != fieldKey || !recordpolicy.RecordSensitiveFieldClosedForPrincipal(principal, object.Key, field) {
+			continue
+		}
+		return RecordFieldPolicyDecision{FieldKey: fieldKey, Effect: "hide", RuleKey: "sensitive_field_policy_required"}, true
+	}
+	return RecordFieldPolicyDecision{}, false
 }
 
 func (s *RecordContextualFieldPolicyDomainService) resolvePagePredicateMatches(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, records []recordmodel.Record, action string) (map[string]map[string]bool, error) {

@@ -10,7 +10,7 @@ import (
 )
 
 func TestAutomationSimulationSideEffectClassification(t *testing.T) {
-	for _, instructionType := range []string{"invoke_business_action", " emit_event ", "start_workflow"} {
+	for _, instructionType := range []string{"invoke_business_action", " emit_event ", "start_workflow", "request_human_review"} {
 		if !AutomationIsSimulationSideEffect(instructionType) {
 			t.Fatalf("instruction %q not classified as side effect", instructionType)
 		}

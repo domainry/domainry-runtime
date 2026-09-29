@@ -46,7 +46,7 @@ type RecordUpdateDependencies struct {
 	ApplySelfEffects      func(context.Context, definitionmodel.ObjectSchema, map[string]any, map[string]any, string, principalmodel.Principal) (bool, error)
 	ValidateUnique        func(context.Context, string, string, definitionmodel.ObjectSchema, string, map[string]any) error
 	ValidateDuplicate     func(context.Context, string, definitionmodel.ObjectSchema, string, map[string]any) error
-	AfterOutbox           func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message
+	AfterOutbox           func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error)
 	UpdatedTriggers       func(string, map[string]any, map[string]any) []string
 	PrepareWorkflow       func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error)
 	ExecuteWorkflow       func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
@@ -305,9 +305,16 @@ func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectK
 	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: record, Optimistic: optimistic, AuthorizationScope: authorizationScope, LocalizedValues: localizedValues}
 	commit.Predicates = recordmutation.MutationPredicatesFromContext(ctx)
 	if s.dependencies.AfterOutbox != nil {
-		commit.Outbox = s.dependencies.AfterOutbox(objectKey, "update", beforeData, record, principal)
+		commit.Outbox, err = s.dependencies.AfterOutbox(ctx, objectKey, "update", beforeData, record, principal)
+		if err != nil {
+			return recordUpdatePlannedMutation{}, err
+		}
 		if recordpolicy.RecordAutomationTransitionCandidate(beforeData, record.Data) {
-			commit.Outbox = append(commit.Outbox, s.dependencies.AfterOutbox(objectKey, "transition", beforeData, record, principal)...)
+			transitionOutbox, outboxErr := s.dependencies.AfterOutbox(ctx, objectKey, "transition", beforeData, record, principal)
+			if outboxErr != nil {
+				return recordUpdatePlannedMutation{}, outboxErr
+			}
+			commit.Outbox = append(commit.Outbox, transitionOutbox...)
 		}
 	}
 	if s.dependencies.BuildAudit != nil {

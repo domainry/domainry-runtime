@@ -173,6 +173,20 @@ func (h *ConversationBusinessHost) AuthorizeBusinessAction(ctx context.Context, 
 	return agentsdk.ConversationToolAuthorization{Granted: true, Revision: in.Principal.AuthorizationRevision}, nil
 }
 
+func (h *ConversationBusinessHost) ResolveBusinessAction(ctx context.Context, intent agentsdk.ConversationBusinessActionIntent, a agentsdk.ConversationAuthority) (agentsdk.ConversationBusinessAction, agentsdk.ConversationToolAuthorization, error) {
+	action, ok := h.businessActionDefinition(strings.TrimSpace(intent.ActionKey))
+	if !ok {
+		return agentsdk.ConversationBusinessAction{}, agentsdk.ConversationToolAuthorization{}, conversationBusinessError("forbidden")
+	}
+	resolved := agentsdk.ConversationBusinessAction{
+		ObjectKey: strings.TrimSpace(intent.ObjectKey), ActionKey: action.Key,
+		Version: h.businessActionVersion(action), RecordID: strings.TrimSpace(intent.RecordID),
+		Data: append(json.RawMessage(nil), intent.Data...),
+	}
+	auth, err := h.AuthorizeBusinessAction(ctx, resolved, a)
+	return resolved, auth, err
+}
+
 func businessActionAcknowledgement(in actionmodel.ActionInvocation, result actionmodel.ActionInvocationResult) agentsdk.ConversationBusinessActionResult {
 	if result.InvocationID != in.IdempotencyKey || (result.Record == nil) == (result.Object == nil) {
 		return agentsdk.ConversationBusinessActionResult{Status: "uncertain"}
@@ -202,18 +216,43 @@ func businessActionAcknowledgement(in actionmodel.ActionInvocation, result actio
 }
 
 func (h *ConversationBusinessHost) runBusinessAction(ctx context.Context, request agentsdk.ConversationBusinessActionRequest, reconcile bool) (agentsdk.ConversationBusinessActionResult, error) {
+	if _, _, err := h.prepareBusinessAction(ctx, request.Action, request.Authority); err != nil {
+		return agentsdk.ConversationBusinessActionResult{}, err
+	}
+	if !validBusinessActionConfirmation(request) {
+		return agentsdk.ConversationBusinessActionResult{}, conversationBusinessError("forbidden")
+	}
+	var confirmed agentsdk.ConversationBusinessAction
+	if json.Unmarshal([]byte(request.Arguments), &confirmed) != nil || conversationBusinessDigest(confirmed) != conversationBusinessDigest(request.Action) {
+		return agentsdk.ConversationBusinessActionResult{}, conversationBusinessError("forbidden")
+	}
+	return h.executePreparedBusinessAction(ctx, request, reconcile)
+}
+
+func validBusinessActionConfirmation(request agentsdk.ConversationBusinessActionRequest) bool {
+	confirmation := request.Confirmation
+	return confirmation != nil && confirmation.ID != "" && confirmation.UserID == request.Authority.UserID &&
+		request.ToolActionKey != "" && request.ToolVersion != "" && confirmation.ActionKey == request.ToolActionKey &&
+		confirmation.ToolVersion == request.ToolVersion && !confirmation.ApprovedAt.IsZero() &&
+		request.IdempotencyKey != "" && len(request.IdempotencyKey) <= 256 && request.ConversationID != "" &&
+		request.RunID != "" && request.CallID != "" && confirmation.ArgumentsHash == conversationBusinessDigest(request.Arguments)
+}
+
+func (h *ConversationBusinessHost) runResolvedBusinessAction(ctx context.Context, request agentsdk.ConversationBusinessActionRequest, reconcile bool) (agentsdk.ConversationBusinessActionResult, error) {
+	if request.ToolActionKey == agentsdk.ConversationToolActionPrefix+"invoke_action" || !json.Valid([]byte(request.Arguments)) || !validBusinessActionConfirmation(request) {
+		return agentsdk.ConversationBusinessActionResult{}, conversationBusinessError("forbidden")
+	}
+	// The same-process product adapter owns the closed mapping from the exact
+	// confirmed specialized arguments to request.Action. prepareBusinessAction
+	// still resolves current permission, record scope and payload contract.
+	return h.executePreparedBusinessAction(ctx, request, reconcile)
+}
+
+func (h *ConversationBusinessHost) executePreparedBusinessAction(ctx context.Context, request agentsdk.ConversationBusinessActionRequest, reconcile bool) (agentsdk.ConversationBusinessActionResult, error) {
 	unknown := agentsdk.ConversationBusinessActionResult{Status: "uncertain"}
 	_, in, err := h.prepareBusinessAction(ctx, request.Action, request.Authority)
 	if err != nil {
 		return agentsdk.ConversationBusinessActionResult{}, err
-	}
-	confirmation := request.Confirmation
-	if confirmation == nil || confirmation.ID == "" || confirmation.UserID != request.Authority.UserID || confirmation.ActionKey != agentsdk.ConversationToolActionPrefix+"invoke_action" || confirmation.ToolVersion != "1" || confirmation.ApprovedAt.IsZero() || request.IdempotencyKey == "" || len(request.IdempotencyKey) > 256 || request.ConversationID == "" || request.RunID == "" || request.CallID == "" {
-		return agentsdk.ConversationBusinessActionResult{}, conversationBusinessError("forbidden")
-	}
-	var confirmed agentsdk.ConversationBusinessAction
-	if json.Unmarshal([]byte(request.Arguments), &confirmed) != nil || conversationBusinessDigest(confirmed) != conversationBusinessDigest(request.Action) || confirmation.ArgumentsHash != conversationBusinessDigest(request.Arguments) {
-		return agentsdk.ConversationBusinessActionResult{}, conversationBusinessError("forbidden")
 	}
 	in.IdempotencyKey = request.IdempotencyKey
 	in.RequestID = "conversation:" + request.RunID + ":" + request.CallID
@@ -254,6 +293,14 @@ func (h *ConversationBusinessHost) runBusinessAction(ctx context.Context, reques
 	return businessActionAcknowledgement(in, result), nil
 }
 
+func (h *ConversationBusinessHost) InvokeResolvedBusinessAction(ctx context.Context, request agentsdk.ConversationBusinessActionRequest) (agentsdk.ConversationBusinessActionResult, error) {
+	return h.runResolvedBusinessAction(ctx, request, false)
+}
+
+func (h *ConversationBusinessHost) ReconcileResolvedBusinessAction(ctx context.Context, request agentsdk.ConversationBusinessActionRequest) (agentsdk.ConversationBusinessActionResult, error) {
+	return h.runResolvedBusinessAction(ctx, request, true)
+}
+
 func (h *ConversationBusinessHost) InvokeBusinessAction(ctx context.Context, in agentsdk.ConversationBusinessActionRequest) (agentsdk.ConversationBusinessActionResult, error) {
 	return h.runBusinessAction(ctx, in, false)
 }
@@ -287,3 +334,5 @@ func (h *ConversationBusinessHost) RevalidateBusinessAction(ctx context.Context,
 }
 
 var _ agentsdk.ConversationBusinessActionSource = (*ConversationBusinessHost)(nil)
+var _ agentsdk.ConversationBusinessActionResolver = (*ConversationBusinessHost)(nil)
+var _ agentsdk.ConversationBusinessResolvedActionSource = (*ConversationBusinessHost)(nil)

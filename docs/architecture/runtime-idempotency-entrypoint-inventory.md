@@ -5,11 +5,15 @@
 
 Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `optimistic_only`, `not_applicable`.
 
-## HTTP mutation routes (47)
+## HTTP mutation routes (51)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
+| `automation` | `POST /automation/rules/{ruleKey}/draft/discard` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/automation/automation_routes.go` |
+| `automation` | `POST /automation/rules/{ruleKey}/publish` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/automation/automation_routes.go` |
 | `automation` | `POST /automation/rules/{ruleKey}/simulate` | `not_applicable` | none | `runtime/transport/http/automation/automation_routes.go` |
+| `automation` | `POST /automation/rules/{ruleKey}/state` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/automation/automation_routes.go` |
+| `automation` | `PUT /automation/rules/{ruleKey}/draft` | `natural_key` | workspace plus stable path resource | `runtime/transport/http/automation/automation_routes.go` |
 | `dispatch` | `POST /dispatch/executions` | `system_key_required` | upstream operation and resolved target identity | `runtime/transport/http/dispatch/dispatch_routes.go` |
 | `lifecycle` | `POST /operations/lifecycle/cleanup/jobs/{jobID}/run` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/lifecycle/lifecycle_routes.go` |
 | `operations` | `POST /operations/break-glass-grants` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/operations/operations_routes.go` |
@@ -57,7 +61,7 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `workspaceprovision` | `POST /workspaces/{workspaceCode}/suspend` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 | `workspaceprovision` | `PUT /workspaces/{workspaceCode}/commercial-configuration` | `caller_key_required` | Idempotency-Key header | `runtime/transport/http/workspaceprovision/workspaceprovision_routes.go` |
 
-## Application mutation commands (128)
+## Application mutation commands (135)
 
 | Owner | Entrypoint | Decision | Key/source | Source |
 |---|---|---|---|---|
@@ -72,8 +76,15 @@ Decision values: `caller_key_required`, `system_key_required`, `natural_key`, `o
 | `automation` | `Execute` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_rule_application_service.go` |
 | `automation` | `ExecuteBeforeRule` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_application_service.go` |
 | `automation` | `ExecuteOutboxMessage` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_record_lifecycle_application_service.go` |
+| `automation` | `PublishAutomationRuleDraft` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_application_service.go` |
+| `automation` | `PublishDraft` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_rule_definition_application_service.go` |
 | `automation` | `Run` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_before_application_service.go` |
 | `automation` | `RunBefore` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_application_service.go` |
+| `automation` | `RunWebhookAutomation` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/automation/automation_application_service.go` |
+| `automation` | `SaveAutomationRuleDraft` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/automation/automation_application_service.go` |
+| `automation` | `SaveDraft` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/automation/automation_rule_definition_application_service.go` |
+| `automation` | `SetAutomationRuleEnabled` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/automation/automation_application_service.go` |
+| `automation` | `SetEnabled` | `optimistic_only` | workspace plus aggregate identity and expected version | `runtime/application/automation/automation_rule_definition_application_service.go` |
 | `businessevent` | `Publish` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/businessevent/business_event_application_service.go` |
 | `deployment` | `ProcessIdempotencyCleanup` | `system_key_required` | claimed work or deterministic operation identity | `runtime/application/deployment/deployment_runtime_status_application_service.go` |
 | `deployment` | `ResetIdempotencyReceipt` | `caller_key_required` | use-case key propagated from transport or parent execution | `runtime/application/deployment/deployment_runtime_status_application_service.go` |

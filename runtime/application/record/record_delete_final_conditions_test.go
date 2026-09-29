@@ -97,8 +97,8 @@ func TestRecordHardDeleteRelationFailureCancellationNilUpdateAndOutbox(t *testin
 	dependencies = recordDeleteEdgeDependencies(repository, root)
 	dependencies.Relations = recordservice.NewRecordDeleteRelationDomainService(repository, func() map[string]definitionmodel.ObjectSchema { return schema })
 	dependencies.PlanUpdateReference = nil
-	dependencies.AfterOutbox = func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message {
-		return []publicationmodel.Message{{ID: "outbox"}}
+	dependencies.AfterOutbox = func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error) {
+		return []publicationmodel.Message{{ID: "outbox"}}, nil
 	}
 	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), root.Key, "root-1", principal); apperror.CodeOf(err) != "backend.internal" || len(repository.commits) != 0 {
 		t.Fatalf("missing relation planner commits=%#v err=%v", repository.commits, err)

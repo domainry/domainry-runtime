@@ -60,6 +60,9 @@ func TestAutomationDefinitionValidatorRejectsInvalidInstructions(t *testing.T) {
 		{"action not found", "after", []automationmodel.AutomationInstructionSchema{{Key: "invoke", Type: "invoke_business_action", Config: map[string]any{"action_key": "missing"}}}, "backend.automation.business_action_not_found"},
 		{"workflow key missing", "after", []automationmodel.AutomationInstructionSchema{{Key: "start", Type: "start_workflow"}}, "backend.automation.workflow_key_required"},
 		{"workflow not found", "after", []automationmodel.AutomationInstructionSchema{{Key: "start", Type: "start_workflow", Config: map[string]any{"workflow_key": "missing"}}}, "backend.automation.target_workflow_not_found"},
+		{"human review workflow missing approval", "after", []automationmodel.AutomationInstructionSchema{{Key: "review", Type: "request_human_review", Config: map[string]any{"workflow_key": "order.approve"}}}, "backend.automation.human_review_workflow_required"},
+		{"human review workflow missing idempotency", "after", []automationmodel.AutomationInstructionSchema{{Key: "review", Type: "request_human_review", Config: map[string]any{"workflow_key": "order.unstable"}}}, "backend.automation.human_review_idempotency_required"},
+		{"human review missing idempotency input", "after", []automationmodel.AutomationInstructionSchema{{Key: "review", Type: "request_human_review", Config: map[string]any{"workflow_key": "order.review"}}}, "backend.automation.human_review_idempotency_input_required"},
 		{"derive fields missing", "before", []automationmodel.AutomationInstructionSchema{{Key: "derive", Type: "derive_fields"}}, "backend.automation.derive_fields_required"},
 		{"assert source missing", "before", []automationmodel.AutomationInstructionSchema{{Key: "guard", Type: "assert"}}, "backend.automation.assert_source_required"},
 	}
@@ -81,7 +84,7 @@ func TestAutomationDefinitionValidatorAcceptsSupportedInstructions(t *testing.T)
 		instructions []automationmodel.AutomationInstructionSchema
 	}{
 		{"before pure instructions", "before", []automationmodel.AutomationInstructionSchema{{Key: "derive", Type: "derive_fields", Config: map[string]any{"fields": map[string]any{"status": "ready"}}}, {Key: "guard", Type: "assert", Config: map[string]any{"source": "$payload.status", "operator": "eq", "value": "ready"}}}},
-		{"after instructions", "after", []automationmodel.AutomationInstructionSchema{{Key: "invoke", Type: "invoke_business_action", Config: map[string]any{"action_key": "order.normalize"}}, {Key: "start", Type: "start_workflow", Config: map[string]any{"workflow_key": "order.approve"}}, {Key: "emit", Type: "emit_event"}}},
+		{"after instructions", "after", []automationmodel.AutomationInstructionSchema{{Key: "invoke", Type: "invoke_business_action", Config: map[string]any{"action_key": "order.normalize"}}, {Key: "start", Type: "start_workflow", Config: map[string]any{"workflow_key": "order.approve"}}, {Key: "review", Type: "request_human_review", Config: map[string]any{"workflow_key": "order.review", "payload": map[string]any{"reason": "check"}}}, {Key: "emit", Type: "emit_event"}}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -93,6 +96,19 @@ func TestAutomationDefinitionValidatorAcceptsSupportedInstructions(t *testing.T)
 			}
 		})
 	}
+}
+
+func TestAutomationDefinitionValidatorAcceptsWebhookTriggerAndRejectsRecordFilters(t *testing.T) {
+	validator := AutomationDefinitionValidator{Catalog: automationValidatorCatalog()}
+	rule := automationValidatorRule()
+	rule.Trigger = automationmodel.AutomationTriggerSchema{Phase: "webhook", Source: "crm", Operation: "contact.changed"}
+	if err := validator.Validate(t.Context(), rule); err != nil {
+		t.Fatalf("valid webhook rule rejected: %v", err)
+	}
+	rule.Trigger.ChangedFields = []string{"number"}
+	assertAutomationErrorCode(t, validator.Validate(t.Context(), rule), "backend.automation.webhook_filter_invalid")
+	rule.Trigger = automationmodel.AutomationTriggerSchema{Phase: "webhook", Operation: "contact.changed"}
+	assertAutomationErrorCode(t, validator.Validate(t.Context(), rule), "backend.automation.webhook_source_required")
 }
 
 func TestAutomationExecutionPolicyAcceptsExplicitResultNotificationModes(t *testing.T) {
@@ -122,6 +138,13 @@ func automationValidatorCatalog() AutomationDefinitionCatalog {
 		Actions: []definitionmodel.ActionSchema{{Key: "order.normalize", ObjectKey: "order"}},
 		Workflows: []definitionmodel.WorkflowSchema{{
 			Key: "order.approve", Enabled: true, TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "manual"},
+		}, {
+			Key: "order.review", Enabled: true, TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "manual"}, IdempotencyKeys: []string{"reason"},
+			InputFields: []definitionmodel.WorkflowInputField{{Key: "reason", Type: "text", Required: true}},
+			Graph:       &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "review", Type: "approval"}}},
+		}, {
+			Key: "order.unstable", Enabled: true, TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "manual"},
+			Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "review", Type: "approval"}}},
 		}},
 	}
 }

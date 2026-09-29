@@ -296,9 +296,14 @@ func (gateway integrationRuntimeConnectorGateway) WriteConnectionAccount(ctx con
 	if connectionKey == "" || operation.Validate() != nil {
 		return ConnectionAccountWriteResult{}, &runtimeext.BusinessError{Code: "backend.connector.account_write_request_invalid", Message: "Account write connection and operation are invalid"}
 	}
+	lease, err := runtimeext.AcquireConnectionAccountWrite(execution)
+	if err != nil {
+		return ConnectionAccountWriteResult{}, err
+	}
+	defer lease.Release()
 	subject := integrationsdk.ConnectionAccountSubject{
 		WorkspaceID: workspace.ID, UserID: strings.TrimSpace(principal.UserID),
-		Access: integrationsdk.ConnectionAccountAccess{Personal: true},
+		Access: integrationsdk.ConnectionAccountAccess{Personal: !request.Workspace, Workspace: request.Workspace},
 	}
 	access, err := gateway.accountWrites.AuthorizeConnectionAccountWrite(ctx, subject, connectionKey, operation)
 	if err != nil {
@@ -316,6 +321,7 @@ func (gateway integrationRuntimeConnectorGateway) WriteConnectionAccount(ctx con
 	}
 	return ConnectionAccountWriteResult{
 		InvocationID: result.InvocationID, Status: result.Status, RecordedAt: result.RecordedAt,
+		ConnectionKey: result.Source.ConnectionKey, ConnectorKey: result.Source.ConnectorKey, ProviderKey: result.Source.ProviderKey,
 		Receipt: append(json.RawMessage(nil), result.Receipt...),
 	}, nil
 }
@@ -353,8 +359,18 @@ func (gateway integrationRuntimeConnectorGateway) UploadKnowledgeDocument(ctx co
 	if err != nil {
 		return KnowledgeDocumentResult{}, err
 	}
-	document, err := gateway.knowledgeDocuments.UploadKnowledgeDocument(ctx, strings.TrimSpace(request.LibraryID), agentsdk.KnowledgeDocumentUpload{
+	identity := execution.Identity()
+	if strings.TrimSpace(identity.ObjectKey) == "" || strings.TrimSpace(identity.RecordID) == "" {
+		return KnowledgeDocumentResult{}, &runtimeext.BusinessError{Code: "backend.knowledge.source_record_required", Message: "Knowledge uploads require an exact source record"}
+	}
+	sourceDocuments, ok := gateway.knowledgeDocuments.(agentsdk.KnowledgeDocumentSourceUploadService)
+	if !ok {
+		return KnowledgeDocumentResult{}, &runtimeext.BusinessError{Code: "backend.knowledge.source_acl_unavailable", Message: "Knowledge source record authorization is unavailable"}
+	}
+	document, err := sourceDocuments.UploadKnowledgeDocumentForSource(ctx, strings.TrimSpace(request.LibraryID), agentsdk.KnowledgeDocumentUpload{
 		ClientID: strings.TrimSpace(request.ClientID), Filename: strings.TrimSpace(request.Filename), Data: append([]byte(nil), request.Data...),
+	}, agentsdk.KnowledgeDocumentSourceAccess{
+		Namespace: agentsdk.KnowledgeDocumentSourceNamespaceRuntimeRecord, ResourceType: strings.TrimSpace(identity.ObjectKey), ResourceID: strings.TrimSpace(identity.RecordID),
 	}, authority)
 	if err != nil {
 		return KnowledgeDocumentResult{}, err

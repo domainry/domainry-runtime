@@ -50,7 +50,7 @@ func TestSQLiteCompositionSchemasMatchExactSourceOwnedSnapshotsAndBudgets(t *tes
 	}{
 		{minimalComposition, 30, 45},
 		{fullNoAgentComposition, 70, 85},
-		{fullAgentComposition, 85, 110},
+		{fullAgentComposition, 85, 111},
 	}
 	for _, test := range tests {
 		t.Run(string(test.composition), func(t *testing.T) {
@@ -236,7 +236,7 @@ func expectedCompositionTables(t *testing.T, composition schemaComposition) []st
 
 func TestCompositionSnapshotCountsRemainStable(t *testing.T) {
 	for composition, want := range map[schemaComposition]int{
-		minimalComposition: 41, fullNoAgentComposition: 82, fullAgentComposition: 110,
+		minimalComposition: 41, fullNoAgentComposition: 83, fullAgentComposition: 111,
 	} {
 		if got := len(expectedCompositionTables(t, composition)); got != want {
 			t.Fatalf("%s target table count=%d want=%d", composition, got, want)

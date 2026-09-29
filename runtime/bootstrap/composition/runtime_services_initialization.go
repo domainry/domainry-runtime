@@ -70,6 +70,7 @@ func newRuntimeServicesState(ctx context.Context, definitions runtimeext.Project
 		metadataLocalization:                deps.MetadataLocalization,
 		automationWorkerRepo:                deps.AutomationWorker,
 		automationExecutionRepo:             deps.AutomationExecutions,
+		automationDefinitionRepo:            deps.AutomationDefinitions,
 		runtimeStatusRepo:                   deps.RuntimeStatus,
 		actionAssuranceStore:                deps.ActionAssurance,
 		connectorRegistry:                   connectorRegistry,

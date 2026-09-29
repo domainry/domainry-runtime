@@ -56,6 +56,29 @@ func TestInstructionServiceReplaysSucceededExecution(t *testing.T) {
 	}
 }
 
+func TestInstructionServiceTreatsWebhookEffectsAsDurable(t *testing.T) {
+	claimCalls := 0
+	repository := instructionRepositoryStub{
+		claim: func(context.Context, automationmodel.AutomationInstructionExecution, string, string) (automationmodel.AutomationInstructionExecution, bool, error) {
+			claimCalls++
+			return automationmodel.AutomationInstructionExecution{Status: "succeeded", Result: map[string]any{"status": "succeeded"}}, false, nil
+		},
+		complete: func(context.Context, string, string, string, int64, string, map[string]any, string) (automationmodel.AutomationInstructionExecution, error) {
+			t.Fatal("replayed webhook effect must not be completed twice")
+			return automationmodel.AutomationInstructionExecution{}, nil
+		},
+	}
+	request := afterInstructionRequest(func(context.Context) (automationmodel.AutomationInstructionResult, error) {
+		t.Fatal("replayed webhook effect must not execute twice")
+		return automationmodel.AutomationInstructionResult{}, nil
+	})
+	request.Phase = "webhook"
+	result, err := NewAutomationInstructionExecutionApplicationService(repository).Execute(t.Context(), request)
+	if err != nil || claimCalls != 1 || result.Status != "idempotent_replay" {
+		t.Fatalf("result=%#v claim_calls=%d err=%v", result, claimCalls, err)
+	}
+}
+
 func TestInstructionServiceMapsCompletionLeaseLoss(t *testing.T) {
 	repository := instructionRepositoryStub{
 		claim: func(_ context.Context, execution automationmodel.AutomationInstructionExecution, _, _ string) (automationmodel.AutomationInstructionExecution, bool, error) {

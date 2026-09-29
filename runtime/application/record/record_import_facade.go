@@ -10,6 +10,7 @@ import (
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/telemetry"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -160,6 +161,49 @@ func (s *RecordApplicationService) CreateRecordIdempotentResult(ctx context.Cont
 	}
 	created, err := s.create.CreateClaimed(ctx, objectKey, data, claim, principal)
 	return created, false, err
+}
+
+func (s *RecordApplicationService) createImportedRecord(ctx context.Context, objectKey string, data map[string]any, principal principalmodel.Principal) (recordmodel.Record, error) {
+	authorized, err := recordImportCreateAuthorizationPrincipal(principal, objectKey)
+	if err != nil {
+		return recordmodel.Record{}, err
+	}
+	return s.CreateRecord(ctx, objectKey, data, authorized)
+}
+
+func (s *RecordApplicationService) createImportedRecordIdempotentResult(ctx context.Context, objectKey string, data map[string]any, idempotencyKey string, principal principalmodel.Principal) (recordmodel.Record, bool, error) {
+	authorized, err := recordImportCreateAuthorizationPrincipal(principal, objectKey)
+	if err != nil {
+		return recordmodel.Record{}, false, err
+	}
+	return s.CreateRecordIdempotentResult(ctx, objectKey, data, idempotencyKey, authorized)
+}
+
+// recordImportCreateAuthorizationPrincipal delegates only the create effect
+// needed to persist a validated import row. The derived bundle projects the
+// exact import data predicate onto create and does not grant update, delete,
+// export, or any other object operation.
+func recordImportCreateAuthorizationPrincipal(principal principalmodel.Principal, objectKey string) (principalmodel.Principal, error) {
+	objectKey = strings.TrimSpace(objectKey)
+	if principal.AccessBundle != nil {
+		bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{
+			Resource: identitysdk.ResourceType(objectKey), Action: "create",
+			SourceResource: identitysdk.ResourceType(objectKey), SourceAction: "import",
+		}, principal.AuthorizationEvaluationTime())
+		if err != nil {
+			return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.permission.denied", err, nil)
+		}
+		authorized := principal
+		authorized.AccessBundle = &bundle
+		authorized.Permissions = authorized.PermissionKeys()
+		return authorized, nil
+	}
+	if principal.SystemScope.Valid() && principal.Allows(objectKey, "import") {
+		authorized := principal
+		authorized.SystemCapabilities = append(append([]string(nil), principal.SystemCapabilities...), objectKey+".create")
+		return authorized, nil
+	}
+	return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.permission.denied", nil, nil)
 }
 
 func (s *RecordApplicationService) CreateLocalizedRecordIdempotentResult(ctx context.Context, objectKey string, data map[string]any, translations recordmodel.RecordTranslations, idempotencyKey string, principal principalmodel.Principal) (recordmodel.Record, bool, error) {

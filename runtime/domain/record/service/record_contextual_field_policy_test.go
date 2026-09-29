@@ -75,6 +75,40 @@ func TestContextualFieldPolicyValidatesWriteAgainstCandidateRecord(t *testing.T)
 	}
 }
 
+func TestContextualFieldPolicyKeepsSensitiveFieldClosedWithoutExactPolicy(t *testing.T) {
+	object := definitionmodel.ObjectSchema{Key: "contact", Fields: []definitionmodel.FieldSchema{
+		{Key: "name", Type: "text"},
+		{Key: "primary_email", Type: "email", Sensitive: true},
+	}}
+	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{
+		{ObjectKey: "contact", FieldKey: "*", Read: true, Write: true},
+	}})
+	service := NewRecordContextualFieldPolicyDomainService(RecordContextualFieldPolicyDependencies{Objects: func() []definitionmodel.ObjectSchema { return []definitionmodel.ObjectSchema{object} }})
+	record := recordmodel.Record{ID: "contact-1", Data: map[string]any{"name": "Ada", "primary_email": "ada@example.test"}}
+
+	projected, _, err := service.ApplyRead(t.Context(), principal, object, record, "read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if projected.Data["name"] != "Ada" || projected.Data["primary_email"] != nil {
+		t.Fatalf("sensitive field inherited wildcard policy: %#v", projected.Data)
+	}
+	if err := service.ValidateWrite(t.Context(), principal, object, record, map[string]any{"primary_email": "changed@example.test"}); err == nil {
+		t.Fatal("sensitive field write inherited wildcard policy")
+	}
+
+	explicit := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{
+		{ObjectKey: "contact", FieldKey: "primary_email", Read: true, Write: false},
+	}})
+	projected, _, err = service.ApplyRead(t.Context(), explicit, object, record, "read")
+	if err != nil || projected.Data["primary_email"] != "ada@example.test" {
+		t.Fatalf("exact sensitive field policy did not open read: data=%#v err=%v", projected.Data, err)
+	}
+	if err := service.ValidateWrite(t.Context(), explicit, object, record, map[string]any{"primary_email": "changed@example.test"}); err == nil {
+		t.Fatal("read-only exact sensitive field policy opened write")
+	}
+}
+
 func TestRecordApplyMaskStrategyUsesTypedStableShapes(t *testing.T) {
 	tests := []struct {
 		name     string

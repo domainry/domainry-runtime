@@ -145,13 +145,14 @@ type ObjectCapabilitySet struct {
 	Read   bool `json:"read"`
 	Update bool `json:"update"`
 	Delete bool `json:"delete"`
+	Import bool `json:"import"`
 	Export bool `json:"export"`
 }
 
 // StandardObjectCapabilities is the default for an ordinary mutable object.
 // Export is included because Runtime publishes a generic export API.
 func StandardObjectCapabilities() ObjectCapabilitySet {
-	return ObjectCapabilitySet{Create: true, Read: true, Update: true, Delete: true, Export: true}
+	return ObjectCapabilitySet{Create: true, Read: true, Update: true, Delete: true, Import: true, Export: true}
 }
 
 // EffectiveObjectCapabilities applies source declarations and lifecycle

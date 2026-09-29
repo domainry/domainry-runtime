@@ -12,8 +12,17 @@ import (
 // Automation trigger. Object and field references remain the responsibility of
 // the full definition validator and the published reference resolvers.
 func AutomationValidateTriggerShape(trigger automationmodel.AutomationTriggerSchema) error {
-	if trigger.Phase != "before" && trigger.Phase != "after" {
+	if trigger.Phase != "before" && trigger.Phase != "after" && trigger.Phase != "webhook" {
 		return definitionError(apperror.KindBadRequest, "backend.automation.phase_invalid", nil)
+	}
+	if trigger.Phase == "webhook" {
+		if strings.TrimSpace(trigger.Source) == "" {
+			return definitionError(apperror.KindBadRequest, "backend.automation.webhook_source_required", nil)
+		}
+		if strings.TrimSpace(trigger.Operation) == "" {
+			return definitionError(apperror.KindBadRequest, "backend.automation.operation_invalid", nil)
+		}
+		return AutomationValidateTriggerFilterShape(trigger)
 	}
 	switch trigger.Operation {
 	case "create", "update", "delete", "transition":
@@ -26,6 +35,9 @@ func AutomationValidateTriggerShape(trigger automationmodel.AutomationTriggerSch
 // AutomationValidateTriggerFilterShape keeps operation/filter compatibility
 // reusable for callers that validate filters independently from phase.
 func AutomationValidateTriggerFilterShape(trigger automationmodel.AutomationTriggerSchema) error {
+	if trigger.Phase == "webhook" && (len(trigger.ChangedFields) > 0 || strings.TrimSpace(trigger.FromState) != "" || strings.TrimSpace(trigger.ToState) != "") {
+		return definitionError(apperror.KindBadRequest, "backend.automation.webhook_filter_invalid", nil)
+	}
 	if trigger.Operation != "update" && len(trigger.ChangedFields) > 0 {
 		return definitionError(apperror.KindBadRequest, "backend.automation.changed_fields_operation_invalid", nil, "operation", trigger.Operation)
 	}
@@ -61,7 +73,7 @@ func AutomationValidateInstructionShape(phase string, instruction automationmode
 	if phase == "before" && instruction.Type != "derive_fields" && instruction.Type != "assert" {
 		return definitionError(apperror.KindBadRequest, "backend.automation.before_instruction_unsupported", nil, "instruction", instruction.Key, "type", instruction.Type)
 	}
-	if phase == "after" && instruction.Type != "invoke_business_action" && instruction.Type != "emit_event" && instruction.Type != "start_workflow" {
+	if (phase == "after" || phase == "webhook") && instruction.Type != "invoke_business_action" && instruction.Type != "emit_event" && instruction.Type != "start_workflow" && instruction.Type != "request_human_review" {
 		return definitionError(apperror.KindBadRequest, "backend.automation.after_instruction_unsupported", nil, "instruction", instruction.Key, "type", instruction.Type)
 	}
 	switch instruction.Type {
@@ -69,7 +81,7 @@ func AutomationValidateInstructionShape(phase string, instruction automationmode
 		if value := strings.TrimSpace(fmt.Sprint(instruction.Config["action_key"])); value == "" || value == "<nil>" {
 			return definitionError(apperror.KindBadRequest, "backend.automation.business_action_key_required", nil, "instruction", instruction.Key)
 		}
-	case "start_workflow":
+	case "start_workflow", "request_human_review":
 		if value := strings.TrimSpace(fmt.Sprint(instruction.Config["workflow_key"])); value == "" || value == "<nil>" {
 			return definitionError(apperror.KindBadRequest, "backend.automation.workflow_key_required", nil, "instruction", instruction.Key)
 		}

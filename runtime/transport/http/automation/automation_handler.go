@@ -50,12 +50,64 @@ func (h *AutomationHandler) listAutomationExecutions(w http.ResponseWriter, r *h
 }
 
 func (h *AutomationHandler) listAutomationRules(w http.ResponseWriter, r *http.Request) {
-	rules, err := h.commands.AutomationRules(r.Context(), h.principal(r))
+	rules, err := h.commands.AutomationManagedRules(r.Context(), h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return
 	}
 	h.writeJSON(w, http.StatusOK, map[string]any{"items": rules, "count": len(rules)})
+}
+
+func (h *AutomationHandler) saveAutomationRuleDraft(w http.ResponseWriter, r *http.Request) {
+	var request automationmodel.AutomationSaveDraftRequest
+	if !h.decodeJSON(w, r, &request) {
+		return
+	}
+	definition, err := h.commands.SaveAutomationRuleDraft(r.Context(), strings.TrimSpace(r.PathValue("ruleKey")), request, h.principal(r))
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, definition)
+}
+
+func (h *AutomationHandler) publishAutomationRuleDraft(w http.ResponseWriter, r *http.Request) {
+	var request automationmodel.AutomationPublishDraftRequest
+	if !h.decodeJSON(w, r, &request) {
+		return
+	}
+	definition, err := h.commands.PublishAutomationRuleDraft(r.Context(), strings.TrimSpace(r.PathValue("ruleKey")), request, h.principal(r))
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, definition)
+}
+
+func (h *AutomationHandler) setAutomationRuleState(w http.ResponseWriter, r *http.Request) {
+	var request automationmodel.AutomationSetEnabledRequest
+	if !h.decodeJSON(w, r, &request) {
+		return
+	}
+	definition, err := h.commands.SetAutomationRuleEnabled(r.Context(), strings.TrimSpace(r.PathValue("ruleKey")), request, h.principal(r))
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, definition)
+}
+
+func (h *AutomationHandler) discardAutomationRuleDraft(w http.ResponseWriter, r *http.Request) {
+	var request automationmodel.AutomationDiscardDraftRequest
+	if !h.decodeJSON(w, r, &request) {
+		return
+	}
+	definition, err := h.commands.DiscardAutomationRuleDraft(r.Context(), strings.TrimSpace(r.PathValue("ruleKey")), request, h.principal(r))
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, definition)
 }
 
 func (h *AutomationHandler) automationExecutionCatalog(w http.ResponseWriter, r *http.Request) {

@@ -74,6 +74,9 @@ func IntegrationEventBindings(mapping appschemamodel.IntegrationEventMappingSche
 	for inputKey, path := range mapping.WorkflowInput {
 		requirePath("workflow_input."+inputKey, path, bindingcontract.TypeUnknown)
 	}
+	for inputKey, path := range mapping.AutomationInput {
+		requirePath("automation_input."+inputKey, path, bindingcontract.TypeUnknown)
+	}
 	for inputKey, path := range mapping.AgentInput {
 		requirePath("agent_input."+inputKey, path, bindingcontract.TypeUnknown)
 	}

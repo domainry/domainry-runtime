@@ -68,6 +68,13 @@ func RecordApplyFieldDefaults(object definitionmodel.ObjectSchema, data map[stri
 }
 
 func RecordCanWriteScope(principal principalmodel.Principal, object definitionmodel.ObjectSchema, data map[string]any) bool {
+	return RecordCanWriteActionScope(principal, object, data, "update")
+}
+
+// RecordCanWriteActionScope evaluates the data predicate owned by the exact
+// mutation Action. Import must not silently depend on update permission after
+// the caller has already been authorized for object.import.
+func RecordCanWriteActionScope(principal principalmodel.Principal, object definitionmodel.ObjectSchema, data map[string]any, action string) bool {
 	if !principal.Known {
 		return false
 	}
@@ -78,10 +85,10 @@ func RecordCanWriteScope(principal principalmodel.Principal, object definitionmo
 	if value, ok := data[RecordOwnerOrgIDSystemField]; ok {
 		record.OwnerOrgID = strings.TrimSpace(fmt.Sprint(value))
 	}
-	if allowed, handled := RecordSDKAllowsRecord(principal, object, "update", record); handled {
+	if allowed, handled := RecordSDKAllowsRecord(principal, object, strings.TrimSpace(action), record); handled {
 		return allowed
 	}
-	return principal.SystemScope.Valid() && principal.Allows(object.Key, "update")
+	return principal.SystemScope.Valid() && principal.Allows(object.Key, strings.TrimSpace(action))
 }
 
 func RecordFilterReadable(principal principalmodel.Principal, object definitionmodel.ObjectSchema, record recordmodel.Record) recordmodel.Record {

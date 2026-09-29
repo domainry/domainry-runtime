@@ -93,6 +93,7 @@ func objectActionTestDependencies(ctx context.Context, store *persistence.Runtim
 		WorkflowDecisions:            workflowpersistence.NewWorkflowDecisionStore(store),
 		AutomationWorker:             automationpersistence.NewAutomationWorkerStore(store),
 		AutomationExecutions:         automationpersistence.NewAutomationExecutionStore(store),
+		AutomationDefinitions:        automationpersistence.NewAutomationRuleDefinitionStore(store),
 		ActionExecutions:             actionpersistence.NewActionBusinessExecutionStore(store),
 	}
 }

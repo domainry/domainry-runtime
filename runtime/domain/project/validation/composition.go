@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	bindingcontract "github.com/domainry/domainry-runtime/runtime/domain/invocation/binding"
 	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
 )
@@ -26,10 +29,11 @@ func ValidateComposition(model projectmodel.Model, registry *runtimeext.ProjectE
 			knownPermissions[key+".read"] = true
 			knownPermissions[key+".update"] = true
 			knownPermissions[key+".delete"] = true
+			knownPermissions[key+".import"] = true
 			knownPermissions[key+".export"] = true
 			continue
 		}
-		for operation, enabled := range map[string]bool{"create": capabilities.Create, "read": capabilities.Read, "update": capabilities.Update, "delete": capabilities.Delete, "export": capabilities.Export} {
+		for operation, enabled := range map[string]bool{"create": capabilities.Create, "read": capabilities.Read, "update": capabilities.Update, "delete": capabilities.Delete, "import": capabilities.Import, "export": capabilities.Export} {
 			if enabled {
 				knownPermissions[key+"."+operation] = true
 			}
@@ -206,7 +210,9 @@ func ValidateComposition(model projectmodel.Model, registry *runtimeext.ProjectE
 		}
 	}
 
+	automations := map[string]automationmodel.AutomationRuleSchema{}
 	for _, rule := range definitions.AutomationRules {
+		automations[rule.Key] = rule
 		path := "/definitions/automation/" + rule.Key
 		if _, found := model.Objects[rule.ObjectKey]; !found {
 			add("project_definition.automation_object_unknown", path+"/object_key", fmt.Sprintf("automation references unknown object %q", rule.ObjectKey))
@@ -215,7 +221,7 @@ func ValidateComposition(model projectmodel.Model, registry *runtimeext.ProjectE
 			switch instruction.Type {
 			case "invoke_business_action":
 				validateOperationReference(configString(instruction.Config, "action_key"), rule.ObjectKey, handlers, model, path+"/instructions/"+instruction.Key, add)
-			case "start_workflow":
+			case "start_workflow", "request_human_review":
 				key := configString(instruction.Config, "workflow_key")
 				if !workflows[key] {
 					add("project_definition.automation_workflow_unknown", path+"/instructions/"+instruction.Key, fmt.Sprintf("automation references unknown workflow %q", key))
@@ -270,6 +276,15 @@ func ValidateComposition(model projectmodel.Model, registry *runtimeext.ProjectE
 			if !workflows[mapping.WorkflowKey] {
 				add("project_definition.integration_workflow_unknown", path+"/workflow_key", fmt.Sprintf("integration mapping references unknown workflow %q", mapping.WorkflowKey))
 			}
+		case "automation":
+			rule, found := automations[mapping.AutomationRuleKey]
+			if !found {
+				add("project_definition.integration_automation_unknown", path+"/automation_rule_key", fmt.Sprintf("integration mapping references unknown automation %q", mapping.AutomationRuleKey))
+			} else if rule.Trigger.Phase != "webhook" || strings.TrimSpace(rule.Trigger.Source) != strings.TrimSpace(mapping.Provider) || strings.TrimSpace(rule.Trigger.Operation) != strings.TrimSpace(mapping.EventType) {
+				add("project_definition.integration_automation_trigger_mismatch", path+"/automation_rule_key", fmt.Sprintf("integration mapping does not match webhook automation %q trigger", mapping.AutomationRuleKey))
+			} else if object, objectFound := legacyObjectCatalog[rule.ObjectKey]; objectFound {
+				validateAutomationMappingInput(mapping, object, path, add)
+			}
 		case "agent_task":
 			if !agents[mapping.AgentID] {
 				add("project_definition.integration_agent_unknown", path+"/agent_id", fmt.Sprintf("integration mapping references unknown agent %q", mapping.AgentID))
@@ -280,6 +295,37 @@ func ValidateComposition(model projectmodel.Model, registry *runtimeext.ProjectE
 		return &projectmodel.ValidationError{Issues: issues}
 	}
 	return nil
+}
+
+func validateAutomationMappingInput(mapping integrationsdk.EventMappingRequirement, object definitionmodel.ObjectSchema, pointer string, add func(string, string, string)) {
+	fields := objectFieldsByKey(object)
+	eventFields := map[string]bindingcontract.ValueType{}
+	for _, field := range mapping.EventFields {
+		eventFields[strings.TrimSpace(field.Path)] = bindingcontract.NormalizeType(field.Type)
+	}
+	for inputKey, eventPath := range mapping.AutomationInput {
+		field, found := fields[strings.TrimSpace(inputKey)]
+		if !found {
+			add("project_definition.integration_automation_input_unknown", pointer+"/automation_input/"+inputKey, fmt.Sprintf("automation input %q is not a field on object %q", inputKey, object.Key))
+			continue
+		}
+		sourceType, sourceFound := eventFields[strings.TrimSpace(eventPath)]
+		targetType := bindingcontract.NormalizeType(field.Type)
+		if sourceFound && !bindingcontract.Compatible(sourceType, targetType) {
+			add("project_definition.integration_automation_input_type_invalid", pointer+"/automation_input/"+inputKey, fmt.Sprintf("event field %q type %q cannot bind to automation input %q type %q", eventPath, sourceType, inputKey, targetType))
+		}
+	}
+	for inputKey, value := range mapping.Payload {
+		field, found := fields[strings.TrimSpace(inputKey)]
+		if !found {
+			add("project_definition.integration_automation_input_unknown", pointer+"/payload/"+inputKey, fmt.Sprintf("automation payload %q is not a field on object %q", inputKey, object.Key))
+			continue
+		}
+		sourceType, targetType := bindingcontract.LiteralType(value), bindingcontract.NormalizeType(field.Type)
+		if !bindingcontract.Compatible(sourceType, targetType) {
+			add("project_definition.integration_automation_input_type_invalid", pointer+"/payload/"+inputKey, fmt.Sprintf("automation payload %q type %q cannot bind to field type %q", inputKey, sourceType, targetType))
+		}
+	}
 }
 
 func validateOperationReference(actionKey, objectKey string, handlers map[string]runtimeext.HandlerDescriptor, model projectmodel.Model, pointer string, add func(string, string, string)) {

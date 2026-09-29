@@ -134,6 +134,10 @@
 "notification.integration.credential.refreshFailed.body" = "공급자 자격 증명을 갱신하지 못했습니다. 안전한 오류 코드를 확인하세요."
 "notification.integration.credential.recovered.title" = "자격 증명 복구: {{credential_name}}"
 "notification.integration.credential.recovered.body" = "자격 증명이 다시 유효하며 이전 알림이 해결되었습니다."
+"notification.integration.health.degraded.title" = "통합 상태 SLA 위반: {{metric_name}}"
+"notification.integration.health.degraded.body" = "{{observed_at}}의 관측값 {{observed_value}} {{unit}}이 한도 {{threshold}} {{unit}}을 초과했습니다."
+"notification.integration.health.recovered.title" = "통합 상태 복구: {{metric_name}}"
+"notification.integration.health.recovered.body" = "{{observed_at}}의 관측값 {{observed_value}} {{unit}}이 한도 {{threshold}} {{unit}} 이내로 돌아왔습니다."
 
 # Frontend runtime flat resources
 "connector.blockedBeforeActivation" = "활성화 전 차단됨"

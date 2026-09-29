@@ -253,7 +253,7 @@ func (h runtimeAgentApplicationHost) ConversationCodingRuntime() agentsdk.Conver
 }
 
 func (h runtimeAgentApplicationHost) ConversationAuthorizer() agentsdk.ConversationToolAuthorizer {
-	return h.conversations
+	return h.conversationToolAuthorizer()
 }
 func (h runtimeAgentApplicationHost) ConversationBusinessSource() agentsdk.ConversationBusinessSource {
 	return h.conversations
@@ -272,6 +272,25 @@ func (h runtimeAgentApplicationHost) ProposalAgent() agentmodulehost.ProposalHos
 func (h runtimeAgentApplicationHost) AuditAgent() agentmodulehost.AuditHost { return h.audit }
 func (h runtimeAgentApplicationHost) AnalysisAgent() agentmodulehost.AnalysisHost {
 	return h.analysis
+}
+
+type runtimeConversationToolAuthorizer struct {
+	*agentapplication.ConversationBusinessHost
+	definitions []agentsdk.ConversationToolDefinition
+}
+
+func (h runtimeAgentApplicationHost) conversationToolAuthorizer() runtimeConversationToolAuthorizer {
+	return runtimeConversationToolAuthorizer{
+		ConversationBusinessHost: h.conversations,
+		definitions:              append([]agentsdk.ConversationToolDefinition(nil), h.ConversationToolDefinitions()...),
+	}
+}
+
+func (a runtimeConversationToolAuthorizer) AuthorizeConversationTool(ctx context.Context, request agentsdk.ConversationToolRequest) (agentsdk.ConversationToolAuthorization, error) {
+	if a.ConversationBusinessHost == nil {
+		return agentsdk.ConversationToolAuthorization{}, nil
+	}
+	return a.ConversationBusinessHost.AuthorizeConversationToolCatalog(ctx, request, a.definitions)
 }
 
 type runtimeAgentTaskHost struct {

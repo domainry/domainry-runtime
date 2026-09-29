@@ -59,6 +59,13 @@ type moduleAuditRecorderStub struct {
 	err    error
 }
 
+type authenticatedModuleRouteGuardStub struct{ calls []string }
+
+func (stub *authenticatedModuleRouteGuardStub) GuardAuthenticatedModuleHTTPRoute(route modulehttp.Route, next http.Handler) (http.Handler, error) {
+	stub.calls = append(stub.calls, route.Action.Key)
+	return next, nil
+}
+
 func (stub *moduleAuditRecorderStub) Record(_ context.Context, event modulehttp.AuditEvent) error {
 	stub.events = append(stub.events, event)
 	return stub.err
@@ -91,6 +98,31 @@ func TestModuleHTTPGovernanceEnforcesIdempotencyReasonAndConfirmation(t *testing
 	}
 	if response := call(map[string]string{"Idempotency-Key": "key-1", "X-Operation-Reason": "reviewed", "X-Operation-Confirmation": "confirmed"}); response.Code != http.StatusNoContent {
 		t.Fatalf("governed status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestRuntimeModuleHTTPRouteGuardOnlySelectsRuntimeAuthenticatedRoutes(t *testing.T) {
+	runtimeRoute := modulehttp.Route{Action: runtimeHostTestAction("integration.webhook_subscriptions.list", "GET /integration/webhook-subscriptions", []actioncontract.Exposure{actioncontract.ExposureManagement}, actioncontract.AuthorizationAuthenticated)}
+	runtimeSigned := modulehttp.Route{Action: runtimeHostTestAction("integration.webhooks.ingest", "POST /integration/webhooks", []actioncontract.Exposure{actioncontract.ExposurePublic}, actioncontract.AuthorizationSigned)}
+	identityRoute := modulehttp.Route{Action: runtimeHostTestAction("identity.users.list", "GET /identity/users", []actioncontract.Exposure{actioncontract.ExposureManagement}, actioncontract.AuthorizationAuthenticated)}
+	adapter := moduleAdapterStub{owner: "integration", name: "product", routes: []modulehttp.Route{runtimeRoute, runtimeSigned}, handler: http.NotFoundHandler()}
+	runtimeGuard := &authenticatedModuleRouteGuardStub{}
+	fallbackCalls := []string{}
+	fallback := func(route modulehttp.Route, next http.Handler, _ modulehttp.AuditRecorder) (http.Handler, error) {
+		fallbackCalls = append(fallbackCalls, route.Action.Key)
+		return next, nil
+	}
+	guard := runtimeModuleHTTPRouteGuard(fallback, runtimeGuard, []modulehttp.Adapter{adapter})
+	for _, route := range []modulehttp.Route{runtimeRoute, runtimeSigned, identityRoute} {
+		if _, err := guard(route, http.NotFoundHandler(), nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(runtimeGuard.calls) != 1 || runtimeGuard.calls[0] != runtimeRoute.Action.Key {
+		t.Fatalf("Runtime guard calls=%v", runtimeGuard.calls)
+	}
+	if len(fallbackCalls) != 2 || fallbackCalls[0] != runtimeSigned.Action.Key || fallbackCalls[1] != identityRoute.Action.Key {
+		t.Fatalf("fallback guard calls=%v", fallbackCalls)
 	}
 }
 

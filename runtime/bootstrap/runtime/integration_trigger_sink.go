@@ -18,6 +18,8 @@ import (
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
+	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
+	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowcontract "github.com/domainry/domainry-runtime/runtime/domain/workflow/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -54,6 +56,9 @@ type runtimeIntegrationTriggerSink struct {
 	workflows interface {
 		RunIntegrationWorkflow(context.Context, string, map[string]any, principalmodel.Principal) (workflowmodel.WorkflowRunResult, error)
 	}
+	automations interface {
+		RunWebhookAutomation(context.Context, automationmodel.AutomationWebhookTriggerRequest, principalmodel.Principal) (automationprojection.AutomationRuleTrace, error)
+	}
 	agents     agentsdk.BusinessEventConversationTaskService
 	principals identitysdk.PrincipalResolver
 }
@@ -63,7 +68,7 @@ func newRuntimeIntegrationTriggerSink(records *composition.RuntimeServices, prin
 		return runtimeIntegrationTriggerSink{principals: principals}
 	}
 	applications := records.Applications()
-	return runtimeIntegrationTriggerSink{actions: applications.Actions, workflows: applications.Workflows, agents: records.AgentBusinessEvents(), principals: principals}
+	return runtimeIntegrationTriggerSink{actions: applications.Actions, workflows: applications.Workflows, automations: applications.Automations, agents: records.AgentBusinessEvents(), principals: principals}
 }
 
 func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request integrationsdk.TriggerRequest) (integrationsdk.RuntimeExecutionReceipt, error) {
@@ -73,6 +78,12 @@ func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request inte
 	principal, err := s.principal(ctx, request)
 	if err != nil {
 		return runtimeIntegrationReceipt(request, "", "failed", apperror.CodeOf(err)), err
+	}
+	if strings.TrimSpace(request.Target.Type) == "automation" && strings.TrimSpace(request.Principal.ActorID) == "" {
+		principal, err = s.automationOwnerPrincipal(ctx, request)
+		if err != nil {
+			return runtimeIntegrationReceipt(request, "", "failed", "backend.integration.runtime_automation_principal_required"), err
+		}
 	}
 	switch strings.TrimSpace(request.Target.Type) {
 	case "action":
@@ -103,6 +114,20 @@ func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request inte
 		executionPrincipal := principal.WithExactSystemCapabilities(workflowcontract.RunActionKey(request.Target.WorkflowKey))
 		result, runErr := s.workflows.RunIntegrationWorkflow(ctx, request.Target.WorkflowKey, payload, executionPrincipal)
 		receipt := runtimeIntegrationReceipt(request, result.Execution.ID, result.Status, "")
+		if runErr != nil {
+			receipt.Status, receipt.ErrorCode = "failed", apperror.CodeOf(runErr)
+		}
+		return receipt, runErr
+	case "automation":
+		if s.automations == nil {
+			err := fmt.Errorf("Runtime Automation application is unavailable")
+			return runtimeIntegrationReceipt(request, "", "failed", "backend.integration.runtime_automation_unavailable"), err
+		}
+		trace, runErr := s.automations.RunWebhookAutomation(ctx, automationmodel.AutomationWebhookTriggerRequest{
+			RuleKey: request.Target.AutomationRuleKey, EventID: request.EventID, MappingKey: request.MappingKey, MappingRevision: request.MappingRevision,
+			Provider: request.Source.Provider, EventType: request.Source.EventType, ExternalID: request.Source.ExternalID, Input: cloneIntegrationTriggerInput(request.Target.Input),
+		}, principal)
+		receipt := runtimeIntegrationReceipt(request, trace.ExecutionID, trace.Status, trace.ErrorCode)
 		if runErr != nil {
 			receipt.Status, receipt.ErrorCode = "failed", apperror.CodeOf(runErr)
 		}
@@ -147,17 +172,64 @@ func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request inte
 	}
 }
 
+func (s runtimeIntegrationTriggerSink) automationOwnerPrincipal(ctx context.Context, request integrationsdk.TriggerRequest) (principalmodel.Principal, error) {
+	ownerUserID := strings.TrimSpace(request.Principal.OwnerUserID)
+	if ownerUserID == "" || s.principals == nil {
+		return principalmodel.Principal{}, fmt.Errorf("Runtime Integration Automation trigger requires a resolvable connection owner")
+	}
+	resolution, err := s.principals.Resolve(requestcontext.WithWorkspaceID(ctx, request.WorkspaceID), identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(ownerUserID)})
+	if err != nil {
+		return principalmodel.Principal{}, fmt.Errorf("resolve Integration connection owner %q: %w", ownerUserID, err)
+	}
+	if workspaceID := strings.TrimSpace(resolution.Principal.WorkspaceID); workspaceID != "" && workspaceID != strings.TrimSpace(request.WorkspaceID) {
+		return principalmodel.Principal{}, fmt.Errorf("Integration connection owner workspace %q does not match trigger workspace %q", workspaceID, request.WorkspaceID)
+	}
+	resolution.Principal.AccessBundle = &resolution.AccessBundle
+	principal := principalmodel.NewPrincipalFromIdentity(resolution.Principal, request.EventID)
+	principal.WorkspaceID = strings.TrimSpace(request.WorkspaceID)
+	principal.CorrelationID, principal.CausationID = request.EventID, request.EventID
+	return principal, nil
+}
+
 func (s runtimeIntegrationTriggerSink) principal(ctx context.Context, request integrationsdk.TriggerRequest) (principalmodel.Principal, error) {
 	actorID := strings.TrimSpace(request.Principal.ActorID)
 	if actorID == "" {
 		ownerUserID := strings.TrimSpace(request.Principal.OwnerUserID)
 		if ownerUserID == "" {
-			ownerUserID = "integration:worker"
+			principal := principalmodel.NewSystemPrincipal(
+				"integration:worker",
+				principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "execute verified Integration event mapping"),
+			)
+			principal.WorkspaceID = strings.TrimSpace(request.WorkspaceID)
+			principal.RequestID, principal.CorrelationID, principal.CausationID = request.EventID, request.EventID, request.EventID
+			return principal, nil
 		}
+		if s.principals == nil {
+			return principalmodel.Principal{}, fmt.Errorf("Identity principal resolver is unavailable for Integration connection owner %q", ownerUserID)
+		}
+		resolution, err := s.principals.Resolve(requestcontext.WithWorkspaceID(ctx, request.WorkspaceID), identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(ownerUserID)})
+		if err != nil {
+			return principalmodel.Principal{}, fmt.Errorf("resolve Integration connection owner %q: %w", ownerUserID, err)
+		}
+		resolved := resolution.Principal
+		if !resolved.Known || strings.TrimSpace(resolved.UserID) != ownerUserID {
+			return principalmodel.Principal{}, fmt.Errorf("Integration connection owner %q did not resolve to the same current user", ownerUserID)
+		}
+		if workspaceID := strings.TrimSpace(resolved.WorkspaceID); workspaceID != "" && workspaceID != strings.TrimSpace(request.WorkspaceID) {
+			return principalmodel.Principal{}, fmt.Errorf("Integration connection owner workspace %q does not match trigger workspace %q", workspaceID, request.WorkspaceID)
+		}
+		// Connection-owner triggers keep Runtime system authorization. Only the
+		// current, non-secret Identity facts are projected so source-owned handlers
+		// can assign ownership and organization scope without a browser token.
+		resolved.AccessBundle = nil
 		principal := principalmodel.NewSystemPrincipal(
 			ownerUserID,
 			principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "execute verified Integration event mapping"),
 		)
+		principal.Principal = resolved
+		principal.Principal.WorkspaceID = strings.TrimSpace(request.WorkspaceID)
+		principal.Principal.UserID = ownerUserID
+		principal.Principal.Known = true
 		principal.WorkspaceID = strings.TrimSpace(request.WorkspaceID)
 		principal.RequestID, principal.CorrelationID, principal.CausationID = request.EventID, request.EventID, request.EventID
 		return principal, nil
@@ -199,6 +271,24 @@ func validateRuntimeIntegrationTrigger(request integrationsdk.TriggerRequest) er
 	case "workflow":
 		if strings.TrimSpace(request.Target.WorkflowKey) == "" {
 			return fmt.Errorf("Runtime Integration workflow trigger requires workflow_key")
+		}
+	case "automation":
+		if strings.TrimSpace(request.Target.AutomationRuleKey) == "" {
+			return fmt.Errorf("Runtime Integration automation trigger requires automation_rule_key")
+		}
+		for name, value := range map[string]string{"mapping_revision": request.MappingRevision, "source.provider": request.Source.Provider, "source.event_type": request.Source.EventType, "source.external_id": request.Source.ExternalID, "source.received_at": request.Source.ReceivedAt} {
+			if strings.TrimSpace(value) == "" {
+				return fmt.Errorf("Runtime Integration automation trigger %s is required", name)
+			}
+		}
+		if len(request.MappingRevision) != 64 {
+			return fmt.Errorf("Runtime Integration automation trigger mapping_revision is invalid")
+		}
+		if decoded, err := hex.DecodeString(request.MappingRevision); err != nil || len(decoded) != 32 || strings.ToLower(request.MappingRevision) != request.MappingRevision {
+			return fmt.Errorf("Runtime Integration automation trigger mapping_revision is invalid")
+		}
+		if _, err := time.Parse(time.RFC3339Nano, request.Source.ReceivedAt); err != nil {
+			return fmt.Errorf("Runtime Integration automation trigger source.received_at is invalid")
 		}
 	case "agent_task":
 		if strings.TrimSpace(request.Target.AgentID) == "" || strings.TrimSpace(request.Target.ConversationID) == "" {

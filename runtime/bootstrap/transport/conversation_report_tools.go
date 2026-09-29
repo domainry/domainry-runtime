@@ -11,15 +11,22 @@ func (h runtimeAgentApplicationHost) ConversationToolDefinitions() []agent.Conve
 	if h.conversationToolsFactory == nil {
 		return nil
 	}
-	return h.conversationToolsFactory.ConversationToolDefinitions(toolsdk.ConversationToolCapabilities{MCP: h.hasMCPConversationTools()})
+	return h.conversationToolsFactory.ConversationToolDefinitions(toolsdk.ConversationToolCapabilities{
+		Business: h.conversations != nil,
+		MCP:      h.hasMCPConversationTools(),
+	})
 }
 
 func (h runtimeAgentApplicationHost) AssembleConversationTools(base agent.ConversationToolHost) (agent.ConversationToolHost, error) {
+	authorizer := h.conversationToolAuthorizer()
 	input := toolsdk.ConversationToolAssembly{
-		Base:           base,
+		Base: base,
+		BusinessSource: func() toolsdk.ConversationBusinessSource {
+			return conversationToolsBusinessSource{source: h.conversations}
+		},
 		ReportSource:   func() toolsdk.ReportSource { return h.conversations },
 		AnalysisSource: func() toolsdk.AnalysisSource { return h.conversations },
-		Authorize:      h.conversations.AuthorizeConversationTool,
+		Authorize:      authorizer.AuthorizeConversationTool,
 	}
 	if h.hasMCPConversationTools() {
 		input.MCP = &toolsdk.ConversationMCPPorts{

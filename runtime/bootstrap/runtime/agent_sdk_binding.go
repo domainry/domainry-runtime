@@ -34,7 +34,9 @@ type runtimeAgentSaaSHost struct{ runtimeID string }
 
 func (h runtimeAgentSaaSHost) RuntimeID() string { return h.runtimeID }
 
-func synchronizeAgentDefinitions(ctx context.Context, binding agentsdk.Binding, sourceID, revision string, definitions runtimeext.ProjectDefinitions) error {
+const agentDefinitionContractVersion = "domainry-agent-definition-v1"
+
+func synchronizeAgentDefinitions(ctx context.Context, binding agentsdk.Binding, sourceID string, definitions runtimeext.ProjectDefinitions) error {
 	repositories, ok := binding.(agentpersistence.DefinitionBinding)
 	if !ok || repositories.DefinitionRepository() == nil {
 		if !projectDefinitionsUseAgent(definitions) {
@@ -46,12 +48,8 @@ func synchronizeAgentDefinitions(ctx context.Context, binding agentsdk.Binding, 
 	if sourceID == "" {
 		sourceID = "project"
 	}
-	version := strings.TrimSpace(revision)
-	if version == "" {
-		version = "1"
-	}
 	snapshot := agentpersistence.DefinitionSnapshot{
-		SchemaVersion: version, SourceKind: "project_registry", SourceID: sourceID,
+		SourceKind: "project_registry", SourceID: sourceID,
 		Skills: definitions.AgentSkills, Agents: definitions.Agents, Tasks: definitions.AgentTasks,
 		Entrypoints: definitions.AgentEntrypoints, Principals: definitions.AgentServicePrincipals,
 	}
@@ -67,6 +65,7 @@ func synchronizeAgentDefinitions(ctx context.Context, binding agentsdk.Binding, 
 	}
 	hash := sha256.Sum256(raw)
 	snapshot.SchemaHash = hex.EncodeToString(hash[:])
+	snapshot.SchemaVersion = agentDefinitionContractVersion + ":" + snapshot.SchemaHash
 	if err := repositories.DefinitionRepository().SyncDefinitions(ctx, snapshot); err != nil {
 		return err
 	}

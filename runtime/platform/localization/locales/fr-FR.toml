@@ -134,6 +134,10 @@
 "notification.integration.credential.refreshFailed.body" = "L’identifiant du fournisseur n’a pas pu être renouvelé. Consultez le code d’erreur sécurisé."
 "notification.integration.credential.recovered.title" = "Identifiant rétabli : {{credential_name}}"
 "notification.integration.credential.recovered.body" = "L’identifiant est de nouveau valide et l’alerte précédente est résolue."
+"notification.integration.health.degraded.title" = "SLA de santé de l’intégration dépassé : {{metric_name}}"
+"notification.integration.health.degraded.body" = "La valeur observée {{observed_value}} {{unit}} dépasse la limite de {{threshold}} {{unit}} à {{observed_at}}."
+"notification.integration.health.recovered.title" = "Santé de l’intégration rétablie : {{metric_name}}"
+"notification.integration.health.recovered.body" = "La valeur observée {{observed_value}} {{unit}} respecte de nouveau la limite de {{threshold}} {{unit}} à {{observed_at}}."
 
 # Frontend runtime flat resources
 "connector.blockedBeforeActivation" = "Bloque avant activation"

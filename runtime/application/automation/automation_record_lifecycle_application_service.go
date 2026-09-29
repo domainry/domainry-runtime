@@ -13,6 +13,7 @@ import (
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
 	automationprojection "github.com/domainry/domainry-runtime/runtime/domain/automation/projection"
+	automationruntime "github.com/domainry/domainry-runtime/runtime/domain/automation/runtime"
 	automationdomain "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -79,7 +80,7 @@ func AutomationAfterOutbox(rules []automationmodel.AutomationRuleSchema, objectK
 		correlationID := valueOrDefault(strings.TrimSpace(principal.CorrelationID), principal.RequestID)
 		causationID := valueOrDefault(strings.TrimSpace(principal.CausationID), principal.RequestID)
 		event := automationmodel.AutomationLifecycleEvent{
-			ID: eventID, RuleKey: rule.Key, ObjectKey: objectKey, Operation: operation, RecordID: record.ID, RecordVersion: recordVersion,
+			ID: eventID, RuleKey: rule.Key, Rule: cloneAutomationRule(rule), ObjectKey: objectKey, Operation: operation, RecordID: record.ID, RecordVersion: recordVersion,
 			Before: recordcontract.RecordCloneData(before), Record: record, ActorUserID: principal.UserID, ActorRoleKey: principal.RoleKey,
 			RequestID: principal.RequestID, CorrelationID: correlationID, CausationID: causationID, IdentityPolicy: "revalidate_initiator",
 			AutomationDepth: principal.AutomationDepth, VisitedRuleKeys: append([]string(nil), principal.VisitedRuleKeys...), OccurredAt: time.Now().UTC().Format(time.RFC3339),
@@ -95,12 +96,12 @@ func (s *AutomationApplicationService) ExecuteOutboxMessage(ctx context.Context,
 		return automationError(apperror.KindForbidden, "backend.workspace_scope_required", err)
 	}
 	event := automationdomain.LifecycleEventFromPayload(message.Payload)
-	rule, ok := s.rules.Get(event.RuleKey)
-	if !ok || !rule.Enabled || rule.Trigger.Phase != "after" {
+	rule := event.Rule
+	if strings.TrimSpace(rule.Key) == "" || rule.Key != event.RuleKey || !rule.Enabled || rule.Trigger.Phase != "after" {
 		return automationError(apperror.KindBadRequest, "backend.automation.after_rule_not_found", nil, "rule", event.RuleKey)
 	}
 	record := event.Record
-	record.UpdatedAt = valueOrDefault(event.RecordVersion, record.UpdatedAt)
+	automationruntime.AutomationBindRecordVersion(&record, event.RecordVersion)
 	principal := s.principal(ctx, event.ActorUserID, event.ActorRoleKey, "")
 	principal.WorkspaceID = workspaceID.String()
 	if automationAuthorizeCommand(principal) != nil || strings.TrimSpace(principal.RoleKey) != strings.TrimSpace(event.ActorRoleKey) {

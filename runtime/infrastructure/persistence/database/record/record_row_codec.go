@@ -45,7 +45,16 @@ func recordsFromRows(profile persistencedriver.EngineProfile, object definitionm
 					if record.QuerySortValues == nil {
 						record.QuerySortValues = map[string]any{}
 					}
-					record.QuerySortValues[key] = value
+					// Cursor ordering follows SQL NULL semantics. A nullable
+					// datetime is intentionally rendered as "" in the public
+					// record shape, so using the rendered value here would turn a
+					// NULL keyset boundary into a non-NULL empty-string boundary
+					// and make the next page match the first page again.
+					if values[i] == nil {
+						record.QuerySortValues[key] = nil
+					} else {
+						record.QuerySortValues[key] = value
+					}
 				}
 			}
 			switch column {

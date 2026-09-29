@@ -134,6 +134,10 @@
 "notification.integration.credential.refreshFailed.body" = "تعذر تحديث بيانات اعتماد المزود. راجع رمز الخطأ الآمن."
 "notification.integration.credential.recovered.title" = "تمت استعادة بيانات الاعتماد: {{credential_name}}"
 "notification.integration.credential.recovered.body" = "أصبحت بيانات الاعتماد صالحة مرة أخرى وتم حل التنبيه السابق."
+"notification.integration.health.degraded.title" = "تم تجاوز اتفاقية مستوى صحة التكامل: {{metric_name}}"
+"notification.integration.health.degraded.body" = "تجاوزت القيمة المرصودة {{observed_value}} {{unit}} الحد {{threshold}} {{unit}} عند {{observed_at}}."
+"notification.integration.health.recovered.title" = "تعافت صحة التكامل: {{metric_name}}"
+"notification.integration.health.recovered.body" = "عادت القيمة المرصودة {{observed_value}} {{unit}} ضمن الحد {{threshold}} {{unit}} عند {{observed_at}}."
 
 # Frontend runtime flat resources
 "connector.blockedBeforeActivation" = "محظور قبل التفعيل"

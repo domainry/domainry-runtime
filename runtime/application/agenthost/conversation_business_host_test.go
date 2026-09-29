@@ -79,12 +79,13 @@ func newConversationBusinessFixture(t *testing.T, extraObjects ...definitionmode
 	t.Helper()
 	a := agentsdk.ConversationAuthority{Known: true, RuntimeID: "business-runtime", WorkspaceID: "business-workspace", UserID: "operator", RoleKey: "staff"}
 	p := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: a.WorkspaceID, UserID: a.UserID}}, accessfixture.Bundle{
-		Key: "staff", Permissions: []string{"customer.read", agentsdk.ConversationToolActionPrefix + "business_catalog", agentsdk.ConversationToolActionPrefix + "query_records", agentsdk.ConversationToolActionPrefix + "get_record"},
+		Key: "staff", Permissions: []string{"customer.read", agentsdk.ConversationToolActionPrefix + "business_catalog", agentsdk.ConversationToolActionPrefix + "query_records", agentsdk.ConversationToolActionPrefix + "get_record", agentsdk.ConversationToolActionPrefix + "crm_search_accounts"},
 		DataPolicies: []accessfixture.DataPolicyFixture{
 			{ObjectKey: "customer", Action: "read", Scope: identitysdk.DataScopeOwner, Read: true},
 			{ObjectKey: "agent.conversation_tools", Action: "business_catalog", Scope: identitysdk.DataScopeAll, Read: true},
 			{ObjectKey: "agent.conversation_tools", Action: "query_records", Scope: identitysdk.DataScopeAll, Read: true},
 			{ObjectKey: "agent.conversation_tools", Action: "get_record", Scope: identitysdk.DataScopeAll, Read: true},
+			{ObjectKey: "agent.conversation_tools", Action: "crm_search_accounts", Scope: identitysdk.DataScopeAll, Read: true},
 		},
 		FieldPolicies: []accessfixture.FieldPolicyFixture{
 			{ObjectKey: "customer", FieldKey: "name", Read: true},
@@ -186,6 +187,19 @@ func TestConversationBusinessRuntimeReadsApplyScopesMaskingAndExactIntegers(t *t
 	if string(page.Items[0].Data["amount"]) != "9007199254740993" {
 		t.Fatal("integer precision changed", string(page.Items[0].Data["amount"]))
 	}
+	searched, err := host.QueryBusinessRecords(t.Context(), agentsdk.ConversationBusinessQuery{
+		ObjectKey: "customer", Fields: []string{"name"}, OptionalFields: []string{"account", "secret"}, Search: "Al", SearchFields: []string{"name"}, OptionalSearchFields: []string{"account", "secret"}, PageSize: 10,
+	}, a)
+	if err != nil || len(searched.Items) != 1 || searched.Items[0].ID != "own-1" || string(searched.Items[0].Data["account"]) != `"****6789"` || searched.Items[0].Data["secret"] != nil || reads.last.Search != "Al" || !slices.Equal(reads.last.SearchFields, []string{"name"}) {
+		t.Fatalf("searched=%+v query=%+v err=%v", searched, reads.last, err)
+	}
+	optional, err := host.GetBusinessRecord(t.Context(), agentsdk.ConversationBusinessGet{ObjectKey: "customer", RecordID: "own-1", Fields: []string{"name"}, OptionalFields: []string{"account", "secret"}}, a)
+	if err != nil || string(optional.Data["name"]) != `"Alpha"` || string(optional.Data["account"]) != `"****6789"` || optional.Data["secret"] != nil {
+		t.Fatalf("optional field projection=%+v err=%v", optional, err)
+	}
+	if _, err = host.GetBusinessRecord(t.Context(), agentsdk.ConversationBusinessGet{ObjectKey: "customer", RecordID: "own-1", Fields: []string{"secret"}}, a); err == nil {
+		t.Fatal("unreadable required field was silently omitted")
+	}
 	raw, _ := json.Marshal(page)
 	if strings.Contains(string(raw), "PRIVATE-") || strings.Contains(string(raw), "secret") {
 		t.Fatal("unreadable or unmasked values returned")
@@ -216,6 +230,10 @@ func TestConversationBusinessRejectsInvalidQueriesBeforeRuntimeRead(t *testing.T
 		{ObjectKey: "customer", Filters: []agentsdk.ConversationBusinessFilter{{Field: "account", Operator: "eq", Value: json.RawMessage(`"guess"`)}}},
 		{ObjectKey: "customer", Filters: []agentsdk.ConversationBusinessFilter{{Field: "amount", Operator: "eq", Value: json.RawMessage(`"invalid"`)}}},
 		{ObjectKey: "customer", Filters: []agentsdk.ConversationBusinessFilter{{Field: "name", Operator: "in", Value: json.RawMessage(`[]`)}}},
+		{ObjectKey: "customer", Search: "Alpha"},
+		{ObjectKey: "customer", SearchFields: []string{"name"}},
+		{ObjectKey: "customer", Search: "Alpha", SearchFields: []string{"secret"}},
+		{ObjectKey: "customer", Search: "Alpha", SearchFields: []string{"name", "name"}},
 		{ObjectKey: "customer", PageSize: 26},
 		{ObjectKey: "customer", Page: 2},
 	} {
@@ -308,5 +326,33 @@ func TestConversationBusinessRevalidatesCurrentIdentityAndWholeEvidence(t *testi
 	auth, err = host.AuthorizeConversationTool(t.Context(), agentsdk.ConversationToolRequest{Authority: a, Definition: definition})
 	if err == nil && auth.Granted {
 		t.Fatal("revoked tool grant retained")
+	}
+}
+
+func TestConversationBusinessAuthorizesExactProductToolCatalogContracts(t *testing.T) {
+	host, _, _, authority := newConversationBusinessFixture(t)
+	product := agentsdk.ConversationToolDefinition{
+		Key: "crm_search_accounts", Version: "1", ActionKey: "agent.conversation_tools.crm_search_accounts",
+		Effect: "read", Idempotency: "natural",
+	}
+	authorization, err := host.AuthorizeConversationToolCatalog(t.Context(), agentsdk.ConversationToolRequest{Authority: authority, Definition: product}, []agentsdk.ConversationToolDefinition{product})
+	if err != nil || !authorization.Granted {
+		t.Fatalf("product tool authorization=%+v err=%v", authorization, err)
+	}
+	for name, changed := range map[string]agentsdk.ConversationToolDefinition{
+		"version": func() agentsdk.ConversationToolDefinition { value := product; value.Version = "2"; return value }(),
+		"Action key": func() agentsdk.ConversationToolDefinition {
+			value := product
+			value.ActionKey += "_forged"
+			return value
+		}(),
+		"tool key": func() agentsdk.ConversationToolDefinition { value := product; value.Key += "_forged"; return value }(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			decision, decisionErr := host.AuthorizeConversationToolCatalog(t.Context(), agentsdk.ConversationToolRequest{Authority: authority, Definition: changed}, []agentsdk.ConversationToolDefinition{product})
+			if decisionErr != nil || decision.Granted {
+				t.Fatalf("mismatched contract authorization=%+v err=%v", decision, decisionErr)
+			}
+		})
 	}
 }

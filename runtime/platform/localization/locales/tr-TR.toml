@@ -134,6 +134,10 @@
 "notification.integration.credential.refreshFailed.body" = "Sağlayıcı kimlik bilgisi yenilenemedi. Güvenli hata kodunu inceleyin."
 "notification.integration.credential.recovered.title" = "Kimlik bilgisi kurtarıldı: {{credential_name}}"
 "notification.integration.credential.recovered.body" = "Kimlik bilgisi yeniden geçerli ve önceki uyarı çözüldü."
+"notification.integration.health.degraded.title" = "Entegrasyon sağlık SLA sınırı aşıldı: {{metric_name}}"
+"notification.integration.health.degraded.body" = "{{observed_at}} zamanında gözlenen {{observed_value}} {{unit}}, {{threshold}} {{unit}} sınırını aştı."
+"notification.integration.health.recovered.title" = "Entegrasyon sağlığı düzeldi: {{metric_name}}"
+"notification.integration.health.recovered.body" = "{{observed_at}} zamanında gözlenen {{observed_value}} {{unit}}, {{threshold}} {{unit}} sınırına geri döndü."
 
 # Frontend runtime flat resources
 "connector.blockedBeforeActivation" = "Etkinleştirmeden önce engellendi"

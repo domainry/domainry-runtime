@@ -134,6 +134,10 @@
 "notification.integration.credential.refreshFailed.body" = "No se pudo actualizar la credencial del proveedor. Revisa el código de error seguro."
 "notification.integration.credential.recovered.title" = "Credencial recuperada: {{credential_name}}"
 "notification.integration.credential.recovered.body" = "La credencial vuelve a ser válida y la alerta anterior está resuelta."
+"notification.integration.health.degraded.title" = "SLA de salud de la integración incumplido: {{metric_name}}"
+"notification.integration.health.degraded.body" = "El valor observado {{observed_value}} {{unit}} supera el límite de {{threshold}} {{unit}} a las {{observed_at}}."
+"notification.integration.health.recovered.title" = "Salud de la integración recuperada: {{metric_name}}"
+"notification.integration.health.recovered.body" = "El valor observado {{observed_value}} {{unit}} vuelve a estar dentro del límite de {{threshold}} {{unit}} a las {{observed_at}}."
 
 # Frontend runtime flat resources
 "connector.blockedBeforeActivation" = "Bloqueado antes de la activación"

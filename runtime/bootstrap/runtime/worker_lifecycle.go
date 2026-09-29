@@ -35,6 +35,7 @@ func StartWorkers(ctx context.Context, runtime *Runtime) {
 	runtime.startConnectorProviderBackgroundWorker(ctx)
 	runtime.startIntegrationInvocationReconciliationWorker(ctx)
 	runtime.startIntegrationCredentialExpiryWorker(ctx)
+	runtime.startIntegrationHealthAlertWorker(ctx)
 	runtime.StartNotificationPublicationWorker(ctx)
 	runtime.startNotificationInboxWorker(ctx)
 	runtime.startNotificationChannelWorker(ctx)

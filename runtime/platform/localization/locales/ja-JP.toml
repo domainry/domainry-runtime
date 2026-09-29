@@ -134,6 +134,10 @@
 "notification.integration.credential.refreshFailed.body" = "プロバイダーの認証情報を更新できませんでした。安全なエラーコードを確認してください。"
 "notification.integration.credential.recovered.title" = "認証情報が復旧しました: {{credential_name}}"
 "notification.integration.credential.recovered.body" = "認証情報は再び有効になり、以前のアラートは解決済みです。"
+"notification.integration.health.degraded.title" = "インテグレーションの正常性 SLA 違反: {{metric_name}}"
+"notification.integration.health.degraded.body" = "{{observed_at}} の観測値 {{observed_value}} {{unit}} が上限 {{threshold}} {{unit}} を超えました。"
+"notification.integration.health.recovered.title" = "インテグレーションの正常性が回復: {{metric_name}}"
+"notification.integration.health.recovered.body" = "{{observed_at}} の観測値 {{observed_value}} {{unit}} は上限 {{threshold}} {{unit}} 以内です。"
 
 # Frontend runtime flat resources
 "connector.blockedBeforeActivation" = "有効化前にブロック"

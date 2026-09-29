@@ -144,6 +144,14 @@ func (h *ConversationBusinessHost) authorizeAction(ctx context.Context, a agents
 	return out, nil
 }
 func (h *ConversationBusinessHost) AuthorizeConversationTool(ctx context.Context, in agentsdk.ConversationToolRequest) (agentsdk.ConversationToolAuthorization, error) {
+	return h.AuthorizeConversationToolCatalog(ctx, in, nil)
+}
+
+// AuthorizeConversationToolCatalog extends the Runtime-owned business
+// authorization boundary with exact product tool contracts supplied by the
+// source-selected ConversationToolsFactory. The Action grant still comes from
+// current Identity state; catalog membership alone never grants execution.
+func (h *ConversationBusinessHost) AuthorizeConversationToolCatalog(ctx context.Context, in agentsdk.ConversationToolRequest, product []agentsdk.ConversationToolDefinition) (agentsdk.ConversationToolAuthorization, error) {
 	if (in.Definition.Key == "workflow_start" || in.Definition.Key == "workflow_get") && (h.workflows == nil || len(h.evidenceKey) == 0) {
 		return agentsdk.ConversationToolAuthorization{}, nil
 	}
@@ -159,6 +167,7 @@ func (h *ConversationBusinessHost) AuthorizeConversationTool(ctx context.Context
 	definitions = append(definitions, toolsdk.ReportQueryDefinitions()...)
 	definitions = append(definitions, toolsdk.AnalysisDefinitions()...)
 	definitions = append(definitions, toolsdk.MCPDefinitions()...)
+	definitions = append(definitions, product...)
 	for _, definition := range definitions {
 		if definition.Key == in.Definition.Key && definition.ActionKey == in.Definition.ActionKey && definition.Version == in.Definition.Version {
 			return h.authorizeAction(ctx, in.Authority, definition.ActionKey)
@@ -248,27 +257,38 @@ func (h *ConversationBusinessHost) object(ctx context.Context, key string, a age
 	return definitionmodel.ObjectSchema{}, p, conversationBusinessError("forbidden")
 }
 
-func businessSelectFields(object definitionmodel.ObjectSchema, requested []string) ([]string, error) {
-	if len(requested) > 50 {
+func businessSelectFields(object definitionmodel.ObjectSchema, requested, optional []string) ([]string, error) {
+	if len(requested)+len(optional) > 50 {
 		return nil, conversationBusinessError("bad_request")
 	}
 	allowed := map[string]bool{}
 	for _, field := range object.Fields {
 		allowed[field.Key] = true
 	}
-	if len(requested) == 0 {
+	if len(requested) == 0 && len(optional) == 0 {
 		for _, field := range object.Fields {
 			requested = append(requested, field.Key)
 		}
 	}
 	seen := map[string]bool{}
+	selected := make([]string, 0, len(requested)+len(optional))
 	for _, key := range requested {
 		if !allowed[key] || seen[key] {
 			return nil, conversationBusinessError("bad_request")
 		}
 		seen[key] = true
+		selected = append(selected, key)
 	}
-	return requested, nil
+	for _, key := range optional {
+		if key == "" || seen[key] {
+			return nil, conversationBusinessError("bad_request")
+		}
+		seen[key] = true
+		if allowed[key] {
+			selected = append(selected, key)
+		}
+	}
+	return selected, nil
 }
 
 func businessRecord(record recordmodel.Record, fields []string) (agentsdk.ConversationBusinessRecord, error) {
@@ -294,7 +314,7 @@ func (h *ConversationBusinessHost) GetBusinessRecord(ctx context.Context, q agen
 	if err != nil {
 		return out, err
 	}
-	fields, err := businessSelectFields(object, q.Fields)
+	fields, err := businessSelectFields(object, q.Fields, q.OptionalFields)
 	if err != nil {
 		return out, err
 	}

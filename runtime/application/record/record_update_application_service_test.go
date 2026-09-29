@@ -169,9 +169,9 @@ func TestUpdateServiceOwnsCompleteUpdateTransaction(t *testing.T) {
 			return nil
 		},
 		ValidateDuplicate: func(context.Context, string, definitionmodel.ObjectSchema, string, map[string]any) error { return nil },
-		AfterOutbox: func(_ string, operation string, _ map[string]any, _ recordmodel.Record, _ principalmodel.Principal) []publicationmodel.Message {
+		AfterOutbox: func(_ context.Context, _ string, operation string, _ map[string]any, _ recordmodel.Record, _ principalmodel.Principal) ([]publicationmodel.Message, error) {
 			outboxOperations = append(outboxOperations, operation)
-			return []publicationmodel.Message{{ID: "outbox-" + operation}}
+			return []publicationmodel.Message{{ID: "outbox-" + operation}}, nil
 		},
 		UpdatedTriggers: func(string, map[string]any, map[string]any) []string { return []string{"record_updated:case.status"} },
 		PrepareWorkflow: func(_ context.Context, _ string, _ recordmodel.Record, _ map[string]any, _ principalmodel.Principal, trigger string) ([]workflowmodel.WorkflowExecution, error) {

@@ -178,11 +178,12 @@ func (s *HTTPRouter) principalFromRequest(r *http.Request) principalmodel.Princi
 		}
 		return s.principalWithBusinessProfile(principal, r)
 	}
-	if token := apiKeyTokenFromRequest(r); token != "" {
-		principal, _, err := s.integrationAuth.PrincipalFromIntegrationAPIKey(r.Context(), token, workspaceID, requestID)
-		if err == nil {
-			return s.principalWithBusinessProfile(principal, r)
-		}
+	if apiKeyTokenFromRequest(r) != "" {
+		// API keys are authenticated exactly once by withAuth. Callers before that
+		// boundary (listener capacity and denied-request auditing) may inspect only
+		// the target workspace; re-authenticating here would also consume the
+		// per-key rate limit more than once for one HTTP request.
+		return principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: workspaceID, Known: false}, RequestID: requestID}
 		return principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: workspaceID, Known: false}, RequestID: requestID}
 	}
 	if bearerTokenFromRequest(r) != "" {
@@ -340,11 +341,8 @@ func (s *HTTPRouter) auditPrincipalFromRequest(r *http.Request) principalmodel.P
 		principal.RequestID = requestID
 		return principal
 	}
-	if token := apiKeyTokenFromRequest(r); token != "" {
-		principal, _, err := s.integrationAuth.PrincipalFromIntegrationAPIKey(r.Context(), token, workspaceIDFromRequest(r), requestID)
-		if err == nil {
-			return principal
-		}
+	if apiKeyTokenFromRequest(r) != "" {
+		return principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: workspaceIDFromRequest(r), Known: false}, RequestID: requestID}
 	}
 	if s.allowDevAuthHeaders && devAuthHeadersPresent(r) {
 		userID := strings.TrimSpace(r.Header.Get("X-User-ID"))

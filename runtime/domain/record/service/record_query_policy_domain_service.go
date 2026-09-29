@@ -119,10 +119,14 @@ func (s *RecordQueryPolicyDomainService) CanAccessRecord(principal principalmode
 }
 
 func (s *RecordQueryPolicyDomainService) CanWriteRecordScope(principal principalmodel.Principal, object definitionmodel.ObjectSchema, data map[string]any) bool {
+	return s.CanWriteRecordActionScope(principal, object, data, "update")
+}
+
+func (s *RecordQueryPolicyDomainService) CanWriteRecordActionScope(principal principalmodel.Principal, object definitionmodel.ObjectSchema, data map[string]any, action string) bool {
 	if principal.AccessBundle != nil {
-		return recordpolicy.RecordCanWriteScope(principal, object, data)
+		return recordpolicy.RecordCanWriteActionScope(principal, object, data, normalizeSDKScopeAction(action))
 	}
-	return principal.SystemScope.Valid() && principal.Allows(object.Key, "update")
+	return principal.SystemScope.Valid() && principal.Allows(object.Key, normalizeSDKScopeAction(action))
 }
 
 // CanWriteCandidateScope evaluates compiled relation predicates against the

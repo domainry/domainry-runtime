@@ -59,6 +59,43 @@ func TestBusinessActionExecutionRejectsConnectorCallsOutsidePublishedGrant(t *te
 	}
 }
 
+func TestBusinessActionExecutionLeasesDynamicAccountWritesOnlyForDurableOwners(t *testing.T) {
+	for _, source := range []actionmodel.ActionSource{actionmodel.ActionSourceAgent, actionmodel.ActionSourceRecordTimer, actionmodel.ActionSourceScheduler} {
+		t.Run(string(source), func(t *testing.T) {
+			execution := &businessActionExecution{
+				unitOfWork: newActionTestUnitOfWork(),
+				invocation: actionmodel.ActionInvocation{Source: source, PreventExecutionReclaim: true},
+			}
+			lease, err := execution.AcquireConnectionAccountWrite()
+			if err != nil {
+				t.Fatal(err)
+			}
+			lease.Release()
+		})
+	}
+	for name, invocation := range map[string]actionmodel.ActionInvocation{
+		"reclaimable Agent": {Source: actionmodel.ActionSourceAgent},
+		"HTTP":              {Source: actionmodel.ActionSourceHTTP, PreventExecutionReclaim: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			execution := &businessActionExecution{unitOfWork: newActionTestUnitOfWork(), invocation: invocation}
+			if _, err := execution.AcquireConnectionAccountWrite(); apperror.CodeOf(err) != runtimeext.ConnectorActionSideEffectOutboxErrorCode {
+				t.Fatalf("error=%v", err)
+			}
+		})
+	}
+	execution := &businessActionExecution{
+		unitOfWork: newActionTestUnitOfWork(),
+		invocation: actionmodel.ActionInvocation{Source: actionmodel.ActionSourceAgent, PreventExecutionReclaim: true},
+	}
+	if _, err := execution.unitOfWork.beginWriting(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := execution.AcquireConnectionAccountWrite(); apperror.CodeOf(err) != runtimeext.ConnectorCallAfterWriteErrorCode {
+		t.Fatalf("write-phase account call error=%v", err)
+	}
+}
+
 func TestBusinessActionExecutionStagesOnlyValidatedGrantedOutboxIntent(t *testing.T) {
 	grant := runtimeext.ActionConnectorCapability{
 		ConnectorKey: "email", ConnectionKey: "primary", OperationKey: "send",

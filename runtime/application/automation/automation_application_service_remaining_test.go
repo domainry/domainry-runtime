@@ -81,7 +81,7 @@ func TestAutomationOutboxRejectsRevalidatedRoleMismatch(t *testing.T) {
 		},
 	})
 	event := automationmodel.AutomationLifecycleEvent{
-		RuleKey: "after", ActorUserID: "operator", ActorRoleKey: "original-role",
+		RuleKey: "after", Rule: rule, ActorUserID: "operator", ActorRoleKey: "original-role",
 		Record: recordmodel.Record{ID: "order-1"},
 	}
 	message := publicationmodel.Message{

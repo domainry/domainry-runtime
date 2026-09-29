@@ -112,11 +112,11 @@ func buildRecordApplicationDependencies(s *runtimeAssembly) recordapplication.Re
 			_, err := s.automationApplicationService.RunBefore(ctx, objectKey, operation, recordID, input, before, candidate, principal)
 			return err
 		},
-		AfterOutbox: func(objectKey, operation string, before map[string]any, record recordmodel.Record, principal principalmodel.Principal) []publicationmodel.Message {
+		AfterOutbox: func(ctx context.Context, objectKey, operation string, before map[string]any, record recordmodel.Record, principal principalmodel.Principal) ([]publicationmodel.Message, error) {
 			if s.automationApplicationService == nil {
-				return nil
+				return nil, nil
 			}
-			return s.automationApplicationService.AfterOutbox(objectKey, operation, before, record, principal)
+			return s.automationApplicationService.AfterOutbox(ctx, objectKey, operation, before, record, principal)
 		},
 		PrepareWorkflow: func(ctx context.Context, objectKey string, record recordmodel.Record, before map[string]any, principal principalmodel.Principal, trigger string) ([]workflowmodel.WorkflowExecution, error) {
 			intents, _, err := workflowTriggers.Prepare(ctx, objectKey, record, before, principal, trigger)

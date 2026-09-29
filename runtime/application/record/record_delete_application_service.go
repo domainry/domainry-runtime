@@ -44,7 +44,7 @@ type RecordDeleteDependencies struct {
 	CanWrite            func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool
 	RunBefore           func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error
 	ValidatePolicies    func(context.Context, definitionmodel.ObjectSchema, map[string]any, map[string]any, string, string, principalmodel.Principal) error
-	AfterOutbox         func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message
+	AfterOutbox         func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error)
 	UpdatedTriggers     func(string, map[string]any, map[string]any) []string
 	PrepareWorkflow     func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error)
 	ExecuteWorkflow     func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
@@ -285,7 +285,11 @@ func (s *RecordDeleteApplicationService) planSoftDelete(ctx context.Context, obj
 		commit.Audit = &audit
 	}
 	if s.dependencies.AfterOutbox != nil {
-		commit.Outbox = s.dependencies.AfterOutbox(objectKey, "delete", beforeData, record, principal)
+		outbox, outboxErr := s.dependencies.AfterOutbox(ctx, objectKey, "delete", beforeData, record, principal)
+		if outboxErr != nil {
+			return outboxErr
+		}
+		commit.Outbox = outbox
 	}
 	if s.dependencies.UpdatedTriggers != nil && s.dependencies.PrepareWorkflow != nil {
 		for _, trigger := range s.dependencies.UpdatedTriggers(objectKey, beforeData, record.Data) {
@@ -347,7 +351,11 @@ func (s *RecordDeleteApplicationService) planHardDelete(ctx context.Context, obj
 		commit.Audit = &audit
 	}
 	if s.dependencies.AfterOutbox != nil {
-		commit.Outbox = s.dependencies.AfterOutbox(objectKey, "delete", beforeData, record, principal)
+		outbox, outboxErr := s.dependencies.AfterOutbox(ctx, objectKey, "delete", beforeData, record, principal)
+		if outboxErr != nil {
+			return outboxErr
+		}
+		commit.Outbox = outbox
 	}
 	plan, err := s.dependencies.MutationKernel.Plan(ctx, principal, commit, beforeData)
 	if err != nil {

@@ -556,6 +556,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 			NotificationEventPublisher:          notificationEventPublisherCallback(notificationPublisher),
 			AutomationWorker:                    automationpersistence.NewAutomationWorkerStore(store),
 			AutomationExecutions:                automationpersistence.NewAutomationExecutionStore(store),
+			AutomationDefinitions:               automationpersistence.NewAutomationRuleDefinitionStore(store),
 			ActionExecutions:                    actionpersistence.NewActionBusinessExecutionStore(store),
 			ActionAssurance:                     actionpersistence.NewActionAssuranceStore(store),
 			ProjectExtensions:                   projectExtensions,

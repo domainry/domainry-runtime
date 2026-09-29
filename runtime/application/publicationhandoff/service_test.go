@@ -39,6 +39,8 @@ func (p *publicationRepositoryProbe) GetOutbox(context.Context, string, string) 
 type publicationWorkerProbe struct {
 	publicationRepositoryProbe
 	status, responseRef string
+	retryScheduled      bool
+	retryDelaySeconds   int
 	due                 []publicationmodel.Message
 	listErr             error
 }
@@ -60,7 +62,9 @@ func (p *publicationWorkerProbe) UpdateOutboxStatus(_ context.Context, _, _, _ s
 	value.Status, value.ResponseRef = status, responseRef
 	return value, nil
 }
-func (p *publicationWorkerProbe) ScheduleOutboxRetry(context.Context, string, string, string, int64, int, string, string) (publicationmodel.Message, error) {
+func (p *publicationWorkerProbe) ScheduleOutboxRetry(_ context.Context, _, _, _ string, _ int64, delaySeconds int, _, _ string) (publicationmodel.Message, error) {
+	p.retryScheduled = true
+	p.retryDelaySeconds = delaySeconds
 	return p.inserted, nil
 }
 
@@ -166,8 +170,33 @@ func TestPublicationWorkerRecordsRetryAttemptByOwner(t *testing.T) {
 	if _, err := service.process(t.Context(), Locator{WorkspaceID: "workspace-primary", MessageID: "message-retry-metrics"}); err == nil {
 		t.Fatal("retry attempt unexpectedly succeeded")
 	}
+	if !repository.retryScheduled || repository.retryDelaySeconds <= 0 || repository.status == "dead_letter" {
+		t.Fatalf("retryScheduled=%v retryDelaySeconds=%d status=%q", repository.retryScheduled, repository.retryDelaySeconds, repository.status)
+	}
 	metrics := workerplatform.OpenMetrics(t.Context())
 	if !strings.Contains(metrics, `domainry_runtime_worker_owner_outcomes_total{owner="runtime_publication_outbox",outcome="retry"}`) {
 		t.Fatalf("publication retry metric missing:\n%s", metrics)
+	}
+}
+
+func TestPublicationWorkerMovesTenthFailureToDeadLetter(t *testing.T) {
+	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: publicationmodel.Message{
+		ID: "message-dead-letter", WorkspaceID: "workspace-primary", ConnectorKey: "__automation__", Operation: "rule",
+		Payload: map[string]any{}, Status: "queued", AttemptCount: maxHandoffAttempts,
+	}}}
+	service := NewPublicationHandoffApplicationService(Dependencies{
+		Repository: &repository.publicationRepositoryProbe, WorkerRepository: repository,
+		Delivery: &deliveryProbe{err: errors.New("automation execution failed")},
+	})
+	message, err := service.process(t.Context(), Locator{WorkspaceID: "workspace-primary", MessageID: "message-dead-letter"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message.Status != "dead_letter" || repository.status != "dead_letter" || repository.retryScheduled {
+		t.Fatalf("message=%+v status=%q retryScheduled=%v", message, repository.status, repository.retryScheduled)
+	}
+	metrics := workerplatform.OpenMetrics(t.Context())
+	if !strings.Contains(metrics, `domainry_runtime_worker_owner_outcomes_total{owner="runtime_publication_outbox",outcome="dead_letter"}`) {
+		t.Fatalf("publication dead-letter metric missing:\n%s", metrics)
 	}
 }

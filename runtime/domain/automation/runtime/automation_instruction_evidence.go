@@ -11,9 +11,11 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
+const automationRecordVersionExtInfoKey = "runtime.automation.record_version"
+
 func AutomationIsSimulationSideEffect(instructionType string) bool {
 	switch strings.TrimSpace(instructionType) {
-	case "invoke_business_action", "emit_event", "start_workflow":
+	case "invoke_business_action", "emit_event", "start_workflow", "request_human_review":
 		return true
 	default:
 		return false
@@ -44,7 +46,25 @@ func AutomationRecordVersion(record *recordmodel.Record) string {
 	if record == nil {
 		return "unknown"
 	}
+	if record.ExtInfo != nil {
+		if version := strings.TrimSpace(fmt.Sprint(record.ExtInfo[automationRecordVersionExtInfoKey])); version != "" && version != "<nil>" {
+			return version
+		}
+	}
 	return valueOrDefault(strings.TrimSpace(record.UpdatedAt), "unknown")
+}
+
+// AutomationBindRecordVersion keeps the mutation fingerprint separate from
+// the record's actual optimistic-concurrency revision. Rendering may therefore
+// expose $record.updated_at without weakening automation idempotency.
+func AutomationBindRecordVersion(record *recordmodel.Record, version string) {
+	if record == nil || strings.TrimSpace(version) == "" {
+		return
+	}
+	if record.ExtInfo == nil {
+		record.ExtInfo = map[string]any{}
+	}
+	record.ExtInfo[automationRecordVersionExtInfoKey] = strings.TrimSpace(version)
 }
 
 func AutomationInstructionResultMap(result automationmodel.AutomationInstructionResult) map[string]any {

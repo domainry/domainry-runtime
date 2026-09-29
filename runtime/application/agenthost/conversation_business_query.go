@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"io"
 	"slices"
+	"strings"
+	"unicode/utf8"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -26,14 +28,14 @@ func (h *ConversationBusinessHost) queryBusinessRecords(ctx context.Context, q a
 	if q.PageSize == 0 {
 		q.PageSize = 20
 	}
-	if q.Page < 0 || q.Page > 1000000 || q.PageSize < 1 || q.PageSize > 25 || len(q.Filters) > 20 || len(q.Sort) > 5 || q.Page > 1 && q.Cursor == "" {
+	if q.Page < 0 || q.Page > 1000000 || q.PageSize < 1 || q.PageSize > 25 || len(q.Filters) > 20 || len(q.Sort) > 5 || len(q.SearchFields)+len(q.OptionalSearchFields) > 10 || q.Page > 1 && q.Cursor == "" || utf8.RuneCountInString(q.Search) > 500 || (strings.TrimSpace(q.Search) == "") != (len(q.SearchFields)+len(q.OptionalSearchFields) == 0) {
 		return out, conversationBusinessError("bad_request")
 	}
 	object, p, err := h.object(ctx, q.ObjectKey, a)
 	if err != nil {
 		return out, err
 	}
-	fields, err := businessSelectFields(object, q.Fields)
+	fields, err := businessSelectFields(object, q.Fields, q.OptionalFields)
 	if err != nil {
 		return out, err
 	}
@@ -47,6 +49,29 @@ func (h *ConversationBusinessHost) queryBusinessRecords(ctx context.Context, q a
 	for _, field := range object.Fields {
 		definitions[field.Key] = businessField(field, object.Key, p)
 	}
+	searchSeen := map[string]bool{}
+	for _, fieldKey := range q.SearchFields {
+		field, ok := definitions[fieldKey]
+		if !ok || searchSeen[fieldKey] || !businessOperatorAllowed(field, "contains") {
+			return out, conversationBusinessError("bad_request")
+		}
+		searchSeen[fieldKey] = true
+		query.SearchFields = append(query.SearchFields, fieldKey)
+	}
+	for _, fieldKey := range q.OptionalSearchFields {
+		field, ok := definitions[fieldKey]
+		if fieldKey == "" || searchSeen[fieldKey] {
+			return out, conversationBusinessError("bad_request")
+		}
+		searchSeen[fieldKey] = true
+		if ok && businessOperatorAllowed(field, "contains") {
+			query.SearchFields = append(query.SearchFields, fieldKey)
+		}
+	}
+	if strings.TrimSpace(q.Search) != "" && len(query.SearchFields) == 0 {
+		return out, conversationBusinessError("bad_request")
+	}
+	query.Search = strings.TrimSpace(q.Search)
 	// Validate before Runtime's legacy normalizer, which drops invalid filters
 	// and sort keys. A malformed model request must never become a broader read.
 	query.FilterExpression, err = businessQueryFilterExpression(object, definitions, q.Filters, required)

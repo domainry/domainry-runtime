@@ -61,7 +61,7 @@ type RecordApplicationDependencies struct {
 	IdentityProfileExtensions    func() []profilebindingmodel.Binding
 	FindBeforeCreateReplay       func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) (recordmodel.Record, bool, error)
 	RunBefore                    func(context.Context, string, string, string, map[string]any, map[string]any, map[string]any, principalmodel.Principal) error
-	AfterOutbox                  func(string, string, map[string]any, recordmodel.Record, principalmodel.Principal) []publicationmodel.Message
+	AfterOutbox                  func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error)
 	BuildAudit                   func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) auditmodel.AuditEvent
 	RecordMutationExecution      *recordruntime.RecordMutationExecutionRuntime
 	DataExchange                 dataexchange.Binding
@@ -286,14 +286,16 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 	importer := NewRecordImportApplicationService(RecordImportDependencies{
 		Repository:      dependencies.Repository,
 		ObjectForAction: service.queryPolicy.ObjectForAction,
-		CanWrite:        service.queryPolicy.CanWriteRecordScope,
+		CanWrite: func(principal principalmodel.Principal, object definitionmodel.ObjectSchema, data map[string]any) bool {
+			return service.queryPolicy.CanWriteRecordActionScope(principal, object, data, "import")
+		},
 		ValidateRelations: func(ctx context.Context, object definitionmodel.ObjectSchema, data map[string]any, principal principalmodel.Principal) error {
 			return dependencies.Validation.ValidateRelations(ctx, object, data, principal)
 		},
 		CreateRecord: func(ctx context.Context, objectKey string, data map[string]any, principal principalmodel.Principal) (recordmodel.Record, error) {
-			return service.CreateRecord(ctx, objectKey, data, principal)
+			return service.createImportedRecord(ctx, objectKey, data, principal)
 		},
-		CreateIdempotent: service.CreateRecordIdempotentResult,
+		CreateIdempotent: service.createImportedRecordIdempotentResult,
 		Execution:        service.recordMutationExecution,
 		Audit:            service.audit,
 	})

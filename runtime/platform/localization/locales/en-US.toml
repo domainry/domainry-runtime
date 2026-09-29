@@ -134,6 +134,10 @@
 "notification.integration.credential.refreshFailed.body" = "The provider credential could not be refreshed. Review the safe error code and reconnect if required."
 "notification.integration.credential.recovered.title" = "Credential recovered: {{credential_name}}"
 "notification.integration.credential.recovered.body" = "The credential is valid again and the previous alert is resolved."
+"notification.integration.health.degraded.title" = "Integration health SLA breached: {{metric_name}}"
+"notification.integration.health.degraded.body" = "Observed {{observed_value}} {{unit}} exceeds the limit of {{threshold}} {{unit}} at {{observed_at}}."
+"notification.integration.health.recovered.title" = "Integration health recovered: {{metric_name}}"
+"notification.integration.health.recovered.body" = "Observed {{observed_value}} {{unit}} is within the limit of {{threshold}} {{unit}} at {{observed_at}}."
 
 # Frontend runtime flat resources
 "connector.blockedBeforeActivation" = "Blocked before activation"
