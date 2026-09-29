@@ -63,6 +63,13 @@ func (e *businessActionExecution) AcquireConnectionAccountWrite() (runtimeext.Sy
 	return e.unitOfWork.acquireSynchronousConnectorCall()
 }
 
+func (e *businessActionExecution) AcquireConnectionAccountRead() (runtimeext.SynchronousConnectorCallLease, error) {
+	if e == nil {
+		return nil, apperror.New(apperror.KindInternal, runtimeext.ConnectorActionExecutionRequiredErrorCode, nil, nil)
+	}
+	return e.unitOfWork.acquireSynchronousConnectorCall()
+}
+
 func (e *businessActionExecution) hasConnectorGrant(requested runtimeext.ActionConnectorCapability) bool {
 	if !requested.Valid() {
 		return false

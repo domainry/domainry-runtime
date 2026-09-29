@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	connector "github.com/domainry/domainry-connector-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/mutation"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -155,6 +156,15 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 		var transient *mutation.TransactionTransientError
 		if errors.As(err, &appError) || errors.As(err, &businessConflict) || errors.As(err, &conflict) || errors.As(err, &transient) || mutation.IsTransactionCommitUnknown(err) {
 			return ActionExecutionResult{}, err
+		}
+		if classification, classified := connector.ErrorClassificationOf(err); classified {
+			if code, coded := connector.ProviderErrorCodeOf(err); coded {
+				kind := apperror.KindUnavailable
+				if classification == connector.ErrorPermanent {
+					kind = apperror.KindBadRequest
+				}
+				return ActionExecutionResult{}, apperror.New(kind, code, err, nil)
+			}
 		}
 		var businessError *runtimeext.BusinessError
 		if errors.As(err, &businessError) && businessError.Valid() {

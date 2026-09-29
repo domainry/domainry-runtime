@@ -96,6 +96,21 @@ func TestBusinessActionExecutionLeasesDynamicAccountWritesOnlyForDurableOwners(t
 	}
 }
 
+func TestBusinessActionExecutionLeasesDynamicAccountReadsOnlyBeforeWriting(t *testing.T) {
+	execution := &businessActionExecution{unitOfWork: newActionTestUnitOfWork()}
+	lease, err := execution.AcquireConnectionAccountRead()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease.Release()
+	if _, err = execution.unitOfWork.beginWriting(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = execution.AcquireConnectionAccountRead(); apperror.CodeOf(err) != runtimeext.ConnectorCallAfterWriteErrorCode {
+		t.Fatalf("write-phase account read error=%v", err)
+	}
+}
+
 func TestBusinessActionExecutionStagesOnlyValidatedGrantedOutboxIntent(t *testing.T) {
 	grant := runtimeext.ActionConnectorCapability{
 		ConnectorKey: "email", ConnectionKey: "primary", OperationKey: "send",

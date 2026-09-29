@@ -163,6 +163,7 @@ type integrationConnectorExecution struct {
 	lease              *integrationConnectorLease
 	capability         runtimeext.ActionConnectorCapability
 	acquireErr         error
+	accountReadLeased  bool
 	accountWriteLeased bool
 }
 
@@ -197,6 +198,14 @@ func (execution *integrationConnectorExecution) AcquireSynchronousConnectorCall(
 
 func (execution *integrationConnectorExecution) AcquireConnectionAccountWrite() (runtimeext.SynchronousConnectorCallLease, error) {
 	execution.accountWriteLeased = true
+	if execution.acquireErr != nil {
+		return nil, execution.acquireErr
+	}
+	return execution.lease, nil
+}
+
+func (execution *integrationConnectorExecution) AcquireConnectionAccountRead() (runtimeext.SynchronousConnectorCallLease, error) {
+	execution.accountReadLeased = true
 	if execution.acquireErr != nil {
 		return nil, execution.acquireErr
 	}
@@ -361,6 +370,7 @@ func TestIntegrationRuntimeConnectorGatewayUsesOwnedPersonalAccountRead(t *testi
 	execution := &integrationConnectorExecution{
 		identity:  runtimeext.ExecutionIdentity{ExecutionID: "sync-1", ActionKey: "meeting.sync_transcript", ObjectKey: "meeting", RecordID: "meeting-a"},
 		principal: runtimeext.Principal{UserID: "user-a", RoleKey: "sales_rep"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
+		lease: &integrationConnectorLease{requestID: "sync-1:connector:1"},
 	}
 	request := ConnectionAccountReadRequest{ConnectionKey: "feishu-a", OperationKey: "fetch_meeting_content", ContractSHA256: hash, Payload: json.RawMessage(`{"meeting_no":"123456789"}`)}
 	result, err := (integrationRuntimeConnectorGateway{accountReads: probe}).ReadConnectionAccount(t.Context(), execution, request)
@@ -370,8 +380,11 @@ func TestIntegrationRuntimeConnectorGatewayUsesOwnedPersonalAccountRead(t *testi
 	if probe.calls != 1 || probe.subject.WorkspaceID != "workspace-a" || probe.subject.UserID != "user-a" || !probe.subject.Access.Personal || probe.subject.Access.Workspace || probe.key != "feishu-a" || probe.op.Operation != "fetch_meeting_content" || probe.op.ContractSHA256 != hash {
 		t.Fatalf("probe=%+v subject=%+v", probe, probe.subject)
 	}
-	if probe.request.RequestID != "sync-1" || probe.request.Operation != "fetch_meeting_content" || probe.request.ContractSHA256 != hash || string(probe.request.Payload) != string(request.Payload) {
+	if probe.request.RequestID != "sync-1:connector:1" || probe.request.Operation != "fetch_meeting_content" || probe.request.ContractSHA256 != hash || string(probe.request.Payload) != string(request.Payload) {
 		t.Fatalf("read request=%+v", probe.request)
+	}
+	if !execution.accountReadLeased || !execution.lease.released {
+		t.Fatalf("account read lease was not acquired and released: execution=%+v", execution)
 	}
 }
 

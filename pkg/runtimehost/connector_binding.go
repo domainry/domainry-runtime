@@ -260,6 +260,11 @@ func (gateway integrationRuntimeConnectorGateway) ReadConnectionAccount(ctx cont
 	if connectionKey == "" || operation.Validate() != nil {
 		return ConnectionAccountReadResult{}, &runtimeext.BusinessError{Code: "backend.connector.account_read_request_invalid", Message: "Account read connection and operation are invalid"}
 	}
+	lease, err := runtimeext.AcquireConnectionAccountRead(execution)
+	if err != nil {
+		return ConnectionAccountReadResult{}, err
+	}
+	defer lease.Release()
 	subject := integrationsdk.ConnectionAccountSubject{
 		WorkspaceID: workspace.ID, UserID: strings.TrimSpace(principal.UserID),
 		Access: integrationsdk.ConnectionAccountAccess{Personal: true},
@@ -270,6 +275,9 @@ func (gateway integrationRuntimeConnectorGateway) ReadConnectionAccount(ctx cont
 	requestID := strings.TrimSpace(request.RequestID)
 	if requestID == "" {
 		requestID = identity.ExecutionID
+		if identified, ok := lease.(connectorRequestIDLease); ok && strings.TrimSpace(identified.ConnectorRequestID()) != "" {
+			requestID = strings.TrimSpace(identified.ConnectorRequestID())
+		}
 	}
 	result, err := gateway.accountReads.ReadConnectionAccount(ctx, subject, connectionKey, integrationsdk.ConnectionAccountReadRequest{
 		RequestID: requestID, Operation: operation.Operation, ContractSHA256: operation.ContractSHA256, Payload: append(json.RawMessage(nil), request.Payload...),

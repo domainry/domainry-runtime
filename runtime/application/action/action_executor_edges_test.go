@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	connector "github.com/domainry/domainry-connector-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -124,6 +125,29 @@ func TestBusinessHandlerExecutorPreservesClassifiedHandlerErrors(t *testing.T) {
 		if !businessError.Valid() && apperror.CodeOf(err) != "backend.action.handler_failed" {
 			t.Fatalf("invalid business error=%v", err)
 		}
+	}
+}
+
+func TestBusinessHandlerExecutorMapsValidatedProviderFailureContract(t *testing.T) {
+	action := definitionmodel.ActionSchema{Key: "booking.reserve", ObjectKey: "booking"}
+	tests := []struct {
+		name string
+		err  error
+		kind apperror.ErrorKind
+	}{
+		{name: "retryable", err: connector.RetryableError("provider.temporarily_unavailable", errors.New("private response")), kind: apperror.KindUnavailable},
+		{name: "uncertain", err: connector.UncertainError("provider.result_unknown", errors.New("private response")), kind: apperror.KindUnavailable},
+		{name: "permanent", err: connector.PermanentError("provider.request_invalid", errors.New("private response")), kind: apperror.KindBadRequest},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			handler := actionExecutorEdgeHandler{descriptor: actionTestHandlerDescriptor(action.Key, nil), err: test.err}
+			_, err := newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{}).execute(t.Context(), actionExecutorEdgeGoverned(handler, action))
+			code, _ := connector.ProviderErrorCodeOf(test.err)
+			if apperror.CodeOf(err) != code || apperror.KindOf(err) != test.kind || !errors.Is(err, test.err) {
+				t.Fatalf("code=%q kind=%q error=%v", apperror.CodeOf(err), apperror.KindOf(err), err)
+			}
+		})
 	}
 }
 

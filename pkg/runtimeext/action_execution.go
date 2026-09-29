@@ -36,6 +36,25 @@ type SynchronousConnectorCallLease interface {
 	Release()
 }
 
+// ConnectionAccountReadExecution is the Runtime-owned lease boundary for an
+// Integration account read. Account identity and operation authorization are
+// resolved dynamically by Integration, so this lease deliberately does not
+// reuse a source-authored static Connector grant.
+type ConnectionAccountReadExecution interface {
+	AcquireConnectionAccountRead() (SynchronousConnectorCallLease, error)
+}
+
+// AcquireConnectionAccountRead keeps a dynamic account read in the Action
+// prewrite phase. Integration persists invocation evidence for reads, so the
+// Action must not hold its business transaction while that work executes.
+func AcquireConnectionAccountRead(execution ActionExecution) (SynchronousConnectorCallLease, error) {
+	accountRead, ok := execution.(ConnectionAccountReadExecution)
+	if !ok {
+		return nil, &BusinessError{Code: ConnectorActionExecutionRequiredErrorCode, Message: "Connection account read execution is unavailable"}
+	}
+	return accountRead.AcquireConnectionAccountRead()
+}
+
 // ConnectionAccountWriteExecution is the Runtime-owned lease boundary for an
 // Integration account write. Account identity and operation authorization are
 // resolved dynamically by Integration, so this lease deliberately does not

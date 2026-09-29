@@ -63,6 +63,8 @@ github.com/domainry/domainry-connector-sdk v0.1.4 h1:Pvo4VM1yfdtVT9k6YRuUmyO7/Tf
 github.com/domainry/domainry-connector-sdk v0.1.4/go.mod h1:y3YMg09XmWCuxyIeYb1d4xC4AkFmqGWbrm+OaumeyY8=
 github.com/domainry/domainry-connector-sdk v0.1.5 h1:deTWF3Ah20KPg3sfSmDp0mJwAEsfaIdyIDGKvPGHCeE=
 github.com/domainry/domainry-connector-sdk v0.1.5/go.mod h1:y3YMg09XmWCuxyIeYb1d4xC4AkFmqGWbrm+OaumeyY8=
+github.com/domainry/domainry-connector-sdk v0.1.6 h1:ugzTXW4NvC2DOHRo477Tt2P1dY33URu6klQ/8v5Al9I=
+github.com/domainry/domainry-connector-sdk v0.1.6/go.mod h1:y3YMg09XmWCuxyIeYb1d4xC4AkFmqGWbrm+OaumeyY8=
 github.com/domainry/domainry-connectors v0.1.6 h1:nlm+FREaL3LDQgAQNEFIOomPQEC6Ky//C7jVCW7D78k=
 github.com/domainry/domainry-connectors v0.1.6/go.mod h1:F4RZuOIPW3AvYN8VtC205wz8+iR5wIf0yrhowUWQWYA=
 github.com/domainry/domainry-data-exchange v0.3.23 h1:Nrj1sirBlhbWf6/srqDs1TjZTtr9WGpfPFQF/vmUBQ0=
