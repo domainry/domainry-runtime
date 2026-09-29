@@ -54,13 +54,18 @@ type Page struct {
 }
 
 type ActionRequest struct {
-	ActionKey            string
-	ObjectKey            string
-	RecordID             string
-	Input                any
-	IdempotencyKey       string
-	TargetOrganizationID string
-	AssuranceToken       string
+	ActionKey      string
+	ObjectKey      string
+	RecordID       string
+	Input          any
+	IdempotencyKey string
+	// PreventExecutionReclaim makes an unresolved Action receipt permanent.
+	// Project handlers set it only for a user-confirmed external account write:
+	// a retry may replay a completed receipt but must never take over and repeat
+	// an external effect after the original process disappears.
+	PreventExecutionReclaim bool
+	TargetOrganizationID    string
+	AssuranceToken          string
 }
 
 type ActionResult struct {

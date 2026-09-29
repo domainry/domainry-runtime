@@ -631,7 +631,8 @@ func (e *projectEngine) InvokeAction(ctx context.Context, request runtimeengine.
 	result, serviceErr := e.actions.Invoke(actionContext, actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
 		ActionKey: strings.TrimSpace(request.ActionKey), ObjectKey: strings.TrimSpace(request.ObjectKey), RecordID: strings.TrimSpace(request.RecordID),
 		Input: input, Principal: principal, Actor: principal, RequestID: principal.RequestID,
-		IdempotencyKey: strings.TrimSpace(request.IdempotencyKey), TargetOrganizationID: strings.TrimSpace(request.TargetOrganizationID), AssuranceToken: strings.TrimSpace(request.AssuranceToken),
+		IdempotencyKey: strings.TrimSpace(request.IdempotencyKey), PreventExecutionReclaim: request.PreventExecutionReclaim,
+		TargetOrganizationID: strings.TrimSpace(request.TargetOrganizationID), AssuranceToken: strings.TrimSpace(request.AssuranceToken),
 	})
 	if serviceErr != nil {
 		return runtimeengine.ActionResult{}, projectEngineError(serviceErr)

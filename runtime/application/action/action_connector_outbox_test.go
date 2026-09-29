@@ -60,7 +60,7 @@ func TestBusinessActionExecutionRejectsConnectorCallsOutsidePublishedGrant(t *te
 }
 
 func TestBusinessActionExecutionLeasesDynamicAccountWritesOnlyForDurableOwners(t *testing.T) {
-	for _, source := range []actionmodel.ActionSource{actionmodel.ActionSourceAgent, actionmodel.ActionSourceRecordTimer, actionmodel.ActionSourceScheduler} {
+	for _, source := range []actionmodel.ActionSource{actionmodel.ActionSourceAgent, actionmodel.ActionSourceHTTP, actionmodel.ActionSourceRecordTimer, actionmodel.ActionSourceScheduler} {
 		t.Run(string(source), func(t *testing.T) {
 			execution := &businessActionExecution{
 				unitOfWork: newActionTestUnitOfWork(),
@@ -75,7 +75,7 @@ func TestBusinessActionExecutionLeasesDynamicAccountWritesOnlyForDurableOwners(t
 	}
 	for name, invocation := range map[string]actionmodel.ActionInvocation{
 		"reclaimable Agent": {Source: actionmodel.ActionSourceAgent},
-		"HTTP":              {Source: actionmodel.ActionSourceHTTP, PreventExecutionReclaim: true},
+		"reclaimable HTTP":  {Source: actionmodel.ActionSourceHTTP},
 	} {
 		t.Run(name, func(t *testing.T) {
 			execution := &businessActionExecution{unitOfWork: newActionTestUnitOfWork(), invocation: invocation}

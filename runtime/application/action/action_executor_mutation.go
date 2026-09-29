@@ -48,11 +48,12 @@ func (e *businessActionExecution) AcquireConnectionAccountWrite() (runtimeext.Sy
 	if e == nil {
 		return nil, apperror.New(apperror.KindInternal, runtimeext.ConnectorActionExecutionRequiredErrorCode, nil, nil)
 	}
-	// Conversation Actions and Runtime-owned scheduled executions persist a
-	// non-reclaimable Action claim before dispatch. Integration then adds the
-	// exact account/operation authorization and its own insert-only effect claim.
+	// Conversation Actions, explicitly confirmed project HTTP Actions and
+	// Runtime-owned scheduled executions persist a non-reclaimable Action claim
+	// before dispatch. Integration then adds the exact account/operation
+	// authorization and its own insert-only effect claim.
 	switch e.invocation.Source {
-	case actionmodel.ActionSourceAgent, actionmodel.ActionSourceRecordTimer, actionmodel.ActionSourceScheduler:
+	case actionmodel.ActionSourceAgent, actionmodel.ActionSourceHTTP, actionmodel.ActionSourceRecordTimer, actionmodel.ActionSourceScheduler:
 	default:
 		return nil, apperror.New(apperror.KindForbidden, runtimeext.ConnectorActionSideEffectOutboxErrorCode, nil, nil)
 	}
