@@ -7,8 +7,8 @@ toolchain go1.26.6
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/creack/pty v1.1.24
-	github.com/domainry/domainry-agent v0.1.63
-	github.com/domainry/domainry-agent-sdk v0.1.33
+	github.com/domainry/domainry-agent v0.1.64
+	github.com/domainry/domainry-agent-sdk v0.1.34
 	github.com/domainry/domainry-audit v0.1.27
 	github.com/domainry/domainry-audit-sdk v0.1.11
 	github.com/domainry/domainry-connector-sdk v0.1.6
@@ -20,7 +20,7 @@ require (
 	github.com/domainry/domainry-identity-sdk v0.1.18
 	github.com/domainry/domainry-integration v0.1.33
 	github.com/domainry/domainry-integration-sdk v0.1.14
-	github.com/domainry/domainry-knowledge v0.1.28
+	github.com/domainry/domainry-knowledge v0.1.29
 	github.com/domainry/domainry-lifecycle v0.1.24
 	github.com/domainry/domainry-lifecycle-sdk v0.1.20
 	github.com/domainry/domainry-metadata v0.1.19
@@ -76,7 +76,7 @@ require (
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/crewjam/saml v0.5.1 // indirect
-	github.com/domainry/domainry-knowledge-sdk v0.1.10 // indirect
+	github.com/domainry/domainry-knowledge-sdk v0.1.11 // indirect
 	github.com/domainry/domainry-todo-sdk v0.1.6 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect

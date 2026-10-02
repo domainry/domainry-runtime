@@ -79,7 +79,7 @@ func newConversationBusinessFixture(t *testing.T, extraObjects ...definitionmode
 	t.Helper()
 	a := agentsdk.ConversationAuthority{Known: true, RuntimeID: "business-runtime", WorkspaceID: "business-workspace", UserID: "operator", RoleKey: "staff"}
 	attachmentUpload := agentsdk.ConversationAttachmentPermission("attachments_upload")
-	p := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: a.WorkspaceID, UserID: a.UserID}}, accessfixture.Bundle{
+	p := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: a.WorkspaceID, UserID: a.UserID, OrgID: "store-a", OrgScopeIDs: []string{"region-a", "store-a"}, SupportOrgID: "support-a", SupportOrgScopeIDs: []string{"support-region", "support-a"}}}, accessfixture.Bundle{
 		Key: "staff", Permissions: []string{"customer.read", attachmentUpload.Key, agentsdk.ConversationToolActionPrefix + "business_catalog", agentsdk.ConversationToolActionPrefix + "query_records", agentsdk.ConversationToolActionPrefix + "get_record", agentsdk.ConversationToolActionPrefix + "crm_search_accounts"},
 		DataPolicies: []accessfixture.DataPolicyFixture{
 			{ObjectKey: "customer", Action: "read", Scope: identitysdk.DataScopeOwner, Read: true},
@@ -166,6 +166,18 @@ func TestConversationBusinessAttachmentAuthorizationUsesLiveIdentityGrant(t *tes
 	resolver.revoke()
 	if err := host.AuthorizeConversationAttachment(t.Context(), "attachments_upload", authority); err == nil {
 		t.Fatal("revoked principal retained attachment access")
+	}
+}
+
+func TestConversationBusinessAttachmentPermissionsUseLiveIdentityScope(t *testing.T) {
+	host, resolver, _, authority := newConversationBusinessFixture(t)
+	scope, err := host.ResolveConversationAttachmentPermissions(t.Context(), authority)
+	if err != nil || !slices.Equal(scope.OrganizationIDs, []string{"region-a", "store-a", "support-a", "support-region"}) {
+		t.Fatalf("scope=%+v err=%v", scope, err)
+	}
+	resolver.revoke()
+	if _, err = host.ResolveConversationAttachmentPermissions(t.Context(), authority); err == nil {
+		t.Fatal("revoked principal retained KB organization scope")
 	}
 }
 

@@ -198,6 +198,32 @@ func (h *ConversationBusinessHost) AuthorizeConversationAttachment(ctx context.C
 	return nil
 }
 
+// ResolveConversationAttachmentPermissions reads the current Identity bundle
+// on every KB binding. Revoked organization membership therefore disappears
+// from the upstream read request without trusting browser or model input.
+func (h *ConversationBusinessHost) ResolveConversationAttachmentPermissions(ctx context.Context, a agentsdk.ConversationAuthority) (agentsdk.ConversationAttachmentPermissionScope, error) {
+	var zero agentsdk.ConversationAttachmentPermissionScope
+	p, err := h.principal(ctx, a)
+	if err != nil {
+		return zero, err
+	}
+	if p.AccessBundle == nil {
+		return zero, conversationBusinessError("forbidden")
+	}
+	subject := p.AccessBundle.Subject
+	ids := append([]string{subject.OrgID}, subject.OrgScopeIDs...)
+	ids = append(ids, subject.SupportOrgID)
+	ids = append(ids, subject.SupportOrgScopeIDs...)
+	out := ids[:0]
+	for _, id := range ids {
+		if strings.TrimSpace(id) != "" {
+			out = append(out, id)
+		}
+	}
+	slices.Sort(out)
+	return agentsdk.ConversationAttachmentPermissionScope{OrganizationIDs: slices.Compact(out)}, nil
+}
+
 // ResolveConversationIdentityPrincipal reuses the exact live Identity lookup
 // used by Agent authorization so product adapters can compile owner-specific
 // Integration account scope without accepting identity facts from tool input.
@@ -220,6 +246,7 @@ func (h *ConversationBusinessHost) AuthorizeConversationExecution(ctx context.Co
 
 var _ agentsdk.ConversationExecutionAuthorizer = (*ConversationBusinessHost)(nil)
 var _ agentsdk.ConversationAttachmentAuthorizer = (*ConversationBusinessHost)(nil)
+var _ agentsdk.ConversationAttachmentPermissionResolver = (*ConversationBusinessHost)(nil)
 
 func (h *ConversationBusinessHost) BusinessSourceIdentity() string { return h.source }
 
