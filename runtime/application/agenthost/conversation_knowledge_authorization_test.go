@@ -46,6 +46,7 @@ func TestConversationKnowledgeAuthorizationUsesCurrentActorAndLibraryOwnerFacts(
 func TestConversationKnowledgeCurrentVersionedToolDefinitionsAreAuthorized(t *testing.T) {
 	host, resolver, _, actor := newConversationBusinessFixture(t)
 	definitions := append(agent.LibraryKnowledgeConversationTools(), agent.KnowledgeExtractionTool())
+	definitions = append(definitions, agent.AttachmentConversationTools()...)
 	bundle := accessfixture.Bundle{Key: actor.RoleKey}
 	for _, d := range definitions {
 		bundle.Permissions = append(bundle.Permissions, d.ActionKey)
@@ -55,7 +56,7 @@ func TestConversationKnowledgeCurrentVersionedToolDefinitionsAreAuthorized(t *te
 	for _, d := range definitions {
 		auth, err := host.AuthorizeConversationTool(t.Context(), agent.ConversationToolRequest{Authority: actor, Definition: d})
 		if err != nil || !auth.Granted {
-			t.Fatal("current library/extraction tool unavailable", d.Key, d.Version, err)
+			t.Fatal("current knowledge/attachment tool unavailable", d.Key, d.Version, err)
 		}
 	}
 }

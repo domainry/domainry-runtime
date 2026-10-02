@@ -158,6 +158,7 @@ func (h *ConversationBusinessHost) AuthorizeConversationToolCatalog(ctx context.
 	definitions := append(agentsdk.PersonalConversationTools(), agentsdk.ArtifactConversationTools()...)
 	definitions = append(definitions, agentsdk.KnowledgeConversationTools()...)
 	definitions = append(definitions, agentsdk.LibraryKnowledgeConversationTools()...)
+	definitions = append(definitions, agentsdk.AttachmentConversationTools()...)
 	definitions = append(definitions, agentsdk.KnowledgeExtractionTool())
 	definitions = append(definitions, agentsdk.BusinessConversationTools()...)
 	definitions = append(definitions, agentsdk.BusinessRelationConversationTools()...)
@@ -177,6 +178,24 @@ func (h *ConversationBusinessHost) AuthorizeConversationToolCatalog(ctx context.
 }
 func (h *ConversationBusinessHost) AuthorizeConversationInteraction(ctx context.Context, a agentsdk.ConversationAuthority, _ agentsdk.ConversationInteraction) (agentsdk.ConversationToolAuthorization, error) {
 	return h.authorizeAction(ctx, a, agentsdk.ConversationInteractionPermission().Key)
+}
+
+// AuthorizeConversationAttachment keeps private conversation files on the
+// same live Identity boundary as Agent tools. An attachment is always scoped
+// to its authenticated owner, so the caller cannot supply broader facts.
+func (h *ConversationBusinessHost) AuthorizeConversationAttachment(ctx context.Context, operation string, a agentsdk.ConversationAuthority) error {
+	permission := agentsdk.ConversationAttachmentPermission(operation)
+	if permission == nil {
+		return &agentsdk.Error{Class: "forbidden", Code: "agent.conversation.attachment_access_denied"}
+	}
+	authorization, err := h.authorizeAction(ctx, a, permission.Key)
+	if err != nil {
+		return err
+	}
+	if !authorization.Granted {
+		return &agentsdk.Error{Class: "forbidden", Code: "agent.conversation.attachment_access_denied"}
+	}
+	return nil
 }
 
 // ResolveConversationIdentityPrincipal reuses the exact live Identity lookup
@@ -200,6 +219,7 @@ func (h *ConversationBusinessHost) AuthorizeConversationExecution(ctx context.Co
 }
 
 var _ agentsdk.ConversationExecutionAuthorizer = (*ConversationBusinessHost)(nil)
+var _ agentsdk.ConversationAttachmentAuthorizer = (*ConversationBusinessHost)(nil)
 
 func (h *ConversationBusinessHost) BusinessSourceIdentity() string { return h.source }
 

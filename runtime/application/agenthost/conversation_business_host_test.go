@@ -78,10 +78,12 @@ func (r *businessReadProbe) ListRecords(ctx context.Context, key string, query r
 func newConversationBusinessFixture(t *testing.T, extraObjects ...definitionmodel.ObjectSchema) (*ConversationBusinessHost, *businessPrincipalResolver, *businessReadProbe, agentsdk.ConversationAuthority) {
 	t.Helper()
 	a := agentsdk.ConversationAuthority{Known: true, RuntimeID: "business-runtime", WorkspaceID: "business-workspace", UserID: "operator", RoleKey: "staff"}
+	attachmentUpload := agentsdk.ConversationAttachmentPermission("attachments_upload")
 	p := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: a.WorkspaceID, UserID: a.UserID}}, accessfixture.Bundle{
-		Key: "staff", Permissions: []string{"customer.read", agentsdk.ConversationToolActionPrefix + "business_catalog", agentsdk.ConversationToolActionPrefix + "query_records", agentsdk.ConversationToolActionPrefix + "get_record", agentsdk.ConversationToolActionPrefix + "crm_search_accounts"},
+		Key: "staff", Permissions: []string{"customer.read", attachmentUpload.Key, agentsdk.ConversationToolActionPrefix + "business_catalog", agentsdk.ConversationToolActionPrefix + "query_records", agentsdk.ConversationToolActionPrefix + "get_record", agentsdk.ConversationToolActionPrefix + "crm_search_accounts"},
 		DataPolicies: []accessfixture.DataPolicyFixture{
 			{ObjectKey: "customer", Action: "read", Scope: identitysdk.DataScopeOwner, Read: true},
+			{ObjectKey: attachmentUpload.ResourceKey, Action: attachmentUpload.OperationKey, Scope: identitysdk.DataScopeOwner, Write: true},
 			{ObjectKey: "agent.conversation_tools", Action: "business_catalog", Scope: identitysdk.DataScopeAll, Read: true},
 			{ObjectKey: "agent.conversation_tools", Action: "query_records", Scope: identitysdk.DataScopeAll, Read: true},
 			{ObjectKey: "agent.conversation_tools", Action: "get_record", Scope: identitysdk.DataScopeAll, Read: true},
@@ -151,6 +153,20 @@ func newConversationBusinessFixture(t *testing.T, extraObjects ...definitionmode
 		t.Fatal(err)
 	}
 	return host, resolver, reads, a
+}
+
+func TestConversationBusinessAttachmentAuthorizationUsesLiveIdentityGrant(t *testing.T) {
+	host, resolver, _, authority := newConversationBusinessFixture(t)
+	if err := host.AuthorizeConversationAttachment(t.Context(), "attachments_upload", authority); err != nil {
+		t.Fatal(err)
+	}
+	if err := host.AuthorizeConversationAttachment(t.Context(), "unknown", authority); err == nil {
+		t.Fatal("unknown attachment operation was authorized")
+	}
+	resolver.revoke()
+	if err := host.AuthorizeConversationAttachment(t.Context(), "attachments_upload", authority); err == nil {
+		t.Fatal("revoked principal retained attachment access")
+	}
 }
 
 func TestConversationBusinessRuntimeReadsApplyScopesMaskingAndExactIntegers(t *testing.T) {
