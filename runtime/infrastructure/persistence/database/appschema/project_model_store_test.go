@@ -6,12 +6,14 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
+	"github.com/domainry/domainry-orm/query"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 )
 
-func TestProjectModelInitializationIsExactHashOnly(t *testing.T) {
+func TestProjectModelInitializationAppliesIncrementalSourceAndPreservesRecords(t *testing.T) {
 	store := openStoreForMetadataTest(t)
 	model := projectmodel.RuntimeModel{
 		SchemaVersion: "1", ProjectKey: "crm", ProjectName: "CRM", DefaultLocale: "zh-CN",
@@ -45,7 +47,42 @@ func TestProjectModelInitializationIsExactHashOnly(t *testing.T) {
 	}
 	changed := model
 	changed.ContentHash = strings.Repeat("b", 64)
-	if err := store.InitializeProjectModel(t.Context(), metadataTestInstallationScope(), changed); apperror.CodeOf(err) != projectmodel.ChangedRequiresEmptyDatabaseCode {
-		t.Fatalf("changed model error=%v code=%q", err, apperror.CodeOf(err))
+	statement, args, err := query.NewInsertBuilder(store.store.SQLRenderer, "customer").
+		Columns("id", "workspace_id", "name").Values("retained-customer", principalmodel.InstallationWorkspaceID, "Retained customer").Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.database().ExecContext(t.Context(), statement, args...); err != nil {
+		t.Fatal(err)
+	}
+	changed.Objects = append(append([]definitionmodel.ObjectSchema{}, model.Objects...), definitionmodel.ObjectSchema{
+		Key: "spare_part", Name: "Spare part", Fields: []definitionmodel.FieldSchema{{Key: "code", Name: "Code", Type: "text", Required: true}},
+	})
+	if err := store.InitializeProjectModel(t.Context(), metadataTestInstallationScope(), changed); err != nil {
+		t.Fatalf("incremental source failed: %v", err)
+	}
+	if matched, err := store.ProjectModelMatches(t.Context(), metadataTestInstallationScope(), changed); err != nil || !matched {
+		t.Fatalf("incremental restart matched=%t err=%v", matched, err)
+	}
+	statement, args, err = query.NewSelectBuilder(store.store.SQLRenderer, "customer").Columns("name").Where(query.Equal("id", "retained-customer")).Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retainedName string
+	if err := store.database().QueryRowContext(t.Context(), statement, args...).Scan(&retainedName); err != nil || retainedName != "Retained customer" {
+		t.Fatalf("retained name=%q err=%v", retainedName, err)
+	}
+	columns, err := store.tableColumns(t.Context(), "spare_part")
+	if err != nil || !columns["code"] {
+		t.Fatalf("incremental storage columns=%v err=%v", columns, err)
+	}
+	metadataDefinitions, err = store.metadata.Definitions().List(t.Context(), metadatasdk.DefinitionQuery{Owner: metadatasdk.DefinitionOwnerMetadata})
+	if err != nil || len(metadataDefinitions) != 4 {
+		t.Fatalf("incremental definitions=%#v err=%v", metadataDefinitions, err)
+	}
+	otherProject := changed
+	otherProject.ProjectKey = "other-project"
+	if err := store.InitializeProjectModel(t.Context(), metadataTestInstallationScope(), otherProject); apperror.CodeOf(err) != projectmodel.ProjectIdentityMismatchCode {
+		t.Fatalf("different project error=%v", err)
 	}
 }

@@ -17,20 +17,21 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/timevalue"
 )
 
-// ProjectModelMatches is the restart fast path for the single model.json
-// contract. There is no upgrade, migration-plan, or previous-model fallback.
+// ProjectModelMatches is the restart fast path for the current source model.
+// A changed model for the same project is applied from its current source.
 func (s ApplicationSchemaStore) ProjectModelMatches(ctx context.Context, scope principalmodel.SystemScope, model projectmodel.RuntimeModel) (bool, error) {
 	if err := requireMetadataInstallationScope(scope); err != nil {
 		return false, err
 	}
 	statement, args, err := query.NewSelectBuilder(s.store.SQLRenderer, "_project_model_state").
-		Columns("model_hash", "initialized_at").Where(query.Equal("id", "current")).Build()
+		Columns("model_hash", "initialized_at", "project_key").Where(query.Equal("id", "current")).Build()
 	if err != nil {
 		return false, fmt.Errorf("build project model lookup: %w", err)
 	}
 	var installedHash string
+	var installedProject string
 	var initializedAt int64
-	err = s.database().QueryRowContext(ctx, statement, args...).Scan(&installedHash, &initializedAt)
+	err = s.database().QueryRowContext(ctx, statement, args...).Scan(&installedHash, &initializedAt, &installedProject)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -40,21 +41,22 @@ func (s ApplicationSchemaStore) ProjectModelMatches(ctx context.Context, scope p
 	if strings.TrimSpace(installedHash) == "" {
 		return false, nil
 	}
-	if strings.TrimSpace(installedHash) != strings.TrimSpace(model.ContentHash) {
+	if strings.TrimSpace(installedProject) != strings.TrimSpace(model.ProjectKey) {
 		return false, &apperror.AppError{
 			Kind: apperror.KindConflict,
-			Code: projectmodel.ChangedRequiresEmptyDatabaseCode,
+			Code: projectmodel.ProjectIdentityMismatchCode,
 			Params: map[string]string{
-				"installed_model_hash": strings.TrimSpace(installedHash),
-				"requested_model_hash": strings.TrimSpace(model.ContentHash),
+				"installed_project_key": strings.TrimSpace(installedProject),
+				"requested_project_key": strings.TrimSpace(model.ProjectKey),
 			},
 		}
 	}
-	return initializedAt != 0, nil
+	return initializedAt != 0 && strings.TrimSpace(installedHash) == strings.TrimSpace(model.ContentHash), nil
 }
 
-// InitializeProjectModel materializes storage and Metadata exactly once. A
-// restart with the same hash is a no-op; a different hash is rejected.
+// InitializeProjectModel applies the current source-owned storage and Metadata
+// snapshot. Matching restarts are a no-op; changed source adds required storage
+// without removing existing business records, then records the new identity.
 func (s ApplicationSchemaStore) InitializeProjectModel(ctx context.Context, scope principalmodel.SystemScope, model projectmodel.RuntimeModel) error {
 	if err := requireMetadataInstallationScope(scope); err != nil {
 		return err

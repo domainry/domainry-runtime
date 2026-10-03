@@ -11,7 +11,7 @@ import (
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 )
 
-const ChangedRequiresEmptyDatabaseCode = "backend.metadata.project_model_changed_requires_empty_database"
+const ProjectIdentityMismatchCode = "backend.metadata.project_identity_mismatch"
 
 // RuntimeModel is the validated, in-memory form of model.json used by storage,
 // authorization and Workspace initialization. It is not a serializable project
