@@ -1,6 +1,10 @@
 package appschema
 
 import (
+	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/platform/config"
+	"github.com/domainry/domainry-runtime/testsupport/metadatamodulefixture"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,7 +18,16 @@ import (
 )
 
 func TestProjectModelInitializationAppliesIncrementalSourceAndPreservesRecords(t *testing.T) {
-	store := openStoreForMetadataTest(t)
+	raw, err := persistence.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "project.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = raw.Close() })
+	metadatamodulefixture.EnsureBinding(t.Context(), raw)
+	if err := raw.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	store := NewApplicationSchemaStore(raw)
 	model := projectmodel.RuntimeModel{
 		SchemaVersion: "1", ProjectKey: "crm", ProjectName: "CRM", DefaultLocale: "zh-CN",
 		TimeZone: "Asia/Shanghai", ContentHash: strings.Repeat("a", 64),
@@ -38,7 +51,7 @@ func TestProjectModelInitializationAppliesIncrementalSourceAndPreservesRecords(t
 		t.Fatalf("project model current-state rows=%d want=1", states)
 	}
 	metadataDefinitions, err := store.metadata.Definitions().List(t.Context(), metadatasdk.DefinitionQuery{Owner: metadatasdk.DefinitionOwnerMetadata})
-	if err != nil || len(metadataDefinitions) != 2 {
+	if err != nil || len(metadataDefinitions) != 3 {
 		t.Fatalf("metadata definitions=%#v err=%v", metadataDefinitions, err)
 	}
 	identityDefinitions, err := store.metadata.Definitions().List(t.Context(), metadatasdk.DefinitionQuery{Owner: metadatasdk.DefinitionOwnerIdentity})
@@ -47,6 +60,7 @@ func TestProjectModelInitializationAppliesIncrementalSourceAndPreservesRecords(t
 	}
 	changed := model
 	changed.ContentHash = strings.Repeat("b", 64)
+	changed.ProjectName = "CRM Inventory"
 	statement, args, err := query.NewInsertBuilder(store.store.SQLRenderer, "customer").
 		Columns("id", "workspace_id", "name").Values("retained-customer", principalmodel.InstallationWorkspaceID, "Retained customer").Build()
 	if err != nil {
@@ -58,6 +72,8 @@ func TestProjectModelInitializationAppliesIncrementalSourceAndPreservesRecords(t
 	changed.Objects = append(append([]definitionmodel.ObjectSchema{}, model.Objects...), definitionmodel.ObjectSchema{
 		Key: "spare_part", Name: "Spare part", Fields: []definitionmodel.FieldSchema{{Key: "code", Name: "Code", Type: "text", Required: true}},
 	})
+	changed.Objects[0].Fields = append([]definitionmodel.FieldSchema{}, model.Objects[0].Fields...)
+	changed.Objects[0].Fields[0].Name = "Customer name"
 	if err := store.InitializeProjectModel(t.Context(), metadataTestInstallationScope(), changed); err != nil {
 		t.Fatalf("incremental source failed: %v", err)
 	}
@@ -77,7 +93,7 @@ func TestProjectModelInitializationAppliesIncrementalSourceAndPreservesRecords(t
 		t.Fatalf("incremental storage columns=%v err=%v", columns, err)
 	}
 	metadataDefinitions, err = store.metadata.Definitions().List(t.Context(), metadatasdk.DefinitionQuery{Owner: metadatasdk.DefinitionOwnerMetadata})
-	if err != nil || len(metadataDefinitions) != 4 {
+	if err != nil || len(metadataDefinitions) != 5 {
 		t.Fatalf("incremental definitions=%#v err=%v", metadataDefinitions, err)
 	}
 	otherProject := changed

@@ -109,6 +109,8 @@ func (s ApplicationSchemaStore) syncProjectModelDefinitions(ctx context.Context,
 	if s.metadata == nil || s.metadata.DefinitionStore() == nil {
 		return fmt.Errorf("Metadata Definition store is unavailable")
 	}
+	// Metadata versions identify immutable source content, not the model format.
+	projectionVersion := model.SchemaVersion + ":" + model.ContentHash
 	metadataDefinitions := []metadatasdk.Definition{}
 	identityDefinitions := []metadatasdk.Definition{}
 	appendDefinition := func(target *[]metadatasdk.Definition, resourceType, key, objectKey, name string, value any) error {
@@ -153,14 +155,14 @@ func (s ApplicationSchemaStore) syncProjectModelDefinitions(ctx context.Context,
 	}
 	if err := s.metadata.DefinitionStore().ReplaceSourceSnapshot(ctx, metadatasdk.ProjectionSnapshot{
 		Owner:         metadatasdk.DefinitionOwnerMetadata,
-		SchemaVersion: model.SchemaVersion, SourceKind: "project_model", SourceID: model.ProjectKey,
+		SchemaVersion: projectionVersion, SourceKind: "project_model", SourceID: model.ProjectKey,
 		Name: strings.TrimSpace(model.ProjectName), DefaultLocale: projectModelDefaultLocale(model), Definitions: metadataDefinitions,
 	}); err != nil {
 		return err
 	}
 	return s.metadata.DefinitionStore().ReplaceSourceSnapshot(ctx, metadatasdk.ProjectionSnapshot{
 		Owner:         metadatasdk.DefinitionOwnerIdentity,
-		SchemaVersion: model.SchemaVersion, SourceKind: "project_model", SourceID: model.ProjectKey,
+		SchemaVersion: projectionVersion, SourceKind: "project_model", SourceID: model.ProjectKey,
 		Definitions: identityDefinitions,
 	})
 }
