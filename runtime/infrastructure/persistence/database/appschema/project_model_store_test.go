@@ -74,6 +74,7 @@ func TestProjectModelInitializationAppliesIncrementalSourceAndPreservesRecords(t
 	})
 	changed.Objects[0].Fields = append([]definitionmodel.FieldSchema{}, model.Objects[0].Fields...)
 	changed.Objects[0].Fields[0].Name = "Customer name"
+	changed.Objects[0].Fields = append(changed.Objects[0].Fields, definitionmodel.FieldSchema{Key: "reference", Name: "Reference", Type: "text"})
 	if err := store.InitializeProjectModel(t.Context(), metadataTestInstallationScope(), changed); err != nil {
 		t.Fatalf("incremental source failed: %v", err)
 	}
@@ -93,8 +94,16 @@ func TestProjectModelInitializationAppliesIncrementalSourceAndPreservesRecords(t
 		t.Fatalf("incremental storage columns=%v err=%v", columns, err)
 	}
 	metadataDefinitions, err = store.metadata.Definitions().List(t.Context(), metadatasdk.DefinitionQuery{Owner: metadatasdk.DefinitionOwnerMetadata})
-	if err != nil || len(metadataDefinitions) != 5 {
+	if err != nil || len(metadataDefinitions) != 6 {
 		t.Fatalf("incremental definitions=%#v err=%v", metadataDefinitions, err)
+	}
+	columns, err = store.tableColumns(t.Context(), "customer")
+	if err != nil || !columns["reference"] {
+		t.Fatalf("updated existing storage columns=%v err=%v", columns, err)
+	}
+	field, found, err := store.metadata.Definitions().Get(t.Context(), metadatasdk.DefinitionOwnerMetadata, "field", metadataJoinedKey("customer", "name"))
+	if err != nil || !found || field.Name != "Customer name" {
+		t.Fatalf("updated existing field=%#v found=%t err=%v", field, found, err)
 	}
 	otherProject := changed
 	otherProject.ProjectKey = "other-project"
