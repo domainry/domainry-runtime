@@ -146,3 +146,8 @@ runtime/infrastructure/persistence/lifecyclemodule/relational_owner_executor.go|
 runtime/infrastructure/persistence/lifecyclemodule/relational_owner_executor.go|ea3d447910e1697b
 runtime/infrastructure/persistence/subjectevidence/subject_evidence.go|1958e0371dca914b
 runtime/infrastructure/persistence/subjectevidence/subject_evidence.go|75bbf4c146928957
+# 2026-10-04 review: Workspace creation rejects an existing target grant,
+# target identity or profile binding; other account operations require an
+# existing resolved target. Both are target-scope guards, not Workspace fallbacks.
+runtime/application/action/action_identity_handler_delivery_execution.go|0db3a82169f3df78
+runtime/application/action/action_identity_handler_delivery_execution.go|a22efc6acc55525d

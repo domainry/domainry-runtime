@@ -26,14 +26,13 @@ func TestIdentityCatalogResolvesOnlyActiveLocalWorkspaces(t *testing.T) {
 	now := int64(1790294400000)
 	insertWorkspaceAdministrationFixture(t, store.DB(), "physical-a", "public-a", "A", installation, now)
 	insertWorkspaceAdministrationFixture(t, store.DB(), "physical-b", "public-b", "B", "", now)
-	insertWorkspaceAdministrationFixture(t, store.DB(), "foreign-id", "foreign-code", "Foreign", "another-installation", now)
 	for ref, want := range map[string]string{"public-a": "physical-a", "physical-a": "physical-a", "public-b": "physical-b", "physical-b": "physical-b"} {
 		id, err := ResolveActiveIdentityWorkspace(t.Context(), store, ref)
 		if err != nil || id != want {
 			t.Fatalf("%s resolved incorrectly: %v", ref, err)
 		}
 	}
-	for _, ref := range []string{"", "unknown", "foreign-id", "foreign-code"} {
+	for _, ref := range []string{"", "unknown"} {
 		if _, err := ResolveActiveIdentityWorkspace(t.Context(), store, ref); err == nil {
 			t.Fatalf("accepted %q", ref)
 		}
@@ -49,6 +48,12 @@ func TestIdentityCatalogResolvesOnlyActiveLocalWorkspaces(t *testing.T) {
 		_, err = ResolveActiveIdentityWorkspace(t.Context(), store, "public-b")
 		if (err == nil) != (status == "active") {
 			t.Fatalf("status %s resolved incorrectly: %v", status, err)
+		}
+	}
+	insertWorkspaceAdministrationFixture(t, store.DB(), "foreign-id", "foreign-code", "Foreign", "another-installation", now)
+	for _, ref := range []string{"public-a", "foreign-id", "foreign-code"} {
+		if _, err := ResolveActiveIdentityWorkspace(t.Context(), store, ref); err == nil {
+			t.Fatalf("ambiguous SQLite installation authority accepted %q", ref)
 		}
 	}
 }

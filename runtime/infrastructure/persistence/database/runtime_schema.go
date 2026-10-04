@@ -506,13 +506,45 @@ func (s *RuntimeStore) verifyManagedDatabaseCohortMarkerWith(ctx context.Context
 // InstallationIdentity returns a stable identity for the host-owned database
 // installation. It is neither a Workspace identifier nor legacy tenant
 // registry state. Managed server databases use their persisted random cohort
-// marker; SQLite installations use the stable absolute database location
-// because the managed marker is intentionally disabled for that engine.
+// marker; initialized SQLite installations retain the initial Workspace's
+// persisted host identity. The database location seeds only a fresh installation.
 func (s *RuntimeStore) InstallationIdentity(ctx context.Context) (string, error) {
 	if s == nil {
 		return "", fmt.Errorf("Runtime installation identity store is required")
 	}
 	if !s.sqlBase().RuntimeEngine.ManagedDatabaseMarkerEnabled() {
+		statement, arguments, err := query.NewSelectBuilder(s.RuntimeRenderer(), "_workspaces").
+			Columns("initial_installation_identity").
+			Where(query.IsNotNull("initial_installation_identity")).Limit(2).Build()
+		if err != nil {
+			return "", fmt.Errorf("build SQLite installation authority query: %w", err)
+		}
+		rows, err := s.db.QueryContext(ctx, statement, arguments...)
+		if err != nil {
+			return "", fmt.Errorf("read SQLite installation authority: %w", err)
+		}
+		defer rows.Close()
+		identity := ""
+		for rows.Next() {
+			if identity != "" {
+				return "", fmt.Errorf("SQLite installation has multiple initial Workspace authorities")
+			}
+			if err := rows.Scan(&identity); err != nil {
+				return "", fmt.Errorf("read SQLite installation identity: %w", err)
+			}
+			if len(identity) != 64 {
+				return "", fmt.Errorf("SQLite installation authority is invalid")
+			}
+			if _, err := hex.DecodeString(identity); err != nil {
+				return "", fmt.Errorf("SQLite installation authority is invalid")
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return "", fmt.Errorf("read SQLite installation authority: %w", err)
+		}
+		if identity != "" {
+			return identity, nil
+		}
 		path := strings.TrimSpace(s.config.DBPath)
 		if path == "" || path == ":memory:" {
 			return "", fmt.Errorf("stable SQLite installation path is required")
