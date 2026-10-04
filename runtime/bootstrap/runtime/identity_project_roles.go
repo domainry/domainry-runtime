@@ -331,7 +331,7 @@ func runtimeDownstreamCapabilityPermissions(descriptors []runtimeext.HandlerDesc
 		if descriptor.IdentityHandlerDelivery != nil {
 			for _, operation := range descriptor.IdentityHandlerDelivery.Operations {
 				switch operation {
-				case runtimeext.IdentityHandlerCreate:
+				case runtimeext.IdentityHandlerCreate, runtimeext.IdentityHandlerCreateWorkspace:
 					add(identitysdk.HandlerDeliveryCreatePermission)
 				case runtimeext.IdentityHandlerUpdate:
 					add(identitysdk.HandlerDeliveryUpdatePermission)

@@ -34,11 +34,16 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 	if request.User.User.ID != "" || request.User.User.OrgID != "" {
 		return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindForbidden, "identity.handler_delivery_runtime_owned_identity_fields", nil, nil)
 	}
+	workspaceCreate := request.User.Operation == runtimeext.IdentityHandlerCreateWorkspace
+	creating := workspaceCreate || request.User.Operation == runtimeext.IdentityHandlerCreate
 	targetID := strings.TrimSpace(e.targetOrganization.ID)
-	if e.targetGrant == nil || !e.targetResolved || targetID == "" {
+	if workspaceCreate && (e.targetGrant != nil || e.targetResolved || targetID != "" || request.ProfileBinding != nil) {
+		return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindForbidden, "identity.handler_delivery_workspace_scope_invalid", nil, nil)
+	}
+	if !workspaceCreate && (e.targetGrant == nil || !e.targetResolved || targetID == "") {
 		return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindBadRequest, "backend.action.target_organization_unresolved", nil, nil)
 	}
-	if request.User.Operation == runtimeext.IdentityHandlerCreate {
+	if creating {
 		if request.User.ExpectedVersion != 0 || request.User.LoginMode != runtimeext.IdentityHandlerLoginNone && request.User.LoginMode != runtimeext.IdentityHandlerLoginPassword {
 			return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindBadRequest, "identity.handler_delivery_login_mode_invalid", nil, nil)
 		}
@@ -51,7 +56,7 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 	var embeddedProfileRecord map[string]any
 	var txCtx context.Context
 	createProfile := false
-	if request.User.Operation != runtimeext.IdentityHandlerCreate && request.ProfileBinding == nil {
+	if !creating && request.ProfileBinding == nil {
 		return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindBadRequest, "identity.handler_delivery_profile_binding_required", nil, nil)
 	}
 	if request.ProfileBinding != nil {
@@ -131,12 +136,16 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 		return runtimeext.IdentityHandlerDeliveryResult{}, err
 	}
 	e.identityDeliveryCalls++
+	operation := identitysdk.HandlerUserOperation(request.User.Operation)
+	if workspaceCreate {
+		operation = identitysdk.HandlerUserCreate
+	}
 	sdkRequest := identitysdk.HandlerDeliveryRequest{
 		ContractVersion: identitysdk.HandlerDeliveryContractVersionV1,
 		AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken),
 		IdempotencyKey:  e.identity.ExecutionID + ":identity_handler_delivery",
 		User: identitysdk.HandlerUserMutation{
-			Operation:       identitysdk.HandlerUserOperation(request.User.Operation),
+			Operation:       operation,
 			User:            toSDKIdentityUser(request.User.User),
 			ExpectedVersion: request.User.ExpectedVersion,
 			LoginMode:       identitysdk.HandlerLoginMode(request.User.LoginMode),
@@ -166,7 +175,7 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 		}
 	}
 	if credential := sdkResult.InitialCredential; credential != nil {
-		if request.User.Operation != runtimeext.IdentityHandlerCreate || request.User.LoginMode != runtimeext.IdentityHandlerLoginPassword ||
+		if !creating || request.User.LoginMode != runtimeext.IdentityHandlerLoginPassword ||
 			strings.TrimSpace(credential.InitialPassword) == "" || !credential.MustChangePassword || !credential.NoStore {
 			return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindInternal, "identity.handler_delivery_initial_credential_invalid", nil, nil)
 		}

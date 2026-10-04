@@ -147,7 +147,7 @@ func (d HandlerDescriptor) Validate() error {
 		ObjectCapabilityCreate: true, ObjectCapabilityUpdate: true, ObjectCapabilityConditionalUpdate: true,
 		ObjectCapabilityDelete: true, ObjectCapabilityRestore: true, ObjectCapabilityConditionalUpdateMany: true,
 		RecordNotificationRecipientOperation: true,
-		RecordManagerRecipientOperation: true,
+		RecordManagerRecipientOperation:      true,
 	}
 	for _, capability := range d.ObjectCapabilities {
 		objectKey := strings.TrimSpace(capability.ObjectKey)
@@ -245,6 +245,13 @@ func (d HandlerDescriptor) Validate() error {
 				}
 			}
 			if !allowed {
+				return ErrHandlerCapabilityInvalid
+			}
+		}
+	}
+	if d.IdentityHandlerDelivery != nil && d.TargetOrganization != nil {
+		for _, operation := range d.IdentityHandlerDelivery.Operations {
+			if operation == IdentityHandlerCreateWorkspace {
 				return ErrHandlerCapabilityInvalid
 			}
 		}

@@ -14,10 +14,12 @@ type IdentityHandlerOperation string
 type IdentityHandlerLoginMode string
 
 const (
-	IdentityHandlerCreate  IdentityHandlerOperation = "create"
-	IdentityHandlerUpdate  IdentityHandlerOperation = "update"
-	IdentityHandlerDisable IdentityHandlerOperation = "disable"
-	IdentityHandlerResolve IdentityHandlerOperation = "resolve"
+	IdentityHandlerCreate IdentityHandlerOperation = "create"
+	// IdentityHandlerCreateWorkspace creates a Workspace-owned account without an organization.
+	IdentityHandlerCreateWorkspace IdentityHandlerOperation = "create_workspace"
+	IdentityHandlerUpdate          IdentityHandlerOperation = "update"
+	IdentityHandlerDisable         IdentityHandlerOperation = "disable"
+	IdentityHandlerResolve         IdentityHandlerOperation = "resolve"
 
 	IdentityHandlerLoginNone     IdentityHandlerLoginMode = "none"
 	IdentityHandlerLoginPassword IdentityHandlerLoginMode = "password"
@@ -25,7 +27,7 @@ const (
 
 func (value IdentityHandlerOperation) Valid() bool {
 	switch value {
-	case IdentityHandlerCreate, IdentityHandlerUpdate, IdentityHandlerDisable, IdentityHandlerResolve:
+	case IdentityHandlerCreate, IdentityHandlerCreateWorkspace, IdentityHandlerUpdate, IdentityHandlerDisable, IdentityHandlerResolve:
 		return true
 	default:
 		return false
@@ -73,7 +75,10 @@ func (value IdentityHandlerDeliveryCapability) Valid() bool {
 		return false
 	}
 	credentialField := strings.TrimSpace(value.InitialCredentialOutputField)
-	return credentialField == "" || operations[IdentityHandlerCreate] && handlerFieldIdentityPattern.MatchString(credentialField)
+	if operations[IdentityHandlerCreateWorkspace] && (len(bindings) != 0 || operations[IdentityHandlerCreate] || operations[IdentityHandlerUpdate] || operations[IdentityHandlerDisable]) {
+		return false
+	}
+	return credentialField == "" || (operations[IdentityHandlerCreate] || operations[IdentityHandlerCreateWorkspace]) && handlerFieldIdentityPattern.MatchString(credentialField)
 }
 
 type IdentityUser struct {
