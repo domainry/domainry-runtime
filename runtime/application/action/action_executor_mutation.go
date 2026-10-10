@@ -30,9 +30,11 @@ func (e *businessActionExecution) AcquireSynchronousConnectorCall(requested runt
 	case runtimeext.ConnectorEffectReserve, runtimeext.ConnectorEffectWrite:
 		// A synchronous external effect may only run from a durable owner
 		// invocation whose Action receipt can never be reclaimed. If the
-		// worker disappears after dispatch, later timer attempts observe the
-		// unresolved receipt instead of repeating the external call.
-		if (e.invocation.Source != actionmodel.ActionSourceRecordTimer && e.invocation.Source != actionmodel.ActionSourceScheduler) || !e.invocation.PreventExecutionReclaim {
+		// process disappears after dispatch, a later retry observes the
+		// unresolved receipt instead of repeating the external call. Project
+		// HTTP handlers must opt in per Action; generic Runtime HTTP routes do
+		// not set this flag.
+		if !synchronousConnectorWriteOwner(e.invocation.Source) || !e.invocation.PreventExecutionReclaim {
 			return nil, apperror.New(apperror.KindForbidden, runtimeext.ConnectorActionSideEffectOutboxErrorCode, nil, map[string]string{"connector": requested.ConnectorKey, "operation": requested.OperationKey})
 		}
 	default:
@@ -42,6 +44,15 @@ func (e *businessActionExecution) AcquireSynchronousConnectorCall(requested runt
 		return nil, apperror.New(apperror.KindForbidden, runtimeext.ConnectorActionGrantDeniedErrorCode, nil, map[string]string{"connector": requested.ConnectorKey, "operation": requested.OperationKey})
 	}
 	return e.unitOfWork.acquireSynchronousConnectorCall()
+}
+
+func synchronousConnectorWriteOwner(source actionmodel.ActionSource) bool {
+	switch source {
+	case actionmodel.ActionSourceHTTP, actionmodel.ActionSourceRecordTimer, actionmodel.ActionSourceScheduler:
+		return true
+	default:
+		return false
+	}
 }
 
 func (e *businessActionExecution) AcquireConnectionAccountWrite() (runtimeext.SynchronousConnectorCallLease, error) {

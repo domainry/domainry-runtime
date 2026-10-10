@@ -13,7 +13,7 @@ import (
 
 func TestRuntimeextPrincipalCarriesDetachedActiveBusinessProfile(t *testing.T) {
 	internal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true,
-		UserID: "user-1"},
+		UserID: "user-1", AuthenticatedProvider: "wechat_mini_program", ProviderSubject: "openid-1"},
 		ActiveBusinessProfile: &profilebindingmodel.Reference{
 			BindingKey: "member",
 			ObjectKey:  "member",
@@ -22,6 +22,9 @@ func TestRuntimeextPrincipalCarriesDetachedActiveBusinessProfile(t *testing.T) {
 	}, accessfixture.Bundle{Key: "member"},
 	)
 	public := toRuntimeextPrincipal(internal)
+	if public.AuthenticatedProvider != "wechat_mini_program" || public.ProviderSubject != "openid-1" {
+		t.Fatalf("public Principal lost authenticated provider subject: %+v", public)
+	}
 	if public.ActiveBusinessProfile == nil ||
 		public.ActiveBusinessProfile.BindingKey != "member" ||
 		public.ActiveBusinessProfile.ObjectKey != "member" ||

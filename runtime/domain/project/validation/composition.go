@@ -200,7 +200,8 @@ func ValidateComposition(model projectmodel.Model, registry *runtimeext.ProjectE
 				add("project_definition.schedule_role_unknown", path+"/run_as_role", fmt.Sprintf("schedule references unknown role %q", schedule.Target.RunAsRole))
 			}
 		case "workflow":
-			if !workflows[schedule.Target.Operation] {
+			workflowKey := strings.TrimPrefix(strings.TrimSpace(schedule.Target.Operation), "scheduled:")
+			if !workflows[workflowKey] {
 				add("project_definition.schedule_workflow_unknown", path+"/operation", fmt.Sprintf("schedule references unknown workflow %q", schedule.Target.Operation))
 			}
 		case "report":

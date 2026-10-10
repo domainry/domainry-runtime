@@ -22,6 +22,8 @@ type Principal struct {
 	CorrelationID         string
 	CausationID           string
 	AuthorizationRevision string
+	AuthenticatedProvider string
+	ProviderSubject       string
 	Known                 bool
 	ActiveBusinessProfile *BusinessProfileReference
 }

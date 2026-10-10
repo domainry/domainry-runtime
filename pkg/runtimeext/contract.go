@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v49"
-	ContractSHA256  = "21bce5a97583120dc8ec2a447f698343f433572402ec939af36ab7a063153bfa"
+	ContractVersion = "runtimeext-v50"
+	ContractSHA256  = "5e482df7ce61ced2a98e3a08a91329688905fcf6fbbd16ba63e7a93637a948c1"
 )
 
-const contractDefinitionV49 = `runtimeext-v49
+const contractDefinitionV50 = `runtimeext-v50
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
@@ -66,7 +66,7 @@ NotificationDispatchOperationKey=notification.intent.dispatch
 NotificationBatchSizeInvalidErrorCode=backend.notification.action_batch_size_invalid
 NotificationBatchMaximum=200
 SynchronousConnectorCallLease.Release()
-SynchronousConnectorCallSemantics=read_before_write|reserve_or_write_only_from_non_reclaimable_record_timer_action|unresolved_dispatch_never_reclaimed
+SynchronousConnectorCallSemantics=read_before_write|reserve_or_write_only_from_non_reclaimable_project_http_record_timer_or_scheduler_action|unresolved_dispatch_never_reclaimed
 ConnectorCallAfterWriteErrorCode=backend.connector.call_after_write_forbidden
 ActionWriteDuringConnectorCallErrorCode=backend.action.write_during_connector_call_forbidden
 ConnectorActionExecutionRequiredErrorCode=backend.connector.action_execution_required
@@ -166,7 +166,7 @@ func ComputedContractSHA256() string {
 		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV49)
+	definition.WriteString(contractDefinitionV50)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

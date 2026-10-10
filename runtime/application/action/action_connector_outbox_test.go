@@ -53,9 +53,20 @@ func TestBusinessActionExecutionRejectsConnectorCallsOutsidePublishedGrant(t *te
 	} else {
 		lease.Release()
 	}
+	execution.invocation.Source = actionmodel.ActionSourceHTTP
+	if lease, err := execution.AcquireSynchronousConnectorCall(writeCall); err != nil {
+		t.Fatalf("non-reclaimable project HTTP side effect error=%v", err)
+	} else {
+		lease.Release()
+	}
+	execution.invocation.Source = actionmodel.ActionSourceAgent
+	if _, err := execution.AcquireSynchronousConnectorCall(writeCall); apperror.CodeOf(err) != runtimeext.ConnectorActionSideEffectOutboxErrorCode {
+		t.Fatalf("agent side effect error=%v", err)
+	}
+	execution.invocation.Source = actionmodel.ActionSourceHTTP
 	execution.invocation.PreventExecutionReclaim = false
 	if _, err := execution.AcquireSynchronousConnectorCall(writeCall); apperror.CodeOf(err) != runtimeext.ConnectorActionSideEffectOutboxErrorCode {
-		t.Fatalf("reclaimable timer side effect error=%v", err)
+		t.Fatalf("reclaimable project HTTP side effect error=%v", err)
 	}
 }
 
