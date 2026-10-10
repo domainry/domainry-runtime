@@ -14,6 +14,7 @@ import (
 
 const DevIntegrationSecret = "dev-generated-integration-secret-change-me"
 const DevAuditExportTokenKey = "dev-generated-audit-export-token-change-me"
+const DevDefaultAdminPassword = "Domainry!123"
 
 type Config struct {
 	RuntimeVersion                          string
@@ -125,6 +126,8 @@ type Config struct {
 	WorkspaceProvisionFailurePoint              string
 	RuntimeWorkspaceProvisionClientID           string
 	RuntimeWorkspaceProvisionSigningSecret      string
+	AuthDefaultPassword                         string
+	AuthInitialCredentialRotationRequired       bool
 	InitialWorkspaceRequestID                   string
 	InitialWorkspaceCode                        string
 	InitialWorkspaceName                        string
@@ -305,6 +308,8 @@ func FromEnv() Config {
 		WorkspaceProvisionFailurePoint:                  strings.TrimSpace(os.Getenv("WORKSPACE_PROVISION_FAILURE_POINT")),
 		RuntimeWorkspaceProvisionClientID:               strings.TrimSpace(os.Getenv("RUNTIME_WORKSPACE_PROVISION_CLIENT_ID")),
 		RuntimeWorkspaceProvisionSigningSecret:          os.Getenv("RUNTIME_WORKSPACE_PROVISION_SIGNING_SECRET"),
+		AuthDefaultPassword:                             env("AUTH_DEFAULT_PASSWORD", DevDefaultAdminPassword),
+		AuthInitialCredentialRotationRequired:           boolEnv("AUTH_INITIAL_CREDENTIAL_ROTATION_REQUIRED", true),
 		InitialWorkspaceRequestID:                       env("INITIAL_WORKSPACE_REQUEST_ID", "initial-workspace"),
 		InitialWorkspaceCode:                            strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_CODE")),
 		InitialWorkspaceName:                            strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_NAME")),
@@ -425,6 +430,12 @@ func (c Config) ValidateSecurity() error {
 	}
 	if !c.IsProduction() {
 		return nil
+	}
+	if strings.TrimSpace(c.AuthDefaultPassword) == "" || c.AuthDefaultPassword == DevDefaultAdminPassword || len(c.AuthDefaultPassword) > 72 {
+		return fmt.Errorf("AUTH_DEFAULT_PASSWORD must be set to a non-default value of at most 72 bytes in production")
+	}
+	if !c.AuthInitialCredentialRotationRequired {
+		return fmt.Errorf("AUTH_INITIAL_CREDENTIAL_ROTATION_REQUIRED must be true in production")
 	}
 	if c.RuntimeAllowDevIdentityHeaders {
 		return fmt.Errorf("RUNTIME_ALLOW_DEV_IDENTITY_HEADERS must be false in production")

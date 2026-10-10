@@ -20,6 +20,7 @@ func TestDeckProductProductionEnvironmentLoadsAsRuntimeContract(t *testing.T) {
 		"AUTH_JWT_SECRET":                           "local-test-jwt-secret",
 		"AUTH_JWT_ACTIVE_KID":                       "product-v1",
 		"AUTH_DEFAULT_PASSWORD":                     "local-test-default-password",
+		"AUTH_INITIAL_CREDENTIAL_ROTATION_REQUIRED": "true",
 		"IDENTITY_DATA_SECRET_KEY":                  "local-test-data-secret",
 		"IDENTITY_DATA_ACTIVE_KEY_ID":               "product-v1",
 		"IDENTITY_OPERATIONS_ACCESS_TOKEN":          "local-test-operations-token",

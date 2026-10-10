@@ -258,7 +258,8 @@ func initialWorkspaceRequest(cfg config.Config) (workspaceprovisionmodel.Request
 		RequestID: strings.TrimSpace(cfg.InitialWorkspaceRequestID), WorkspaceCode: strings.TrimSpace(cfg.InitialWorkspaceCode),
 		WorkspaceName: strings.TrimSpace(cfg.InitialWorkspaceName), FirstStoreCode: strings.TrimSpace(cfg.InitialWorkspaceFirstStoreCode),
 		FirstStoreName: strings.TrimSpace(cfg.InitialWorkspaceFirstStoreName), AdminLoginID: strings.TrimSpace(cfg.InitialWorkspaceAdminLoginID),
-		AdminName: strings.TrimSpace(cfg.InitialWorkspaceAdminName), CommercialConfiguration: configuration, ApplicationBootstrap: applicationBootstrap,
+		AdminName: strings.TrimSpace(cfg.InitialWorkspaceAdminName), InitialAdminPassword: cfg.AuthDefaultPassword,
+		InitialAdminMustChangePassword: cfg.AuthInitialCredentialRotationRequired, CommercialConfiguration: configuration, ApplicationBootstrap: applicationBootstrap,
 	}, nil
 }
 

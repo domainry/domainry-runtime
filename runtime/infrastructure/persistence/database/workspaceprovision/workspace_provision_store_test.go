@@ -181,8 +181,8 @@ func TestWorkspaceInitializationCompletesThenClaimsOnceAndReplayHasNoSecret(t *t
 	if probe.request.ContractVersion != identitysdk.WorkspaceIdentityBootstrapContractVersion || probe.request.ContractHash != identitysdk.WorkspaceIdentityBootstrapContractHash {
 		t.Fatalf("bootstrap contract=%q hash=%q", probe.request.ContractVersion, probe.request.ContractHash)
 	}
-	if probe.request.InitialAdminPassword == "" || probe.request.InitialAdminPassword == "domainry!123" {
-		t.Fatal("Runtime did not generate a fresh one-time bootstrap credential")
+	if probe.request.InitialAdminPassword != request.InitialAdminPassword {
+		t.Fatal("Runtime did not preserve its configured initial administrator credential")
 	}
 	if len(probe.completions) != 1 || probe.completions[0].Outcome != identitysdk.WorkspaceIdentityBootstrapTransactionCommitted {
 		t.Fatalf("completions=%#v", probe.completions)
@@ -425,7 +425,8 @@ func validWorkspaceRequest(requestID string) workspaceprovisionmodel.Request {
 	return workspaceprovisionmodel.Request{
 		RequestID: requestID, WorkspaceCode: "primary", WorkspaceName: "Primary",
 		FirstStoreCode: "primary-store", FirstStoreName: "Primary Store",
-		AdminLoginID: "OWNER@EXAMPLE.TEST", AdminName: "Owner",
+		AdminLoginID: "OWNER@EXAMPLE.TEST", AdminName: "Owner", InitialAdminPassword: "Domainry!123",
+		InitialAdminMustChangePassword: true,
 		CommercialConfiguration: workspaceprovisionmodel.CommercialConfiguration{
 			Plan: "standard", IncludedUserLimit: 1, MaxUserLimit: 100,
 			IncludedCustomerLimit: 0, MaxCustomerLimit: 1000,

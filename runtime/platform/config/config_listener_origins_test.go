@@ -122,6 +122,7 @@ func TestValidateProductionListeners(t *testing.T) {
 func TestProductionListenerValidationRemainingConditions(t *testing.T) {
 	valid := Config{
 		Environment: "production", AuditExportTokenKey: "audit-export-secret",
+		AuthDefaultPassword: "StrongPassword!", AuthInitialCredentialRotationRequired: true,
 		IntegrationSecretKey: "integration-secret", IntegrationActiveKeyID: "data-1",
 		SchedulerPollInterval: time.Second,
 	}

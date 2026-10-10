@@ -74,7 +74,7 @@ func Definitions() []Definition {
 			defaultValue = "[REDACTED]"
 		}
 		definition := Definition{Field: field.Name, Name: name, Owner: configOwner(name), Type: reflectValueType(field.Type), Default: defaultValue, Secret: secret}
-		definition.Required = name == "AUDIT_EXPORT_TOKEN_KEY" || name == "INTEGRATION_SECRET_KEY"
+		definition.Required = name == "AUDIT_EXPORT_TOKEN_KEY" || name == "AUTH_DEFAULT_PASSWORD" || name == "AUTH_INITIAL_CREDENTIAL_ROTATION_REQUIRED" || name == "INTEGRATION_SECRET_KEY"
 		out = append(out, definition)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
@@ -544,7 +544,7 @@ func managedConfigName(name string) bool {
 
 func identityModuleConfigName(name string) bool {
 	switch name {
-	case "AUTH_JWT_SECRET", "AUTH_JWT_ACTIVE_KID", "AUTH_DEFAULT_PASSWORD",
+	case "AUTH_JWT_SECRET", "AUTH_JWT_ACTIVE_KID", "AUTH_DEFAULT_PASSWORD", "AUTH_INITIAL_CREDENTIAL_ROTATION_REQUIRED",
 		"IDENTITY_DATA_SECRET_KEY", "IDENTITY_DATA_ACTIVE_KEY_ID",
 		"IDENTITY_OPERATIONS_ACCESS_TOKEN", "IDENTITY_BROWSER_RETURN_URLS":
 		return true

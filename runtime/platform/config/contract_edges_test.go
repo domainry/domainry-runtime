@@ -318,6 +318,7 @@ func TestConfigManagedNamesAndSecurityValidationEdges(t *testing.T) {
 		t.Fatal(err)
 	}
 	valid.Environment = "production"
+	valid.AuthDefaultPassword = "StrongPassword!"
 	valid.RuntimeAllowDevIdentityHeaders = true
 	if err := valid.Validate(); err == nil || !strings.Contains(err.Error(), "RUNTIME_ALLOW_DEV_IDENTITY_HEADERS") {
 		t.Fatalf("security validation error=%v", err)

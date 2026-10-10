@@ -3,13 +3,13 @@ package workspaceprovisionmodel
 import "errors"
 
 var (
-	ErrInvalid                    = errors.New("workspace provisioning request invalid")
-	ErrIdempotencyConflict        = errors.New("workspace provisioning idempotency conflict")
-	ErrCodeConflict               = errors.New("workspace canonical code conflict")
-	ErrWorkspaceNotFound          = errors.New("workspace not found")
-	ErrIdentityUnavailable        = errors.New("embedded Identity workspace bootstrap is unavailable")
-	ErrInitializationRequired     = errors.New("initial Workspace must be initialized before workspace provisioning")
-	ErrAlreadyInitialized         = errors.New("initial Workspace is already initialized")
+	ErrInvalid                = errors.New("workspace provisioning request invalid")
+	ErrIdempotencyConflict    = errors.New("workspace provisioning idempotency conflict")
+	ErrCodeConflict           = errors.New("workspace canonical code conflict")
+	ErrWorkspaceNotFound      = errors.New("workspace not found")
+	ErrIdentityUnavailable    = errors.New("embedded Identity workspace bootstrap is unavailable")
+	ErrInitializationRequired = errors.New("initial Workspace must be initialized before workspace provisioning")
+	ErrAlreadyInitialized     = errors.New("initial Workspace is already initialized")
 	// ErrAcceptanceFailure is intentionally stable and contains no generated
 	// Workspace, credential, organization, or application-record identity.
 	ErrAcceptanceFailure = errors.New("workspace provisioning acceptance failure")
@@ -36,15 +36,17 @@ type CommercialConfiguration struct {
 }
 
 type Request struct {
-	RequestID               string                  `json:"request_id"`
-	WorkspaceCode           string                  `json:"workspace_code"`
-	WorkspaceName           string                  `json:"workspace_name"`
-	FirstStoreCode          string                  `json:"first_store_code"`
-	FirstStoreName          string                  `json:"first_store_name"`
-	AdminLoginID            string                  `json:"admin_login_id"`
-	AdminName               string                  `json:"admin_name"`
-	CommercialConfiguration CommercialConfiguration `json:"commercial_configuration"`
-	ApplicationBootstrap    map[string]any          `json:"application_bootstrap,omitempty"`
+	RequestID                      string                  `json:"request_id"`
+	WorkspaceCode                  string                  `json:"workspace_code"`
+	WorkspaceName                  string                  `json:"workspace_name"`
+	FirstStoreCode                 string                  `json:"first_store_code"`
+	FirstStoreName                 string                  `json:"first_store_name"`
+	AdminLoginID                   string                  `json:"admin_login_id"`
+	AdminName                      string                  `json:"admin_name"`
+	InitialAdminPassword           string                  `json:"-"`
+	InitialAdminMustChangePassword bool                    `json:"-"`
+	CommercialConfiguration        CommercialConfiguration `json:"commercial_configuration"`
+	ApplicationBootstrap           map[string]any          `json:"application_bootstrap,omitempty"`
 }
 
 type CredentialDeliveryStatus string

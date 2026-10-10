@@ -136,6 +136,9 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	if err := workspaceprovisionvalidation.ValidateRequest(request); err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
+	if request.InitialAdminPassword == "" || len(request.InitialAdminPassword) > 72 {
+		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInvalid
+	}
 	if err := store.validateApplicationBootstrapRequest(request.ApplicationBootstrap); err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
@@ -187,7 +190,7 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	result = workspaceprovisionmodel.Result{
 		WorkspaceID: workspaceID, CompanyID: companyID, FirstStoreID: firstStoreID,
 		InitialAdminUserID: adminUserID, CanonicalCode: request.WorkspaceCode,
-		AdminLoginID: request.AdminLoginID, MustChangePassword: true,
+		AdminLoginID: request.AdminLoginID, MustChangePassword: request.InitialAdminMustChangePassword,
 		CredentialDelivery: workspaceprovisionmodel.CredentialUnavailableResetRequired,
 	}
 
@@ -227,11 +230,6 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	if err = store.insertRuntimeWorkspace(ctx, tx, request, result, installationIdentity); err != nil {
 		return store.afterFailedInsert(ctx, request, fingerprint, err)
 	}
-	initialAdminPassword, err := randomInitialAdministratorPassword()
-	if err != nil {
-		return workspaceprovisionmodel.Result{}, err
-	}
-
 	identityReceipt, err = store.bootstrap.BootstrapWorkspaceIdentity(ctx, identitysdk.WorkspaceIdentityBootstrapRequest{
 		ContractVersion: identitysdk.WorkspaceIdentityBootstrapContractVersion,
 		ContractHash:    identitysdk.WorkspaceIdentityBootstrapContractHash,
@@ -242,7 +240,7 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 		// Runtime generates a one-time secret for Identity's closed bootstrap
 		// transaction. It is never authored in model.json or retained in project
 		// metadata; only the post-commit credential claim can disclose it.
-		InitialAdminPassword: initialAdminPassword,
+		InitialAdminPassword: request.InitialAdminPassword,
 	}, identitysdk.EmbeddedTransaction{Executor: tx, WorkspaceProvisionFailures: store.identityFailureInjector()})
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, err
@@ -276,6 +274,10 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	})
 	if err != nil {
 		return result, nil
+	}
+	if credential.MustChangePassword != request.InitialAdminMustChangePassword {
+		credential.InitialPassword = ""
+		return result, fmt.Errorf("Identity initial credential rotation policy does not match Runtime configuration")
 	}
 	result.AdminLoginID = credential.LoginID
 	result.InitialPassword = credential.InitialPassword
@@ -643,7 +645,7 @@ func (store *WorkspaceProvisionStore) identityFailureInjector() identitysdk.Work
 }
 
 func requestFingerprint(request workspaceprovisionmodel.Request, configuration, applicationInput []byte) string {
-	payload := strings.Join([]string{request.WorkspaceCode, request.WorkspaceName, request.FirstStoreCode, request.FirstStoreName, request.AdminLoginID, request.AdminName, string(configuration), string(applicationInput)}, "\x00")
+	payload := strings.Join([]string{request.WorkspaceCode, request.WorkspaceName, request.FirstStoreCode, request.FirstStoreName, request.AdminLoginID, request.AdminName, request.InitialAdminPassword, fmt.Sprintf("must_change_password=%t", request.InitialAdminMustChangePassword), string(configuration), string(applicationInput)}, "\x00")
 	sum := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(sum[:])
 }
@@ -654,12 +656,4 @@ func randomID(prefix string) (string, error) {
 		return "", fmt.Errorf("generate workspace provisioning identity: %w", err)
 	}
 	return prefix + "_" + hex.EncodeToString(buffer), nil
-}
-
-func randomInitialAdministratorPassword() (string, error) {
-	random := make([]byte, 18)
-	if _, err := rand.Read(random); err != nil {
-		return "", fmt.Errorf("generate initial administrator credential: %w", err)
-	}
-	return "Aa1!" + hex.EncodeToString(random), nil
 }

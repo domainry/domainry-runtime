@@ -40,7 +40,7 @@ func NewInitialWorkspaceCredentialFileDelivery(path string) (InitialWorkspaceCre
 func (delivery *initialWorkspaceCredentialFileDelivery) DeliverInitialWorkspaceCredential(ctx context.Context, credential InitialWorkspaceCredential) (InitialWorkspaceCredentialDeliveryAcknowledgment, error) {
 	workspaceID := strings.TrimSpace(credential.WorkspaceID)
 	if delivery == nil || strings.TrimSpace(delivery.path) == "" || ctx == nil || workspaceID == "" || strings.EqualFold(workspaceID, "default") ||
-		strings.TrimSpace(credential.CanonicalCode) == "" || strings.TrimSpace(credential.LoginID) == "" || strings.TrimSpace(credential.InitialPassword) == "" || !credential.MustChangePassword {
+		strings.TrimSpace(credential.CanonicalCode) == "" || strings.TrimSpace(credential.LoginID) == "" || strings.TrimSpace(credential.InitialPassword) == "" {
 		return InitialWorkspaceCredentialDeliveryAcknowledgment{}, fmt.Errorf("initial Workspace credential delivery is invalid")
 	}
 	select {

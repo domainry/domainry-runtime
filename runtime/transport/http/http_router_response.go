@@ -184,7 +184,6 @@ func (s *HTTPRouter) principalFromRequest(r *http.Request) principalmodel.Princi
 		// the target workspace; re-authenticating here would also consume the
 		// per-key rate limit more than once for one HTTP request.
 		return principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: workspaceID, Known: false}, RequestID: requestID}
-		return principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: workspaceID, Known: false}, RequestID: requestID}
 	}
 	if bearerTokenFromRequest(r) != "" {
 		return principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: workspaceID, Known: false}, RequestID: requestID}

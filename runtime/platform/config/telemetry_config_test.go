@@ -18,7 +18,7 @@ func TestTelemetryConfigLoadsExporterAndCredentials(t *testing.T) {
 }
 
 func TestProductionRejectsInsecureTelemetryTransport(t *testing.T) {
-	cfg := Config{Environment: "production", AuditExportTokenKey: "safe-audit-export", IntegrationSecretKey: "safe-integration", IntegrationActiveKeyID: "data-1", TelemetryEndpoint: "http://collector:4318/v1/traces", TelemetryInsecure: true}
+	cfg := Config{Environment: "production", AuditExportTokenKey: "safe-audit-export", AuthDefaultPassword: "StrongPassword!", AuthInitialCredentialRotationRequired: true, IntegrationSecretKey: "safe-integration", IntegrationActiveKeyID: "data-1", TelemetryEndpoint: "http://collector:4318/v1/traces", TelemetryInsecure: true}
 	setValidProductionListenerOrigins(&cfg)
 	if err := cfg.ValidateSecurity(); err == nil {
 		t.Fatal("production accepted insecure telemetry transport")
