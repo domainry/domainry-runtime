@@ -18,7 +18,7 @@ func TestDevelopmentIdentityRequestIsEnvironmentGatedAndNormalized(t *testing.T)
 	if _, _, err := developmentIdentityRequest(config.Config{Environment: "production"}, options); err == nil || !strings.Contains(err.Error(), "forbidden") {
 		t.Fatalf("production error=%v", err)
 	}
-	request, enabled, err := developmentIdentityRequest(config.Config{Environment: "demo"}, options)
+	request, enabled, err := developmentIdentityRequest(config.Config{Environment: "development"}, options)
 	if err != nil || !enabled {
 		t.Fatalf("enabled=%t error=%v", enabled, err)
 	}

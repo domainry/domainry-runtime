@@ -38,10 +38,14 @@ func TestValidateSecurityRemainingProductionGates(t *testing.T) {
 			}
 		})
 	}
-	valid.Environment = "test"
+	valid.Environment = "development"
 	valid.RuntimeAllowDevIdentityHeaders = true
 	if err := valid.ValidateSecurity(); err != nil {
 		t.Fatalf("non-production security validation: %v", err)
+	}
+	valid.Environment = "test"
+	if err := valid.ValidateSecurity(); err == nil || !strings.Contains(err.Error(), "APP_ENV must be development or production") {
+		t.Fatalf("unsupported environment validation: %v", err)
 	}
 }
 

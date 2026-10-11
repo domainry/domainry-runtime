@@ -190,12 +190,12 @@ type Config struct {
 }
 
 func FromEnv() Config {
-	environment := env("APP_ENV", env("GO_ENV", env("NODE_ENV", "development")))
+	environment := env("APP_ENV", "development")
 	workerPollDefault := 500 * time.Millisecond
 	schedulerPollDefault := 500 * time.Millisecond
 	recordTimerPollDefault := 500 * time.Millisecond
 	switch strings.ToLower(strings.TrimSpace(environment)) {
-	case "prod", "production":
+	case "production":
 		workerPollDefault = 30 * time.Second
 		schedulerPollDefault = 30 * time.Second
 		recordTimerPollDefault = 30 * time.Second
@@ -399,7 +399,7 @@ func databaseMigrationModeEnv(environment string) string {
 		return value
 	}
 	switch strings.ToLower(strings.TrimSpace(environment)) {
-	case "prod", "production":
+	case "production":
 		return "verify"
 	default:
 		return "apply"
@@ -417,6 +417,13 @@ func (c Config) EffectiveDatabaseMigrationMode() string {
 }
 
 func (c Config) ValidateSecurity() error {
+	environment := strings.ToLower(strings.TrimSpace(c.Environment))
+	if environment == "" {
+		environment = "development"
+	}
+	if environment != "development" && environment != "production" {
+		return fmt.Errorf("APP_ENV must be development or production")
+	}
 	if c.RuntimeWorkspaceProvisionClientID != "" || c.RuntimeWorkspaceProvisionSigningSecret != "" {
 		if strings.TrimSpace(c.RuntimeWorkspaceProvisionClientID) == "" || strings.ContainsAny(c.RuntimeWorkspaceProvisionClientID, "\r\n") || len(c.RuntimeWorkspaceProvisionSigningSecret) < 32 {
 			return fmt.Errorf("RUNTIME_WORKSPACE_PROVISION_CLIENT_ID and a signing secret of at least 32 bytes must be configured together")
@@ -478,8 +485,8 @@ func (c Config) validateWorkspaceProvisionFailurePoint() error {
 		return nil
 	}
 	environment := strings.ToLower(strings.TrimSpace(c.Environment))
-	if environment != "dev" && environment != "development" && environment != "acceptance" {
-		return fmt.Errorf("WORKSPACE_PROVISION_FAILURE_POINT is allowed only when APP_ENV is development or acceptance")
+	if environment != "development" {
+		return fmt.Errorf("WORKSPACE_PROVISION_FAILURE_POINT is allowed only when APP_ENV is development")
 	}
 	allowed := map[string]bool{
 		"after_workspace": true, "after_identity_user": true,
@@ -586,12 +593,7 @@ func (c Config) validateProductionListenerOrigins() error {
 }
 
 func (c Config) IsProduction() bool {
-	switch strings.ToLower(strings.TrimSpace(c.Environment)) {
-	case "prod", "production":
-		return true
-	default:
-		return false
-	}
+	return strings.EqualFold(strings.TrimSpace(c.Environment), "production")
 }
 
 func (c Config) HTTPAddr() string {

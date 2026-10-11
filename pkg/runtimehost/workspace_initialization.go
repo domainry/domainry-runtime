@@ -190,7 +190,7 @@ func developmentIdentityRequest(cfg config.Config, options *DevelopmentIdentityO
 		return identitysdk.WorkspaceAcceptanceFixtureRequest{}, false, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(cfg.Environment)) {
-	case "development", "dev", "demo", "test":
+	case "development":
 	default:
 		return identitysdk.WorkspaceAcceptanceFixtureRequest{}, false, fmt.Errorf("development identities are forbidden in environment %q", cfg.Environment)
 	}

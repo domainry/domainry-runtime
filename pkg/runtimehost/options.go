@@ -88,14 +88,14 @@ type Options struct {
 	// outside the project transport implementation.
 	ProjectHTTP runtimeengine.HTTPFactory
 	// DevelopmentData enables one-shot generated sample records after the
-	// project model has materialized. Runtime accepts it only in development or
-	// demo environments and only while every eligible business object is empty.
+	// project model has materialized. Runtime accepts it only in the development
+	// environment and only while every eligible business object is empty.
 	// No sample row is described in model.json or SQL.
 	DevelopmentData *DevelopmentDataOptions
 	// DevelopmentIdentity enables explicitly authored evaluation users while
-	// creating the first embedded Workspace. Runtime accepts it only in
-	// development, dev, demo, or test environments and provisions the users in
-	// the same transaction as the Workspace. Production startup rejects it.
+	// creating the first embedded Workspace. Runtime accepts it only in the
+	// development environment and provisions the users in the same transaction
+	// as the Workspace. Production startup rejects it.
 	DevelopmentIdentity *DevelopmentIdentityOptions
 	Connectors          connector.ProviderSetFactory
 	// ConnectorProcesses is an explicit host policy for optional Provider

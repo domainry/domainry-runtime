@@ -7,19 +7,17 @@ import (
 
 func TestWorkspaceProvisionFailurePointIsStartupOnlyAndEnvironmentGated(t *testing.T) {
 	t.Setenv("WORKSPACE_PROVISION_FAILURE_POINT", "")
-	for _, environment := range []string{"development", "dev", "acceptance"} {
-		cfg := FromEnv()
-		cfg.Environment = environment
-		cfg.WorkspaceProvisionFailurePoint = "after_credential"
-		if err := cfg.validateWorkspaceProvisionFailurePoint(); err != nil {
-			t.Fatalf("%s rejected acceptance failure injection: %v", environment, err)
-		}
+	cfg := FromEnv()
+	cfg.Environment = "development"
+	cfg.WorkspaceProvisionFailurePoint = "after_credential"
+	if err := cfg.validateWorkspaceProvisionFailurePoint(); err != nil {
+		t.Fatalf("development rejected failure injection: %v", err)
 	}
-	for _, environment := range []string{"production", "prod", "stage", "test", "online"} {
+	for _, environment := range []string{"production", "prod", "stage", "test", "acceptance", "demo", "dev", "online"} {
 		cfg := FromEnv()
 		cfg.Environment = environment
 		cfg.WorkspaceProvisionFailurePoint = "after_workspace"
-		if err := cfg.validateWorkspaceProvisionFailurePoint(); err == nil || !strings.Contains(err.Error(), "development or acceptance") {
+		if err := cfg.validateWorkspaceProvisionFailurePoint(); err == nil || !strings.Contains(err.Error(), "APP_ENV is development") {
 			t.Fatalf("%s failure injection gate error=%v", environment, err)
 		}
 	}
@@ -34,14 +32,14 @@ func TestWorkspaceProvisionFailurePointValidatesClosedPointCatalog(t *testing.T)
 	}
 	for _, point := range valid {
 		cfg := FromEnv()
-		cfg.Environment, cfg.WorkspaceProvisionFailurePoint = "acceptance", point
+		cfg.Environment, cfg.WorkspaceProvisionFailurePoint = "development", point
 		if err := cfg.validateWorkspaceProvisionFailurePoint(); err != nil {
 			t.Fatalf("point %q rejected: %v", point, err)
 		}
 	}
 	for _, point := range []string{"workspace", "after_identity", "after_application_bootstrap_record:", "after_application_bootstrap_record:../store", "after_commit", "after_receipt:any"} {
 		cfg := FromEnv()
-		cfg.Environment, cfg.WorkspaceProvisionFailurePoint = "acceptance", point
+		cfg.Environment, cfg.WorkspaceProvisionFailurePoint = "development", point
 		if err := cfg.validateWorkspaceProvisionFailurePoint(); err == nil || !strings.Contains(err.Error(), "invalid") {
 			t.Fatalf("point %q error=%v", point, err)
 		}
@@ -57,7 +55,7 @@ func TestWorkspaceProvisionFailurePointRejectsNonEnvironmentConfigurationSources
 		}
 	}
 	configured, snapshot, err := LoadContract(Source{Name: "environment", Priority: 300, Values: map[string]string{
-		"APP_ENV": "acceptance", "WORKSPACE_PROVISION_FAILURE_POINT": "after_receipt",
+		"APP_ENV": "development", "WORKSPACE_PROVISION_FAILURE_POINT": "after_receipt",
 	}})
 	if err != nil || configured.WorkspaceProvisionFailurePoint != "after_receipt" || snapshot.Entries["WORKSPACE_PROVISION_FAILURE_POINT"].Source != "environment" {
 		t.Fatalf("environment startup configuration cfg=%#v snapshot=%#v err=%v", configured, snapshot.Entries["WORKSPACE_PROVISION_FAILURE_POINT"], err)

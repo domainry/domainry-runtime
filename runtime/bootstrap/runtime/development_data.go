@@ -20,7 +20,7 @@ func generateDevelopmentData(ctx context.Context, cfg config.Config, store *pers
 		return nil
 	}
 	switch strings.ToLower(strings.TrimSpace(cfg.Environment)) {
-	case "development", "dev", "demo", "test":
+	case "development":
 	default:
 		return fmt.Errorf("development data is forbidden in environment %q", cfg.Environment)
 	}
