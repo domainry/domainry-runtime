@@ -74,7 +74,7 @@ func Definitions() []Definition {
 			defaultValue = "[REDACTED]"
 		}
 		definition := Definition{Field: field.Name, Name: name, Owner: configOwner(name), Type: reflectValueType(field.Type), Default: defaultValue, Secret: secret}
-		definition.Required = name == "AUDIT_EXPORT_TOKEN_KEY" || name == "AUTH_DEFAULT_PASSWORD" || name == "AUTH_INITIAL_CREDENTIAL_ROTATION_REQUIRED" || name == "INTEGRATION_SECRET_KEY"
+		definition.Required = name == "AUDIT_EXPORT_TOKEN_KEY" || name == "INTEGRATION_SECRET_KEY"
 		out = append(out, definition)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

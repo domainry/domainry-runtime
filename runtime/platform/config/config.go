@@ -438,12 +438,6 @@ func (c Config) ValidateSecurity() error {
 	if !c.IsProduction() {
 		return nil
 	}
-	if strings.TrimSpace(c.AuthDefaultPassword) == "" || c.AuthDefaultPassword == DevDefaultAdminPassword || len(c.AuthDefaultPassword) > 72 {
-		return fmt.Errorf("AUTH_DEFAULT_PASSWORD must be set to a non-default value of at most 72 bytes in production")
-	}
-	if !c.AuthInitialCredentialRotationRequired {
-		return fmt.Errorf("AUTH_INITIAL_CREDENTIAL_ROTATION_REQUIRED must be true in production")
-	}
 	if c.RuntimeAllowDevIdentityHeaders {
 		return fmt.Errorf("RUNTIME_ALLOW_DEV_IDENTITY_HEADERS must be false in production")
 	}

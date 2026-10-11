@@ -10,7 +10,7 @@ import (
 func TestValidateSecurityRemainingProductionGates(t *testing.T) {
 	valid := Config{
 		Environment: "production", AuditExportTokenKey: "audit-export-secret",
-		AuthDefaultPassword: "StrongPassword!", AuthInitialCredentialRotationRequired: true,
+		AuthDefaultPassword: DevDefaultAdminPassword, AuthInitialCredentialRotationRequired: false,
 		IntegrationSecretKey: "integration-secret", IntegrationActiveKeyID: "data-1",
 		CORSAllowedOrigins: []string{"https://admin.example.com"}, SchedulerPollInterval: time.Second,
 	}
@@ -22,8 +22,6 @@ func TestValidateSecurityRemainingProductionGates(t *testing.T) {
 	}{
 		{name: "missing audit export key", mutate: func(c *Config) { c.AuditExportTokenKey = " " }, want: "AUDIT_EXPORT_TOKEN_KEY"},
 		{name: "default audit export key", mutate: func(c *Config) { c.AuditExportTokenKey = DevAuditExportTokenKey }, want: "AUDIT_EXPORT_TOKEN_KEY"},
-		{name: "local default administrator password", mutate: func(c *Config) { c.AuthDefaultPassword = DevDefaultAdminPassword }, want: "AUTH_DEFAULT_PASSWORD"},
-		{name: "disabled initial credential rotation", mutate: func(c *Config) { c.AuthInitialCredentialRotationRequired = false }, want: "AUTH_INITIAL_CREDENTIAL_ROTATION_REQUIRED"},
 		{name: "missing integration key", mutate: func(c *Config) { c.IntegrationSecretKey = " " }, want: "INTEGRATION_SECRET_KEY"},
 		{name: "missing integration kid", mutate: func(c *Config) { c.IntegrationActiveKeyID = " " }, want: "INTEGRATION_ACTIVE_KEY_ID"},
 		{name: "scheduler interval", mutate: func(c *Config) { c.SchedulerEnabled = true; c.SchedulerPollInterval = time.Millisecond }, want: "SCHEDULER_POLL_INTERVAL"},
@@ -132,10 +130,14 @@ func TestConfigEnvironmentHelperEdges(t *testing.T) {
 	}
 }
 
-func TestInitialCredentialRotationPolicyIsARequiredNonSecretBoolean(t *testing.T) {
+func TestDevelopmentInitialCredentialSettingsAreOptional(t *testing.T) {
+	password, passwordFound := definitionByName(Definitions(), "AUTH_DEFAULT_PASSWORD")
 	definition, ok := definitionByName(Definitions(), "AUTH_INITIAL_CREDENTIAL_ROTATION_REQUIRED")
-	if !ok || definition.Type != TypeBool || !definition.Required || definition.Secret {
-		t.Fatalf("definition=%#v found=%t", definition, ok)
+	if !passwordFound || password.Required || !password.Secret {
+		t.Fatalf("password definition=%#v found=%t", password, passwordFound)
+	}
+	if !ok || definition.Type != TypeBool || definition.Required || definition.Secret {
+		t.Fatalf("rotation definition=%#v found=%t", definition, ok)
 	}
 }
 

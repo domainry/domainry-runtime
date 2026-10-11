@@ -254,12 +254,16 @@ func initialWorkspaceRequest(cfg config.Config) (workspaceprovisionmodel.Request
 	if err := requireJSONEOF(bootstrapDecoder); err != nil {
 		return workspaceprovisionmodel.Request{}, fmt.Errorf("INITIAL_WORKSPACE_APPLICATION_BOOTSTRAP_JSON must contain exactly one JSON object: %w", err)
 	}
+	initialPassword, mustChangePassword, err := initialWorkspaceAdministratorCredential(cfg)
+	if err != nil {
+		return workspaceprovisionmodel.Request{}, err
+	}
 	return workspaceprovisionmodel.Request{
 		RequestID: strings.TrimSpace(cfg.InitialWorkspaceRequestID), WorkspaceCode: strings.TrimSpace(cfg.InitialWorkspaceCode),
 		WorkspaceName: strings.TrimSpace(cfg.InitialWorkspaceName), FirstStoreCode: strings.TrimSpace(cfg.InitialWorkspaceFirstStoreCode),
 		FirstStoreName: strings.TrimSpace(cfg.InitialWorkspaceFirstStoreName), AdminLoginID: strings.TrimSpace(cfg.InitialWorkspaceAdminLoginID),
-		AdminName: strings.TrimSpace(cfg.InitialWorkspaceAdminName), InitialAdminPassword: cfg.AuthDefaultPassword,
-		InitialAdminMustChangePassword: cfg.AuthInitialCredentialRotationRequired, CommercialConfiguration: configuration, ApplicationBootstrap: applicationBootstrap,
+		AdminName: strings.TrimSpace(cfg.InitialWorkspaceAdminName), InitialAdminPassword: initialPassword,
+		InitialAdminMustChangePassword: mustChangePassword, CommercialConfiguration: configuration, ApplicationBootstrap: applicationBootstrap,
 	}, nil
 }
 
