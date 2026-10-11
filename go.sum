@@ -110,6 +110,8 @@ github.com/domainry/domainry-identity v0.2.36 h1:kp4Hc7mgwP/t7cva1Ig0obfWax4iae7
 github.com/domainry/domainry-identity v0.2.36/go.mod h1:z5zdvS5EePjLfCCXXAuPKn6lVa69+WWm09IM4VI8bGQ=
 github.com/domainry/domainry-identity v0.2.37 h1:35me0GrnMYfimjFY6JRG5G3u4SehthtuIpGi0CCqp/E=
 github.com/domainry/domainry-identity v0.2.37/go.mod h1:yA7Fjm4lEGCEnt318xFDEqyF7W15FAC0IIrchq0Habs=
+github.com/domainry/domainry-identity v0.2.38 h1:jxG5IYiOUxzD0pveNb56X9Hn9aYBNztV8+/AjPXF/Z0=
+github.com/domainry/domainry-identity v0.2.38/go.mod h1:yA7Fjm4lEGCEnt318xFDEqyF7W15FAC0IIrchq0Habs=
 github.com/domainry/domainry-identity-sdk v0.1.18 h1:hJFKRCXhXJgjKQgsi5Q/buZAbHkrkCkwvy3xPiqrLIQ=
 github.com/domainry/domainry-identity-sdk v0.1.18/go.mod h1:PoVPl9OVibzabl1QB0+G3S2PgiBNGpkPmTgGzzyFY7Q=
 github.com/domainry/domainry-identity-sdk v0.1.19 h1:WvoJsVzvoeOCdL35ubDsCRJ3z1F2cEZxWYFUJWPlbb0=
