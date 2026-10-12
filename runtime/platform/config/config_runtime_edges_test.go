@@ -10,7 +10,7 @@ import (
 func TestValidateSecurityRemainingProductionGates(t *testing.T) {
 	valid := Config{
 		Environment: "production", AuditExportTokenKey: "audit-export-secret",
-		AuthDefaultPassword: DevDefaultAdminPassword, AuthInitialCredentialRotationRequired: false,
+		AuthDefaultPassword: "unused-in-production", AuthInitialCredentialRotationRequired: false,
 		IntegrationSecretKey: "integration-secret", IntegrationActiveKeyID: "data-1",
 		CORSAllowedOrigins: []string{"https://admin.example.com"}, SchedulerPollInterval: time.Second,
 	}

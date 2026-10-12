@@ -2,6 +2,19 @@ package config
 
 import "testing"
 
+func TestDevelopmentPasswordMustComeFromTheHostEnvironment(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("AUTH_DEFAULT_PASSWORD", "")
+
+	configured, _, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configured.AuthDefaultPassword != "" {
+		t.Fatal("Runtime compiled or synthesized a development password instead of requiring host injection")
+	}
+}
+
 func TestDeckProductProductionEnvironmentLoadsAsRuntimeContract(t *testing.T) {
 	values := map[string]string{
 		"APP_ENV":                                   "production",

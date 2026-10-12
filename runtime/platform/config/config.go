@@ -14,7 +14,6 @@ import (
 
 const DevIntegrationSecret = "dev-generated-integration-secret-change-me"
 const DevAuditExportTokenKey = "dev-generated-audit-export-token-change-me"
-const DevDefaultAdminPassword = "Domainry!123"
 
 type Config struct {
 	RuntimeVersion                          string
@@ -308,7 +307,7 @@ func FromEnv() Config {
 		WorkspaceProvisionFailurePoint:                  strings.TrimSpace(os.Getenv("WORKSPACE_PROVISION_FAILURE_POINT")),
 		RuntimeWorkspaceProvisionClientID:               strings.TrimSpace(os.Getenv("RUNTIME_WORKSPACE_PROVISION_CLIENT_ID")),
 		RuntimeWorkspaceProvisionSigningSecret:          os.Getenv("RUNTIME_WORKSPACE_PROVISION_SIGNING_SECRET"),
-		AuthDefaultPassword:                             env("AUTH_DEFAULT_PASSWORD", DevDefaultAdminPassword),
+		AuthDefaultPassword:                             strings.TrimSpace(os.Getenv("AUTH_DEFAULT_PASSWORD")),
 		AuthInitialCredentialRotationRequired:           boolEnv("AUTH_INITIAL_CREDENTIAL_ROTATION_REQUIRED", true),
 		InitialWorkspaceRequestID:                       env("INITIAL_WORKSPACE_REQUEST_ID", "initial-workspace"),
 		InitialWorkspaceCode:                            strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_CODE")),
