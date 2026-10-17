@@ -8,15 +8,15 @@ require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/creack/pty v1.1.24
 	github.com/domainry/domainry-agent v0.1.64
-	github.com/domainry/domainry-agent-sdk v0.1.34
+	github.com/domainry/domainry-agent-sdk v0.1.35
 	github.com/domainry/domainry-audit v0.1.27
 	github.com/domainry/domainry-audit-sdk v0.1.11
 	github.com/domainry/domainry-connector-sdk v0.1.7
 	github.com/domainry/domainry-connectors v0.1.10
 	github.com/domainry/domainry-data-exchange v0.3.23
 	github.com/domainry/domainry-data-exchange-sdk v0.3.11
-	github.com/domainry/domainry-foundation v0.1.42
-	github.com/domainry/domainry-identity v0.2.38
+	github.com/domainry/domainry-foundation v0.1.43
+	github.com/domainry/domainry-identity v0.2.39
 	github.com/domainry/domainry-identity-sdk v0.1.19
 	github.com/domainry/domainry-integration v0.1.34
 	github.com/domainry/domainry-integration-sdk v0.1.14
@@ -113,7 +113,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/domainry/domainry-orm v0.1.33
 	github.com/domainry/domainry-tools v0.1.11
-	github.com/domainry/domainry-tools-sdk v0.1.11
+	github.com/domainry/domainry-tools-sdk v0.1.13
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
