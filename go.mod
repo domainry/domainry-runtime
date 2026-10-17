@@ -11,11 +11,11 @@ require (
 	github.com/domainry/domainry-agent-sdk v0.1.35
 	github.com/domainry/domainry-audit v0.1.27
 	github.com/domainry/domainry-audit-sdk v0.1.11
-	github.com/domainry/domainry-connector-sdk v0.1.7
-	github.com/domainry/domainry-connectors v0.1.10
+	github.com/domainry/domainry-connector-sdk v0.1.8
+	github.com/domainry/domainry-connectors v0.1.11
 	github.com/domainry/domainry-data-exchange v0.3.23
 	github.com/domainry/domainry-data-exchange-sdk v0.3.11
-	github.com/domainry/domainry-foundation v0.1.43
+	github.com/domainry/domainry-foundation v0.1.44
 	github.com/domainry/domainry-identity v0.2.39
 	github.com/domainry/domainry-identity-sdk v0.1.19
 	github.com/domainry/domainry-integration v0.1.34
