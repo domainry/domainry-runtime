@@ -13,8 +13,24 @@ import (
 
 type mcpAccountPortsStub struct{}
 
+type emptyConversationToolHost struct{}
+
+func (emptyConversationToolHost) ConversationTools(context.Context, agent.ConversationAuthority) ([]agent.ConversationToolDefinition, error) {
+	return nil, nil
+}
+func (emptyConversationToolHost) AuthorizeConversationTool(context.Context, agent.ConversationToolRequest) (agent.ConversationToolAuthorization, error) {
+	return agent.ConversationToolAuthorization{}, nil
+}
+func (emptyConversationToolHost) InvokeConversationTool(context.Context, agent.ConversationToolRequest) (agent.ConversationToolResult, error) {
+	return agent.ConversationToolResult{}, nil
+}
+func (emptyConversationToolHost) ReconcileConversationTool(context.Context, agent.ConversationToolRequest) (agent.ConversationToolResult, error) {
+	return agent.ConversationToolResult{}, nil
+}
+
 type conversationCapabilityFactoryProbe struct {
 	capabilities tools.ConversationToolCapabilities
+	assembly     tools.ConversationToolAssembly
 }
 
 func (p *conversationCapabilityFactoryProbe) ConversationToolDefinitions(capabilities tools.ConversationToolCapabilities) []tools.Definition {
@@ -22,7 +38,8 @@ func (p *conversationCapabilityFactoryProbe) ConversationToolDefinitions(capabil
 	return nil
 }
 
-func (*conversationCapabilityFactoryProbe) AssembleConversationTools(input tools.ConversationToolAssembly) (tools.Host, error) {
+func (p *conversationCapabilityFactoryProbe) AssembleConversationTools(input tools.ConversationToolAssembly) (tools.Host, error) {
+	p.assembly = input
 	return input.Base, nil
 }
 
@@ -98,6 +115,32 @@ func TestRuntimePublishesBusinessSourceCapabilityOnlyWhenAssembled(t *testing.T)
 	(runtimeAgentApplicationHost{conversationToolsFactory: probe, conversations: &agentapplication.ConversationBusinessHost{}}).ConversationToolDefinitions()
 	if !probe.capabilities.Business {
 		t.Fatal("assembled ConversationBusinessHost was not published to the product tool factory")
+	}
+}
+
+func TestRuntimePublishesAndAssemblesAccountReadPortsIndependentlyFromWrites(t *testing.T) {
+	probe := &conversationCapabilityFactoryProbe{}
+	ports := mcpAccountPortsStub{}
+	host := runtimeAgentApplicationHost{accounts: ports, accountReads: ports, conversationToolsFactory: probe}
+	host.ConversationToolDefinitions()
+	if probe.capabilities.AccountReads {
+		t.Fatal("account reads published without a trusted subject resolver")
+	}
+	host.accountSubject = func(context.Context, agent.ConversationAuthority, string) (integration.ConnectionAccountSubject, error) {
+		return integration.ConnectionAccountSubject{}, nil
+	}
+	host.ConversationToolDefinitions()
+	if !probe.capabilities.AccountReads || probe.capabilities.MCP {
+		t.Fatalf("capabilities=%+v", probe.capabilities)
+	}
+	if _, err := host.AssembleConversationTools(emptyConversationToolHost{}); err != nil {
+		t.Fatal(err)
+	}
+	if probe.assembly.AccountReads == nil || probe.assembly.AccountReads.Accounts == nil || probe.assembly.AccountReads.Reads == nil || probe.assembly.AccountReads.Subject == nil {
+		t.Fatalf("account read assembly=%+v", probe.assembly.AccountReads)
+	}
+	if probe.assembly.MCP != nil {
+		t.Fatal("MCP write ports were assembled without a write implementation")
 	}
 }
 

@@ -60,3 +60,34 @@ func TestDefaultActionsForObjectHonorsExplicitAndLifecycleCapabilities(t *testin
 		}
 	}
 }
+
+func TestDefaultActionsSeparateExecutionFromDirectRoleGrant(t *testing.T) {
+	executable := definitionmodel.ObjectCapabilitySet{Create: true, Read: true, Update: true}
+	direct := definitionmodel.ObjectCapabilitySet{Read: true}
+	definitions, err := DefaultActionsForObject(definitionmodel.ObjectSchema{
+		Key: "sync_state", Capabilities: &executable, DirectGrantCapabilities: &direct,
+	}, "application:orders")
+	if err != nil {
+		t.Fatal(err)
+	}
+	modes := map[string]actioncontract.PermissionGrantMode{}
+	for _, definition := range definitions {
+		modes[definition.Key] = definition.Permission.GrantMode
+	}
+	if modes["sync_state.read"] != actioncontract.PermissionGrantDirect || modes["sync_state.create"] != actioncontract.PermissionGrantBundled || modes["sync_state.update"] != actioncontract.PermissionGrantBundled {
+		t.Fatalf("grant modes=%v", modes)
+	}
+}
+
+func TestDefaultActionsDoNotBecomeDirectlyGrantableByOmission(t *testing.T) {
+	executable := definitionmodel.ObjectCapabilitySet{Create: true, Read: true}
+	definitions, err := DefaultActionsForObject(definitionmodel.ObjectSchema{Key: "sync_state", Capabilities: &executable}, "application:orders")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, definition := range definitions {
+		if definition.Permission.GrantMode != actioncontract.PermissionGrantBundled {
+			t.Fatalf("omitted direct-grant surface exposed %s as %s", definition.Key, definition.Permission.GrantMode)
+		}
+	}
+}

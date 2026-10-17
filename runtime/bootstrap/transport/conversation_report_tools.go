@@ -12,8 +12,9 @@ func (h runtimeAgentApplicationHost) ConversationToolDefinitions() []agent.Conve
 		return nil
 	}
 	return h.conversationToolsFactory.ConversationToolDefinitions(toolsdk.ConversationToolCapabilities{
-		Business: h.conversations != nil,
-		MCP:      h.hasMCPConversationTools(),
+		Business:     h.conversations != nil,
+		AccountReads: h.hasConversationAccountReads(),
+		MCP:          h.hasMCPConversationTools(),
 	})
 }
 
@@ -28,6 +29,13 @@ func (h runtimeAgentApplicationHost) AssembleConversationTools(base agent.Conver
 		AnalysisSource: func() toolsdk.AnalysisSource { return h.conversations },
 		Authorize:      authorizer.AuthorizeConversationTool,
 	}
+	if h.hasConversationAccountReads() {
+		input.AccountReads = &toolsdk.ConversationAccountReadPorts{
+			Accounts: h.accounts,
+			Reads:    h.accountReads,
+			Subject:  toolsdk.ConnectionAccountSubjectResolver(h.accountSubject),
+		}
+	}
 	if h.hasMCPConversationTools() {
 		input.MCP = &toolsdk.ConversationMCPPorts{
 			Accounts: h.accounts,
@@ -39,6 +47,10 @@ func (h runtimeAgentApplicationHost) AssembleConversationTools(base agent.Conver
 	return h.conversationToolsFactory.AssembleConversationTools(input)
 }
 
+func (h runtimeAgentApplicationHost) hasConversationAccountReads() bool {
+	return h.accounts != nil && h.accountReads != nil && h.accountSubject != nil
+}
+
 func (h runtimeAgentApplicationHost) hasMCPConversationTools() bool {
-	return h.accounts != nil && h.accountReads != nil && h.accountWrites != nil && h.accountSubject != nil
+	return h.hasConversationAccountReads() && h.accountWrites != nil
 }

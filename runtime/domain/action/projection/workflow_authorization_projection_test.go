@@ -15,7 +15,7 @@ func TestAuthorizationActionForWorkflowProducesConcreteSameKeyPermission(t *test
 		t.Fatal(err)
 	}
 	wantKey := workflowcontract.RunActionKey(workflow.Key)
-	if definition.Key != wantKey || definition.Permission == nil || definition.Permission.Key != wantKey || definition.Permission.Owner != definition.Owner {
+	if definition.Key != wantKey || definition.Permission == nil || definition.Permission.Key != wantKey || definition.Permission.Owner != definition.Owner || definition.Permission.GrantMode != actioncontract.PermissionGrantBundled {
 		t.Fatalf("definition=%#v", definition)
 	}
 	if definition.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || definition.HTTP != nil || len(definition.NonHTTP) != 1 {

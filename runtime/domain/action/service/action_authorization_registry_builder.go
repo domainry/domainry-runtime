@@ -84,6 +84,7 @@ func BuildAuthorizationRegistry(input AuthorizationRegistryInput) (*actioncontra
 	nonHTTPBindings := cloneNonHTTPBindings(input.NonHTTPBindings)
 	for _, definition := range input.ContributedActions {
 		definition = attachNonHTTPBindings(definition, nonHTTPBindings)
+		definition = applyRuntimePermissionGrantPolicy(definition)
 		if err := registry.Register(definition); err != nil {
 			return nil, fmt.Errorf("register contributed Action %q: %w", definition.Key, err)
 		}
@@ -126,6 +127,37 @@ func BuildAuthorizationRegistry(input AuthorizationRegistryInput) (*actioncontra
 		return nil, fmt.Errorf("freeze Runtime authorization Action registry: %w", err)
 	}
 	return registry, nil
+}
+
+// applyRuntimePermissionGrantPolicy classifies generated protocol, agent and
+// metadata capabilities that module registries publish for execution but that
+// must not become loose checkboxes in a human role editor. These source kinds
+// are structural, so their policy overrides the direct default that may have
+// been filled while freezing the source registry.
+func applyRuntimePermissionGrantPolicy(definition actioncontract.ActionDefinition) actioncontract.ActionDefinition {
+	if definition.Permission == nil {
+		return definition
+	}
+	mode := definition.Permission.GrantMode
+	if mode == "" {
+		mode = actioncontract.PermissionGrantDirect
+	}
+	switch strings.TrimSpace(definition.SourceKind) {
+	case "agent_tool", "agent_collaboration":
+		mode = actioncontract.PermissionGrantBundled
+	case "service_protocol", "integration_account_write":
+		mode = actioncontract.PermissionGrantInternal
+	}
+	switch strings.TrimSpace(definition.Owner) {
+	case "module:metadata", "runtime:builtin":
+		mode = actioncontract.PermissionGrantInternal
+	}
+	if mode == definition.Permission.GrantMode {
+		return definition
+	}
+	copy := actioncontract.CloneDefinition(definition)
+	copy.Permission.GrantMode = mode
+	return copy
 }
 
 func cloneNonHTTPBindings(source map[string][]actioncontract.NonHTTPBinding) map[string][]actioncontract.NonHTTPBinding {

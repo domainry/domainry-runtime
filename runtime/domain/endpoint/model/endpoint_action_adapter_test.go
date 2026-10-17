@@ -30,6 +30,29 @@ func TestAuthorizationActionDefinitionProjectsStaticEndpointAsSameKeyPermission(
 	if definition.HTTP == nil || definition.HTTP.RouteTemplate != "/workspaces" || definition.ApprovalPolicies[0] != actioncontract.ApprovalConfirmation {
 		t.Fatalf("binding/governance=%#v", definition)
 	}
+	if definition.Permission.GrantMode != actioncontract.PermissionGrantInternal {
+		t.Fatalf("workspace provisioning permission is directly grantable: %#v", definition.Permission)
+	}
+}
+
+func TestAuthorizationActionDefinitionClassifiesHumanAndBundledRuntimeEndpoints(t *testing.T) {
+	for _, test := range []struct {
+		owner string
+		want  actioncontract.PermissionGrantMode
+	}{
+		{owner: "automation", want: actioncontract.PermissionGrantDirect},
+		{owner: "workflows", want: actioncontract.PermissionGrantBundled},
+	} {
+		contract := endpointActionTestContract()
+		contract.SourceOwner = test.owner
+		definition, err := AuthorizationActionDefinition(contract)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if definition.Permission.GrantMode != test.want {
+			t.Fatalf("owner %s grant mode=%s want=%s", test.owner, definition.Permission.GrantMode, test.want)
+		}
+	}
 }
 
 func TestEndpointContractRejectsAnyRolePermissionShapeExceptExactSameKey(t *testing.T) {

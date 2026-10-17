@@ -54,7 +54,8 @@ func OperationsAuthorizationActions() ([]actioncontract.ActionDefinition, error)
 			NonHTTP:       []actioncontract.NonHTTPBinding{{Kind: operationsActionBindingKind, InvocationKey: operation.Kind}},
 			Permission: &actioncontract.PermissionDefinition{
 				Key: operation.ActionKey, Owner: "runtime:operations", ResourceKey: operation.ActionKey[:separator],
-				OperationKey: operation.ActionKey[separator+1:], Label: label, Category: "Runtime Operations", LifecycleStatus: actioncontract.LifecycleActive,
+				OperationKey: operation.ActionKey[separator+1:], Label: label, Category: "Runtime Operations",
+				GrantMode: actioncontract.PermissionGrantInternal, LifecycleStatus: actioncontract.LifecycleActive,
 			},
 			EffectClass: actioncontract.EffectWrite, RiskLevel: actioncontract.RiskHigh,
 			ApprovalPolicies:    []actioncontract.ApprovalPolicy{actioncontract.ApprovalReason},

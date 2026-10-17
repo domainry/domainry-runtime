@@ -35,7 +35,8 @@ func AuthorizationActionForWorkflow(workflow definitionmodel.WorkflowSchema, own
 		Permission: &actioncontract.PermissionDefinition{
 			Key: actionKey, Owner: strings.TrimSpace(owner), ResourceKey: "workflow." + workflowKey, OperationKey: "run",
 			Label: "Run " + label, Description: "Invoke the published Workflow " + label,
-			Category: "Business Workflows", LifecycleStatus: actioncontract.LifecycleActive,
+			Category: "Business Workflows", GrantMode: actioncontract.PermissionGrantBundled,
+			LifecycleStatus: actioncontract.LifecycleActive,
 		},
 		EffectClass: actioncontract.EffectWrite, RiskLevel: actioncontract.RiskMedium,
 		IdempotencyDecision: "caller_key_required", AuditClass: "workflow_execution",

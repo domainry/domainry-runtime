@@ -1,6 +1,10 @@
 package projection
 
-import "testing"
+import (
+	"testing"
+
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+)
 
 func TestRecordTimerSystemObjectsContainOnlyRecordTimerLifecycle(t *testing.T) {
 	objects := RecordTimerSystemObjects()
@@ -10,6 +14,9 @@ func TestRecordTimerSystemObjectsContainOnlyRecordTimerLifecycle(t *testing.T) {
 	for _, object := range objects {
 		if object.Config["runtime_owned"] != true || object.Config["system_kind"] != "record_timer" || object.Config["record_timer_runtime"] != true {
 			t.Fatalf("ownership for %s = %#v", object.Key, object.Config)
+		}
+		if object.DirectGrantCapabilities == nil || *object.DirectGrantCapabilities != (definitionmodel.ObjectCapabilitySet{}) {
+			t.Fatalf("record timer %s is directly grantable: %#v", object.Key, object.DirectGrantCapabilities)
 		}
 	}
 	if objects[1].Config["append_only"] != true {

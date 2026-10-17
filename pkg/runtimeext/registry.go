@@ -480,6 +480,7 @@ func normalizeHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor 
 	result.ActionKey = strings.TrimSpace(result.ActionKey)
 	result.ObjectKey = strings.TrimSpace(result.ObjectKey)
 	result.Label = strings.TrimSpace(result.Label)
+	result.PermissionGrantMode = strings.TrimSpace(result.PermissionGrantMode)
 	result.Kind = strings.TrimSpace(result.Kind)
 	result.RiskLevel = strings.TrimSpace(result.RiskLevel)
 	result.AuditEvent = strings.TrimSpace(result.AuditEvent)

@@ -113,3 +113,10 @@ func TestValidateRejectsRuntimeOwnedObjectKeys(t *testing.T) {
 		t.Fatalf("reserved object err=%v", err)
 	}
 }
+
+func TestValidateRejectsDirectGrantOutsideExecutableCapabilities(t *testing.T) {
+	raw := strings.Replace(validModelJSON(), `"description":""`, `"description":"","capabilities":{"read":true},"direct_grant_capabilities":{"create":true}`, 1)
+	if _, err := Decode([]byte(raw)); err == nil || !strings.Contains(err.Error(), "project_model.direct_grant_capability_not_executable") {
+		t.Fatalf("direct grant outside executable capabilities err=%v", err)
+	}
+}

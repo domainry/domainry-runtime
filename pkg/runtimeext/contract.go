@@ -8,15 +8,16 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v50"
-	ContractSHA256  = "5e482df7ce61ced2a98e3a08a91329688905fcf6fbbd16ba63e7a93637a948c1"
+	ContractVersion = "runtimeext-v51"
+	ContractSHA256  = "71e45e0d02e31d51586db11c408b7f6a0d01ea8a57fba22bf4134a5e2c69d4f3"
 )
 
-const contractDefinitionV50 = `runtimeext-v50
+const contractDefinitionV51 = `runtimeext-v51
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
 NewTypedBusinessHandler(HandlerDescriptor,CapabilityFactory,Handler)(BusinessHandler,error)
+HandlerDescriptor.PermissionGrantMode=direct|bundled|internal
 BusinessHandler.Descriptor()HandlerDescriptor
 BusinessHandler.Invoke(context.Context,ActionExecution,json.RawMessage)(json.RawMessage,error)
 NativeBusinessHandler.InvokeNative(context.Context,ActionExecution,any)(json.RawMessage,bool,error)
@@ -166,7 +167,7 @@ func ComputedContractSHA256() string {
 		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV50)
+	definition.WriteString(contractDefinitionV51)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

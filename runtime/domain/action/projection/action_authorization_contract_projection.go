@@ -50,7 +50,8 @@ func AuthorizationActionDefinition(schema definitionmodel.ActionSchema, context 
 		NonHTTP:       []actioncontract.NonHTTPBinding{{Kind: "runtime_action", InvocationKey: strings.TrimSpace(schema.Key)}},
 		Permission: &actioncontract.PermissionDefinition{
 			Key: permissionKey, Owner: owner, ResourceKey: resourceKey, OperationKey: operationKey,
-			Label: label, Category: strings.TrimSpace(context.PermissionCategory), LifecycleStatus: permissionLifecycle,
+			Label: label, Category: strings.TrimSpace(context.PermissionCategory),
+			GrantMode: actioncontract.PermissionGrantMode(schema.PermissionGrantMode), LifecycleStatus: permissionLifecycle,
 		},
 		EffectClass: actioncontract.EffectWrite, RiskLevel: actioncontract.RiskLevel(actionmodel.ActionRiskLevel(schema)),
 		AssuranceRequired: actionmodel.ActionAssuranceMethods(schema), ApprovalPolicies: actionApprovalPolicies(schema),

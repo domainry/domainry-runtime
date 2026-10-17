@@ -70,6 +70,7 @@ func Validate(model Model, knownPermissions map[string]bool) error {
 		if strings.TrimSpace(object.Name) == "" {
 			add("project_model.object_name_required", path+"/name", "object name is required")
 		}
+		validateDirectGrantCapabilities(object, path, add)
 		validateObjectFields(model, object, path, add)
 	}
 	for key, role := range model.Roles {
@@ -115,6 +116,30 @@ func Validate(model Model, knownPermissions map[string]bool) error {
 		return issues[i].Pointer < issues[j].Pointer
 	})
 	return &ValidationError{Issues: issues}
+}
+
+func validateDirectGrantCapabilities(object Object, path string, add func(string, string, string)) {
+	if object.DirectGrantCapabilities == nil {
+		return
+	}
+	executable := definitionmodel.EffectiveObjectCapabilities(definitionmodel.ObjectSchema{Capabilities: object.Capabilities})
+	direct := *object.DirectGrantCapabilities
+	for _, operation := range []struct {
+		key        string
+		direct     bool
+		executable bool
+	}{
+		{key: "create", direct: direct.Create, executable: executable.Create},
+		{key: "read", direct: direct.Read, executable: executable.Read},
+		{key: "update", direct: direct.Update, executable: executable.Update},
+		{key: "delete", direct: direct.Delete, executable: executable.Delete},
+		{key: "import", direct: direct.Import, executable: executable.Import},
+		{key: "export", direct: direct.Export, executable: executable.Export},
+	} {
+		if operation.direct && !operation.executable {
+			add("project_model.direct_grant_capability_not_executable", path+"/direct_grant_capabilities/"+operation.key, "a directly grantable operation must also be executable")
+		}
+	}
 }
 
 func validateObjectFields(model Model, object Object, path string, add func(string, string, string)) {
@@ -303,7 +328,8 @@ func RuntimeObjects(model Model) ([]definitionmodel.ObjectSchema, error) {
 		}
 		result = append(result, definitionmodel.ObjectSchema{
 			Key: objectKey, Name: object.Name, Description: object.Description, I18n: object.I18n, Fields: fields, Validations: validations,
-			Capabilities: object.Capabilities, LifecyclePolicy: object.LifecyclePolicy, LedgerPolicy: object.LedgerPolicy,
+			Capabilities: object.Capabilities, DirectGrantCapabilities: object.DirectGrantCapabilities,
+			LifecyclePolicy: object.LifecyclePolicy, LedgerPolicy: object.LedgerPolicy,
 			ExportAssurancePolicy: object.ExportAssurancePolicy,
 		})
 	}

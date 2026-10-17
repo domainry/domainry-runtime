@@ -35,6 +35,7 @@ func DefaultActionsForObject(object definitionmodel.ObjectSchema, owner string) 
 		{key: "export", label: "Export", method: "GET", route: "/records/{objectKey}/export", idempotency: "not_applicable", effect: actioncontract.EffectRead, risk: actioncontract.RiskMedium},
 	}
 	capabilities := definitionmodel.EffectiveObjectCapabilities(object)
+	directGrants := definitionmodel.EffectiveObjectDirectGrantCapabilities(object)
 	enabled := map[string]bool{
 		"create": capabilities.Create, "read": capabilities.Read,
 		"update": capabilities.Update, "delete": capabilities.Delete,
@@ -46,6 +47,14 @@ func DefaultActionsForObject(object definitionmodel.ObjectSchema, owner string) 
 			continue
 		}
 		key := objectKey + "." + operation.key
+		grantMode := actioncontract.PermissionGrantBundled
+		if map[string]bool{
+			"create": directGrants.Create, "read": directGrants.Read,
+			"update": directGrants.Update, "delete": directGrants.Delete,
+			"import": directGrants.Import, "export": directGrants.Export,
+		}[operation.key] {
+			grantMode = actioncontract.PermissionGrantDirect
+		}
 		definition, err := actioncontract.NormalizeDefinition(actioncontract.ActionDefinition{
 			Key: key, Owner: owner, SourceKind: "object_default",
 			CapabilityKey: objectKey, CapabilityLabel: capabilityLabel,
@@ -59,7 +68,8 @@ func DefaultActionsForObject(object definitionmodel.ObjectSchema, owner string) 
 			NonHTTP: []actioncontract.NonHTTPBinding{{Kind: "runtime_object_action", InvocationKey: key}},
 			Permission: &actioncontract.PermissionDefinition{
 				Key: key, Owner: owner, ResourceKey: objectKey, OperationKey: operation.key,
-				Label: capabilityLabel + " · " + operation.label, Category: capabilityLabel, LifecycleStatus: actioncontract.LifecycleActive,
+				Label: capabilityLabel + " · " + operation.label, Category: capabilityLabel,
+				GrantMode: grantMode, LifecycleStatus: actioncontract.LifecycleActive,
 			},
 			EffectClass: operation.effect, RiskLevel: operation.risk,
 			IdempotencyDecision: operation.idempotency, AuditClass: "record_authorization", LifecycleStatus: actioncontract.LifecycleActive,

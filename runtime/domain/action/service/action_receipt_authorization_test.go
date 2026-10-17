@@ -18,7 +18,7 @@ func TestBusinessReceiptPermissionsAreSourceOwnedAndIndependent(t *testing.T) {
 	}
 	for key, binding := range map[string]string{"action.receipt.order.approve.read": "runtime_action_receipt_read", "workflow.receipt.review.read": "runtime_workflow_receipt_read"} {
 		d, ok := registry.Definition(key)
-		if !ok || d.Permission == nil || d.Owner != "application:orders" || d.Permission.Owner != d.Owner || d.Permission.Key != key || d.Permission.ResourceKey+".read" != key || d.EffectClass != actioncontract.EffectRead || d.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || len(d.NonHTTP) != 1 || d.NonHTTP[0].Kind != binding || d.HTTP != nil {
+		if !ok || d.Permission == nil || d.Owner != "application:orders" || d.Permission.Owner != d.Owner || d.Permission.Key != key || d.Permission.ResourceKey+".read" != key || d.Permission.GrantMode != actioncontract.PermissionGrantInternal || d.EffectClass != actioncontract.EffectRead || d.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || len(d.NonHTTP) != 1 || d.NonHTTP[0].Kind != binding || d.HTTP != nil {
 			t.Fatal("receipt policy is not an independent owner read", key, d)
 		}
 	}
@@ -29,6 +29,9 @@ func TestBusinessReceiptPermissionsAreSourceOwnedAndIndependent(t *testing.T) {
 		d, ok := registry.Definition(key)
 		if !ok || d.EffectClass != actioncontract.EffectWrite {
 			t.Fatal("original execution policy changed", key, d)
+		}
+		if key == "workflow.review.run" && d.Permission.GrantMode != actioncontract.PermissionGrantBundled {
+			t.Fatal("workflow execution permission became directly grantable", d)
 		}
 	}
 }

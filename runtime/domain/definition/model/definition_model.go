@@ -100,9 +100,13 @@ type ObjectSchema struct {
 	// Nil means the Runtime standard set; a non-nil value can only remove
 	// operations the object does not support. The authorization compiler turns
 	// the effective set into exact object Action/Permission pairs.
-	Capabilities    *ObjectCapabilitySet   `json:"capabilities,omitempty"`
-	LifecyclePolicy *ObjectLifecyclePolicy `json:"lifecycle_policy,omitempty"`
-	LedgerPolicy    *ObjectLedgerPolicy    `json:"ledger_policy,omitempty"`
+	Capabilities *ObjectCapabilitySet `json:"capabilities,omitempty"`
+	// DirectGrantCapabilities is the subset of executable generic record
+	// operations that workspace administrators may add to human-authored roles.
+	// Other executable operations remain available to code-owned role bundles.
+	DirectGrantCapabilities *ObjectCapabilitySet   `json:"direct_grant_capabilities,omitempty"`
+	LifecyclePolicy         *ObjectLifecyclePolicy `json:"lifecycle_policy,omitempty"`
+	LedgerPolicy            *ObjectLedgerPolicy    `json:"ledger_policy,omitempty"`
 	// ExportAssurancePolicy applies the shared assurance grant contract to
 	// object exports. Record-bound selector fields are intentionally not used.
 	ExportAssurancePolicy *ActionAssurancePolicy `json:"export_assurance_policy,omitempty"`
@@ -171,6 +175,24 @@ func EffectiveObjectCapabilities(object ObjectSchema) ObjectCapabilitySet {
 	return capabilities
 }
 
+// EffectiveObjectDirectGrantCapabilities never makes a non-executable
+// operation grantable. Omission is fail-closed: a product must explicitly
+// declare which generic operations administrators may add to authored roles.
+func EffectiveObjectDirectGrantCapabilities(object ObjectSchema) ObjectCapabilitySet {
+	executable := EffectiveObjectCapabilities(object)
+	if object.DirectGrantCapabilities == nil {
+		return ObjectCapabilitySet{}
+	}
+	direct := *object.DirectGrantCapabilities
+	direct.Create = direct.Create && executable.Create
+	direct.Read = direct.Read && executable.Read
+	direct.Update = direct.Update && executable.Update
+	direct.Delete = direct.Delete && executable.Delete
+	direct.Import = direct.Import && executable.Import
+	direct.Export = direct.Export && executable.Export
+	return direct
+}
+
 const (
 	ObjectLifecycleMutable             = "mutable"
 	ObjectLifecycleSoftDeleteOnly      = "soft_delete_only"
@@ -203,6 +225,7 @@ type ActionSchema struct {
 	Key                       string                                 `json:"key"`
 	ObjectKey                 string                                 `json:"object_key"`
 	Label                     string                                 `json:"label"`
+	PermissionGrantMode       string                                 `json:"permission_grant_mode,omitempty"`
 	I18n                      localizationmodel.LocalizedTextMap     `json:"i18n,omitempty"`
 	Kind                      string                                 `json:"kind"`
 	RiskLevel                 string                                 `json:"risk_level,omitempty"`

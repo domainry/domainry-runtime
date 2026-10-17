@@ -81,7 +81,11 @@ func recordTimerEventObject() definitionmodel.ObjectSchema {
 }
 
 func recordTimerSystemObject(key, name, description string, fields []definitionmodel.FieldSchema) definitionmodel.ObjectSchema {
-	return definitionmodel.ObjectSchema{Key: key, Name: name, Description: description, Fields: fields, Config: map[string]any{"runtime_owned": true, "system_kind": "record_timer", "record_timer_runtime": true}}
+	return definitionmodel.ObjectSchema{
+		Key: key, Name: name, Description: description, Fields: fields,
+		DirectGrantCapabilities: &definitionmodel.ObjectCapabilitySet{},
+		Config:                  map[string]any{"runtime_owned": true, "system_kind": "record_timer", "record_timer_runtime": true},
+	}
 }
 
 func recordTimerField(key, name, fieldType string, required bool) definitionmodel.FieldSchema {

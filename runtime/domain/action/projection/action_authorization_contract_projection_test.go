@@ -46,7 +46,7 @@ func TestAuthorizationActionDefinitionOwnsDedicatedPermissionWithoutInventingHTT
 func TestAuthorizationActionDefinitionUsesSameKeyPermission(t *testing.T) {
 	schema := definitionmodel.ActionSchema{
 		Key: "order.confirm", ObjectKey: "order", Label: "Confirm order", Kind: definitionmodel.ActionKindRecordUpdate,
-		AuditEvent: "order.updated", OptimisticConcurrency: true,
+		PermissionGrantMode: string(actioncontract.PermissionGrantBundled), AuditEvent: "order.updated", OptimisticConcurrency: true,
 	}
 	definition, err := AuthorizationActionDefinition(schema, AuthorizationContractContext{
 		Owner: "application:orders", CapabilityKey: "orders.actions", CapabilityLabel: "Order actions",
@@ -55,7 +55,7 @@ func TestAuthorizationActionDefinitionUsesSameKeyPermission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if definition.Permission == nil || definition.Permission.Key != schema.Key {
+	if definition.Permission == nil || definition.Permission.Key != schema.Key || definition.Permission.GrantMode != actioncontract.PermissionGrantBundled {
 		t.Fatalf("definition=%#v", definition)
 	}
 	if definition.IdempotencyDecision != "caller_key_required" || definition.RiskLevel != actioncontract.RiskMedium {

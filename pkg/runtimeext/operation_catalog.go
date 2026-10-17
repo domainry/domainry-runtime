@@ -39,7 +39,8 @@ func (descriptor HandlerDescriptor) ActionDefinition() (definitionmodel.ActionSc
 	}
 	definition := definitionmodel.ActionSchema{
 		Key: descriptor.ActionKey, ObjectKey: descriptor.ObjectKey, Label: descriptor.Label,
-		Kind: descriptor.Kind, RiskLevel: descriptor.RiskLevel,
+		PermissionGrantMode: descriptor.PermissionGrantMode,
+		Kind:                descriptor.Kind, RiskLevel: descriptor.RiskLevel,
 		Preconditions: append([]string(nil), descriptor.Preconditions...), AuditEvent: descriptor.AuditEvent,
 		InputType: descriptor.InputType, OutputType: descriptor.OutputType,
 		PayloadFields: cloneDefinition(descriptor.PayloadFields), OutputFields: cloneDefinition(descriptor.OutputFields),

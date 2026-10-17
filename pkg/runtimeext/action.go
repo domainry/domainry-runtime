@@ -19,6 +19,12 @@ var (
 	ErrHandlerCapabilityInvalid = errors.New("business handler capability is invalid")
 )
 
+const (
+	PermissionGrantDirect   = "direct"
+	PermissionGrantBundled  = "bundled"
+	PermissionGrantInternal = "internal"
+)
+
 var (
 	handlerContractHashPattern  = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	handlerTypeIdentityPattern  = regexp.MustCompile(`^[A-Za-z0-9._~\-/]+\.[A-Za-z_][A-Za-z0-9_]*$`)
@@ -98,6 +104,7 @@ type HandlerDescriptor struct {
 	ActionKey                 string
 	ObjectKey                 string
 	Label                     string
+	PermissionGrantMode       string
 	Kind                      string
 	RiskLevel                 string
 	Preconditions             []string
@@ -139,6 +146,11 @@ func (d HandlerDescriptor) Validate() error {
 	}
 	if strings.TrimSpace(d.HandlerRevision) == "" {
 		return ErrHandlerRevisionRequired
+	}
+	switch strings.TrimSpace(d.PermissionGrantMode) {
+	case "", PermissionGrantDirect, PermissionGrantBundled, PermissionGrantInternal:
+	default:
+		return ErrHandlerCapabilityInvalid
 	}
 	objects := map[string]bool{}
 	allowed := map[string]bool{

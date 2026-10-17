@@ -57,9 +57,16 @@ func AuthorizationActionDefinition(contract RuntimeEndpointContractV1) (actionco
 		definition.Authorization = actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated}
 		separator := strings.LastIndex(definition.Key, ".")
 		resourceKey := definition.Key[:separator]
+		grantMode := actioncontract.PermissionGrantInternal
+		if strings.TrimSpace(contract.SourceOwner) == "automation" {
+			grantMode = actioncontract.PermissionGrantDirect
+		} else if strings.TrimSpace(contract.SourceOwner) == "workflows" {
+			grantMode = actioncontract.PermissionGrantBundled
+		}
 		definition.Permission = &actioncontract.PermissionDefinition{
 			Key: definition.Key, Owner: owner, ResourceKey: resourceKey, OperationKey: operationKey,
-			Label: operationLabel, Category: strings.TrimSpace(contract.SourceOwner), LifecycleStatus: actioncontract.LifecycleActive,
+			Label: operationLabel, Category: strings.TrimSpace(contract.SourceOwner), GrantMode: grantMode,
+			LifecycleStatus: actioncontract.LifecycleActive,
 		}
 	default:
 		return actioncontract.ActionDefinition{}, fmt.Errorf("endpoint contract %q has no Action authorization adapter for %q", contract.EndpointIdentity, policy)
