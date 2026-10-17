@@ -132,15 +132,15 @@ func BuildAuthorizationRegistry(input AuthorizationRegistryInput) (*actioncontra
 // applyRuntimePermissionGrantPolicy classifies generated protocol, agent and
 // metadata capabilities that module registries publish for execution but that
 // must not become loose checkboxes in a human role editor. These source kinds
-// are structural, so their policy overrides the direct default that may have
-// been filled while freezing the source registry.
+// are structural, so their policy can further constrain the secure internal
+// default filled while freezing the source registry.
 func applyRuntimePermissionGrantPolicy(definition actioncontract.ActionDefinition) actioncontract.ActionDefinition {
 	if definition.Permission == nil {
 		return definition
 	}
 	mode := definition.Permission.GrantMode
 	if mode == "" {
-		mode = actioncontract.PermissionGrantDirect
+		mode = actioncontract.PermissionGrantInternal
 	}
 	switch strings.TrimSpace(definition.SourceKind) {
 	case "agent_tool", "agent_collaboration":

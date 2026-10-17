@@ -6,7 +6,7 @@ import (
 	actioncontract "github.com/domainry/domainry-foundation/action"
 )
 
-func TestRuntimePermissionGrantPolicyOverridesNormalizedDirectDefaults(t *testing.T) {
+func TestRuntimePermissionGrantPolicyClassifiesSecureDefaults(t *testing.T) {
 	tests := []struct {
 		name, sourceKind, owner string
 		want                    actioncontract.PermissionGrantMode
@@ -16,7 +16,7 @@ func TestRuntimePermissionGrantPolicyOverridesNormalizedDirectDefaults(t *testin
 		{name: "service protocol", sourceKind: "service_protocol", owner: "module:integration", want: actioncontract.PermissionGrantInternal},
 		{name: "metadata http", sourceKind: "module_http", owner: "module:metadata", want: actioncontract.PermissionGrantInternal},
 		{name: "runtime discovery", sourceKind: "builtin_http", owner: "runtime:builtin", want: actioncontract.PermissionGrantInternal},
-		{name: "ordinary http", sourceKind: "module_http", owner: "module:reports", want: actioncontract.PermissionGrantDirect},
+		{name: "ordinary http", sourceKind: "module_http", owner: "module:reports", want: actioncontract.PermissionGrantInternal},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -34,8 +34,8 @@ func TestRuntimePermissionGrantPolicyOverridesNormalizedDirectDefaults(t *testin
 			if err != nil {
 				t.Fatal(err)
 			}
-			if definition.Permission.GrantMode != actioncontract.PermissionGrantDirect {
-				t.Fatalf("normalization did not reproduce direct default: %s", definition.Permission.GrantMode)
+			if definition.Permission.GrantMode != actioncontract.PermissionGrantInternal {
+				t.Fatalf("normalization did not reproduce internal default: %s", definition.Permission.GrantMode)
 			}
 			got := applyRuntimePermissionGrantPolicy(definition)
 			if got.Permission.GrantMode != test.want {
