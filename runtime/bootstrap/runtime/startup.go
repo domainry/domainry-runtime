@@ -558,6 +558,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		integrationMode:          integrationDeploymentMode(integrationOwner.Binding),
 		integrationBinding:       integrationOwner.Binding,
 		integrationWorkers:       integrationOwner.Workers,
+		integrationWakeups:       integrationOwner.Wakeups,
 		dataExchangeBinding:      serviceAssembly.dataExchangeBinding,
 		lifecycleBinding:         serviceAssembly.lifecycleBinding,
 		fileScanProcessor:        serviceAssembly.fileScanProcessor,

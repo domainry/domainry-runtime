@@ -58,6 +58,8 @@ type Runtime struct {
 	integrationMode            integrationsdk.DeploymentMode
 	integrationBinding         integrationsdk.Binding
 	integrationWorkers         integrationsdk.LocalWorkers
+	integrationWakeupsOnce     sync.Once
+	integrationWakeups         *integrationQueueWakeups
 	dataExchangeBinding        dataexchangesdk.Binding
 	lifecycleBinding           lifecyclesdk.Binding
 	fileScanProcessor          *uploadapplication.FileScanProcessor

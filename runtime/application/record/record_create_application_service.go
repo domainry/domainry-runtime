@@ -35,6 +35,7 @@ import (
 type RecordCreateDependencies struct {
 	Repository            recordrepository.RecordRepository
 	MutationKernel        *recordmutation.MutationKernelApplicationService
+	Objects               func() map[string]definitionmodel.ObjectSchema
 	ObjectForAction       func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error)
 	CanWrite              func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool
 	CanWriteCandidate     func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) (bool, error)
@@ -89,7 +90,20 @@ func (s *RecordCreateApplicationService) PlanCreateMutation(ctx context.Context,
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
-	authorizationPrincipal := recordEffectAuthorizationPrincipal(ctx, principal, objectKey, "create")
+	authorizationPrincipal := principal
+	var err error
+	var schema definitionmodel.ObjectSchema
+	if s.dependencies.Objects != nil {
+		schema = s.dependencies.Objects()[strings.TrimSpace(objectKey)]
+	}
+	if schema.AuthorizationParent != nil {
+		authorizationPrincipal, err = recordOwnedEffectAuthorizationPrincipal(ctx, principal, schema)
+		if err != nil {
+			return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
+		}
+	} else {
+		authorizationPrincipal = recordEffectAuthorizationPrincipal(ctx, principal, objectKey, "create")
+	}
 	object, err := s.dependencies.ObjectForAction(authorizationPrincipal, objectKey, "create")
 	if err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
@@ -207,6 +221,9 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 		return recordCreatePlannedMutation{}, recordCreateErrorFrom(apperror.KindBadRequest, err)
 	}
 	data = normalized
+	if err := recordValidateOwnedEffectCandidate(ctx, object, data, principal); err != nil {
+		return recordCreatePlannedMutation{}, err
+	}
 	if s.dependencies.ValidatePipeline != nil {
 		if err := s.dependencies.ValidatePipeline(ctx, object, "", data, principal); err != nil {
 			return recordCreatePlannedMutation{}, err
@@ -263,6 +280,9 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 	}
 	if err := recordvalidation.RecordValidateData(object, data, false); err != nil {
 		return recordCreatePlannedMutation{}, recordCreateErrorFrom(apperror.KindBadRequest, err)
+	}
+	if err := recordValidateOwnedEffectCandidate(ctx, object, data, principal); err != nil {
+		return recordCreatePlannedMutation{}, err
 	}
 	if s.dependencies.ValidateFiles != nil {
 		if err := s.dependencies.ValidateFiles(ctx, object, data, principal); err != nil {

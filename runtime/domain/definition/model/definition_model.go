@@ -96,6 +96,10 @@ type ObjectSchema struct {
 	I18n        localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
 	Fields      []FieldSchema                      `json:"fields"`
 	Validations []ValidationSchema                 `json:"validations,omitempty"`
+	// AuthorizationParent makes this append-only dependent object inherit its
+	// parent's read scope. Internal creates require an authorized parent plan
+	// in the same Action; no source predicate is copied onto this object.
+	AuthorizationParent *ObjectAuthorizationParent `json:"authorization_parent,omitempty"`
 	// Capabilities is the source declaration for the generic record API.
 	// Nil means the Runtime standard set; a non-nil value can only remove
 	// operations the object does not support. The authorization compiler turns
@@ -112,6 +116,11 @@ type ObjectSchema struct {
 	ExportAssurancePolicy *ActionAssurancePolicy `json:"export_assurance_policy,omitempty"`
 	PublicResources       []ObjectPublicResource `json:"public_resources,omitempty"`
 	Config                map[string]any         `json:"config,omitempty"`
+}
+
+type ObjectAuthorizationParent struct {
+	ObjectKey     string `json:"object_key"`
+	RelationField string `json:"relation_field"`
 }
 
 // ObjectPublicResource is a code-governed anonymous projection of one

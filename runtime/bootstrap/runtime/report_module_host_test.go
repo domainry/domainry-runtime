@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
@@ -79,14 +80,18 @@ func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) 
 	if err := SynchronizeReportDefinitions(t.Context(), binding, "template", "7", reportDefinitions); err != nil {
 		t.Fatal(err)
 	}
+	snapshot, err := binding.Definitions().DefinitionSnapshot(t.Context())
+	if err != nil || !strings.HasPrefix(snapshot.SchemaVersion, "7:") {
+		t.Fatalf("content-versioned snapshot=%#v err=%v", snapshot, err)
+	}
 	var snapshots, definitions, definitionVersions, migrations, retiredDefinitionTables int
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _report_snapshots WHERE id='snapshot-1'`).Scan(&snapshots); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _definitions WHERE owner='report' AND kind='report' AND definition_key='summary' AND schema_version='7'`).Scan(&definitions); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _definitions WHERE owner='report' AND kind='report' AND definition_key='summary' AND schema_version=?`, snapshot.SchemaVersion).Scan(&definitions); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _definition_versions WHERE owner='report' AND kind='report' AND definition_key='summary' AND schema_version='7'`).Scan(&definitionVersions); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _definition_versions WHERE owner='report' AND kind='report' AND definition_key='summary' AND schema_version=?`, snapshot.SchemaVersion).Scan(&definitionVersions); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('_report_definitions','_report_operation_state_examples','_report_sensitive_field_policies','_report_export_controls')`).Scan(&retiredDefinitionTables); err != nil {
@@ -97,5 +102,24 @@ func TestReportModuleAdoptsRuntimeSnapshotTableAndOwnsDefinitions(t *testing.T) 
 	}
 	if snapshots != 1 || definitions != 1 || definitionVersions != 1 || migrations != 1 || retiredDefinitionTables != 0 {
 		t.Fatalf("snapshots=%d definitions=%d definition_versions=%d migrations=%d retired_definition_tables=%d", snapshots, definitions, definitionVersions, migrations, retiredDefinitionTables)
+	}
+	// Replaying identical code is idempotent. Changing only a Go-owned report
+	// while keeping the model revision must create a new immutable version.
+	if err := SynchronizeReportDefinitions(t.Context(), binding, "template", "7", reportDefinitions); err != nil {
+		t.Fatal(err)
+	}
+	reportDefinitions[0].Report.RequiredPermissions = []string{"opportunity.read"}
+	if err := SynchronizeReportDefinitions(t.Context(), binding, "template", "7", reportDefinitions); err != nil {
+		t.Fatalf("changed report with unchanged model revision: %v", err)
+	}
+	updated, err := binding.Definitions().DefinitionSnapshot(t.Context())
+	if err != nil || updated.SchemaVersion == snapshot.SchemaVersion || len(updated.Definitions) != 1 || len(updated.Definitions[0].Report.RequiredPermissions) != 1 || updated.Definitions[0].Report.RequiredPermissions[0] != "opportunity.read" {
+		t.Fatalf("updated snapshot=%#v err=%v", updated, err)
+	}
+	if err := SynchronizeReportDefinitions(t.Context(), binding, "template", "7", reportDefinitions); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _definition_versions WHERE owner='report' AND kind='report' AND definition_key='summary'`).Scan(&definitionVersions); err != nil || definitionVersions != 2 {
+		t.Fatalf("report versions=%d want=2 err=%v", definitionVersions, err)
 	}
 }

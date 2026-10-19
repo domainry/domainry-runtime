@@ -28,17 +28,18 @@ type Model struct {
 // decoding. Runtime's older definition model contains generic Config/Options
 // escape hatches; this project contract intentionally does not expose them.
 type Object struct {
-	Key                     string                                 `json:"key,omitempty"`
-	Name                    string                                 `json:"name"`
-	Description             string                                 `json:"description,omitempty"`
-	I18n                    localizationmodel.LocalizedTextMap     `json:"i18n,omitempty"`
-	Fields                  map[string]Field                       `json:"fields"`
-	UniqueConstraints       map[string]UniqueConstraint            `json:"unique_constraints,omitempty"`
-	Capabilities            *definitionmodel.ObjectCapabilitySet   `json:"capabilities,omitempty"`
-	DirectGrantCapabilities *definitionmodel.ObjectCapabilitySet   `json:"direct_grant_capabilities,omitempty"`
-	LifecyclePolicy         *definitionmodel.ObjectLifecyclePolicy `json:"lifecycle_policy,omitempty"`
-	LedgerPolicy            *definitionmodel.ObjectLedgerPolicy    `json:"ledger_policy,omitempty"`
-	ExportAssurancePolicy   *definitionmodel.ActionAssurancePolicy `json:"export_assurance_policy,omitempty"`
+	Key                     string                                     `json:"key,omitempty"`
+	Name                    string                                     `json:"name"`
+	Description             string                                     `json:"description,omitempty"`
+	I18n                    localizationmodel.LocalizedTextMap         `json:"i18n,omitempty"`
+	Fields                  map[string]Field                           `json:"fields"`
+	AuthorizationParent     *definitionmodel.ObjectAuthorizationParent `json:"authorization_parent,omitempty"`
+	UniqueConstraints       map[string]UniqueConstraint                `json:"unique_constraints,omitempty"`
+	Capabilities            *definitionmodel.ObjectCapabilitySet       `json:"capabilities,omitempty"`
+	DirectGrantCapabilities *definitionmodel.ObjectCapabilitySet       `json:"direct_grant_capabilities,omitempty"`
+	LifecyclePolicy         *definitionmodel.ObjectLifecyclePolicy     `json:"lifecycle_policy,omitempty"`
+	LedgerPolicy            *definitionmodel.ObjectLedgerPolicy        `json:"ledger_policy,omitempty"`
+	ExportAssurancePolicy   *definitionmodel.ActionAssurancePolicy     `json:"export_assurance_policy,omitempty"`
 }
 
 // Field is the normalized Runtime representation, not the JSON authoring shape.

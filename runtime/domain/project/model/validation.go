@@ -72,6 +72,17 @@ func Validate(model Model, knownPermissions map[string]bool) error {
 		}
 		validateDirectGrantCapabilities(object, path, add)
 		validateObjectFields(model, object, path, add)
+		if parent := object.AuthorizationParent; parent != nil {
+			owner, found := model.Objects[parent.ObjectKey]
+			field, relationFound := object.Fields[parent.RelationField]
+			if !found || parent.ObjectKey == key || owner.AuthorizationParent != nil || !relationFound || field.Type != "relation" || !field.Required || relationFieldTarget(field) != parent.ObjectKey {
+				add("project_model.authorization_parent_invalid", path+"/authorization_parent", "authorization parent must be a direct required relation to an independent object")
+			}
+			capabilities := definitionmodel.EffectiveObjectCapabilities(definitionmodel.ObjectSchema{Capabilities: object.Capabilities})
+			if capabilities.Create || capabilities.Update || capabilities.Delete || capabilities.Import || capabilities.Export {
+				add("project_model.authorization_parent_invalid", path+"/authorization_parent", "dependent objects only allow generic reads; writes belong to parent Actions")
+			}
+		}
 	}
 	for key, role := range model.Roles {
 		path := "/roles/" + pointerToken(key)
@@ -329,7 +340,8 @@ func RuntimeObjects(model Model) ([]definitionmodel.ObjectSchema, error) {
 		result = append(result, definitionmodel.ObjectSchema{
 			Key: objectKey, Name: object.Name, Description: object.Description, I18n: object.I18n, Fields: fields, Validations: validations,
 			Capabilities: object.Capabilities, DirectGrantCapabilities: object.DirectGrantCapabilities,
-			LifecyclePolicy: object.LifecyclePolicy, LedgerPolicy: object.LedgerPolicy,
+			AuthorizationParent: object.AuthorizationParent,
+			LifecyclePolicy:     object.LifecyclePolicy, LedgerPolicy: object.LedgerPolicy,
 			ExportAssurancePolicy: object.ExportAssurancePolicy,
 		})
 	}

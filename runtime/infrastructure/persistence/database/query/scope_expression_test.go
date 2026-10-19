@@ -10,6 +10,33 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
+func TestRelationExistenceScopeDoesNotRequireComparisonValues(t *testing.T) {
+	for _, operator := range []string{"exists", "not_exists"} {
+		t.Run(operator, func(t *testing.T) {
+			expression := recordmodel.RecordScopeExpression{Operator: operator, FieldKey: "id", Path: []recordmodel.RecordScopePathSegment{{SourceObjectKey: "event", Direction: "forward", RelationFieldKey: "deal", TargetObjectKey: "deal"}}}
+			called := false
+			resolved, err := ResolveScopeMembership(fuzzQueryStore{}, "workspace-a", expression, 100, func(statement string, args ...any) ([]string, error) {
+				called = true
+				if !strings.Contains(statement, "IS ") || len(args) == 0 || args[0] != "workspace-a" {
+					t.Fatalf("existence query lost workspace: %s %v", statement, args)
+				}
+				return []string{"deal-a"}, nil
+			})
+			if err != nil || !called || len(resolved.Values) != 1 || resolved.Values[0] != "deal-a" {
+				t.Fatalf("existence scope became empty: %+v %v", resolved, err)
+			}
+			called = false
+			matched, err := CandidateScopeMatches(fuzzQueryStore{}, "workspace-a", recordmodel.Record{ID: "event-a", Data: map[string]any{"deal": "deal-a"}}, expression, func(statement string, args ...any) (bool, error) {
+				called = true
+				return true, nil
+			})
+			if err != nil || !called || !matched {
+				t.Fatalf("candidate existence skipped lookup: %v %v", matched, err)
+			}
+		})
+	}
+}
+
 func TestResolveScopeMembershipQueriesPermissionIDsBeforeRootFieldIN(t *testing.T) {
 	store := fuzzQueryStore{}
 	expression := &recordmodel.RecordScopeExpression{Operator: "and", Children: []recordmodel.RecordScopeExpression{

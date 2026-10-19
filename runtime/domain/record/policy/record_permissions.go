@@ -97,6 +97,7 @@ func RecordFilterReadable(principal principalmodel.Principal, object definitionm
 }
 
 func RecordFilterReadableData(principal principalmodel.Principal, object definitionmodel.ObjectSchema, data map[string]any) map[string]any {
+	principal = RecordAuthorizationParentReadFieldPrincipal(principal, object)
 	filtered := map[string]any{}
 	for _, field := range object.Fields {
 		if RecordSensitiveFieldClosedForPrincipal(principal, object.Key, field) {

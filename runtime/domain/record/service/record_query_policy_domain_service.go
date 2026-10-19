@@ -39,13 +39,17 @@ func (s *RecordQueryPolicyDomainService) ObjectForAction(principal principalmode
 	if !principal.Known {
 		return definitionmodel.ObjectSchema{}, queryPolicyError(apperror.KindForbidden, "backend.role.unknown")
 	}
-	if allowed, handled := recordpolicy.RecordSDKAllowsObjectAction(principal, objectKey, action); handled {
+	permissionObjectKey := objectKey
+	if object.AuthorizationParent != nil && normalizeSDKScopeAction(action) == "read" {
+		permissionObjectKey = object.AuthorizationParent.ObjectKey
+	}
+	if allowed, handled := recordpolicy.RecordSDKAllowsObjectAction(principal, permissionObjectKey, action); handled {
 		if !allowed {
 			return definitionmodel.ObjectSchema{}, queryPolicyError(apperror.KindForbidden, "backend.permission.denied")
 		}
 		return object, nil
 	}
-	if !principal.SystemScope.Valid() || !principal.Allows(objectKey, action) {
+	if !principal.SystemScope.Valid() || !principal.Allows(permissionObjectKey, action) {
 		return definitionmodel.ObjectSchema{}, queryPolicyError(apperror.KindForbidden, "backend.permission.denied")
 	}
 	return object, nil

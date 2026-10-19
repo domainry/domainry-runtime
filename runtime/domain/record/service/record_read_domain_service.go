@@ -106,6 +106,7 @@ func (s *RecordReadDomainService) listRecords(ctx context.Context, objectKey str
 	if err != nil {
 		return recordmodel.RecordPageResult{}, err
 	}
+	principal = recordpolicy.RecordAuthorizationParentReadFieldPrincipal(principal, object)
 	if err := s.policy.EnsureReportSnapshotAccess(object, "read", principal); err != nil {
 		return recordmodel.RecordPageResult{}, err
 	}
@@ -189,6 +190,7 @@ func (s *RecordReadDomainService) getRecord(ctx context.Context, objectKey, reco
 	if err != nil {
 		return recordmodel.Record{}, err
 	}
+	principal = recordpolicy.RecordAuthorizationParentReadFieldPrincipal(principal, object)
 	if err := s.policy.EnsureReportSnapshotAccess(object, "read", principal); err != nil {
 		return recordmodel.Record{}, err
 	}

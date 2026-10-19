@@ -155,6 +155,7 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 	create := NewRecordCreateApplicationService(RecordCreateDependencies{
 		Repository:      dependencies.Repository,
 		MutationKernel:  mutationKernel,
+		Objects:         service.schemaMap,
 		ObjectForAction: service.queryPolicy.ObjectForAction,
 		CanWrite:        service.queryPolicy.CanWriteRecordScope,
 		CanWriteCandidate: func(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, candidate recordmodel.Record) (bool, error) {

@@ -29,6 +29,7 @@ type openedRuntimeIntegration struct {
 	Workers            integrationsdk.LocalWorkers
 	Subjects           integrationsdk.SubjectLifecycle
 	SubjectPersistence integrationsdk.SubjectLifecyclePersistenceBinding
+	Wakeups            *integrationQueueWakeups
 }
 
 func integrationDeploymentMode(binding integrationsdk.Binding) integrationsdk.DeploymentMode {
@@ -42,6 +43,7 @@ func openRuntimeIntegration(ctx context.Context, application integrationsdk.Appl
 	if factory == nil {
 		return openedRuntimeIntegration{}, nil
 	}
+	host.wakeups = newIntegrationQueueWakeups()
 	binding, err := openIntegrationBinding(ctx, application, factory, host)
 	if err != nil {
 		return openedRuntimeIntegration{}, err
@@ -52,7 +54,7 @@ func openRuntimeIntegration(ctx context.Context, application integrationsdk.Appl
 	if err := binding.Descriptor().Validate(); err != nil {
 		return openedRuntimeIntegration{}, err
 	}
-	result := openedRuntimeIntegration{Binding: binding, Delivery: binding.Delivery(), Catalog: binding.Catalog(), Requirements: binding.Requirements()}
+	result := openedRuntimeIntegration{Binding: binding, Delivery: binding.Delivery(), Catalog: binding.Catalog(), Requirements: binding.Requirements(), Wakeups: host.wakeups}
 	if result.Delivery == nil {
 		return openedRuntimeIntegration{}, fmt.Errorf("Integration Binding returned no Delivery port")
 	}
@@ -127,6 +129,23 @@ type runtimeIntegrationModuleHost struct {
 	store     *persistence.RuntimeStore
 	providers *connector.Registry
 	triggers  integrationsdk.TriggerSink
+	wakeups   *integrationQueueWakeups
+}
+
+func (h runtimeIntegrationModuleHost) EventWorkNotifier() integrationmodulehost.EventWorkNotifier {
+	return runtimeIntegrationEventWorkNotifier{wakeups: h.wakeups}
+}
+
+type runtimeIntegrationEventWorkNotifier struct{ wakeups *integrationQueueWakeups }
+
+func (n runtimeIntegrationEventWorkNotifier) EventsCommitted() {
+	if n.wakeups == nil {
+		return
+	}
+	select {
+	case n.wakeups.event <- struct{}{}:
+	default:
+	}
 }
 
 func (h runtimeIntegrationModuleHost) Database() integrationmodulehost.Database { return h.store.DB() }

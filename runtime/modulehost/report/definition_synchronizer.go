@@ -2,6 +2,9 @@ package reportmodulehost
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -31,6 +34,14 @@ func SynchronizeDefinitions(ctx context.Context, binding reportsdk.Binding, sour
 	if version == "" {
 		version = "1"
 	}
+	// Reports are code-owned, so their payload can change without model.json
+	// changing. Include all report content in the immutable definition version.
+	raw, err := json.Marshal(definitions)
+	if err != nil {
+		return fmt.Errorf("encode Report definition snapshot: %w", err)
+	}
+	hash := sha256.Sum256(raw)
+	version += ":" + hex.EncodeToString(hash[:])
 	sourceID = strings.TrimSpace(sourceID)
 	if sourceID == "" {
 		sourceID = "project"

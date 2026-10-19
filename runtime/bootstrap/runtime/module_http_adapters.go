@@ -24,6 +24,11 @@ func (runtime *Runtime) ModuleHTTPAdapters() []modulehttp.Adapter {
 		return nil
 	}
 	adapters := runtime.moduleBindings.HTTPAdapters()
+	for index, adapter := range adapters {
+		if runtime.integrationWorkers != nil && adapter != nil && adapter.Owner() == "integration" {
+			adapters[index] = integrationWakeupHTTPAdapter{Adapter: adapter, runtime: runtime}
+		}
+	}
 	adapters = append(adapters,
 		runtimeDiscoveryHTTPAdapter{runtime: runtime},
 		runtimeActionHTTPAdapter{runtime: runtime},

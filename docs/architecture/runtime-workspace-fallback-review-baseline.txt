@@ -68,6 +68,11 @@ runtime/application/operations/operations_result_evidence_application_service.go
 runtime/application/operations/operations_result_evidence_application_service.go|b2e5ab60c1900c7a
 runtime/application/publicationhandoff/publication_handoff_application_service.go|3a264f3250c4d24e
 runtime/application/publicationhandoff/publication_handoff_application_service.go|b2e5ab60c1900c7a
+# 2026-10-18 review: owned dependent creates accept only same-Workspace parent
+# plans, reject an empty caller Workspace and reject deleted/mismatched parents.
+# These two predicates never select or substitute a fallback Workspace.
+runtime/application/record/record_owned_effect.go|2cda01513d904239
+runtime/application/record/record_owned_effect.go|6b83ded1b21ea2a3
 runtime/application/record/record_subject_erasure_plan.go|9fa2685ac2a3d4c7
 runtime/application/record/record_subject_erasure_plan.go|db4061e02aef0d91
 runtime/application/record/record_subject_lifecycle_application_service.go|9bc2b99f1b0726ee

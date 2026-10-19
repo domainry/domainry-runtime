@@ -12,6 +12,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
+	"go.uber.org/zap"
 )
 
 var runtimeWorkerApplications = func(records *composition.RuntimeServices) composition.RuntimeApplications {
@@ -256,12 +257,35 @@ func (a *Runtime) startIntegrationOwnerLoop(ctx context.Context, name, failure s
 		if batch <= 0 || batch > 500 {
 			batch = 25
 		}
-		return workerplatform.StartAdaptiveLoop(workerCtx, name, interval, max(30*time.Second, interval*30), func() bool {
+		tick := func() bool {
 			return runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, failure, func() (bool, error) {
+				started := time.Now()
 				processed, err := process(workerCtx, batch)
+				if processed > 0 {
+					logging.FromContext(workerCtx).Info("Integration owner batch completed", zap.String("worker", name), zap.Int("processed", processed), zap.Int64("started_at_ms", started.UnixMilli()), zap.Int64("duration_ms", time.Since(started).Milliseconds()), zap.Bool("success", err == nil))
+				}
+				// The owner returns only after its task transactions have finished.
+				// Even a partially failed batch may have committed events. This is
+				// only a hint: the event owner still claims committed durable rows.
+				if name == "integration_provider" && processed > 0 {
+					a.signalIntegrationQueue("integration_event")
+				}
 				return processed > 0, err
 			})
-		})
+		}
+		maxInterval := max(30*time.Second, interval*30)
+		wakeups := a.integrationQueueWakeup(name)
+		if name == "integration_provider" {
+			// One recovery slot plus one push-only slot, both inside this owner
+			// supervisor/controller. A long backfill batch must not prevent a new
+			// notification being admitted. Integration's existing connection
+			// leases/fencing still serialize each mailbox; there are at most two
+			// concurrent batches, not an unbounded goroutine per notification.
+			recovery := workerplatform.StartAdaptiveLoop(workerCtx, name, interval, maxInterval, tick)
+			push := workerplatform.StartWakeableRecoveryLoop(workerCtx, name+"_push", maxInterval, wakeups, func() {}, func(struct{}) { tick() })
+			return workerplatform.Join(recovery, push)
+		}
+		return workerplatform.StartWakeableAdaptiveLoop(workerCtx, name, interval, maxInterval, wakeups, tick)
 	})
 }
 

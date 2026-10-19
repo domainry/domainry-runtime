@@ -38,7 +38,7 @@ func resolveScopeMembership(s Store, workspace string, expression recordmodel.Re
 		if len(expression.Path) == 0 {
 			return expression, nil
 		}
-		if len(expression.Values) == 0 {
+		if len(expression.Values) == 0 && expression.Operator != "exists" && expression.Operator != "not_exists" {
 			return resolvedMembershipLeaf(expression, nil), nil
 		}
 		statement, args, err := buildScopeMembershipLookup(s, workspace, expression, inThreshold+1)
@@ -133,7 +133,7 @@ func CandidateScopeMatches(s Store, workspace string, candidate recordmodel.Reco
 }
 
 func candidateRelationScopeMatches(s Store, workspace string, candidate recordmodel.Record, expression recordmodel.RecordScopeExpression, lookup CandidateScopeLookup) (bool, error) {
-	if len(expression.Values) == 0 {
+	if len(expression.Values) == 0 && expression.Operator != "exists" && expression.Operator != "not_exists" {
 		return false, nil
 	}
 	first := expression.Path[0]

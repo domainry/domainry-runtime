@@ -16,6 +16,10 @@ func RecordCompileSDKDataScopeExpression(object definitionmodel.ObjectSchema, ob
 	if principal.AccessBundle == nil {
 		return nil, nil, false
 	}
+	if object.AuthorizationParent != nil && normalizeSDKScopeAction(action) == "read" {
+		expression, err := recordAuthorizationParentReadScope(object, objects, principal)
+		return expression, err, true
+	}
 	filter, err := identityevaluator.CompileRecordFilter(
 		*principal.AccessBundle,
 		identitysdk.ResourceType(strings.TrimSpace(object.Key)),

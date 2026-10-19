@@ -50,6 +50,7 @@ type runtimeConstructionInput struct {
 	integrationMode          integrationsdk.DeploymentMode
 	integrationBinding       integrationsdk.Binding
 	integrationWorkers       integrationsdk.LocalWorkers
+	integrationWakeups       *integrationQueueWakeups
 	dataExchangeBinding      dataexchangesdk.Binding
 	lifecycleBinding         lifecyclesdk.Binding
 	fileScanProcessor        *uploadapplication.FileScanProcessor
@@ -97,6 +98,7 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		integrationMode:            input.integrationMode,
 		integrationBinding:         input.integrationBinding,
 		integrationWorkers:         input.integrationWorkers,
+		integrationWakeups:         input.integrationWakeups,
 		dataExchangeBinding:        input.dataExchangeBinding,
 		lifecycleBinding:           input.lifecycleBinding,
 		fileScanProcessor:          input.fileScanProcessor,

@@ -187,7 +187,7 @@ func TestRelationValidatorWrapsRepositoryAndIdentityErrors(t *testing.T) {
 }
 
 func TestPlannedRelationContextNilAndEmptyEdges(t *testing.T) {
-	records := map[string]map[string]recordmodel.Record{"customer": {"customer-1": {ID: "customer-1"}}}
+	records := map[string]map[string]recordmodel.Record{"customer": {"customer-1": {ID: "customer-1", WorkspaceID: "workspace-a", Deleted: true}}}
 	if got := RecordWithPlannedRelations(nil, records); got != nil {
 		t.Fatalf("nil context became %#v", got)
 	}
@@ -209,7 +209,7 @@ func TestPlannedRelationContextNilAndEmptyEdges(t *testing.T) {
 	}
 	plannedContext := RecordWithPlannedRelations(ctx, records)
 	planned := RecordPlannedRelations(plannedContext)
-	if planned["customer"]["customer-1"].ID != "customer-1" {
+	if planned["customer"]["customer-1"].ID != "customer-1" || planned["customer"]["customer-1"].WorkspaceID != "workspace-a" || !planned["customer"]["customer-1"].Deleted {
 		t.Fatalf("planned relations=%#v", planned)
 	}
 }

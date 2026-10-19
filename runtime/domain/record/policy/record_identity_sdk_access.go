@@ -64,6 +64,7 @@ func RecordCanWriteFieldForPrincipal(principal principalmodel.Principal, objectK
 }
 
 func RecordCanReadObjectFieldForPrincipal(principal principalmodel.Principal, object definitionmodel.ObjectSchema, field definitionmodel.FieldSchema) bool {
+	principal = RecordAuthorizationParentReadFieldPrincipal(principal, object)
 	if RecordSensitiveFieldClosedForPrincipal(principal, object.Key, field) {
 		return false
 	}
