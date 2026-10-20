@@ -159,10 +159,7 @@ func (h *ConversationBusinessHost) AuthorizeConversationToolCatalog(ctx context.
 		return agentsdk.ConversationToolAuthorization{}, nil
 	}
 	definitions := append(agentsdk.PersonalConversationTools(), agentsdk.ArtifactConversationTools()...)
-	definitions = append(definitions, agentsdk.KnowledgeConversationTools()...)
-	definitions = append(definitions, agentsdk.LibraryKnowledgeConversationTools()...)
 	definitions = append(definitions, agentsdk.AttachmentConversationTools()...)
-	definitions = append(definitions, agentsdk.KnowledgeExtractionTool())
 	definitions = append(definitions, agentsdk.BusinessConversationTools()...)
 	definitions = append(definitions, agentsdk.BusinessRelationConversationTools()...)
 	definitions = append(definitions, agentsdk.BusinessActionConversationTools()...)
