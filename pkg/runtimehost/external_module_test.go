@@ -102,7 +102,7 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 	compositionSource := []byte(`package composition
 
 import (
-	agentremote "github.com/domainry/domainry-agent/remote"
+	agentmodule "github.com/domainry/domainry-agent/module"
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangeremote "github.com/domainry/domainry-data-exchange/remote"
 	identityremote "github.com/domainry/domainry-identity-sdk/remote"
@@ -132,7 +132,7 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		MonitoringFactory: monitoringremote.NewFactory(monitoringremote.ConfigFromEnvironment()),
 		SchedulerFactory: schedulerremote.NewHTTPFactory(schedulerhttp.ConfigFromEnvironment()),
 		DataExchangeFactory: dataexchangeremote.NewFactory(nil),
-		AgentFactory: agentremote.NewFactory(agentremote.OptionsFromEnvironment()),
+		AgentFactory: agentmodule.NewSaaSFactory(agentmodule.SaaSOptionsFromEnvironment()),
 	}
 }
 `)
