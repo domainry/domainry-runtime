@@ -49,9 +49,15 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 		NotificationInboxActions: runtime.notificationHTTP,
 		ProjectExtensions:        runtime.projectExtensions,
 		ProjectHTTP:              runtime.projectHTTP,
+		KnowledgeSearch:          runtimeKnowledgeSearchSource(runtime.knowledgeRetrieval),
 		BlobStore:                runtime.blobStore,
 	})
 	return runtime
+}
+
+func runtimeKnowledgeSearchSource(source any) transportbootstrap.KnowledgeLibrarySearchSource {
+	value, _ := source.(transportbootstrap.KnowledgeLibrarySearchSource)
+	return value
 }
 
 func (a *Runtime) Routes() http.Handler {

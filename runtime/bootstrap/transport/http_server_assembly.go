@@ -79,6 +79,7 @@ type HTTPServerDependencies struct {
 	NotificationInboxActions notificationhttp.NotificationInboxActionResolver
 	ProjectExtensions        *runtimeext.ProjectExtensionRegistry
 	ProjectHTTP              runtimeengine.HTTPFactory
+	KnowledgeSearch          KnowledgeLibrarySearchSource
 	BlobStore                runtimefile.BlobStore
 }
 
@@ -209,10 +210,6 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		if binding, ok := dependencies.IntegrationBinding.(integrationsdk.ConnectionAccountWritesBinding); ok {
 			accountWrites = binding.ConnectionAccountWrites()
 		}
-		var knowledgeSearch agentsdk.ConversationLibraryKnowledgeSource
-		if binding, ok := dependencies.AgentBinding.(agentsdk.ConversationBinding); ok && binding.Conversations() != nil {
-			knowledgeSearch, _ = binding.Conversations().(agentsdk.ConversationLibraryKnowledgeSource)
-		}
 		engine := newProjectEngine(
 			recordApplication,
 			records.Applications().Actions,
@@ -220,7 +217,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 			accountReads,
 			accountWrites,
 			identityProjection,
-			knowledgeSearch,
+			dependencies.KnowledgeSearch,
 			dependencies.RuntimeInstanceID,
 			server.PrincipalFromContext,
 		)

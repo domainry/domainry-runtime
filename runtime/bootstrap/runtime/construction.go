@@ -11,6 +11,8 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	knowledgecontract "github.com/domainry/domainry-knowledge-sdk/contract"
+	knowledgemodulehost "github.com/domainry/domainry-knowledge-sdk/modulehost"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
@@ -66,6 +68,9 @@ type runtimeConstructionInput struct {
 	monitoringBinding        monitoringsdk.Binding
 	schedulerBinding         schedulersdk.Binding
 	agentBinding             agentsdk.Binding
+	knowledgeBinding         knowledgemodulehost.ModuleBinding
+	knowledgeService         knowledgecontract.Service
+	knowledgeRetrieval       knowledgecontract.Knowledge
 	auditBinding             auditsdk.Binding
 	metadataBinding          metadatasdk.Binding
 	reportBinding            reportsdk.Binding
@@ -115,6 +120,9 @@ func constructRuntime(input runtimeConstructionInput) *Runtime {
 		monitoringBinding:          input.monitoringBinding,
 		schedulerBinding:           input.schedulerBinding,
 		agentBinding:               input.agentBinding,
+		knowledgeBinding:           input.knowledgeBinding,
+		knowledgeService:           input.knowledgeService,
+		knowledgeRetrieval:         input.knowledgeRetrieval,
 		auditBinding:               input.auditBinding,
 		metadataBinding:            input.metadataBinding,
 		reportBinding:              input.reportBinding,

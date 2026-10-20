@@ -16,6 +16,8 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	knowledgecontract "github.com/domainry/domainry-knowledge-sdk/contract"
+	knowledgemodulehost "github.com/domainry/domainry-knowledge-sdk/modulehost"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
@@ -76,6 +78,9 @@ type Runtime struct {
 	monitoringBinding          monitoringsdk.Binding
 	schedulerBinding           schedulersdk.Binding
 	agentBinding               agentsdk.Binding
+	knowledgeBinding           knowledgemodulehost.ModuleBinding
+	knowledgeService           knowledgecontract.Service
+	knowledgeRetrieval         knowledgecontract.Knowledge
 	auditBinding               auditsdk.Binding
 	metadataBinding            metadatasdk.Binding
 	reportBinding              reportsdk.Binding
@@ -134,33 +139,20 @@ func (r *Runtime) IntegrationOwnerAccountWrites() integrationsdk.ConnectionAccou
 	return r.records.IntegrationOwnerAccountWrites()
 }
 
-// AgentKnowledgeDocuments returns the Agent-owned document service used by the
-// runtimehost project gateway. The service performs current Identity and
-// library membership authorization for every call.
-func (r *Runtime) AgentKnowledgeDocuments() agentsdk.KnowledgeDocumentService {
-	if r == nil || r.agentBinding == nil {
+// KnowledgeService is the independently composed Knowledge owner used by
+// project actions and Knowledge's source-owned HTTP adapter.
+func (r *Runtime) KnowledgeService() knowledgecontract.Service {
+	if r == nil {
 		return nil
 	}
-	conversations, ok := r.agentBinding.(agentsdk.ConversationBinding)
-	if !ok || conversations.Conversations() == nil {
-		return nil
-	}
-	documents, _ := conversations.Conversations().(agentsdk.KnowledgeDocumentService)
-	return documents
+	return r.knowledgeService
 }
 
-// AgentKnowledgeLibraries returns the Agent-owned library service for live
-// project Action checks before publishing source-backed documents.
-func (r *Runtime) AgentKnowledgeLibraries() agentsdk.KnowledgeLibraryService {
-	if r == nil || r.agentBinding == nil {
+func (r *Runtime) KnowledgeRetrieval() knowledgecontract.Knowledge {
+	if r == nil {
 		return nil
 	}
-	conversations, ok := r.agentBinding.(agentsdk.ConversationBinding)
-	if !ok || conversations.Conversations() == nil {
-		return nil
-	}
-	libraries, _ := conversations.Conversations().(agentsdk.KnowledgeLibraryService)
-	return libraries
+	return r.knowledgeRetrieval
 }
 
 func (r *Runtime) RuntimeInstanceID() string {

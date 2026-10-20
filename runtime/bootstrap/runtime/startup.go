@@ -375,6 +375,18 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(records.Applications().Workflows.ConfigureWorkflowWorkloadIdentity(identityBinding, identitysdk.ApplicationScope{
 		WorkspaceID: identitysdk.WorkspaceID(strings.TrimSpace(cfg.IdentityWorkspaceID)), ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(cfg.IdentityAudience)),
 	}))
+	knowledgeOwner, err := openRuntimeKnowledge(
+		ctx,
+		cfg.RuntimeInstanceID,
+		identitysdk.ApplicationScope{WorkspaceID: identitysdk.WorkspaceID(cfg.IdentityWorkspaceID), ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience)},
+		store,
+		identityPrincipals,
+		identityProjection,
+		records.Applications().Records,
+		startupOptions.KnowledgeFactory,
+		startupOptions.KnowledgeOptions,
+	)
+	mustCompleteRuntimeStartup(err)
 
 	auditHostBinder, ok := auditBinding.(auditsdk.ApplicationHostBinder)
 	if !ok {
@@ -471,7 +483,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	}
 	moduleBindings := newRuntimeModuleBindingInventory(
 		notificationBinding, integrationOwner.Binding, schedulerBinding, monitoringBinding,
-		serviceAssembly.dataExchangeBinding, agentBinding, serviceAssembly.lifecycleBinding,
+		serviceAssembly.dataExchangeBinding, knowledgeOwner.binding, agentBinding, serviceAssembly.lifecycleBinding,
 		auditBinding, metadataBinding, reportBinding,
 	)
 	authorizationModuleActions, err := moduleBindings.AuthorizationActions()
@@ -574,6 +586,9 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		monitoringBinding:        monitoringBinding,
 		schedulerBinding:         schedulerBinding,
 		agentBinding:             agentBinding,
+		knowledgeBinding:         knowledgeOwner.binding,
+		knowledgeService:         knowledgeOwner.service,
+		knowledgeRetrieval:       knowledgeOwner.retrieval,
 		auditBinding:             auditBinding,
 		metadataBinding:          metadataBinding,
 		reportBinding:            reportBinding,

@@ -72,6 +72,15 @@ func (a *Runtime) close(ctx context.Context) error {
 		cancel()
 		a.agentBinding = nil
 	}
+	var knowledgeErr error
+	if a.knowledgeBinding != nil {
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.cfg.HTTPShutdownTimeout)
+		knowledgeErr = a.knowledgeBinding.Close(closeCtx)
+		cancel()
+		a.knowledgeBinding = nil
+		a.knowledgeService = nil
+		a.knowledgeRetrieval = nil
+	}
 	var lifecycleErr error
 	if a.lifecycleBinding != nil {
 		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.cfg.HTTPShutdownTimeout)
@@ -118,9 +127,9 @@ func (a *Runtime) close(ctx context.Context) error {
 		a.principalCache = nil
 	}
 	if a.borrowedStore {
-		return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, lifecycleErr, integrationErr, auditErr, metadataErr, reportErr, rateLimiterErr, principalCacheErr)
+		return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, knowledgeErr, lifecycleErr, integrationErr, auditErr, metadataErr, reportErr, rateLimiterErr, principalCacheErr)
 	}
-	return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, lifecycleErr, integrationErr, auditErr, metadataErr, reportErr, rateLimiterErr, principalCacheErr, a.store.Close())
+	return errors.Join(releaseErr, notificationErr, monitoringErr, schedulerErr, dataExchangeErr, agentErr, knowledgeErr, lifecycleErr, integrationErr, auditErr, metadataErr, reportErr, rateLimiterErr, principalCacheErr, a.store.Close())
 }
 
 func (a *Runtime) startTrackedWorker(parent context.Context, start func(context.Context) <-chan struct{}) {

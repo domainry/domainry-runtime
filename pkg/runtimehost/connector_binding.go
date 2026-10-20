@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 
-	agentsdk "github.com/domainry/domainry-agent-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	knowledgesdk "github.com/domainry/domainry-knowledge-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -202,8 +201,8 @@ type integrationRuntimeConnectorGateway struct {
 	accountReads       integrationsdk.ConnectionAccountReads
 	accountWrites      integrationsdk.ConnectionAccountWrites
 	runtimeID          string
-	knowledgeDocuments agentsdk.KnowledgeDocumentService
-	knowledgeLibraries agentsdk.KnowledgeLibraryService
+	knowledgeDocuments knowledgesdk.KnowledgeDocumentService
+	knowledgeLibraries knowledgesdk.KnowledgeLibraryService
 }
 
 func (gateway integrationRuntimeConnectorGateway) Call(ctx context.Context, execution runtimeext.ActionExecution, request ConnectorCallRequest) (ConnectorCallResult, error) {
@@ -337,24 +336,24 @@ func (gateway integrationRuntimeConnectorGateway) WriteConnectionAccount(ctx con
 	}, nil
 }
 
-func knowledgeDocumentAuthority(runtimeID string, execution runtimeext.ActionExecution) (agentsdk.ConversationAuthority, error) {
+func knowledgeDocumentAuthority(runtimeID string, execution runtimeext.ActionExecution) (knowledgesdk.Authority, error) {
 	if execution == nil {
-		return agentsdk.ConversationAuthority{}, &runtimeext.BusinessError{Code: runtimeext.ConnectorActionExecutionRequiredErrorCode, Message: "Knowledge ActionExecution is required"}
+		return knowledgesdk.Authority{}, &runtimeext.BusinessError{Code: runtimeext.ConnectorActionExecutionRequiredErrorCode, Message: "Knowledge ActionExecution is required"}
 	}
 	identity, workspace, principal := execution.Identity(), execution.Workspace(), execution.Principal()
 	if !identity.Valid() || !workspace.Valid() || strings.TrimSpace(runtimeID) == "" || strings.TrimSpace(principal.UserID) == "" || strings.TrimSpace(principal.RoleKey) == "" {
-		return agentsdk.ConversationAuthority{}, &runtimeext.BusinessError{Code: "backend.knowledge.execution_identity_invalid", Message: "Knowledge execution identity, Runtime, Workspace, user and role are required"}
+		return knowledgesdk.Authority{}, &runtimeext.BusinessError{Code: "backend.knowledge.execution_identity_invalid", Message: "Knowledge execution identity, Runtime, Workspace, user and role are required"}
 	}
 	if execution.Phase() != runtimeext.ExecutionPhasePrewrite {
-		return agentsdk.ConversationAuthority{}, &runtimeext.BusinessError{Code: "backend.knowledge.call_after_write_forbidden", Message: "Knowledge operations must run before business record writes"}
+		return knowledgesdk.Authority{}, &runtimeext.BusinessError{Code: "backend.knowledge.call_after_write_forbidden", Message: "Knowledge operations must run before business record writes"}
 	}
-	return agentsdk.ConversationAuthority{
+	return knowledgesdk.Authority{
 		Known: true, RuntimeID: strings.TrimSpace(runtimeID), WorkspaceID: workspace.ID,
 		UserID: strings.TrimSpace(principal.UserID), RoleKey: strings.TrimSpace(principal.RoleKey),
 	}, nil
 }
 
-func knowledgeDocumentResult(document agentsdk.KnowledgeDocument) KnowledgeDocumentResult {
+func knowledgeDocumentResult(document knowledgesdk.KnowledgeDocument) KnowledgeDocumentResult {
 	return KnowledgeDocumentResult{
 		ID: document.ID, LibraryID: document.LibraryID, Filename: document.Filename, ContentType: document.ContentType,
 		Bytes: document.Bytes, SHA256: document.SHA256, State: document.State, IndexStatus: document.IndexStatus,
@@ -374,16 +373,16 @@ func (gateway integrationRuntimeConnectorGateway) UploadKnowledgeDocument(ctx co
 	if strings.TrimSpace(identity.ObjectKey) == "" || strings.TrimSpace(identity.RecordID) == "" {
 		return KnowledgeDocumentResult{}, &runtimeext.BusinessError{Code: "backend.knowledge.source_record_required", Message: "Knowledge uploads require an exact source record"}
 	}
-	sourceDocuments, ok := gateway.knowledgeDocuments.(agentsdk.KnowledgeDocumentSourceUploadService)
+	sourceDocuments, ok := gateway.knowledgeDocuments.(knowledgesdk.KnowledgeDocumentSourceUploadService)
 	if !ok {
 		return KnowledgeDocumentResult{}, &runtimeext.BusinessError{Code: "backend.knowledge.source_acl_unavailable", Message: "Knowledge source record authorization is unavailable"}
 	}
 	content := append([]byte(nil), request.Data...)
 	digest := sha256.Sum256(content)
-	document, err := sourceDocuments.UploadKnowledgeDocumentForSource(ctx, strings.TrimSpace(request.LibraryID), agentsdk.KnowledgeDocumentUpload{
+	document, err := sourceDocuments.UploadKnowledgeDocumentForSource(ctx, strings.TrimSpace(request.LibraryID), knowledgesdk.KnowledgeDocumentUpload{
 		ClientID: strings.TrimSpace(request.ClientID), Filename: strings.TrimSpace(request.Filename),
 		Bytes: int64(len(content)), SHA256: hex.EncodeToString(digest[:]), Content: bytes.NewReader(content),
-	}, agentsdk.KnowledgeDocumentSourceAccess{
+	}, knowledgesdk.KnowledgeDocumentSourceAccess{
 		Namespace: knowledgesdk.KnowledgeDocumentSourceNamespaceRuntimeRecord, ResourceType: strings.TrimSpace(identity.ObjectKey), ResourceID: strings.TrimSpace(identity.RecordID),
 	}, authority)
 	if err != nil {

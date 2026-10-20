@@ -21,6 +21,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	knowledgecontract "github.com/domainry/domainry-knowledge-sdk/contract"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	reportsdk "github.com/domainry/domainry-report-sdk"
@@ -103,7 +104,7 @@ func (r bootstrapRuntimeProcess) connectorGateway() runtimeConnectorGateway {
 	return integrationRuntimeConnectorGateway{
 		operations: r.Runtime.IntegrationOwnerOperations(), accountReads: r.Runtime.IntegrationOwnerAccountReads(),
 		accountWrites: r.Runtime.IntegrationOwnerAccountWrites(),
-		runtimeID:     r.Runtime.RuntimeInstanceID(), knowledgeDocuments: r.Runtime.AgentKnowledgeDocuments(), knowledgeLibraries: r.Runtime.AgentKnowledgeLibraries(),
+		runtimeID:     r.Runtime.RuntimeInstanceID(), knowledgeDocuments: r.Runtime.KnowledgeService(), knowledgeLibraries: r.Runtime.KnowledgeService(),
 	}
 }
 
@@ -462,6 +463,13 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 				}
 			}
 			runtimeConfig := workspaceManager.Config()
+			knowledgeOptions := knowledgecontract.Options{}
+			if options.KnowledgeOptionsFactory != nil {
+				knowledgeOptions, err = options.KnowledgeOptionsFactory(runtimeConfig.RuntimeInstanceID, runtimeConfig.IdentityWorkspaceID)
+				if err != nil {
+					return nil, fmt.Errorf("open project Knowledge options: %w", err)
+				}
+			}
 			var analysisTableSource reportmodulehost.AnalysisTableSource
 			if options.AnalysisTableSourceFactory != nil {
 				analysisTableSource, err = options.AnalysisTableSourceFactory(runtimeConfig.RuntimeInstanceID)
@@ -498,6 +506,8 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 				DevelopmentData:           developmentData,
 				ProjectModel:              runtimeModel,
 				AnalysisTableSource:       analysisTableSource,
+				KnowledgeFactory:          options.KnowledgeFactory,
+				KnowledgeOptions:          knowledgeOptions,
 				BlobStore:                 options.BlobStore,
 				FileScanner:               options.FileScanner,
 				ProjectHTTP:               options.ProjectHTTP,

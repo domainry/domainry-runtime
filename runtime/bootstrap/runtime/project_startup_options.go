@@ -2,6 +2,8 @@ package runtime
 
 import (
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	knowledgecontract "github.com/domainry/domainry-knowledge-sdk/contract"
+	knowledgemodulehost "github.com/domainry/domainry-knowledge-sdk/modulehost"
 	reportmodulehost "github.com/domainry/domainry-report-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
@@ -18,6 +20,8 @@ type ProjectStartupOptions struct {
 	ConversationToolsFactory  toolsdk.ConversationToolFactory
 	DevelopmentData           DevelopmentDataOptions
 	AnalysisTableSource       reportmodulehost.AnalysisTableSource
+	KnowledgeFactory          knowledgemodulehost.Factory
+	KnowledgeOptions          knowledgecontract.Options
 	BlobStore                 runtimefile.BlobStore
 	FileScanner               runtimefile.FileScanner
 	ProjectHTTP               runtimeengine.HTTPFactory

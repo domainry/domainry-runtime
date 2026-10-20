@@ -10,6 +10,8 @@ import (
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	knowledgecontract "github.com/domainry/domainry-knowledge-sdk/contract"
+	knowledgemodulehost "github.com/domainry/domainry-knowledge-sdk/modulehost"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
 	monitoringsdk "github.com/domainry/domainry-monitoring-sdk"
@@ -56,6 +58,13 @@ type Options struct {
 	// Runtime. Nil leaves Report module storage, HTTP and application ports
 	// uninstalled and is rejected when the project declares Report references.
 	ReportFactory reportsdk.Factory
+	// KnowledgeFactory selects the source-owned Knowledge Module. Knowledge is
+	// a Runtime sibling of Agent; Agent never owns or opens this module.
+	KnowledgeFactory knowledgemodulehost.Factory
+	// KnowledgeOptionsFactory assembles deployment-selected storage and provider
+	// ports after Runtime has resolved its durable Runtime and Workspace IDs.
+	// Runtime supplies Identity and record authorization ports itself.
+	KnowledgeOptionsFactory func(string, string) (knowledgecontract.Options, error)
 	// AnalysisTableSourceFactory is assembled by project code from a Knowledge
 	// or data-service public adapter. Runtime supplies the resolved instance ID
 	// and consumes only the Report SDK owner port.

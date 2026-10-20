@@ -7,11 +7,12 @@ import (
 	"sort"
 	"strings"
 
-	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	knowledgesdk "github.com/domainry/domainry-knowledge-sdk"
+	knowledgecontract "github.com/domainry/domainry-knowledge-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
@@ -29,9 +30,16 @@ type projectEngine struct {
 	accountReads  integrationsdk.ConnectionAccountReads
 	accountWrites integrationsdk.ConnectionAccountWrites
 	identityUsers identitysdk.Projection
-	knowledge     agentsdk.ConversationLibraryKnowledgeSource
+	knowledge     KnowledgeLibrarySearchSource
 	runtimeID     string
 	principal     func(context.Context) (principalmodel.Principal, bool)
+}
+
+// KnowledgeLibrarySearchSource is the library-aware retrieval port prepared
+// by the independent Knowledge owner. Project HTTP never reaches through Agent.
+type KnowledgeLibrarySearchSource interface {
+	knowledgecontract.Knowledge
+	SearchLibraryKnowledge(context.Context, string, string, knowledgesdk.Authority) (knowledgesdk.Result, error)
 }
 
 func newProjectEngine(
@@ -41,7 +49,7 @@ func newProjectEngine(
 	accountReads integrationsdk.ConnectionAccountReads,
 	accountWrites integrationsdk.ConnectionAccountWrites,
 	identityUsers identitysdk.Projection,
-	knowledge agentsdk.ConversationLibraryKnowledgeSource,
+	knowledge KnowledgeLibrarySearchSource,
 	runtimeID string,
 	principal func(context.Context) (principalmodel.Principal, bool),
 ) runtimeengine.Engine {
@@ -60,7 +68,7 @@ func (e *projectEngine) SearchKnowledgeLibrary(ctx context.Context, libraryID, q
 	if libraryID == "" || len(libraryID) > 96 || query == "" || len([]rune(query)) > 4096 {
 		return runtimeengine.KnowledgeSearchResult{}, runtimeengine.NewError(runtimeengine.ErrorBadRequest, "backend.knowledge.search_request_invalid", nil, nil)
 	}
-	authority := agentsdk.ConversationAuthority{
+	authority := knowledgesdk.Authority{
 		Known: true, RuntimeID: e.runtimeID, WorkspaceID: principal.WorkspaceID,
 		UserID: principal.UserID, RoleKey: principal.RoleKey,
 	}
@@ -88,9 +96,9 @@ func (e *projectEngine) SearchKnowledgeLibrary(ctx context.Context, libraryID, q
 
 func projectKnowledgeSearchError(code string, err error) error {
 	kind := runtimeengine.ErrorUnavailable
-	var agentError *agentsdk.Error
-	if errors.As(err, &agentError) {
-		switch agentError.Class {
+	var knowledgeError *knowledgesdk.Error
+	if errors.As(err, &knowledgeError) {
+		switch knowledgeError.Class {
 		case "bad_request":
 			kind = runtimeengine.ErrorBadRequest
 		case "forbidden", "not_found":
