@@ -126,7 +126,9 @@ func inspectPostgresTable(ctx context.Context, db *sql.DB, schema, name string) 
 	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+relation).Scan(&table.Rows); err != nil {
 		return TableInventory{}, err
 	}
-	_ = db.QueryRowContext(ctx, `SELECT pg_total_relation_size($1::regclass)`, schema+"."+name).Scan(&table.EstimatedBytes)
+	if err := db.QueryRowContext(ctx, `SELECT pg_total_relation_size($1::regclass)`, schema+"."+name).Scan(&table.EstimatedBytes); err != nil {
+		return TableInventory{}, fmt.Errorf("inventory PostgreSQL relation size: %w", err)
+	}
 	columns, err := db.QueryContext(ctx, `SELECT column_name, data_type, is_nullable, COALESCE(column_default, '') FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position`, schema, name)
 	if err != nil {
 		return TableInventory{}, err

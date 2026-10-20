@@ -3,6 +3,7 @@ package lifecyclemodule
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
@@ -33,17 +34,20 @@ func (e OwnerExecutor) archiveCandidate(ctx context.Context, job lifecyclemodel.
 	if err != nil {
 		return false, err
 	}
-	columns, _ := rows.Columns()
+	columns, err := rows.Columns()
+	if err != nil {
+		return false, errors.Join(err, rows.Close())
+	}
 	if !rows.Next() {
-		err := rows.Err()
-		_ = rows.Close()
-		return false, err
+		return false, errors.Join(rows.Err(), rows.Close())
 	}
 	values, pointers := make([]any, len(columns)), make([]any, len(columns))
 	for index := range values {
 		pointers[index] = &values[index]
 	}
-	_ = rows.Scan(pointers...)
+	if err := rows.Scan(pointers...); err != nil {
+		return false, errors.Join(err, rows.Close())
+	}
 	if err := rows.Close(); err != nil {
 		return false, err
 	}
@@ -55,7 +59,10 @@ func (e OwnerExecutor) archiveCandidate(ctx context.Context, job lifecyclemodel.
 			payload[column] = values[index]
 		}
 	}
-	raw, _ := json.Marshal(payload)
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return false, err
+	}
 	return e.archivePayload(ctx, job, policy, spec.table, resourceID, raw)
 }
 

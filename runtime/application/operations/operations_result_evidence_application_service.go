@@ -61,7 +61,10 @@ func (s *OperationsApplicationService) prepareResultEvidence(ctx context.Context
 		Schema: operationsmodel.OperationsResultArtifactSchemaV1, ArtifactID: reference.ID,
 		ContentSHA256: reference.ContentSHA256, SizeBytes: reference.SizeBytes,
 	}}
-	receipt.Result, _ = json.Marshal(pointer)
+	receipt.Result, err = json.Marshal(pointer)
+	if err != nil {
+		return operationsmodel.OperationsReceipt{}, apperror.New(apperror.KindInternal, "backend.operations.result_artifact_pointer_invalid", err, nil)
+	}
 	receipt.Evidence = appendUniqueOperationsEvidence(receipt.Evidence, "artifact:"+reference.ID)
 	return receipt, nil
 }

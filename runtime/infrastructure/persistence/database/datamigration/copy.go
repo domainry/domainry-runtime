@@ -258,7 +258,10 @@ func (c Copier) copyBatch(ctx context.Context, tablePlan TablePlan, checkpoint T
 			return 0, checkpoint, fmt.Errorf("checkpoint key %s is missing from table %s", key, tablePlan.Name)
 		}
 		keyValue := converted[keyIndex]
-		checkpoint.LastKey, _ = json.Marshal(keyValue)
+		checkpoint.LastKey, err = json.Marshal(keyValue)
+		if err != nil {
+			return 0, checkpoint, fmt.Errorf("encode checkpoint key for table %s: %w", tablePlan.Name, err)
+		}
 		checkpoint.Digest = rollDigest(checkpoint.Digest, canonicalRow(converted))
 		checkpoint.Processed++
 		processed++

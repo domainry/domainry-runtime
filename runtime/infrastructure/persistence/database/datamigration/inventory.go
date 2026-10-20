@@ -33,10 +33,13 @@ func Inspect(ctx context.Context, db *sql.DB, engine Engine, schema string) (Inv
 func inspectSQLite(ctx context.Context, db *sql.DB) (Inventory, error) {
 	result := Inventory{Engine: EngineSQLite, CapturedAt: time.Now().UTC()}
 	var pageCount, pageSize int64
-	if err := db.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err == nil {
-		_ = db.QueryRowContext(ctx, "PRAGMA page_size").Scan(&pageSize)
-		result.DatabaseBytes = pageCount * pageSize
+	if err := db.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err != nil {
+		return Inventory{}, fmt.Errorf("inventory SQLite page count: %w", err)
 	}
+	if err := db.QueryRowContext(ctx, "PRAGMA page_size").Scan(&pageSize); err != nil {
+		return Inventory{}, fmt.Errorf("inventory SQLite page size: %w", err)
+	}
+	result.DatabaseBytes = pageCount * pageSize
 	rows, err := db.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
 	if err != nil {
 		return Inventory{}, fmt.Errorf("inventory SQLite tables: %w", err)

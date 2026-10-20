@@ -7,6 +7,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -205,9 +206,7 @@ func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Co
 			} else {
 				continued, runErr = s.processEngine.RunWithContext(workCtx, process, nodeIDs, nil, executionPrincipal)
 			}
-			if heartbeatErr := stopHeartbeat(); runErr == nil && heartbeatErr != nil {
-				return workflowmodel.WorkflowProcessResult{}, internalError("workflow continuation lease lost", heartbeatErr)
-			}
+			heartbeatErr := stopHeartbeat()
 			claimed.Attempt = nextAttempt
 			claimed.UpdatedAt = s.worker.Clock.Now().Format(time.RFC3339)
 			claimed.Result = workflowpolicy.WorkflowCloneMap(claimed.Result)
@@ -217,7 +216,13 @@ func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Co
 					return workflowmodel.WorkflowProcessResult{}, internalError("persist workflow continuation failure", err)
 				}
 				processed = append(processed, claimed)
+				if heartbeatErr != nil {
+					return workflowmodel.WorkflowProcessResult{Processed: len(processed), Executions: processed}, errors.Join(runErr, internalError("workflow continuation lease lost", heartbeatErr))
+				}
 				continue
+			}
+			if heartbeatErr != nil {
+				return workflowmodel.WorkflowProcessResult{}, internalError("workflow continuation lease lost", heartbeatErr)
 			}
 			claimed.Status, claimed.Message, claimed.LastError, claimed.NextRunAt = continued.Status, "workflow.message.continuationCompleted", "", ""
 			claimed.NodeID = ""
@@ -236,7 +241,7 @@ func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Co
 		workCtx, stopHeartbeat := s.workflowExecutionHeartbeat(ctx, claimed)
 		executionPrincipal, principalErr := s.workflowTriggerInitiatorPrincipal(workCtx, previous, principal)
 		if principalErr != nil {
-			_ = stopHeartbeat()
+			heartbeatErr := stopHeartbeat()
 			claimed.Attempt = nextAttempt
 			claimed.UpdatedAt = s.worker.Clock.Now().Format(time.RFC3339)
 			workflowpolicy.WorkflowMarkFailed(&claimed, workflow, principalErr, s.worker.Clock.Now())
@@ -244,11 +249,19 @@ func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Co
 				return workflowmodel.WorkflowProcessResult{}, internalError("persist workflow initiator reauthorization failure", err)
 			}
 			processed = append(processed, claimed)
+			if heartbeatErr != nil {
+				return workflowmodel.WorkflowProcessResult{Processed: len(processed), Executions: processed}, errors.Join(principalErr, internalError("workflow execution lease lost", heartbeatErr))
+			}
 			continue
 		}
 		execution, err := s.executeWorkflowAttempt(workCtx, workflow, payload, executionPrincipal, "worker:"+previous.ID, nextAttempt, true)
-		if heartbeatErr := stopHeartbeat(); err == nil && heartbeatErr != nil {
-			return workflowmodel.WorkflowProcessResult{}, internalError("workflow execution lease lost", heartbeatErr)
+		if heartbeatErr := stopHeartbeat(); heartbeatErr != nil {
+			heartbeatFailure := internalError("workflow execution lease lost", heartbeatErr)
+			if err != nil {
+				err = errors.Join(err, heartbeatFailure)
+			} else {
+				return workflowmodel.WorkflowProcessResult{}, heartbeatFailure
+			}
 		}
 		if err != nil {
 			return workflowmodel.WorkflowProcessResult{Processed: len(processed), Executions: processed}, err

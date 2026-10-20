@@ -71,7 +71,7 @@ func TestInventoryClosedSQLiteDatabaseFails(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Inspect(t.Context(), db, EngineSQLite, ""); err == nil || !strings.Contains(err.Error(), "inventory SQLite tables") {
+	if _, err := Inspect(t.Context(), db, EngineSQLite, ""); err == nil || !strings.Contains(err.Error(), "inventory SQLite page count") {
 		t.Fatalf("closed database error = %v", err)
 	}
 }
