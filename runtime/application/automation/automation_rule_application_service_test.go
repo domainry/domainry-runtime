@@ -40,8 +40,8 @@ func TestRuleServiceTriggerTargetStopsBeforeContextInitialization(t *testing.T) 
 	if err != nil || initialized || len(trace.NodeTraces) != 1 || trace.NodeTraces[0].NodeID != "trigger" {
 		t.Fatalf("unexpected target result trace=%#v initialized=%v err=%v", trace, initialized, err)
 	}
-	if len(repository.inserted) != 1 || repository.inserted[0].RuleKey != "notify" {
-		t.Fatalf("execution evidence missing: %#v", repository.inserted)
+	if len(repository.inserted) != 0 {
+		t.Fatalf("read-only simulation persisted execution evidence: %#v", repository.inserted)
 	}
 }
 

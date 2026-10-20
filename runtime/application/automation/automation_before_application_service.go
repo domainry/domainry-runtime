@@ -116,6 +116,7 @@ func executeBeforeRule(ctx context.Context, rule automationmodel.AutomationRuleS
 	trace := automationprojection.AutomationRuleTrace{RuleKey: rule.Key, Status: "succeeded", Matched: true}
 	render := &automationmodel.AutomationRenderContext{
 		Payload: candidate,
+		Record:  recordcontract.RecordCloneData(candidate),
 		Input:   recordcontract.RecordCloneData(input),
 		Before:  recordcontract.RecordCloneData(before),
 		Actor:   map[string]any{"user_id": principal.UserID, "role": principal.RoleKey},

@@ -95,6 +95,7 @@ func (s *AutomationApplicationService) ExecuteOutboxMessage(ctx context.Context,
 	if err != nil {
 		return automationError(apperror.KindForbidden, "backend.workspace_scope_required", err)
 	}
+	ctx = requestcontext.WithWorkspaceID(ctx, workspaceID.String())
 	event := automationdomain.LifecycleEventFromPayload(message.Payload)
 	rule := event.Rule
 	if strings.TrimSpace(rule.Key) == "" || rule.Key != event.RuleKey || !rule.Enabled || rule.Trigger.Phase != "after" {

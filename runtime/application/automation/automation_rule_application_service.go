@@ -96,6 +96,9 @@ func (s *AutomationRuleApplicationService) Execute(ctx context.Context, request 
 		recordID = request.Record.ID
 	}
 	defer func() {
+		if simulation {
+			return
+		}
 		if s.executionRepository == nil && request.PersistExecution == nil {
 			return
 		}
@@ -215,6 +218,9 @@ func (s *AutomationRuleApplicationService) Execute(ctx context.Context, request 
 }
 
 func (s *AutomationRuleApplicationService) appendAudit(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, message string, before, after, metadata map[string]any) {
+	if simulation, _ := ctx.Value(simulationEnabledKey).(bool); simulation {
+		return
+	}
 	if s.audit != nil {
 		s.audit(ctx, event, objectKey, recordID, principal, message, before, after, metadata)
 	}

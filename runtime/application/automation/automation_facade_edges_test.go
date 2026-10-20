@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	requestcontext "github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
@@ -225,6 +226,31 @@ func TestAutomationFacadeRejectsEffectfulBeforeInstruction(t *testing.T) {
 	}
 }
 
+func TestAutomationSimulationUsesInputAsSyntheticRecordWithoutPersistence(t *testing.T) {
+	rule := automationmodel.AutomationRuleSchema{
+		Key: "after", ObjectKey: "order", Enabled: true,
+		Trigger:    automationmodel.AutomationTriggerSchema{Phase: "after", Operation: "update"},
+		Conditions: automationmodel.AutomationConditionGroup{Clauses: []automationmodel.AutomationConditionClause{{Reference: "$record.status", Operator: "eq", Value: "ready"}}},
+	}
+	repository := &executionRepositoryStub{}
+	auditCount := 0
+	service := NewAutomationApplicationService(AutomationApplicationDependencies{
+		Rules:               &automationFacadeRegistry{rules: map[string]automationmodel.AutomationRuleSchema{rule.Key: rule}},
+		ExecutionRepository: repository,
+		ValidateRule:        func(context.Context, automationmodel.AutomationRuleSchema) error { return nil },
+		Audit: func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) {
+			auditCount++
+		},
+	})
+	result, err := service.SimulateAutomationRule(t.Context(), rule.Key, automationcontract.AutomationSimulationRequest{Input: map[string]any{"status": "ready"}}, automationFacadePrincipal())
+	if err != nil || !result.Trace.Matched || !result.NodePassed {
+		t.Fatalf("simulation=%#v err=%v", result, err)
+	}
+	if len(repository.inserted) != 0 || auditCount != 0 {
+		t.Fatalf("read-only simulation persisted executions=%d audits=%d", len(repository.inserted), auditCount)
+	}
+}
+
 func TestAutomationFacadeExecuteOutboxValidatesScopeRuleAndExecutes(t *testing.T) {
 	afterRule := automationmodel.AutomationRuleSchema{Key: "after", ObjectKey: "order", Enabled: true, Trigger: automationmodel.AutomationTriggerSchema{Phase: "after", Operation: "update"}, Execution: automationmodel.AutomationExecutionPolicy{ResultNotification: "all"}}
 	registry := &automationFacadeRegistry{rules: map[string]automationmodel.AutomationRuleSchema{"after": afterRule, "disabled": {Key: "disabled", Enabled: false, Trigger: automationmodel.AutomationTriggerSchema{Phase: "after"}}, "before": {Key: "before", Enabled: true, Trigger: automationmodel.AutomationTriggerSchema{Phase: "before"}}}}
@@ -336,6 +362,29 @@ func TestAutomationAfterOutboxRevalidatesIdentityAndRejectsLoopsAndDepth(t *test
 	}
 	if err := service.ExecuteOutboxMessage(t.Context(), message(automationmodel.AutomationLifecycleEvent{IdentityPolicy: "frozen_admin"})); apperror.CodeOf(err) != "backend.automation.identity_policy_invalid" {
 		t.Fatalf("identity policy err=%v", err)
+	}
+}
+
+func TestAutomationAfterOutboxScopesIdentityResolutionToMessageWorkspace(t *testing.T) {
+	rule := automationmodel.AutomationRuleSchema{Key: "after", ObjectKey: "order", Enabled: true, Trigger: automationmodel.AutomationTriggerSchema{Phase: "after", Operation: "update"}}
+	registry := &automationFacadeRegistry{rules: map[string]automationmodel.AutomationRuleSchema{rule.Key: rule}}
+	resolvedWorkspace := ""
+	service := NewAutomationApplicationService(AutomationApplicationDependencies{
+		Rules: registry,
+		Principal: func(ctx context.Context, userID, roleKey, _ string) principalmodel.Principal {
+			resolvedWorkspace = requestcontext.WorkspaceID(ctx)
+			return accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: resolvedWorkspace == "workspace-a", UserID: userID}}, accessfixture.Bundle{Key: roleKey})
+		},
+	})
+	event := automationmodel.AutomationLifecycleEvent{
+		RuleKey: rule.Key, Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1", Data: map[string]any{}},
+		ActorUserID: "operator-a", ActorRoleKey: "operator", IdentityPolicy: "revalidate_initiator",
+	}
+	if err := service.ExecuteOutboxMessage(t.Context(), publicationmodel.Message{WorkspaceID: "workspace-a", Payload: automationbusiness.LifecycleEventPayload(event)}); err != nil {
+		t.Fatal(err)
+	}
+	if resolvedWorkspace != "workspace-a" {
+		t.Fatalf("resolved workspace=%q, want workspace-a", resolvedWorkspace)
 	}
 }
 

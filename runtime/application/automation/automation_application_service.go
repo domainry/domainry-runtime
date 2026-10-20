@@ -273,6 +273,7 @@ func (s *AutomationApplicationService) executeRuleWithPersistence(execCtx contex
 		Initialize: func() {
 			actionContext = automationmodel.AutomationRenderContext{
 				Payload: candidate,
+				Record:  recordvalidation.RecordCloneData(candidate),
 				Input:   recordvalidation.RecordCloneData(input),
 				Before:  recordvalidation.RecordCloneData(before),
 				Actor:   map[string]any{"user_id": principal.UserID, "role": principal.RoleKey},
