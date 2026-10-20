@@ -36,16 +36,13 @@ import (
 	agentmodule "github.com/domainry/domainry-agent/module"
 	"github.com/domainry/domainry-connector-sdk"
 	connectorscatalog "github.com/domainry/domainry-connectors/catalog"
-	knowledgehttpapi "github.com/domainry/domainry-connectors/providers/knowledge_base/http_api"
 	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	identitymodule "github.com/domainry/domainry-identity/module"
 	integrationmodule "github.com/domainry/domainry-integration/module"
-	knowledgemodule "github.com/domainry/domainry-knowledge/module"
 	monitoringmodule "github.com/domainry/domainry-monitoring/module"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	reportmodule "github.com/domainry/domainry-report/module"
 	schedulermodule "github.com/domainry/domainry-scheduler/module"
-	todomodule "github.com/domainry/domainry-todo/module"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimehost"
 )
@@ -75,11 +72,7 @@ func newIntegrationFactory() *integrationmodule.Factory {
 }
 
 func newAgentFactory() *agentmodule.Factory {
-	options := agentmodule.OptionsFromEnvironment()
-	options.KnowledgeFactory = knowledgemodule.NewFactory()
-	options.KnowledgeProviderFactory = knowledgemodule.NewProviderFactory(knowledgehttpapi.New)
-	options.TodoFactory = todomodule.NewFactory()
-	return agentmodule.NewFactory(options)
+	return agentmodule.NewFactory(agentmodule.OptionsFromEnvironment())
 }
 `)
 	if err := os.WriteFile(filepath.Join(compositionDir, "extensions.gen.go"), compositionSource, 0o600); err != nil {
