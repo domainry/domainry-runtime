@@ -5,27 +5,32 @@ import (
 
 	agent "github.com/domainry/domainry-agent-sdk"
 	identity "github.com/domainry/domainry-identity-sdk"
+	knowledge "github.com/domainry/domainry-knowledge-sdk"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
 func TestConversationKnowledgeAuthorizationUsesCurrentActorAndLibraryOwnerFacts(t *testing.T) {
 	host, resolver, _, actor := newConversationBusinessFixture(t)
-	permission := agent.KnowledgeDocumentPermission("documents_download")
+	action, found, err := knowledge.AuthorizationAction(knowledge.ActionDocumentsDownload)
+	if err != nil || !found || action.Permission == nil {
+		t.Fatal("Knowledge download action missing", err)
+	}
+	permission := action.Permission
 	resolver.principal = accessfixture.Attach(resolver.principal, accessfixture.Bundle{Key: actor.RoleKey,
 		Permissions: []string{permission.Key}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: permission.ResourceKey, Action: permission.OperationKey, Scope: identity.DataScopeOwner, Read: true}}})
 	library := agent.KnowledgeLibrary{ID: "lib_source", Kind: "shared", Role: "reader", OwnerUserID: actor.UserID}
-	if err := host.AuthorizeKnowledgeLibrary(t.Context(), "documents_download", library, actor); err != nil {
+	if err := host.AuthorizeKnowledgeLibrary(t.Context(), knowledge.ActionDocumentsDownload, library, actor); err != nil {
 		t.Fatal("independent file read policy required execution authority", err)
 	}
 	if resolver.request.SubjectID != identity.SubjectID(actor.UserID) || resolver.request.RoleKey != actor.RoleKey || resolver.workspace != actor.WorkspaceID {
 		t.Fatal("library authorization lost exact current actor", resolver.request)
 	}
 	library.OwnerUserID = "another_source_owner"
-	if err := host.AuthorizeKnowledgeLibrary(t.Context(), "documents_download", library, actor); err == nil {
+	if err := host.AuthorizeKnowledgeLibrary(t.Context(), knowledge.ActionDocumentsDownload, library, actor); err == nil {
 		t.Fatal("owner file policy evaluated with reader as resource owner")
 	}
 	library.OwnerUserID = actor.UserID
-	if err := host.AuthorizeKnowledgeLibrary(t.Context(), "libraries_get", library, actor); err == nil {
+	if err := host.AuthorizeKnowledgeLibrary(t.Context(), knowledge.ActionLibrariesGet, library, actor); err == nil {
 		t.Fatal("download permission granted unrelated library metadata")
 	}
 	if err := host.ValidateKnowledgeLibraryMember(t.Context(), actor.UserID, actor); err != nil {
@@ -35,11 +40,41 @@ func TestConversationKnowledgeAuthorizationUsesCurrentActorAndLibraryOwnerFacts(
 		t.Fatal("unresolved member admitted")
 	}
 	resolver.revoke()
-	if err := host.AuthorizeKnowledgeLibrary(t.Context(), "documents_download", library, actor); err == nil {
+	if err := host.AuthorizeKnowledgeLibrary(t.Context(), knowledge.ActionDocumentsDownload, library, actor); err == nil {
 		t.Fatal("saved download policy survived current actor withdrawal")
 	}
 	if err := host.ValidateKnowledgeLibraryMember(t.Context(), actor.UserID, actor); err == nil {
 		t.Fatal("inactive actor admitted member")
+	}
+}
+
+func TestConversationKnowledgeAuthorizationResolvesLatestOwnerActionsAndRejectsAliases(t *testing.T) {
+	actions, err := knowledge.AuthorizationActions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range actions {
+		t.Run(action.Key, func(t *testing.T) {
+			host, resolver, _, actor := newConversationBusinessFixture(t)
+			library := agent.KnowledgeLibrary{ID: "library", Kind: "shared", Role: "manager", OwnerUserID: actor.UserID}
+			if action.Permission == nil {
+				if err := host.AuthorizeKnowledgeLibrary(t.Context(), action.Key, library, actor); err == nil {
+					t.Fatal("worker Action admitted as user permission")
+				}
+				return
+			}
+			permission := action.Permission
+			resolver.principal = accessfixture.Attach(resolver.principal, accessfixture.Bundle{Key: actor.RoleKey, Permissions: []string{permission.Key}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: permission.ResourceKey, Action: permission.OperationKey, Scope: identity.DataScopeAll, Read: true, Write: true}}})
+			if err := host.AuthorizeKnowledgeLibrary(t.Context(), action.Key, library, actor); err != nil {
+				t.Fatal("current source-owned action not supported", err)
+			}
+		})
+	}
+	host, _, _, actor := newConversationBusinessFixture(t)
+	for _, unknown := range []string{"documents_download", "libraries_get", "knowledge.documents.unknown", "customer.read"} {
+		if err := host.AuthorizeKnowledgeLibrary(t.Context(), unknown, agent.KnowledgeLibrary{}, actor); err == nil {
+			t.Fatal("unknown or obsolete operation alias admitted", unknown)
+		}
 	}
 }
 

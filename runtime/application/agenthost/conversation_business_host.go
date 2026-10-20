@@ -11,6 +11,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
@@ -38,16 +39,18 @@ type ConversationBusinessRecords interface {
 // its row scope, field policies and masking. It never obtains a Task credential
 // or an internal Action/system principal on behalf of a conversation.
 type ConversationBusinessHost struct {
-	runtimeID   string
-	application identitysdk.ApplicationScope
-	principals  identitysdk.PrincipalResolver
-	schema      ConversationBusinessSchema
-	records     ConversationBusinessRecords
-	source      string
-	evidenceKey []byte
-	actions     ConversationBusinessActions
-	workflows   ConversationBusinessWorkflows
-	reports     ConversationBusinessReports
+	runtimeID    string
+	application  identitysdk.ApplicationScope
+	principals   identitysdk.PrincipalResolver
+	schema       ConversationBusinessSchema
+	records      ConversationBusinessRecords
+	source       string
+	evidenceKey  []byte
+	actions      ConversationBusinessActions
+	workflows    ConversationBusinessWorkflows
+	reports      ConversationBusinessReports
+	projectionMu sync.Mutex
+	projections  map[string]*businessPolicyProjection
 }
 
 type ConversationBusinessHostOption func(*ConversationBusinessHost) error
@@ -251,7 +254,10 @@ var _ agentsdk.ConversationAttachmentPermissionResolver = (*ConversationBusiness
 func (h *ConversationBusinessHost) BusinessSourceIdentity() string { return h.source }
 
 func (h *ConversationBusinessHost) objects(ctx context.Context, p principalmodel.Principal) []definitionmodel.ObjectSchema {
-	snapshot := h.schema.ForPrincipal(ctx, p)
+	return h.businessProjection(ctx, p).objects
+}
+
+func readableBusinessObjects(snapshot appschemamodel.ApplicationSchemaSnapshot, p principalmodel.Principal) []definitionmodel.ObjectSchema {
 	objects := make([]definitionmodel.ObjectSchema, 0, len(snapshot.Objects))
 	for _, object := range snapshot.Objects {
 		if !definitionmodel.EffectiveObjectCapabilities(object).Read || !recordpolicy.RecordAllowsObjectAction(p, object.Key, "read") {

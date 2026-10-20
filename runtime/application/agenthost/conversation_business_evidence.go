@@ -14,6 +14,7 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 )
@@ -33,18 +34,26 @@ func WithConversationBusinessEvidenceKey(key []byte) ConversationBusinessHostOpt
 }
 
 func (h *ConversationBusinessHost) businessPolicyDigest(ctx context.Context, p principalmodel.Principal) string {
+	return h.businessProjection(ctx, p).policyDigest
+}
+
+func businessPolicyDigest(p principalmodel.Principal, objects []definitionmodel.ObjectSchema) string {
 	bundle := *p.AccessBundle
 	// Resolver expiry and revision identify a resolution, not its effective
 	// policy. Current Identity is resolved on every check, including after a
 	// revoke/restore. All actual grants, subject scopes and rules remain bound.
 	bundle.AuthorizationRevision = ""
 	bundle.ExpiresAt = time.Time{}
-	return conversationBusinessDigest([]any{bundle, recordpolicy.RecordSDKEvaluationContext(p), h.schema.ForPrincipal(ctx, p).Objects})
+	return conversationBusinessDigest([]any{bundle, recordpolicy.RecordSDKEvaluationContext(p), objects})
 }
 
 // A historical read binds data visibility, rather than the rights to execute
 // its producing tool. Full current policy digests still guard each read call.
 func (h *ConversationBusinessHost) businessReadPolicyDigest(ctx context.Context, p principalmodel.Principal) string {
+	return h.businessProjection(ctx, p).readDigest
+}
+
+func businessReadPolicyDigest(p principalmodel.Principal, objects []definitionmodel.ObjectSchema) string {
 	bundle := *p.AccessBundle
 	bundle.AuthorizationRevision = ""
 	bundle.ExpiresAt = time.Time{}
@@ -80,7 +89,7 @@ func (h *ConversationBusinessHost) businessReadPolicyDigest(ctx context.Context,
 			bundle.Guardrails = append(bundle.Guardrails, guard)
 		}
 	}
-	return conversationBusinessDigest([]any{bundle, recordpolicy.RecordSDKEvaluationContext(p), h.objects(ctx, p)})
+	return conversationBusinessDigest([]any{bundle, recordpolicy.RecordSDKEvaluationContext(p), objects})
 }
 
 func (h *ConversationBusinessHost) businessSnapshotPolicy(ctx context.Context, p principalmodel.Principal, version string) string {

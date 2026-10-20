@@ -2,8 +2,11 @@ package runtimehost
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -463,7 +466,9 @@ func TestIntegrationRuntimeConnectorGatewayUsesAuthorizedKnowledgeDocumentServic
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 	content[0] = 'X'
-	if probe.uploadLibrary != "library-a" || probe.upload.ClientID != "meeting:meeting-a:hash" || string(probe.upload.Data) != "transcript" {
+	uploaded, readErr := io.ReadAll(probe.upload.Content)
+	digest := sha256.Sum256(uploaded)
+	if readErr != nil || probe.upload.Bytes != int64(len(uploaded)) || probe.upload.SHA256 != hex.EncodeToString(digest[:]) || probe.uploadLibrary != "library-a" || probe.upload.ClientID != "meeting:meeting-a:hash" || string(uploaded) != "transcript" {
 		t.Fatalf("upload library=%q upload=%+v", probe.uploadLibrary, probe.upload)
 	}
 	if probe.uploadSource != (agentsdk.KnowledgeDocumentSourceAccess{Namespace: agentsdk.KnowledgeDocumentSourceNamespaceRuntimeRecord, ResourceType: "meeting", ResourceID: "meeting-a"}) {

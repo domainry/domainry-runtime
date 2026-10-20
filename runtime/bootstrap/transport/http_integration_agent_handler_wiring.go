@@ -73,11 +73,10 @@ func BindAgentApplicationHost(dependencies AgentApplicationHostDependencies) err
 	if !ok || binder == nil {
 		return nil
 	}
-	if complete, err := agentAuthorizationProjectionComplete(dependencies.Binding); err != nil {
-		return err
-	} else if complete {
-		return nil
-	}
+	// Binding is source-owned and idempotent. Do not use the authorization
+	// manifest as a readiness probe: embedded Knowledge cannot project its HTTP
+	// Actions until this host binding has created the conversation service.
+	// Validate the complete manifest below, after BindApplicationHost succeeds.
 	if dependencies.Records == nil || dependencies.Principals == nil {
 		return fmt.Errorf("Agent application host dependencies are incomplete")
 	}
@@ -170,19 +169,6 @@ func connectionAccountSubjectForPrincipal(principal identitysdk.Principal, permi
 		return integrationsdk.ConnectionAccountSubject{}, fmt.Errorf("Integration connection account scope is denied")
 	}
 	return integrationsdk.ConnectionAccountSubject{WorkspaceID: workspaceID, UserID: userID, Access: access}, nil
-}
-
-func agentAuthorizationProjectionComplete(binding agentsdk.Binding) (bool, error) {
-	provider, hasAdapters := binding.(modulehttp.Provider)
-	actions, hasActions := binding.(actioncontract.Provider)
-	if !hasAdapters || !hasActions || provider == nil || actions == nil {
-		return false, nil
-	}
-	definitions, err := actions.AuthorizationActions()
-	if err != nil {
-		return false, fmt.Errorf("load Agent authorization manifest: %w", err)
-	}
-	return modulehttp.ValidateAuthorizationProjection(definitions, provider) == nil, nil
 }
 
 func validateAgentAuthorizationProjection(binding agentsdk.Binding) error {

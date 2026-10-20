@@ -3,6 +3,8 @@ package runtimehost
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -375,8 +377,11 @@ func (gateway integrationRuntimeConnectorGateway) UploadKnowledgeDocument(ctx co
 	if !ok {
 		return KnowledgeDocumentResult{}, &runtimeext.BusinessError{Code: "backend.knowledge.source_acl_unavailable", Message: "Knowledge source record authorization is unavailable"}
 	}
+	content := append([]byte(nil), request.Data...)
+	digest := sha256.Sum256(content)
 	document, err := sourceDocuments.UploadKnowledgeDocumentForSource(ctx, strings.TrimSpace(request.LibraryID), agentsdk.KnowledgeDocumentUpload{
-		ClientID: strings.TrimSpace(request.ClientID), Filename: strings.TrimSpace(request.Filename), Data: append([]byte(nil), request.Data...),
+		ClientID: strings.TrimSpace(request.ClientID), Filename: strings.TrimSpace(request.Filename),
+		Bytes: int64(len(content)), SHA256: hex.EncodeToString(digest[:]), Content: bytes.NewReader(content),
 	}, agentsdk.KnowledgeDocumentSourceAccess{
 		Namespace: agentsdk.KnowledgeDocumentSourceNamespaceRuntimeRecord, ResourceType: strings.TrimSpace(identity.ObjectKey), ResourceID: strings.TrimSpace(identity.RecordID),
 	}, authority)

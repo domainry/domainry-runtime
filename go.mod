@@ -7,12 +7,12 @@ toolchain go1.26.6
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/creack/pty v1.1.24
-	github.com/domainry/domainry-agent v0.1.66
-	github.com/domainry/domainry-agent-sdk v0.1.40
+	github.com/domainry/domainry-agent v0.1.67
+	github.com/domainry/domainry-agent-sdk v0.1.41
 	github.com/domainry/domainry-audit v0.1.31
 	github.com/domainry/domainry-audit-sdk v0.1.14
-	github.com/domainry/domainry-connector-sdk v0.1.8
-	github.com/domainry/domainry-connectors v0.1.12
+	github.com/domainry/domainry-connector-sdk v0.1.9
+	github.com/domainry/domainry-connectors v0.1.13
 	github.com/domainry/domainry-data-exchange v0.3.27
 	github.com/domainry/domainry-data-exchange-sdk v0.3.13
 	github.com/domainry/domainry-foundation v0.2.2
@@ -20,7 +20,8 @@ require (
 	github.com/domainry/domainry-identity-sdk v0.1.23
 	github.com/domainry/domainry-integration v0.1.41
 	github.com/domainry/domainry-integration-sdk v0.1.18
-	github.com/domainry/domainry-knowledge v0.1.32
+	github.com/domainry/domainry-knowledge v0.1.34
+	github.com/domainry/domainry-knowledge-sdk v0.1.15
 	github.com/domainry/domainry-lifecycle v0.1.28
 	github.com/domainry/domainry-lifecycle-sdk v0.1.23
 	github.com/domainry/domainry-metadata v0.1.23
@@ -76,7 +77,6 @@ require (
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/crewjam/saml v0.5.1 // indirect
-	github.com/domainry/domainry-knowledge-sdk v0.1.14 // indirect
 	github.com/domainry/domainry-todo-sdk v0.1.10 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect

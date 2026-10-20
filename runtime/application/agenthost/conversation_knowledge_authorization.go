@@ -5,21 +5,26 @@ import (
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	"github.com/domainry/domainry-identity-sdk/authorization/evaluator"
+	knowledgesdk "github.com/domainry/domainry-knowledge-sdk"
 )
 
 // Library membership and document state remain Knowledge-owned. Runtime
 // evaluates their loaded facts against the exact actor's current Identity.
 func (h *ConversationBusinessHost) AuthorizeKnowledgeLibrary(ctx context.Context, operation string, library agentsdk.KnowledgeLibrary, authority agentsdk.ConversationAuthority) error {
-	permission := agentsdk.KnowledgeLibraryPermission(operation)
-	if permission == nil {
-		permission = agentsdk.KnowledgeDocumentPermission(operation)
+	action, found, err := knowledgesdk.AuthorizationAction(operation)
+	if err != nil {
+		return conversationBusinessReadError(err)
 	}
-	if permission == nil {
+	// Use Knowledge's current Action/Permission projection, not Agent's old
+	// operation aliases. Signed workers do not acquire user permission here.
+	if !found || action.Permission == nil || action.Authorization.Strategy != actioncontract.AuthorizationAuthenticated {
 		return &agentsdk.Error{Class: "forbidden", Code: "agent.conversation.library_access_denied"}
 	}
+	permission := action.Permission
 	principal, err := h.principal(ctx, authority)
 	if err != nil {
 		return err
