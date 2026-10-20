@@ -2,12 +2,9 @@ package runtime
 
 import (
 	"net/http"
-	"time"
 
-	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
-	"go.uber.org/zap"
 )
 
 // These coalesced, process-local hints never own work. Integration still owns
@@ -64,11 +61,9 @@ func (a integrationWakeupHTTPAdapter) Handler() http.Handler {
 			continue
 		}
 		mux.Handle(route.Pattern(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			started := time.Now()
 			response := &integrationWakeupResponse{ResponseWriter: w}
 			next.ServeHTTP(response, r)
 			if response.status >= 200 && response.status < 300 {
-				logging.FromContext(r.Context()).Info("Integration ingress committed; waking queues", zap.String("action_key", key), zap.Int64("started_at_ms", started.UnixMilli()), zap.Int64("duration_ms", time.Since(started).Milliseconds()))
 				if key == integrationsdk.ActionIntegrationRoutedWebhooksIngest {
 					a.runtime.signalIntegrationQueue("integration_provider")
 				}

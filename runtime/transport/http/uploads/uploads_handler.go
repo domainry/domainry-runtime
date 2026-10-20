@@ -304,7 +304,7 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 	}
 	fileIdentifier := filepath.Base(strings.TrimSpace(r.PathValue("fileID")))
 	if fileIdentifier == "." || strings.Contains(fileIdentifier, "..") {
-		http.NotFound(w, r)
+		h.writeError(w, r, http.StatusNotFound, "backend.upload.not_found")
 		return
 	}
 	objectKey := strings.TrimSpace(r.URL.Query().Get("object_key"))
@@ -348,7 +348,7 @@ func (h *UploadsHandler) serveUploadedFile(w http.ResponseWriter, r *http.Reques
 			}
 			storageFilename = filepath.Base(strings.TrimSpace(evidence.Filename))
 			if storageFilename == "." || strings.Contains(storageFilename, "..") {
-				http.NotFound(w, r)
+				h.writeError(w, r, http.StatusNotFound, "backend.upload.not_found")
 				return
 			}
 		case errors.Is(err, sql.ErrNoRows):

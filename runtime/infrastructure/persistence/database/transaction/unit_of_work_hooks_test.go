@@ -9,14 +9,22 @@ import (
 	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestSQLUnitOfWorkRunsOnlyCommittedRecoverableAfterCommitHooks(t *testing.T) {
+	core, observed := observer.New(zap.WarnLevel)
+	previous := zap.L()
+	zap.ReplaceGlobals(zap.New(core))
+	t.Cleanup(func() { zap.ReplaceGlobals(previous) })
 	database := openUnitOfWorkDatabase(t)
 	unit := newTestSQLUnitOfWork(database)
 	visibleAfterCommit := false
 	wantHookError := errors.New("local wakeup unavailable")
-	err := unit.WithinTransaction(requestcontext.WithRequestID(t.Context(), "correlation-hook"), func(ctx context.Context, ports testTransactionPorts) error {
+	ctx := requestcontext.WithRequestID(t.Context(), "request-hook")
+	ctx = requestcontext.WithCorrelationID(ctx, "correlation-hook")
+	err := unit.WithinTransaction(ctx, func(ctx context.Context, ports testTransactionPorts) error {
 		if err := ports.Insert(ctx, "committed-hook"); err != nil {
 			return err
 		}
@@ -41,6 +49,10 @@ func TestSQLUnitOfWorkRunsOnlyCommittedRecoverableAfterCommitHooks(t *testing.T)
 	if len(failures) != 1 || failures[0].Name != "invalidate local cache" || failures[0].CorrelationID != "correlation-hook" || !errors.Is(failures[0].Cause, wantHookError) {
 		t.Fatalf("after-commit failures=%#v", failures)
 	}
+	entries := observed.FilterMessage("after_commit_hook_failed").All()
+	if len(entries) != 1 || entries[0].ContextMap()["hook_name"] != "invalidate local cache" || entries[0].ContextMap()["correlation_id"] != "correlation-hook" {
+		t.Fatalf("after-commit log=%v", entries)
+	}
 }
 
 func TestSQLUnitOfWorkDiscardsRolledBackAttemptHooksAndRejectsUnrecoverableHooks(t *testing.T) {
@@ -50,7 +62,7 @@ func TestSQLUnitOfWorkDiscardsRolledBackAttemptHooksAndRejectsUnrecoverableHooks
 		return testTransactionPort{tx: tx}
 	})
 	runs, attempts := 0, 0
-	err := unit.WithinTransaction(requestcontext.WithRequestID(t.Context(), "correlation-hook"), func(ctx context.Context, _ testTransactionPorts) error {
+	err := unit.WithinTransaction(requestcontext.WithCorrelationID(t.Context(), "correlation-hook"), func(ctx context.Context, _ testTransactionPorts) error {
 		attempts++
 		attempt := attempts
 		if err := transactioncontract.RegisterAfterCommit(ctx, transactioncontract.AfterCommitHook{
@@ -148,7 +160,7 @@ func TestCriticalTransactionChainsCoverEveryFailureWindow(t *testing.T) {
 				database := openUnitOfWorkDatabase(t)
 				unit := newTestSQLUnitOfWork(database)
 				hookFailure := errors.New("injected after commit")
-				err := unit.WithinTransaction(requestcontext.WithRequestID(t.Context(), "failure-window:"+chain), func(ctx context.Context, ports testTransactionPorts) error {
+				err := unit.WithinTransaction(requestcontext.WithCorrelationID(t.Context(), "failure-window:"+chain), func(ctx context.Context, ports testTransactionPorts) error {
 					if err := ports.Insert(ctx, chain+":first"); err != nil {
 						return err
 					}
@@ -197,7 +209,7 @@ func TestSQLUnitOfWorkRejectsRetryPolicyAboveHardAttemptLimit(t *testing.T) {
 		return testTransactionPort{tx: tx}
 	})
 	called := false
-	err := unit.WithinTransaction(requestcontext.WithRequestID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
+	err := unit.WithinTransaction(requestcontext.WithCorrelationID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
 		called = true
 		return nil
 	})

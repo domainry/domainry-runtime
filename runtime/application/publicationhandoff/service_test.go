@@ -19,6 +19,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 type publicationRepositoryProbe struct {
@@ -219,6 +221,10 @@ func TestPublicationWorkerMetricsUseOwnerIdentity(t *testing.T) {
 }
 
 func TestPublicationWorkerRecordsRetryAttemptByOwner(t *testing.T) {
+	core, observed := observer.New(zap.WarnLevel)
+	previous := zap.L()
+	zap.ReplaceGlobals(zap.New(core))
+	t.Cleanup(func() { zap.ReplaceGlobals(previous) })
 	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: publicationmodel.Message{ID: "message-retry-metrics", WorkspaceID: "workspace-primary", ConnectorKey: "email", Operation: "send", Payload: map[string]any{}, Status: "queued"}}}
 	service := NewPublicationHandoffApplicationService(Dependencies{Repository: &repository.publicationRepositoryProbe, WorkerRepository: repository, Delivery: &deliveryProbe{err: errors.New("provider unavailable")}})
 	if _, err := service.process(t.Context(), Locator{WorkspaceID: "workspace-primary", MessageID: "message-retry-metrics"}); err == nil {
@@ -231,9 +237,17 @@ func TestPublicationWorkerRecordsRetryAttemptByOwner(t *testing.T) {
 	if !strings.Contains(metrics, `domainry_runtime_worker_owner_outcomes_total{owner="runtime_publication_outbox",outcome="retry"}`) {
 		t.Fatalf("publication retry metric missing:\n%s", metrics)
 	}
+	entries := observed.FilterMessage("runtime_publication_retry_scheduled").All()
+	if len(entries) != 1 || entries[0].ContextMap()["task_id"] != "message-retry-metrics" || entries[0].ContextMap()["outcome"] != "retry" {
+		t.Fatalf("retry log=%v", entries)
+	}
 }
 
 func TestPublicationWorkerMovesTenthFailureToDeadLetter(t *testing.T) {
+	core, observed := observer.New(zap.WarnLevel)
+	previous := zap.L()
+	zap.ReplaceGlobals(zap.New(core))
+	t.Cleanup(func() { zap.ReplaceGlobals(previous) })
 	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: publicationmodel.Message{
 		ID: "message-dead-letter", WorkspaceID: "workspace-primary", ConnectorKey: "__automation__", Operation: "rule",
 		Payload: map[string]any{}, Status: "queued", AttemptCount: maxHandoffAttempts,
@@ -252,5 +266,9 @@ func TestPublicationWorkerMovesTenthFailureToDeadLetter(t *testing.T) {
 	metrics := workerplatform.OpenMetrics(t.Context())
 	if !strings.Contains(metrics, `domainry_runtime_worker_owner_outcomes_total{owner="runtime_publication_outbox",outcome="dead_letter"}`) {
 		t.Fatalf("publication dead-letter metric missing:\n%s", metrics)
+	}
+	entries := observed.FilterMessage("runtime_publication_dead_lettered").All()
+	if len(entries) != 1 || entries[0].ContextMap()["task_id"] != "message-dead-letter" || entries[0].ContextMap()["outcome"] != "dead_letter" {
+		t.Fatalf("dead-letter log=%v", entries)
 	}
 }

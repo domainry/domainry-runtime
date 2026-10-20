@@ -9,19 +9,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
-	publicationrepository "github.com/domainry/domainry-runtime/runtime/domain/publication/repository"
 	"strings"
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	"github.com/domainry/domainry-foundation/telemetry"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
+	publicationrepository "github.com/domainry/domainry-runtime/runtime/domain/publication/repository"
 	"go.opentelemetry.io/otel/trace"
+	"go.uber.org/zap"
 )
 
 const queueKind = "runtime_publication_outbox"
@@ -310,10 +312,12 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 		dead, updateErr := s.workerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "dead_letter", "", stableError(err), s.worker.Clock.Now().Format(time.RFC3339))
 		if updateErr == nil {
 			workerplatform.ObserveOutcome(queueKind, "dead_letter")
+			logPublicationTransition(ctx, err, claimed, "dead_letter", false)
 		} else {
 			workerplatform.ObserveOutcome(queueKind, "failed")
+			return dead, errors.Join(err, updateErr)
 		}
-		return dead, updateErr
+		return dead, nil
 	}
 	// Delivery.Accept is idempotent by message/deduplication key, so an unknown
 	// transport outcome is safely retried without Runtime interpreting provider state.
@@ -323,7 +327,25 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 		return claimed, retryErr
 	}
 	workerplatform.ObserveOutcome(queueKind, "retry")
+	logPublicationTransition(ctx, err, claimed, "retry", true)
 	return retry, err
+}
+
+func logPublicationTransition(ctx context.Context, cause error, message publicationmodel.Message, outcome string, retryable bool) {
+	fields := logging.ErrorFields(cause, logging.Failure{Stage: "publication_handoff", Dependency: message.ConnectorKey, Retryable: retryable})
+	fields = append(fields,
+		zap.String("task_kind", queueKind),
+		zap.String("task_id", message.ID),
+		zap.Int("attempt", message.AttemptCount),
+		zap.Int("max_attempts", maxHandoffAttempts),
+		zap.String("outcome", outcome),
+	)
+	logger := logging.FromContext(ctx)
+	if retryable {
+		logger.Warn("runtime_publication_retry_scheduled", fields...)
+		return
+	}
+	logger.Error("runtime_publication_dead_lettered", fields...)
 }
 
 func oldestPublicationLag(messages []publicationmodel.Message, now time.Time) time.Duration {

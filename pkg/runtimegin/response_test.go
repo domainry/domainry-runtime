@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/httpresponse"
 	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	"github.com/gin-gonic/gin"
 )
@@ -20,21 +21,21 @@ func ginContext(method string) (*gin.Context, *httptest.ResponseRecorder) {
 	return context, response
 }
 
-func TestWriteErrorUsesStableRuntimeEnvelope(t *testing.T) {
+func TestWriteErrorUsesCanonicalHTTPResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	context, response := ginContext(http.MethodGet)
 	WriteError(context, runtimeengine.NewError(runtimeengine.ErrorConflict, "backend.order.conflict", map[string]string{"order": "one"}, nil))
-	var body ErrorBody
+	var body httpresponse.ErrorResponse
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if response.Code != http.StatusConflict || body.Error.Code != "backend.order.conflict" || body.Error.Parameters["order"] != "one" {
+	if response.Code != http.StatusConflict || body.Code != "backend.order.conflict" || body.Params["order"] != "one" {
 		t.Fatalf("status=%d body=%+v", response.Code, body)
 	}
 
 	context, response = ginContext(http.MethodGet)
 	WriteError(context, errors.New("database secret"))
-	if response.Code != http.StatusInternalServerError || response.Body.String() != `{"error":{"code":"backend.internal","message":"backend.internal"}}` {
+	if response.Code != http.StatusInternalServerError || response.Body.String() != "{\"code\":\"backend.internal\",\"message\":\"Internal Server Error\",\"request_id\":\"\"}\n" {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
@@ -71,11 +72,11 @@ func TestBindJSONRunsProjectRequestValidation(t *testing.T) {
 	if BindJSON(context, &request) {
 		t.Fatal("expected custom validation to reject the request")
 	}
-	var body ErrorBody
+	var body httpresponse.ErrorResponse
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if response.Code != http.StatusBadRequest || body.Error.Code != "invalid_stage" || body.Error.Message != "use the governed operation" {
+	if response.Code != http.StatusBadRequest || body.Code != "backend.request.invalid_stage" || body.Message != "use the governed operation" {
 		t.Fatalf("status=%d body=%+v", response.Code, body)
 	}
 }

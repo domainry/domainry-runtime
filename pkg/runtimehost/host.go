@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -118,7 +119,8 @@ type serverRunDependencies struct {
 	readFile             func(string) ([]byte, error)
 	prepareDatabase      func(context.Context, config.Config, bootstrap.RuntimeSchemaCapabilities) (*bootstrap.ProjectDatabase, error)
 	newRuntime           func(context.Context, config.Config, *runtimeext.ProjectExtensionRegistry, *connector.Registry, runtimehttp.RuntimeReleaseIdentity, bootstrap.RuntimeReleaseArtifactEvidence, identitysdk.Binding, bootstrap.FoundationModuleFactories, notificationsdk.Factory, monitoringsdk.Factory, schedulersdk.Factory, dataexchangesdk.Factory, agentsdk.Factory, integrationsdk.Factory, reportsdk.Factory, *bootstrap.ProjectDatabase, bootstrap.ProjectStartupOptions) runtimeProcess
-	listenAndServe       func(*http.Server) error
+	listen               func(string, string) (net.Listener, error)
+	serve                func(*http.Server, net.Listener) error
 	shutdown             func(context.Context, *http.Server) error
 }
 
@@ -137,8 +139,9 @@ func defaultServerRunDependencies() serverRunDependencies {
 		newRuntime: func(ctx context.Context, cfg config.Config, handlers *runtimeext.ProjectExtensionRegistry, connectors *connector.Registry, identity runtimehttp.RuntimeReleaseIdentity, evidence bootstrap.RuntimeReleaseArtifactEvidence, binding identitysdk.Binding, foundationModules bootstrap.FoundationModuleFactories, notificationFactory notificationsdk.Factory, monitoringFactory monitoringsdk.Factory, schedulerFactory schedulersdk.Factory, dataExchangeFactory dataexchangesdk.Factory, agentFactory agentsdk.Factory, integrationFactory integrationsdk.Factory, reportFactory reportsdk.Factory, database *bootstrap.ProjectDatabase, startupOptions bootstrap.ProjectStartupOptions) runtimeProcess {
 			return bootstrapRuntimeProcess{Runtime: bootstrap.NewVerifiedProjectWithAllTopologyFactoriesAndDatabaseOptions(ctx, cfg, handlers, connectors, identity, evidence, binding, foundationModules, notificationFactory, monitoringFactory, schedulerFactory, dataExchangeFactory, integrationFactory, reportFactory, database, startupOptions, agentFactory)}
 		},
-		listenAndServe: func(server *http.Server) error { return server.ListenAndServe() },
-		shutdown:       func(ctx context.Context, server *http.Server) error { return server.Shutdown(ctx) },
+		listen:   net.Listen,
+		serve:    func(server *http.Server, listener net.Listener) error { return server.Serve(listener) },
+		shutdown: func(ctx context.Context, server *http.Server) error { return server.Shutdown(ctx) },
 	}
 }
 
@@ -568,13 +571,17 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			MaxHeaderBytes:    cfg.HTTPMaxHeaderBytes,
 		})
 	}
+	listeners, err := bindHTTPListeners(servers, dependencies.listen)
+	if err != nil {
+		return err
+	}
 	serveErr := make(chan error, len(servers))
 	dependencies.processStarted(lifecycleCtx, map[string]any{
 		"listener_count": len(servers), "module_count": mountedModuleCount,
 		"project_key": runtimeModel.ProjectKey,
 	})
-	for _, server := range servers {
-		go func(server *http.Server) { serveErr <- dependencies.listenAndServe(server) }(server)
+	for index, server := range servers {
+		go func(server *http.Server, listener net.Listener) { serveErr <- dependencies.serve(server, listener) }(server, listeners[index])
 	}
 	select {
 	case err := <-serveErr:
@@ -598,4 +605,19 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 		}
 		return nil
 	}
+}
+
+func bindHTTPListeners(servers []*http.Server, listen func(string, string) (net.Listener, error)) ([]net.Listener, error) {
+	listeners := make([]net.Listener, 0, len(servers))
+	for _, server := range servers {
+		listener, err := listen("tcp", server.Addr)
+		if err != nil {
+			for _, opened := range listeners {
+				_ = opened.Close()
+			}
+			return nil, fmt.Errorf("bind Runtime HTTP listener: %w", err)
+		}
+		listeners = append(listeners, listener)
+	}
+	return listeners, nil
 }

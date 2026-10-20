@@ -41,7 +41,7 @@ func (s *RuntimeStore) ensureMigrationBackupForExistingData(ctx context.Context,
 		}
 		s.migrationBackupID = policy.BackupIDPrefix + checksum[:16]
 		logging.FromContext(ctx).Info(
-			"database migration backup created",
+			"database_migration_backup_created",
 			zap.String("backup_id", s.migrationBackupID),
 			zap.String("database_engine", policy.EvidenceEngine),
 		)

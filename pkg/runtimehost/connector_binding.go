@@ -13,6 +13,7 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	knowledgesdk "github.com/domainry/domainry-knowledge-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 )
 
@@ -383,7 +384,7 @@ func (gateway integrationRuntimeConnectorGateway) UploadKnowledgeDocument(ctx co
 		ClientID: strings.TrimSpace(request.ClientID), Filename: strings.TrimSpace(request.Filename),
 		Bytes: int64(len(content)), SHA256: hex.EncodeToString(digest[:]), Content: bytes.NewReader(content),
 	}, agentsdk.KnowledgeDocumentSourceAccess{
-		Namespace: agentsdk.KnowledgeDocumentSourceNamespaceRuntimeRecord, ResourceType: strings.TrimSpace(identity.ObjectKey), ResourceID: strings.TrimSpace(identity.RecordID),
+		Namespace: knowledgesdk.KnowledgeDocumentSourceNamespaceRuntimeRecord, ResourceType: strings.TrimSpace(identity.ObjectKey), ResourceID: strings.TrimSpace(identity.RecordID),
 	}, authority)
 	if err != nil {
 		return KnowledgeDocumentResult{}, err

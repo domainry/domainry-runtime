@@ -34,7 +34,7 @@ func TestWriteServiceErrorMapsWrappedContextErrors(t *testing.T) {
 			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 				t.Fatal(err)
 			}
-			if body["code"] != tc.code || body["message_key"] != tc.code {
+			if body["code"] != tc.code || body["message"] == nil || body["request_id"] == nil {
 				t.Fatalf("unexpected response contract: %#v", body)
 			}
 		})

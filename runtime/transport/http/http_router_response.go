@@ -384,15 +384,15 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, code string,
 
 func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, context.Canceled) {
-		writeErrorWithParams(w, r, 499, "backend.request_cancelled", nil)
+		writeErrorWithParams(w, r, 499, "backend.request_cancelled", nil, err)
 		return
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		writeErrorWithParams(w, r, http.StatusGatewayTimeout, "backend.deadline_exceeded", nil)
+		writeErrorWithParams(w, r, http.StatusGatewayTimeout, "backend.deadline_exceeded", nil, err)
 		return
 	}
 	status := serviceErrorHTTPStatus(r, err)
-	writeErrorWithParams(w, r, status, publicServiceErrorCode(err), apperror.ParamsOf(err))
+	writeErrorWithParams(w, r, status, publicServiceErrorCode(err), apperror.ParamsOf(err), err)
 }
 
 func publicServiceErrorCode(err error) string {
@@ -403,10 +403,14 @@ func publicServiceErrorCode(err error) string {
 	return code
 }
 
-func writeErrorWithParams(w http.ResponseWriter, r *http.Request, status int, code string, params map[string]string) {
+func writeErrorWithParams(w http.ResponseWriter, r *http.Request, status int, code string, params map[string]string, causes ...error) {
 	code = strings.TrimSpace(code)
 	if code == "" {
 		code = "backend.request_failed"
 	}
-	httpresponse.WriteError(w, r, httpresponse.Failure{Status: status, Code: code, Params: params})
+	var cause error
+	if len(causes) > 0 {
+		cause = causes[0]
+	}
+	httpresponse.WriteError(w, r, httpresponse.Failure{Status: status, Code: code, Params: params, Cause: cause})
 }

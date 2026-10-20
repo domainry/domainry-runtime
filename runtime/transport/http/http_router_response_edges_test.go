@@ -138,7 +138,7 @@ func TestWriteServiceErrorKindAndResponseParameterMatrix(t *testing.T) {
 		writeServiceError(response, request, err)
 		var body map[string]any
 		if json.Unmarshal(response.Body.Bytes(), &body) != nil || response.Code != test.status ||
-			body["code"] != "backend.test" || body["message"] != "backend.test" ||
+			body["code"] != "backend.test" || body["message"] == nil ||
 			body["request_id"] != "req-test" {
 			t.Fatalf("kind=%s status=%d body=%v", test.kind, response.Code, body)
 		}

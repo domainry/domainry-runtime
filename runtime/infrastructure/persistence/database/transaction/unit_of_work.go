@@ -75,7 +75,7 @@ func (u *SQLUnitOfWork[Ports]) WithinTransaction(ctx context.Context, operation 
 	}
 	retryIdentity := transactioncontract.TransactionRetryIdentity{
 		IdempotencyScope: u.options.Retry.IdempotencyScope,
-		CorrelationID:    requestcontext.RequestID(ctx),
+		CorrelationID:    requestcontext.CorrelationID(ctx),
 	}.Normalized()
 	if maxAttempts > 1 && !retryIdentity.IsComplete() {
 		return ErrUnitOfWorkRetryIdentity

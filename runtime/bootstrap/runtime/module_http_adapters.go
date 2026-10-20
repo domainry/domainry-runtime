@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
+	"github.com/domainry/domainry-foundation/httpresponse"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	publicresourceapplication "github.com/domainry/domainry-runtime/runtime/application/publicresource"
 	hostsurfacemodel "github.com/domainry/domainry-runtime/runtime/domain/hostsurface/model"
@@ -174,14 +175,12 @@ func (s runtimeDiscoveryHTTPAdapter) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /discovery/modules", func(response http.ResponseWriter, request *http.Request) {
 		inventory, err := s.runtime.ModuleInventory()
-		response.Header().Set("Content-Type", "application/json")
 		response.Header().Set("Cache-Control", "no-store")
 		if err != nil {
-			response.WriteHeader(http.StatusServiceUnavailable)
-			_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.module_inventory_unavailable"})
+			httpresponse.WriteError(response, request, httpresponse.Failure{Status: http.StatusServiceUnavailable, Code: "runtime.module_inventory_unavailable", Cause: err})
 			return
 		}
-		_ = json.NewEncoder(response).Encode(inventory)
+		httpresponse.WriteJSON(response, http.StatusOK, inventory)
 	})
 	return mux
 }
@@ -189,39 +188,33 @@ func (s runtimeDiscoveryHTTPAdapter) Handler() http.Handler {
 func (s runtimeActionHTTPAdapter) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /action/permission-usages/query", func(response http.ResponseWriter, request *http.Request) {
-		response.Header().Set("Content-Type", "application/json")
 		response.Header().Set("Cache-Control", "no-store")
 		var query actioncontract.PermissionUsageRequest
 		decoder := json.NewDecoder(http.MaxBytesReader(response, request.Body, 1<<20))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&query); err != nil {
-			response.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.action_usage_query_invalid"})
+			httpresponse.WriteError(response, request, httpresponse.Failure{Status: http.StatusBadRequest, Code: "runtime.action_usage_query_invalid", Cause: err})
 			return
 		}
 		if err := ensureRuntimeUsageRequestEOF(decoder); err != nil {
-			response.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.action_usage_query_invalid"})
+			httpresponse.WriteError(response, request, httpresponse.Failure{Status: http.StatusBadRequest, Code: "runtime.action_usage_query_invalid", Cause: err})
 			return
 		}
 		if s.runtime == nil || s.runtime.authorizationActions == nil {
-			response.WriteHeader(http.StatusServiceUnavailable)
-			_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.action_registry_unavailable"})
+			httpresponse.WriteError(response, request, httpresponse.Failure{Status: http.StatusServiceUnavailable, Code: "runtime.action_registry_unavailable"})
 			return
 		}
 		registry := s.runtime.authorizationActions()
 		if registry == nil {
-			response.WriteHeader(http.StatusServiceUnavailable)
-			_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.action_registry_unavailable"})
+			httpresponse.WriteError(response, request, httpresponse.Failure{Status: http.StatusServiceUnavailable, Code: "runtime.action_registry_unavailable"})
 			return
 		}
 		snapshot, err := registry.QueryPermissionUsages(request.Context(), query)
 		if err != nil {
-			response.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.action_usage_query_invalid"})
+			httpresponse.WriteError(response, request, httpresponse.Failure{Status: http.StatusBadRequest, Code: "runtime.action_usage_query_invalid", Cause: err})
 			return
 		}
-		_ = json.NewEncoder(response).Encode(snapshot)
+		httpresponse.WriteJSON(response, http.StatusOK, snapshot)
 	})
 	return mux
 }
@@ -229,19 +222,17 @@ func (s runtimeActionHTTPAdapter) Handler() http.Handler {
 func (s runtimePublicResourceHTTPAdapter) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /public-resources/{resourceKey}/{accessKey}", func(response http.ResponseWriter, request *http.Request) {
-		response.Header().Set("Content-Type", "application/json")
 		response.Header().Set("Cache-Control", "no-store")
 		if s.runtime == nil || s.runtime.publicResources == nil {
-			response.WriteHeader(http.StatusServiceUnavailable)
-			_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.public_resource_unavailable"})
+			httpresponse.WriteError(response, request, httpresponse.Failure{Status: http.StatusServiceUnavailable, Code: "runtime.public_resource_unavailable"})
 			return
 		}
 		resource, err := s.runtime.publicResources.Get(request.Context(), request.PathValue("resourceKey"), request.PathValue("accessKey"))
 		if err != nil {
-			writePublicResourceError(response, err)
+			writePublicResourceError(response, request, err)
 			return
 		}
-		_ = json.NewEncoder(response).Encode(resource)
+		httpresponse.WriteJSON(response, http.StatusOK, resource)
 	})
 	if !s.runtime.effectiveSchemaCapabilities().Uploads {
 		return mux
@@ -251,15 +242,12 @@ func (s runtimePublicResourceHTTPAdapter) Handler() http.Handler {
 		response.Header().Set("X-Content-Type-Options", "nosniff")
 		response.Header().Set("Content-Security-Policy", "sandbox")
 		if s.runtime == nil || s.runtime.publicResources == nil {
-			response.Header().Set("Content-Type", "application/json")
-			response.WriteHeader(http.StatusServiceUnavailable)
-			_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.public_resource_unavailable"})
+			httpresponse.WriteError(response, request, httpresponse.Failure{Status: http.StatusServiceUnavailable, Code: "runtime.public_resource_unavailable"})
 			return
 		}
 		file, err := s.runtime.publicResources.OpenFile(request.Context(), request.PathValue("resourceKey"), request.PathValue("accessKey"), request.PathValue("fieldKey"))
 		if err != nil {
-			response.Header().Set("Content-Type", "application/json")
-			writePublicResourceError(response, err)
+			writePublicResourceError(response, request, err)
 			return
 		}
 		disposition := "attachment"
@@ -274,14 +262,12 @@ func (s runtimePublicResourceHTTPAdapter) Handler() http.Handler {
 	return mux
 }
 
-func writePublicResourceError(response http.ResponseWriter, err error) {
+func writePublicResourceError(response http.ResponseWriter, request *http.Request, err error) {
 	if errors.Is(err, publicresourceapplication.ErrNotFound) || errors.Is(err, publicresourceapplication.ErrRequestInvalid) {
-		response.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.public_resource_not_found"})
+		httpresponse.WriteError(response, request, httpresponse.Failure{Status: http.StatusNotFound, Code: "runtime.public_resource_not_found", Cause: err})
 		return
 	}
-	response.WriteHeader(http.StatusServiceUnavailable)
-	_ = json.NewEncoder(response).Encode(map[string]string{"code": "runtime.public_resource_unavailable"})
+	httpresponse.WriteError(response, request, httpresponse.Failure{Status: http.StatusServiceUnavailable, Code: "runtime.public_resource_unavailable", Cause: err})
 }
 
 func ensureRuntimeUsageRequestEOF(decoder *json.Decoder) error {

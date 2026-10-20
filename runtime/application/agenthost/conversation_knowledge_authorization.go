@@ -59,7 +59,7 @@ func (h *ConversationBusinessHost) ValidateKnowledgeLibraryMember(ctx context.Co
 // the current Runtime record policy. Shared-library membership is necessary but
 // never sufficient to read a meeting transcript or another CRM-derived file.
 func (h *ConversationBusinessHost) AuthorizeKnowledgeDocumentSource(ctx context.Context, source agentsdk.KnowledgeDocumentSourceAccess, authority agentsdk.ConversationAuthority) error {
-	if source.Namespace != agentsdk.KnowledgeDocumentSourceNamespaceRuntimeRecord || source.ResourceType == "" || source.ResourceID == "" {
+	if source.Namespace != knowledgesdk.KnowledgeDocumentSourceNamespaceRuntimeRecord || source.ResourceType == "" || source.ResourceID == "" {
 		return &agentsdk.Error{Class: "forbidden", Code: "agent.conversation.document_source_access_denied"}
 	}
 	principal, err := h.principal(ctx, authority)

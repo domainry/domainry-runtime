@@ -195,7 +195,7 @@ func requireSignedModuleRequest(services identitysdk.ApplicationServiceTokenVeri
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		accessToken, ok := identityhttpmiddleware.BearerToken(request)
 		if !ok {
-			writeModuleGovernanceError(writer, http.StatusUnauthorized, "auth.signed_request_required")
+			writeModuleGovernanceError(writer, request, http.StatusUnauthorized, "auth.signed_request_required")
 			return
 		}
 		_, err := services.Verify(request.Context(), identitysdk.VerifyApplicationServiceTokenRequest{AccessToken: accessToken, Audience: audience, Grant: grant})
@@ -205,7 +205,7 @@ func requireSignedModuleRequest(services identitysdk.ApplicationServiceTokenVeri
 			if errors.As(err, &sdkError) && sdkError.StatusCode >= http.StatusInternalServerError {
 				status = http.StatusServiceUnavailable
 			}
-			writeModuleGovernanceError(writer, status, "auth.signed_request_invalid")
+			writeModuleGovernanceError(writer, request, status, "auth.signed_request_invalid")
 			return
 		}
 		next.ServeHTTP(writer, request)
@@ -216,30 +216,30 @@ func governModuleHTTPRoute(route modulehttp.Route, next http.Handler) http.Handl
 	action := route.Action
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if action.IdempotencyDecision == "caller_key_required" && strings.TrimSpace(request.Header.Get("Idempotency-Key")) == "" {
-			writeModuleGovernanceError(writer, http.StatusBadRequest, "backend.idempotency.key_required")
+			writeModuleGovernanceError(writer, request, http.StatusBadRequest, "backend.idempotency.key_required")
 			return
 		}
 		if len(action.ApprovalPolicies) != 0 {
 			reason, err := decodeModuleOperationReason(request.Header.Get("X-Operation-Reason"))
 			if err != nil {
-				writeModuleGovernanceError(writer, http.StatusBadRequest, "operations.reason_encoding_invalid")
+				writeModuleGovernanceError(writer, request, http.StatusBadRequest, "operations.reason_encoding_invalid")
 				return
 			}
 			if reason == "" {
-				writeModuleGovernanceError(writer, http.StatusBadRequest, "operations.reason_required")
+				writeModuleGovernanceError(writer, request, http.StatusBadRequest, "operations.reason_required")
 				return
 			}
 			request.Header.Set("X-Operation-Reason", reason)
 		}
 		if moduleActionHasApprovalPolicy(action, actioncontract.ApprovalConfirmation) {
 			if strings.TrimSpace(request.Header.Get("X-Operation-Confirmation")) != "confirmed" {
-				writeModuleGovernanceError(writer, http.StatusBadRequest, "operations.confirmation_required")
+				writeModuleGovernanceError(writer, request, http.StatusBadRequest, "operations.confirmation_required")
 				return
 			}
 		}
 		if moduleActionHasApprovalPolicy(action, actioncontract.ApprovalBreakGlass) {
 			if strings.TrimSpace(request.Header.Get("X-Operation-Confirmation")) != "break-glass" {
-				writeModuleGovernanceError(writer, http.StatusBadRequest, "operations.break_glass_confirmation_required")
+				writeModuleGovernanceError(writer, request, http.StatusBadRequest, "operations.break_glass_confirmation_required")
 				return
 			}
 		}
@@ -269,9 +269,7 @@ func decodeModuleOperationReason(value string) (string, error) {
 	return strings.TrimSpace(decoded), nil
 }
 
-func writeModuleGovernanceError(writer http.ResponseWriter, status int, code string) {
-	writer.Header().Set("Content-Type", "application/json")
+func writeModuleGovernanceError(writer http.ResponseWriter, request *http.Request, status int, code string) {
 	writer.Header().Set("Cache-Control", "no-store")
-	writer.WriteHeader(status)
-	_ = json.NewEncoder(writer).Encode(map[string]string{"code": code})
+	httpresponse.WriteError(writer, request, httpresponse.Failure{Status: status, Code: code})
 }

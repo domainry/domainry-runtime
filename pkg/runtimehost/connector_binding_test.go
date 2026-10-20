@@ -13,6 +13,7 @@ import (
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	knowledgesdk "github.com/domainry/domainry-knowledge-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 )
 
@@ -471,7 +472,7 @@ func TestIntegrationRuntimeConnectorGatewayUsesAuthorizedKnowledgeDocumentServic
 	if readErr != nil || probe.upload.Bytes != int64(len(uploaded)) || probe.upload.SHA256 != hex.EncodeToString(digest[:]) || probe.uploadLibrary != "library-a" || probe.upload.ClientID != "meeting:meeting-a:hash" || string(uploaded) != "transcript" {
 		t.Fatalf("upload library=%q upload=%+v", probe.uploadLibrary, probe.upload)
 	}
-	if probe.uploadSource != (agentsdk.KnowledgeDocumentSourceAccess{Namespace: agentsdk.KnowledgeDocumentSourceNamespaceRuntimeRecord, ResourceType: "meeting", ResourceID: "meeting-a"}) {
+	if probe.uploadSource != (agentsdk.KnowledgeDocumentSourceAccess{Namespace: knowledgesdk.KnowledgeDocumentSourceNamespaceRuntimeRecord, ResourceType: "meeting", ResourceID: "meeting-a"}) {
 		t.Fatalf("source=%+v", probe.uploadSource)
 	}
 	wantAuthority := agentsdk.ConversationAuthority{Known: true, RuntimeID: "aurora-runtime", WorkspaceID: "workspace-a", UserID: "user-a", RoleKey: "sales_rep"}
