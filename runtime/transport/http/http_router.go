@@ -11,6 +11,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
+	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	businesseventapplication "github.com/domainry/domainry-runtime/runtime/application/businessevent"
@@ -19,7 +20,6 @@ import (
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	"github.com/domainry/domainry-runtime/runtime/platform/productbrand"
 	businesseventhttp "github.com/domainry/domainry-runtime/runtime/transport/http/businessevents"
-	"go.uber.org/zap"
 )
 
 const (
@@ -97,7 +97,10 @@ func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRo
 		panic("invalid compiled Runtime endpoint contract: " + err.Error())
 	}
 	controller := capacityplatform.NewController(config.CapacityLimits, func(event capacityplatform.Event) {
-		zap.L().Warn("runtime capacity state", zap.String("code", event.Code), zap.String("state", string(event.State)), zap.String("dimension", string(event.Dimension)), zap.Int("current", event.Current), zap.Int("limit", event.Limit))
+		logging.FromContext(context.Background()).Warn("runtime_capacity_state", logging.Fields(map[string]any{
+			"code": event.Code, "state": string(event.State), "dimension": string(event.Dimension),
+			"current": event.Current, "limit": event.Limit,
+		})...)
 	})
 	authorizationActions := deps.AuthorizationActions
 	if authorizationActions == nil {
@@ -237,7 +240,7 @@ func (s *HTTPRouter) Routes() http.Handler {
 	highRiskAuthorized := s.withHighRiskOperationPolicy(mux, published)
 	actionAuthorized := s.withActionAuthorization(mux, highRiskAuthorized)
 	authenticated := s.withAuth(mux, actionAuthorized)
-	return s.withMetrics(s.withRecovery(s.withCORS(authenticated)))
+	return s.withCORS(authenticated)
 }
 
 // RoutesForListenerGroup builds an externally attached listener mux from the

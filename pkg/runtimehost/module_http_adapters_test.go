@@ -9,13 +9,46 @@ import (
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	"github.com/domainry/domainry-foundation/telemetry"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 type moduleAdapterStub struct {
 	owner, name string
 	routes      []modulehttp.Route
 	handler     http.Handler
+}
+
+func TestModuleAdapterRouteProducesOneOuterAccessEventWithTemplate(t *testing.T) {
+	core, observed := observer.New(zapcore.InfoLevel)
+	previous := zap.L()
+	zap.ReplaceGlobals(zap.New(core))
+	t.Cleanup(func() { zap.ReplaceGlobals(previous) })
+
+	sample := moduleAdapterStub{
+		owner: "report", name: "business",
+		handler: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusNoContent) }),
+		routes:  []modulehttp.Route{{Action: runtimeHostTestAction("report.query", "POST /report/{reportKey}/query", []actioncontract.Exposure{actioncontract.ExposurePublic}, actioncontract.AuthorizationAnonymous)}},
+	}
+	router := newModuleAdapterRouter(runtimehttp.ListenerRouteGroupPublic, http.NotFoundHandler())
+	if err := router.Bind([]modulehttp.Adapter{sample}); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/report/weekly/query?token=must-not-leak", nil)
+	request.Header.Set(telemetry.CorrelationIDHeader, "corr-module")
+	telemetry.HTTPServerMiddleware(telemetry.HTTPServerConfig{ListenerGroup: "public"}, router).ServeHTTP(httptest.NewRecorder(), request)
+
+	entries := observed.FilterMessage("http_request").All()
+	if len(entries) != 1 {
+		t.Fatalf("terminal events=%d entries=%#v", len(entries), observed.All())
+	}
+	fields := entries[0].ContextMap()
+	if fields["route"] != "/report/{reportKey}/query" || fields["listener_group"] != "public" || fields["correlation_id"] != "corr-module" {
+		t.Fatalf("fields=%#v", fields)
+	}
 }
 
 func TestModuleAdapterRouterPublishesRequestContextAndResponseHeaders(t *testing.T) {
@@ -33,8 +66,9 @@ func TestModuleAdapterRouterPublishesRequestContextAndResponseHeaders(t *testing
 	request.Header.Set("X-Request-ID", "request-module-1")
 	request.Header.Set("X-Correlation-ID", "correlation-module-1")
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, request)
-	if observedRequestID != "request-module-1" || observedCorrelationID != "correlation-module-1" {
+	observed := telemetry.HTTPServerMiddleware(telemetry.HTTPServerConfig{ListenerGroup: "public"}, router)
+	observed.ServeHTTP(response, request)
+	if observedRequestID == "" || observedRequestID == "request-module-1" || observedCorrelationID != "correlation-module-1" {
 		t.Fatalf("module context request=%q correlation=%q", observedRequestID, observedCorrelationID)
 	}
 	if response.Header().Get("X-Request-ID") != observedRequestID || response.Header().Get("X-Correlation-ID") != observedCorrelationID {
@@ -44,7 +78,7 @@ func TestModuleAdapterRouterPublishesRequestContextAndResponseHeaders(t *testing
 	request = httptest.NewRequest(http.MethodPost, "/report/weekly/query", nil)
 	request.Header.Set("X-Request-ID", "invalid request id")
 	response = httptest.NewRecorder()
-	router.ServeHTTP(response, request)
+	observed.ServeHTTP(response, request)
 	if observedRequestID == "" || observedRequestID == "invalid request id" || observedCorrelationID != observedRequestID {
 		t.Fatalf("generated module context request=%q correlation=%q", observedRequestID, observedCorrelationID)
 	}
@@ -62,8 +96,8 @@ func TestModuleAdapterRouterPublishesRequestContextAndResponseHeaders(t *testing
 	request = httptest.NewRequest(http.MethodGet, "/sample", nil)
 	request.Header.Set("X-Request-ID", "request-protected-1")
 	response = httptest.NewRecorder()
-	protectedRouter.ServeHTTP(response, request)
-	if response.Code != http.StatusNoContent || observedRequestID != "request-protected-1" || response.Header().Get("X-Request-ID") != "request-protected-1" {
+	telemetry.HTTPServerMiddleware(telemetry.HTTPServerConfig{ListenerGroup: "management"}, protectedRouter).ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || observedRequestID == "" || observedRequestID == "request-protected-1" || response.Header().Get("X-Request-ID") != observedRequestID {
 		t.Fatalf("protected module status=%d context=%q headers=%v", response.Code, observedRequestID, response.Header())
 	}
 }

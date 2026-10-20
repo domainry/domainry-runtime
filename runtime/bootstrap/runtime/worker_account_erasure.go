@@ -19,11 +19,11 @@ func (a *Runtime) startAccountErasureWorker(ctx context.Context) {
 	}
 	queue := binding.AccountErasures()
 	a.startControlledWorker(ctx, "account_erasure", func(workerCtx context.Context) <-chan struct{} {
-		return workerplatform.StartAdaptiveLoop(workerCtx, "account_erasure", time.Second, 30*time.Second, func() bool {
-			return runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "approved account erasure worker failed", func() (bool, error) {
-				count, err := queue.ProcessApprovedAccountErasures(workerCtx, a.worker.WorkerID.String(), 10, a.worker.Clock.Now(),
+		return workerplatform.StartAdaptiveLoop(workerCtx, runtimeWorkerIdentity("account_erasure"), time.Second, 30*time.Second, func(tickCtx context.Context) (workerplatform.TickResult, error) {
+			return runControlledRuntimeWorkerTick(tickCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+				count, err := queue.ProcessApprovedAccountErasures(operationCtx, a.worker.WorkerID.String(), 10, a.worker.Clock.Now(),
 					lifecycleaccess.NewSystemScope(lifecycleaccess.SystemScopeGlobal, "process committed account erasure approvals"))
-				return count > 0, err
+				return workerplatform.TickResult{Worked: count > 0, ProcessedCount: count}, err
 			})
 		})
 	})

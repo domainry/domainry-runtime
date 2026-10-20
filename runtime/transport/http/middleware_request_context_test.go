@@ -23,20 +23,20 @@ func (w *flushTrackingWriter) WriteHeader(int)                   {}
 func (w *flushTrackingWriter) Write(payload []byte) (int, error) { return len(payload), nil }
 func (w *flushTrackingWriter) Flush()                            { w.flushed = true }
 
-func TestMetricsMiddlewareInjectsStableRequestIDContext(t *testing.T) {
+func TestMetricsMiddlewareCreatesLocalRequestIDContext(t *testing.T) {
 	router := &HTTPRouter{httpMetrics: NewMemoryHTTPMetricsCollector(16)}
 	observed := ""
-	handler := router.withMetrics(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+	handler := router.withMetrics(ListenerRouteGroupPublic, http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
 		observed = requestcontext.RequestID(request.Context())
 	}))
 	request := httptest.NewRequest(http.MethodGet, "/probe", nil)
 	request.Header.Set(requestIDHeader, "req-http-context")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if observed != "req-http-context" {
+	if observed == "" || observed == "req-http-context" {
 		t.Fatalf("handler observed request id %q", observed)
 	}
-	if response.Header().Get(requestIDHeader) != "req-http-context" {
+	if response.Header().Get(requestIDHeader) != observed {
 		t.Fatalf("response request id = %q", response.Header().Get(requestIDHeader))
 	}
 }
@@ -48,7 +48,7 @@ func TestMetricsMiddlewarePropagatesW3CAndCorrelationContext(t *testing.T) {
 	t.Cleanup(func() { _ = provider.Shutdown(t.Context()); otel.SetTracerProvider(previous) })
 	router := &HTTPRouter{httpMetrics: NewMemoryHTTPMetricsCollector(16)}
 	var traceID, correlationID, workspaceID, actorID string
-	handler := router.withMetrics(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+	handler := router.withMetrics(ListenerRouteGroupPublic, http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
 		traceID = requestcontext.TraceID(request.Context())
 		correlationID = requestcontext.CorrelationID(request.Context())
 		workspaceID = requestcontext.WorkspaceID(request.Context())
@@ -76,7 +76,7 @@ func TestMetricsMiddlewareRebuildsInvalidTraceAndCorrelationHeaders(t *testing.T
 	t.Cleanup(func() { _ = provider.Shutdown(t.Context()); otel.SetTracerProvider(previous) })
 	router := &HTTPRouter{httpMetrics: NewMemoryHTTPMetricsCollector(16)}
 	var traceID, correlationID string
-	handler := router.withMetrics(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+	handler := router.withMetrics(ListenerRouteGroupPublic, http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
 		traceID = requestcontext.TraceID(request.Context())
 		correlationID = requestcontext.CorrelationID(request.Context())
 	}))
@@ -103,9 +103,9 @@ func TestStatusRecorderPreservesResponseControllerFlush(t *testing.T) {
 
 func TestRecoveryReturnsStableInternalErrorAndMetricsStatus(t *testing.T) {
 	router := &HTTPRouter{httpMetrics: NewMemoryHTTPMetricsCollector(16)}
-	handler := router.withMetrics(router.withRecovery(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	handler := router.withMetrics(ListenerRouteGroupPublic, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic("handler failed")
-	})))
+	}))
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/panic", nil))
 	if response.Code != http.StatusInternalServerError {

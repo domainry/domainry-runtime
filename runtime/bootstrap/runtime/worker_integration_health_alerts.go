@@ -42,9 +42,9 @@ func (a *Runtime) startIntegrationHealthAlertWorker(ctx context.Context) {
 	}
 
 	a.startControlledWorker(ctx, "integration_health_alerts", func(workerCtx context.Context) <-chan struct{} {
-		return workerplatform.StartNamedLoop(workerCtx, "integration_health_alerts", a.cfg.IntegrationHealthAlertPollInterval, func() {
-			runLoggedRuntimeWorkerTick(workerCtx, a.worker.Control, "Integration health alert evaluation failed", func() error {
-				return a.runIntegrationHealthAlertTick(workerCtx, monitor, alertBinding.SystemAlerts(), a.notificationBinding.Publisher())
+		return workerplatform.StartNamedLoop(workerCtx, runtimeWorkerIdentity("integration_health_alerts"), a.cfg.IntegrationHealthAlertPollInterval, func(tickCtx context.Context) (workerplatform.TickResult, error) {
+			return runControlledRuntimeWorkerTick(tickCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+				return workerplatform.TickResult{}, a.runIntegrationHealthAlertTick(operationCtx, monitor, alertBinding.SystemAlerts(), a.notificationBinding.Publisher())
 			})
 		})
 	})

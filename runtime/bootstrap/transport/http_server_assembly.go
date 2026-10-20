@@ -6,6 +6,7 @@ import (
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	agentpersistence "github.com/domainry/domainry-agent-sdk/persistence"
 	actioncontract "github.com/domainry/domainry-foundation/action"
+	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 	"time"
@@ -47,7 +48,6 @@ import (
 	notificationhttp "github.com/domainry/domainry-runtime/runtime/transport/http/notifications"
 	publicationhandoffhttp "github.com/domainry/domainry-runtime/runtime/transport/http/publicationhandoff"
 	workspaceprovisionhttp "github.com/domainry/domainry-runtime/runtime/transport/http/workspaceprovision"
-	"go.uber.org/zap"
 )
 
 type HTTPServerDependencies struct {
@@ -119,7 +119,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	resolver, err := identityprincipal.NewAuthenticator(dependencies.IdentityBinding, identityprincipal.Options{
 		Clock: dependencies.Clock, MaxCacheTTL: dependencies.Config.EffectivePrincipalCacheTTL(), Cache: dependencies.PrincipalCache,
 		OnCacheError: func(err error) {
-			zap.L().Warn("Identity principal cache operation failed; resolving from authoritative binding", zap.String("error_kind", "identity_principal_cache_operation_failed"), zap.Error(err))
+			logging.FromContext(ctx).Warn("dependency_call_failed", logging.ErrorFields(err, logging.Failure{Stage: "principal_cache_operation", Dependency: "identity_principal_cache", Retryable: true})...)
 		},
 	})
 	if err != nil {

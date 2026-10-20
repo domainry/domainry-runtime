@@ -17,12 +17,10 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
-	"github.com/domainry/domainry-foundation/logging"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
-	"go.uber.org/zap"
 )
 
 var errMigrationNotCurrent = errors.New("runtime migration is not current")
@@ -86,20 +84,15 @@ func (s *DeploymentRuntimeStatusApplicationService) StartIdempotencyCleanupWorke
 	}
 	owner := s.worker.WorkerID.String()
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "clean expired idempotency receipts")
-	return workerplatform.StartNamedLoop(ctx, "idempotency_cleanup", interval, func() {
-		s.worker.Control.RunIfAccepting(func() {
-			result, err := s.ProcessIdempotencyCleanup(ctx, owner, batchSize, s.worker.Clock.Now(), scope)
-			if err != nil {
-				if ctx.Err() == nil {
-					fields := append([]zap.Field{zap.String("lease_owner", owner)}, logging.StableErrorFields(err)...)
-					logging.FromContext(ctx).Error("idempotency cleanup worker failed", fields...)
-				}
-				return
-			}
-			if result.Acquired {
-				logging.FromContext(ctx).Info("idempotency cleanup completed", zap.Int("deleted", result.Deleted), zap.Int64("fencing_token", result.FencingToken), zap.String("lease_owner", owner))
-			}
-		})
+	return workerplatform.StartNamedLoop(ctx, workerplatform.Identity{Owner: "runtime", Name: "idempotency_cleanup"}, interval, func(tickCtx context.Context) (workerplatform.TickResult, error) {
+		var result deploymentmodel.IdempotencyCleanupResult
+		var err error
+		if !s.worker.Control.RunIfAccepting(func() {
+			result, err = s.ProcessIdempotencyCleanup(tickCtx, owner, batchSize, s.worker.Clock.Now(), scope)
+		}) {
+			return workerplatform.TickResult{}, nil
+		}
+		return workerplatform.TickResult{Worked: result.Acquired, ProcessedCount: result.Deleted}, err
 	})
 }
 

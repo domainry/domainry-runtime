@@ -58,6 +58,13 @@ func (a *Runtime) Routes() http.Handler {
 	return a.api.Routes()
 }
 
+func (a *Runtime) HostObservabilityMiddleware(group runtimehttp.ListenerRouteGroup, next http.Handler) http.Handler {
+	if a == nil || a.api == nil {
+		return next
+	}
+	return a.api.HostObservabilityMiddleware(group, next)
+}
+
 // GuardAuthenticatedModuleHTTPRoute lets runtimehost mount an in-process
 // module ahead of Routes() without replacing Runtime authentication semantics.
 func (a *Runtime) GuardAuthenticatedModuleHTTPRoute(route modulehttp.Route, next http.Handler) (http.Handler, error) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/domainry/domainry-foundation/logging"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	notificationsdk "github.com/domainry/domainry-notification-sdk"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
@@ -12,8 +11,13 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
-	"go.uber.org/zap"
 )
+
+var runtimeWorkerOwner = "runtime"
+
+func runtimeWorkerIdentity(name string) workerplatform.Identity {
+	return workerplatform.Identity{Owner: runtimeWorkerOwner, Name: name}
+}
 
 var runtimeWorkerApplications = func(records *composition.RuntimeServices) composition.RuntimeApplications {
 	return records.Applications()
@@ -73,15 +77,15 @@ func (a *Runtime) startRecordTimerWorker(ctx context.Context) {
 		if batch <= 0 {
 			batch = 25
 		}
-		return workerplatform.StartAdaptiveLoop(workerCtx, "record_timer", interval, maxInterval, func() bool {
-			return runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "record timer worker failed", func() (bool, error) {
+		return workerplatform.StartAdaptiveLoop(workerCtx, runtimeWorkerIdentity("record_timer"), interval, maxInterval, func(tickCtx context.Context) (workerplatform.TickResult, error) {
+			return runControlledRuntimeWorkerTick(tickCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
 				processed, err := service.ProcessDueForAllWorkspaces(
-					workerCtx,
+					operationCtx,
 					time.Time{},
 					batch,
 					principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "process due record timers"),
 				)
-				return processed > 0, err
+				return workerplatform.TickResult{Worked: processed > 0, ProcessedCount: processed}, err
 			})
 		})
 	})
@@ -106,14 +110,15 @@ func (a *Runtime) startNotificationChannelWorker(ctx context.Context) {
 			batch = 25
 		}
 		wakeups := a.store.WorkerWakeups().Subscribe("notification_channel", 64)
-		return workerplatform.StartWakeableRecoveryLoop(workerCtx, "notification_channel", notificationChannelRecoveryInterval(a.cfg.EffectiveWorkerPollInterval()), wakeups, func() {
-			runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification channel worker failed", func() (bool, error) {
-				processed, err := a.notificationWorkers.ProcessDueChannelPlans(workerCtx, batch)
-				return processed > 0, err
+		return workerplatform.StartWakeableRecoveryLoop(workerCtx, runtimeWorkerIdentity("notification_channel"), notificationChannelRecoveryInterval(a.cfg.EffectiveWorkerPollInterval()), wakeups, func(tickCtx context.Context) (workerplatform.TickResult, error) {
+			return runControlledRuntimeWorkerTick(tickCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+				processed, err := a.notificationWorkers.ProcessDueChannelPlans(operationCtx, batch)
+				return workerplatform.TickResult{Worked: processed > 0, ProcessedCount: processed}, err
 			})
-		}, func(locator workerplatform.DurableTaskLocator) {
-			runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification channel execution failed", func() (bool, error) {
-				return a.notificationWorkers.ProcessChannelPlan(workerCtx, notificationSDKWorkLocator(locator))
+		}, func(executeCtx context.Context, locator workerplatform.DurableTaskLocator) (workerplatform.TickResult, error) {
+			return runControlledRuntimeWorkerTick(executeCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+				worked, err := a.notificationWorkers.ProcessChannelPlan(operationCtx, notificationSDKWorkLocator(locator))
+				return workerplatform.TickResult{Worked: worked, ProcessedCount: boolCount(worked)}, err
 			})
 		})
 	})
@@ -197,15 +202,15 @@ func startWorkflowContinuationWorkerLoop(
 	if batchSize <= 0 {
 		batchSize = 25
 	}
-	return workerplatform.StartWakeableRecoveryLoop(ctx, "workflow_continuation", interval, wakeups, func() {
-		runLoggedRuntimeWorkerTickWork(ctx, control, "workflow continuation recovery failed", func() (bool, error) {
-			result, err := process(ctx, batchSize, workflowapplication.WorkflowWorkerPrincipal())
-			return result.Processed > 0, err
+	return workerplatform.StartWakeableRecoveryLoop(ctx, runtimeWorkerIdentity("workflow_continuation"), interval, wakeups, func(tickCtx context.Context) (workerplatform.TickResult, error) {
+		return runControlledRuntimeWorkerTick(tickCtx, control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+			result, err := process(operationCtx, batchSize, workflowapplication.WorkflowWorkerPrincipal())
+			return workerplatform.TickResult{Worked: result.Processed > 0, ProcessedCount: result.Processed}, err
 		})
-	}, func(locator workflowapplication.WorkflowContinuationLocator) {
-		runLoggedRuntimeWorkerTickWork(ctx, control, "workflow continuation execution failed", func() (bool, error) {
-			result, err := processExact(ctx, locator, workflowapplication.WorkflowWorkerPrincipal())
-			return result.Processed > 0, err
+	}, func(executeCtx context.Context, locator workflowapplication.WorkflowContinuationLocator) (workerplatform.TickResult, error) {
+		return runControlledRuntimeWorkerTick(executeCtx, control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+			result, err := processExact(operationCtx, locator, workflowapplication.WorkflowWorkerPrincipal())
+			return workerplatform.TickResult{Worked: result.Processed > 0, ProcessedCount: result.Processed}, err
 		})
 	})
 }
@@ -247,7 +252,7 @@ func (a *Runtime) startIntegrationCredentialExpiryWorker(ctx context.Context) {
 	a.startIntegrationOwnerLoop(ctx, "integration_credentials", "Integration credential worker failed", a.integrationWorkers.ProcessDueCredentialExpirations)
 }
 
-func (a *Runtime) startIntegrationOwnerLoop(ctx context.Context, name, failure string, process func(context.Context, int) (int, error)) {
+func (a *Runtime) startIntegrationOwnerLoop(ctx context.Context, name, _ string, process func(context.Context, int) (int, error)) {
 	a.startControlledWorker(ctx, name, func(workerCtx context.Context) <-chan struct{} {
 		interval := a.cfg.EffectiveWorkerPollInterval()
 		if interval <= 0 {
@@ -257,20 +262,16 @@ func (a *Runtime) startIntegrationOwnerLoop(ctx context.Context, name, failure s
 		if batch <= 0 || batch > 500 {
 			batch = 25
 		}
-		tick := func() bool {
-			return runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, failure, func() (bool, error) {
-				started := time.Now()
-				processed, err := process(workerCtx, batch)
-				if processed > 0 {
-					logging.FromContext(workerCtx).Info("Integration owner batch completed", zap.String("worker", name), zap.Int("processed", processed), zap.Int64("started_at_ms", started.UnixMilli()), zap.Int64("duration_ms", time.Since(started).Milliseconds()), zap.Bool("success", err == nil))
-				}
+		tick := func(tickCtx context.Context) (workerplatform.TickResult, error) {
+			return runControlledRuntimeWorkerTick(tickCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+				processed, err := process(operationCtx, batch)
 				// The owner returns only after its task transactions have finished.
 				// Even a partially failed batch may have committed events. This is
 				// only a hint: the event owner still claims committed durable rows.
 				if name == "integration_provider" && processed > 0 {
 					a.signalIntegrationQueue("integration_event")
 				}
-				return processed > 0, err
+				return workerplatform.TickResult{Worked: processed > 0, ProcessedCount: processed}, err
 			})
 		}
 		maxInterval := max(30*time.Second, interval*30)
@@ -281,11 +282,15 @@ func (a *Runtime) startIntegrationOwnerLoop(ctx context.Context, name, failure s
 			// notification being admitted. Integration's existing connection
 			// leases/fencing still serialize each mailbox; there are at most two
 			// concurrent batches, not an unbounded goroutine per notification.
-			recovery := workerplatform.StartAdaptiveLoop(workerCtx, name, interval, maxInterval, tick)
-			push := workerplatform.StartWakeableRecoveryLoop(workerCtx, name+"_push", maxInterval, wakeups, func() {}, func(struct{}) { tick() })
+			recovery := workerplatform.StartAdaptiveLoop(workerCtx, runtimeWorkerIdentity(name), interval, maxInterval, tick)
+			push := workerplatform.StartWakeableRecoveryLoop(workerCtx, runtimeWorkerIdentity(name+"_push"), maxInterval, wakeups, func(context.Context) (workerplatform.TickResult, error) {
+				return workerplatform.TickResult{}, nil
+			}, func(executeCtx context.Context, _ struct{}) (workerplatform.TickResult, error) {
+				return tick(executeCtx)
+			})
 			return workerplatform.Join(recovery, push)
 		}
-		return workerplatform.StartWakeableAdaptiveLoop(workerCtx, name, interval, maxInterval, wakeups, tick)
+		return workerplatform.StartWakeableAdaptiveLoop(workerCtx, runtimeWorkerIdentity(name), interval, maxInterval, wakeups, tick)
 	})
 }
 
@@ -300,14 +305,15 @@ func (a *Runtime) StartNotificationPublicationWorker(ctx context.Context) {
 				batch = 25
 			}
 			wakeups := a.store.WorkerWakeups().Subscribe("notification_publication", 64)
-			return workerplatform.StartWakeableRecoveryLoop(workerCtx, "notification_publication", notificationPublicationRecoveryInterval(a.cfg.EffectiveWorkerPollInterval()), wakeups, func() {
-				runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "Notification SaaS publication recovery failed", func() (bool, error) {
-					processed, err := a.notificationRelay.ProcessDue(workerCtx, batch)
-					return processed > 0, err
+			return workerplatform.StartWakeableRecoveryLoop(workerCtx, runtimeWorkerIdentity("notification_publication"), notificationPublicationRecoveryInterval(a.cfg.EffectiveWorkerPollInterval()), wakeups, func(tickCtx context.Context) (workerplatform.TickResult, error) {
+				return runControlledRuntimeWorkerTick(tickCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+					processed, err := a.notificationRelay.ProcessDue(operationCtx, batch)
+					return workerplatform.TickResult{Worked: processed > 0, ProcessedCount: processed}, err
 				})
-			}, func(locator workerplatform.DurableTaskLocator) {
-				runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "Notification SaaS publication relay failed", func() (bool, error) {
-					return a.notificationRelay.Process(workerCtx, locator)
+			}, func(executeCtx context.Context, locator workerplatform.DurableTaskLocator) (workerplatform.TickResult, error) {
+				return runControlledRuntimeWorkerTick(executeCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+					worked, err := a.notificationRelay.Process(operationCtx, locator)
+					return workerplatform.TickResult{Worked: worked, ProcessedCount: boolCount(worked)}, err
 				})
 			})
 		})
@@ -320,18 +326,21 @@ func (a *Runtime) StartNotificationPublicationWorker(ctx context.Context) {
 				batch = 25
 			}
 			wakeups := a.store.WorkerWakeups().Subscribe("notification_publication", 64)
-			publicationDone := workerplatform.StartWakeableRecoveryLoop(workerCtx, "notification_publication", notificationPublicationRecoveryInterval(a.cfg.EffectiveWorkerPollInterval()), wakeups, func() {
-				runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification publication recovery failed", func() (bool, error) {
-					processed, err := a.notificationWorkers.ProcessDuePublications(workerCtx, batch)
-					return processed > 0, err
+			publicationDone := workerplatform.StartWakeableRecoveryLoop(workerCtx, runtimeWorkerIdentity("notification_publication"), notificationPublicationRecoveryInterval(a.cfg.EffectiveWorkerPollInterval()), wakeups, func(tickCtx context.Context) (workerplatform.TickResult, error) {
+				return runControlledRuntimeWorkerTick(tickCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+					processed, err := a.notificationWorkers.ProcessDuePublications(operationCtx, batch)
+					return workerplatform.TickResult{Worked: processed > 0, ProcessedCount: processed}, err
 				})
-			}, func(locator workerplatform.DurableTaskLocator) {
-				runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification publication execution failed", func() (bool, error) {
-					return a.notificationWorkers.ProcessPublication(workerCtx, notificationSDKWorkLocator(locator))
+			}, func(executeCtx context.Context, locator workerplatform.DurableTaskLocator) (workerplatform.TickResult, error) {
+				return runControlledRuntimeWorkerTick(executeCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+					worked, err := a.notificationWorkers.ProcessPublication(operationCtx, notificationSDKWorkLocator(locator))
+					return workerplatform.TickResult{Worked: worked, ProcessedCount: boolCount(worked)}, err
 				})
 			})
-			refreshDone := workerplatform.StartNamedLoop(workerCtx, "notification_renderer_refresh", 5*time.Second, func() {
-				runLoggedRuntimeWorkerTick(workerCtx, a.worker.Control, "notification renderer refresh failed", func() error { return a.notificationWorkers.RefreshPublished(workerCtx) })
+			refreshDone := workerplatform.StartNamedLoop(workerCtx, runtimeWorkerIdentity("notification_renderer_refresh"), 5*time.Second, func(tickCtx context.Context) (workerplatform.TickResult, error) {
+				return runControlledRuntimeWorkerTick(tickCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+					return workerplatform.TickResult{}, a.notificationWorkers.RefreshPublished(operationCtx)
+				})
 			})
 			return workerplatform.Join(publicationDone, refreshDone)
 		})
@@ -355,14 +364,15 @@ func (a *Runtime) startNotificationInboxWorker(ctx context.Context) {
 			batch = 25
 		}
 		wakeups := a.store.WorkerWakeups().Subscribe("notification_inbox", 64)
-		return workerplatform.StartWakeableRecoveryLoop(workerCtx, "notification_inbox", notificationInboxRecoveryInterval(a.cfg.EffectiveWorkerPollInterval()), wakeups, func() {
-			runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification inbox recovery failed", func() (bool, error) {
-				processed, err := a.notificationWorkers.ProcessDueInboxEvents(workerCtx, batch)
-				return processed > 0, err
+		return workerplatform.StartWakeableRecoveryLoop(workerCtx, runtimeWorkerIdentity("notification_inbox"), notificationInboxRecoveryInterval(a.cfg.EffectiveWorkerPollInterval()), wakeups, func(tickCtx context.Context) (workerplatform.TickResult, error) {
+			return runControlledRuntimeWorkerTick(tickCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+				processed, err := a.notificationWorkers.ProcessDueInboxEvents(operationCtx, batch)
+				return workerplatform.TickResult{Worked: processed > 0, ProcessedCount: processed}, err
 			})
-		}, func(locator workerplatform.DurableTaskLocator) {
-			runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "notification inbox execution failed", func() (bool, error) {
-				return a.notificationWorkers.ProcessInboxEvent(workerCtx, notificationSDKWorkLocator(locator))
+		}, func(executeCtx context.Context, locator workerplatform.DurableTaskLocator) (workerplatform.TickResult, error) {
+			return runControlledRuntimeWorkerTick(executeCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+				worked, err := a.notificationWorkers.ProcessInboxEvent(operationCtx, notificationSDKWorkLocator(locator))
+				return workerplatform.TickResult{Worked: worked, ProcessedCount: boolCount(worked)}, err
 			})
 		})
 	})
@@ -379,24 +389,20 @@ func notificationInboxRecoveryInterval(interval time.Duration) time.Duration {
 	return interval
 }
 
-func runLoggedRuntimeWorkerTick(ctx context.Context, control *workerplatform.Controller, message string, operation func() error) {
-	control.RunIfAccepting(func() {
-		if err := operation(); err != nil && ctx.Err() == nil {
-			logging.FromContext(ctx).Error(message, logging.StableErrorFields(err)...)
-		}
-	})
+func runControlledRuntimeWorkerTick(ctx context.Context, control *workerplatform.Controller, operation workerplatform.Tick) (workerplatform.TickResult, error) {
+	result := workerplatform.TickResult{}
+	var err error
+	if control == nil || !control.RunIfAccepting(func() { result, err = operation(ctx) }) {
+		return result, nil
+	}
+	return result, err
 }
 
-func runLoggedRuntimeWorkerTickWork(ctx context.Context, control *workerplatform.Controller, message string, operation func() (bool, error)) bool {
-	worked := false
-	control.RunIfAccepting(func() {
-		var err error
-		worked, err = operation()
-		if err != nil && ctx.Err() == nil {
-			logging.FromContext(ctx).Error(message, logging.StableErrorFields(err)...)
-		}
-	})
-	return worked
+func boolCount(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func (a *Runtime) startRuntimeReleaseHeartbeat(parent context.Context) {
@@ -404,21 +410,21 @@ func (a *Runtime) startRuntimeReleaseHeartbeat(parent context.Context) {
 		return
 	}
 	a.startTrackedWorker(parent, func(ctx context.Context) <-chan struct{} {
-		return workerplatform.StartNamedLoop(ctx, "runtime_release_cohort", a.releaseCohort.HeartbeatInterval(), func() {
+		return workerplatform.StartNamedLoop(ctx, runtimeWorkerIdentity("runtime_release_cohort"), a.releaseCohort.HeartbeatInterval(), func(tickCtx context.Context) (workerplatform.TickResult, error) {
 			if a.releaseAdmission.Check() != nil {
-				return
+				return workerplatform.TickResult{}, nil
 			}
-			lease, err := a.releaseCohort.Heartbeat(ctx, a.runtimeReleaseLease(), a.worker.Clock.Now())
+			lease, err := a.releaseCohort.Heartbeat(tickCtx, a.runtimeReleaseLease(), a.worker.Clock.Now())
 			if err == nil {
 				a.replaceRuntimeReleaseLease(lease)
-				return
+				return workerplatform.TickResult{Worked: true, ProcessedCount: 1}, nil
 			}
-			logging.FromContext(ctx).Error("runtime release cohort heartbeat failed", logging.StableErrorFields(err)...)
 			a.releaseAdmission.Fail(err)
 			if a.api != nil {
 				a.api.SetDraining(true)
 			}
 			a.worker.Control.Drain()
+			return workerplatform.TickResult{Attempt: 1}, err
 		})
 	})
 }

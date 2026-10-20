@@ -16,7 +16,7 @@ import (
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/modulehttp"
-	"github.com/domainry/domainry-foundation/telemetry"
+	"github.com/domainry/domainry-foundation/processhost"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
@@ -34,24 +34,20 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
-	"go.uber.org/zap"
 )
 
 // Run validates project-owned composition, freezes its Handler registry
 // and owns the complete Runtime process lifecycle until shutdown.
-func Run(options Options) error {
-	logger, err := logging.Initialize("domainry-domain-runtime")
+func Run(options Options) (runErr error) {
+	observability, err := processhost.Open(context.Background(), processhost.Config{ServiceName: "domainry-domain-runtime", ServiceVersion: options.Identity.RuntimeVersion})
 	if err != nil {
-		wrapped := fmt.Errorf("initialize logger: %w", err)
-		_, _ = fmt.Fprintln(os.Stderr, wrapped)
-		return wrapped
+		return fmt.Errorf("initialize Runtime observability: %w", err)
 	}
-	defer func() { _ = logger.Sync() }()
-	if err := runWithDependencies(options, defaultServerRunDependencies()); err != nil {
-		logger.Error("domain Runtime stopped", logging.StableErrorFields(err)...)
-		return err
-	}
-	return nil
+	defer func() { runErr = observability.Finish(context.Background(), nil, runErr) }()
+	dependencies := defaultServerRunDependencies()
+	dependencies.processStarted = observability.Started
+	dependencies.processStopping = observability.Stopping
+	return runWithDependencies(options, dependencies)
 }
 
 type runtimeProcess interface {
@@ -73,6 +69,10 @@ type runtimeModuleRouteGuardProcess interface {
 	GuardAuthenticatedModuleHTTPRoute(modulehttp.Route, http.Handler) (http.Handler, error)
 }
 
+type runtimeHTTPObservabilityProcess interface {
+	HostObservabilityMiddleware(runtimehttp.ListenerRouteGroup, http.Handler) http.Handler
+}
+
 type bootstrapRuntimeProcess struct{ *bootstrap.Runtime }
 
 func (r bootstrapRuntimeProcess) StartWorkers(ctx context.Context) {
@@ -91,6 +91,10 @@ func (r bootstrapRuntimeProcess) GuardAuthenticatedModuleHTTPRoute(route moduleh
 	return r.Runtime.GuardAuthenticatedModuleHTTPRoute(route, next)
 }
 
+func (r bootstrapRuntimeProcess) HostObservabilityMiddleware(group runtimehttp.ListenerRouteGroup, next http.Handler) http.Handler {
+	return r.Runtime.HostObservabilityMiddleware(group, next)
+}
+
 func (r bootstrapRuntimeProcess) connectorGateway() runtimeConnectorGateway {
 	if r.Runtime == nil {
 		return unavailableRuntimeConnectorGateway{}
@@ -107,7 +111,8 @@ type serverRunDependencies struct {
 	loadProjectConfig    func(string) (config.Config, config.Snapshot, error)
 	configureProjectI18n func(string) error
 	notifyContext        func(context.Context, ...os.Signal) (context.Context, context.CancelFunc)
-	initializeTracer     func(context.Context, telemetry.Config) (telemetry.Shutdown, error)
+	processStarted       func(context.Context, map[string]any)
+	processStopping      func(context.Context, map[string]any)
 	executable           func() (string, error)
 	stat                 func(string) (os.FileInfo, error)
 	readFile             func(string) ([]byte, error)
@@ -123,7 +128,8 @@ func defaultServerRunDependencies() serverRunDependencies {
 		loadProjectConfig:    config.LoadWithProjectFile,
 		configureProjectI18n: localization.ConfigureProjectExtension,
 		notifyContext:        signal.NotifyContext,
-		initializeTracer:     telemetry.Initialize,
+		processStarted:       logging.ProcessStarted,
+		processStopping:      logging.ProcessStopping,
 		executable:           os.Executable,
 		stat:                 os.Stat,
 		readFile:             os.ReadFile,
@@ -156,6 +162,16 @@ func (a *runtimeActivator) entrypointHandlers() map[runtimehttp.ListenerRouteGro
 		}
 	}
 	return nil
+}
+
+func (a *runtimeActivator) hostObservabilityMiddleware(group runtimehttp.ListenerRouteGroup, next http.Handler) http.Handler {
+	a.mu.Lock()
+	runtime := a.runtime
+	a.mu.Unlock()
+	if observer, ok := runtime.(runtimeHTTPObservabilityProcess); ok {
+		return observer.HostObservabilityMiddleware(group, next)
+	}
+	return next
 }
 
 func (a *runtimeActivator) Activate() (err error) {
@@ -344,12 +360,13 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	integrationFactory := options.IntegrationFactory
 	reportFactory := options.ReportFactory
 	for _, entry := range configSnapshot.StartupReport() {
-		zap.L().Info("Runtime configuration", zap.String("name", entry.Name), zap.String("source", entry.Source), zap.String("version", entry.Version), zap.Bool("redacted", entry.Redacted))
+		logging.FromContext(context.Background()).Info("runtime_configuration", logging.Fields(map[string]any{
+			"name": entry.Name, "source": entry.Source, "version": entry.Version, "redacted": entry.Redacted,
+		})...)
 	}
-	for _, warning := range configSnapshot.Warnings {
-		zap.L().Warn("Runtime configuration warning", zap.String("warning", warning))
-	}
-	zap.L().Info("Runtime configuration snapshot", zap.String("revision", configSnapshot.Revision))
+	logging.FromContext(context.Background()).Info("runtime_configuration_snapshot", logging.Fields(map[string]any{
+		"revision": configSnapshot.Revision, "warning_count": len(configSnapshot.Warnings),
+	})...)
 	lifecycleCtx, stop := dependencies.notifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	modulePrincipalCache, err := principalcache.Open(context.WithoutCancel(lifecycleCtx), cfg)
@@ -359,7 +376,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	defer func() {
 		if closer, ok := modulePrincipalCache.(interface{ Close() error }); ok {
 			if err := closer.Close(); err != nil {
-				zap.L().Warn("close Identity principal cache", zap.String("error_kind", "identity_principal_cache_close_failed"), zap.Error(err))
+				logging.FromContext(context.WithoutCancel(lifecycleCtx)).Warn("dependency_call_failed", logging.ErrorFields(err, logging.Failure{Stage: "principal_cache_close", Dependency: "identity_principal_cache"})...)
 			}
 		}
 	}()
@@ -367,25 +384,9 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 		MaxCacheTTL: cfg.EffectivePrincipalCacheTTL(),
 		Cache:       modulePrincipalCache,
 		OnCacheError: func(err error) {
-			zap.L().Warn("Identity principal cache operation failed; resolving from authoritative binding", zap.String("error_kind", "identity_principal_cache_operation_failed"), zap.Error(err))
+			logging.FromContext(lifecycleCtx).Warn("dependency_call_failed", logging.ErrorFields(err, logging.Failure{Stage: "principal_cache_operation", Dependency: "identity_principal_cache", Retryable: true})...)
 		},
 	}
-	shutdownTelemetry, telemetryErr := dependencies.initializeTracer(lifecycleCtx, telemetry.Config{
-		ServiceName: "domainry-domain-runtime", ServiceVersion: cfg.RuntimeVersion,
-		Exporter: cfg.TelemetryExporter, Endpoint: cfg.TelemetryEndpoint, Headers: cfg.TelemetryHeaders,
-		Insecure: cfg.TelemetryInsecure, SampleRatio: cfg.TelemetrySampleRatio, ExportTimeout: cfg.TelemetryExportTimeout,
-	})
-	if telemetryErr != nil {
-		zap.L().Warn("telemetry exporter disabled after initialization failure", zap.String("error_kind", "telemetry_initialization_failed"))
-		shutdownTelemetry = func(context.Context) error { return nil }
-	}
-	defer func() {
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(lifecycleCtx), cfg.TelemetryExportTimeout)
-		defer cancel()
-		if err := shutdownTelemetry(shutdownCtx); err != nil {
-			zap.L().Warn("telemetry shutdown failed", zap.String("error_kind", "telemetry_shutdown_failed"))
-		}
-	}()
 	projectDatabaseConfig := cfg
 	projectDatabaseConfig.DatabaseMigrationDSN = ""
 	projectDatabase, err := dependencies.prepareDatabase(context.WithoutCancel(lifecycleCtx), projectDatabaseConfig, runtimeSchemaCapabilities)
@@ -407,7 +408,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(lifecycleCtx), cfg.HTTPShutdownTimeout)
 		defer cancel()
 		if err := workspaceManager.Close(closeCtx); err != nil {
-			zap.L().Error("close Identity integration", zap.Error(err))
+			logging.FromContext(closeCtx).Error("dependency_call_failed", logging.ErrorFields(err, logging.Failure{Stage: "identity_close", Dependency: "identity"})...)
 		}
 	}()
 
@@ -436,6 +437,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 		defer cancel()
 		return runtime.CloseContext(closeCtx)
 	}
+	mountedModuleCount := 0
 	activator := &runtimeActivator{
 		handlers: handlers, connectorGateway: connectorGateway,
 		close: closeRuntime,
@@ -506,6 +508,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 				runtimeModuleAdapters = provider.ModuleHTTPAdapters()
 				moduleAdapters = append(moduleAdapters, runtimeModuleAdapters...)
 			}
+			mountedModuleCount = len(moduleAdapters)
 			hostGuard := moduleGuard
 			if provider, ok := runtime.(runtimeModuleRouteGuardProcess); ok {
 				hostGuard = runtimeModuleHTTPRouteGuard(moduleGuard, provider, runtimeModuleAdapters)
@@ -546,13 +549,15 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 		if listener.group == runtimehttp.ListenerRouteGroupPublic || listener.group == runtimehttp.ListenerRouteGroupAll {
 			listenerHandler = frontendAssets.wrap(listenerHandler, options.ProjectHTTP != nil)
 		}
+		// Observability is deliberately the final listener wrapper so Runtime,
+		// Module, ProjectHTTP and frontend fallbacks cannot bypass the process
+		// request/trace/recovery boundary.
+		listenerHandler = activator.hostObservabilityMiddleware(listener.group, listenerHandler)
 		endpointCount := runtimehttp.ListenerRouteGroupEndpointCount(listener.group)
-		zap.L().Info("starting domain Runtime listener",
-			zap.String("listener", listener.name),
-			zap.String("address", listener.addr),
-			zap.String("listener_group", string(listener.group)),
-			zap.Int("endpoint_count", endpointCount),
-		)
+		logging.FromContext(lifecycleCtx).Info("runtime_listener_starting", logging.Fields(map[string]any{
+			"listener": listener.name, "address": listener.addr,
+			"listener_group": string(listener.group), "endpoint_count": endpointCount,
+		})...)
 		servers = append(servers, &http.Server{
 			Addr:              listener.addr,
 			Handler:           listenerHandler,
@@ -564,16 +569,22 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 		})
 	}
 	serveErr := make(chan error, len(servers))
+	dependencies.processStarted(lifecycleCtx, map[string]any{
+		"listener_count": len(servers), "module_count": mountedModuleCount,
+		"project_key": runtimeModel.ProjectKey,
+	})
 	for _, server := range servers {
 		go func(server *http.Server) { serveErr <- dependencies.listenAndServe(server) }(server)
 	}
 	select {
 	case err := <-serveErr:
+		dependencies.processStopping(lifecycleCtx, map[string]any{"reason": "listener_stopped"})
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
 		return err
 	case <-lifecycleCtx.Done():
+		dependencies.processStopping(context.WithoutCancel(lifecycleCtx), map[string]any{"reason": "signal"})
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(lifecycleCtx), cfg.HTTPShutdownTimeout)
 		defer cancel()
 		var shutdownErrors []error

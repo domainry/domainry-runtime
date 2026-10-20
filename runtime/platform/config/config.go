@@ -20,6 +20,8 @@ type Config struct {
 	RuntimeInstanceID                       string
 	ProductBrandName                        string
 	Environment                             string
+	LogLevel                                string
+	LogEncoding                             string
 	AppLocale                               string
 	HTTPBindHost                            string
 	Port                                    string
@@ -204,6 +206,8 @@ func FromEnv() Config {
 		RuntimeInstanceID:                               strings.TrimSpace(os.Getenv("RUNTIME_INSTANCE_ID")),
 		ProductBrandName:                                productbrand.NameFromEnvironment(),
 		Environment:                                     environment,
+		LogLevel:                                        env("LOG_LEVEL", "info"),
+		LogEncoding:                                     env("LOG_ENCODING", "json"),
 		AppLocale:                                       env("APP_LOCALE", "en-US"),
 		HTTPBindHost:                                    strings.TrimSpace(os.Getenv("HTTP_BIND_HOST")),
 		Port:                                            env("PORT", "8081"),

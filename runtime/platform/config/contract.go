@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/domainry/domainry-foundation/logging"
 )
 
 type ValueType string
@@ -130,7 +132,7 @@ func LoadContract(sources ...Source) (Config, Snapshot, error) {
 
 func processEnvironmentOnlyConfig(name string) bool {
 	switch name {
-	case "WORKSPACE_PROVISION_FAILURE_POINT", "INITIAL_ACCEPTANCE_FIXTURES", "RUNTIME_ACCEPTANCE_FIXTURES_ENABLED",
+	case "LOG_LEVEL", "LOG_ENCODING", "WORKSPACE_PROVISION_FAILURE_POINT", "INITIAL_ACCEPTANCE_FIXTURES", "RUNTIME_ACCEPTANCE_FIXTURES_ENABLED",
 		"INSTALLATION_ADMINISTRATOR_BOOTSTRAP_ENABLED", "INSTALLATION_ADMINISTRATOR_REQUEST_ID", "INSTALLATION_ADMINISTRATOR_LOGIN_ID",
 		"INSTALLATION_ADMINISTRATOR_NAME", "INSTALLATION_ADMINISTRATOR_CREDENTIAL_FILE":
 		return true
@@ -234,6 +236,13 @@ func (s Snapshot) StartupReport() []Provenance {
 }
 
 func (c Config) Validate() error {
+	if err := logging.Validate(logging.Config{
+		ServiceName: "domainry-runtime",
+		Level:       c.LogLevel,
+		Encoding:    c.LogEncoding,
+	}); err != nil {
+		return fmt.Errorf("invalid process logging configuration: %w", err)
+	}
 	if strings.TrimSpace(os.Getenv("NOTIFICATION_TENANT_ID")) != "" {
 		return errors.New("NOTIFICATION_TENANT_ID is retired; Notification scope is derived from NOTIFICATION_WORKSPACE_ID")
 	}

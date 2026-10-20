@@ -15,10 +15,13 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
+	"github.com/domainry/domainry-foundation/telemetry"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const queueKind = "runtime_publication_outbox"
@@ -186,10 +189,16 @@ func (s *PublicationHandoffApplicationService) StartWorker(ctx context.Context, 
 	if limit <= 0 {
 		limit = 25
 	}
-	return workerplatform.StartWakeableDispatcherWithExecutors(ctx, workerplatform.DispatcherExecutorConfig{Name: queueKind, Concurrency: min(limit, 8)}, interval, s.wakeups, s.recoverLocators, func(executeCtx context.Context, locator workerplatform.DurableTaskLocator) {
-		s.worker.Control.RunIfAccepting(func() {
-			_, _ = s.process(executeCtx, Locator{WorkspaceID: locator.WorkspaceID, MessageID: locator.TaskID})
-		})
+	return workerplatform.StartWakeableDispatcherWithExecutors(ctx, workerplatform.DispatcherExecutorConfig{Owner: "runtime", Name: queueKind, Concurrency: min(limit, 8)}, interval, s.wakeups, s.recoverLocators, func(executeCtx context.Context, locator workerplatform.DurableTaskLocator) (workerplatform.TickResult, error) {
+		result := workerplatform.TickResult{}
+		var executeErr error
+		if !s.worker.Control.RunIfAccepting(func() {
+			_, executeErr = s.process(executeCtx, Locator{WorkspaceID: locator.WorkspaceID, MessageID: locator.TaskID})
+			result = workerplatform.TickResult{Worked: executeErr == nil, ProcessedCount: 1}
+		}) {
+			return workerplatform.TickResult{}, nil
+		}
+		return result, executeErr
 	})
 }
 
@@ -233,6 +242,13 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 		return claimed, err
 	}
 	workerplatform.ObserveOutcome(queueKind, "claimed")
+	applicationPayload, asyncLink := telemetry.ConsumeAsyncPayload(claimed.Payload)
+	claimed.Payload = applicationPayload
+	ctx, executionSpan := telemetry.StartLinkedSpan(ctx, "domainry.runtime.worker", "runtime.publication.execute", asyncLink, trace.WithSpanKind(trace.SpanKindConsumer))
+	defer executionSpan.End()
+	if requestcontext.OwnerExecutionID(ctx) == "" {
+		ctx = requestcontext.WithOwnerExecutionID(ctx, claimed.ID)
+	}
 	workCtx, stopHeartbeat := workerplatform.WithHeartbeat(ctx, 90*time.Second, func(heartbeatCtx context.Context) error {
 		if heartbeatErr := workerplatform.CheckFault(heartbeatCtx, s.worker.Faults, workerplatform.FaultWorkerHeartbeat); heartbeatErr != nil {
 			return heartbeatErr

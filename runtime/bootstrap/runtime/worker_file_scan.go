@@ -20,10 +20,10 @@ func (a *Runtime) startFileScanWorker(ctx context.Context) {
 		if batch <= 0 || batch > 100 {
 			batch = 25
 		}
-		return workerplatform.StartNamedLoop(workerCtx, "file_scan", interval, func() {
-			runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "file scan worker failed", func() (bool, error) {
-				processed, err := a.fileScanProcessor.ProcessPending(workerCtx, batch)
-				return processed > 0, err
+		return workerplatform.StartNamedLoop(workerCtx, runtimeWorkerIdentity("file_scan"), interval, func(tickCtx context.Context) (workerplatform.TickResult, error) {
+			return runControlledRuntimeWorkerTick(tickCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+				processed, err := a.fileScanProcessor.ProcessPending(operationCtx, batch)
+				return workerplatform.TickResult{Worked: processed > 0, ProcessedCount: processed}, err
 			})
 		})
 	})

@@ -41,10 +41,10 @@ func (a *Runtime) startArtifactCleanupWorker(ctx context.Context) {
 		if interval < time.Minute {
 			interval = time.Minute
 		}
-		return workerplatform.StartAdaptiveLoop(workerCtx, "artifact_cleanup", interval, max(5*time.Minute, interval*10), func() bool {
-			return runLoggedRuntimeWorkerTickWork(workerCtx, a.worker.Control, "artifact cleanup worker failed", func() (bool, error) {
-				result, err := reconcileRuntimeArtifactContent(workerCtx, cleanup, a.worker.Clock.Now(), runtimeArtifactCleanupBatchSize)
-				return result.Expired > 0 || result.Deleted > 0, err
+		return workerplatform.StartAdaptiveLoop(workerCtx, runtimeWorkerIdentity("artifact_cleanup"), interval, max(5*time.Minute, interval*10), func(tickCtx context.Context) (workerplatform.TickResult, error) {
+			return runControlledRuntimeWorkerTick(tickCtx, a.worker.Control, func(operationCtx context.Context) (workerplatform.TickResult, error) {
+				result, err := reconcileRuntimeArtifactContent(operationCtx, cleanup, a.worker.Clock.Now(), runtimeArtifactCleanupBatchSize)
+				return workerplatform.TickResult{Worked: result.Expired > 0 || result.Deleted > 0, ProcessedCount: result.Scanned}, err
 			})
 		})
 	})

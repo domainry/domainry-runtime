@@ -10,7 +10,6 @@ import (
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
-	"github.com/domainry/domainry-foundation/logging"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
@@ -81,7 +80,7 @@ func (h *RecordsHandler) dispatchExport(w http.ResponseWriter, r *http.Request) 
 		w.Header().Set("Content-Disposition", "attachment; filename="+dispatch.Filename)
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write(dispatch.Content); err != nil {
-			logging.FromContext(r.Context()).Error("write direct record export failed", logging.StableErrorFields(err)...)
+			recordHTTPResponseError(w, string(apperror.KindInternal), "backend.response_write_failed")
 		}
 		return
 	}
@@ -110,7 +109,24 @@ func (h *RecordsHandler) downloadExport(w http.ResponseWriter, r *http.Request) 
 	}
 	w.WriteHeader(http.StatusOK)
 	if _, err := io.Copy(w, artifact.Content); err != nil {
-		logging.FromContext(r.Context()).Error("write record export artifact failed", logging.StableErrorFields(err)...)
+		recordHTTPResponseError(w, string(apperror.KindInternal), "backend.response_write_failed")
+	}
+}
+
+func recordHTTPResponseError(writer http.ResponseWriter, kind, code string) {
+	for writer != nil {
+		if recorder, ok := writer.(interface{ RecordError(string, string) }); ok {
+			recorder.RecordError(kind, code)
+		}
+		unwrapper, ok := writer.(interface{ Unwrap() http.ResponseWriter })
+		if !ok {
+			return
+		}
+		next := unwrapper.Unwrap()
+		if next == writer {
+			return
+		}
+		writer = next
 	}
 }
 

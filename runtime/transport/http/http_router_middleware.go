@@ -2,39 +2,30 @@ package http
 
 import (
 	"net/http"
-	"runtime/debug"
 	"strings"
-	"time"
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
-
 	apperror "github.com/domainry/domainry-foundation/apperror"
-	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/requestcontext"
+	"github.com/domainry/domainry-foundation/telemetry"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	workspaceprovision "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	localization "github.com/domainry/domainry-runtime/runtime/platform/localization"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/zap"
 )
 
 const (
-	requestIDHeader     = "X-Request-ID"
-	correlationIDHeader = "X-Correlation-ID"
+	requestIDHeader     = telemetry.RequestIDHeader
+	correlationIDHeader = telemetry.CorrelationIDHeader
 )
-
-var httpTracePropagator = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
 
 type statusRecorder struct {
 	http.ResponseWriter
 	status      int
 	wroteHeader bool
+	errorKind   string
+	errorCode   string
 }
 
 func (r *statusRecorder) WriteHeader(status int) {
@@ -59,75 +50,44 @@ func (r *statusRecorder) Unwrap() http.ResponseWriter {
 	return r.ResponseWriter
 }
 
-func (s *HTTPRouter) withRecovery(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if recovered := recover(); recovered != nil {
-				if recovered == http.ErrAbortHandler {
-					panic(recovered)
-				}
-				logging.FromContext(r.Context()).Error("http panic recovered", zap.Any("panic", recovered), zap.ByteString("stack", debug.Stack()))
-				if recorder, ok := w.(*statusRecorder); !ok || !recorder.wroteHeader {
-					writeError(w, r, http.StatusInternalServerError, "backend.internal")
-				}
-			}
-		}()
-		next.ServeHTTP(w, r)
-	})
+func (r *statusRecorder) RecordError(kind, code string) {
+	r.errorKind = strings.TrimSpace(kind)
+	r.errorCode = strings.TrimSpace(code)
 }
 
-func (s *HTTPRouter) withMetrics(next http.Handler) http.Handler {
+func markResponseError(writer http.ResponseWriter, kind, code string) {
+	telemetry.RecordHTTPError(writer, kind, code)
+}
+
+// HostObservabilityMiddleware is the process-owned HTTP observation boundary.
+// Runtime, hosted modules and ProjectHTTP must all be mounted inside it.
+func (s *HTTPRouter) HostObservabilityMiddleware(group ListenerRouteGroup, next http.Handler) http.Handler {
+	return s.withMetrics(group, next)
+}
+
+func (s *HTTPRouter) withMetrics(group ListenerRouteGroup, next http.Handler) http.Handler {
+	observed := telemetry.HTTPServerMiddleware(telemetry.HTTPServerConfig{
+		ListenerGroup: string(group),
+		TracerName:    "domainry.runtime.http",
+		Observe: func(observation telemetry.HTTPServerObservation) {
+			if s.httpMetrics != nil {
+				s.httpMetrics.Observe(observation.Method, observation.Route, observation.Status, observation.Duration)
+			}
+		},
+		WritePanic: func(writer http.ResponseWriter, request *http.Request) {
+			writeError(writer, request, http.StatusInternalServerError, "backend.internal")
+		},
+	}, next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
 		if s.httpMetrics != nil {
 			s.httpMetrics.Begin()
 		}
-		requestID, correlationID, r := requestContextRequest(r)
-		w.Header().Set(requestIDHeader, requestID)
-		w.Header().Set(correlationIDHeader, correlationID)
-		ctx := r.Context()
-		ctx = requestcontext.WithWorkspaceID(ctx, explicitWorkspaceIDFromRequest(r))
-		ctx = requestcontext.WithActorID(ctx, strings.TrimSpace(r.Header.Get("X-User-ID")))
 		if s.allowDevAuthHeaders {
 			// Acceptance failure injection is a development-only control that
 			// shares the same gate as header-based development identities.
-			ctx = actionmodel.WithAcceptanceFailurePoint(ctx, r.Header.Get(actionmodel.AcceptanceFailureHeader))
+			r = r.WithContext(actionmodel.WithAcceptanceFailurePoint(r.Context(), r.Header.Get(actionmodel.AcceptanceFailureHeader)))
 		}
-		ctx, span := otel.Tracer("domainry.runtime.http").Start(ctx, "HTTP "+r.Method, trace.WithSpanKind(trace.SpanKindServer), trace.WithAttributes(
-			attribute.String("http.request.method", r.Method),
-		))
-		defer span.End()
-		r = r.WithContext(ctx)
-		w.Header().Set(requestIDHeader, requestID)
-		w.Header().Set(correlationIDHeader, correlationID)
-		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
-		next.ServeHTTP(recorder, r)
-		path := r.Pattern
-		if strings.TrimSpace(path) == "" {
-			path = "unmatched"
-		}
-		span.SetName(r.Method + " " + path)
-		span.SetAttributes(attribute.String("http.route", path), attribute.Int("http.response.status_code", recorder.status))
-		if recorder.status >= http.StatusInternalServerError {
-			span.SetStatus(codes.Error, http.StatusText(recorder.status))
-		}
-		s.observeHTTPRequest(r, path, recorder.status, time.Since(start))
-	})
-}
-
-// RequestContextMiddleware publishes the same request and correlation identity
-// on module-owned routes that the Runtime router publishes on host-owned
-// routes. Module adapters are mounted ahead of HTTPRouter, so they must receive
-// this narrow shared wrapper at the process-host boundary.
-func RequestContextMiddleware(next http.Handler) http.Handler {
-	if next == nil {
-		next = http.NotFoundHandler()
-	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID, correlationID, request := requestContextRequest(r)
-		w.Header().Set(requestIDHeader, requestID)
-		w.Header().Set(correlationIDHeader, correlationID)
-		next.ServeHTTP(w, request)
+		observed.ServeHTTP(w, r)
 	})
 }
 
@@ -136,38 +96,27 @@ func requestContextRequest(r *http.Request) (string, string, *http.Request) {
 	correlationID := correlationIDFromRequest(r, requestID)
 	r.Header.Set(requestIDHeader, requestID)
 	r.Header.Set(correlationIDHeader, correlationID)
-	ctx := httpTracePropagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+	ctx := telemetry.ExtractHTTPContext(r.Context(), r.Header)
 	ctx = requestcontext.WithRequestID(ctx, requestID)
 	ctx = requestcontext.WithCorrelationID(ctx, correlationID)
 	return requestID, correlationID, r.WithContext(ctx)
 }
 
 func requestIDFromRequest(r *http.Request) string {
-	if value := normalizedCorrelationValue(r.Header.Get(requestIDHeader)); value != "" {
+	if value := requestcontext.RequestID(r.Context()); value != "" {
 		return value
 	}
 	return requestcontext.NewRequestID()
 }
 
 func correlationIDFromRequest(r *http.Request, requestID string) string {
-	if value := normalizedCorrelationValue(r.Header.Get(correlationIDHeader)); value != "" {
+	if value := requestcontext.CorrelationID(r.Context()); value != "" {
+		return value
+	}
+	if value := telemetry.NormalizeHTTPIdentity(r.Header.Get(correlationIDHeader)); value != "" {
 		return value
 	}
 	return requestID
-}
-
-func normalizedCorrelationValue(raw string) string {
-	value := strings.TrimSpace(raw)
-	if value == "" || len(value) > 128 {
-		return ""
-	}
-	for _, character := range value {
-		if (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || strings.ContainsRune("._:-", character) {
-			continue
-		}
-		return ""
-	}
-	return value
 }
 
 func requestLocale(r *http.Request) string {
@@ -199,26 +148,6 @@ func supportedRequestLocale(locale string) string {
 		}
 	}
 	return localization.DefaultLocale
-}
-
-func (s *HTTPRouter) observeHTTPRequest(r *http.Request, path string, status int, duration time.Duration) {
-	if s.httpMetrics != nil {
-		s.httpMetrics.Observe(r.Method, path, status, duration)
-	}
-	logging.FromContext(r.Context()).Info("http_request", logging.Fields(map[string]any{
-		"event":        "http_request",
-		"workspace_id": workspaceIDFromRequest(r),
-		"actor_id":     s.actorIDFromRequest(r),
-		"role":         valueOrDefault(strings.TrimSpace(r.Header.Get("X-Preview-Role")), valueOrDefault(strings.TrimSpace(r.Header.Get("X-Role")), strings.TrimSpace(r.Header.Get("X-User-Role")))),
-		"method":       r.Method,
-		"path":         path,
-		"status":       status,
-		"duration_ms":  duration.Milliseconds(),
-		"object_key":   strings.TrimSpace(r.PathValue("objectKey")),
-		"action_key":   strings.TrimSpace(r.PathValue("actionKey")),
-		"workflow_key": strings.TrimSpace(r.PathValue("workflowKey")),
-		"execution_id": strings.TrimSpace(r.PathValue("executionID")),
-	})...)
 }
 
 func (s *HTTPRouter) httpMetricsSnapshot() []HTTPRequestMetric {

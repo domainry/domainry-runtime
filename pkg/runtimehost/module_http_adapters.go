@@ -47,7 +47,6 @@ func (router *moduleAdapterRouter) Bind(adapters []modulehttp.Adapter, guards ..
 	if len(router.corsOrigins) > 0 {
 		handler = runtimehttp.CORSMiddleware(router.corsOrigins, handler)
 	}
-	handler = runtimehttp.RequestContextMiddleware(handler)
 	router.mu.Lock()
 	router.handler = handler
 	router.guard = guard

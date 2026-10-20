@@ -105,7 +105,7 @@ func TestCloneAndAuditPrincipalContext(t *testing.T) {
 	}
 	router := &HTTPRouter{}
 	request := requestWithPrincipal(httptest.NewRequest(http.MethodGet, "/", nil), principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "auditor", WorkspaceID: "workspace-1"}})
-	request.Header.Set(requestIDHeader, "request-1")
+	request = request.WithContext(requestcontext.WithRequestID(request.Context(), "request-1"))
 	principal := router.auditPrincipalFromRequest(request)
 	if principal.UserID != "auditor" || principal.RequestID != "request-1" {
 		t.Fatalf("audit principal=%+v", principal)
@@ -133,7 +133,7 @@ func TestWriteServiceErrorKindAndResponseParameterMatrix(t *testing.T) {
 	} {
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/", nil)
-		request.Header.Set("X-Request-ID", "req-test")
+		request = request.WithContext(requestcontext.WithRequestID(request.Context(), "req-test"))
 		err := &apperror.AppError{Kind: test.kind, Code: "backend.test", Params: map[string]string{"field": "name"}}
 		writeServiceError(response, request, err)
 		var body map[string]any

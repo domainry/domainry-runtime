@@ -8,11 +8,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
+	"github.com/domainry/domainry-foundation/telemetry"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	runtimeext "github.com/domainry/domainry-runtime/pkg/runtimeext"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type publicationRepositoryProbe struct {
@@ -69,16 +75,64 @@ func (p *publicationWorkerProbe) ScheduleOutboxRetry(_ context.Context, _, _, _ 
 }
 
 type deliveryProbe struct {
-	request integrationsdk.DeliveryRequest
-	err     error
+	request          integrationsdk.DeliveryRequest
+	err              error
+	spanContext      trace.SpanContext
+	correlationID    string
+	ownerExecutionID string
 }
 
-func (p *deliveryProbe) Accept(_ context.Context, request integrationsdk.DeliveryRequest) (integrationsdk.DeliveryReceipt, error) {
+func (p *deliveryProbe) Accept(ctx context.Context, request integrationsdk.DeliveryRequest) (integrationsdk.DeliveryReceipt, error) {
 	p.request = request
+	p.spanContext = trace.SpanContextFromContext(ctx)
+	p.correlationID = requestcontext.CorrelationID(ctx)
+	p.ownerExecutionID = requestcontext.OwnerExecutionID(ctx)
 	if p.err != nil {
 		return integrationsdk.DeliveryReceipt{}, p.err
 	}
 	return integrationsdk.DeliveryReceipt{MessageID: request.MessageID, InvocationID: "invocation-1", Status: integrationsdk.DeliveryStatusAccepted}, nil
+}
+
+func TestWorkerStartsLinkedRootSpanAndStripsTelemetryPayload(t *testing.T) {
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(provider)
+	t.Cleanup(func() {
+		_ = provider.Shutdown(t.Context())
+		otel.SetTracerProvider(previous)
+	})
+
+	producerContext := requestcontext.WithCorrelationID(t.Context(), "correlation-1")
+	producerContext = requestcontext.WithOwnerExecutionID(producerContext, "workflow-1")
+	producerContext, producerSpan := provider.Tracer("test.producer").Start(producerContext, "http.request")
+	producerSpanContext := producerSpan.SpanContext()
+	payload := telemetry.EnsureAsyncPayload(producerContext, map[string]any{"subject": "hello"})
+	producerSpan.End()
+
+	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: publicationmodel.Message{
+		ID: "message-linked", DedupKey: "dedup-linked", WorkspaceID: "workspace-primary", ConnectorKey: "email", Operation: "send", Payload: payload, Status: "queued",
+	}}}
+	delivery := &deliveryProbe{}
+	service := NewPublicationHandoffApplicationService(Dependencies{Repository: &repository.publicationRepositoryProbe, WorkerRepository: repository, Delivery: delivery})
+	if _, err := service.process(t.Context(), Locator{WorkspaceID: "workspace-primary", MessageID: "message-linked"}); err != nil {
+		t.Fatal(err)
+	}
+	if !delivery.spanContext.IsValid() || delivery.spanContext.TraceID() == producerSpanContext.TraceID() || delivery.correlationID != "correlation-1" || delivery.ownerExecutionID != "workflow-1" {
+		t.Fatalf("delivery span=%v correlation=%q owner=%q", delivery.spanContext, delivery.correlationID, delivery.ownerExecutionID)
+	}
+	if strings.Contains(string(delivery.request.Payload), telemetry.AsyncPayloadKey) {
+		t.Fatalf("framework telemetry leaked to provider payload: %s", delivery.request.Payload)
+	}
+	var workerSpan sdktrace.ReadOnlySpan
+	for _, ended := range recorder.Ended() {
+		if ended.Name() == "runtime.publication.execute" {
+			workerSpan = ended
+		}
+	}
+	if workerSpan == nil || workerSpan.Parent().IsValid() || len(workerSpan.Links()) != 1 || workerSpan.Links()[0].SpanContext.TraceID() != producerSpanContext.TraceID() || workerSpan.Links()[0].SpanContext.SpanID() != producerSpanContext.SpanID() {
+		t.Fatalf("worker span=%#v producer=%v", workerSpan, producerSpanContext)
+	}
 }
 func (*deliveryProbe) Query(context.Context, string) (integrationsdk.DeliveryReceipt, error) {
 	return integrationsdk.DeliveryReceipt{}, nil
