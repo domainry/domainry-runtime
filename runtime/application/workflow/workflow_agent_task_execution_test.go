@@ -18,8 +18,9 @@ import (
 )
 
 type workflowAgentTaskStateStub struct {
-	commit transactionmodel.WorkflowStateCommit
-	err    error
+	commit  transactionmodel.WorkflowStateCommit
+	commits []transactionmodel.WorkflowStateCommit
+	err     error
 }
 
 func (*workflowAgentTaskStateStub) CommitWorkflowDecision(context.Context, transactionmodel.WorkflowDecisionCommit) (bool, error) {
@@ -28,6 +29,7 @@ func (*workflowAgentTaskStateStub) CommitWorkflowDecision(context.Context, trans
 
 func (s *workflowAgentTaskStateStub) CommitWorkflowState(_ context.Context, commit transactionmodel.WorkflowStateCommit) error {
 	s.commit = commit
+	s.commits = append(s.commits, commit)
 	return s.err
 }
 
@@ -39,6 +41,9 @@ func TestWorkflowAgentTaskNodeStartsCapabilityAndCommitsWaitingCorrelation(t *te
 	runtime := NewWorkflowProcessRuntime(WorkflowDependencies{
 		Processes: processes, Decisions: state,
 		StartAgentTask: func(_ context.Context, request WorkflowAgentTaskPreparation) (agentsdk.TaskResult, error) {
+			if len(state.commits) != 1 || len(state.commits[0].InsertNodes) != 1 || state.commits[0].InsertNodes[0].Status != "waiting" || state.commits[0].InsertNodes[0].Input["agent_task_run_id"] != request.RunID {
+				t.Fatalf("Agent task became runnable before its correlation was durable: commits=%#v request=%#v", state.commits, request)
+			}
 			prepared = request
 			return agentsdk.TaskResult{ExternalRunID: request.WorkspaceID + "/" + request.RunID, Status: agentsdk.ProviderRunAccepted}, nil
 		},
@@ -49,15 +54,16 @@ func TestWorkflowAgentTaskNodeStartsCapabilityAndCommitsWaitingCorrelation(t *te
 	if err != nil || !waiting || outcome != "waiting" {
 		t.Fatalf("outcome=%q waiting=%v err=%v", outcome, waiting, err)
 	}
-	if prepared.NodeID != "agent" || prepared.Iteration != 1 || prepared.DefinitionSnapshotHash != "definition-hash" || len(state.commit.InsertNodes) != 1 || len(state.commit.Events) != 1 {
-		t.Fatalf("prepared=%#v commit=%#v", prepared, state.commit)
+	if prepared.NodeID != "agent" || prepared.Iteration != 1 || prepared.DefinitionSnapshotHash != "definition-hash" || len(state.commits) != 2 || len(state.commits[0].InsertNodes) != 1 || len(state.commits[1].Events) != 1 {
+		t.Fatalf("prepared=%#v commits=%#v", prepared, state.commits)
 	}
-	if state.commit.InsertNodes[0].Status != "waiting" || state.commit.InsertNodes[0].Input["agent_task_run_id"] != prepared.RunID {
-		t.Fatalf("prepared=%#v node=%#v", prepared, state.commit.InsertNodes[0])
+	waitingNode := state.commits[0].InsertNodes[0]
+	if waitingNode.Status != "waiting" || waitingNode.Input["agent_task_run_id"] != prepared.RunID {
+		t.Fatalf("prepared=%#v node=%#v", prepared, waitingNode)
 	}
 	nodeInstanceID, runID := workflowAgentTaskCorrelation(process.ID, node.ID, 1)
-	if prepared.NodeInstanceID != nodeInstanceID || prepared.RunID != runID || state.commit.InsertNodes[0].ID != nodeInstanceID {
-		t.Fatalf("durable correlation prepared=%#v node=%#v", prepared, state.commit.InsertNodes[0])
+	if prepared.NodeInstanceID != nodeInstanceID || prepared.RunID != runID || waitingNode.ID != nodeInstanceID {
+		t.Fatalf("durable correlation prepared=%#v node=%#v", prepared, waitingNode)
 	}
 	otherNodeInstanceID, otherRunID := workflowAgentTaskCorrelation(process.ID, node.ID, 2)
 	if otherNodeInstanceID == nodeInstanceID || otherRunID == runID {

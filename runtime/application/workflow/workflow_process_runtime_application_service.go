@@ -54,26 +54,47 @@ func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, proces
 	input := renderWorkflowRecordData(ctx, contract.Input, process.Variables, principal)
 	instance.Input = workflowpolicy.WorkflowCloneMap(input)
 	instance.Input["agent_task_run_id"] = runID
+	// Persist the exact workflow correlation before making the Agent task
+	// runnable. A fast task may complete as soon as StartAgentTask returns; if
+	// the waiting node is inserted afterwards, its terminal callback cannot be
+	// correlated and the workflow is stranded even though the task succeeded.
+	if err := stateStore.CommitWorkflowState(ctx, transactionmodel.WorkflowStateCommit{
+		WorkspaceID: process.WorkspaceID, InsertNodes: []workflowmodel.WorkflowNodeInstance{instance},
+	}); err != nil {
+		return "", false, internalError("prepare Agent Task", err)
+	}
 	result, err := e.runtime.dependencies.StartAgentTask(ctx, WorkflowAgentTaskPreparation{
 		RunID: runID, WorkspaceID: process.WorkspaceID, ProcessID: process.ID, NodeInstanceID: instance.ID,
 		NodeID: node.ID, Iteration: instance.Iteration, DefinitionVersionID: process.DefinitionVersionID, DefinitionSnapshotHash: process.DefinitionHash,
 		Contract: contract, Input: input, Initiator: principal, CorrelationID: principal.CorrelationID,
 	})
 	if err != nil {
+		e.failPreparedAgentTaskNode(ctx, instance, serviceErrorCode(err))
 		return "", false, err
 	}
 	if result.Status != agentsdk.ProviderRunAccepted && result.Status != agentsdk.ProviderRunRunning {
+		e.failPreparedAgentTaskNode(ctx, instance, "backend.workflow.agent_task_start_invalid")
 		return "", false, internalError("start Agent Task", fmt.Errorf("Agent capability returned status %q", result.Status))
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	event := workflowmodel.WorkflowProcessEvent{WorkspaceID: process.WorkspaceID, ID: workflowProcessID(ctx, "event"), ProcessID: process.ID, NodeID: node.ID, Event: "agent_task_waiting", ActorID: valueOrDefault(principal.UserID, "system"), Summary: node.Name, Metadata: map[string]any{"task_run_id": runID, "task_key": contract.TaskKey, "task_version": contract.TaskVersion, "agent_external_run_id": result.ExternalRunID}, CreatedAt: now}
-	if err := stateStore.CommitWorkflowState(ctx, transactionmodel.WorkflowStateCommit{WorkspaceID: process.WorkspaceID, InsertNodes: []workflowmodel.WorkflowNodeInstance{instance}, Events: []workflowmodel.WorkflowProcessEvent{event}}); err != nil {
-		return "", false, internalError("commit Agent Task", err)
+	if err := stateStore.CommitWorkflowState(ctx, transactionmodel.WorkflowStateCommit{WorkspaceID: process.WorkspaceID, Events: []workflowmodel.WorkflowProcessEvent{event}}); err != nil {
+		return "", false, internalError("record Agent Task dispatch", err)
 	}
 	if strings.TrimSpace(contract.OutputVariable) != "" {
 		process.Variables["agent_task:"+node.ID+":output_variable"] = strings.TrimSpace(contract.OutputVariable)
 	}
 	return "waiting", true, nil
+}
+
+func (e *WorkflowProcessEngine) failPreparedAgentTaskNode(ctx context.Context, instance workflowmodel.WorkflowNodeInstance, code string) {
+	if e == nil || e.runtime == nil || e.runtime.dependencies.Processes == nil {
+		return
+	}
+	instance.Status = "configuration_error"
+	instance.ErrorCode = strings.TrimSpace(code)
+	instance.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	_ = e.runtime.dependencies.Processes.UpdateNode(ctx, instance.WorkspaceID, instance)
 }
 
 func workflowAgentTaskCorrelation(processID, nodeID string, iteration int) (string, string) {
