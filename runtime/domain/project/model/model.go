@@ -56,6 +56,13 @@ type Field struct {
 	Default     json.RawMessage                    `json:"default,omitempty"`
 	Sensitive   bool                               `json:"sensitive,omitempty"`
 	JSONShape   string                             `json:"json_shape,omitempty"`
+	// Subject lifecycle policy is authored only through the compact field
+	// declaration. These normalized values compile into the Runtime definition
+	// Config consumed by the generic subject lifecycle engine.
+	LifecycleErase           string `json:"-"`
+	LifecycleSubjectIdentity bool   `json:"-"`
+	LifecycleSubjectFile     bool   `json:"-"`
+	LifecycleSubjectRelation bool   `json:"-"`
 }
 
 type FieldValidation struct {
@@ -82,6 +89,9 @@ type Project struct {
 	DefaultLocale                     string `json:"default_locale,omitempty"`
 	TimeZone                          string `json:"time_zone,omitempty"`
 	InitialWorkspaceAdministratorRole string `json:"initial_workspace_administrator_role"`
+	// SubjectErasureDefault is the project's explicit default for fields on
+	// records linked to a Runtime user. Empty keeps fail-closed preflight.
+	SubjectErasureDefault string `json:"subject_erasure_default,omitempty"`
 }
 
 // Role is an application-owned authorization policy. Permission keys may

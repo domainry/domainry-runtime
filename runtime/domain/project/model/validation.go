@@ -50,6 +50,9 @@ func Validate(model Model, knownPermissions map[string]bool) error {
 	if strings.TrimSpace(model.Project.Name) == "" {
 		add("project_model.project_name_required", "/project/name", "project name is required")
 	}
+	if mode := strings.TrimSpace(model.Project.SubjectErasureDefault); mode != "" && mode != "retain" && mode != "anonymize" && mode != "delete" {
+		add("project_model.subject_erasure_default_invalid", "/project/subject_erasure_default", "subject erasure default must be retain, anonymize, or delete")
+	}
 	zone := strings.TrimSpace(model.Project.TimeZone)
 	if zone == "" {
 		zone = "UTC"
@@ -173,6 +176,12 @@ func validateObjectFields(model Model, object Object, path string, add func(stri
 		}
 		if field.JSONShape != "" && (field.Type != "json" || (field.JSONShape != "object" && field.JSONShape != "array")) {
 			add("project_model.field_json_shape_invalid", fieldPath+"/json_shape", "json shape requires a json field and object or array")
+		}
+		if field.LifecycleSubjectFile && field.Type != "file" && field.Type != "file_list" {
+			add("project_model.lifecycle_subject_file_invalid", fieldPath, "lifecycle_subject_file requires file or file_list")
+		}
+		if field.LifecycleSubjectRelation && field.Type != "relation" {
+			add("project_model.lifecycle_subject_relation_invalid", fieldPath, "lifecycle_subject_relation requires a relation")
 		}
 		if strings.TrimSpace(field.Type) == "relation" {
 			target := ""
@@ -317,9 +326,28 @@ func RuntimeObjects(model Model) ([]definitionmodel.ObjectSchema, error) {
 					return nil, fmt.Errorf("decode default for %s.%s: %w", objectKey, fieldKey, err)
 				}
 			}
-			var config map[string]any
+			config := map[string]any{}
 			if field.JSONShape != "" {
-				config = map[string]any{"json_shape": field.JSONShape}
+				config["json_shape"] = field.JSONShape
+			}
+			erase := field.LifecycleErase
+			if erase == "" {
+				erase = strings.TrimSpace(model.Project.SubjectErasureDefault)
+			}
+			if erase != "" {
+				config["lifecycle_erase"] = erase
+			}
+			if field.LifecycleSubjectIdentity {
+				config["lifecycle_subject_identity"] = true
+			}
+			if field.LifecycleSubjectFile {
+				config["lifecycle_subject_file"] = true
+			}
+			if field.LifecycleSubjectRelation {
+				config["lifecycle_subject_relation"] = true
+			}
+			if len(config) == 0 {
+				config = nil
 			}
 			fields = append(fields, definitionmodel.FieldSchema{
 				Key: fieldKey, Name: field.Name, Description: field.Description, Type: field.Type, I18n: field.I18n,

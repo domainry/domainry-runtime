@@ -140,9 +140,32 @@ func parseFieldDeclaration(declaration string) (Field, error) {
 				return Field{}, fmt.Errorf("shape requires a json field and object or array")
 			}
 			result.JSONShape = value
+		case "lifecycle_erase":
+			if !hasValue || (value != "retain" && value != "anonymize" && value != "delete") {
+				return Field{}, fmt.Errorf("lifecycle_erase requires retain, anonymize, or delete")
+			}
+			result.LifecycleErase = value
+		case "lifecycle_subject_identity", "lifecycle_subject_file", "lifecycle_subject_relation":
+			if hasValue {
+				return Field{}, fmt.Errorf("%s does not take a value", key)
+			}
+			switch key {
+			case "lifecycle_subject_identity":
+				result.LifecycleSubjectIdentity = true
+			case "lifecycle_subject_file":
+				result.LifecycleSubjectFile = true
+			case "lifecycle_subject_relation":
+				result.LifecycleSubjectRelation = true
+			}
 		default:
 			return Field{}, fmt.Errorf("unsupported field attribute %q", key)
 		}
+	}
+	if result.LifecycleSubjectFile && result.Type != "file" && result.Type != "file_list" {
+		return Field{}, fmt.Errorf("lifecycle_subject_file requires file or file_list")
+	}
+	if result.LifecycleSubjectRelation && result.Type != "relation" {
+		return Field{}, fmt.Errorf("lifecycle_subject_relation requires a relation")
 	}
 	return result, nil
 }
