@@ -104,7 +104,7 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 import (
 	agentmodule "github.com/domainry/domainry-agent/module"
 	"github.com/domainry/domainry-connector-sdk"
-	dataexchangeremote "github.com/domainry/domainry-data-exchange/remote"
+	dataexchangemodule "github.com/domainry/domainry-data-exchange/module"
 	identityremote "github.com/domainry/domainry-identity-sdk/remote"
 	integrationremote "github.com/domainry/domainry-integration-sdk/remote"
 	integrationmodule "github.com/domainry/domainry-integration/module"
@@ -112,7 +112,7 @@ import (
 	notificationremote "github.com/domainry/domainry-notification-sdk/remote"
 	notificationmodule "github.com/domainry/domainry-notification/module"
 	reportmodule "github.com/domainry/domainry-report/module"
-	schedulerremote "github.com/domainry/domainry-scheduler/remote"
+	schedulermodule "github.com/domainry/domainry-scheduler/module"
 	schedulerhttp "github.com/domainry/domainry-scheduler-sdk/saashost/httptransport"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimehost"
@@ -130,8 +130,8 @@ func RuntimeOptions(runtimeVersion string) runtimehost.Options {
 		ReportFactory: reportmodule.NewFactory(),
 		NotificationFactory: notificationmodule.NewSaaSFactory(notificationremote.NewFactory(notificationremote.ConfigFromEnvironment())),
 		MonitoringFactory: monitoringremote.NewFactory(monitoringremote.ConfigFromEnvironment()),
-		SchedulerFactory: schedulerremote.NewHTTPFactory(schedulerhttp.ConfigFromEnvironment()),
-		DataExchangeFactory: dataexchangeremote.NewFactory(nil),
+		SchedulerFactory: schedulermodule.NewHTTPSaaSFactory(schedulerhttp.ConfigFromEnvironment()),
+		DataExchangeFactory: dataexchangemodule.NewSaaSFactory(nil),
 		AgentFactory: agentmodule.NewSaaSFactory(agentmodule.SaaSOptionsFromEnvironment()),
 	}
 }
