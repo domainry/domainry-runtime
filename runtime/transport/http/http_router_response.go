@@ -16,6 +16,7 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 
 	apperror "github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/httpresponse"
 	"github.com/domainry/domainry-foundation/requestcontext"
 )
 
@@ -369,11 +370,7 @@ func resolveIdentitySDKPrincipal(ctx context.Context, resolver identitysdk.Princ
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(value); err != nil {
-		markResponseError(w, string(apperror.KindInternal), "backend.response_write_failed")
-	}
+	httpresponse.WriteJSON(w, status, value)
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, status int, code string, params ...string) {
@@ -411,32 +408,5 @@ func writeErrorWithParams(w http.ResponseWriter, r *http.Request, status int, co
 	if code == "" {
 		code = "backend.request_failed"
 	}
-	markResponseError(w, responseErrorKind(status), code)
-	params = apperror.SanitizeParams(params)
-	response := map[string]any{
-		"error": code, "code": code, "message": code, "message_key": code, "params": params,
-		"request_id": requestIDFromRequest(r),
-	}
-	writeJSON(w, status, response)
-}
-
-func responseErrorKind(status int) string {
-	switch {
-	case status == http.StatusBadRequest || status == http.StatusRequestEntityTooLarge || status == http.StatusUnprocessableEntity:
-		return string(apperror.KindBadRequest)
-	case status == http.StatusUnauthorized || status == http.StatusForbidden:
-		return string(apperror.KindForbidden)
-	case status == http.StatusNotFound:
-		return string(apperror.KindNotFound)
-	case status == http.StatusConflict:
-		return string(apperror.KindConflict)
-	case status == http.StatusTooManyRequests:
-		return string(apperror.KindRateLimited)
-	case status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout:
-		return string(apperror.KindUnavailable)
-	case status >= http.StatusInternalServerError:
-		return string(apperror.KindInternal)
-	default:
-		return ""
-	}
+	httpresponse.WriteError(w, r, httpresponse.Failure{Status: status, Code: code, Params: params})
 }

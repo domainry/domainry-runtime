@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/httpresponse"
 	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
 	dispatchcontract "github.com/domainry/domainry-runtime/runtime/domain/dispatch/contract"
 	schedulergateway "github.com/domainry/domainry-scheduler-sdk/dispatchgateway"
@@ -41,16 +42,12 @@ func NewExecutionHandler(deps TargetExecutionDependencies) *ExecutionHandler {
 	}
 	writeJSON := deps.WriteJSON
 	if writeJSON == nil {
-		writeJSON = func(w http.ResponseWriter, status int, value any) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(status)
-			_ = json.NewEncoder(w).Encode(value)
-		}
+		writeJSON = httpresponse.WriteJSON
 	}
 	writeServiceError := deps.WriteServiceError
 	if writeServiceError == nil {
-		writeServiceError = func(w http.ResponseWriter, _ *http.Request, _ error) {
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"status_code": http.StatusInternalServerError, "code": "dispatch.execution_failed"})
+		writeServiceError = func(w http.ResponseWriter, r *http.Request, err error) {
+			httpresponse.WriteError(w, r, httpresponse.Failure{Status: http.StatusInternalServerError, Code: "dispatch.execution_failed", Cause: err})
 		}
 	}
 	return &ExecutionHandler{

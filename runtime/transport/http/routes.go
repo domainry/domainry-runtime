@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	healthplatform "github.com/domainry/domainry-foundation/health"
+	"github.com/domainry/domainry-foundation/httpresponse"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -48,7 +49,7 @@ func (s *HTTPRouter) registerFallbackRoutes(mux *http.ServeMux) {
 }
 
 func (s *HTTPRouter) notFound(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusNotFound, map[string]any{"code": "route_not_found", "message": "unknown domain Runtime route", "path": r.URL.Path, "service_kind": s.serviceKind, "guidance": "Use the published client route without an /api/v1 prefix; /api/v1 is not supported."})
+	httpresponse.WriteError(w, r, httpresponse.Failure{Status: http.StatusNotFound, Code: "backend.route_not_found", Message: "Runtime route was not found"})
 }
 
 func (s *HTTPRouter) apiInfo(w http.ResponseWriter, r *http.Request) {

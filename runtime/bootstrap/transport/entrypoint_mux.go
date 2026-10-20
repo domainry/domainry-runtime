@@ -3,6 +3,8 @@ package transport
 import (
 	"net/http"
 	"sync"
+
+	"github.com/domainry/domainry-foundation/httpresponse"
 )
 
 // EntrypointMux publishes the authenticated business transport after Runtime
@@ -27,5 +29,5 @@ func (h *EntrypointMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		businessHandler.ServeHTTP(w, r)
 		return
 	}
-	http.Error(w, "Runtime handler unavailable", http.StatusServiceUnavailable)
+	httpresponse.WriteError(w, r, httpresponse.Failure{Status: http.StatusServiceUnavailable, Code: "backend.runtime.handler_unavailable"})
 }

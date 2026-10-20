@@ -1,7 +1,6 @@
 package runtimehost
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
+	"github.com/domainry/domainry-foundation/httpresponse"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -108,12 +108,12 @@ func moduleIdentityErrorWriter(route modulehttp.Route, audit modulehttp.AuditRec
 			identity, known := identitysdk.RequestIdentityFromContext(request.Context())
 			if known && identity.Principal.Known {
 				if err := audit.Record(request.Context(), modulePermissionDeniedAuditEvent(route, request, identity.Principal)); err != nil {
-					writeModuleIdentityError(writer, http.StatusServiceUnavailable, "backend.audit.append_failed")
+					writeModuleIdentityError(writer, request, http.StatusServiceUnavailable, "backend.audit.append_failed")
 					return
 				}
 			}
 		}
-		writeModuleIdentityError(writer, status, code)
+		writeModuleIdentityError(writer, request, status, code)
 	}
 }
 
@@ -164,11 +164,9 @@ func moduleRouteRecordID(routeTemplate string, request *http.Request) string {
 	return ""
 }
 
-func writeModuleIdentityError(writer http.ResponseWriter, status int, code string) {
-	writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+func writeModuleIdentityError(writer http.ResponseWriter, request *http.Request, status int, code string) {
 	writer.Header().Set("Cache-Control", "no-store")
-	writer.WriteHeader(status)
-	_ = json.NewEncoder(writer).Encode(map[string]any{"code": code, "error": map[string]string{"code": code}})
+	httpresponse.WriteError(writer, request, httpresponse.Failure{Status: status, Code: code})
 }
 
 func signedModuleGrant(action actioncontract.ActionDefinition) (identitysdk.ApplicationServiceGrant, error) {

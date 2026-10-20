@@ -8,19 +8,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/httpresponse"
 	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	"github.com/gin-gonic/gin"
 )
-
-type ErrorBody struct {
-	Error Error `json:"error"`
-}
-
-type Error struct {
-	Code       string            `json:"code"`
-	Message    string            `json:"message"`
-	Parameters map[string]string `json:"parameters,omitempty"`
-}
 
 // RequestValidationError is returned by a project HTTP DTO's Validate method
 // when a rule belongs to that specific endpoint rather than Runtime metadata.
@@ -63,7 +54,7 @@ func BindJSON(context *gin.Context, target any) bool {
 func WriteError(context *gin.Context, err error) {
 	status := runtimeengine.HTTPStatus(err)
 	code := runtimeengine.ErrorCode(err)
-	message := code
+	message := ""
 	parameters := map[string]string(nil)
 	if typed, ok := runtimeengine.AsError(err); ok {
 		parameters = typed.Parameters
@@ -71,7 +62,8 @@ func WriteError(context *gin.Context, err error) {
 			message = typed.Message
 		}
 	}
-	context.AbortWithStatusJSON(status, ErrorBody{Error: Error{Code: code, Message: message, Parameters: parameters}})
+	httpresponse.WriteError(context.Writer, context.Request, httpresponse.Failure{Status: status, Code: code, Message: message, Params: parameters, Cause: err})
+	context.Abort()
 }
 
 func WriteValidationError(context *gin.Context, code, message string) {
@@ -79,7 +71,10 @@ func WriteValidationError(context *gin.Context, code, message string) {
 	if code == "" {
 		code = "request"
 	}
-	context.AbortWithStatusJSON(http.StatusBadRequest, ErrorBody{Error: Error{Code: "invalid_" + code, Message: strings.TrimSpace(message)}})
+	httpresponse.WriteError(context.Writer, context.Request, httpresponse.Failure{
+		Status: http.StatusBadRequest, Code: "backend.request.invalid_" + code, Message: strings.TrimSpace(message),
+	})
+	context.Abort()
 }
 
 func RequireIdempotencyKey(context *gin.Context) (string, bool) {
