@@ -7,7 +7,10 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
-func normalizeRuntimeConfig(cfg config.Config) config.Config {
+// NormalizeConfig resolves Runtime-owned defaults that host composition and
+// Runtime startup must share, including the instance identity supplied to
+// independently composed sibling modules.
+func NormalizeConfig(cfg config.Config) config.Config {
 	return normalizeRuntimeConfigWithHostname(cfg, os.Hostname)
 }
 

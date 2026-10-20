@@ -7,21 +7,21 @@ import (
 )
 
 func TestNormalizeRuntimeConfigDoesNotInventWorkspaceScope(t *testing.T) {
-	cfg := normalizeRuntimeConfig(config.Config{})
+	cfg := NormalizeConfig(config.Config{})
 	if cfg.IdentityWorkspaceID != "" || cfg.NotificationWorkspaceID != "" || cfg.IdentityAudience != "domainry-runtime" {
 		t.Fatalf("Identity defaults=%#v", cfg)
 	}
 }
 
 func TestNormalizeRuntimeConfigPreservesExplicitIdentityApplication(t *testing.T) {
-	cfg := normalizeRuntimeConfig(config.Config{IdentityWorkspaceID: "workspace-a", IdentityAudience: "application-a"})
+	cfg := NormalizeConfig(config.Config{IdentityWorkspaceID: "workspace-a", IdentityAudience: "application-a"})
 	if cfg.IdentityWorkspaceID != "workspace-a" || cfg.IdentityAudience != "application-a" {
 		t.Fatalf("Identity application=%#v", cfg)
 	}
 }
 
 func TestNormalizeRuntimeConfigDoesNotInferDevelopmentIdentityHeaders(t *testing.T) {
-	cfg := normalizeRuntimeConfig(config.Config{})
+	cfg := NormalizeConfig(config.Config{})
 	if cfg.RuntimeAllowDevIdentityHeaders {
 		t.Fatal("development Identity headers must require explicit configuration")
 	}

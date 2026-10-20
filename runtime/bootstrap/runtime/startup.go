@@ -69,7 +69,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		panic("bootstrap.NewWithExtensions requires an Identity SDK Binding")
 	}
 	mustCompleteRuntimeStartup(foundationModules.Validate())
-	cfg = normalizeRuntimeConfig(cfg)
+	cfg = NormalizeConfig(cfg)
 	mustCompleteRuntimeStartup(principalmodel.ConfigureInstallationWorkspaceID(cfg.IdentityWorkspaceID))
 	mustCompleteRuntimeStartup(cfg.ValidateSecurity())
 	if strings.TrimSpace(startupOptions.ProjectModel.ContentHash) == "" {

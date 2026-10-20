@@ -30,6 +30,7 @@ import (
 	"github.com/domainry/domainry-runtime/pkg/codingruntime"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/runtime/bootstrap"
+	runtimebootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/runtime"
 	recordtimerprojection "github.com/domainry/domainry-runtime/runtime/domain/recordtimer/projection"
 	principalcache "github.com/domainry/domainry-runtime/runtime/infrastructure/principalcache"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -339,6 +340,10 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	if err != nil {
 		return fmt.Errorf("load Runtime configuration: %w", err)
 	}
+	// Resolve Runtime-owned identities before any project-selected sibling
+	// module factory is called. NewRuntime normalizes the same config again, but
+	// Knowledge and other independently composed modules are opened first.
+	cfg = runtimebootstrap.NormalizeConfig(cfg)
 	// Runtime-owned record timer storage is code-owned infrastructure. It is
 	// always materialized with the project model, but never authored in
 	// model.json and never participates in the project content hash.
