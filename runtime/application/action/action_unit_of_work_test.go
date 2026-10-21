@@ -871,6 +871,32 @@ func TestActionSuccessAuditAndReceiptShareTransactionWithoutBusinessMutation(t *
 	}
 }
 
+func TestMutationOnlyAuditPolicySuppressesSuccessfulPollingNoop(t *testing.T) {
+	store := &actionUnitOfWorkStoreProbe{}
+	handler := &catalogHandler{descriptor: actionTestHandlerDescriptor("booking.poll", []runtimeext.ActionObjectCapability{{ObjectKey: "booking", Operations: []string{"list"}}})}
+	registry := runtimeext.NewProjectExtensionRegistry()
+	if err := registry.RegisterBusinessHandler(handler); err != nil {
+		t.Fatal(err)
+	}
+	registry.Freeze()
+	action := actionTestPublishedContract(definitionmodel.ActionSchema{Key: "booking.poll", ObjectKey: "booking", Kind: definitionmodel.ActionKindObjectOperation, AuditEvent: "booking.polled", AuditPolicy: definitionmodel.ActionAuditPolicyMutationsOnly})
+	auditBuilds := 0
+	system := NewSystemOperationCatalog()
+	service := NewActionApplication(ActionApplicationDependencies{
+		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: NewSystemOperationExecutor(system),
+		BusinessHandlers: newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{}),
+		UnitOfWork:       NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
+		Audit: ActionAudit{BuildSuccess: func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
+			auditBuilds++
+			return auditmodel.AuditEvent{ID: "unexpected"}
+		}},
+	})
+	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceScheduler, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, IdempotencyKey: "booking-poll-1", Principal: actionTestPrincipal("booking.poll")})
+	if err != nil || result.Status != "success" || result.AuditEvent != "" || auditBuilds != 0 || len(store.completions) != 1 || len(store.completions[0].AuditEvents) != 0 {
+		t.Fatalf("result=%+v audit_builds=%d completions=%+v error=%v", result, auditBuilds, store.completions, err)
+	}
+}
+
 func TestBookClassCommitsClassBookingAuditOutboxAndReceiptThroughOneUnitOfWork(t *testing.T) {
 	newPlan := func(operation string, object definitionmodel.ObjectSchema, record recordmodel.Record, predicates []transactionmodel.MutationPredicate) (transactionmodel.MutationPlan, error) {
 		mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{

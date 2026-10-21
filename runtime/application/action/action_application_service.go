@@ -293,6 +293,12 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 	} else if executed.Object != nil {
 		result.Status, result.Output = executed.Object.Status, ActionObjectInvocationOutput(*executed.Object)
 	}
+	auditEvents := make([]auditmodel.AuditEvent, 0, 1)
+	if definitionmodel.EffectiveActionAuditPolicy(action) == definitionmodel.ActionAuditPolicyAlways || len(executed.Commits) > 0 {
+		auditEvents = append(auditEvents, s.dependencies.Audit.BuildSuccess(auditContext, action, invocation, result))
+	} else {
+		result.AuditEvent = ""
+	}
 	// actionReceiptResult returns backend.action.result_invalid before any
 	// malformed owner result can be committed.
 	receiptResult, err := actionReceiptResult(result)
@@ -304,8 +310,7 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 		unitOfWork.rollBack(ctx)
 		return s.failOwnedInvocation(context.WithoutCancel(ctx), unitOfWork, result, apperror.New(apperror.KindInternal, actionmodel.AcceptanceFailureInjectedCode, nil, map[string]string{"action": action.Key, "point": actionmodel.AcceptanceFailureBeforeCommit}), nil)
 	}
-	auditEvent := s.dependencies.Audit.BuildSuccess(auditContext, action, invocation, result)
-	err = unitOfWork.commit(ctx, receiptResult, executed.Commits, []auditmodel.AuditEvent{auditEvent})
+	err = unitOfWork.commit(ctx, receiptResult, executed.Commits, auditEvents)
 	if err != nil {
 		return s.failOwnedInvocation(context.WithoutCancel(ctx), unitOfWork, result, err, nil)
 	}

@@ -85,6 +85,11 @@ func TestHandlerDescriptorRequiresStableIdentityAndContracts(t *testing.T) {
 	if err := missingRevision.Validate(); !errors.Is(err, ErrHandlerRevisionRequired) {
 		t.Fatalf("missing revision error = %v", err)
 	}
+	invalidAuditPolicy := validTestBusinessHandler("group_class.book_class").Descriptor()
+	invalidAuditPolicy.AuditPolicy = "sometimes"
+	if err := invalidAuditPolicy.Validate(); !errors.Is(err, ErrHandlerContractInvalid) {
+		t.Fatalf("invalid audit policy error = %v", err)
+	}
 	invalidCapability := validTestBusinessHandler("group_class.book_class").Descriptor()
 	invalidCapability.ObjectCapabilities[0].Operations = []string{"sql"}
 	if err := invalidCapability.Validate(); !errors.Is(err, ErrHandlerCapabilityInvalid) {
@@ -108,7 +113,7 @@ func TestHandlerDescriptorRequiresStableIdentityAndContracts(t *testing.T) {
 }
 
 func TestRuntimeextContractIdentityIsCurrent(t *testing.T) {
-	if ContractVersion != "runtimeext-v51" {
+	if ContractVersion != "runtimeext-v52" {
 		t.Fatalf("contract version = %q", ContractVersion)
 	}
 	if got := ComputedContractSHA256(); got != ContractSHA256 {

@@ -41,7 +41,7 @@ func (descriptor HandlerDescriptor) ActionDefinition() (definitionmodel.ActionSc
 		Key: descriptor.ActionKey, ObjectKey: descriptor.ObjectKey, Label: descriptor.Label,
 		PermissionGrantMode: descriptor.PermissionGrantMode,
 		Kind:                descriptor.Kind, RiskLevel: descriptor.RiskLevel,
-		Preconditions: append([]string(nil), descriptor.Preconditions...), AuditEvent: descriptor.AuditEvent,
+		Preconditions: append([]string(nil), descriptor.Preconditions...), AuditEvent: descriptor.AuditEvent, AuditPolicy: descriptor.AuditPolicy,
 		InputType: descriptor.InputType, OutputType: descriptor.OutputType,
 		PayloadFields: cloneDefinition(descriptor.PayloadFields), OutputFields: cloneDefinition(descriptor.OutputFields),
 		Defaults: cloneDefinition(descriptor.Defaults), OptimisticConcurrency: descriptor.OptimisticConcurrency,

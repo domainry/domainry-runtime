@@ -484,6 +484,7 @@ func normalizeHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor 
 	result.Kind = strings.TrimSpace(result.Kind)
 	result.RiskLevel = strings.TrimSpace(result.RiskLevel)
 	result.AuditEvent = strings.TrimSpace(result.AuditEvent)
+	result.AuditPolicy = strings.TrimSpace(result.AuditPolicy)
 	result.InputType = strings.TrimSpace(result.InputType)
 	result.OutputType = strings.TrimSpace(result.OutputType)
 	result.ConcurrencyField = strings.TrimSpace(result.ConcurrencyField)

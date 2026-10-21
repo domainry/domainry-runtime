@@ -109,6 +109,7 @@ type HandlerDescriptor struct {
 	RiskLevel                 string
 	Preconditions             []string
 	AuditEvent                string
+	AuditPolicy               string
 	InputType                 string
 	OutputType                string
 	PayloadFields             []definitionmodel.ActionPayloadField
@@ -146,6 +147,11 @@ func (d HandlerDescriptor) Validate() error {
 	}
 	if strings.TrimSpace(d.HandlerRevision) == "" {
 		return ErrHandlerRevisionRequired
+	}
+	switch strings.TrimSpace(d.AuditPolicy) {
+	case "", definitionmodel.ActionAuditPolicyAlways, definitionmodel.ActionAuditPolicyMutationsOnly:
+	default:
+		return ErrHandlerContractInvalid
 	}
 	switch strings.TrimSpace(d.PermissionGrantMode) {
 	case "", PermissionGrantDirect, PermissionGrantBundled, PermissionGrantInternal:

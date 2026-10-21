@@ -240,6 +240,7 @@ type ActionSchema struct {
 	RiskLevel                 string                                 `json:"risk_level,omitempty"`
 	Preconditions             []string                               `json:"preconditions"`
 	AuditEvent                string                                 `json:"audit_event"`
+	AuditPolicy               string                                 `json:"audit_policy,omitempty"`
 	InputType                 string                                 `json:"input_type,omitempty"`
 	OutputType                string                                 `json:"output_type,omitempty"`
 	PayloadFields             []ActionPayloadField                   `json:"payload_fields,omitempty"`
@@ -266,6 +267,22 @@ type ActionStoreOrganizationMutationPolicy struct {
 }
 
 const DefaultBusinessActionAuditEvent = "business_action_executed"
+
+const (
+	ActionAuditPolicyAlways        = "always"
+	ActionAuditPolicyMutationsOnly = "mutations_only"
+)
+
+// EffectiveActionAuditPolicy preserves the historical always-audit behavior
+// unless a code-owned Handler explicitly declares that successful invocations
+// without staged record mutations are polling no-ops rather than business
+// events. Failures remain audited independently of this success policy.
+func EffectiveActionAuditPolicy(action ActionSchema) string {
+	if strings.TrimSpace(action.AuditPolicy) == ActionAuditPolicyMutationsOnly {
+		return ActionAuditPolicyMutationsOnly
+	}
+	return ActionAuditPolicyAlways
+}
 
 // EffectiveActionAuditEvent returns the stable technical event used when an
 // Action does not need a business-specific subscription event. The Action key
