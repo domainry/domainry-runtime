@@ -103,14 +103,14 @@ func conversationReportError(err error) error {
 	}
 	var e *report.Error
 	if errors.As(err, &e) {
-		switch e.StatusCode {
-		case 400, 422:
+		switch e.Class {
+		case report.ErrorClassBadRequest:
 			return conversationBusinessError("bad_request")
-		case 401, 403:
+		case report.ErrorClassForbidden:
 			return conversationBusinessError("forbidden")
-		case 404:
+		case report.ErrorClassNotFound:
 			return conversationBusinessError("not_found")
-		case 409:
+		case report.ErrorClassConflict:
 			return conversationBusinessError("conflict")
 		}
 	}

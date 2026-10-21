@@ -74,7 +74,7 @@ func initializeRecordApplications(s *runtimeAssembly) {
 			}
 			identity, ok := identitysdk.RequestIdentityFromContext(ctx)
 			if !ok || strings.TrimSpace(identity.AccessToken) == "" || strings.TrimSpace(authority.AccessToken) != strings.TrimSpace(identity.AccessToken) {
-				return principalmodel.Principal{}, &reportsdk.Error{StatusCode: 401, Code: "auth.token_required"}
+				return principalmodel.Principal{}, &reportsdk.Error{Class: reportsdk.ErrorClassForbidden, Code: "auth.token_required"}
 			}
 			principal := principalmodel.NewPrincipalFromIdentity(identity.Principal, strings.TrimSpace(authority.RequestID))
 			resolved, err := businessPrincipals.ResolveBusinessPrincipal(ctx, principal, authority.BusinessProfileKey, authority.BusinessProfileID)

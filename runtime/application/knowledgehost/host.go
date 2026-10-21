@@ -199,17 +199,19 @@ func (h *Host) ExplainKnowledgeAccess(ctx context.Context, input knowledgesdk.Kn
 	return result, nil
 }
 
-func denied(code string) error { return &knowledgesdk.Error{Class: "forbidden", Code: code} }
+func denied(code string) error {
+	return &knowledgesdk.Error{Class: knowledgesdk.ErrorClassForbidden, Code: code}
+}
 
 func classify(code string, err error) error {
-	class := "unavailable"
+	class := knowledgesdk.ErrorClassUnavailable
 	switch apperror.KindOf(err) {
 	case apperror.KindBadRequest:
-		class = "bad_request"
+		class = knowledgesdk.ErrorClassBadRequest
 	case apperror.KindForbidden, apperror.KindNotFound:
-		class = "forbidden"
+		class = knowledgesdk.ErrorClassForbidden
 	case apperror.KindConflict:
-		class = "conflict"
+		class = knowledgesdk.ErrorClassConflict
 	}
 	return &knowledgesdk.Error{Class: class, Code: code}
 }

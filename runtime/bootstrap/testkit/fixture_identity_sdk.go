@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -165,11 +164,11 @@ func (binding *fixtureIdentityBinding) Providers(context.Context, identitysdk.Pr
 func (binding *fixtureIdentityBinding) LoginWithPassword(_ context.Context, request identitysdk.PasswordLoginRequest) (identitysdk.AuthSession, error) {
 	subject := binding.findSubject(request.Login)
 	if subject == "" {
-		return identitysdk.AuthSession{}, &identitysdk.Error{Code: "auth.credentials_invalid", StatusCode: 401}
+		return identitysdk.AuthSession{}, &identitysdk.Error{Code: "auth.credentials_invalid", Class: identitysdk.ErrorClassForbidden}
 	}
 	role := binding.firstUserRole(subject)
 	if role == "" {
-		return identitysdk.AuthSession{}, &identitysdk.Error{Code: "identity.role_not_found", StatusCode: 403}
+		return identitysdk.AuthSession{}, &identitysdk.Error{Code: "identity.role_not_found", Class: identitysdk.ErrorClassForbidden}
 	}
 	token := fmt.Sprintf("plane-testkit-token-%d", time.Now().UnixNano())
 	binding.mu.Lock()
@@ -193,7 +192,7 @@ func (binding *fixtureIdentityBinding) VerifyOTP(context.Context, identitysdk.Ve
 func (binding *fixtureIdentityBinding) RefreshSession(_ context.Context, request identitysdk.RefreshRequest) (identitysdk.AuthSession, error) {
 	session, found := binding.session(request.RefreshToken)
 	if !found {
-		return identitysdk.AuthSession{}, &identitysdk.Error{Code: "auth.token_invalid", StatusCode: 401}
+		return identitysdk.AuthSession{}, &identitysdk.Error{Code: "auth.token_invalid", Class: identitysdk.ErrorClassForbidden}
 	}
 	return binding.authSession(request.RefreshToken, session.subject, session.role), nil
 }
@@ -206,7 +205,7 @@ func (binding *fixtureIdentityBinding) LogoutSession(_ context.Context, request 
 func (binding *fixtureIdentityBinding) CurrentSession(_ context.Context, request identitysdk.CurrentSessionRequest) (identitysdk.SessionView, error) {
 	session, found := binding.session(request.AccessToken)
 	if !found {
-		return identitysdk.SessionView{}, &identitysdk.Error{Code: "auth.token_invalid", StatusCode: 401}
+		return identitysdk.SessionView{}, &identitysdk.Error{Code: "auth.token_invalid", Class: identitysdk.ErrorClassForbidden}
 	}
 	role := binding.roles[session.role]
 	return identitysdk.SessionView{
@@ -218,7 +217,7 @@ func (binding *fixtureIdentityBinding) CurrentSession(_ context.Context, request
 func (binding *fixtureIdentityBinding) Verify(_ context.Context, request identitysdk.VerifyTokenRequest) (identitysdk.VerifiedToken, error) {
 	session, found := binding.session(request.AccessToken)
 	if !found {
-		return identitysdk.VerifiedToken{}, &identitysdk.Error{Code: "auth.token_invalid", StatusCode: 401}
+		return identitysdk.VerifiedToken{}, &identitysdk.Error{Code: "auth.token_invalid", Class: identitysdk.ErrorClassForbidden}
 	}
 	now := time.Now()
 	return identitysdk.VerifiedToken{
@@ -252,7 +251,7 @@ func (binding *fixtureIdentityBinding) Reauthorize(ctx context.Context, request 
 
 func (binding *fixtureIdentityBinding) Resolve(ctx context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
 	if workspaceID := requestcontext.WorkspaceID(ctx); workspaceID != "" && workspaceID != string(binding.application.WorkspaceID) {
-		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.application_scope_mismatch", StatusCode: http.StatusForbidden}
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.application_scope_mismatch", Class: identitysdk.ErrorClassForbidden}
 	}
 	if request.Workload != nil {
 		return binding.resolveWorkflowWorkload(request)
@@ -263,7 +262,7 @@ func (binding *fixtureIdentityBinding) Resolve(ctx context.Context, request iden
 	}
 	role, found := binding.roles[roleKey]
 	if !found {
-		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.role_not_found", StatusCode: 403}
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.role_not_found", Class: identitysdk.ErrorClassForbidden}
 	}
 	subject := strings.TrimSpace(string(request.SubjectID))
 	if subject == "" {
@@ -283,7 +282,7 @@ func (binding *fixtureIdentityBinding) ApplyWorkflowWorkloadBindings(_ context.C
 		return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, err
 	}
 	if !binding.matchesApplication(request.Application) {
-		return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.application_scope_mismatch", StatusCode: http.StatusForbidden}
+		return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.application_scope_mismatch", Class: identitysdk.ErrorClassForbidden}
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -292,13 +291,13 @@ func (binding *fixtureIdentityBinding) ApplyWorkflowWorkloadBindings(_ context.C
 	for _, spec := range request.Bindings {
 		role, found := binding.roles[spec.RoleKey]
 		if !found {
-			return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.workflow_workload_role_not_found", StatusCode: http.StatusNotFound}
+			return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.workflow_workload_role_not_found", Class: identitysdk.ErrorClassNotFound}
 		}
 		if strings.TrimSpace(role.Audience) != "service" {
-			return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.workflow_workload_role_audience_invalid", StatusCode: http.StatusForbidden}
+			return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.workflow_workload_role_audience_invalid", Class: identitysdk.ErrorClassForbidden}
 		}
 		if strings.TrimSpace(role.AssignmentMode) != "system_managed" {
-			return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.workflow_workload_role_assignment_mode_invalid", StatusCode: http.StatusForbidden}
+			return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.workflow_workload_role_assignment_mode_invalid", Class: identitysdk.ErrorClassForbidden}
 		}
 		allowed := make(map[string]struct{}, len(role.Permissions))
 		for _, permission := range role.Permissions {
@@ -306,7 +305,7 @@ func (binding *fixtureIdentityBinding) ApplyWorkflowWorkloadBindings(_ context.C
 		}
 		for _, actionKey := range spec.ActionKeys {
 			if _, ok := allowed[actionKey]; !ok {
-				return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.workflow_workload_action_denied", StatusCode: http.StatusForbidden}
+				return identitysdk.ApplyWorkflowWorkloadBindingsResult{}, &identitysdk.Error{Code: "identity.workflow_workload_action_denied", Class: identitysdk.ErrorClassForbidden}
 			}
 		}
 		workload := identitysdk.WorkflowWorkloadBinding{
@@ -330,19 +329,19 @@ func (binding *fixtureIdentityBinding) GetWorkflowWorkloadBinding(_ context.Cont
 		return identitysdk.WorkflowWorkloadBinding{}, err
 	}
 	if !binding.matchesApplication(request.Application) {
-		return identitysdk.WorkflowWorkloadBinding{}, &identitysdk.Error{Code: "identity.application_scope_mismatch", StatusCode: http.StatusForbidden}
+		return identitysdk.WorkflowWorkloadBinding{}, &identitysdk.Error{Code: "identity.application_scope_mismatch", Class: identitysdk.ErrorClassForbidden}
 	}
 	binding.mu.RLock()
 	workload, found := binding.workflowWorkloads[strings.TrimSpace(request.WorkflowKey)]
 	binding.mu.RUnlock()
 	if !found || workload.Status != identitysdk.WorkflowWorkloadBindingActive {
-		return identitysdk.WorkflowWorkloadBinding{}, &identitysdk.Error{Code: "identity.workflow_workload_not_found", StatusCode: http.StatusNotFound}
+		return identitysdk.WorkflowWorkloadBinding{}, &identitysdk.Error{Code: "identity.workflow_workload_not_found", Class: identitysdk.ErrorClassNotFound}
 	}
 	if workload.DefinitionVersionID != strings.TrimSpace(request.DefinitionVersionID) {
-		return identitysdk.WorkflowWorkloadBinding{}, &identitysdk.Error{Code: "identity.workflow_workload_version_mismatch", StatusCode: http.StatusForbidden}
+		return identitysdk.WorkflowWorkloadBinding{}, &identitysdk.Error{Code: "identity.workflow_workload_version_mismatch", Class: identitysdk.ErrorClassForbidden}
 	}
 	if workload.ReleaseDigest != strings.TrimSpace(request.ReleaseDigest) {
-		return identitysdk.WorkflowWorkloadBinding{}, &identitysdk.Error{Code: "identity.workflow_workload_release_digest_mismatch", StatusCode: http.StatusForbidden}
+		return identitysdk.WorkflowWorkloadBinding{}, &identitysdk.Error{Code: "identity.workflow_workload_release_digest_mismatch", Class: identitysdk.ErrorClassForbidden}
 	}
 	return workload, nil
 }
@@ -352,26 +351,26 @@ func (binding *fixtureIdentityBinding) resolveWorkflowWorkload(request identitys
 	workflowKey := strings.TrimSpace(workload.WorkflowKey)
 	subjectID := identitysdk.WorkflowWorkloadSubjectID(workflowKey)
 	if subjectID == "" || request.SubjectID != subjectID || strings.TrimSpace(request.RoleKey) == "" || strings.TrimSpace(workload.DefinitionVersionID) == "" || workload.DefinitionVersion <= 0 || strings.TrimSpace(workload.ReleaseID) == "" || strings.TrimSpace(workload.ReleaseDigest) == "" {
-		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_resolution_invalid", StatusCode: http.StatusBadRequest}
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_resolution_invalid", Class: identitysdk.ErrorClassBadRequest}
 	}
 	binding.mu.RLock()
 	current, found := binding.workflowWorkloads[workflowKey]
 	binding.mu.RUnlock()
 	if !found || current.Status != identitysdk.WorkflowWorkloadBindingActive {
-		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_not_found", StatusCode: http.StatusNotFound}
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_not_found", Class: identitysdk.ErrorClassNotFound}
 	}
 	if current.RoleKey != strings.TrimSpace(request.RoleKey) {
-		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_role_mismatch", StatusCode: http.StatusForbidden}
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_role_mismatch", Class: identitysdk.ErrorClassForbidden}
 	}
 	if current.DefinitionVersionID != strings.TrimSpace(workload.DefinitionVersionID) || current.DefinitionVersion != workload.DefinitionVersion {
-		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_version_mismatch", StatusCode: http.StatusForbidden}
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_version_mismatch", Class: identitysdk.ErrorClassForbidden}
 	}
 	if current.ReleaseID != strings.TrimSpace(workload.ReleaseID) || current.ReleaseDigest != strings.TrimSpace(workload.ReleaseDigest) {
-		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_release_digest_mismatch", StatusCode: http.StatusForbidden}
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_release_digest_mismatch", Class: identitysdk.ErrorClassForbidden}
 	}
 	role, found := binding.roles[current.RoleKey]
 	if !found || strings.TrimSpace(role.Audience) != "service" || strings.TrimSpace(role.AssignmentMode) != "system_managed" {
-		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_role_unavailable", StatusCode: http.StatusForbidden}
+		return identitysdk.PrincipalResolution{}, &identitysdk.Error{Code: "identity.workflow_workload_role_unavailable", Class: identitysdk.ErrorClassForbidden}
 	}
 	bundle := binding.accessBundle(string(subjectID), current.RoleKey)
 	principal := identitysdk.Principal{
@@ -462,7 +461,7 @@ func (binding *fixtureIdentityBinding) Reconcile(_ context.Context, request iden
 	}
 	currentSnapshotHash := binding.permissionSnapshotHashes[request.SourceOwner]
 	if request.PreviousSnapshotHash != currentSnapshotHash && request.SnapshotHash != currentSnapshotHash {
-		return identitysdk.PermissionReconcileReceipt{}, &identitysdk.Error{Code: "identity.permission_reconcile_stale_snapshot", StatusCode: 409}
+		return identitysdk.PermissionReconcileReceipt{}, &identitysdk.Error{Code: "identity.permission_reconcile_stale_snapshot", Class: identitysdk.ErrorClassConflict}
 	}
 	binding.permissions[request.SourceOwner] = definitions
 	binding.permissionSnapshotHashes[request.SourceOwner] = request.SnapshotHash
@@ -491,7 +490,7 @@ func (binding *fixtureIdentityBinding) CurrentSourceSnapshot(_ context.Context, 
 func (binding *fixtureIdentityBinding) ChangePassword(_ context.Context, request identitysdk.ChangePasswordRequest) (identitysdk.AuthSession, error) {
 	session, found := binding.session(request.AccessToken)
 	if !found {
-		return identitysdk.AuthSession{}, &identitysdk.Error{Code: "auth.token_invalid", StatusCode: 401}
+		return identitysdk.AuthSession{}, &identitysdk.Error{Code: "auth.token_invalid", Class: identitysdk.ErrorClassForbidden}
 	}
 	return binding.authSession(request.AccessToken, session.subject, session.role), nil
 }

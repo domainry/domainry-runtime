@@ -36,7 +36,7 @@ func TestApplicationUserAuthorityUsesOriginalIdentityRequestToken(t *testing.T) 
 }
 
 func TestMapErrorPreservesStableNotificationCodeAndRetryKind(t *testing.T) {
-	source := &notificationsdk.Error{StatusCode: 503, Code: "notification.remote_unavailable", Retryable: true}
+	source := &notificationsdk.Error{Class: notificationsdk.ErrorClassUnavailable, Code: "notification.remote_unavailable", Retryable: true}
 	mapped := mapError(source)
 	if apperror.KindOf(mapped) != apperror.KindUnavailable || apperror.CodeOf(mapped) != "backend.notification.remote_unavailable" || !errors.Is(mapped, source) {
 		t.Fatalf("mapped=%v kind=%s code=%s", mapped, apperror.KindOf(mapped), apperror.CodeOf(mapped))

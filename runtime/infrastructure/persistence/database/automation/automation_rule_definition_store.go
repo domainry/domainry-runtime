@@ -120,7 +120,7 @@ func (s AutomationRuleDefinitionStore) Put(ctx context.Context, next automationm
 	})
 	if err != nil {
 		var metadataErr *metadatasdk.Error
-		if errors.As(err, &metadataErr) && metadataErr.StatusCode == 409 {
+		if errors.As(err, &metadataErr) && metadataErr.Kind == metadatasdk.ErrorKindConflict {
 			latest, _, loadErr := s.Get(ctx, workspaceID, ruleKey)
 			return latest, false, loadErr
 		}

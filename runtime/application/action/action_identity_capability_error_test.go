@@ -32,18 +32,18 @@ func TestNormalizeIdentityCapabilityErrorKeepsTheModuleClassification(t *testing
 	}
 }
 
-func TestNormalizeIdentityCapabilityErrorHonoursRemoteStatusAndCodeText(t *testing.T) {
+func TestNormalizeIdentityCapabilityErrorUsesOwnerClassificationWithoutCodeGuessing(t *testing.T) {
 	var got *apperror.AppError
-	err := normalizeIdentityCapabilityError(&identitysdk.Error{StatusCode: 409, Code: "identity.user_email_exists"}, "identity.handler_delivery_failed")
+	err := normalizeIdentityCapabilityError(&identitysdk.Error{Class: identitysdk.ErrorClassConflict, Code: "identity.user_email_exists"}, "identity.handler_delivery_failed")
 	if !errors.As(err, &got) || got.Kind != apperror.KindConflict || got.Code != "identity.user_email_exists" {
-		t.Fatalf("a remote 409 is a conflict: %+v", err)
+		t.Fatalf("an owner-classified conflict must remain a conflict: %+v", err)
 	}
 	err = normalizeIdentityCapabilityError(&identitysdk.Error{Code: "identity.login_already_taken"}, "identity.handler_delivery_failed")
-	if !errors.As(err, &got) || got.Kind != apperror.KindConflict {
-		t.Fatalf("without a status, an 'already' code is a conflict, not a 500: %+v", err)
-	}
-	err = normalizeIdentityCapabilityError(&identitysdk.Error{Code: "identity.handler_delivery_unavailable"}, "identity.handler_delivery_failed")
 	if !errors.As(err, &got) || got.Kind != apperror.KindInternal {
-		t.Fatalf("an unclassifiable module failure remains internal: %+v", err)
+		t.Fatalf("an unclassified code must not be guessed from its text: %+v", err)
+	}
+	err = normalizeIdentityCapabilityError(&identitysdk.Error{Class: identitysdk.ErrorClassUnavailable, Code: "identity.handler_delivery_unavailable"}, "identity.handler_delivery_failed")
+	if !errors.As(err, &got) || got.Kind != apperror.KindUnavailable {
+		t.Fatalf("an owner-classified unavailable failure must remain unavailable: %+v", err)
 	}
 }

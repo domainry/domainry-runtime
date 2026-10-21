@@ -202,7 +202,7 @@ func requireSignedModuleRequest(services identitysdk.ApplicationServiceTokenVeri
 		if err != nil {
 			status := http.StatusUnauthorized
 			var sdkError *identitysdk.Error
-			if errors.As(err, &sdkError) && sdkError.StatusCode >= http.StatusInternalServerError {
+			if errors.As(err, &sdkError) && (sdkError.Class == identitysdk.ErrorClassUnavailable || sdkError.Class == identitysdk.ErrorClassInternal) {
 				status = http.StatusServiceUnavailable
 			}
 			writeModuleGovernanceError(writer, request, status, "auth.signed_request_invalid")

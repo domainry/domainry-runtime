@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -80,7 +79,7 @@ func (p *integrationAPIKeyPrincipalProvider) PrincipalFromIntegrationAPIKey(ctx 
 	})
 	if err != nil {
 		var identityErr *identitysdk.Error
-		if errors.As(err, &identityErr) && identityErr.StatusCode >= http.StatusInternalServerError {
+		if errors.As(err, &identityErr) && (identityErr.Class == identitysdk.ErrorClassUnavailable || identityErr.Class == identitysdk.ErrorClassInternal) {
 			return principalmodel.Principal{}, integrationsdk.APIKey{}, integrationAPIKeyError(apperror.KindUnavailable, "backend.integration.api_key_authentication_unavailable")
 		}
 		return principalmodel.Principal{}, integrationsdk.APIKey{}, integrationAPIKeyError(apperror.KindForbidden, "auth.invalid_api_key")

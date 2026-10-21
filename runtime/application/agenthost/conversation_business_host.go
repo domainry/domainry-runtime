@@ -90,8 +90,8 @@ func conversationBusinessDigest(value any) string {
 	hash := sha256.Sum256(raw)
 	return hex.EncodeToString(hash[:])
 }
-func conversationBusinessError(class string) error {
-	return &agentsdk.Error{Class: class, Code: "runtime.conversation.business_" + class}
+func conversationBusinessError(class agentsdk.ErrorClass) error {
+	return &agentsdk.Error{Class: class, Code: "runtime.conversation.business_" + string(class)}
 }
 func conversationBusinessReadError(err error) error {
 	if err == nil {
@@ -115,8 +115,8 @@ func (h *ConversationBusinessHost) principal(ctx context.Context, a agentsdk.Con
 	}
 	resolved, err := h.principals.Resolve(requestcontext.WithWorkspaceID(ctx, a.WorkspaceID), identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(a.UserID), RoleKey: a.RoleKey})
 	if err != nil {
-		var denied *identitysdk.Error
-		if errors.As(err, &denied) && (denied.StatusCode == 401 || denied.StatusCode == 403 || denied.StatusCode == 404 || denied.Code == "identity.subject_not_found") {
+		kind := apperror.KindOf(err)
+		if kind == apperror.KindForbidden || kind == apperror.KindNotFound {
 			return principalmodel.Principal{}, conversationBusinessError("forbidden")
 		}
 		return principalmodel.Principal{}, conversationBusinessReadError(err)

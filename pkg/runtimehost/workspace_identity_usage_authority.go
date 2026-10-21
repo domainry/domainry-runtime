@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -56,11 +55,11 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) BindAuthenticator(authe
 
 func (authority *runtimeWorkspaceIdentityUsageAuthority) AuthorizeWorkspaceIdentityUsage(ctx context.Context, request identitymodulehost.WorkspaceIdentityUsageAuthorizationRequest) (identitymodulehost.WorkspaceIdentityUsageGrant, error) {
 	if authority == nil || authority.runtime == nil || authority.applicationKey == "" {
-		return identitymodulehost.WorkspaceIdentityUsageGrant{}, workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_authority_unavailable", nil)
+		return identitymodulehost.WorkspaceIdentityUsageGrant{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_authority_unavailable", nil)
 	}
 	installation, found, err := workspaceprovision.LoadInstallation(ctx, authority.runtime)
 	if err != nil || !found {
-		return identitymodulehost.WorkspaceIdentityUsageGrant{}, workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_installation_unavailable", err)
+		return identitymodulehost.WorkspaceIdentityUsageGrant{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_installation_unavailable", err)
 	}
 	permissionKey := strings.TrimSpace(request.PermissionKey)
 	authority.mu.RLock()
@@ -85,14 +84,14 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) AuthorizeWorkspaceIdent
 	}
 	auditID, auditErr := authority.appendAuthorizationAudit(installation, principal, permissionKey, outcome, denialCode)
 	if auditErr != nil {
-		return identitymodulehost.WorkspaceIdentityUsageGrant{}, workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_authority_audit_failed", auditErr)
+		return identitymodulehost.WorkspaceIdentityUsageGrant{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_authority_audit_failed", auditErr)
 	}
 	if denialCode != "" {
-		return identitymodulehost.WorkspaceIdentityUsageGrant{}, workspaceIdentityUsageAuthorityError(http.StatusForbidden, denialCode, err)
+		return identitymodulehost.WorkspaceIdentityUsageGrant{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassForbidden, denialCode, err)
 	}
 	installationID, err := authority.runtime.InstallationIdentity(ctx)
 	if err != nil {
-		return identitymodulehost.WorkspaceIdentityUsageGrant{}, workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_installation_unavailable", err)
+		return identitymodulehost.WorkspaceIdentityUsageGrant{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_installation_unavailable", err)
 	}
 	return identitymodulehost.WorkspaceIdentityUsageGrant{
 		InstallationID: installationID, ApplicationKey: authority.applicationKey, SubjectID: strings.TrimSpace(principal.UserID),
@@ -106,18 +105,18 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) ListAuthorizedWorkspace
 		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, err
 	}
 	if request.Limit < 1 || request.Limit > identitysdk.WorkspaceIdentityUsageMaxPageSize+1 {
-		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(http.StatusBadRequest, "identity.workspace_usage_catalog_request_invalid", nil)
+		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassBadRequest, "identity.workspace_usage_catalog_request_invalid", nil)
 	}
 	executor := database.ActionExecutionTransaction(ctx)
 	if executor == nil {
-		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_transaction_required", nil)
+		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_transaction_required", nil)
 	}
 	revision, err := authority.catalogRevision(ctx, executor, grant.InstallationID)
 	if err != nil {
 		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, err
 	}
 	if expected := strings.TrimSpace(request.ExpectedCatalogRevision); expected != "" && expected != revision {
-		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(http.StatusConflict, "identity.workspace_usage_catalog_revision_conflict", nil)
+		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassConflict, "identity.workspace_usage_catalog_revision_conflict", nil)
 	}
 	after := strings.TrimSpace(request.AfterWorkspaceID)
 	predicate := query.EqualExpressions(query.QualifiedColumn("workspace", "status"), query.Value("active"))
@@ -127,11 +126,11 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) ListAuthorizedWorkspace
 	statement, arguments, err := query.NewSelectBuilder(authority.runtime.RuntimeRenderer(), "_workspaces").Alias("workspace").
 		Columns("id", "status").Where(predicate).OrderBy(query.Ascending("id")).Limit(request.Limit).Build()
 	if err != nil {
-		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_catalog_unavailable", err)
+		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_catalog_unavailable", err)
 	}
 	rows, err := executor.QueryContext(ctx, statement, arguments...)
 	if err != nil {
-		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_catalog_unavailable", err)
+		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_catalog_unavailable", err)
 	}
 	defer rows.Close()
 	page := identitymodulehost.WorkspaceIdentityUsageCatalogPage{CatalogRevision: revision}
@@ -156,22 +155,22 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) ResolveAuthorizedWorksp
 	}
 	workspaceCode := workspaceprovisionvalidation.NormalizeCanonicalCode(request.WorkspaceCode)
 	if workspaceCode == "" || workspaceCode != request.WorkspaceCode || workspaceprovisionvalidation.ValidateCanonicalCode(workspaceCode) != nil {
-		return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{}, workspaceIdentityUsageAuthorityError(http.StatusBadRequest, "identity.workspace_usage_catalog_request_invalid", nil)
+		return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassBadRequest, "identity.workspace_usage_catalog_request_invalid", nil)
 	}
 	executor := database.ActionExecutionTransaction(ctx)
 	if executor == nil {
-		return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{}, workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_transaction_required", nil)
+		return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_transaction_required", nil)
 	}
 	statement, arguments, err := query.NewSelectBuilder(authority.runtime.RuntimeRenderer(), "_workspaces").Columns("id", "status").
 		Where(query.And(query.Equal("canonical_code", workspaceCode), query.Equal("status", "active"))).Limit(1).Build()
 	if err != nil {
-		return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{}, workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_catalog_unavailable", err)
+		return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_catalog_unavailable", err)
 	}
 	var resolvedID, status string
 	if err := executor.QueryRowContext(ctx, statement, arguments...).Scan(&resolvedID, &status); errors.Is(err, sql.ErrNoRows) {
-		return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{}, workspaceIdentityUsageAuthorityError(http.StatusForbidden, "identity.workspace_usage_catalog_scope_denied", nil)
+		return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassForbidden, "identity.workspace_usage_catalog_scope_denied", nil)
 	} else if err != nil {
-		return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{}, workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_catalog_unavailable", err)
+		return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_catalog_unavailable", err)
 	}
 	return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{
 		WorkspaceID: strings.TrimSpace(resolvedID), Status: identitymodulehost.WorkspaceIdentityUsageCatalogStatus(strings.TrimSpace(status)), Known: true, Authorized: true,
@@ -180,35 +179,35 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) ResolveAuthorizedWorksp
 
 func (authority *runtimeWorkspaceIdentityUsageAuthority) validateGrant(ctx context.Context, grant identitymodulehost.WorkspaceIdentityUsageGrant) error {
 	if authority == nil || authority.runtime == nil {
-		return workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_authority_unavailable", nil)
+		return workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_authority_unavailable", nil)
 	}
 	installation, found, err := workspaceprovision.LoadInstallation(ctx, authority.runtime)
 	if err != nil || !found {
-		return workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_installation_unavailable", err)
+		return workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_installation_unavailable", err)
 	}
 	installationID, err := authority.runtime.InstallationIdentity(ctx)
 	if err != nil {
-		return workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_installation_unavailable", err)
+		return workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_installation_unavailable", err)
 	}
 	if strings.TrimSpace(grant.InstallationID) != installationID || strings.TrimSpace(grant.ApplicationKey) != authority.applicationKey ||
 		strings.TrimSpace(grant.AuditWorkspaceID) != strings.TrimSpace(installation.WorkspaceID) || strings.TrimSpace(grant.PermissionKey) != identitysdk.WorkspaceIdentityUsageAggregatePermission ||
 		strings.TrimSpace(grant.SubjectID) == "" || strings.TrimSpace(grant.AuthorizationRevision) == "" || strings.TrimSpace(grant.AuthorizationAuditID) == "" {
-		return workspaceIdentityUsageAuthorityError(http.StatusForbidden, "identity.workspace_usage_grant_invalid", nil)
+		return workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassForbidden, "identity.workspace_usage_grant_invalid", nil)
 	}
 	statement, arguments, err := query.NewWorkspaceSelectBuilder(authority.runtime.RuntimeRenderer(), "_audit_events", installation.WorkspaceID).
 		Columns("event", "actor_id", "role_key", "metadata_json").Where(query.Equal("id", strings.TrimSpace(grant.AuthorizationAuditID))).Limit(1).Build()
 	if err != nil {
-		return workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_authority_audit_unavailable", err)
+		return workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_authority_audit_unavailable", err)
 	}
 	var event, actorID, roleKey, metadataJSON string
 	if err := authority.runtime.DB().QueryRowContext(ctx, statement, arguments...).Scan(&event, &actorID, &roleKey, &metadataJSON); err != nil {
-		return workspaceIdentityUsageAuthorityError(http.StatusForbidden, "identity.workspace_usage_authority_audit_invalid", err)
+		return workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassForbidden, "identity.workspace_usage_authority_audit_invalid", err)
 	}
 	var metadata map[string]any
 	if json.Unmarshal([]byte(metadataJSON), &metadata) != nil || event != "identity.workspace_identity_usage.authorize" || strings.TrimSpace(actorID) != strings.TrimSpace(grant.SubjectID) ||
 		strings.TrimSpace(roleKey) != workspaceIdentityUsageAdministratorRole || metadata["outcome"] != "allowed" || metadata["application_key"] != authority.applicationKey ||
 		metadata["principal_snapshot"] != workspaceIdentityUsageAuthorizationRevisionDigest(grant.AuthorizationRevision) {
-		return workspaceIdentityUsageAuthorityError(http.StatusForbidden, "identity.workspace_usage_authority_audit_invalid", nil)
+		return workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassForbidden, "identity.workspace_usage_authority_audit_invalid", nil)
 	}
 	return nil
 }
@@ -221,11 +220,11 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) catalogRevision(ctx con
 		).
 		Where(query.EqualExpressions(query.QualifiedColumn("workspace", "status"), query.Value("active"))).OrderBy(query.AscendingExpression(query.QualifiedColumn("workspace", "id"))).Build()
 	if err != nil {
-		return "", workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_catalog_unavailable", err)
+		return "", workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_catalog_unavailable", err)
 	}
 	rows, err := executor.QueryContext(ctx, statement, arguments...)
 	if err != nil {
-		return "", workspaceIdentityUsageAuthorityError(http.StatusInternalServerError, "identity.workspace_usage_catalog_unavailable", err)
+		return "", workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_catalog_unavailable", err)
 	}
 	defer rows.Close()
 	hash := sha256.New()
@@ -278,8 +277,8 @@ func workspaceIdentityUsageCursorKey(secret string) []byte {
 	return append([]byte(nil), digest[:]...)
 }
 
-func workspaceIdentityUsageAuthorityError(status int, code string, cause error) error {
-	return &identitysdk.Error{StatusCode: status, Code: code, Cause: cause}
+func workspaceIdentityUsageAuthorityError(class identitysdk.ErrorClass, code string, cause error) error {
+	return &identitysdk.Error{Class: class, Code: code, Cause: cause}
 }
 
 var _ identitymodulehost.WorkspaceIdentityUsageInstallationAuthority = (*runtimeWorkspaceIdentityUsageAuthority)(nil)

@@ -76,7 +76,9 @@ func businessActionPayloadFields(action definitionmodel.ActionSchema) []definiti
 	return append(fields, field)
 }
 
-func businessActionError(class, code string) error { return &agentsdk.Error{Class: class, Code: code} }
+func businessActionError(class agentsdk.ErrorClass, code string) error {
+	return &agentsdk.Error{Class: class, Code: code}
+}
 
 func businessActionHostError(err error) error {
 	if err == nil {

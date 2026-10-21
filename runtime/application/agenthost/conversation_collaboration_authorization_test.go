@@ -21,18 +21,18 @@ func (r collaborationPrincipalError) Resolve(context.Context, identity.Principal
 func TestConversationCollaborationIdentityDenialsRemainDenials(t *testing.T) {
 	h, _, _, a := newConversationBusinessFixture(t)
 	request := agent.ConversationCollaborationAuthorizationRequest{Authority: a, OwnerUserID: a.UserID, Operations: []string{"view"}}
-	for _, status := range []int{401, 403, 404} {
-		h.principals = collaborationPrincipalError{&identity.Error{StatusCode: status, Code: "identity.subject_not_found"}}
+	for _, class := range []identity.ErrorClass{identity.ErrorClassForbidden, identity.ErrorClassNotFound} {
+		h.principals = collaborationPrincipalError{&identity.Error{Class: class, Code: "identity.subject_not_found"}}
 		decision, err := h.AuthorizeConversationCollaboration(t.Context(), request)
 		if err != nil || len(decision.Allowed) != 0 {
-			t.Fatal("Identity denial became unavailable", status, decision, err)
+			t.Fatal("Identity denial became unavailable", class, decision, err)
 		}
 		var coded *agent.Error
 		if _, err := h.principal(t.Context(), a); !errors.As(err, &coded) || coded.Class != "forbidden" {
-			t.Fatal("role/subject denial misclassified", status, err)
+			t.Fatal("role/subject denial misclassified", class, err)
 		}
 	}
-	h.principals = collaborationPrincipalError{&identity.Error{StatusCode: 503, Code: "identity.temporarily_unavailable"}}
+	h.principals = collaborationPrincipalError{&identity.Error{Class: identity.ErrorClassUnavailable, Code: "identity.temporarily_unavailable"}}
 	if _, err := h.AuthorizeConversationCollaboration(t.Context(), request); err == nil {
 		t.Fatal("unavailable Identity treated as a policy decision")
 	}

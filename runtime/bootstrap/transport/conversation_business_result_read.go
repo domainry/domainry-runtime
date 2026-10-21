@@ -15,7 +15,7 @@ func (q conversationReportQueries) AuthorizeQueryResultRead(ctx context.Context,
 	}
 	owner, ok := q.queries.(report.ResultReader)
 	if !ok {
-		return &report.Error{StatusCode: 503, Code: "backend.report.read_scope_unavailable"}
+		return &report.Error{Class: report.ErrorClassUnavailable, Code: "backend.report.read_scope_unavailable"}
 	}
 	return owner.AuthorizeQueryResultRead(ctx, in, a)
 }
@@ -26,7 +26,7 @@ func (q conversationReportQueries) AuthorizeCatalogRead(ctx context.Context, in 
 	}
 	owner, ok := q.queries.(report.ResultReader)
 	if !ok {
-		return &report.Error{StatusCode: 503, Code: "backend.report.read_scope_unavailable"}
+		return &report.Error{Class: report.ErrorClassUnavailable, Code: "backend.report.read_scope_unavailable"}
 	}
 	return owner.AuthorizeCatalogRead(ctx, in, a)
 }
@@ -37,7 +37,7 @@ func (q conversationReportQueries) AuthorizeAnalysisResultRead(ctx context.Conte
 	}
 	owner, ok := q.queries.(report.ResultReader)
 	if !ok {
-		return &report.Error{StatusCode: 503, Code: "backend.report.read_scope_unavailable"}
+		return &report.Error{Class: report.ErrorClassUnavailable, Code: "backend.report.read_scope_unavailable"}
 	}
 	return owner.AuthorizeAnalysisResultRead(ctx, in, a)
 }
@@ -48,7 +48,7 @@ func (q conversationReportQueries) AuthorizeAnalysisCatalogRead(ctx context.Cont
 	}
 	owner, ok := q.queries.(report.ResultReader)
 	if !ok {
-		return &report.Error{StatusCode: 503, Code: "backend.report.read_scope_unavailable"}
+		return &report.Error{Class: report.ErrorClassUnavailable, Code: "backend.report.read_scope_unavailable"}
 	}
 	return owner.AuthorizeAnalysisCatalogRead(ctx, in, a)
 }

@@ -143,21 +143,7 @@ func reportExportOwnerError(err error) error {
 	if !errors.As(err, &stable) {
 		return err
 	}
-	kind := apperror.KindInternal
-	switch stable.StatusCode {
-	case 400:
-		kind = apperror.KindBadRequest
-	case 401, 403:
-		kind = apperror.KindForbidden
-	case 404:
-		kind = apperror.KindNotFound
-	case 409:
-		kind = apperror.KindConflict
-	case 429:
-		kind = apperror.KindRateLimited
-	case 503:
-		kind = apperror.KindUnavailable
-	}
+	kind := apperror.KindOf(stable)
 	return &apperror.AppError{Kind: kind, Code: stable.Code, Params: stable.Params, Err: err}
 }
 

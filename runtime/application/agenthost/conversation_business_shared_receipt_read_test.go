@@ -26,7 +26,7 @@ func (r *sharedBusinessPrincipals) Resolve(_ context.Context, in identity.Princi
 	if string(in.SubjectID) == r.reader.UserID && in.RoleKey == r.reader.RoleKey && r.actual.Known {
 		return agentPrincipalResolution(r.actual), nil
 	}
-	return identity.PrincipalResolution{}, &identity.Error{StatusCode: 403, Code: "identity.subject_not_found"}
+	return identity.PrincipalResolution{}, &identity.Error{Class: identity.ErrorClassForbidden, Code: "identity.subject_not_found"}
 }
 
 func bindSharedBusinessReader(h *ConversationBusinessHost, resolver *businessPrincipalResolver, producer agent.ConversationAuthority) (*sharedBusinessPrincipals, agent.ConversationAuthority) {

@@ -488,66 +488,10 @@ func normalizeIdentityCapabilityError(err error, fallback string) error {
 	if err == nil {
 		return nil
 	}
-	// The embedded Identity module returns refusals it already classified
-	// (a duplicate login email is backend.identity.user_email_exists as a bad
-	// request); keep that classification, its code and its params instead of
-	// guessing the kind from the code text, which reported it as a 500.
-	var classified *apperror.AppError
-	if errors.As(err, &classified) && classified != nil && classified.Kind != "" && classified.Kind != apperror.KindInternal {
-		code := strings.TrimSpace(classified.Code)
-		if code == "" {
-			code = fallback
-		}
-		return apperror.New(classified.Kind, code, err, classified.Params)
+	code := strings.TrimSpace(fallback)
+	var coded interface{ ErrorCode() string }
+	if errors.As(err, &coded) && apperror.IsI18nCode(coded.ErrorCode()) {
+		code = strings.TrimSpace(coded.ErrorCode())
 	}
-	code := ""
-	var identityError *identitysdk.Error
-	if errors.As(err, &identityError) {
-		code = strings.TrimSpace(identityError.Code)
-		// A remote Identity answered with an HTTP status: a 4xx is the caller's
-		// refusal, not a Runtime failure.
-		if kind, known := identityStatusKind(identityError.StatusCode); known {
-			if code == "" {
-				code = fallback
-			}
-			return apperror.New(kind, code, err, identityError.Params)
-		}
-	}
-	if code == "" {
-		code = strings.TrimSpace(apperror.CodeOf(err))
-	}
-	if code == "" {
-		code = fallback
-	}
-	kind := apperror.KindInternal
-	lower := strings.ToLower(code)
-	switch {
-	case strings.Contains(lower, "denied"), strings.Contains(lower, "forbidden"), strings.Contains(lower, "scope_mismatch"), strings.Contains(lower, "request_identity_required"):
-		kind = apperror.KindForbidden
-	case strings.Contains(lower, "conflict"), strings.Contains(lower, "stale"), strings.Contains(lower, "idempotency_key_reused"):
-		kind = apperror.KindConflict
-	case strings.Contains(lower, "not_found"):
-		kind = apperror.KindNotFound
-	case strings.Contains(lower, "invalid"), strings.Contains(lower, "required") && !strings.Contains(lower, "transaction_required"):
-		kind = apperror.KindBadRequest
-	case strings.Contains(lower, "exists"), strings.Contains(lower, "already"), strings.Contains(lower, "duplicate"):
-		kind = apperror.KindConflict
-	}
-	return apperror.New(kind, code, err, nil)
-}
-
-func identityStatusKind(status int) (apperror.ErrorKind, bool) {
-	switch status {
-	case 400, 422:
-		return apperror.KindBadRequest, true
-	case 401, 403:
-		return apperror.KindForbidden, true
-	case 404:
-		return apperror.KindNotFound, true
-	case 409:
-		return apperror.KindConflict, true
-	case 429:
-		return apperror.KindRateLimited, true
-	}
-	return "", false
+	return apperror.New(apperror.KindOf(err), code, err, apperror.ParamsOf(err))
 }

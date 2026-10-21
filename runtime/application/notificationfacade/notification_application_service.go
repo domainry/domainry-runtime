@@ -60,21 +60,7 @@ func mapError(err error) error {
 	if !errors.As(err, &sdkError) {
 		return err
 	}
-	kind := apperror.KindInternal
-	switch sdkError.StatusCode {
-	case 400, 422:
-		kind = apperror.KindBadRequest
-	case 401, 403:
-		kind = apperror.KindForbidden
-	case 404:
-		kind = apperror.KindNotFound
-	case 409:
-		kind = apperror.KindConflict
-	case 429:
-		kind = apperror.KindRateLimited
-	case 502, 503, 504:
-		kind = apperror.KindUnavailable
-	}
+	kind := apperror.KindOf(sdkError)
 	return &apperror.AppError{Kind: kind, Code: "backend." + strings.TrimPrefix(sdkError.Code, "backend."), Err: err}
 }
 

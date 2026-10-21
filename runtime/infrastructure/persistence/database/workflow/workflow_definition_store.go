@@ -567,7 +567,7 @@ func (r WorkflowDefinitionStore) mutate(ctx context.Context, change func(context
 
 func workflowDefinitionRetryable(err error) bool {
 	var metadataErr *metadatasdk.Error
-	if errors.As(err, &metadataErr) && metadataErr.StatusCode == 409 {
+	if errors.As(err, &metadataErr) && metadataErr.Kind == metadatasdk.ErrorKindConflict {
 		return true
 	}
 	return mutation.IsTransactionTransient(mutation.TransactionError(err, "workflow_definition", "publication"), "")

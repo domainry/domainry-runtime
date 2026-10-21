@@ -16,7 +16,7 @@ func (q conversationReportQueries) analyses(p principalmodel.Principal) (report.
 	}
 	owner, ok := q.queries.(report.Analyses)
 	if !ok {
-		return nil, a, &report.Error{StatusCode: 503, Code: "backend.report.analysis.unavailable"}
+		return nil, a, &report.Error{Class: report.ErrorClassUnavailable, Code: "backend.report.analysis.unavailable"}
 	}
 	return owner, a, nil
 }

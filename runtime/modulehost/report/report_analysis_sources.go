@@ -129,7 +129,7 @@ func (h *ReportModuleQueryHost) ReportAnalysisSources(ctx context.Context, subje
 
 func analysisDiscoveryDenied(err error) bool {
 	var failure *reportsdk.Error
-	return errors.As(stableReportHostError(err), &failure) && (failure.StatusCode == 403 || failure.StatusCode == 404)
+	return errors.As(stableReportHostError(err), &failure) && (failure.Class == reportsdk.ErrorClassForbidden || failure.Class == reportsdk.ErrorClassNotFound)
 }
 
 var _ modulehost.AnalysisSources = (*ReportModuleQueryHost)(nil)

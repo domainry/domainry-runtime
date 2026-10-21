@@ -19,7 +19,7 @@ func (q conversationReportQueries) AuthorizeSharedQueryResultRead(ctx context.Co
 	}
 	owner, ok := q.queries.(report.SharedResultReader)
 	if !ok {
-		return &report.Error{StatusCode: 503, Code: "backend.report.shared_read_scope_unavailable"}
+		return &report.Error{Class: report.ErrorClassUnavailable, Code: "backend.report.shared_read_scope_unavailable"}
 	}
 	return owner.AuthorizeSharedQueryResultRead(ctx, in, a, origin)
 }
@@ -35,7 +35,7 @@ func (q conversationReportQueries) AuthorizeSharedCatalogRead(ctx context.Contex
 	}
 	owner, ok := q.queries.(report.SharedResultReader)
 	if !ok {
-		return &report.Error{StatusCode: 503, Code: "backend.report.shared_read_scope_unavailable"}
+		return &report.Error{Class: report.ErrorClassUnavailable, Code: "backend.report.shared_read_scope_unavailable"}
 	}
 	return owner.AuthorizeSharedCatalogRead(ctx, in, a, origin)
 }
@@ -51,7 +51,7 @@ func (q conversationReportQueries) AuthorizeSharedAnalysisResultRead(ctx context
 	}
 	owner, ok := q.queries.(report.SharedResultReader)
 	if !ok {
-		return &report.Error{StatusCode: 503, Code: "backend.report.shared_read_scope_unavailable"}
+		return &report.Error{Class: report.ErrorClassUnavailable, Code: "backend.report.shared_read_scope_unavailable"}
 	}
 	return owner.AuthorizeSharedAnalysisResultRead(ctx, in, a, origin)
 }
@@ -67,7 +67,7 @@ func (q conversationReportQueries) AuthorizeSharedAnalysisCatalogRead(ctx contex
 	}
 	owner, ok := q.queries.(report.SharedResultReader)
 	if !ok {
-		return &report.Error{StatusCode: 503, Code: "backend.report.shared_read_scope_unavailable"}
+		return &report.Error{Class: report.ErrorClassUnavailable, Code: "backend.report.shared_read_scope_unavailable"}
 	}
 	return owner.AuthorizeSharedAnalysisCatalogRead(ctx, in, a, origin)
 }

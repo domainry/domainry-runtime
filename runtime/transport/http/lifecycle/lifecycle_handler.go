@@ -57,7 +57,7 @@ func NewLifecycleHandler(deps LifecycleDependencies) *LifecycleHandler {
 
 func (h *LifecycleHandler) runCleanupJob(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
-		h.writeServiceError(w, r, &lifecyclesdk.Error{StatusCode: http.StatusServiceUnavailable, Code: "lifecycle.unavailable"})
+		h.writeServiceError(w, r, &lifecyclesdk.Error{Class: lifecyclesdk.ErrorClassUnavailable, Code: "lifecycle.unavailable"})
 		return
 	}
 	principal := h.principal(r)

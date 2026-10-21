@@ -25,7 +25,7 @@ func (stub *moduleServiceVerifierStub) Verify(_ context.Context, request identit
 	stub.calls++
 	stub.request = request
 	if request.AccessToken != "valid-service-token" {
-		return identitysdk.ApplicationServicePrincipal{}, &identitysdk.Error{StatusCode: http.StatusUnauthorized, Code: "invalid_service_token"}
+		return identitysdk.ApplicationServicePrincipal{}, &identitysdk.Error{Class: identitysdk.ErrorClassForbidden, Code: "invalid_service_token"}
 	}
 	return identitysdk.ApplicationServicePrincipal{SubjectID: "service:identity", Audience: request.Audience}, nil
 }

@@ -316,28 +316,13 @@ func runtimeBusinessClaims(values map[string]reportmodel.ReportBusinessClaim) ma
 
 func stableReportHostError(err error) error {
 	if err == nil {
-		return &reportsdk.Error{StatusCode: 500, Code: "backend.internal_error"}
+		return &reportsdk.Error{Class: reportsdk.ErrorClassInternal, Code: "backend.internal_error"}
 	}
 	var stable *reportsdk.Error
 	if errors.As(err, &stable) {
 		return stable
 	}
-	status := 500
-	switch apperror.KindOf(err) {
-	case apperror.KindBadRequest:
-		status = 400
-	case apperror.KindForbidden:
-		status = 403
-	case apperror.KindNotFound:
-		status = 404
-	case apperror.KindConflict:
-		status = 409
-	case apperror.KindRateLimited:
-		status = 429
-	case apperror.KindUnavailable:
-		status = 503
-	}
-	return &reportsdk.Error{StatusCode: status, Code: apperror.CodeOf(err), Params: apperror.ParamsOf(err), Cause: err}
+	return &reportsdk.Error{Class: apperror.KindOf(err), Code: apperror.CodeOf(err), Params: apperror.ParamsOf(err), Cause: err}
 }
 
 // StableReportHostError is shared by Runtime's Report host adapters so every

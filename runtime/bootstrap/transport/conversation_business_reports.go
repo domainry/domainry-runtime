@@ -20,7 +20,7 @@ func (q conversationReportQueries) governed(p principalmodel.Principal) (report.
 	}
 	queries, ok := q.queries.(report.GovernedQueries)
 	if !ok {
-		return nil, a, &report.Error{StatusCode: 503, Code: "backend.report.evidence_unavailable"}
+		return nil, a, &report.Error{Class: report.ErrorClassUnavailable, Code: "backend.report.evidence_unavailable"}
 	}
 	return queries, a, nil
 }

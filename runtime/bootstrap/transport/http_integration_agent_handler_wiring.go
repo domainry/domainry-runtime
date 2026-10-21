@@ -593,7 +593,7 @@ func runtimeAgentSDKError(err error) error {
 	if errors.As(err, &sdkError) {
 		return err
 	}
-	return &agentsdk.Error{Class: string(apperror.KindOf(err)), Code: apperror.CodeOf(err), Cause: err}
+	return &agentsdk.Error{Class: apperror.KindOf(err), Code: apperror.CodeOf(err), Cause: err}
 }
 
 func (h runtimeAgentInteractiveHost) InvokeInteractiveTool(ctx context.Context, request agentmodulehost.InteractiveToolInvocationRequest) (agentmodulehost.InteractiveToolInvocationResult, error) {
