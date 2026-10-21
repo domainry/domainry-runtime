@@ -112,13 +112,7 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 			if records.actionService == nil {
 				return workflowapplication.WorkflowBusinessActionInvocationResult{}, apperror.New(apperror.KindInternal, "backend.internal", nil, map[string]string{"operation": "invoke workflow domain action"})
 			}
-			executionPrincipal := invocation.Principal.WithExactSystemCapabilities(invocation.ActionKey)
-			result, err := records.actionService.Invoke(ctx, actionmodel.ActionSourceWorkflow, actionmodel.ActionInvocation{
-				ActionKey: invocation.ActionKey, ObjectKey: invocation.ObjectKey, RecordID: invocation.RecordID,
-				Input: invocation.Input, Principal: executionPrincipal, Actor: invocation.Actor,
-				ProcessID: invocation.ProcessID, NodeID: invocation.NodeID,
-				IdempotencyKey: invocation.IdempotencyKey,
-			})
+			result, err := records.actionService.Invoke(ctx, actionmodel.ActionSourceWorkflow, workflowBusinessActionInvocation(invocation))
 			return workflowActionInvocationResult(result), err
 		},
 		Audit: func(ctx context.Context, event, objectKey, recordID string, principal principalmodel.Principal, summary string, before, after map[string]any) {
@@ -128,5 +122,20 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 			records.auditApplicationService.AppendWithMetadata(ctx, auditmodel.EventFamilyRuntimeWorkflow, event, objectKey, recordID, principal, summary, before, after, metadata)
 		},
 		Worker: records.workerDependencies,
+	}
+}
+
+func workflowBusinessActionInvocation(invocation workflowapplication.WorkflowBusinessActionInvocation) actionmodel.ActionInvocation {
+	return actionmodel.ActionInvocation{
+		PreventExecutionReclaim: true,
+		ActionKey:               invocation.ActionKey,
+		ObjectKey:               invocation.ObjectKey,
+		RecordID:                invocation.RecordID,
+		Input:                   invocation.Input,
+		Principal:               invocation.Principal.WithExactSystemCapabilities(invocation.ActionKey),
+		Actor:                   invocation.Actor,
+		ProcessID:               invocation.ProcessID,
+		NodeID:                  invocation.NodeID,
+		IdempotencyKey:          invocation.IdempotencyKey,
 	}
 }

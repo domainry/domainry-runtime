@@ -53,6 +53,12 @@ func TestBusinessActionExecutionRejectsConnectorCallsOutsidePublishedGrant(t *te
 	} else {
 		lease.Release()
 	}
+	execution.invocation.Source = actionmodel.ActionSourceWorkflow
+	if lease, err := execution.AcquireSynchronousConnectorCall(writeCall); err != nil {
+		t.Fatalf("non-reclaimable Workflow side effect error=%v", err)
+	} else {
+		lease.Release()
+	}
 	execution.invocation.Source = actionmodel.ActionSourceHTTP
 	if lease, err := execution.AcquireSynchronousConnectorCall(writeCall); err != nil {
 		t.Fatalf("non-reclaimable project HTTP side effect error=%v", err)
@@ -71,7 +77,7 @@ func TestBusinessActionExecutionRejectsConnectorCallsOutsidePublishedGrant(t *te
 }
 
 func TestBusinessActionExecutionLeasesDynamicAccountWritesOnlyForDurableOwners(t *testing.T) {
-	for _, source := range []actionmodel.ActionSource{actionmodel.ActionSourceAgent, actionmodel.ActionSourceHTTP, actionmodel.ActionSourceRecordTimer, actionmodel.ActionSourceScheduler} {
+	for _, source := range []actionmodel.ActionSource{actionmodel.ActionSourceAgent, actionmodel.ActionSourceHTTP, actionmodel.ActionSourceRecordTimer, actionmodel.ActionSourceScheduler, actionmodel.ActionSourceWorkflow} {
 		t.Run(string(source), func(t *testing.T) {
 			execution := &businessActionExecution{
 				unitOfWork: newActionTestUnitOfWork(),

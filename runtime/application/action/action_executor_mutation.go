@@ -48,7 +48,7 @@ func (e *businessActionExecution) AcquireSynchronousConnectorCall(requested runt
 
 func synchronousConnectorWriteOwner(source actionmodel.ActionSource) bool {
 	switch source {
-	case actionmodel.ActionSourceHTTP, actionmodel.ActionSourceRecordTimer, actionmodel.ActionSourceScheduler:
+	case actionmodel.ActionSourceHTTP, actionmodel.ActionSourceRecordTimer, actionmodel.ActionSourceScheduler, actionmodel.ActionSourceWorkflow:
 		return true
 	default:
 		return false
@@ -59,12 +59,12 @@ func (e *businessActionExecution) AcquireConnectionAccountWrite() (runtimeext.Sy
 	if e == nil {
 		return nil, apperror.New(apperror.KindInternal, runtimeext.ConnectorActionExecutionRequiredErrorCode, nil, nil)
 	}
-	// Conversation Actions, explicitly confirmed project HTTP Actions and
-	// Runtime-owned scheduled executions persist a non-reclaimable Action claim
-	// before dispatch. Integration then adds the exact account/operation
-	// authorization and its own insert-only effect claim.
+	// Conversation Actions, explicitly confirmed project HTTP Actions,
+	// Runtime-owned scheduled executions and Workflow Actions persist a
+	// non-reclaimable Action claim before dispatch. Integration then adds the
+	// exact account/operation authorization and its own insert-only effect claim.
 	switch e.invocation.Source {
-	case actionmodel.ActionSourceAgent, actionmodel.ActionSourceHTTP, actionmodel.ActionSourceRecordTimer, actionmodel.ActionSourceScheduler:
+	case actionmodel.ActionSourceAgent, actionmodel.ActionSourceHTTP, actionmodel.ActionSourceRecordTimer, actionmodel.ActionSourceScheduler, actionmodel.ActionSourceWorkflow:
 	default:
 		return nil, apperror.New(apperror.KindForbidden, runtimeext.ConnectorActionSideEffectOutboxErrorCode, nil, nil)
 	}
