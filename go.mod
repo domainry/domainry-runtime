@@ -7,7 +7,7 @@ toolchain go1.26.6
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/creack/pty v1.1.24
-	github.com/domainry/domainry-agent v0.1.80
+	github.com/domainry/domainry-agent v0.1.83
 	github.com/domainry/domainry-agent-sdk v0.1.50
 	github.com/domainry/domainry-audit v0.1.38
 	github.com/domainry/domainry-audit-sdk v0.1.15
@@ -15,13 +15,13 @@ require (
 	github.com/domainry/domainry-data-exchange v0.3.33
 	github.com/domainry/domainry-data-exchange-sdk v0.3.14
 	github.com/domainry/domainry-foundation v0.2.9
-	github.com/domainry/domainry-identity v0.2.55
-	github.com/domainry/domainry-identity-sdk v0.1.27
+	github.com/domainry/domainry-identity v0.2.57
+	github.com/domainry/domainry-identity-sdk v0.1.29
 	github.com/domainry/domainry-integration v0.1.52
 	github.com/domainry/domainry-integration-sdk v0.1.20
-	github.com/domainry/domainry-knowledge v0.1.51
+	github.com/domainry/domainry-knowledge v0.1.52
 	github.com/domainry/domainry-knowledge-sdk v0.1.22
-	github.com/domainry/domainry-lifecycle v0.1.34
+	github.com/domainry/domainry-lifecycle v0.1.35
 	github.com/domainry/domainry-lifecycle-sdk v0.1.25
 	github.com/domainry/domainry-metadata v0.1.29
 	github.com/domainry/domainry-metadata-sdk v0.1.11

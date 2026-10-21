@@ -45,8 +45,8 @@ func TestReportObjectSQLDialectGoldens(t *testing.T) {
 	ctes := []string{`"src0" AS (SELECT 1)`, `"src1" AS (SELECT 1)`}
 	wants := map[string][]string{
 		"sqlite":   {`runtime_date_bucket("s"."sold_at", 'day', 'UTC')`, `runtime_decimal_sum_minor(runtime_decimal_minor("s"."total", 18))`, `runtime_currency_divide_minor(runtime_decimal_sum_minor(runtime_decimal_minor("s"."total", 18)), NULLIF(COUNT(*), 0))`, `>= ?`},
-		"postgres": {`DATE_TRUNC('day', CAST("s"."sold_at" AS TIMESTAMPTZ))`, `SUM("s"."total")`, `(SUM("s"."total") / NULLIF(COUNT(*), 0))`, `>= $1`},
-		"mysql":    {"DATE_FORMAT(`s`.`sold_at`, '%Y-%m-%d 00:00:00')", "SUM(`s`.`total`)", "(SUM(`s`.`total`) / NULLIF(COUNT(*), 0))", ">= ?"},
+		"postgres": {`TO_TIMESTAMP(("s"."sold_at")::DOUBLE PRECISION / 1000.0) AT TIME ZONE 'UTC'`, `TO_CHAR(DATE_TRUNC('day'`, `|| 'Z'`, `SUM("s"."total")`, `(SUM("s"."total") / NULLIF(COUNT(*), 0))`, `>= $1`},
+		"mysql":    {"CONCAT(DATE_FORMAT(TIMESTAMPADD(SECOND, (`s`.`sold_at` DIV 1000), '1970-01-01 00:00:00'), '%Y-%m-%dT00:00:00'), 'Z')", "SUM(`s`.`total`)", "(SUM(`s`.`total`) / NULLIF(COUNT(*), 0))", ">= ?"},
 	}
 	for driver, fragments := range wants {
 		t.Run(driver, func(t *testing.T) {
@@ -103,14 +103,14 @@ func TestReportObjectSQLDialectCompleteQueryHasNoOffset(t *testing.T) {
 	}
 }
 
-func TestReportObjectSQLPostgresDateBucketCastsTextBackedTemporalTypes(t *testing.T) {
+func TestReportObjectSQLPostgresDateBucketConvertsRecordStorageTypes(t *testing.T) {
 	for _, test := range []struct {
 		name      string
 		fieldType string
 		want      string
 	}{
-		{name: "date", fieldType: "date", want: `DATE_TRUNC('month', CAST("b"."business_date" AS DATE))`},
-		{name: "datetime", fieldType: "datetime", want: `DATE_TRUNC('month', CAST("b"."occurred_at" AS TIMESTAMPTZ))`},
+		{name: "date", fieldType: "date", want: `(TO_CHAR(DATE_TRUNC('month', CAST("b"."business_date" AS TIMESTAMP)), 'YYYY-MM-DD"T"HH24:MI:SS') || 'Z')`},
+		{name: "datetime", fieldType: "datetime", want: `(TO_CHAR(DATE_TRUNC('month', TO_TIMESTAMP(("b"."occurred_at")::DOUBLE PRECISION / 1000.0) AT TIME ZONE 'UTC'), 'YYYY-MM-DD"T"HH24:MI:SS') || 'Z')`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			args := []any{}
