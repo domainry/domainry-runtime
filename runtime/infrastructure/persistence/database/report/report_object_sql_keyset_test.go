@@ -59,3 +59,34 @@ func TestReportObjectSQLKeysetPageHandlesNullOrderValue(t *testing.T) {
 		t.Fatalf("NULL keyset predicate is not stable: %s", statement)
 	}
 }
+
+func TestReportObjectSQLKeysetPageRanksGroupedValuesAfterAggregation(t *testing.T) {
+	args := []any{}
+	emitter := reportObjectSQLEmitter{dialect: objectSQLGoldenDialect{driver: "mysql"}, profile: reportTestEngineProfile("mysql"), args: &args}
+	bucket := reportmodel.ReportObjectSQLExpression{
+		Kind: "function", Name: "date_bucket", Value: "day", Type: "datetime",
+		Arguments: []reportmodel.ReportObjectSQLExpression{{Kind: "field", Alias: "touch", FieldKey: "occurred_at", Type: "datetime"}},
+	}
+	plan := reportmodel.ReportObjectSQLPlan{
+		Sources: []reportmodel.ReportObjectSQLSource{{Alias: "touch"}},
+		Projections: []reportmodel.ReportObjectSQLProjection{
+			{Alias: "day_bucket", Expression: bucket},
+			{Alias: "activity_count", Expression: reportmodel.ReportObjectSQLExpression{Kind: "aggregate", Name: "count", Type: "integer", Arguments: []reportmodel.ReportObjectSQLExpression{{Kind: "field", Alias: "touch", FieldKey: "id", Type: "text"}}}},
+		},
+		GroupBy: []reportmodel.ReportObjectSQLExpression{bucket},
+		OrderBy: []reportmodel.ReportObjectSQLOrder{{Expression: reportmodel.ReportObjectSQLExpression{Kind: "result", Alias: "day_bucket"}, Direction: "asc"}},
+		Limit:   100,
+	}
+	statement, err := emitter.statementKeysetPage(plan, []string{"`source` AS (SELECT 1)"}, nil, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRank := "CASE WHEN `__cursor_value_0` IS NULL THEN 1 ELSE 0 END AS `__cursor_null_0`"
+	if !strings.Contains(statement, "`domainry_report_base` AS (") || !strings.Contains(statement, "`domainry_report_page` AS (SELECT") || !strings.Contains(statement, wantRank) {
+		t.Fatalf("grouped keyset statement does not rank the aggregated alias in an outer layer: %s", statement)
+	}
+	rankStart := strings.Index(statement, wantRank)
+	if rankStart < 0 || strings.Contains(statement[rankStart:rankStart+len(wantRank)], "occurred_at") {
+		t.Fatalf("cursor NULL rank still references the raw grouped field: %s", statement)
+	}
+}

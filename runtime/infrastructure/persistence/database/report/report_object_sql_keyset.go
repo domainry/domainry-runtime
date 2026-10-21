@@ -8,7 +8,10 @@ import (
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 )
 
-const reportObjectSQLPageCTE = "domainry_report_page"
+const (
+	reportObjectSQLBaseCTE = "domainry_report_base"
+	reportObjectSQLPageCTE = "domainry_report_page"
+)
 
 // statementKeysetPage emits a bounded report page without OFFSET. Every
 // published report plan already carries deterministic tie terms. The emitter
@@ -26,7 +29,7 @@ func (e *reportObjectSQLEmitter) statementKeysetPage(plan reportmodel.ReportObje
 	}
 
 	visible := make([]string, 0, len(plan.Projections))
-	inner := make([]string, 0, len(plan.Projections)+len(plan.OrderBy)*2)
+	baseColumns := make([]string, 0, len(plan.Projections)+len(plan.OrderBy))
 	for _, projection := range plan.Projections {
 		expression, err := e.expression(projection.Expression)
 		if err != nil {
@@ -34,30 +37,27 @@ func (e *reportObjectSQLEmitter) statementKeysetPage(plan reportmodel.ReportObje
 		}
 		alias := e.dialect.Identifier(projection.Alias)
 		visible = append(visible, alias)
-		inner = append(inner, expression+" AS "+alias)
+		baseColumns = append(baseColumns, expression+" AS "+alias)
 	}
 	for index, order := range plan.OrderBy {
 		expression, err := e.reportKeysetOrderExpression(plan, order.Expression)
 		if err != nil {
 			return "", err
 		}
-		inner = append(inner,
-			"CASE WHEN "+expression+" IS NULL THEN 1 ELSE 0 END AS "+e.dialect.Identifier(reportKeysetNullAlias(index)),
-			expression+" AS "+e.dialect.Identifier(reportKeysetValueAlias(index)),
-		)
+		baseColumns = append(baseColumns, expression+" AS "+e.dialect.Identifier(reportKeysetValueAlias(index)))
 	}
 
 	from, err := e.reportKeysetFrom(plan)
 	if err != nil {
 		return "", err
 	}
-	pageBody := "SELECT " + strings.Join(inner, ", ") + " FROM " + from
+	baseBody := "SELECT " + strings.Join(baseColumns, ", ") + " FROM " + from
 	if plan.Where != nil {
 		value, expressionErr := e.expression(*plan.Where)
 		if expressionErr != nil {
 			return "", expressionErr
 		}
-		pageBody += " WHERE " + value
+		baseBody += " WHERE " + value
 	}
 	if len(plan.GroupBy) > 0 {
 		values := make([]string, len(plan.GroupBy))
@@ -68,17 +68,30 @@ func (e *reportObjectSQLEmitter) statementKeysetPage(plan reportmodel.ReportObje
 			}
 			values[index] = value
 		}
-		pageBody += " GROUP BY " + strings.Join(values, ", ")
+		baseBody += " GROUP BY " + strings.Join(values, ", ")
 	}
 	if plan.Having != nil {
 		value, expressionErr := e.expression(*plan.Having)
 		if expressionErr != nil {
 			return "", expressionErr
 		}
-		pageBody += " HAVING " + value
+		baseBody += " HAVING " + value
 	}
 
-	allCTEs := append(append([]string(nil), ctes...), e.dialect.Identifier(reportObjectSQLPageCTE)+" AS ("+pageBody+")")
+	baseRelation := e.dialect.Identifier(reportObjectSQLBaseCTE)
+	pageColumns := append([]string(nil), visible...)
+	for index := range plan.OrderBy {
+		valueAlias := e.dialect.Identifier(reportKeysetValueAlias(index))
+		pageColumns = append(pageColumns,
+			"CASE WHEN "+valueAlias+" IS NULL THEN 1 ELSE 0 END AS "+e.dialect.Identifier(reportKeysetNullAlias(index)),
+			valueAlias,
+		)
+	}
+	pageBody := "SELECT " + strings.Join(pageColumns, ", ") + " FROM " + baseRelation
+	allCTEs := append(append([]string(nil), ctes...),
+		baseRelation+" AS ("+baseBody+")",
+		e.dialect.Identifier(reportObjectSQLPageCTE)+" AS ("+pageBody+")",
+	)
 	outerColumns := append([]string(nil), visible...)
 	for index := range plan.OrderBy {
 		outerColumns = append(outerColumns, e.dialect.Identifier(reportKeysetNullAlias(index)), e.dialect.Identifier(reportKeysetValueAlias(index)))
