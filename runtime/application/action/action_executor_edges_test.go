@@ -113,14 +113,25 @@ func TestBusinessHandlerExecutorPreservesClassifiedHandlerErrors(t *testing.T) {
 		})
 	}
 
-	for _, businessError := range []*runtimeext.BusinessError{
-		{Code: ""},
-		{Code: "booking.invalid", Message: "invalid"},
+	for _, test := range []struct {
+		businessError *runtimeext.BusinessError
+		wantKind      apperror.ErrorKind
+	}{
+		{businessError: &runtimeext.BusinessError{Code: ""}},
+		{businessError: &runtimeext.BusinessError{Code: "booking.invalid", Message: "invalid"}, wantKind: apperror.KindBadRequest},
+		{businessError: &runtimeext.BusinessError{Class: runtimeext.BusinessErrorForbidden, Code: "booking.denied"}, wantKind: apperror.KindForbidden},
+		{businessError: &runtimeext.BusinessError{Class: runtimeext.BusinessErrorNotFound, Code: "booking.missing"}, wantKind: apperror.KindNotFound},
+		{businessError: &runtimeext.BusinessError{Class: runtimeext.BusinessErrorConflict, Code: "booking.conflict"}, wantKind: apperror.KindConflict},
+		{businessError: &runtimeext.BusinessError{Class: runtimeext.BusinessErrorRateLimited, Code: "booking.rate_limited"}, wantKind: apperror.KindRateLimited},
+		{businessError: &runtimeext.BusinessError{Class: runtimeext.BusinessErrorUnavailable, Code: "booking.unavailable"}, wantKind: apperror.KindUnavailable},
+		{businessError: &runtimeext.BusinessError{Class: runtimeext.BusinessErrorInternal, Code: "booking.internal"}, wantKind: apperror.KindInternal},
+		{businessError: &runtimeext.BusinessError{Class: "redirect", Code: "booking.redirect"}},
 	} {
+		businessError := test.businessError
 		handler := actionExecutorEdgeHandler{descriptor: actionTestHandlerDescriptor(action.Key, nil), err: businessError}
 		_, err := newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{}).execute(t.Context(), actionExecutorEdgeGoverned(handler, action))
-		if businessError.Valid() && apperror.CodeOf(err) != businessError.Code {
-			t.Fatalf("error=%v", err)
+		if businessError.Valid() && (apperror.CodeOf(err) != businessError.Code || apperror.KindOf(err) != test.wantKind) {
+			t.Fatalf("error=%v kind=%s", err, apperror.KindOf(err))
 		}
 		if !businessError.Valid() && apperror.CodeOf(err) != "backend.action.handler_failed" {
 			t.Fatalf("invalid business error=%v", err)

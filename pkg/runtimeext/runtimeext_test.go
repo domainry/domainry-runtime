@@ -113,7 +113,7 @@ func TestHandlerDescriptorRequiresStableIdentityAndContracts(t *testing.T) {
 }
 
 func TestRuntimeextContractIdentityIsCurrent(t *testing.T) {
-	if ContractVersion != "runtimeext-v53" {
+	if ContractVersion != "runtimeext-v54" {
 		t.Fatalf("contract version = %q", ContractVersion)
 	}
 	if got := ComputedContractSHA256(); got != ContractSHA256 {
@@ -668,9 +668,12 @@ func TestPublicExecutionValuesValidateClosedOperations(t *testing.T) {
 
 func TestBusinessErrorUsesStableCodeAndPreservesCause(t *testing.T) {
 	cause := errors.New("capacity predicate rejected")
-	err := &BusinessError{Code: "gym.class.capacity_full", Cause: cause}
+	err := &BusinessError{Class: BusinessErrorConflict, Code: "gym.class.capacity_full", Cause: cause}
 	if !err.Valid() || err.Error() != "gym.class.capacity_full" || !errors.Is(err, cause) {
 		t.Fatalf("business error = %#v", err)
+	}
+	if (&BusinessError{Class: "redirect", Code: "gym.class.redirect"}).Valid() {
+		t.Fatal("unknown business error class must be rejected")
 	}
 }
 
