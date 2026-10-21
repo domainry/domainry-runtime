@@ -28,3 +28,22 @@ func TestValidateDataRejectsMissingRequiredAndUnknownFields(t *testing.T) {
 		t.Fatalf("expected valid data, got %v", err)
 	}
 }
+
+func TestValidateDataAcceptsPresentEmptyRequiredJSONArray(t *testing.T) {
+	object := definitionmodel.ObjectSchema{
+		Key: "segment",
+		Fields: []definitionmodel.FieldSchema{
+			{Key: "departments", Type: "json", Required: true, Config: map[string]any{"json_shape": "array"}},
+		},
+	}
+
+	if err := RecordValidateData(object, map[string]any{"departments": []any{}}, false); err != nil {
+		t.Fatalf("present empty required JSON array should be valid: %v", err)
+	}
+	if err := RecordValidateData(object, map[string]any{}, false); err == nil {
+		t.Fatal("missing required JSON array should fail")
+	}
+	if err := RecordValidateData(object, map[string]any{"departments": nil}, false); err == nil {
+		t.Fatal("nil required JSON array should fail")
+	}
+}

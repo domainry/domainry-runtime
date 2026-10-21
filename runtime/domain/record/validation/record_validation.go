@@ -46,9 +46,18 @@ func RecordValidateDataWithPrev(object definitionmodel.ObjectSchema, data map[st
 		return nil
 	}
 	for _, field := range object.Fields {
-		empty := RecordIsEmptyValue(data[field.Key])
+		value, present := data[field.Key]
+		empty := !present || RecordIsEmptyValue(value)
+		// A required JSON array means the field itself must be present and have
+		// the declared array shape. An empty array is still a complete value: it
+		// commonly represents an intentionally unrestricted filter or an empty
+		// ordered collection. Treating [] as missing makes valid create payloads
+		// impossible even though structured-field validation accepts the shape.
+		if field.Type == recordmodel.RecordJSONFieldType && strings.EqualFold(strings.TrimSpace(fmt.Sprint(field.Config["json_shape"])), "array") {
+			empty = !present || value == nil
+		}
 		if field.Type == recordmodel.RecordFileListFieldType || field.Type == recordmodel.RecordMultiSelectFieldType {
-			empty = recordCollectionEmpty(data[field.Key])
+			empty = recordCollectionEmpty(value)
 		}
 		if field.Required && empty {
 			if hasPrev && field.FieldExemptsExistingRows() && RecordIsEmptyValue(prev[field.Key]) {
