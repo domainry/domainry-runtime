@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v54"
-	ContractSHA256  = "2b8257c1d1b823329ecf9c79f6898703313451f478a4f7005550c41dd6427712"
+	ContractVersion = "runtimeext-v55"
+	ContractSHA256  = "b49bb1c6527ae7f76d59f077c9043cfddcb24eaf9f3f70ffcf5fe534645587c8"
 )
 
-const contractDefinitionV54 = `runtimeext-v54
+const contractDefinitionV55 = `runtimeext-v55
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
@@ -24,6 +24,7 @@ BusinessHandler.Descriptor()HandlerDescriptor
 BusinessHandler.Invoke(context.Context,ActionExecution,json.RawMessage)(json.RawMessage,error)
 NativeBusinessHandler.InvokeNative(context.Context,ActionExecution,any)(json.RawMessage,bool,error)
 BusinessError.Class=bad_request|forbidden|not_found|conflict|rate_limited|unavailable|internal
+BusinessError.RuntimeCodeKinds=backend.action.input_invalid:bad_request|backend.action.execution_identity_invalid:internal|backend.action.output_invalid:internal|backend.record.not_found:not_found
 ActionExecution.Identity()ExecutionIdentity
 ActionExecution.Principal()Principal
 ActionExecution.Workspace()Workspace
@@ -170,7 +171,7 @@ func ComputedContractSHA256() string {
 		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{},
 	}
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV54)
+	definition.WriteString(contractDefinitionV55)
 	for _, value := range structs {
 		current := reflect.TypeOf(value)
 		definition.WriteString(current.Name())

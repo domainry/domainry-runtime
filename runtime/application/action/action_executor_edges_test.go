@@ -125,6 +125,10 @@ func TestBusinessHandlerExecutorPreservesClassifiedHandlerErrors(t *testing.T) {
 		{businessError: &runtimeext.BusinessError{Class: runtimeext.BusinessErrorRateLimited, Code: "booking.rate_limited"}, wantKind: apperror.KindRateLimited},
 		{businessError: &runtimeext.BusinessError{Class: runtimeext.BusinessErrorUnavailable, Code: "booking.unavailable"}, wantKind: apperror.KindUnavailable},
 		{businessError: &runtimeext.BusinessError{Class: runtimeext.BusinessErrorInternal, Code: "booking.internal"}, wantKind: apperror.KindInternal},
+		{businessError: &runtimeext.BusinessError{Code: runtimeext.ErrorCodeRecordNotFound}, wantKind: apperror.KindNotFound},
+		{businessError: &runtimeext.BusinessError{Code: runtimeext.ErrorCodeActionExecutionIdentityInvalid}, wantKind: apperror.KindInternal},
+		{businessError: &runtimeext.BusinessError{Code: runtimeext.ErrorCodeActionOutputInvalid}, wantKind: apperror.KindInternal},
+		{businessError: &runtimeext.BusinessError{Code: "backend.generated.action_output_invalid"}, wantKind: apperror.KindInternal},
 		{businessError: &runtimeext.BusinessError{Class: "redirect", Code: "booking.redirect"}},
 	} {
 		businessError := test.businessError

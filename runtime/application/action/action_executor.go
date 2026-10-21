@@ -168,10 +168,7 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 		}
 		var businessError *runtimeext.BusinessError
 		if errors.As(err, &businessError) && businessError.Valid() {
-			kind := businessErrorKind(businessError.Class)
-			if businessError.Code == "backend.generated.action_output_invalid" {
-				kind = apperror.KindInternal
-			}
+			kind := businessErrorKind(businessError.Class, businessError.Code)
 			return ActionExecutionResult{}, apperror.FromError(kind, businessError)
 		}
 		return ActionExecutionResult{}, apperror.New(apperror.KindInternal, "backend.action.handler_failed", err, map[string]string{"action": action.Key})
@@ -206,7 +203,13 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 	return ActionExecutionResult{Object: &result, Commits: commits, PostCommit: session.postCommit}, nil
 }
 
-func businessErrorKind(class string) apperror.ErrorKind {
+func businessErrorKind(class, code string) apperror.ErrorKind {
+	switch strings.TrimSpace(code) {
+	case runtimeext.ErrorCodeRecordNotFound:
+		return apperror.KindNotFound
+	case runtimeext.ErrorCodeActionExecutionIdentityInvalid, runtimeext.ErrorCodeActionOutputInvalid, "backend.generated.action_output_invalid":
+		return apperror.KindInternal
+	}
 	switch strings.TrimSpace(class) {
 	case runtimeext.BusinessErrorForbidden:
 		return apperror.KindForbidden
