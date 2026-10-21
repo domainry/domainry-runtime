@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -42,7 +43,11 @@ import (
 // Run validates project-owned composition, freezes its Handler registry
 // and owns the complete Runtime process lifecycle until shutdown.
 func Run(options Options) (runErr error) {
-	observability, err := processhost.Open(context.Background(), processhost.Config{ServiceName: "domainry-domain-runtime", ServiceVersion: options.Identity.RuntimeVersion})
+	serviceName, err := runtimeServiceName()
+	if err != nil {
+		return err
+	}
+	observability, err := processhost.Open(context.Background(), processhost.Config{ServiceName: serviceName, ServiceVersion: options.Identity.RuntimeVersion})
 	if err != nil {
 		return fmt.Errorf("initialize Runtime observability: %w", err)
 	}
@@ -51,6 +56,25 @@ func Run(options Options) (runErr error) {
 	dependencies.processStarted = observability.Started
 	dependencies.processStopping = observability.Stopping
 	return runWithDependencies(options, dependencies)
+}
+
+func runtimeServiceName() (string, error) {
+	executable, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("resolve Runtime executable identity: %w", err)
+	}
+	return normalizeRuntimeServiceName(executable, os.Getenv("DOMAINRY_SERVICE_NAME"))
+}
+
+func normalizeRuntimeServiceName(executable, configured string) (string, error) {
+	if configured = strings.TrimSpace(configured); configured != "" {
+		return configured, nil
+	}
+	name := strings.TrimSpace(strings.TrimSuffix(filepath.Base(executable), filepath.Ext(executable)))
+	if name == "" || name == "." {
+		return "", errors.New("Runtime service name is required")
+	}
+	return name, nil
 }
 
 type runtimeProcess interface {

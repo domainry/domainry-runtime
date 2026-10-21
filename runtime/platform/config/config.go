@@ -22,6 +22,11 @@ type Config struct {
 	Environment                             string
 	LogLevel                                string
 	LogEncoding                             string
+	LogConsole                              bool
+	LogDirectory                            string
+	LogMaxFileSizeMB                        int
+	LogRetentionDays                        int
+	LogMaxTotalSizeMB                       int
 	AppLocale                               string
 	HTTPBindHost                            string
 	Port                                    string
@@ -208,6 +213,11 @@ func FromEnv() Config {
 		Environment:                                     environment,
 		LogLevel:                                        env("LOG_LEVEL", "info"),
 		LogEncoding:                                     env("LOG_ENCODING", "json"),
+		LogConsole:                                      boolEnv("LOG_CONSOLE", true),
+		LogDirectory:                                    strings.TrimSpace(os.Getenv("LOG_DIRECTORY")),
+		LogMaxFileSizeMB:                                intEnv("LOG_MAX_FILE_SIZE_MB", 100),
+		LogRetentionDays:                                intEnv("LOG_RETENTION_DAYS", 30),
+		LogMaxTotalSizeMB:                               intEnv("LOG_MAX_TOTAL_SIZE_MB", 2048),
 		AppLocale:                                       env("APP_LOCALE", "en-US"),
 		HTTPBindHost:                                    strings.TrimSpace(os.Getenv("HTTP_BIND_HOST")),
 		Port:                                            env("PORT", "8081"),

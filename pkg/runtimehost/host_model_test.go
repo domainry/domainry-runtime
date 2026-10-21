@@ -33,6 +33,18 @@ func modelBoundaryDependencies(readFile func(string) ([]byte, error)) serverRunD
 	}
 }
 
+func TestRuntimeServiceNameUsesExplicitDeploymentIdentityThenExecutable(t *testing.T) {
+	if got, err := normalizeRuntimeServiceName("/app/bin/stock-runtime", " inventory-runtime "); err != nil || got != "inventory-runtime" {
+		t.Fatalf("configured service name=%q error=%v", got, err)
+	}
+	if got, err := normalizeRuntimeServiceName("/app/bin/stock-runtime", ""); err != nil || got != "stock-runtime" {
+		t.Fatalf("executable service name=%q error=%v", got, err)
+	}
+	if _, err := normalizeRuntimeServiceName(".", ""); err == nil {
+		t.Fatal("blank Runtime service identity was accepted")
+	}
+}
+
 func TestRuntimeHostRequiresOneStrictProjectModelBeforeFactoriesOrNetwork(t *testing.T) {
 	options := minimalHostOptions()
 	err := runWithDependencies(options, modelBoundaryDependencies(nil))

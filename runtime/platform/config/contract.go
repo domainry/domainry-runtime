@@ -132,7 +132,8 @@ func LoadContract(sources ...Source) (Config, Snapshot, error) {
 
 func processEnvironmentOnlyConfig(name string) bool {
 	switch name {
-	case "LOG_LEVEL", "LOG_ENCODING", "WORKSPACE_PROVISION_FAILURE_POINT", "INITIAL_ACCEPTANCE_FIXTURES", "RUNTIME_ACCEPTANCE_FIXTURES_ENABLED",
+	case "LOG_LEVEL", "LOG_ENCODING", "LOG_CONSOLE", "LOG_DIRECTORY", "LOG_MAX_FILE_SIZE_MB", "LOG_RETENTION_DAYS", "LOG_MAX_TOTAL_SIZE_MB",
+		"WORKSPACE_PROVISION_FAILURE_POINT", "INITIAL_ACCEPTANCE_FIXTURES", "RUNTIME_ACCEPTANCE_FIXTURES_ENABLED",
 		"INSTALLATION_ADMINISTRATOR_BOOTSTRAP_ENABLED", "INSTALLATION_ADMINISTRATOR_REQUEST_ID", "INSTALLATION_ADMINISTRATOR_LOGIN_ID",
 		"INSTALLATION_ADMINISTRATOR_NAME", "INSTALLATION_ADMINISTRATOR_CREDENTIAL_FILE":
 		return true
@@ -242,6 +243,13 @@ func (c Config) Validate() error {
 		Encoding:    c.LogEncoding,
 	}); err != nil {
 		return fmt.Errorf("invalid process logging configuration: %w", err)
+	}
+	fileLoggingConfigured := strings.TrimSpace(c.LogDirectory) != "" || c.LogMaxFileSizeMB != 0 || c.LogRetentionDays != 0 || c.LogMaxTotalSizeMB != 0
+	if fileLoggingConfigured && !c.LogConsole && strings.TrimSpace(c.LogDirectory) == "" {
+		return errors.New("invalid process logging configuration: LOG_CONSOLE=false requires LOG_DIRECTORY")
+	}
+	if fileLoggingConfigured && (c.LogMaxFileSizeMB <= 0 || c.LogRetentionDays <= 0 || c.LogMaxTotalSizeMB <= 0 || c.LogMaxTotalSizeMB < c.LogMaxFileSizeMB) {
+		return errors.New("invalid process logging configuration: log file size and retention limits must be positive and total size must cover one file")
 	}
 	if strings.TrimSpace(os.Getenv("NOTIFICATION_TENANT_ID")) != "" {
 		return errors.New("NOTIFICATION_TENANT_ID is retired; Notification scope is derived from NOTIFICATION_WORKSPACE_ID")
