@@ -23,6 +23,9 @@ const (
 	PermissionGrantDirect   = "direct"
 	PermissionGrantBundled  = "bundled"
 	PermissionGrantInternal = "internal"
+
+	ActionAuditPolicyAlways        = definitionmodel.ActionAuditPolicyAlways
+	ActionAuditPolicyMutationsOnly = definitionmodel.ActionAuditPolicyMutationsOnly
 )
 
 var (
@@ -149,7 +152,7 @@ func (d HandlerDescriptor) Validate() error {
 		return ErrHandlerRevisionRequired
 	}
 	switch strings.TrimSpace(d.AuditPolicy) {
-	case "", definitionmodel.ActionAuditPolicyAlways, definitionmodel.ActionAuditPolicyMutationsOnly:
+	case "", ActionAuditPolicyAlways, ActionAuditPolicyMutationsOnly:
 	default:
 		return ErrHandlerContractInvalid
 	}
