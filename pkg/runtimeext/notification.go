@@ -149,7 +149,7 @@ type notificationBatchActionExecution interface {
 func StageNotification(ctx context.Context, execution ActionExecution, intent NotificationIntent) (NotificationReceipt, error) {
 	capability, ok := execution.(notificationActionExecution)
 	if !ok {
-		return NotificationReceipt{}, &BusinessError{Code: "backend.notification.action_execution_unsupported", Message: "Runtime Action execution does not support notification dispatch"}
+		return NotificationReceipt{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.notification.action_execution_unsupported", Message: "Runtime Action execution does not support notification dispatch"}
 	}
 	return capability.StageNotification(ctx, intent)
 }
@@ -159,11 +159,11 @@ func StageNotification(ctx context.Context, execution ActionExecution, intent No
 // intents as one ordered, all-or-nothing addition to the Action transaction.
 func StageNotificationBatch(ctx context.Context, execution ActionExecution, intents []NotificationIntent) ([]NotificationReceipt, error) {
 	if len(intents) < 1 || len(intents) > NotificationBatchMaximum {
-		return nil, &BusinessError{Code: NotificationBatchSizeInvalidErrorCode, Message: "Notification batch requires 1 through 200 items"}
+		return nil, &BusinessError{Class: BusinessErrorBadRequest, Code: NotificationBatchSizeInvalidErrorCode, Message: "Notification batch requires 1 through 200 items"}
 	}
 	capability, ok := execution.(notificationBatchActionExecution)
 	if !ok {
-		return nil, &BusinessError{Code: "backend.notification.action_batch_execution_unsupported", Message: "Runtime Action execution does not support notification batch dispatch"}
+		return nil, &BusinessError{Class: BusinessErrorInternal, Code: "backend.notification.action_batch_execution_unsupported", Message: "Runtime Action execution does not support notification batch dispatch"}
 	}
 	return capability.StageNotificationBatch(ctx, intents)
 }

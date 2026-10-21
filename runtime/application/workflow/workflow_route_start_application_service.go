@@ -26,7 +26,16 @@ func workflowRouteStartError(code, fieldPath string, parameters map[string]strin
 	for key, value := range parameters {
 		params[key] = value
 	}
-	return &runtimeext.BusinessError{Code: code, Message: code, Parameters: params}
+	class := runtimeext.BusinessErrorBadRequest
+	switch code {
+	case runtimeext.WorkflowGrantDeniedErrorCode:
+		class = runtimeext.BusinessErrorForbidden
+	case "backend.workflow.not_found":
+		class = runtimeext.BusinessErrorNotFound
+	case "backend.workflow.approval_identity_unavailable":
+		class = runtimeext.BusinessErrorUnavailable
+	}
+	return &runtimeext.BusinessError{Class: class, Code: code, Message: code, Parameters: params}
 }
 
 // StageWorkflowRouteStart validates one Action-staged Workflow start against

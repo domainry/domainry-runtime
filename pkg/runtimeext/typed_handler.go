@@ -72,10 +72,10 @@ func (h *typedBusinessHandler[Capabilities, Input, Output]) Invoke(ctx context.C
 		decoder := json.NewDecoder(bytes.NewReader(payload))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&input); err != nil {
-			return nil, &BusinessError{Code: ErrorCodeActionInputInvalid, Message: err.Error(), Cause: err}
+			return nil, &BusinessError{Class: BusinessErrorBadRequest, Code: ErrorCodeActionInputInvalid, Message: err.Error(), Cause: err}
 		}
 		if err := ensureJSONDocumentEnded(decoder); err != nil {
-			return nil, &BusinessError{Code: ErrorCodeActionInputInvalid, Message: err.Error(), Cause: err}
+			return nil, &BusinessError{Class: BusinessErrorBadRequest, Code: ErrorCodeActionInputInvalid, Message: err.Error(), Cause: err}
 		}
 	}
 	return h.invoke(ctx, execution, input)
@@ -92,7 +92,7 @@ func (h *typedBusinessHandler[Capabilities, Input, Output]) InvokeNative(ctx con
 
 func (h *typedBusinessHandler[Capabilities, Input, Output]) invoke(ctx context.Context, execution ActionExecution, input Input) (json.RawMessage, error) {
 	if execution == nil || strings.TrimSpace(execution.Identity().ActionKey) != h.descriptor.ActionKey {
-		return nil, &BusinessError{Code: ErrorCodeActionExecutionIdentityInvalid, Message: "business handler execution identity is invalid"}
+		return nil, &BusinessError{Class: BusinessErrorInternal, Code: ErrorCodeActionExecutionIdentityInvalid, Message: "business handler execution identity is invalid"}
 	}
 	capabilities, err := h.capabilities(execution)
 	if err != nil {
@@ -104,7 +104,7 @@ func (h *typedBusinessHandler[Capabilities, Input, Output]) invoke(ctx context.C
 	}
 	encoded, err := json.Marshal(output)
 	if err != nil {
-		return nil, &BusinessError{Code: ErrorCodeActionOutputInvalid, Message: err.Error(), Cause: err}
+		return nil, &BusinessError{Class: BusinessErrorInternal, Code: ErrorCodeActionOutputInvalid, Message: err.Error(), Cause: err}
 	}
 	return encoded, nil
 }

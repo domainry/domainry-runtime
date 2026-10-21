@@ -78,7 +78,7 @@ type WorkflowStartExecution interface {
 func StageWorkflowStart(ctx context.Context, execution ActionExecution, start WorkflowStart) (WorkflowStartReceipt, error) {
 	capability, ok := execution.(WorkflowStartExecution)
 	if !ok {
-		return WorkflowStartReceipt{}, &BusinessError{Code: "backend.action.workflow_start_unavailable", Message: "Runtime Workflow start execution is unavailable"}
+		return WorkflowStartReceipt{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.action.workflow_start_unavailable", Message: "Runtime Workflow start execution is unavailable"}
 	}
 	return capability.StageWorkflowStart(ctx, start)
 }
@@ -106,7 +106,7 @@ type WorkflowWithdrawalExecution interface {
 func StageWorkflowWithdrawal(ctx context.Context, execution ActionExecution, withdrawal WorkflowWithdrawal) (WorkflowWithdrawalReceipt, error) {
 	capability, ok := execution.(WorkflowWithdrawalExecution)
 	if !ok {
-		return WorkflowWithdrawalReceipt{}, &BusinessError{Code: "backend.action.workflow_withdrawal_unavailable", Message: "Runtime Workflow withdrawal execution is unavailable"}
+		return WorkflowWithdrawalReceipt{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.action.workflow_withdrawal_unavailable", Message: "Runtime Workflow withdrawal execution is unavailable"}
 	}
 	return capability.StageWorkflowWithdrawal(ctx, withdrawal)
 }

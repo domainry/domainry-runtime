@@ -117,7 +117,7 @@ type WorkspaceIdentityUsageExecution interface {
 func ExecuteWorkspaceIdentityUsage(ctx context.Context, execution ActionExecution, request WorkspaceIdentityUsageRequest) (WorkspaceIdentityUsagePage, error) {
 	capability, ok := execution.(WorkspaceIdentityUsageExecution)
 	if !ok {
-		return WorkspaceIdentityUsagePage{}, &BusinessError{Code: "backend.action.workspace_identity_usage_unavailable", Message: "Runtime Workspace identity usage is unavailable"}
+		return WorkspaceIdentityUsagePage{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.action.workspace_identity_usage_unavailable", Message: "Runtime Workspace identity usage is unavailable"}
 	}
 	return capability.ListWorkspaceIdentityUsage(ctx, request)
 }
@@ -125,7 +125,7 @@ func ExecuteWorkspaceIdentityUsage(ctx context.Context, execution ActionExecutio
 func ExecuteWorkspaceIdentityUsageResolve(ctx context.Context, execution ActionExecution, request WorkspaceIdentityUsageResolveRequest) (WorkspaceIdentityUsageResolveResult, error) {
 	capability, ok := execution.(WorkspaceIdentityUsageExecution)
 	if !ok {
-		return WorkspaceIdentityUsageResolveResult{}, &BusinessError{Code: "backend.action.workspace_identity_usage_unavailable", Message: "Runtime Workspace identity usage is unavailable"}
+		return WorkspaceIdentityUsageResolveResult{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.action.workspace_identity_usage_unavailable", Message: "Runtime Workspace identity usage is unavailable"}
 	}
 	return capability.ResolveWorkspaceIdentityUsage(ctx, request)
 }

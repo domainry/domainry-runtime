@@ -227,13 +227,13 @@ func ResolveBoundIdentity(ctx context.Context, execution ActionExecution, userID
 
 func ResolveBoundIdentities(ctx context.Context, execution ActionExecution, userIDs []string) ([]IdentityBoundIdentity, error) {
 	if len(userIDs) == 0 || len(userIDs) > IdentityHandlerMaximumResolveBatchSize {
-		return nil, &BusinessError{Code: "identity.handler_delivery_resolve_batch_invalid", Message: "Identity resolve batch must contain from 1 through 200 users"}
+		return nil, &BusinessError{Class: BusinessErrorBadRequest, Code: "identity.handler_delivery_resolve_batch_invalid", Message: "Identity resolve batch must contain from 1 through 200 users"}
 	}
 	seen := make(map[string]bool, len(userIDs))
 	for _, userID := range userIDs {
 		userID = strings.TrimSpace(userID)
 		if userID == "" || seen[userID] {
-			return nil, &BusinessError{Code: "identity.handler_delivery_resolve_batch_invalid", Message: "Identity resolve batch user identities must be non-empty and distinct"}
+			return nil, &BusinessError{Class: BusinessErrorBadRequest, Code: "identity.handler_delivery_resolve_batch_invalid", Message: "Identity resolve batch user identities must be non-empty and distinct"}
 		}
 		seen[userID] = true
 	}

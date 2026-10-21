@@ -16,7 +16,7 @@ type ApplicationTimeZoneExecution interface {
 func ResolveApplicationTimeZone(execution ActionExecution) (string, error) {
 	provider, ok := execution.(ApplicationTimeZoneExecution)
 	if !ok {
-		return "", &BusinessError{Code: "backend.action.application_time_zone_unavailable"}
+		return "", &BusinessError{Class: BusinessErrorInternal, Code: "backend.action.application_time_zone_unavailable"}
 	}
 	zone, err := provider.ApplicationTimeZone()
 	if err != nil {
@@ -33,13 +33,13 @@ func ResolveApplicationTimeZone(execution ActionExecution) (string, error) {
 // a different accounting policy.
 func ValidateApplicationTimeZone(zone string) error {
 	if zone == "" {
-		return &BusinessError{Code: "backend.action.application_time_zone_unavailable"}
+		return &BusinessError{Class: BusinessErrorInternal, Code: "backend.action.application_time_zone_unavailable"}
 	}
 	if zone != strings.TrimSpace(zone) || zone == "Local" || strings.HasPrefix(zone, "/") || strings.HasPrefix(zone, ".") || zone != "UTC" && !strings.Contains(zone, "/") {
-		return &BusinessError{Code: "backend.action.application_time_zone_invalid"}
+		return &BusinessError{Class: BusinessErrorBadRequest, Code: "backend.action.application_time_zone_invalid"}
 	}
 	if _, err := time.LoadLocation(zone); err != nil {
-		return &BusinessError{Code: "backend.action.application_time_zone_invalid", Message: err.Error()}
+		return &BusinessError{Class: BusinessErrorBadRequest, Code: "backend.action.application_time_zone_invalid", Message: err.Error()}
 	}
 	return nil
 }

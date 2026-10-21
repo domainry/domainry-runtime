@@ -209,7 +209,7 @@ type CrossWorkspaceAggregateExecution interface {
 func ExecuteCrossWorkspaceAggregate(ctx context.Context, execution ActionExecution, request CrossWorkspaceAggregateRequest) (CrossWorkspaceAggregateResult, error) {
 	aggregator, ok := execution.(CrossWorkspaceAggregateExecution)
 	if !ok {
-		return CrossWorkspaceAggregateResult{}, &BusinessError{Code: "backend.action.cross_workspace_aggregate_unavailable", Message: "Runtime cross-Workspace aggregate execution is unavailable"}
+		return CrossWorkspaceAggregateResult{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.action.cross_workspace_aggregate_unavailable", Message: "Runtime cross-Workspace aggregate execution is unavailable"}
 	}
 	return aggregator.CrossWorkspaceAggregate(ctx, request)
 }

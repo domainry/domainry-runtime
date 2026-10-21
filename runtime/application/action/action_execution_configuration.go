@@ -46,7 +46,7 @@ func (e *BusinessHandlerExecutor) executionConfiguration(ctx context.Context, in
 
 func (e *businessActionExecution) ApplicationTimeZone() (string, error) {
 	if e == nil {
-		return "", &runtimeext.BusinessError{Code: "backend.action.application_time_zone_unavailable"}
+		return "", &runtimeext.BusinessError{Class: runtimeext.BusinessErrorInternal, Code: "backend.action.application_time_zone_unavailable"}
 	}
 	if err := runtimeext.ValidateApplicationTimeZone(e.applicationTimeZone); err != nil {
 		return "", err

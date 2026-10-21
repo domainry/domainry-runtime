@@ -50,7 +50,7 @@ type ConnectionAccountReadExecution interface {
 func AcquireConnectionAccountRead(execution ActionExecution) (SynchronousConnectorCallLease, error) {
 	accountRead, ok := execution.(ConnectionAccountReadExecution)
 	if !ok {
-		return nil, &BusinessError{Code: ConnectorActionExecutionRequiredErrorCode, Message: "Connection account read execution is unavailable"}
+		return nil, &BusinessError{Class: BusinessErrorInternal, Code: ConnectorActionExecutionRequiredErrorCode, Message: "Connection account read execution is unavailable"}
 	}
 	return accountRead.AcquireConnectionAccountRead()
 }
@@ -69,7 +69,7 @@ type ConnectionAccountWriteExecution interface {
 func AcquireConnectionAccountWrite(execution ActionExecution) (SynchronousConnectorCallLease, error) {
 	accountWrite, ok := execution.(ConnectionAccountWriteExecution)
 	if !ok {
-		return nil, &BusinessError{Code: ConnectorActionExecutionRequiredErrorCode, Message: "Connection account write execution is unavailable"}
+		return nil, &BusinessError{Class: BusinessErrorInternal, Code: ConnectorActionExecutionRequiredErrorCode, Message: "Connection account write execution is unavailable"}
 	}
 	return accountWrite.AcquireConnectionAccountWrite()
 }
@@ -107,7 +107,7 @@ type ConditionalUpdateManyExecution interface {
 func ApplyConditionalUpdateMany(ctx context.Context, execution ActionExecution, request ConditionalUpdateManyRequest) (ConditionalUpdateManyResult, error) {
 	capability, ok := execution.(ConditionalUpdateManyExecution)
 	if !ok {
-		return ConditionalUpdateManyResult{}, &BusinessError{Code: "backend.action.conditional_update_many_unavailable", Message: "Runtime conditional update-many execution is unavailable"}
+		return ConditionalUpdateManyResult{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.action.conditional_update_many_unavailable", Message: "Runtime conditional update-many execution is unavailable"}
 	}
 	return capability.ConditionalUpdateMany(ctx, request)
 }
@@ -155,7 +155,7 @@ type RecordManagerRecipientExecution interface {
 func ResolveRecordManagerRecipient(ctx context.Context, execution ActionExecution, request RecordManagerRecipientRequest) (string, error) {
 	resolver, ok := execution.(RecordManagerRecipientExecution)
 	if !ok {
-		return "", &BusinessError{Code: "backend.notification.manager_recipient_unavailable", Message: "Runtime manager recipient resolution is unavailable"}
+		return "", &BusinessError{Class: BusinessErrorInternal, Code: "backend.notification.manager_recipient_unavailable", Message: "Runtime manager recipient resolution is unavailable"}
 	}
 	return resolver.ResolveRecordManagerRecipient(ctx, request)
 }
@@ -167,7 +167,7 @@ type RecordNotificationRecipientExecution interface {
 func ResolveRecordNotificationRecipient(ctx context.Context, execution ActionExecution, request RecordNotificationRecipientRequest) (string, error) {
 	resolver, ok := execution.(RecordNotificationRecipientExecution)
 	if !ok {
-		return "", &BusinessError{Code: "backend.notification.record_recipient_unavailable", Message: "Runtime record notification recipient resolution is unavailable"}
+		return "", &BusinessError{Class: BusinessErrorInternal, Code: "backend.notification.record_recipient_unavailable", Message: "Runtime record notification recipient resolution is unavailable"}
 	}
 	return resolver.ResolveRecordNotificationRecipient(ctx, request)
 }
@@ -175,7 +175,7 @@ func ResolveRecordNotificationRecipient(ctx context.Context, execution ActionExe
 func VerifyFileClean(ctx context.Context, execution ActionExecution, request FileVerificationRequest) (FileVerificationEvidence, error) {
 	verifier, ok := execution.(FileVerificationExecution)
 	if !ok {
-		return FileVerificationEvidence{}, &BusinessError{Code: "backend.upload.scan_service_unavailable", Message: "Runtime file verification is unavailable"}
+		return FileVerificationEvidence{}, &BusinessError{Class: BusinessErrorUnavailable, Code: "backend.upload.scan_service_unavailable", Message: "Runtime file verification is unavailable"}
 	}
 	return verifier.VerifyFileClean(ctx, request)
 }
@@ -183,7 +183,7 @@ func VerifyFileClean(ctx context.Context, execution ActionExecution, request Fil
 func OpenVerifiedFile(ctx context.Context, execution ActionExecution, request VerifiedFileRequest) (VerifiedFile, error) {
 	opener, ok := execution.(VerifiedFileExecution)
 	if !ok {
-		return VerifiedFile{}, &BusinessError{Code: "backend.upload.file_open_unavailable", Message: "Runtime verified file access is unavailable"}
+		return VerifiedFile{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.upload.file_open_unavailable", Message: "Runtime verified file access is unavailable"}
 	}
 	return opener.OpenVerifiedFile(ctx, request)
 }
@@ -191,7 +191,7 @@ func OpenVerifiedFile(ctx context.Context, execution ActionExecution, request Ve
 func IssueFileDownload(ctx context.Context, execution ActionExecution, request FileDownloadRequest) (FileDownloadTicket, error) {
 	issuer, ok := execution.(FileDownloadExecution)
 	if !ok {
-		return FileDownloadTicket{}, &BusinessError{Code: "backend.upload.download_ticket_unavailable", Message: "Runtime file download ticket issuance is unavailable"}
+		return FileDownloadTicket{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.upload.download_ticket_unavailable", Message: "Runtime file download ticket issuance is unavailable"}
 	}
 	return issuer.IssueFileDownload(ctx, request)
 }
@@ -199,7 +199,7 @@ func IssueFileDownload(ctx context.Context, execution ActionExecution, request F
 func CreateDerivedFile(ctx context.Context, execution ActionExecution, request DerivedFileRequest) (DerivedFileEvidence, error) {
 	creator, ok := execution.(DerivedFileExecution)
 	if !ok {
-		return DerivedFileEvidence{}, &BusinessError{Code: "backend.upload.derived_file_unavailable", Message: "Runtime derived file storage is unavailable"}
+		return DerivedFileEvidence{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.upload.derived_file_unavailable", Message: "Runtime derived file storage is unavailable"}
 	}
 	return creator.CreateDerivedFile(ctx, request)
 }
@@ -207,7 +207,7 @@ func CreateDerivedFile(ctx context.Context, execution ActionExecution, request D
 func RunBusinessJob(ctx context.Context, execution ActionExecution, request BusinessJobRequest) (BusinessJobReceipt, error) {
 	runner, ok := execution.(BusinessJobExecution)
 	if !ok {
-		return BusinessJobReceipt{}, &BusinessError{Code: "backend.business_job.unavailable", Message: "Runtime business job execution is unavailable"}
+		return BusinessJobReceipt{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.business_job.unavailable", Message: "Runtime business job execution is unavailable"}
 	}
 	return runner.RunBusinessJob(ctx, request)
 }

@@ -52,11 +52,11 @@ type StoreOrganizationCatalogItem struct {
 func IssueStoreOrganizationCatalogItem(item StoreOrganizationCatalogItem) (StoreOrganizationCatalogItem, string, error) {
 	organizationID := strings.TrimSpace(item.ID)
 	if organizationID == "" {
-		return StoreOrganizationCatalogItem{}, "", &BusinessError{Code: "backend.action.store_organization_catalog_result_invalid", Message: "Store Organization catalog item identity is required"}
+		return StoreOrganizationCatalogItem{}, "", &BusinessError{Class: BusinessErrorInternal, Code: "backend.action.store_organization_catalog_result_invalid", Message: "Store Organization catalog item identity is required"}
 	}
 	var entropy [32]byte
 	if _, err := rand.Read(entropy[:]); err != nil {
-		return StoreOrganizationCatalogItem{}, "", &BusinessError{Code: "backend.action.store_organization_catalog_reference_failed", Message: "Store Organization catalog reference could not be issued", Cause: err}
+		return StoreOrganizationCatalogItem{}, "", &BusinessError{Class: BusinessErrorInternal, Code: "backend.action.store_organization_catalog_reference_failed", Message: "Store Organization catalog reference could not be issued", Cause: err}
 	}
 	claim := hex.EncodeToString(entropy[:])
 	item.ID = organizationID
@@ -93,7 +93,7 @@ type StoreOrganizationCatalogResolutionExecution interface {
 func ExecuteStoreOrganizationCatalog(ctx context.Context, execution ActionExecution, request StoreOrganizationCatalogRequest) (StoreOrganizationCatalogPage, error) {
 	catalog, ok := execution.(StoreOrganizationCatalogExecution)
 	if !ok {
-		return StoreOrganizationCatalogPage{}, &BusinessError{Code: "backend.action.store_organization_catalog_unavailable", Message: "Runtime store Organization catalog is unavailable"}
+		return StoreOrganizationCatalogPage{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.action.store_organization_catalog_unavailable", Message: "Runtime store Organization catalog is unavailable"}
 	}
 	return catalog.ListStoreOrganizations(ctx, request)
 }
@@ -101,7 +101,7 @@ func ExecuteStoreOrganizationCatalog(ctx context.Context, execution ActionExecut
 func ExecuteStoreOrganizationCatalogResolve(ctx context.Context, execution ActionExecution, organizationID string) (StoreOrganizationCatalogItem, error) {
 	catalog, ok := execution.(StoreOrganizationCatalogResolutionExecution)
 	if !ok {
-		return StoreOrganizationCatalogItem{}, &BusinessError{Code: "backend.action.store_organization_catalog_unavailable", Message: "Runtime store Organization catalog is unavailable"}
+		return StoreOrganizationCatalogItem{}, &BusinessError{Class: BusinessErrorInternal, Code: "backend.action.store_organization_catalog_unavailable", Message: "Runtime store Organization catalog is unavailable"}
 	}
 	return catalog.ResolveStoreOrganization(ctx, organizationID)
 }
