@@ -224,6 +224,43 @@ func TestWorkspaceInitializationCompletesThenClaimsOnceAndReplayHasNoSecret(t *t
 	}
 }
 
+func TestRemoteWorkspaceProvisionGeneratesCredentialAfterReplayDetection(t *testing.T) {
+	store, probe := newWorkspaceProvisionTestStore(t)
+	repository := NewWorkspaceInitializationStore(store, probe, projectmodel.RuntimeModel{}, probe.rolePolicy)
+	if _, err := repository.Initialize(t.Context(), validWorkspaceRequest("initialize")); err != nil {
+		t.Fatal(err)
+	}
+
+	probe.claimed = false
+	request := validWorkspaceRequest("remote-provision")
+	request.WorkspaceCode = "secondary"
+	request.WorkspaceName = "Secondary"
+	request.FirstStoreCode = "secondary-store"
+	request.FirstStoreName = "Secondary Store"
+	request.AdminLoginID = "secondary@example.test"
+	request.InitialAdminPassword = "caller-controlled-secret"
+	request.InitialAdminMustChangePassword = false
+	result, err := repository.Provision(t.Context(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if probe.request.InitialAdminPassword == "" || probe.request.InitialAdminPassword == request.InitialAdminPassword {
+		t.Fatal("remote Workspace provisioning did not replace the caller-controlled credential")
+	}
+	if !result.MustChangePassword || result.CredentialDelivery != workspaceprovisionmodel.CredentialDelivered {
+		t.Fatalf("result=%+v", result)
+	}
+	completionCount := len(probe.completions)
+	request.InitialAdminPassword = "different-caller-secret"
+	replay, err := repository.Provision(t.Context(), request)
+	if err != nil || !replay.Replayed || replay.InitialPassword != "" || replay.CredentialDelivery != workspaceprovisionmodel.CredentialUnavailableResetRequired {
+		t.Fatalf("replay=%+v error=%v", replay, err)
+	}
+	if len(probe.completions) != completionCount {
+		t.Fatal("idempotent replay invoked Identity again")
+	}
+}
+
 func TestWorkspaceInitializationProvisionsConfiguredAcceptanceFixturesInHostTransaction(t *testing.T) {
 	store, probe := newWorkspaceProvisionTestStore(t)
 	fixtures := identitysdk.WorkspaceAcceptanceFixtureRequest{Actors: []identitysdk.WorkspaceAcceptanceActor{{

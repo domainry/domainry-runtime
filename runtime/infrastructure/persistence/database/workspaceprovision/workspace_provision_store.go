@@ -121,6 +121,12 @@ func firstWorkspaceBootstrapRolePolicy(policies []WorkspaceBootstrapRolePolicyEv
 }
 
 func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request workspaceprovisionmodel.Request) (workspaceprovisionmodel.Result, error) {
+	// A remotely provisioned Workspace must not accept an administrator secret
+	// from the HTTP request. Generate the one-time credential inside Runtime,
+	// after replay detection, so a retry observes the durable receipt instead of
+	// producing a different idempotency fingerprint.
+	request.InitialAdminPassword = ""
+	request.InitialAdminMustChangePassword = false
 	return store.provision(ctx, request, false)
 }
 
@@ -136,7 +142,7 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	if err := workspaceprovisionvalidation.ValidateRequest(request); err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
-	if request.InitialAdminPassword == "" || len(request.InitialAdminPassword) > 72 {
+	if initialize && (request.InitialAdminPassword == "" || len(request.InitialAdminPassword) > 72) {
 		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInvalid
 	}
 	if err := store.validateApplicationBootstrapRequest(request.ApplicationBootstrap); err != nil {
@@ -158,6 +164,13 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 		replay.Replayed = true
 		replay.CredentialDelivery = workspaceprovisionmodel.CredentialUnavailableResetRequired
 		return replay, nil
+	}
+	if !initialize {
+		request.InitialAdminPassword, err = randomInitialAdministratorPassword()
+		if err != nil {
+			return workspaceprovisionmodel.Result{}, err
+		}
+		request.InitialAdminMustChangePassword = true
 	}
 
 	_, initialized, err := LoadInstallation(ctx, store.runtime)
@@ -656,4 +669,12 @@ func randomID(prefix string) (string, error) {
 		return "", fmt.Errorf("generate workspace provisioning identity: %w", err)
 	}
 	return prefix + "_" + hex.EncodeToString(buffer), nil
+}
+
+func randomInitialAdministratorPassword() (string, error) {
+	random := make([]byte, 18)
+	if _, err := rand.Read(random); err != nil {
+		return "", fmt.Errorf("generate initial administrator credential: %w", err)
+	}
+	return "Aa1!" + hex.EncodeToString(random), nil
 }
