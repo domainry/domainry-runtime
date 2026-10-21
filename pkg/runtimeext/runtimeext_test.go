@@ -121,6 +121,16 @@ func TestRuntimeextContractIdentityIsCurrent(t *testing.T) {
 	}
 }
 
+func TestContractTypeNameKeepsJSONRawMessageStable(t *testing.T) {
+	field, ok := reflect.TypeOf(BusinessJobRequest{}).FieldByName("Payload")
+	if !ok {
+		t.Fatal("BusinessJobRequest.Payload not found")
+	}
+	if got := stableContractTypeName(field.Type); got != "json.RawMessage" {
+		t.Fatalf("stable Payload type = %q", got)
+	}
+}
+
 func TestRecordOwnershipRemainsRuntimeOwned(t *testing.T) {
 	for _, field := range []string{"workspace_id", "owner_org_id", "owner_user_id", " OWNER_ORG_ID "} {
 		if (RecordQuery{Operation: QueryList, ObjectKey: "store_config", Filters: []Filter{{Field: field, Operator: "eq", Value: "forged"}}, Limit: 1}).Valid() {

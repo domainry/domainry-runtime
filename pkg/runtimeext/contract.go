@@ -9,7 +9,7 @@ import (
 
 const (
 	ContractVersion = "runtimeext-v55"
-	ContractSHA256  = "b49bb1c6527ae7f76d59f077c9043cfddcb24eaf9f3f70ffcf5fe534645587c8"
+	ContractSHA256  = "6e04519b60adff2662730668fb9e2ae2847540199f25407c58519292bee18f10"
 )
 
 const contractDefinitionV55 = `runtimeext-v55
@@ -150,9 +150,7 @@ WorkspaceProvisioningVocabulary=workspace_name,workspace_code
 AcceptanceFixtureContract=runtime-acceptance-fixture-v2|workspace_code
 `
 
-// ComputedContractSHA256 returns the canonical public contract identity used
-// by source-owned project composition and Runtime readiness checks.
-func ComputedContractSHA256() string {
+func contractStructTypes() []reflect.Type {
 	structs := []any{
 		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, FileDownloadRequest{}, FileDownloadTicket{}, DerivedFileRequest{}, DerivedFileEvidence{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{}, RecordManagerRecipientRequest{},
 		CrossWorkspaceAggregateDimension{}, CrossWorkspaceAggregateDimensionTransform{}, CrossWorkspaceAggregateDateBucketTransform{}, CrossWorkspaceAggregateMeasure{}, CrossWorkspaceAggregateFilterCapability{}, CrossWorkspaceAggregateCapability{}, CrossWorkspaceAggregateFilter{}, CrossWorkspaceAggregateRequest{}, CrossWorkspaceAggregateRow{}, CrossWorkspaceAggregateResult{},
@@ -170,10 +168,31 @@ func ComputedContractSHA256() string {
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{},
 	}
+	types := make([]reflect.Type, 0, len(structs))
+	for _, value := range structs {
+		types = append(types, reflect.TypeOf(value))
+	}
+	return types
+}
+
+func stableContractTypeName(current reflect.Type) string {
+	// Go 1.27 exposes encoding/json.RawMessage's runtime type identity as
+	// encoding/json/jsontext.Value. The source-level Runtime contract remains
+	// json.RawMessage, so normalize both toolchain representations to that name.
+	switch current.PkgPath() + "." + current.Name() {
+	case "encoding/json.RawMessage", "encoding/json/jsontext.Value":
+		return "json.RawMessage"
+	default:
+		return current.String()
+	}
+}
+
+// ComputedContractSHA256 returns the canonical public contract identity used
+// by source-owned project composition and Runtime readiness checks.
+func ComputedContractSHA256() string {
 	var definition strings.Builder
 	definition.WriteString(contractDefinitionV55)
-	for _, value := range structs {
-		current := reflect.TypeOf(value)
+	for _, current := range contractStructTypes() {
 		definition.WriteString(current.Name())
 		definition.WriteByte('{')
 		for index := 0; index < current.NumField(); index++ {
@@ -183,7 +202,7 @@ func ComputedContractSHA256() string {
 			field := current.Field(index)
 			definition.WriteString(field.Name)
 			definition.WriteByte(':')
-			definition.WriteString(field.Type.String())
+			definition.WriteString(stableContractTypeName(field.Type))
 		}
 		definition.WriteString("}\n")
 	}
