@@ -30,8 +30,8 @@ require (
 	github.com/domainry/domainry-notification-sdk v0.1.18
 	github.com/domainry/domainry-report v0.1.38
 	github.com/domainry/domainry-report-sdk v0.1.23
-	github.com/domainry/domainry-scheduler v0.1.39
-	github.com/domainry/domainry-scheduler-sdk v0.1.19
+	github.com/domainry/domainry-scheduler v0.1.40
+	github.com/domainry/domainry-scheduler-sdk v0.1.20
 	github.com/domainry/domainry-todo v0.1.29
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-sql-driver/mysql v1.10.0
@@ -93,7 +93,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/domainry/domainry-orm v0.1.33
-	github.com/domainry/domainry-tools v0.1.27
+	github.com/domainry/domainry-tools v0.1.28
 	github.com/domainry/domainry-tools-sdk v0.1.22
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
