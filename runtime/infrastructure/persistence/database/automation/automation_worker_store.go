@@ -84,8 +84,12 @@ func (r AutomationWorkerStore) claimOnce(ctx context.Context, workspaceID string
 	if err != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, fmt.Errorf("encode automation instruction result: %w", err)
 	}
-	insertColumns := []string{"id", "run_kind", "idempotency_key", "rule_key", "object_key", "record_id", "record_version", "operation", "instruction_key", "status", "result_json", "error_code", "lease_owner", "lease_expires_at", "fencing_token", "created_at", "updated_at"}
-	insertValues := []any{execution.ID, automationInstructionKind, execution.IdempotencyKey, execution.RuleKey, execution.ObjectKey, execution.RecordID, execution.RecordVersion, execution.Operation, execution.InstructionKey, execution.Status, string(resultJSON), execution.ErrorCode, execution.LeaseOwner, timevalue.Millis(execution.LeaseExpiresAt), execution.FencingToken, timevalue.Millis(execution.CreatedAt), timevalue.Millis(execution.UpdatedAt)}
+	// _automation_runs stores both durable instruction leases and rule history.
+	// MySQL does not provide implicit defaults for the non-null TEXT evidence
+	// columns owned by the other row kind, so every insert must write the whole
+	// shared JSON envelope explicitly. SQLite previously hid this contract gap.
+	insertColumns := []string{"id", "run_kind", "idempotency_key", "rule_key", "object_key", "record_id", "record_version", "operation", "instruction_key", "status", "candidate_json", "trace_json", "result_json", "error_code", "lease_owner", "lease_expires_at", "fencing_token", "created_at", "updated_at"}
+	insertValues := []any{execution.ID, automationInstructionKind, execution.IdempotencyKey, execution.RuleKey, execution.ObjectKey, execution.RecordID, execution.RecordVersion, execution.Operation, execution.InstructionKey, execution.Status, "{}", "{}", string(resultJSON), execution.ErrorCode, execution.LeaseOwner, timevalue.Millis(execution.LeaseExpiresAt), execution.FencingToken, timevalue.Millis(execution.CreatedAt), timevalue.Millis(execution.UpdatedAt)}
 	builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, automationRunsTable, insertColumns, insertValues)
 	if buildErr != nil {
 		return automationmodel.AutomationInstructionExecution{}, false, buildErr

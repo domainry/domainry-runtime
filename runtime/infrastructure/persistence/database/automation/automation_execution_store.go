@@ -71,8 +71,11 @@ func (r AutomationExecutionStore) InsertExecution(ctx context.Context, workspace
 	if err != nil {
 		return automationmodel.AutomationRuleExecution{}, fmt.Errorf("encode automation execution trace: %w", err)
 	}
-	columns := []string{"id", "run_kind", "idempotency_key", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at"}
-	values := []any{value.ID, automationRuleRunKind, value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), timevalue.Millis(value.CreatedAt), timevalue.Millis(value.UpdatedAt)}
+	// _automation_runs also stores instruction lease rows. Keep the shared
+	// non-null JSON envelope complete on strict MySQL instead of relying on a
+	// dialect-specific implicit default for the instruction result column.
+	columns := []string{"id", "run_kind", "idempotency_key", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "result_json", "created_at", "updated_at"}
+	values := []any{value.ID, automationRuleRunKind, value.ID, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), "{}", timevalue.Millis(value.CreatedAt), timevalue.Millis(value.UpdatedAt)}
 	builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, automationRunsTable, columns, values)
 	if buildErr != nil {
 		return automationmodel.AutomationRuleExecution{}, buildErr

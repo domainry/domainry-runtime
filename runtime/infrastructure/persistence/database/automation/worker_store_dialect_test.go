@@ -43,6 +43,17 @@ func TestAutomationInstructionLeaseContractAcrossDialects(t *testing.T) {
 
 func assertAutomationLeaseRestartAndReclaim(t *testing.T, store *database.RuntimeStore, workspace string) {
 	t.Helper()
+	ruleID := "automation-rule-history"
+	if _, err := NewAutomationExecutionStore(store).InsertExecution(t.Context(), workspace, automationmodel.AutomationRuleExecution{
+		ID: ruleID, RuleKey: "rule", ObjectKey: "customer", RecordID: "customer_1", Phase: "after", Operation: "update", Status: "succeeded",
+		Candidate: map[string]any{"status": "ready"}, Trace: map[string]any{"matched": true},
+	}); err != nil {
+		t.Fatalf("insert rule history: %v", err)
+	}
+	rules, err := NewAutomationExecutionStore(store).ListExecutions(t.Context(), workspace, automationmodel.AutomationExecutionFilter{Limit: 10})
+	if err != nil || len(rules) != 1 || rules[0].ID != ruleID {
+		t.Fatalf("list rule history: rules=%#v err=%v", rules, err)
+	}
 	request := automationmodel.AutomationInstructionExecution{WorkspaceID: workspace, IdempotencyKey: "restart-reclaim", RuleKey: "rule", ObjectKey: "customer", RecordID: "customer_1", RecordVersion: "v1", Operation: "update", InstructionKey: "notify"}
 	firstStore := NewAutomationWorkerStore(store)
 	first, claimed, err := firstStore.ClaimInstruction(t.Context(), workspace, request, "worker-a", "2026-01-01T00:00:00Z", "2026-01-01T00:01:00Z")
