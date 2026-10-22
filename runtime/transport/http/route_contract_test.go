@@ -13,7 +13,30 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 )
+
+func TestPublicListenerIncludesPermissionedHumanManagementButNotProvisioning(t *testing.T) {
+	for _, route := range []string{
+		"GET /workflow/recovery/executions",
+		"GET /workflow/recovery/processes",
+		"GET /operations/catalog",
+	} {
+		if !endpointVisibleOnListener(runtimeEndpointContracts[route], endpointmodel.ListenerExposurePublic) {
+			t.Errorf("permissioned human route missing from public listener: %s", route)
+		}
+	}
+	for _, route := range []string{
+		"POST /workspaces",
+		"POST /operations/break-glass-grants",
+		"PUT /operations/controls/{controlKind}/{owner}",
+	} {
+		if endpointVisibleOnListener(runtimeEndpointContracts[route], endpointmodel.ListenerExposurePublic) {
+			t.Errorf("internal management route leaked to public listener: %s", route)
+		}
+	}
+}
 
 func TestFallbackRouteCanReturnJSONBeforeAuthentication(t *testing.T) {
 	mux := http.NewServeMux()

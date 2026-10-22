@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	healthplatform "github.com/domainry/domainry-foundation/health"
 	"github.com/domainry/domainry-foundation/httpresponse"
@@ -33,6 +34,22 @@ func endpointVisibleOnListener(contract endpointmodel.RuntimeEndpointContractV1,
 	for _, candidate := range contract.ListenerExposures {
 		if candidate == exposure {
 			return true
+		}
+	}
+	// A signed-in human operation belongs on the product listener even when
+	// its source owner also labels it as a management operation. The exact
+	// permission is still enforced by withActionAuthorization; signed and
+	// anonymous machine/operational routes remain isolated.
+	if exposure == endpointmodel.ListenerExposurePublic &&
+		len(contract.ProtocolAudiences) == 0 &&
+		len(contract.RequiredPermissions) > 0 &&
+		contract.SourceOwner != "workspaceprovision" &&
+		contract.HighRiskPolicy != endpointmodel.HighRiskActionBreakGlass &&
+		strings.HasPrefix(contract.PermissionPolicyRef, "static_permission:") {
+		for _, candidate := range contract.ListenerExposures {
+			if candidate == endpointmodel.ListenerExposureManagement {
+				return true
+			}
 		}
 	}
 	return false

@@ -122,7 +122,25 @@ func (s *HTTPRouter) rejectModuleHTTPRequest(w http.ResponseWriter, r *http.Requ
 	writeError(w, r, http.StatusBadRequest, code)
 }
 
+// PublicManagementAction admits only human-authenticated, explicitly
+// permissioned module Actions to the product listener. Module-internal,
+// signed and anonymous management routes remain on their private surfaces.
+func PublicManagementAction(action actioncontract.ActionDefinition) bool {
+	if action.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || action.Permission == nil {
+		return false
+	}
+	for _, exposure := range action.Exposures {
+		if exposure == actioncontract.ExposureManagement {
+			return true
+		}
+	}
+	return false
+}
+
 func moduleRouteVisibleOnListener(route modulehttp.Route, group ListenerRouteGroup) bool {
+	if group == ListenerRouteGroupPublic && PublicManagementAction(route.Action) {
+		return true
+	}
 	want := modulehttp.Exposure("")
 	switch group {
 	case ListenerRouteGroupPublic:

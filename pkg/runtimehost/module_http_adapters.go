@@ -80,7 +80,7 @@ func mountModuleHTTPAdapters(group runtimehttp.ListenerRouteGroup, adapters []mo
 		}
 		identity := strings.TrimSpace(adapter.Owner()) + "/" + strings.TrimSpace(adapter.Name())
 		for _, route := range adapter.Routes() {
-			if !moduleRouteVisible(group, route.Action.Exposures) {
+			if !moduleRouteVisible(group, route.Action.Exposures) && !(group == runtimehttp.ListenerRouteGroupPublic && runtimehttp.PublicManagementAction(route.Action)) {
 				continue
 			}
 			pattern := strings.TrimSpace(route.Pattern())

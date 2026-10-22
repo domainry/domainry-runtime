@@ -140,8 +140,31 @@ func TestModuleHTTPAdaptersMountByExposureAndPreserveFallback(t *testing.T) {
 	}
 	response = httptest.NewRecorder()
 	public.ServeHTTP(response, request)
-	if response.Code != http.StatusTeapot {
+	if response.Code != http.StatusNoContent {
 		t.Fatalf("public status=%d", response.Code)
+	}
+}
+
+func TestPublicListenerKeepsNonPermissionedManagementRoutesPrivate(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		strategy actioncontract.AuthorizationStrategy
+	}{
+		{name: "anonymous", strategy: actioncontract.AuthorizationAnonymous},
+		{name: "signed", strategy: actioncontract.AuthorizationSigned},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			adapter := moduleAdapterStub{owner: "sample", name: test.name, handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }), routes: []modulehttp.Route{{Action: runtimeHostTestAction("sample.read", "GET /sample", []actioncontract.Exposure{actioncontract.ExposureManagement}, test.strategy)}}}
+			public, err := mountModuleHTTPAdapters(runtimehttp.ListenerRouteGroupPublic, []modulehttp.Adapter{adapter}, http.NotFoundHandler())
+			if err != nil {
+				t.Fatal(err)
+			}
+			response := httptest.NewRecorder()
+			public.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/sample", nil))
+			if response.Code != http.StatusNotFound {
+				t.Fatalf("private management route leaked: status=%d", response.Code)
+			}
+		})
 	}
 }
 

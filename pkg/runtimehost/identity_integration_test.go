@@ -82,7 +82,7 @@ func TestProjectHostMountsModuleIdentityHTTPOutsideRuntime(t *testing.T) {
 		}
 	}
 	assertOwner(public, http.MethodPost, "/auth/login", "identity", http.StatusNoContent)
-	assertOwner(public, http.MethodGet, "/identity/users", "runtime", http.StatusAccepted)
+	assertOwner(public, http.MethodGet, "/identity/users", "identity", http.StatusNoContent)
 	assertOwner(admin, http.MethodGet, "/identity/users", "identity", http.StatusNoContent)
 	assertOwner(admin, http.MethodGet, "/records", "runtime", http.StatusAccepted)
 }

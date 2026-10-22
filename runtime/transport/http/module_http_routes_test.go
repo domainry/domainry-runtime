@@ -71,6 +71,22 @@ func TestModuleHTTPRouteAuthorizationUsesDeclaredPermissionPolicy(t *testing.T) 
 	}
 }
 
+func TestPermissionedManagementModuleRouteIsPublishedOnPublic(t *testing.T) {
+	permissioned := modulehttp.Route{Action: moduleHTTPTestAction("module.resource.read", actioncontract.AuthorizationAuthenticated, true)}
+	if !moduleRouteVisibleOnListener(permissioned, ListenerRouteGroupPublic) {
+		t.Fatal("permissioned management Action is absent from product listener")
+	}
+	for _, action := range []actioncontract.ActionDefinition{
+		moduleHTTPTestAction("module.resource.self", actioncontract.AuthorizationAuthenticated, false),
+		moduleHTTPTestAction("module.resource.anon", actioncontract.AuthorizationAnonymous, false),
+		moduleHTTPTestAction("module.resource.signed", actioncontract.AuthorizationSigned, false),
+	} {
+		if moduleRouteVisibleOnListener(modulehttp.Route{Action: action}, ListenerRouteGroupPublic) {
+			t.Fatalf("non-permissioned management Action %q leaked", action.Key)
+		}
+	}
+}
+
 func TestGuardAuthenticatedModuleHTTPRouteUsesRuntimeAPIKeyPrincipal(t *testing.T) {
 	route := modulehttp.Route{Action: moduleHTTPTestAction("module.resource.read", actioncontract.AuthorizationAuthenticated, true)}
 	registry := actioncontract.NewRegistry()
